@@ -44,6 +44,16 @@ cargo test --workspace
 Some commands become available in later milestones. Run all commands applicable
 to the files currently present.
 
+## Releases
+
+- Public releases start at `1.0.0` and use tags shaped as `vVERSION`.
+- Read `docs/releasing.md` before creating or pushing a release tag.
+- Only `bota-device-sdk-core` is currently publishable.
+- The first crates.io publication requires the protected one-time bootstrap
+  token; subsequent releases must migrate to Trusted Publishing.
+- Never push a release tag until `cargo xtask release verify-tag vVERSION`,
+  package verification, and all quality gates pass.
+
 ## Change Discipline
 
 - Write a failing test before production behavior.

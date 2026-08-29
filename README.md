@@ -11,11 +11,13 @@ physical-device parity gates.
 
 ## Current Status
 
-Milestone 1 is implemented at `0.1.0-alpha.1`: the repository has a generated
+The protocol core is versioned at `1.0.0`: the repository has a generated
 protocol manifest, 50 language-neutral compatibility fixtures, bounded Rust
 decoders, byte-exact serializers, stable models/errors, and a typed workflow
 host boundary. It does not publish a supported platform SDK or replace the
-production React Native package.
+production React Native package. The first public artifact is the
+`bota-device-sdk-core` crate; platform SDK artifacts will join the synchronized
+version only after their own acceptance gates pass.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and the
 [firmware compatibility matrix](protocol/compatibility/firmware-compatibility.json).
@@ -39,6 +41,10 @@ cargo xtask protocol generate --check
 
 The full reproducible gate, including the frozen React Native comparator, is
 recorded in `release/evidence/`.
+
+Release maintainers must follow [docs/releasing.md](docs/releasing.md). The
+`v1.0.0` tag must not be pushed until the protected `release` environment and
+one-time crates.io bootstrap token are configured.
 
 ## Naming
 

@@ -1,7 +1,7 @@
 {
   "manifestVersion": 1,
-  "sdkVersion": "0.1.0-alpha.1",
-  "sourceRevision": "22db4a3788103b0c4a42a6ffb8db06384b0d51bc",
+  "sdkVersion": "1.0.0",
+  "sourceRevision": "bbfbb86cb66efa95cd83b9daf13f528e7a8ea77c",
   "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.0",
@@ -12,7 +12,7 @@
     {
       "name": "bota-device-sdk-core",
       "ecosystem": "cargo",
-      "version": "0.1.0-alpha.1",
+      "version": "1.0.0",
       "checksumSha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "capabilities": ["protocol_core"]
     }
