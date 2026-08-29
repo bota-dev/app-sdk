@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "sdkVersion": "0.1.0-alpha.1",
+  "firmwareBaseline": {
+    "version": "1.0.17",
+    "revision": "8b175a89374c9833bdaa67fe73ada6672618e5f7"
+  },
+  "reactNativeBaseline": {
+    "version": "0.0.65",
+    "revision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4"
+  },
+  "features": [
+    {
+      "feature": "device_status",
+      "earliestKnownFirmware": "1.0.17",
+      "validFixtures": [
+        "legacy-idle-status",
+        "extended-uploading-status",
+        "unknown-enums-use-legacy-fallbacks"
+      ],
+      "invalidFixtures": ["truncated-status-is-rejected"],
+      "rust": { "decode": true, "encode": false },
+      "reactNativeBaseline": true,
+      "status": "supported"
+    },
+    {
+      "feature": "recording_list",
+      "earliestKnownFirmware": "1.0.17",
+      "validFixtures": ["empty-list", "encrypted-recording", "count-prefixed-recording"],
+      "invalidFixtures": ["trailing-partial-entry-is-ignored"],
+      "rust": { "decode": true, "encode": false },
+      "reactNativeBaseline": true,
+      "status": "supported"
+    },
+    {
+      "feature": "recording_transfer_and_control",
+      "earliestKnownFirmware": "1.0.17",
+      "validFixtures": [
+        "data-packet",
+        "eof-packet",
+        "paused-packet",
+        "sha256-packet",
+        "e2e-start-packet",
+        "encrypted-data-packet",
+        "encrypted-eof-packet",
+        "device-error-packet",
+        "ack-sequence",
+        "abort-sequence",
+        "list-command",
+        "start-command",
+        "confirm-command",
+        "trigger-upload-accepted",
+        "trigger-upload-busy"
+      ],
+      "invalidFixtures": ["unknown-packet-type"],
+      "rust": { "decode": true, "encode": true },
+      "reactNativeBaseline": true,
+      "status": "supported"
+    },
+    {
+      "feature": "connection_settings",
+      "earliestKnownFirmware": "1.0.17",
+      "validFixtures": [
+        "serialize-explicit-v2-settings",
+        "serialize-defaults",
+        "serialize-legacy-timeout-rounds-up",
+        "parse-explicit-v2-settings",
+        "parse-legacy-v1-settings",
+        "unknown-version-uses-defaults"
+      ],
+      "invalidFixtures": ["invalid-negative-timeout"],
+      "rust": { "decode": true, "encode": true },
+      "reactNativeBaseline": true,
+      "status": "supported"
+    },
+    {
+      "feature": "wifi_configuration",
+      "earliestKnownFirmware": "1.0.17",
+      "validFixtures": ["wifi-grant-packet", "wifi-scan-command", "wifi-config-expired"],
+      "invalidFixtures": [],
+      "rust": { "decode": true, "encode": true },
+      "reactNativeBaseline": true,
+      "status": "partial",
+      "gap": "No malformed WiFi result or oversize grant fixture yet."
+    },
+    {
+      "feature": "provisioning_and_device_commands",
+      "earliestKnownFirmware": "1.0.17",
+      "validFixtures": [
+        "provisioning-success-code",
+        "already-paired-code",
+        "ble-deprovision-command",
+        "authenticated-reset-command",
+        "reset-receipt-command",
+        "pk-d-raw-bytes"
+      ],
+      "invalidFixtures": [],
+      "rust": { "decode": true, "encode": true },
+      "reactNativeBaseline": true,
+      "status": "partial",
+      "gap": "No malformed provisioning result fixture yet."
+    },
+    {
+      "feature": "device_logs",
+      "earliestKnownFirmware": "1.0.17",
+      "validFixtures": ["complete-line", "backlog-multiple-lines", "line-split-across-packets"],
+      "invalidFixtures": ["sequence-gap-discards-partial-line", "malformed-packet-keeps-sequence-state"],
+      "rust": { "decode": true, "encode": false },
+      "reactNativeBaseline": true,
+      "status": "supported"
+    },
+    {
+      "feature": "firmware_ota_transfer",
+      "earliestKnownFirmware": "1.0.17",
+      "validFixtures": [
+        "firmware-upload-start",
+        "firmware-data-packet",
+        "firmware-window-ack",
+        "firmware-upload-verify"
+      ],
+      "invalidFixtures": ["firmware-ready-rejected"],
+      "rust": { "decode": true, "encode": true },
+      "reactNativeBaseline": true,
+      "status": "supported"
+    }
+  ],
+  "notes": [
+    "1.0.17 is the earliest version established by the frozen firmware baseline; earlier introduction versions have not been audited.",
+    "Supported means at least one positive and one malformed, rejected, or recovery fixture exists.",
+    "This matrix covers pure protocol behavior only, not native transports or physical-device acceptance."
+  ]
+}

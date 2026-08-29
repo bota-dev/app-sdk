@@ -1,11 +1,11 @@
 {
   "manifestVersion": 1,
   "sdkVersion": "0.1.0-alpha.1",
-  "sourceRevision": "f76fad3f5ed2995ca75a2acf1a3ccdef05543dd8",
+  "sourceRevision": "22db4a3788103b0c4a42a6ffb8db06384b0d51bc",
   "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.0",
-    "maximum": "1.0.11",
+    "maximum": "1.0.17",
     "baselineRevision": "8b175a89374c9833bdaa67fe73ada6672618e5f7"
   },
   "artifacts": [

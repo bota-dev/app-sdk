@@ -66,6 +66,12 @@ types, field layouts, and size limits live in
 `core/device-sdk-core/src/generated/protocol.rs`; edit the manifest and run
 `cargo xtask protocol generate` rather than editing generated code.
 
+Verified feature coverage and known gaps are recorded in
+`protocol/compatibility/firmware-compatibility.json`. A feature is marked
+supported only when it has both positive and malformed, rejected, or recovery
+fixture coverage. The current matrix proves protocol behavior at the frozen
+firmware `1.0.17` baseline; it does not claim native or physical-device support.
+
 Core models are owned Rust values with no platform Bluetooth types. Unknown
 wire enum values remain representable for forward compatibility, validated
 device and recording identifiers cannot be constructed from malformed input,

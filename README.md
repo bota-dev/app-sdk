@@ -11,11 +11,14 @@ physical-device parity gates.
 
 ## Current Status
 
-Milestone 1 establishes the repository and pure protocol core. It does not yet
-publish a supported platform SDK.
+Milestone 1 is implemented at `0.1.0-alpha.1`: the repository has a generated
+protocol manifest, 50 language-neutral compatibility fixtures, bounded Rust
+decoders, byte-exact serializers, stable models/errors, and a typed workflow
+host boundary. It does not publish a supported platform SDK or replace the
+production React Native package.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and the
-[implementation plan](docs/superpowers/plans/2026-08-28-app-sdk-implementation.md).
+[firmware compatibility matrix](protocol/compatibility/firmware-compatibility.json).
 
 ## Development
 
@@ -26,10 +29,16 @@ Requirements:
 
 ```bash
 npm ci
+npm run check
+npm run test:fixtures
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo xtask protocol generate --check
 ```
+
+The full reproducible gate, including the frozen React Native comparator, is
+recorded in `release/evidence/`.
 
 ## Naming
 
