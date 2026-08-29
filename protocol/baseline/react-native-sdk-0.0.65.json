@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-08-28",
+  "package": "@bota.dev/react-native-sdk",
+  "packageVersion": "0.0.65",
+  "sourceRevision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4",
+  "firmwareRevision": "8b175a89374c9833bdaa67fe73ada6672618e5f7",
+  "cleanCheckout": true,
+  "fixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
+  "fixtureCases": 50,
+  "jest": {
+    "suites": 8,
+    "tests": 86
+  },
+  "sourceDigests": {
+    "src/ble/constants.ts": "21e6149c7b35dda2b3ed15f646df06afc8ce169cef83b251ae8f0fa479b45721",
+    "src/ble/parsers.ts": "f9fe44efa582b0e1431ef362c748fcc1b311917694050ff37861bb5a7191bcdf",
+    "src/ble/deviceLogs.ts": "2997950e9afcb0ac0ef8c8d01ec936c1fa2d9a6ef174aca3c4a652cf5aaddca0",
+    "src/protocol/ProtocolHandler.ts": "62188c6852ee772bf4b641219eb16db7edc8ae04e7d23af43f26a3671314187e"
+  }
+}

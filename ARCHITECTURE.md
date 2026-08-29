@@ -54,6 +54,12 @@ behavioral baseline. It remains authoritative until the monorepo implementation
 passes the relevant fixture, workflow, native, application, and physical-device
 acceptance gates.
 
+Language-neutral protocol fixtures live under `protocol/fixtures/`. The baseline
+record under `protocol/baseline/` pins the SDK and firmware revisions, source
+digests, fixture digest, and passing test counts. `npm run baseline:react-native`
+builds and tests an explicit SDK checkout before comparing every applicable
+fixture; it refuses dirty checkouts unless the audit flag is supplied.
+
 ## Security
 
 - Never commit credentials, tokens, private keys, certificate bodies, signing

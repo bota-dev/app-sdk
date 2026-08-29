@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bota.dev/schemas/device-sdk-fixture-suite-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "protocolRevision", "suite", "cases"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "protocolRevision": {
+      "type": "string",
+      "pattern": "^firmware-[0-9a-f]{12}$"
+    },
+    "suite": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/case" }
+    }
+  },
+  "$defs": {
+    "hex": {
+      "type": "string",
+      "pattern": "^(?:[0-9a-f]{2})*$"
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "operation"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "operation": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]+$" },
+        "inputHex": { "$ref": "#/$defs/hex" },
+        "inputsHex": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/hex" }
+        },
+        "input": {},
+        "constant": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]+$" },
+        "expected": {},
+        "expectedHex": { "$ref": "#/$defs/hex" },
+        "expectedError": { "type": "string", "minLength": 1 },
+        "baselineReference": { "type": "string", "minLength": 1 }
+      },
+      "anyOf": [
+        { "required": ["expected"] },
+        { "required": ["expectedHex"] },
+        { "required": ["expectedError"] }
+      ]
+    }
+  }
+}

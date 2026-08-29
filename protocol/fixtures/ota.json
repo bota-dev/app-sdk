@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "protocolRevision": "firmware-8b175a89374c",
+  "suite": "ota",
+  "cases": [
+    {
+      "name": "firmware-upload-start",
+      "operation": "firmwareUploadStart",
+      "input": { "size": 1000 },
+      "expectedHex": "08e8030000",
+      "baselineReference": "src/protocol/ProtocolHandler.ts:1124"
+    },
+    {
+      "name": "firmware-data-packet",
+      "operation": "firmwareDataPacket",
+      "input": { "sequenceNumber": 7, "payloadHex": "aabbcc" },
+      "expectedHex": "200700aabbcc",
+      "baselineReference": "src/protocol/ProtocolHandler.ts:1161"
+    },
+    {
+      "name": "firmware-window-ack",
+      "operation": "firmwareWindowAck",
+      "input": { "sequenceNumber": 7 },
+      "expectedHex": "100700",
+      "baselineReference": "src/protocol/ProtocolHandler.ts:1067"
+    },
+    {
+      "name": "firmware-upload-verify",
+      "operation": "firmwareUploadVerify",
+      "input": { "crc32": 305419896 },
+      "expectedHex": "0978563412",
+      "baselineReference": "src/protocol/ProtocolHandler.ts:1193"
+    },
+    {
+      "name": "firmware-ready-rejected",
+      "operation": "firmwareStatus",
+      "input": { "command": 8, "result": 2 },
+      "expectedHex": "0802",
+      "baselineReference": "__tests__/ProtocolHandlerFirmwareUpload.test.ts"
+    }
+  ]
+}

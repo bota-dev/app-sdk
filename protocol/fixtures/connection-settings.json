@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "protocolRevision": "firmware-8b175a89374c",
+  "suite": "connection-settings",
+  "cases": [
+    {
+      "name": "serialize-explicit-v2-settings",
+      "operation": "serializeConnectionSettings",
+      "input": {
+        "enabled_connections": { "wifi": true, "cellular": true },
+        "heartbeat_enabled_connections": { "wifi": true, "cellular": false },
+        "upload_network_preference": ["wifi", "ble", "cellular"],
+        "power_management": {
+          "cellular_idle_timeout_seconds": -1,
+          "wifi_idle_timeout_seconds": 0
+        },
+        "streaming_enabled": false,
+        "streaming_flush_interval_seconds": 60
+      },
+      "expectedHex": "0203010203ff00003c810000"
+    },
+    {
+      "name": "serialize-defaults",
+      "operation": "serializeConnectionSettings",
+      "input": {
+        "enabled_connections": { "wifi": true, "cellular": true },
+        "upload_network_preference": ["wifi", "ble", "cellular"]
+      },
+      "expectedHex": "02030102031212013c830000"
+    },
+    {
+      "name": "serialize-legacy-timeout-rounds-up",
+      "operation": "serializeConnectionSettings",
+      "input": {
+        "enabled_connections": { "wifi": true, "cellular": false },
+        "upload_network_preference": ["wifi", "ble"],
+        "power_management": {
+          "cellular_idle_timeout_seconds": 9,
+          "wifi_idle_timeout_seconds": 15
+        }
+      },
+      "expectedHex": "02010102000101013c830000"
+    },
+    {
+      "name": "parse-explicit-v2-settings",
+      "operation": "parseConnectionSettings",
+      "inputHex": "0203010203ff00003c810000",
+      "expected": {
+        "enabled_connections": { "wifi": true, "cellular": true },
+        "heartbeat_enabled_connections": { "wifi": true, "cellular": false },
+        "upload_network_preference": ["wifi", "ble", "cellular"],
+        "power_management": {
+          "cellular_idle_timeout_seconds": -1,
+          "wifi_idle_timeout_seconds": 0
+        },
+        "streaming_enabled": false,
+        "streaming_flush_interval_seconds": 60
+      }
+    },
+    {
+      "name": "parse-legacy-v1-settings",
+      "operation": "parseConnectionSettings",
+      "inputHex": "0103010203121201",
+      "expected": {
+        "enabled_connections": { "wifi": true, "cellular": true },
+        "heartbeat_enabled_connections": { "wifi": true, "cellular": true },
+        "upload_network_preference": ["wifi", "ble", "cellular"],
+        "power_management": {
+          "cellular_idle_timeout_seconds": 180,
+          "wifi_idle_timeout_seconds": 180
+        },
+        "streaming_enabled": true,
+        "streaming_flush_interval_seconds": 60
+      }
+    },
+    {
+      "name": "unknown-version-uses-defaults",
+      "operation": "parseConnectionSettings",
+      "inputHex": "0300000000000000",
+      "expected": {
+        "enabled_connections": { "wifi": true, "cellular": true },
+        "heartbeat_enabled_connections": { "wifi": true, "cellular": true },
+        "upload_network_preference": ["wifi", "ble", "cellular"]
+      }
+    },
+    {
+      "name": "invalid-negative-timeout",
+      "operation": "serializeConnectionSettings",
+      "input": {
+        "enabled_connections": { "wifi": true, "cellular": true },
+        "upload_network_preference": ["wifi", "ble", "cellular"],
+        "power_management": {
+          "cellular_idle_timeout_seconds": -2,
+          "wifi_idle_timeout_seconds": 180
+        }
+      },
+      "expectedError": "Idle timeout must be -1 or an integer from 0 to 2540 seconds"
+    }
+  ]
+}

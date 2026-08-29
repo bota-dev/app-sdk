@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "sdkVersion": "0.1.0-alpha.1",
   "sourceRevision": "f76fad3f5ed2995ca75a2acf1a3ccdef05543dd8",
-  "protocolFixtureDigest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.0",
     "maximum": "1.0.11",

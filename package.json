@@ -6,9 +6,14 @@
     "node": ">=22"
   },
   "scripts": {
+    "baseline:react-native": "node tools/baseline/compare-react-native.mjs",
     "check": "npm run check:licenses",
     "check:licenses": "node scripts/check-licenses.mjs",
     "license-check": "npm run check:licenses",
-    "test:tooling": "node --test scripts/*.test.mjs"
+    "test:fixtures": "node --test tools/baseline/*.test.mjs",
+    "test:tooling": "node --test scripts/*.test.mjs tools/baseline/*.test.mjs"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0"
   }
 }
