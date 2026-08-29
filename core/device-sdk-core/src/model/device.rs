@@ -128,4 +128,21 @@ pub struct DeviceStatus {
     pub lte_status_raw: u8,
     pub lte_signal_quality: Option<u8>,
     pub wifi_status_raw: Option<u8>,
+    pub modem_info: Option<ModemInfo>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ModemInfo {
+    pub imei: Option<String>,
+    pub iccid: Option<String>,
+    pub operator: Option<String>,
+    pub rat: Option<String>,
+    pub band: Option<String>,
+    pub apn: Option<String>,
+    pub sim_status: Option<String>,
+    pub csq: Option<u16>,
+    pub ip_address: Option<String>,
+    pub voltage_mv: Option<u16>,
+    pub firmware: Option<String>,
+    pub roaming: Option<bool>,
 }

@@ -74,6 +74,13 @@ Stable errors expose a machine code, operation, retryability, optional protocol
 status, and diagnostic detail; callers branch on the stable fields rather than
 platform error text.
 
+All untrusted wire reads pass through the bounded cursor in
+`core/device-sdk-core/src/protocol/cursor.rs`. Decoders return structured errors
+for truncated or unknown packets and are covered by language-neutral fixtures
+plus deterministic arbitrary-length input tests. Unknown device states,
+connection types, WiFi results, and status bytes remain available as raw values
+in the core; compatibility fallbacks belong at the platform facade boundary.
+
 ## Security
 
 - Never commit credentials, tokens, private keys, certificate bodies, signing
