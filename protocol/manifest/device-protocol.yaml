@@ -1,0 +1,295 @@
+schemaVersion: 1
+protocolRevision: firmware-8b175a89374c
+
+services:
+  - name: SERVICE_DEVICE_INFO
+    uuid: 180A
+    characteristics:
+      - { name: CHAR_MANUFACTURER_NAME, uuid: 2A29 }
+      - { name: CHAR_MODEL_NUMBER, uuid: 2A24 }
+      - { name: CHAR_SERIAL_NUMBER, uuid: 2A25 }
+      - { name: CHAR_HARDWARE_REVISION, uuid: 2A27 }
+      - { name: CHAR_FIRMWARE_REVISION, uuid: 2A26 }
+  - name: SERVICE_BATTERY
+    uuid: 180F
+    characteristics:
+      - { name: CHAR_BATTERY_LEVEL, uuid: 2A19 }
+  - name: SERVICE_BOTA_AUDIO
+    uuid: B07A0001-0000-1000-8000-00805F9B34FB
+    characteristics:
+      - { name: CHAR_AUDIO_DATA, uuid: B07A0001-0001-1000-8000-00805F9B34FB }
+      - { name: CHAR_AUDIO_CODEC, uuid: B07A0001-0002-1000-8000-00805F9B34FB }
+      - { name: CHAR_AUDIO_CONTROL, uuid: B07A0001-0003-1000-8000-00805F9B34FB }
+  - name: SERVICE_BOTA_CONTROL
+    uuid: B07A0002-0000-1000-8000-00805F9B34FB
+    characteristics:
+      - { name: CHAR_DEVICE_STATUS, uuid: B07A0002-0001-1000-8000-00805F9B34FB }
+      - { name: CHAR_RECORDING_CONTROL, uuid: B07A0002-0002-1000-8000-00805F9B34FB }
+      - { name: CHAR_RECORDING_STATUS, uuid: B07A0002-0003-1000-8000-00805F9B34FB }
+      - { name: CHAR_TIME_SYNC, uuid: B07A0002-0004-1000-8000-00805F9B34FB }
+      - { name: CHAR_DEVICE_COMMAND, uuid: B07A0002-0005-1000-8000-00805F9B34FB }
+  - name: SERVICE_BOTA_PROVISIONING
+    uuid: B07A0003-0000-1000-8000-00805F9B34FB
+    characteristics:
+      - { name: CHAR_PAIRING_STATE, uuid: B07A0003-0001-1000-8000-00805F9B34FB }
+      - { name: CHAR_DEVICE_TOKEN, uuid: B07A0003-0002-1000-8000-00805F9B34FB }
+      - { name: CHAR_API_ENDPOINT, uuid: B07A0003-0003-1000-8000-00805F9B34FB }
+      - { name: CHAR_WIFI_CONFIG, uuid: B07A0003-0004-1000-8000-00805F9B34FB }
+      - { name: CHAR_PROVISIONING_RESULT, uuid: B07A0003-0005-1000-8000-00805F9B34FB }
+      - { name: CHAR_DEVICE_SETTINGS, uuid: B07A0003-0006-1000-8000-00805F9B34FB }
+  - name: SERVICE_BOTA_STORAGE
+    uuid: B07A0004-0000-1000-8000-00805F9B34FB
+    characteristics:
+      - { name: CHAR_STORAGE_INFO, uuid: B07A0004-0001-1000-8000-00805F9B34FB }
+      - { name: CHAR_RECORDING_LIST, uuid: B07A0004-0002-1000-8000-00805F9B34FB }
+      - { name: CHAR_RECORDING_TRANSFER, uuid: B07A0004-0003-1000-8000-00805F9B34FB }
+      - { name: CHAR_TRANSFER_CONTROL, uuid: B07A0004-0004-1000-8000-00805F9B34FB }
+      - { name: CHAR_TRANSFER_STATUS, uuid: B07A0004-0005-1000-8000-00805F9B34FB }
+  - name: SERVICE_BOTA_AUTH
+    uuid: B07A0005-0000-1000-8000-00805F9B34FB
+    characteristics:
+      - { name: CHAR_PK_D, uuid: B07A0005-0001-1000-8000-00805F9B34FB }
+      - { name: CHAR_AUTH_NONCE, uuid: B07A0005-0002-1000-8000-00805F9B34FB }
+      - { name: CHAR_BACKEND_PUBKEY, uuid: B07A0005-0003-1000-8000-00805F9B34FB, introduced: P10 }
+      - { name: CHAR_DEVICE_CERT, uuid: B07A0005-0004-1000-8000-00805F9B34FB, introduced: P4 }
+  - name: SERVICE_BOTA_WIFI_CONFIG
+    uuid: B07A0006-0000-1000-8000-00805F9B34FB
+    characteristics:
+      - { name: CHAR_WIFI_GRANT, uuid: B07A0006-0001-1000-8000-00805F9B34FB }
+      - { name: CHAR_WIFI_CREDENTIAL, uuid: B07A0006-0002-1000-8000-00805F9B34FB }
+      - { name: CHAR_WIFI_STATUS, uuid: B07A0006-0003-1000-8000-00805F9B34FB }
+      - { name: CHAR_WIFI_SCAN, uuid: B07A0006-0004-1000-8000-00805F9B34FB }
+  - name: SERVICE_BOTA_DIAGNOSTICS
+    uuid: B07A0007-0000-1000-8000-00805F9B34FB
+    characteristics:
+      - { name: CHAR_DEVICE_LOG_CONTROL, uuid: B07A0007-0001-1000-8000-00805F9B34FB }
+      - { name: CHAR_DEVICE_LOG_DATA, uuid: B07A0007-0002-1000-8000-00805F9B34FB }
+
+constantGroups:
+  device_types:
+    DEVICE_TYPE_PIN: 1
+    DEVICE_TYPE_PIN_4G: 2
+    DEVICE_TYPE_NOTE: 3
+  pairing_states:
+    PAIRING_STATE_UNPAIRED: 0
+    PAIRING_STATE_PAIRING: 1
+    PAIRING_STATE_PAIRED: 2
+    PAIRING_STATE_ERROR: 3
+  capability_flags:
+    CAP_BLE_SYNC: 1
+    CAP_WIFI_UPLOAD: 2
+    CAP_LTE_UPLOAD: 4
+    CAP_REMOTE_RECORD: 8
+  provisioning_results:
+    PROVISIONING_SUCCESS: 0
+    PROVISIONING_INVALID_TOKEN: 1
+    PROVISIONING_STORAGE_ERROR: 2
+    PROVISIONING_CHUNK_ERROR: 3
+    PROVISIONING_ALREADY_PAIRED: 4
+  wifi_config_results:
+    WIFI_CONFIG_SUCCESS: 0
+    WIFI_CONFIG_INVALID_GRANT: 1
+    WIFI_CONFIG_GRANT_EXPIRED: 2
+    WIFI_CONFIG_DECRYPTION_ERROR: 3
+    WIFI_CONFIG_STORAGE_ERROR: 4
+  transfer_commands:
+    TRANSFER_CMD_LIST: 1
+    TRANSFER_CMD_START: 2
+    TRANSFER_CMD_TRIGGER_DEVICE_UPLOAD: 3
+    TRANSFER_CMD_CONFIRM_SYNC: 7
+  trigger_upload_results:
+    TRIGGER_UPLOAD_ACCEPTED: 0
+    TRIGGER_UPLOAD_NO_NETWORK: 1
+    TRIGGER_UPLOAD_BUSY: 2
+    TRIGGER_UPLOAD_NO_TOKEN: 3
+  transfer_packet_types:
+    PACKET_TYPE_DATA: 1
+    PACKET_TYPE_EOF: 2
+    PACKET_TYPE_PAUSED: 3
+    PACKET_TYPE_SHA256: 4
+    PACKET_TYPE_E2E_START: 5
+    PACKET_TYPE_ENCRYPTED_DATA: 129
+    PACKET_TYPE_ENCRYPTED_EOF: 130
+    PACKET_TYPE_ERROR: 255
+  acknowledgement_types:
+    ACK_TYPE_ACK: 16
+    ACK_TYPE_NACK: 17
+    ACK_TYPE_ABORT: 18
+  device_commands:
+    DEVICE_CMD_FACTORY_RESET: 1
+    DEVICE_CMD_ENTER_DFU: 3
+    DEVICE_CMD_BLE_DEPROVISION: 5
+    DEVICE_CMD_BLE_FACTORY_RESET: 6
+    DEVICE_CMD_BLE_FACTORY_RESET_RESULT_ACK: 10
+  recording_commands:
+    RECORDING_CMD_LOCAL_START: 1
+    RECORDING_CMD_LOCAL_STOP: 2
+    RECORDING_CMD_GRANT_START: 16
+    RECORDING_CMD_GRANT_STOP: 17
+  recording_results:
+    RECORDING_RESULT_SUCCESS: 0
+    RECORDING_RESULT_ERROR: 1
+    RECORDING_RESULT_ALREADY_RECORDING: 2
+    RECORDING_RESULT_NOT_RECORDING: 3
+    RECORDING_RESULT_INVALID_GRANT: 4
+    RECORDING_RESULT_GRANT_EXPIRED: 5
+    RECORDING_RESULT_INVALID_STATE: 6
+  device_states:
+    DEVICE_STATE_IDLE: 0
+    DEVICE_STATE_RECORDING: 1
+    DEVICE_STATE_SYNCING: 2
+    DEVICE_STATE_UPLOADING: 3
+    DEVICE_STATE_CHARGING: 4
+    DEVICE_STATE_LOW_BATTERY: 5
+    DEVICE_STATE_STORAGE_FULL: 6
+    DEVICE_STATE_ERROR: 7
+  device_status_flags:
+    FLAG_CHARGING: 1
+    FLAG_LOW_BATTERY: 2
+    FLAG_STORAGE_FULL: 4
+    FLAG_WIFI_CONNECTED: 8
+    FLAG_LTE_CONNECTED: 16
+    FLAG_SYNC_ACTIVE: 32
+  lte_status:
+    LTE_STATUS_OFF: 0
+    LTE_STATUS_SEARCHING: 1
+    LTE_STATUS_REGISTERED: 2
+    LTE_STATUS_CONNECTED: 3
+    LTE_STATUS_DENIED: 4
+    LTE_STATUS_NO_SIM: 5
+    LTE_STATUS_ERROR: 6
+    LTE_STATUS_LOW_VOLTAGE: 7
+    LTE_STATUS_DISABLED: 8
+  wifi_radio_status:
+    WIFI_RADIO_OFF: 0
+    WIFI_RADIO_SCANNING: 1
+    WIFI_RADIO_CONNECTING: 2
+    WIFI_RADIO_CONNECTED: 3
+    WIFI_RADIO_CONNECT_FAILED: 4
+    WIFI_RADIO_NO_CREDENTIALS: 5
+    WIFI_RADIO_DISABLED: 6
+    WIFI_RADIO_ERROR: 7
+  audio_codecs:
+    CODEC_PCM_16K: 0
+    CODEC_PCM_8K: 1
+    CODEC_OPUS_16K: 16
+    CODEC_OPUS_8K: 17
+  connection_ids:
+    CONN_ID_WIFI: 1
+    CONN_ID_BLE: 2
+    CONN_ID_CELLULAR: 3
+  heartbeat_masks:
+    HEARTBEAT_EXPLICIT: 128
+    HEARTBEAT_WIFI: 1
+    HEARTBEAT_CELLULAR: 2
+  device_log:
+    DEVICE_LOG_CMD_STOP: 0
+    DEVICE_LOG_CMD_START: 1
+    DEVICE_LOG_FLAG_BACKLOG: 1
+    DEVICE_LOG_FLAG_DROPPED: 2
+  ota:
+    FIRMWARE_UPLOAD_START: 8
+    FIRMWARE_UPLOAD_VERIFY: 9
+    FIRMWARE_DATA: 32
+    FIRMWARE_ACK: 16
+  ble_errors:
+    BLE_ERROR_SUCCESS: 0
+    BLE_ERROR_INVALID_COMMAND: 1
+    BLE_ERROR_INVALID_STATE: 2
+    BLE_ERROR_INVALID_PARAMETER: 3
+    BLE_ERROR_STORAGE_FULL: 16
+    BLE_ERROR_RECORDING_NOT_FOUND: 17
+    BLE_ERROR_TRANSFER_FAILED: 18
+    BLE_ERROR_STORAGE_KEY_UNAVAILABLE: 20
+    BLE_ERROR_TOKEN_INVALID: 32
+    BLE_ERROR_TOKEN_EXPIRED: 33
+    BLE_ERROR_NETWORK_ERROR: 48
+    BLE_ERROR_UPLOAD_FAILED: 49
+    BLE_ERROR_UNKNOWN: 255
+
+layouts:
+  DEVICE_STATUS:
+    minimumLength: 14
+    fields:
+      - { name: battery_percent, offset: 0, width: 1, encoding: u8 }
+      - { name: lte_status, offset: 1, width: 1, encoding: enum_u8 }
+      - { name: device_state, offset: 2, width: 1, encoding: enum_u8 }
+      - { name: pending_recordings, offset: 3, width: 1, encoding: u8 }
+      - { name: last_time_sync, offset: 4, width: 4, encoding: u32_le }
+      - { name: flags, offset: 8, width: 1, encoding: bitmask_u8 }
+      - { name: storage_total_mb, offset: 9, width: 2, encoding: u16_le }
+      - { name: storage_used_mb, offset: 11, width: 2, encoding: u16_le }
+      - { name: lte_signal_quality, offset: 13, width: 1, encoding: u8 }
+      - { name: wifi_status, offset: 14, width: 1, encoding: enum_u8, optional: true }
+      - { name: battery_mv, offset: 15, width: 2, encoding: u16_le, optional: true }
+      - { name: modem_info, offset: 17, width: 0, encoding: utf8_tail, optional: true }
+  STORAGE_INFO:
+    minimumLength: 12
+    fields:
+      - { name: total_kb, offset: 0, width: 4, encoding: u32_le }
+      - { name: used_kb, offset: 4, width: 4, encoding: u32_le }
+      - { name: total_recordings, offset: 8, width: 2, encoding: u16_le }
+      - { name: pending_sync_count, offset: 10, width: 2, encoding: u16_le }
+  RECORDING_ENTRY:
+    minimumLength: 24
+    fixedLength: 24
+    fields:
+      - { name: file_id, offset: 0, width: 4, encoding: bytes }
+      - { name: flags, offset: 4, width: 1, encoding: bitmask_u8 }
+      - { name: timestamp, offset: 16, width: 4, encoding: u32_le }
+      - { name: duration_seconds, offset: 20, width: 2, encoding: u16_le }
+      - { name: size_kb, offset: 22, width: 2, encoding: u16_le }
+  TRANSFER_PACKET:
+    minimumLength: 3
+    fields:
+      - { name: packet_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: sequence, offset: 1, width: 2, encoding: u16_le }
+      - { name: payload_length_or_checksum, offset: 3, width: 2, encoding: type_specific, optional: true }
+      - { name: payload, offset: 5, width: 0, encoding: bytes_tail, optional: true }
+  DEVICE_SETTINGS:
+    minimumLength: 8
+    fixedLength: 12
+    fields:
+      - { name: version, offset: 0, width: 1, encoding: u8 }
+      - { name: enabled_mask, offset: 1, width: 1, encoding: bitmask_u8 }
+      - { name: upload_preference, offset: 2, width: 3, encoding: connection_ids }
+      - { name: cellular_idle_timeout, offset: 5, width: 1, encoding: timeout_10s }
+      - { name: wifi_idle_timeout, offset: 6, width: 1, encoding: timeout_10s }
+      - { name: streaming_enabled, offset: 7, width: 1, encoding: bool_u8 }
+      - { name: flush_interval_seconds, offset: 8, width: 1, encoding: u8, optional: true }
+      - { name: heartbeat_mask, offset: 9, width: 1, encoding: bitmask_u8, optional: true }
+  DEVICE_LOG_PACKET:
+    minimumLength: 3
+    fields:
+      - { name: sequence, offset: 0, width: 2, encoding: u16_le }
+      - { name: flags, offset: 2, width: 1, encoding: bitmask_u8 }
+      - { name: utf8_bytes, offset: 3, width: 0, encoding: bytes_tail }
+  FIRMWARE_UPLOAD_START:
+    minimumLength: 5
+    fixedLength: 5
+    fields:
+      - { name: command, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: file_size, offset: 1, width: 4, encoding: u32_le }
+  FIRMWARE_DATA_PACKET:
+    minimumLength: 3
+    fields:
+      - { name: command, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: sequence, offset: 1, width: 2, encoding: u16_le }
+      - { name: payload, offset: 3, width: 0, encoding: bytes_tail }
+  FIRMWARE_UPLOAD_VERIFY:
+    minimumLength: 5
+    fixedLength: 5
+    fields:
+      - { name: command, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: crc32, offset: 1, width: 4, encoding: u32_le }
+
+limits:
+  DEFAULT_MTU: 23
+  MAX_MTU: 512
+  TRANSFER_WINDOW_SIZE: 4
+  FIRMWARE_CHUNK_SIZE: 500
+  FIRMWARE_ACK_WINDOW: 8
+  SHA256_LENGTH: 32
+  E2E_EPHEMERAL_PUBLIC_KEY_LENGTH: 32
+  E2E_SALT_LENGTH: 4
+  E2E_TAG_LENGTH: 16

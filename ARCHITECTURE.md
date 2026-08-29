@@ -60,6 +60,12 @@ digests, fixture digest, and passing test counts. `npm run baseline:react-native
 builds and tests an explicit SDK checkout before comparing every applicable
 fixture; it refuses dirty checkouts unless the audit flag is supplied.
 
+Stable wire facts such as service UUIDs, characteristic UUIDs, opcodes, packet
+types, field layouts, and size limits live in
+`protocol/manifest/device-protocol.yaml`. Rust constants are generated into
+`core/device-sdk-core/src/generated/protocol.rs`; edit the manifest and run
+`cargo xtask protocol generate` rather than editing generated code.
+
 ## Security
 
 - Never commit credentials, tokens, private keys, certificate bodies, signing

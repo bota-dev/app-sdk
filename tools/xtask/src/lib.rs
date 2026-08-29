@@ -1,5 +1,7 @@
 use std::{ffi::OsString, path::PathBuf};
 
+pub mod protocol;
+
 pub mod release {
     use semver::Version;
     use serde::Deserialize;
@@ -146,12 +148,38 @@ pub mod release {
 pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
     let args: Vec<OsString> = args.into_iter().collect();
     match args.as_slice() {
+        [protocol, generate] if protocol == "protocol" && generate == "generate" => {
+            let root = std::env::current_dir()
+                .map_err(|error| format!("cannot resolve repository root: {error}"))?;
+            let changed = protocol::generate(&root, false)?;
+            println!(
+                "protocol constants {}",
+                if changed {
+                    "generated"
+                } else {
+                    "already current"
+                }
+            );
+            Ok(())
+        }
+        [protocol, generate, check]
+            if protocol == "protocol" && generate == "generate" && check == "--check" =>
+        {
+            let root = std::env::current_dir()
+                .map_err(|error| format!("cannot resolve repository root: {error}"))?;
+            protocol::generate(&root, true)?;
+            println!("protocol constants are current");
+            Ok(())
+        }
         [release, validate, path] if release == "release" && validate == "validate" => {
             let path = PathBuf::from(path);
             release::validate_manifest(&path)?;
             println!("release manifest is valid: {}", path.display());
             Ok(())
         }
-        _ => Err("usage: cargo xtask release validate <manifest.json>".to_owned()),
+        _ => Err(
+            "usage: cargo xtask <protocol generate [--check] | release validate <manifest.json>>"
+                .to_owned(),
+        ),
     }
 }
