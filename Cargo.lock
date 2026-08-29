@@ -14,6 +14,9 @@ dependencies = [
 [[package]]
 name = "bota-device-sdk-core"
 version = "0.1.0-alpha.1"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "cfg-if"

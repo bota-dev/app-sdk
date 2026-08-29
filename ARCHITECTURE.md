@@ -66,6 +66,14 @@ types, field layouts, and size limits live in
 `core/device-sdk-core/src/generated/protocol.rs`; edit the manifest and run
 `cargo xtask protocol generate` rather than editing generated code.
 
+Core models are owned Rust values with no platform Bluetooth types. Unknown
+wire enum values remain representable for forward compatibility, validated
+device and recording identifiers cannot be constructed from malformed input,
+and connection settings preserve immediate-off (`0`) versus always-on (`-1`).
+Stable errors expose a machine code, operation, retryability, optional protocol
+status, and diagnostic detail; callers branch on the stable fields rather than
+platform error text.
+
 ## Security
 
 - Never commit credentials, tokens, private keys, certificate bodies, signing
