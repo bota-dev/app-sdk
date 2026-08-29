@@ -1,0 +1,9 @@
+{
+  "packages": [
+    {
+      "name": "dual-license-package",
+      "version": "1.0.0",
+      "license": "MIT OR GPL-3.0-only"
+    }
+  ]
+}
