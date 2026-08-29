@@ -89,6 +89,16 @@ match the React Native baseline by rounding down to 10-second units with a
 minimum encoded value of one. Provisioning payload chunking rejects data that
 would exceed the one-byte chunk-count limit.
 
+Workflow coordination uses the command/event/effect boundary in
+`core/device-sdk-core/src/engine/`. Commands are authorized against explicit
+host capabilities before effects can be built. Platform callbacks enter as
+typed events, while every requested host effect carries an operation and
+cancellation ID. Persisted checkpoints intentionally cannot contain
+credentials, presigned URLs, private keys, file paths, or recording payloads.
+Milestone 1 defines these contracts only; reducer implementations and the FFI
+mechanism are deferred as specified in
+[`ADR 0001`](docs/adr/0001-command-event-host-boundary.md).
+
 ## Security
 
 - Never commit credentials, tokens, private keys, certificate bodies, signing

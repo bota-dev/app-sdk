@@ -1,0 +1,102 @@
+use crate::{
+    engine::{Capability, CapabilitySet},
+    error::{DeviceSdkError, ErrorCode, Operation},
+    model::{DeviceSerialNumber, FirmwareImage, RecordingUuid},
+};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum Command {
+    DiscoverDevices,
+    Connect {
+        device: DeviceSerialNumber,
+    },
+    Provision {
+        device: DeviceSerialNumber,
+    },
+    TransferRecording {
+        device: DeviceSerialNumber,
+        recording: RecordingUuid,
+    },
+    UploadRecording {
+        recording: RecordingUuid,
+    },
+    UpdateFirmware {
+        device: DeviceSerialNumber,
+        image: FirmwareImage,
+    },
+    ReadDeviceLogs {
+        device: DeviceSerialNumber,
+    },
+    FactoryReset {
+        device: DeviceSerialNumber,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AuthorizedCommand(Command);
+
+impl AuthorizedCommand {
+    pub fn command(&self) -> &Command {
+        &self.0
+    }
+}
+
+impl Command {
+    pub fn authorize(
+        &self,
+        capabilities: &CapabilitySet,
+    ) -> Result<AuthorizedCommand, DeviceSdkError> {
+        for capability in self.required_capabilities() {
+            if !capabilities.contains(*capability) {
+                return Err(DeviceSdkError::new(
+                    ErrorCode::UnsupportedCapability,
+                    self.operation(),
+                    false,
+                )
+                .with_detail(format!("host does not provide {capability:?}")));
+            }
+        }
+        Ok(AuthorizedCommand(self.clone()))
+    }
+
+    pub const fn operation(&self) -> Operation {
+        match self {
+            Self::DiscoverDevices => Operation::Discover,
+            Self::Connect { .. } => Operation::Connect,
+            Self::Provision { .. } => Operation::Provision,
+            Self::TransferRecording { .. } => Operation::TransferRecording,
+            Self::UploadRecording { .. } => Operation::Upload,
+            Self::UpdateFirmware { .. } => Operation::UpdateFirmware,
+            Self::ReadDeviceLogs { .. } => Operation::ReadDeviceLogs,
+            Self::FactoryReset { .. } => Operation::FactoryReset,
+        }
+    }
+
+    const fn required_capabilities(&self) -> &'static [Capability] {
+        match self {
+            Self::DiscoverDevices | Self::Connect { .. } | Self::ReadDeviceLogs { .. } => {
+                &[Capability::Ble]
+            }
+            Self::Provision { .. } | Self::FactoryReset { .. } => {
+                &[Capability::Ble, Capability::SecureStorage]
+            }
+            Self::TransferRecording { .. } => &[
+                Capability::Ble,
+                Capability::Persistence,
+                Capability::Progress,
+            ],
+            Self::UploadRecording { .. } => &[
+                Capability::NetworkTransfer,
+                Capability::Persistence,
+                Capability::Progress,
+            ],
+            Self::UpdateFirmware { .. } => &[
+                Capability::Ble,
+                Capability::NetworkTransfer,
+                Capability::Persistence,
+                Capability::Progress,
+            ],
+        }
+    }
+}
