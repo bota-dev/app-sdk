@@ -1,0 +1,9 @@
+[package]
+name = "bota-device-sdk-core"
+version = "0.1.0-alpha.1"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+path = "src/lib.rs"
