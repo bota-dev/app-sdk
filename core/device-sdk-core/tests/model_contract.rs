@@ -45,6 +45,7 @@ fn note_settings_remove_cellular_without_reordering_other_channels() {
         heartbeat: HeartbeatConnections {
             wifi: true,
             cellular: true,
+            unknown_mask: 0,
         },
         upload_priority: vec![
             ConnectionType::Wifi,

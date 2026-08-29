@@ -81,6 +81,14 @@ plus deterministic arbitrary-length input tests. Unknown device states,
 connection types, WiFi results, and status bytes remain available as raw values
 in the core; compatibility fallbacks belong at the platform facade boundary.
 
+Serializers are typed and capacity checked before producing transport effects.
+They normalize model constraints such as removing cellular from Bota Note,
+preserve unknown heartbeat-mask bits, and keep the wire distinction between
+immediate-off (`0x00`) and always-on (`0xFF`). Positive legacy timeout values
+match the React Native baseline by rounding down to 10-second units with a
+minimum encoded value of one. Provisioning payload chunking rejects data that
+would exceed the one-byte chunk-count limit.
+
 ## Security
 
 - Never commit credentials, tokens, private keys, certificate bodies, signing

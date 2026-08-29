@@ -45,11 +45,16 @@ pub fn parse_connection_settings(bytes: &[u8]) -> Result<ParsedConnectionSetting
         HeartbeatConnections {
             wifi: true,
             cellular: true,
+            unknown_mask: 0,
         }
     } else {
         HeartbeatConnections {
             wifi: heartbeat_mask & protocol::HEARTBEAT_WIFI != 0,
             cellular: heartbeat_mask & protocol::HEARTBEAT_CELLULAR != 0,
+            unknown_mask: heartbeat_mask
+                & !(protocol::HEARTBEAT_EXPLICIT
+                    | protocol::HEARTBEAT_WIFI
+                    | protocol::HEARTBEAT_CELLULAR),
         }
     };
 
@@ -93,6 +98,7 @@ fn default_settings() -> DeviceConnectionSettings {
         heartbeat: HeartbeatConnections {
             wifi: true,
             cellular: true,
+            unknown_mask: 0,
         },
         upload_priority: vec![
             ConnectionType::Wifi,
@@ -105,5 +111,42 @@ fn default_settings() -> DeviceConnectionSettings {
         },
         streaming_enabled: true,
         streaming_flush_interval_seconds: 60,
+    }
+}
+
+pub fn encode_connection_settings(
+    settings: &DeviceConnectionSettings,
+    model: crate::model::DeviceModel,
+) -> Result<Vec<u8>, DeviceSdkError> {
+    let settings = settings.normalized_for(model);
+    let mut bytes = vec![0_u8; protocol::DEVICE_SETTINGS_FIXED_LENGTH];
+    bytes[0] = 0x02;
+    bytes[1] = u8::from(settings.enabled.wifi) | (u8::from(settings.enabled.cellular) << 1);
+
+    for (index, connection) in settings.upload_priority.iter().take(3).enumerate() {
+        bytes[2 + index] = connection.to_wire();
+    }
+    bytes[5] = encode_timeout(settings.power.cellular)?;
+    bytes[6] = encode_timeout(settings.power.wifi)?;
+    bytes[7] = u8::from(settings.streaming_enabled);
+    bytes[8] = settings.streaming_flush_interval_seconds.min(128);
+    bytes[9] = protocol::HEARTBEAT_EXPLICIT
+        | settings.heartbeat.unknown_mask
+        | u8::from(settings.heartbeat.wifi)
+        | (u8::from(settings.heartbeat.cellular) << 1);
+    Ok(bytes)
+}
+
+fn encode_timeout(timeout: IdleTimeout) -> Result<u8, DeviceSdkError> {
+    match timeout {
+        IdleTimeout::Immediate => Ok(0),
+        IdleTimeout::AlwaysOn => Ok(u8::MAX),
+        IdleTimeout::Seconds(seconds) if seconds <= 2_540 => Ok((seconds / 10).max(1) as u8),
+        IdleTimeout::Seconds(_) => Err(crate::error::DeviceSdkError::new(
+            crate::error::ErrorCode::InvalidInput,
+            crate::error::Operation::Encode,
+            false,
+        )
+        .with_detail("idle timeout must not exceed 2540 seconds")),
     }
 }

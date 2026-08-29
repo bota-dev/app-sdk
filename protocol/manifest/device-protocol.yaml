@@ -92,6 +92,8 @@ constantGroups:
     WIFI_CONFIG_GRANT_EXPIRED: 2
     WIFI_CONFIG_DECRYPTION_ERROR: 3
     WIFI_CONFIG_STORAGE_ERROR: 4
+  wifi_scan_commands:
+    WIFI_SCAN_CMD_START: 1
   transfer_commands:
     TRANSFER_CMD_LIST: 1
     TRANSFER_CMD_START: 2

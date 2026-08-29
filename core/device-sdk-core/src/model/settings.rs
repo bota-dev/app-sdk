@@ -72,6 +72,7 @@ pub struct EnabledConnections {
 pub struct HeartbeatConnections {
     pub wifi: bool,
     pub cellular: bool,
+    pub unknown_mask: u8,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
