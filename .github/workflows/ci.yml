@@ -40,6 +40,9 @@ jobs:
       - name: Test repository tooling
         run: npm run test:tooling
 
+      - name: Validate release manifest
+        run: cargo xtask release validate release/examples/0.1.0-alpha.1.json
+
       - name: Check Rust formatting
         run: cargo fmt --all -- --check
 

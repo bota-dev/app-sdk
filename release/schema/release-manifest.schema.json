@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bota.dev/schemas/device-sdk-release-manifest-v1.json",
+  "title": "Bota Device SDK release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifestVersion",
+    "sdkVersion",
+    "sourceRevision",
+    "protocolFixtureDigest",
+    "firmwareCompatibility",
+    "artifacts"
+  ],
+  "properties": {
+    "manifestVersion": { "const": 1 },
+    "sdkVersion": { "$ref": "#/$defs/semanticVersion" },
+    "sourceRevision": { "$ref": "#/$defs/gitRevision" },
+    "protocolFixtureDigest": { "$ref": "#/$defs/sha256" },
+    "firmwareCompatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum", "maximum", "baselineRevision"],
+      "properties": {
+        "minimum": { "$ref": "#/$defs/semanticVersion" },
+        "maximum": { "$ref": "#/$defs/semanticVersion" },
+        "baselineRevision": { "$ref": "#/$defs/gitRevision" }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "ecosystem",
+          "version",
+          "checksumSha256",
+          "capabilities"
+        ],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "ecosystem": { "type": "string", "minLength": 1 },
+          "version": { "$ref": "#/$defs/semanticVersion" },
+          "checksumSha256": { "$ref": "#/$defs/sha256" },
+          "capabilities": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "semanticVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "gitRevision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

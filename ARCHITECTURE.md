@@ -42,6 +42,11 @@ Every published Device SDK artifact uses the exact semantic version in
 [`sdk-version.toml`](sdk-version.toml). Release tooling rejects a package or
 manifest with a different version.
 
+The release manifest also pins the source revision, firmware compatibility
+range, protocol-fixture digest, artifact checksums, and artifact capability
+sets. An artifact is not publishable unless it appears in a validated manifest
+and its version matches `sdk-version.toml`.
+
 ## Migration Rule
 
 The existing React Native SDK at revision `44ac1221cb71` is the initial
