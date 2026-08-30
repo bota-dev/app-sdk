@@ -87,8 +87,9 @@ revision. New implementation belongs in this monorepo.
 ## Shipping ABI
 
 The shipping crate is `bota-device-sdk-ffi`. It builds `staticlib` and `cdylib`
-artifacts and depends on `bota-device-sdk-core`. The existing `tools/ffi-smoke`
-crate remains comparison tooling until its tests move to the shipping crate.
+artifacts and depends on `bota-device-sdk-core`. External C and Swift smoke
+callers target this shipping crate; `tools/ffi-smoke` retains only the
+feature-gated UniFFI comparison implementation.
 
 ### Versioning and symbols
 

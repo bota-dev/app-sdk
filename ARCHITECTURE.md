@@ -174,6 +174,11 @@ connection-settings, and device-log formats to the shared core. Fragmented log
 state is scoped to the engine handle, and unknown wire enum values remain
 numeric fields rather than being discarded.
 
+The public header exposes Swift-importable typed numeric constants and a Clang
+module map. Standalone C and Swift programs compile and run against the shipping
+static library in CI; the old JSON C exports have been removed, leaving JSON
+only inside the explicitly enabled UniFFI decision spike.
+
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host
 capabilities, ordered inputs, ordered effects and notifications, and terminal

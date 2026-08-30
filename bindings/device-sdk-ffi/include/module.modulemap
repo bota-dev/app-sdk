@@ -1,0 +1,4 @@
+module BotaDeviceSDKC {
+    header "bota_device_sdk.h"
+    export *
+}

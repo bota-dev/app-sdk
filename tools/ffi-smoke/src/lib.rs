@@ -1,13 +1,10 @@
+#![cfg(feature = "uniffi-spike")]
+
 use bota_device_sdk_core::engine::{
     CancellationId, CapabilitySet, Command, EffectRequest, Event, HostEvent, HostEventKind,
     RequestId, WorkflowEngine,
 };
-use std::{
-    collections::VecDeque,
-    panic::{AssertUnwindSafe, catch_unwind},
-    ptr,
-    sync::Mutex,
-};
+use std::{collections::VecDeque, sync::Mutex};
 
 pub const BOTA_DEVICE_SDK_CAPABILITY_BLE: u64 = 1 << 0;
 pub const BOTA_DEVICE_SDK_CAPABILITY_TIMER: u64 = 1 << 1;
@@ -29,48 +26,21 @@ const KNOWN_CAPABILITY_BITS: u64 = BOTA_DEVICE_SDK_CAPABILITY_BLE
     | BOTA_DEVICE_SDK_CAPABILITY_RECORDING_SINK
     | BOTA_DEVICE_SDK_CAPABILITY_FIRMWARE_BLOB;
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BotaDeviceSdkStatus {
-    Ok = 0,
-    NoOutput = 1,
-    InvalidArgument = -1,
-    OperationFailed = -2,
-    Panic = -3,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct BotaDeviceSdkOwnedBuffer {
-    pub data: *mut u8,
-    pub len: usize,
-}
-
-impl Default for BotaDeviceSdkOwnedBuffer {
-    fn default() -> Self {
-        Self {
-            data: ptr::null_mut(),
-            len: 0,
-        }
-    }
-}
-
 #[derive(Default)]
 struct EngineBridge {
     engine: WorkflowEngine,
-    outputs: VecDeque<Vec<u8>>,
-    last_error: Option<Vec<u8>>,
+    outputs: VecDeque<String>,
 }
 
 impl EngineBridge {
     fn start_json(
         &mut self,
-        command_json: &[u8],
+        command_json: &str,
         capability_bits: u64,
         cancellation_id_high: u64,
         cancellation_id_low: u64,
     ) -> Result<(), String> {
-        let command: Command = serde_json::from_slice(command_json)
+        let command: Command = serde_json::from_str(command_json)
             .map_err(|error| format!("invalid command JSON: {error}"))?;
         let capabilities = capabilities_from_bits(capability_bits)?;
         let effects = self
@@ -84,8 +54,8 @@ impl EngineBridge {
         self.enqueue(effects)
     }
 
-    fn dispatch_json(&mut self, request_id: u64, event_json: &[u8]) -> Result<(), String> {
-        let kind: HostEventKind = serde_json::from_slice(event_json)
+    fn dispatch_json(&mut self, request_id: u64, event_json: &str) -> Result<(), String> {
+        let kind: HostEventKind = serde_json::from_str(event_json)
             .map_err(|error| format!("invalid event JSON: {error}"))?;
         let effects = self
             .engine
@@ -113,22 +83,13 @@ impl EngineBridge {
 
     fn enqueue(&mut self, effects: Vec<EffectRequest>) -> Result<(), String> {
         for effect in effects {
-            let encoded = serde_json::to_vec(&effect)
-                .map_err(|error| format!("failed to encode workflow effect: {error}"))?;
-            self.outputs.push_back(encoded);
+            self.outputs.push_back(
+                serde_json::to_string(&effect)
+                    .map_err(|error| format!("failed to encode workflow effect: {error}"))?,
+            );
         }
-        self.last_error = None;
         Ok(())
     }
-
-    fn fail(&mut self, message: String) {
-        self.last_error = serde_json::to_vec(&serde_json::json!({ "message": message })).ok();
-    }
-}
-
-#[repr(C)]
-pub struct BotaDeviceSdkEngine {
-    bridge: Mutex<EngineBridge>,
 }
 
 fn cancellation_id(high: u64, low: u64) -> CancellationId {
@@ -166,227 +127,23 @@ fn capabilities_from_bits(bits: u64) -> Result<CapabilitySet, String> {
         .map_err(|error| format!("failed to decode capabilities: {error}"))
 }
 
-unsafe fn copied_input(data: *const u8, len: usize) -> Result<Vec<u8>, BotaDeviceSdkStatus> {
-    if data.is_null() && len != 0 {
-        return Err(BotaDeviceSdkStatus::InvalidArgument);
-    }
-    if len == 0 {
-        return Ok(Vec::new());
-    }
-    Ok(unsafe { std::slice::from_raw_parts(data, len) }.to_vec())
-}
-
-unsafe fn write_owned_buffer(
-    bytes: Vec<u8>,
-    out: *mut BotaDeviceSdkOwnedBuffer,
-) -> BotaDeviceSdkStatus {
-    if out.is_null() {
-        return BotaDeviceSdkStatus::InvalidArgument;
-    }
-    let mut bytes = bytes.into_boxed_slice();
-    let buffer = BotaDeviceSdkOwnedBuffer {
-        data: bytes.as_mut_ptr(),
-        len: bytes.len(),
-    };
-    std::mem::forget(bytes);
-    unsafe { out.write(buffer) };
-    BotaDeviceSdkStatus::Ok
-}
-
-unsafe fn run_with_engine(
-    engine: *mut BotaDeviceSdkEngine,
-    operation: impl FnOnce(&mut EngineBridge) -> Result<(), String>,
-) -> BotaDeviceSdkStatus {
-    if engine.is_null() {
-        return BotaDeviceSdkStatus::InvalidArgument;
-    }
-    match catch_unwind(AssertUnwindSafe(|| {
-        let engine = unsafe { &*engine };
-        let mut bridge = engine
-            .bridge
-            .lock()
-            .map_err(|_| "engine lock is poisoned".to_owned())?;
-        operation(&mut bridge).inspect_err(|message| bridge.fail(message.clone()))
-    })) {
-        Ok(Ok(())) => BotaDeviceSdkStatus::Ok,
-        Ok(Err(_)) => BotaDeviceSdkStatus::OperationFailed,
-        Err(_) => BotaDeviceSdkStatus::Panic,
-    }
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn bota_device_sdk_engine_new() -> *mut BotaDeviceSdkEngine {
-    catch_unwind(|| {
-        Box::into_raw(Box::new(BotaDeviceSdkEngine {
-            bridge: Mutex::new(EngineBridge::default()),
-        }))
-    })
-    .unwrap_or(ptr::null_mut())
-}
-
-#[unsafe(no_mangle)]
-/// # Safety
-///
-/// `engine` must be null or a live pointer returned by
-/// [`bota_device_sdk_engine_new`] that has not already been freed.
-pub unsafe extern "C" fn bota_device_sdk_engine_free(engine: *mut BotaDeviceSdkEngine) {
-    if !engine.is_null() {
-        drop(unsafe { Box::from_raw(engine) });
-    }
-}
-
-#[unsafe(no_mangle)]
-/// # Safety
-///
-/// `engine` must be a live SDK engine. `command_json` must point to
-/// `command_len` readable bytes for the duration of this call.
-pub unsafe extern "C" fn bota_device_sdk_engine_start_json(
-    engine: *mut BotaDeviceSdkEngine,
-    command_json: *const u8,
-    command_len: usize,
-    capability_bits: u64,
-    cancellation_id_high: u64,
-    cancellation_id_low: u64,
-) -> BotaDeviceSdkStatus {
-    let command_json = match unsafe { copied_input(command_json, command_len) } {
-        Ok(value) => value,
-        Err(status) => return status,
-    };
-    unsafe {
-        run_with_engine(engine, |bridge| {
-            bridge.start_json(
-                &command_json,
-                capability_bits,
-                cancellation_id_high,
-                cancellation_id_low,
-            )
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-/// # Safety
-///
-/// `engine` must be a live SDK engine. `event_json` must point to `event_len`
-/// readable bytes for the duration of this call.
-pub unsafe extern "C" fn bota_device_sdk_engine_dispatch_json(
-    engine: *mut BotaDeviceSdkEngine,
-    request_id: u64,
-    event_json: *const u8,
-    event_len: usize,
-) -> BotaDeviceSdkStatus {
-    let event_json = match unsafe { copied_input(event_json, event_len) } {
-        Ok(value) => value,
-        Err(status) => return status,
-    };
-    unsafe {
-        run_with_engine(engine, |bridge| {
-            bridge.dispatch_json(request_id, &event_json)
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-/// # Safety
-///
-/// `engine` must be a live SDK engine.
-pub unsafe extern "C" fn bota_device_sdk_engine_cancel(
-    engine: *mut BotaDeviceSdkEngine,
-    cancellation_id_high: u64,
-    cancellation_id_low: u64,
-) -> BotaDeviceSdkStatus {
-    unsafe {
-        run_with_engine(engine, |bridge| {
-            bridge.cancel(cancellation_id_high, cancellation_id_low)
-        })
-    }
-}
-
-#[unsafe(no_mangle)]
-/// # Safety
-///
-/// `engine` must be a live SDK engine and `out_buffer` must point to writable
-/// memory. A successful output must later be passed exactly once to
-/// [`bota_device_sdk_buffer_free`].
-pub unsafe extern "C" fn bota_device_sdk_engine_poll_output(
-    engine: *mut BotaDeviceSdkEngine,
-    out_buffer: *mut BotaDeviceSdkOwnedBuffer,
-) -> BotaDeviceSdkStatus {
-    if engine.is_null() || out_buffer.is_null() {
-        return BotaDeviceSdkStatus::InvalidArgument;
-    }
-    match catch_unwind(AssertUnwindSafe(|| {
-        unsafe { out_buffer.write(BotaDeviceSdkOwnedBuffer::default()) };
-        let engine = unsafe { &*engine };
-        let mut bridge = engine.bridge.lock().map_err(|_| ())?;
-        Ok::<_, ()>(bridge.outputs.pop_front())
-    })) {
-        Ok(Ok(Some(bytes))) => unsafe { write_owned_buffer(bytes, out_buffer) },
-        Ok(Ok(None)) => BotaDeviceSdkStatus::NoOutput,
-        Ok(Err(())) => BotaDeviceSdkStatus::OperationFailed,
-        Err(_) => BotaDeviceSdkStatus::Panic,
-    }
-}
-
-#[unsafe(no_mangle)]
-/// # Safety
-///
-/// `engine` must be a live SDK engine and `out_buffer` must point to writable
-/// memory. A successful output must later be passed exactly once to
-/// [`bota_device_sdk_buffer_free`].
-pub unsafe extern "C" fn bota_device_sdk_engine_last_error(
-    engine: *mut BotaDeviceSdkEngine,
-    out_buffer: *mut BotaDeviceSdkOwnedBuffer,
-) -> BotaDeviceSdkStatus {
-    if engine.is_null() || out_buffer.is_null() {
-        return BotaDeviceSdkStatus::InvalidArgument;
-    }
-    match catch_unwind(AssertUnwindSafe(|| {
-        unsafe { out_buffer.write(BotaDeviceSdkOwnedBuffer::default()) };
-        let engine = unsafe { &*engine };
-        let bridge = engine.bridge.lock().map_err(|_| ())?;
-        Ok::<_, ()>(bridge.last_error.clone())
-    })) {
-        Ok(Ok(Some(bytes))) => unsafe { write_owned_buffer(bytes, out_buffer) },
-        Ok(Ok(None)) => BotaDeviceSdkStatus::NoOutput,
-        Ok(Err(())) => BotaDeviceSdkStatus::OperationFailed,
-        Err(_) => BotaDeviceSdkStatus::Panic,
-    }
-}
-
-#[unsafe(no_mangle)]
-/// # Safety
-///
-/// `buffer` must be an SDK-owned value returned by a successful poll or error
-/// call, and it must not have been freed previously.
-pub unsafe extern "C" fn bota_device_sdk_buffer_free(buffer: BotaDeviceSdkOwnedBuffer) {
-    if !buffer.data.is_null() {
-        let slice = ptr::slice_from_raw_parts_mut(buffer.data, buffer.len);
-        drop(unsafe { Box::from_raw(slice) });
-    }
-}
-
-#[cfg(feature = "uniffi-spike")]
 #[derive(Debug, thiserror::Error, uniffi::Error)]
 pub enum UniFfiSmokeError {
     #[error("{message}")]
     Failure { message: String },
 }
 
-#[cfg(feature = "uniffi-spike")]
 impl From<String> for UniFfiSmokeError {
     fn from(message: String) -> Self {
         Self::Failure { message }
     }
 }
 
-#[cfg(feature = "uniffi-spike")]
 #[derive(uniffi::Object)]
 pub struct UniFfiEngine {
     bridge: Mutex<EngineBridge>,
 }
 
-#[cfg(feature = "uniffi-spike")]
 #[uniffi::export]
 impl UniFfiEngine {
     #[uniffi::constructor]
@@ -405,7 +162,7 @@ impl UniFfiEngine {
     ) -> Result<(), UniFfiSmokeError> {
         self.with_bridge(|bridge| {
             bridge.start_json(
-                command_json.as_bytes(),
+                &command_json,
                 capability_bits,
                 cancellation_id_high,
                 cancellation_id_low,
@@ -418,7 +175,7 @@ impl UniFfiEngine {
         request_id: u64,
         event_json: String,
     ) -> Result<(), UniFfiSmokeError> {
-        self.with_bridge(|bridge| bridge.dispatch_json(request_id, event_json.as_bytes()))
+        self.with_bridge(|bridge| bridge.dispatch_json(request_id, &event_json))
     }
 
     pub fn cancel(
@@ -430,16 +187,10 @@ impl UniFfiEngine {
     }
 
     pub fn poll_output(&self) -> Option<String> {
-        self.bridge
-            .lock()
-            .ok()?
-            .outputs
-            .pop_front()
-            .and_then(|output| String::from_utf8(output).ok())
+        self.bridge.lock().ok()?.outputs.pop_front()
     }
 }
 
-#[cfg(feature = "uniffi-spike")]
 impl UniFfiEngine {
     fn with_bridge(
         &self,
@@ -452,5 +203,4 @@ impl UniFfiEngine {
     }
 }
 
-#[cfg(feature = "uniffi-spike")]
 uniffi::setup_scaffolding!();

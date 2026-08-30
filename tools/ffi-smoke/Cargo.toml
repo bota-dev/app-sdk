@@ -8,11 +8,16 @@ license = "MIT"
 
 [features]
 default = []
-uniffi-spike = ["dep:thiserror", "dep:uniffi"]
+uniffi-spike = [
+  "dep:bota-device-sdk-core",
+  "dep:serde_json",
+  "dep:thiserror",
+  "dep:uniffi",
+]
 
 [dependencies]
-bota-device-sdk-core = { path = "../../core/device-sdk-core" }
-serde_json = "1.0.150"
+bota-device-sdk-core = { path = "../../core/device-sdk-core", optional = true }
+serde_json = { version = "1.0.150", optional = true }
 thiserror = { version = "2.0.18", optional = true }
 uniffi = { version = "=0.32.0", default-features = false, optional = true }
 

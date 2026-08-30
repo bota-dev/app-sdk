@@ -55,9 +55,11 @@ jobs:
       - name: Test Rust workspace
         run: cargo test --workspace
 
-      - name: Test native binding decision spike
+      - name: Test shipping native C ABI
+        run: tools/ffi-smoke/run-native-c-smoke.sh
+
+      - name: Test UniFFI binding decision spike
         run: |
-          tools/ffi-smoke/run-c-smoke.sh
           cargo test -p bota-device-sdk-ffi-smoke --features uniffi-spike --all-targets
           cargo build -p bota-device-sdk-ffi-smoke --features uniffi-spike
           cargo run -p bota-device-sdk-uniffi-bindgen -- generate --no-format --library --language swift --language kotlin --out-dir target/ffi-smoke target/debug/libbota_device_sdk_ffi_smoke.so
@@ -74,5 +76,8 @@ jobs:
         with:
           toolchain: 1.98.0
 
-      - name: Run generated Swift binding
+      - name: Run shipping Swift caller
+        run: tools/ffi-smoke/run-native-swift-smoke.sh
+
+      - name: Run generated comparison binding
         run: tools/ffi-smoke/run-uniffi-swift-smoke.sh

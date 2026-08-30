@@ -167,9 +167,10 @@ UniFFI `0.32.0` is MPL-2.0. Exact package-specific exceptions are recorded in
 repository-wide allow list. `cargo deny check` passes.
 
 The repository pins Rust `1.98.0`, locks dependencies in `Cargo.lock`, and pins
-UniFFI exactly to `0.32.0`. Linux CI compiles and runs the standalone C client,
-runs both Rust smoke paths, and regenerates Swift and Kotlin output with
-formatting disabled. macOS CI compiles and runs the generated Swift binding.
+UniFFI exactly to `0.32.0`. Linux CI compiles and runs the shipping typed C
+caller, runs the feature-gated UniFFI comparison, and regenerates Swift and
+Kotlin output with formatting disabled. macOS CI compiles and runs both the
+shipping typed Swift caller and the generated comparison binding.
 Generated files are evidence under `target/` and are not committed or
 published.
 
@@ -178,9 +179,9 @@ published.
 ```bash
 cargo test -p bota-device-sdk-core --test ffi_contract
 cargo test -p bota-device-sdk-ffi-smoke --features uniffi-spike --all-targets
-tools/ffi-smoke/run-c-smoke.sh
+tools/ffi-smoke/run-native-c-smoke.sh
+tools/ffi-smoke/run-native-swift-smoke.sh
 tools/ffi-smoke/run-uniffi-swift-smoke.sh
-cargo build --release -p bota-device-sdk-ffi-smoke --no-default-features
 cargo build --release -p bota-device-sdk-ffi-smoke --features uniffi-spike
 cargo run -p bota-device-sdk-uniffi-bindgen -- generate --no-format \
   --library --language swift --language kotlin --out-dir target/ffi-smoke \
@@ -192,8 +193,8 @@ cargo deny check
 
 Before any native facade is published:
 
-1. Replace spike JSON where typed or buffer-oriented calls materially reduce
-   allocation or schema risk.
+1. Keep spike JSON isolated to the UniFFI comparison; shipping calls use typed
+   field-list packets and raw buffer views.
 2. Freeze and version the exported C symbols and wire representations.
 3. Compile and test Apple device/simulator slices, Android ABIs, and Windows
    targets; record stripped and packaged size deltas for each.

@@ -2,7 +2,7 @@ const HEADER: &str = include_str!("../../../bindings/device-sdk-ffi/include/bota
 
 #[test]
 fn c_abi_uses_versioned_opaque_handles_and_explicit_error_ownership() {
-    assert!(HEADER.contains("#define BOTA_DEVICE_SDK_ABI_VERSION UINT32_C(1)"));
+    assert!(HEADER.contains("static const uint32_t BOTA_DEVICE_SDK_ABI_VERSION = 1;"));
     assert!(HEADER.contains("typedef struct BotaDeviceSdkEngineV1 BotaDeviceSdkEngineV1;"));
     assert!(HEADER.contains("typedef struct BotaDeviceSdkErrorV1 BotaDeviceSdkErrorV1;"));
     assert!(HEADER.contains("BotaDeviceSdkEngineV1 *bota_device_sdk_v1_engine_new(void);"));
