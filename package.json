@@ -13,7 +13,7 @@
     "license-check": "npm run check:licenses",
     "sync:apple-fixtures": "node tools/apple/sync-protocol-fixtures.mjs --check && node tools/apple/sync-workflow-fixtures.mjs --check",
     "test:fixtures": "node --test tools/baseline/*.test.mjs",
-    "test:release": "node --test tools/release/generate-apple-*.test.mjs tools/release/generate-public-swift-package.test.mjs",
+    "test:release": "node --test tools/release/*.test.mjs",
     "test:tooling": "node --test scripts/*.test.mjs tools/baseline/*.test.mjs",
     "test:workflows": "node tools/baseline/compare-workflows.mjs"
   },

@@ -49,16 +49,8 @@ mkdir -p "$OUTPUT" "$TEMP/archive"
 cp -R "$ARTIFACT" "$TEMP/archive/"
 PLIST="$TEMP/archive/BotaDeviceSDKCore.xcframework/Info.plist"
 plutil -convert json "$PLIST"
-$NODE --input-type=module - "$PLIST" <<'NODE_SCRIPT'
-import { readFileSync, writeFileSync } from 'node:fs';
-
-const path = process.argv[2];
-const plist = JSON.parse(readFileSync(path, 'utf8'));
-plist.AvailableLibraries.sort((left, right) =>
-  left.LibraryIdentifier.localeCompare(right.LibraryIdentifier));
-writeFileSync(path, JSON.stringify(plist));
-NODE_SCRIPT
-plutil -convert xml1 "$PLIST"
+$NODE "$ROOT/tools/release/normalize-apple-xcframework.mjs" "$PLIST" "$PLIST"
+plutil -lint "$PLIST" >/dev/null
 
 export COPYFILE_DISABLE=1
 export LC_ALL=C

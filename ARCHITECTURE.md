@@ -197,6 +197,9 @@ use the root `Package.swift`, which compiles the same Swift facade source and
 downloads the matching `BotaDeviceSDKCore.xcframework.zip` from the immutable
 GitHub Release URL declared for that SDK version. SwiftPM verifies that archive
 against the checked-in checksum before exposing product `BotaAppleSDK`.
+Release packaging rewrites Xcode-generated XCFramework metadata into one
+canonical plist so archives built by supported Xcode versions have identical
+container metadata and checksums.
 Assembly rejects a header digest or Swift package version that differs from the
 frozen repository evidence.
 
