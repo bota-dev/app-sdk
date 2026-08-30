@@ -187,6 +187,9 @@ actor HostEffectExecutor: CoreHost {
                 ?? effect.packet.fields.unsigned(UInt32(BOTA_DEVICE_SDK_V1_FIELD_UPLOAD_ID))
                 ?? 0
             fields.append(.unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_TRANSFER_ID), value: transferID))
+            if case let NativeHostError.httpStatus(status) = error {
+                fields.append(.unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_STATUS_CODE), value: UInt64(status)))
+            }
         } else {
             fields.append(.signed(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_PLATFORM_CODE), value: platformCode))
         }

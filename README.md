@@ -42,8 +42,11 @@ ports, bounds raw payloads, and isolates cancelled or late completions.
 A concrete CoreBluetooth driver now owns Apple delegate state on one serial
 queue, while an actor host merges system-connected peripherals, deduplicates
 scan results, serializes operations per peripheral, and preempts background
-reconnect for manual selection. Durable host implementations and the public
-Apple facade workflows are not implemented or published yet.
+reconnect for manual selection. Native host services now atomically persist
+non-secret workflow journals, isolate secrets in Keychain, keep recording and
+firmware bytes in bounded files, resolve application material by opaque ID, and
+stream URLSession progress without exposing paths or credentials to Rust. The
+public Apple facade workflows are not implemented or published yet.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own

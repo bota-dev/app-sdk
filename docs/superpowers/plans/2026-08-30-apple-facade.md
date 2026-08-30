@@ -483,7 +483,7 @@ git commit -m "feat(apple): add serialized corebluetooth host" \
 
 Use temporary directories and an injected `URLProtocol`. Assert atomic replace,
 load after host recreation, exact factory-reset result retention, delete only
-after receipt, sink append/finalize order, SHA-256 mismatch failure, bounded
+after receipt, sink append/finalize order, transfer CRC32 mismatch failure, bounded
 firmware reads, HTTP cancellation, progress monotonicity, and no URL/token/path
 inside persisted core checkpoints.
 
@@ -498,7 +498,8 @@ Expected: FAIL because concrete host services do not exist.
 Store non-secret journals under Application Support with data-protection
 attributes and atomic replacement. Store device secrets in a dedicated
 Keychain service. Restrict sink/blob IDs to generated UUID keys, never paths.
-Use `FileHandle` for bounded chunks and CryptoKit SHA-256 for final integrity.
+Use `FileHandle` for bounded chunks and the frozen transfer CRC32 for final
+integrity.
 Use URLSession delegates for streamed upload/download progress. Resolve
 provisioning/reset material only through application closures registered by
 opaque ID; never construct Bota API requests.

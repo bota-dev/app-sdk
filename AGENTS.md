@@ -55,6 +55,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Keep CoreBluetooth objects inside `CoreBluetoothDriver`'s dedicated serial
   queue. The actor host may exchange only value records and must serialize BLE
   work per peripheral while allowing disconnect to fail blocked work.
+- Keep Apple URLs, headers, file paths, Keychain values, and material callbacks
+  behind native opaque-ID registries. Core checkpoints may contain workflow
+  state only; recording integrity uses the protocol's CRC32.
 - Keep `ProtocolFixtures` and `WorkflowFixtures` generated. Run
   `npm run sync:apple-fixtures` instead of editing either resource by hand.
 - Never infer identity from an advertised BLE name alone.

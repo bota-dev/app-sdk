@@ -235,6 +235,18 @@ selection preempts a background reconnect owner, and discovery timeout tears
 down the half-open link before releasing radio ownership. Display names are
 never used as device identity.
 
+Apple native services keep operating-system resources behind opaque ABI IDs.
+`FilePersistenceHost` atomically replaces the workflow checkpoint and retains
+the exact authenticated-reset result until its matching receipt succeeds;
+device secrets route to `KeychainSecureStorageHost` instead of those files.
+Recording sinks and firmware blobs use registered UUID/download IDs with
+bounded `FileHandle` access, and recording finalization validates the CRC32
+defined by the frozen transfer protocol. `ApplicationMaterialHost` holds
+application callbacks for provisioning/reset grants in memory. Network URLs,
+headers, source files, and destinations are registered with
+`URLSessionNetworkHost`; its delegate emits byte progress and cancellation
+without placing those resources in a core packet or checkpoint.
+
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host
 capabilities, ordered inputs, ordered effects and notifications, and terminal
