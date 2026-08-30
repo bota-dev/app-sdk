@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "reference": "@bota.dev/react-native-sdk@0.0.65",
+  "scenarios": [
+    { "name": "nonce-and-key-before-host-material", "expected": "ordered" },
+    { "name": "subscribe-before-token-write", "expected": "ordered" },
+    { "name": "oversized-token-rejected-before-write", "expected": "payload_too_large" },
+    { "name": "disconnect-clears-volatile-material", "expected": "not_connected" },
+    { "name": "device-rejection-is-redacted", "expected": "protocol_rejected" }
+  ]
+}

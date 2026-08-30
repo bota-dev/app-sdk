@@ -9,6 +9,7 @@ pub enum Capability {
     SecureStorage,
     NetworkTransfer,
     Progress,
+    HostMaterial,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]

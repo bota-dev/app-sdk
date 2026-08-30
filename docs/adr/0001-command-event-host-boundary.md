@@ -37,7 +37,9 @@ Milestone 1 defined this vocabulary and its invariants. Milestone 2 now includes
 deterministic discovery plus manual connection and reconnect recovery. The
 connection reducer verifies manual selections by serial, uses saved scan-visible
 identity for reconnect, and serial-probes fallback candidates sequentially.
-Provisioning, transfer, upload, OTA, device-log, and reset remain deferred.
+Provisioning resolves backend-issued material through an opaque host effect and
+keeps nonce, key, and token bytes out of checkpoints and notifications.
+Transfer, upload, OTA, device-log, and reset remain deferred.
 
 ## FFI Decision Gate
 

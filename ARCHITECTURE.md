@@ -113,6 +113,12 @@ the next probe, and checkpoints retain only stable identity, phase, retry count,
 and candidate index. The remaining workflows and FFI mechanism are deferred as
 specified in [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md).
 
+Provisioning reads the connection-bound nonce and device public key before it
+asks the host to resolve an opaque material ID. The core validates and chunks
+the returned endpoint and token, subscribes for the result before writing, and
+overwrites volatile nonce, key, and payload buffers on every terminal path.
+Backend requests and durable credential storage remain host responsibilities.
+
 ## Security
 
 - Never commit credentials, tokens, private keys, certificate bodies, signing

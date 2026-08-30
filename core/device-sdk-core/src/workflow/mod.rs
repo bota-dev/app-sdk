@@ -1,8 +1,10 @@
 mod connection;
 mod discovery;
+mod provisioning;
 
 pub(crate) use connection::ConnectionWorkflow;
 pub(crate) use discovery::DiscoveryWorkflow;
+pub(crate) use provisioning::ProvisioningWorkflow;
 
 use crate::{
     engine::{CancellationId, Effect, EffectRequest, HostEvent, RequestId},

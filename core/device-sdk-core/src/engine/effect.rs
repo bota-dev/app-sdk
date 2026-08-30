@@ -1,7 +1,10 @@
 use crate::{
     engine::{RequestId, WorkflowCheckpoint, WorkflowNotification},
     error::Operation,
-    model::{DeviceCandidate, DeviceSerialNumber},
+    model::{
+        DeviceCandidate, DevicePublicKey, DeviceSerialNumber, DurableFactoryResetResult,
+        FactoryResetCommandId, HostMaterialId, ProvisioningNonce,
+    },
 };
 use serde::{Deserialize, Serialize};
 
@@ -51,6 +54,7 @@ pub enum Effect {
     Network(NetworkEffect),
     Progress(ProgressEffect),
     Notify(WorkflowNotification),
+    HostMaterial(HostMaterialEffect),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -69,6 +73,12 @@ pub enum PersistenceEffect {
     SaveConnectionIdentity {
         device: DeviceSerialNumber,
         candidate: DeviceCandidate,
+    },
+    SaveFactoryResetResult {
+        result: DurableFactoryResetResult,
+    },
+    DeleteFactoryResetResult {
+        command_id: FactoryResetCommandId,
     },
 }
 
@@ -135,4 +145,19 @@ pub enum NetworkEffect {
 pub struct ProgressEffect {
     pub completed_units: u64,
     pub total_units: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum HostMaterialEffect {
+    PrepareProvisioning {
+        material_id: HostMaterialId,
+        device: DeviceSerialNumber,
+        nonce: ProvisioningNonce,
+        device_public_key: DevicePublicKey,
+    },
+    PrepareFactoryResetGrant {
+        grant_id: HostMaterialId,
+        device: DeviceSerialNumber,
+        nonce: ProvisioningNonce,
+    },
 }

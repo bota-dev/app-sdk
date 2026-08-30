@@ -1,5 +1,5 @@
 use crate::engine::{CancellationId, RequestId, WorkflowCheckpoint};
-use crate::model::DeviceCandidate;
+use crate::model::{DeviceCandidate, ProvisioningMaterial};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -25,6 +25,20 @@ pub enum HostEventKind {
     },
     CheckpointSaved,
     ConnectionIdentitySaved,
+    FactoryResetResultSaved,
+    FactoryResetResultDeleted,
+    PersistenceFailed {
+        platform_code: Option<i64>,
+    },
+    ProvisioningMaterialPrepared {
+        material: ProvisioningMaterial,
+    },
+    FactoryResetGrantPrepared {
+        grant: Vec<u8>,
+    },
+    HostMaterialFailed {
+        platform_code: Option<i64>,
+    },
     SecretLoaded {
         key: String,
         value: Option<Vec<u8>>,
@@ -46,6 +60,9 @@ pub enum BleEvent {
     },
     ServicesDiscovered {
         peripheral_id: String,
+    },
+    Subscribed {
+        characteristic_uuid: String,
     },
     Disconnected {
         peripheral_id: String,

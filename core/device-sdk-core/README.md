@@ -13,9 +13,10 @@ bota-device-sdk-core = "1.0.0-alpha.1"
 This crate does not implement Bluetooth, HTTP, filesystem access, background
 execution, or a Bota backend API client. Platform SDKs provide those host
 capabilities and execute typed effects emitted by `WorkflowEngine`. The current
-prerelease implements deterministic discovery, manual connection identity
-verification, and single-owner reconnect recovery. Provisioning, recording
-transfer, upload, OTA, device-log, and reset workflows remain under development.
+prerelease implements deterministic discovery, connection recovery, and
+provisioning with host-owned material preparation and volatile secret handling.
+Recording transfer, upload, OTA, device-log, and reset workflows remain under
+development.
 
 The `1.0.0-alpha.*` releases cover protocol and workflow-core milestones. They
 do not replace the production React Native SDK and do not claim native

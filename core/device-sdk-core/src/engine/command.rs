@@ -1,7 +1,10 @@
 use crate::{
     engine::{Capability, CapabilitySet},
     error::{DeviceSdkError, ErrorCode, Operation},
-    model::{DeviceCandidate, DeviceSerialNumber, FirmwareImage, ReconnectHint, RecordingUuid},
+    model::{
+        DeviceCandidate, DeviceSerialNumber, DurableFactoryResetResult, FactoryResetCommandId,
+        FirmwareImage, HostMaterialId, ReconnectHint, RecordingUuid,
+    },
 };
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +24,7 @@ pub enum Command {
     },
     Provision {
         device: DeviceSerialNumber,
+        material_id: HostMaterialId,
     },
     TransferRecording {
         device: DeviceSerialNumber,
@@ -38,6 +42,12 @@ pub enum Command {
     },
     FactoryReset {
         device: DeviceSerialNumber,
+        command_id: FactoryResetCommandId,
+        grant_id: HostMaterialId,
+    },
+    ResumeFactoryReset {
+        device: DeviceSerialNumber,
+        result: DurableFactoryResetResult,
     },
 }
 
@@ -79,6 +89,7 @@ impl Command {
             Self::UpdateFirmware { .. } => Operation::UpdateFirmware,
             Self::ReadDeviceLogs { .. } => Operation::ReadDeviceLogs,
             Self::FactoryReset { .. } => Operation::FactoryReset,
+            Self::ResumeFactoryReset { .. } => Operation::FactoryReset,
         }
     }
 
@@ -89,8 +100,14 @@ impl Command {
                 &[Capability::Ble, Capability::Timer, Capability::Persistence]
             }
             Self::ReadDeviceLogs { .. } => &[Capability::Ble],
-            Self::Provision { .. } | Self::FactoryReset { .. } => {
-                &[Capability::Ble, Capability::SecureStorage]
+            Self::Provision { .. } | Self::FactoryReset { .. } => &[
+                Capability::Ble,
+                Capability::Timer,
+                Capability::Persistence,
+                Capability::HostMaterial,
+            ],
+            Self::ResumeFactoryReset { .. } => {
+                &[Capability::Ble, Capability::Timer, Capability::Persistence]
             }
             Self::TransferRecording { .. } => &[
                 Capability::Ble,
