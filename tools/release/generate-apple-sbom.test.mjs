@@ -44,7 +44,7 @@ test('Apple SPDX names the synchronized package and records the native dependenc
     },
     swiftDependencies: {
       identity: 'apple',
-      name: 'BotaDeviceSDK',
+      name: 'BotaAppleSDK',
       version: 'unspecified',
       path: '/private/build/platforms/apple',
       url: '/private/build/platforms/apple',
@@ -53,8 +53,8 @@ test('Apple SPDX names the synchronized package and records the native dependenc
   });
 
   assert.equal(sbom.spdxVersion, 'SPDX-2.3');
-  assert.equal(sbom.name, 'BotaDeviceSDK-1.0.0-alpha.1');
-  assert.ok(sbom.packages.some((entry) => entry.name === 'BotaDeviceSDK'));
+  assert.equal(sbom.name, 'BotaAppleSDK-1.0.0-alpha.1');
+  assert.ok(sbom.packages.some((entry) => entry.name === 'BotaAppleSDK'));
   const core = sbom.packages.find((entry) => entry.name === 'bota-device-sdk-core');
   const ffi = sbom.packages.find((entry) => entry.name === 'bota-device-sdk-ffi');
   assert.ok(sbom.relationships.some((entry) =>
@@ -72,7 +72,7 @@ test('Apple SPDX rejects invalid checksums and source revisions', () => {
     artifactChecksum: checksum,
     createdAt: '2026-08-30T00:00:00Z',
     cargoMetadata: { packages: [], resolve: { nodes: [] } },
-    swiftDependencies: { identity: 'apple', name: 'BotaDeviceSDK', dependencies: [] },
+    swiftDependencies: { identity: 'apple', name: 'BotaAppleSDK', dependencies: [] },
   };
   assert.throws(() => generateAppleSbom({ ...input, artifactChecksum: '0'.repeat(64) }));
   assert.throws(() => generateAppleSbom({ ...input, sourceRevision: 'short' }));

@@ -1,4 +1,4 @@
-# Bota Device SDK Core
+# Bota App SDK Core
 
 `bota-device-sdk-core` is the portable Rust protocol core for Bota wearable
 devices. It provides generated wire constants, bounded protocol decoders,

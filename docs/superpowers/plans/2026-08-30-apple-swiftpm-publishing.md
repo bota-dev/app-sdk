@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Publish `BotaDeviceSDK` `1.0.0` so native iOS and macOS applications can add `https://github.com/bota-dev/app-sdk.git` directly in Xcode.
+**Goal:** Publish `BotaAppleSDK` `1.0.0` so native iOS and macOS applications can add `https://github.com/bota-dev/app-sdk.git` directly in Xcode.
 
 **Architecture:** Keep the existing local Apple package for facade development and add a root Swift package for remote consumers. The root package compiles the Swift facade source and downloads the Rust C ABI as a checksummed XCFramework from the matching GitHub Release. A protected tag workflow builds the artifact, verifies the checked-in manifest checksum, publishes release assets, and then resolves the package through its public Git URL.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Public package, product, and module name: `BotaDeviceSDK`.
+- Public package, product, and module name: `BotaAppleSDK`.
 - Public entry point: `BotaDeviceClient`.
 - Minimum platforms: iOS 15 and macOS 13.
 - Repository dependency URL: `https://github.com/bota-dev/app-sdk.git`.
@@ -30,7 +30,7 @@
 - Modify: `sdk-version.toml`
 - Modify: `package.json`
 - Modify: `Cargo.toml` workspace member manifests and `Cargo.lock`
-- Modify: `platforms/apple/Sources/BotaDeviceSDK/BotaDeviceSDK.swift`
+- Modify: `platforms/apple/Sources/BotaAppleSDK/BotaAppleSDK.swift`
 - Modify: `protocol/compatibility/firmware-compatibility.json`
 - Create: `release/examples/1.0.0.json`
 - Modify: version-sensitive tests and public documentation
@@ -70,7 +70,7 @@ cargo test -p xtask --test release_readiness --test release_manifest
 tools/apple/test-package.sh --filter PackageSmokeTests
 ```
 
-Expected: PASS with `BotaDeviceSDKVersion.current == "1.0.0"`.
+Expected: PASS with `BotaAppleSDKVersion.current == "1.0.0"`.
 
 ### Task 2: Generate And Validate The Public Swift Package
 
@@ -83,7 +83,7 @@ Expected: PASS with `BotaDeviceSDKVersion.current == "1.0.0"`.
 
 **Interfaces:**
 - Consumes: SDK version and SHA-256/SwiftPM checksum of the deterministic Apple archive.
-- Produces: a root `Package.swift` with a remote `BotaDeviceSDKC` binary target and source `BotaDeviceSDK` facade target.
+- Produces: a root `Package.swift` with a remote `BotaDeviceSDKC` binary target and source `BotaAppleSDK` facade target.
 
 - [x] **Step 1: Write failing package-generation tests**
 
@@ -121,7 +121,7 @@ node tools/release/generate-public-swift-package.mjs \
 swift package dump-package
 ```
 
-Expected: `dump-package` reports product `BotaDeviceSDK`, iOS 15, macOS 13,
+Expected: `dump-package` reports product `BotaAppleSDK`, iOS 15, macOS 13,
 and the matching remote binary target without downloading it.
 
 ### Task 3: Publish And Verify The Apple Release
@@ -188,5 +188,5 @@ each with `Co-Authored-By: OpenAI Codex <noreply@openai.com>`, then push `main`.
 - The same product builds for iOS 15+ and macOS 13+.
 - The release workflow cannot publish an Apple asset whose checksum differs from root `Package.swift`.
 - Release publication does not depend on crates.io credentials.
-- A post-publication macOS consumer imports only `BotaDeviceSDK` from the public tag.
+- A post-publication macOS consumer imports only `BotaAppleSDK` from the public tag.
 - Public documentation lists installation, Bluetooth permission, and macOS sandbox requirements.

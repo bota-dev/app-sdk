@@ -7,7 +7,7 @@
 ## Purpose
 
 Milestone 3 turns the deterministic Rust core into usable Apple and Android
-Device SDKs. Swift and Kotlin retain ownership of operating-system Bluetooth,
+App SDKs. Swift and Kotlin retain ownership of operating-system Bluetooth,
 permissions, lifecycle, storage, and network integration. Rust remains the only
 implementation of protocol parsing, serialization, and workflow decisions.
 
@@ -144,7 +144,7 @@ core request order.
 
 ## Apple Facade
 
-The Swift product and module are `BotaDeviceSDK`; the public entry point is
+The Swift product and module are `BotaAppleSDK`; the public entry point is
 `BotaDeviceClient`. It supports iOS 15 and macOS 13.
 
 - `CoreBluetoothHost` owns one `CBCentralManager` on a dedicated serial queue.
@@ -256,7 +256,7 @@ available throughout migration; application migration begins in Milestone 4.
 ## Non-Goals
 
 - Migrating Demo or Bota One in this milestone.
-- Adding backend API calls to the Device SDK.
+- Adding backend API calls to the App SDK.
 - Publishing React Native, Flutter, Web, or Windows facades.
 - Retiring the old native or React Native repositories before stable acceptance.
 - Changing firmware wire behavior as part of facade migration.

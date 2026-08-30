@@ -14,7 +14,7 @@ let package = Package(
         .executableTarget(
             name: "AppleConsumer",
             dependencies: [
-                .product(name: "BotaDeviceSDK", package: "apple"),
+                .product(name: "BotaAppleSDK", package: "apple"),
             ]
         ),
     ]

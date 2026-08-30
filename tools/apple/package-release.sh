@@ -99,7 +99,7 @@ $NODE "$ROOT/tools/release/generate-apple-sbom.mjs" \
     --created-at "$CREATED_AT" \
     --cargo-metadata "$TEMP/cargo-metadata.json" \
     --swift-dependencies "$TEMP/swift-dependencies.json" \
-    --output "$OUTPUT/BotaDeviceSDK.spdx.json"
+    --output "$OUTPUT/BotaAppleSDK.spdx.json"
 
 $NODE "$ROOT/tools/release/generate-apple-manifest.mjs" \
     --sdk-version "$SDK_VERSION" \
@@ -109,7 +109,7 @@ $NODE "$ROOT/tools/release/generate-apple-manifest.mjs" \
     --compatibility "$ROOT/protocol/compatibility/firmware-compatibility.json" \
     --output "$OUTPUT/release-manifest.json"
 
-if grep -F "$ROOT" "$OUTPUT/BotaDeviceSDK.spdx.json" >/dev/null; then
+if grep -F "$ROOT" "$OUTPUT/BotaAppleSDK.spdx.json" >/dev/null; then
     printf 'SPDX output contains the local checkout path\n' >&2
     exit 1
 fi

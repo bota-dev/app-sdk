@@ -33,7 +33,7 @@ let package = Package(
         .executableTarget(
             name: "AppleRemoteConsumer",
             dependencies: [
-                .product(name: "BotaDeviceSDK", package: "app-sdk"),
+                .product(name: "BotaAppleSDK", package: "app-sdk"),
             ]
         ),
     ]
@@ -41,15 +41,15 @@ let package = Package(
 EOF
 
 cat > "$CONSUMER/Sources/AppleRemoteConsumer/main.swift" <<EOF
-import BotaDeviceSDK
+import BotaAppleSDK
 
 @main
 enum AppleRemoteConsumer {
     static func main() {
-        precondition(BotaDeviceSDKVersion.current == "$VERSION")
+        precondition(BotaAppleSDKVersion.current == "$VERSION")
         _ = BotaConfiguration()
         _ = BotaDeviceClient()
-        print("Resolved BotaDeviceSDK $VERSION")
+        print("Resolved BotaAppleSDK $VERSION")
     }
 }
 EOF

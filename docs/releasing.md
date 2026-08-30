@@ -1,6 +1,6 @@
-# Releasing The Bota Device SDK
+# Releasing The Bota App SDK
 
-The first public platform artifact is the Apple `BotaDeviceSDK` Swift package
+The first public platform artifact is the Apple `BotaAppleSDK` Swift package
 for iOS 15+ and macOS 13+. Consumers add
 `https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
 compiles the Swift facade source and downloads a checksummed
@@ -87,7 +87,7 @@ cargo deny check
 - `BotaDeviceSDKCore.xcframework.zip`
 - `BotaDeviceSDKCore.xcframework.zip.sha256`
 - `BotaDeviceSDKCore.xcframework.swiftpm-checksum`
-- `BotaDeviceSDK.spdx.json`
+- `BotaAppleSDK.spdx.json`
 - `LICENSE`
 - `release-manifest.json`
 
@@ -99,7 +99,7 @@ arm64/x86_64 macOS slices.
 After the release commit is on `main`, create and push the exact annotated tag:
 
 ```bash
-git tag -a v1.0.0 -m "Bota Device SDK 1.0.0"
+git tag -a v1.0.0 -m "Bota App SDK 1.0.0"
 git push origin v1.0.0
 ```
 
@@ -113,7 +113,7 @@ The tag workflow:
 4. Waits for approval in the protected `release` environment.
 5. Creates the GitHub Release and uploads every Apple release file.
 6. Creates an unrelated macOS package that resolves the public Git tag and runs
-   while importing only `BotaDeviceSDK`.
+   while importing only `BotaAppleSDK`.
 
 Do not move or recreate a published tag. If a released artifact or manifest is
 wrong, fix the source and publish a new patch version with a new checksum.

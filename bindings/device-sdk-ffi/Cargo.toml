@@ -4,7 +4,7 @@ version = "1.0.0"
 edition = "2024"
 rust-version = "1.98"
 license = "Apache-2.0"
-description = "Native ABI for the Bota Device SDK core"
+description = "Native ABI for the Bota App SDK core"
 repository = "https://github.com/bota-dev/app-sdk"
 publish = false
 

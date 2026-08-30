@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const source = path.join(root, "protocol/fixtures");
 const destination = path.join(
   root,
-  "platforms/apple/Tests/BotaDeviceSDKTests/Resources/ProtocolFixtures",
+  "platforms/apple/Tests/BotaAppleSDKTests/Resources/ProtocolFixtures",
 );
 const check = process.argv.includes("--check");
 const names = (await readdir(source)).filter((name) => name.endsWith(".json")).sort();

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task by task. Do not begin a later milestone until the preceding exit criteria pass.
 
-**Goal:** Establish `app-sdk` as the single source monorepo for the Bota Device SDK family, preserve the behavior of the production React Native SDK, and migrate to one Rust protocol/workflow core with native platform transports through independently releasable milestones.
+**Goal:** Establish `app-sdk` as the single source monorepo for the Bota App SDK family, preserve the behavior of the production React Native SDK, and migrate to one Rust protocol/workflow core with native platform transports through independently releasable milestones.
 
 **Architecture:** The Rust core owns protocol parsing, serialization, cryptographic envelopes, workflow state, retry decisions, checkpoints, and stable errors. Swift/CoreBluetooth, Kotlin/BluetoothGatt, C#/WinRT GATT, and TypeScript/Web Bluetooth own operating-system integration. React Native and Flutter delegate to native facades. The SDK accepts backend-issued grants and presigned upload targets from the host application; it does not become a Bota API client.
 
@@ -140,7 +140,7 @@ packages are added:
 
 Document these invariants in `ARCHITECTURE.md` and `AGENTS.md`:
 
-- `app-sdk` is the source-repository name; Bota Device SDK is the public family.
+- `app-sdk` is the source-repository name; Bota App SDK is the public family.
 - The future Bota API SDK is a separate repository and release train.
 - Platform transports stay native; protocol and workflow behavior belongs in
   Rust.

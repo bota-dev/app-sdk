@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://bota.dev/schemas/device-sdk-release-manifest-v1.json",
-  "title": "Bota Device SDK release manifest",
+  "title": "Bota App SDK release manifest",
   "type": "object",
   "additionalProperties": false,
   "required": [

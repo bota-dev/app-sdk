@@ -39,7 +39,7 @@ Directories are added only when their milestone starts.
 
 ## Versioning
 
-Every published Device SDK artifact uses the exact semantic version in
+Every published App SDK artifact uses the exact semantic version in
 [`sdk-version.toml`](sdk-version.toml). Release tooling rejects a package or
 manifest with a different version.
 
@@ -196,7 +196,7 @@ universal iOS simulator, and universal macOS Rust archives. Public consumers
 use the root `Package.swift`, which compiles the same Swift facade source and
 downloads the matching `BotaDeviceSDKCore.xcframework.zip` from the immutable
 GitHub Release URL declared for that SDK version. SwiftPM verifies that archive
-against the checked-in checksum before exposing product `BotaDeviceSDK`.
+against the checked-in checksum before exposing product `BotaAppleSDK`.
 Assembly rejects a header digest or Swift package version that differs from the
 frozen repository evidence.
 
@@ -295,7 +295,7 @@ XCFramework with deterministic timestamps and entry order, verifies the root
 package checksum, and publishes the archive, SHA-256 and SwiftPM checksums, SPDX
 2.3 SBOM, repository license, and schema-validated artifact manifest. After
 publication, a fresh macOS package resolves the release through the public Git
-URL and imports only `BotaDeviceSDK`. The protected release environment is the
+URL and imports only `BotaAppleSDK`. The protected release environment is the
 manual approval boundary for hardware acceptance; automated CI does not claim
 physical-device results.
 
@@ -339,4 +339,4 @@ resolve a grant or resend destructive opcode `0x06`.
 - Factory reset is complete only after the authenticated physical-device receipt
   closes the backend command.
 - Recording content stays encrypted according to the selected product security
-  mode; the Device SDK does not receive backend decryption private keys.
+  mode; the App SDK does not receive backend decryption private keys.

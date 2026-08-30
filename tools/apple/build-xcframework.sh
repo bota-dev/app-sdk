@@ -8,7 +8,7 @@ OUTPUT="$ARTIFACTS/BotaDeviceSDKCore.xcframework"
 HEADER_DIR="$ROOT/bindings/device-sdk-ffi/include"
 HEADER="$HEADER_DIR/bota_device_sdk.h"
 EVIDENCE="$ROOT/release/evidence/1.0.0-alpha.1-native-abi.md"
-SWIFT_SOURCE="$PACKAGE_ROOT/Sources/BotaDeviceSDK/BotaDeviceSDK.swift"
+SWIFT_SOURCE="$PACKAGE_ROOT/Sources/BotaAppleSDK/BotaAppleSDK.swift"
 mkdir -p "$ROOT/target"
 BUILD_ROOT=$(mktemp -d "$ROOT/target/apple-xcframework.XXXXXX")
 TEMP_OUTPUT="$ARTIFACTS/.BotaDeviceSDKCore.$$.xcframework"

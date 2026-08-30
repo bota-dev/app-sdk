@@ -4,7 +4,7 @@
 
 **Goal:** Ship a source-tested Apple facade that wraps native ABI v1 with idiomatic Swift concurrency, CoreBluetooth, durable host services, and a reproducible XCFramework.
 
-**Architecture:** `BotaDeviceSDK` exposes Swift models and async managers while a single `CoreEngineActor` owns the opaque Rust engine. The actor drains typed ABI packets in order, an effect executor performs host work through narrow Swift protocols, and every completion returns the original operation, request, and cancellation identity. CoreBluetooth and storage remain native; protocol parsing and workflow decisions remain in Rust.
+**Architecture:** `BotaAppleSDK` exposes Swift models and async managers while a single `CoreEngineActor` owns the opaque Rust engine. The actor drains typed ABI packets in order, an effect executor performs host work through narrow Swift protocols, and every completion returns the original operation, request, and cancellation identity. CoreBluetooth and storage remain native; protocol parsing and workflow decisions remain in Rust.
 
 **Tech Stack:** Rust 1.98, C ABI v1, Swift 6, Swift Package Manager, CoreBluetooth, Security/Keychain, URLSession, XCTest, Xcode XCFramework tooling
 
@@ -14,7 +14,7 @@
 
 - Consume `bindings/device-sdk-ffi/include/bota_device_sdk.h` at the digest recorded in `release/evidence/1.0.0-alpha.1-native-abi.md`; do not redesign ABI v1.
 - Preserve existing numeric symbol, packet-kind, field, capability, operation, status, and error meanings. ABI v1 changes are additive only.
-- The new public package, product, and module are `BotaDeviceSDK`; the public entry point is `BotaDeviceClient`. The pinned Apple scaffold is a migration input, not a naming authority.
+- The new public package, product, and module are `BotaAppleSDK`; the public entry point is `BotaDeviceClient`. The pinned Apple scaffold is a migration input, not a naming authority.
 - Minimum platforms remain iOS 15 and macOS 13.
 - Swift owns CoreBluetooth, application lifecycle, persistence, Keychain access, files, URLSession, and backend-material callbacks. Rust owns protocol codecs and deterministic workflows.
 - One `CoreEngineActor` owns one engine handle. No C call for that handle runs outside the actor.
@@ -32,8 +32,8 @@
 
 **Files:**
 - Create: `platforms/apple/Package.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/BotaDeviceSDK.swift`
-- Create: `platforms/apple/Tests/BotaDeviceSDKTests/PackageSmokeTests.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/BotaAppleSDK.swift`
+- Create: `platforms/apple/Tests/BotaAppleSDKTests/PackageSmokeTests.swift`
 - Create: `tools/apple/build-xcframework.sh`
 - Create: `tools/apple/test-package.sh`
 - Modify: `.gitignore`
@@ -41,19 +41,19 @@
 
 **Interfaces:**
 - Consumes: crate `bota-device-sdk-ffi`, its public header, and Clang module `BotaDeviceSDKC`.
-- Produces: `platforms/apple/Artifacts/BotaDeviceSDKCore.xcframework` and Swift package product `BotaDeviceSDK`.
+- Produces: `platforms/apple/Artifacts/BotaDeviceSDKCore.xcframework` and Swift package product `BotaAppleSDK`.
 
 - [ ] **Step 1: Write the failing package smoke test**
 
 ```swift
 import XCTest
-@testable import BotaDeviceSDK
+@testable import BotaAppleSDK
 import BotaDeviceSDKC
 
 final class PackageSmokeTests: XCTestCase {
     func testPackageImportsFrozenAbi() {
         XCTAssertEqual(bota_device_sdk_v1_abi_version(), BOTA_DEVICE_SDK_ABI_VERSION)
-        XCTAssertEqual(BotaDeviceSDKVersion.current, "1.0.0-alpha.1")
+        XCTAssertEqual(BotaAppleSDKVersion.current, "1.0.0-alpha.1")
     }
 }
 ```
@@ -62,7 +62,7 @@ final class PackageSmokeTests: XCTestCase {
 
 Run: `tools/apple/test-package.sh`
 
-Expected: FAIL because the Apple artifact, package, and `BotaDeviceSDKVersion` do not exist.
+Expected: FAIL because the Apple artifact, package, and `BotaAppleSDKVersion` do not exist.
 
 - [ ] **Step 3: Implement reproducible slice assembly**
 
@@ -78,7 +78,7 @@ Expected: FAIL because the Apple artifact, package, and `BotaDeviceSDKVersion` d
 6. reject a header digest that differs from the current native ABI evidence.
 
 `Package.swift` defines a local binary target named `BotaDeviceSDKC`, a Swift
-target and product named `BotaDeviceSDK`, iOS 15, macOS 13, and a test target. The
+target and product named `BotaAppleSDK`, iOS 15, macOS 13, and a test target. The
 generated `Artifacts/` directory is ignored; release packaging later zips and
 checksums it.
 
@@ -106,11 +106,11 @@ git commit -m "build(apple): assemble native core xcframework" \
 ### Task 2: Add A Memory-Safe Swift ABI Client
 
 **Files:**
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Core/CoreField.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Core/CorePacket.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Core/CoreError.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Core/CoreAbiClient.swift`
-- Test: `platforms/apple/Tests/BotaDeviceSDKTests/CoreAbiClientTests.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Core/CoreField.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Core/CorePacket.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Core/CoreError.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Core/CoreAbiClient.swift`
+- Test: `platforms/apple/Tests/BotaAppleSDKTests/CoreAbiClientTests.swift`
 
 **Interfaces:**
 - Consumes: `bota_device_sdk_v1_engine_*`, packet/error view, protocol codec, and free functions.
@@ -180,7 +180,7 @@ the macOS test target.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add platforms/apple/Sources/BotaDeviceSDK/Core platforms/apple/Tests/BotaDeviceSDKTests/CoreAbiClientTests.swift
+git add platforms/apple/Sources/BotaAppleSDK/Core platforms/apple/Tests/BotaAppleSDKTests/CoreAbiClientTests.swift
 git commit -m "feat(apple): wrap native abi ownership" \
   -m "Co-Authored-By: OpenAI Codex <noreply@openai.com>"
 ```
@@ -188,22 +188,22 @@ git commit -m "feat(apple): wrap native abi ownership" \
 ### Task 3: Map Stable Swift Models, Errors, And Protocol Codecs
 
 **Files:**
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Models/DeviceModels.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Models/RecordingModels.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Models/ConnectionModels.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Models/ProgressModels.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Models/BotaDeviceSDKError.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Core/CoreModelMapper.swift`
-- Test: `platforms/apple/Tests/BotaDeviceSDKTests/ModelMappingTests.swift`
-- Test: `platforms/apple/Tests/BotaDeviceSDKTests/ProtocolCodecTests.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Models/DeviceModels.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Models/RecordingModels.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Models/ConnectionModels.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Models/ProgressModels.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Models/BotaSDKError.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Core/CoreModelMapper.swift`
+- Test: `platforms/apple/Tests/BotaAppleSDKTests/ModelMappingTests.swift`
+- Test: `platforms/apple/Tests/BotaAppleSDKTests/ProtocolCodecTests.swift`
 
 **Interfaces:**
 - Consumes: `CorePacket`, shared protocol encode/decode ABI functions, pinned Apple public models, and language-neutral fixtures.
-- Produces: public `DeviceStatus`, `DeviceRecording`, `TransferPacket`, `DeviceConnectionSettings`, `DiscoveredDevice`, `ConnectedDevice`, progress models, and `BotaDeviceSDKError`.
+- Produces: public `DeviceStatus`, `DeviceRecording`, `TransferPacket`, `DeviceConnectionSettings`, `DiscoveredDevice`, `ConnectedDevice`, progress models, and `BotaSDKError`.
 
 ```swift
-public struct BotaDeviceSDKError: Error, Equatable, Sendable {
-    public let code: BotaDeviceSDKErrorCode
+public struct BotaSDKError: Error, Equatable, Sendable {
+    public let code: BotaSDKErrorCode
     public let operation: BotaOperation
     public let retryable: Bool
     public let protocolStatus: UInt16?
@@ -253,7 +253,7 @@ Expected: Swift and Rust agree on every committed fixture.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add platforms/apple/Sources/BotaDeviceSDK/Models platforms/apple/Sources/BotaDeviceSDK/Core/CoreModelMapper.swift platforms/apple/Tests/BotaDeviceSDKTests
+git add platforms/apple/Sources/BotaAppleSDK/Models platforms/apple/Sources/BotaAppleSDK/Core/CoreModelMapper.swift platforms/apple/Tests/BotaAppleSDKTests
 git commit -m "feat(apple): map shared models and codecs" \
   -m "Co-Authored-By: OpenAI Codex <noreply@openai.com>"
 ```
@@ -261,12 +261,12 @@ git commit -m "feat(apple): map shared models and codecs" \
 ### Task 4: Implement CoreEngineActor And Fake-Host Conformance
 
 **Files:**
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Core/CoreCommand.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Core/CoreNotification.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Core/CoreEngineActor.swift`
-- Create: `platforms/apple/Tests/BotaDeviceSDKTests/Support/FakeCoreHost.swift`
-- Create: `platforms/apple/Tests/BotaDeviceSDKTests/CoreEngineActorTests.swift`
-- Create: `platforms/apple/Tests/BotaDeviceSDKTests/WorkflowConformanceTests.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Core/CoreCommand.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Core/CoreNotification.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Core/CoreEngineActor.swift`
+- Create: `platforms/apple/Tests/BotaAppleSDKTests/Support/FakeCoreHost.swift`
+- Create: `platforms/apple/Tests/BotaAppleSDKTests/CoreEngineActorTests.swift`
+- Create: `platforms/apple/Tests/BotaAppleSDKTests/WorkflowConformanceTests.swift`
 - Create: `tools/apple/sync-workflow-fixtures.mjs`
 - Modify: `package.json`
 
@@ -320,7 +320,7 @@ effects, notifications, and terminal state.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add package.json tools/apple platforms/apple/Sources/BotaDeviceSDK/Core platforms/apple/Tests/BotaDeviceSDKTests
+git add package.json tools/apple platforms/apple/Sources/BotaAppleSDK/Core platforms/apple/Tests/BotaAppleSDKTests
 git commit -m "feat(apple): drive workflows through core actor" \
   -m "Co-Authored-By: OpenAI Codex <noreply@openai.com>"
 ```
@@ -328,15 +328,15 @@ git commit -m "feat(apple): drive workflows through core actor" \
 ### Task 5: Define Host Ports And The Effect Executor
 
 **Files:**
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Host/CoreHost.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Host/BluetoothHost.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Host/PersistenceHost.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Host/NetworkHost.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Host/MaterialHost.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Host/RecordingSinkHost.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Host/FirmwareBlobHost.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Host/HostEffectExecutor.swift`
-- Test: `platforms/apple/Tests/BotaDeviceSDKTests/HostEffectExecutorTests.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Host/CoreHost.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Host/BluetoothHost.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Host/PersistenceHost.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Host/NetworkHost.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Host/MaterialHost.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Host/RecordingSinkHost.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Host/FirmwareBlobHost.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Host/HostEffectExecutor.swift`
+- Test: `platforms/apple/Tests/BotaAppleSDKTests/HostEffectExecutorTests.swift`
 
 **Interfaces:**
 - Consumes: typed host-effect packets.
@@ -392,7 +392,7 @@ Expected: all effect and callback variants are covered on both sides.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add platforms/apple/Sources/BotaDeviceSDK/Host platforms/apple/Tests/BotaDeviceSDKTests/HostEffectExecutorTests.swift
+git add platforms/apple/Sources/BotaAppleSDK/Host platforms/apple/Tests/BotaAppleSDKTests/HostEffectExecutorTests.swift
 git commit -m "feat(apple): execute correlated host effects" \
   -m "Co-Authored-By: OpenAI Codex <noreply@openai.com>"
 ```
@@ -400,13 +400,13 @@ git commit -m "feat(apple): execute correlated host effects" \
 ### Task 6: Serialize CoreBluetooth Operations
 
 **Files:**
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Bluetooth/BluetoothUUIDs.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Bluetooth/CentralDriver.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Bluetooth/CoreBluetoothDriver.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Bluetooth/CoreBluetoothHost.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Bluetooth/RadioArbiter.swift`
-- Test: `platforms/apple/Tests/BotaDeviceSDKTests/Support/FakeCentralDriver.swift`
-- Test: `platforms/apple/Tests/BotaDeviceSDKTests/CoreBluetoothHostTests.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Bluetooth/BluetoothUUIDs.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Bluetooth/CentralDriver.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Bluetooth/CoreBluetoothDriver.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Bluetooth/CoreBluetoothHost.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Bluetooth/RadioArbiter.swift`
+- Test: `platforms/apple/Tests/BotaAppleSDKTests/Support/FakeCentralDriver.swift`
+- Test: `platforms/apple/Tests/BotaAppleSDKTests/CoreBluetoothHostTests.swift`
 
 **Interfaces:**
 - Consumes: BLE start/stop scan, connect, discover, disconnect, read, write, subscribe, and unsubscribe effects.
@@ -448,7 +448,7 @@ Run:
 
 ```bash
 tools/apple/test-package.sh --filter CoreBluetoothHostTests
-(cd platforms/apple && xcodebuild -scheme BotaDeviceSDK -destination 'generic/platform=iOS' build CODE_SIGNING_ALLOWED=NO)
+(cd platforms/apple && xcodebuild -scheme BotaAppleSDK -destination 'generic/platform=iOS' build CODE_SIGNING_ALLOWED=NO)
 swift build --package-path platforms/apple
 ```
 
@@ -458,7 +458,7 @@ builds.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add platforms/apple/Sources/BotaDeviceSDK/Bluetooth platforms/apple/Tests/BotaDeviceSDKTests
+git add platforms/apple/Sources/BotaAppleSDK/Bluetooth platforms/apple/Tests/BotaAppleSDKTests
 git commit -m "feat(apple): add serialized corebluetooth host" \
   -m "Co-Authored-By: OpenAI Codex <noreply@openai.com>"
 ```
@@ -466,14 +466,14 @@ git commit -m "feat(apple): add serialized corebluetooth host" \
 ### Task 7: Implement Durable Storage, Network, And Material Hosts
 
 **Files:**
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Host/FilePersistenceHost.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Host/KeychainSecureStorageHost.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Host/FileRecordingSinkHost.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Host/FileFirmwareBlobHost.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Host/URLSessionNetworkHost.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/Host/ApplicationMaterialHost.swift`
-- Test: `platforms/apple/Tests/BotaDeviceSDKTests/DurableHostTests.swift`
-- Test: `platforms/apple/Tests/BotaDeviceSDKTests/NetworkHostTests.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Host/FilePersistenceHost.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Host/KeychainSecureStorageHost.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Host/FileRecordingSinkHost.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Host/FileFirmwareBlobHost.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Host/URLSessionNetworkHost.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/Host/ApplicationMaterialHost.swift`
+- Test: `platforms/apple/Tests/BotaAppleSDKTests/DurableHostTests.swift`
+- Test: `platforms/apple/Tests/BotaAppleSDKTests/NetworkHostTests.swift`
 
 **Interfaces:**
 - Consumes: opaque checkpoint, sink, blob, material, destination, and download IDs.
@@ -519,7 +519,7 @@ Expected: tests pass; the search finds no embedded credential or backend client.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add platforms/apple/Sources/BotaDeviceSDK/Host platforms/apple/Tests/BotaDeviceSDKTests
+git add platforms/apple/Sources/BotaAppleSDK/Host platforms/apple/Tests/BotaAppleSDKTests
 git commit -m "feat(apple): add durable native host services" \
   -m "Co-Authored-By: OpenAI Codex <noreply@openai.com>"
 ```
@@ -527,10 +527,10 @@ git commit -m "feat(apple): add durable native host services" \
 ### Task 8: Expose Discovery, Connection, And Reconnect
 
 **Files:**
-- Create: `platforms/apple/Sources/BotaDeviceSDK/BotaDeviceClient.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/DeviceManager.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/BotaConfiguration.swift`
-- Test: `platforms/apple/Tests/BotaDeviceSDKTests/DeviceManagerTests.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/BotaDeviceClient.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/DeviceManager.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/BotaConfiguration.swift`
+- Test: `platforms/apple/Tests/BotaAppleSDKTests/DeviceManagerTests.swift`
 
 **Interfaces:**
 - Consumes: discovery, connect, and reconnect core commands plus injected hosts.
@@ -585,7 +585,7 @@ Expected: Swift public behavior follows the canonical connection reducer.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add platforms/apple/Sources/BotaDeviceSDK platforms/apple/Tests/BotaDeviceSDKTests/DeviceManagerTests.swift
+git add platforms/apple/Sources/BotaAppleSDK platforms/apple/Tests/BotaAppleSDKTests/DeviceManagerTests.swift
 git commit -m "feat(apple): expose connection workflows" \
   -m "Co-Authored-By: OpenAI Codex <noreply@openai.com>"
 ```
@@ -593,10 +593,10 @@ git commit -m "feat(apple): expose connection workflows" \
 ### Task 9: Expose Provisioning, Settings, And Authenticated Reset
 
 **Files:**
-- Create: `platforms/apple/Sources/BotaDeviceSDK/ProvisioningManager.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/FactoryResetManager.swift`
-- Test: `platforms/apple/Tests/BotaDeviceSDKTests/ProvisioningManagerTests.swift`
-- Test: `platforms/apple/Tests/BotaDeviceSDKTests/FactoryResetManagerTests.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/ProvisioningManager.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/FactoryResetManager.swift`
+- Test: `platforms/apple/Tests/BotaAppleSDKTests/ProvisioningManagerTests.swift`
+- Test: `platforms/apple/Tests/BotaAppleSDKTests/FactoryResetManagerTests.swift`
 
 **Interfaces:**
 - Consumes: opaque material IDs, application material callbacks, provisioning and reset workflows, and connection-settings codec.
@@ -639,7 +639,7 @@ Expected: ordering and restart behavior match the shared core.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add platforms/apple/Sources/BotaDeviceSDK platforms/apple/Tests/BotaDeviceSDKTests
+git add platforms/apple/Sources/BotaAppleSDK platforms/apple/Tests/BotaAppleSDKTests
 git commit -m "feat(apple): expose secure device lifecycle" \
   -m "Co-Authored-By: OpenAI Codex <noreply@openai.com>"
 ```
@@ -647,12 +647,12 @@ git commit -m "feat(apple): expose secure device lifecycle" \
 ### Task 10: Expose Recording, Upload, OTA, And Device Logs
 
 **Files:**
-- Create: `platforms/apple/Sources/BotaDeviceSDK/RecordingManager.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/OTAManager.swift`
-- Create: `platforms/apple/Sources/BotaDeviceSDK/DeviceLogManager.swift`
-- Test: `platforms/apple/Tests/BotaDeviceSDKTests/RecordingManagerTests.swift`
-- Test: `platforms/apple/Tests/BotaDeviceSDKTests/OTAManagerTests.swift`
-- Test: `platforms/apple/Tests/BotaDeviceSDKTests/DeviceLogManagerTests.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/RecordingManager.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/OTAManager.swift`
+- Create: `platforms/apple/Sources/BotaAppleSDK/DeviceLogManager.swift`
+- Test: `platforms/apple/Tests/BotaAppleSDKTests/RecordingManagerTests.swift`
+- Test: `platforms/apple/Tests/BotaAppleSDKTests/OTAManagerTests.swift`
+- Test: `platforms/apple/Tests/BotaAppleSDKTests/DeviceLogManagerTests.swift`
 
 **Interfaces:**
 - Consumes: recording transfer, upload handoff, firmware update, and device-log workflows plus file/network hosts.
@@ -699,7 +699,7 @@ Expected: all four workflow families match their canonical reducers.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add platforms/apple/Sources/BotaDeviceSDK platforms/apple/Tests/BotaDeviceSDKTests
+git add platforms/apple/Sources/BotaAppleSDK platforms/apple/Tests/BotaAppleSDKTests
 git commit -m "feat(apple): expose transfer ota and logs" \
   -m "Co-Authored-By: OpenAI Codex <noreply@openai.com>"
 ```
@@ -716,13 +716,13 @@ git commit -m "feat(apple): expose transfer ota and logs" \
 - Modify: `docs/releasing.md`
 
 **Interfaces:**
-- Consumes: local `BotaDeviceSDK` package and generated XCFramework.
+- Consumes: local `BotaAppleSDK` package and generated XCFramework.
 - Produces: an external consumer compile/run gate on macOS plus generic iOS compilation.
 
 - [ ] **Step 1: Write a failing external consumer**
 
-The executable imports only public `BotaDeviceSDK`, constructs `BotaConfiguration`,
-checks `BotaDeviceSDKVersion.current`, and type-checks calls to scan, reconnect,
+The executable imports only public `BotaAppleSDK`, constructs `BotaConfiguration`,
+checks `BotaAppleSDKVersion.current`, and type-checks calls to scan, reconnect,
 recording sync, OTA, logs, deprovision, and factory reset. It must not import the
 internal C module.
 
@@ -827,8 +827,8 @@ git commit -m "build(apple): generate release metadata" \
 ### Task 13: Add Physical-Device Harness And Freeze Apple Evidence
 
 **Files:**
-- Create: `platforms/apple/Tests/BotaDeviceSDKPhysicalTests/PhysicalDeviceTests.swift`
-- Create: `platforms/apple/Tests/BotaDeviceSDKPhysicalTests/PhysicalTestConfiguration.swift`
+- Create: `platforms/apple/Tests/BotaAppleSDKPhysicalTests/PhysicalDeviceTests.swift`
+- Create: `platforms/apple/Tests/BotaAppleSDKPhysicalTests/PhysicalTestConfiguration.swift`
 - Create: `docs/testing/apple-physical-device.md`
 - Create: `release/evidence/1.0.0-alpha.1-apple-facade.md`
 - Modify: `protocol/compatibility/firmware-compatibility.json`

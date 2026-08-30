@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const source = path.join(root, "protocol/workflows");
 const destination = path.join(
   root,
-  "platforms/apple/Tests/BotaDeviceSDKTests/Resources/WorkflowFixtures/workflows.json",
+  "platforms/apple/Tests/BotaAppleSDKTests/Resources/WorkflowFixtures/workflows.json",
 );
 const check = process.argv.includes("--check");
 const names = (await readdir(source))

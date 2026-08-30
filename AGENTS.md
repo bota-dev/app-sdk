@@ -4,7 +4,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 
 ## Repository Purpose
 
-- `app-sdk` is the source monorepo for the **Bota Device SDK** family.
+- `app-sdk` is the source monorepo for the **Bota App SDK** family.
 - The future backend-facing **Bota API SDK** is a separate family.
 - Read [ARCHITECTURE.md](ARCHITECTURE.md) and the active plan under
   `docs/superpowers/plans/` before architectural changes.
@@ -30,7 +30,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - One synchronized SDK version comes from `sdk-version.toml`.
 - Rust owns protocol and deterministic workflow behavior.
 - Platform transports and lifecycle integration remain native.
-- Device SDK code does not call the Bota API directly.
+- App SDK code does not call the Bota API directly.
 - Unsupported platform capabilities fail before device state changes.
 - One workflow owns the core engine at a time; hosts preserve request and
   cancellation IDs when returning callbacks.

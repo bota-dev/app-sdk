@@ -1,6 +1,6 @@
 # Bota App SDK
 
-Source monorepo for the **Bota Device SDK** family. The repository will provide
+Source monorepo for the **Bota App SDK** family. The repository will provide
 a shared Rust protocol and workflow core with platform-native Bluetooth
 transports and idiomatic Apple, Android, React Native, Flutter, Web, and Windows
 facades.
@@ -11,7 +11,7 @@ physical-device parity gates.
 
 ## Current Status
 
-The Device SDK is versioned at `1.0.0`: the repository has a generated
+The App SDK is versioned at `1.0.0`: the repository has a generated
 protocol manifest, 50 language-neutral compatibility fixtures, bounded Rust
 decoders, byte-exact serializers, stable models/errors, and deterministic
 discovery, connection-recovery, provisioning, authenticated-reset, resumable
@@ -59,7 +59,7 @@ reset result for the current binding generation. Public recording, upload
 ownership, OTA, and device-log managers now expose typed async streams while
 keeping recording and firmware bytes in native files and accepting only opaque
 application-supplied upload identifiers. An unrelated Swift package now imports
-only `BotaDeviceSDK`, runs a macOS smoke executable, and type-checks every public
+only `BotaAppleSDK`, runs a macOS smoke executable, and type-checks every public
 manager. CI also compiles generic iOS device and simulator destinations with
 strict concurrency diagnostics, then produces a deterministic XCFramework zip,
 checksums, SPDX 2.3 SBOM, copied license, and validated release manifest as
@@ -84,7 +84,7 @@ https://github.com/bota-dev/app-sdk.git
 ```
 
 Select version `1.0.0` or **Up to Next Major Version**, then add the
-`BotaDeviceSDK` product to an iOS 15+ or macOS 13+ target. Swift packages can
+`BotaAppleSDK` product to an iOS 15+ or macOS 13+ target. Swift packages can
 declare the dependency directly:
 
 ```swift
@@ -94,7 +94,7 @@ declare the dependency directly:
 Import and configure the client from application code:
 
 ```swift
-import BotaDeviceSDK
+import BotaAppleSDK
 
 let bota = BotaDeviceClient.shared
 try await bota.configure()
@@ -143,8 +143,10 @@ approval are configured.
 ## Naming
 
 `app-sdk` is the source repository name. Public physical-device packages belong
-to the **Bota Device SDK** family. Future backend API clients belong to a
-separate **Bota API SDK** family and repository.
+to the **Bota App SDK** family. The Apple package, product, and Swift module are
+named `BotaAppleSDK`; internal Rust and C artifacts retain their existing
+device-core names. Future backend API clients belong to a separate **Bota API
+SDK** family and repository.
 
 ## Contributing
 

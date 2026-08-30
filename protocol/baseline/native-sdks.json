@@ -23,8 +23,8 @@
   "migrationTargets": {
     "apple": {
       "repository": "https://github.com/bota-dev/app-sdk.git",
-      "package": "BotaDeviceSDK",
-      "product": "BotaDeviceSDK",
+      "package": "BotaAppleSDK",
+      "product": "BotaAppleSDK",
       "entryPoint": "BotaDeviceClient",
       "minimumPlatform": "iOS 15 / macOS 13",
       "status": "automated_verified_physical_pending",

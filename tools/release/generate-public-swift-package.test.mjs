@@ -11,7 +11,7 @@ test('public Swift package pins the matching Apple release artifact', () => {
     artifactChecksum: checksum,
   });
 
-  assert.match(manifest, /name: "BotaDeviceSDK"/);
+  assert.match(manifest, /name: "BotaAppleSDK"/);
   assert.match(manifest, /\.iOS\(\.v15\)/);
   assert.match(manifest, /\.macOS\(\.v13\)/);
   assert.match(
@@ -19,7 +19,7 @@ test('public Swift package pins the matching Apple release artifact', () => {
     /https:\/\/github\.com\/bota-dev\/app-sdk\/releases\/download\/v1\.0\.0\/BotaDeviceSDKCore\.xcframework\.zip/,
   );
   assert.match(manifest, new RegExp(`checksum: "${checksum}"`));
-  assert.match(manifest, /path: "platforms\/apple\/Sources\/BotaDeviceSDK"/);
+  assert.match(manifest, /path: "platforms\/apple\/Sources\/BotaAppleSDK"/);
   assert.doesNotMatch(manifest, /Artifacts\/BotaDeviceSDKCore\.xcframework/);
 });
 

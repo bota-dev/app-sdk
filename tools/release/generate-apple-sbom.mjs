@@ -83,7 +83,7 @@ export function generateAppleSbom({
     spdxVersion: 'SPDX-2.3',
     dataLicense: 'CC0-1.0',
     SPDXID: 'SPDXRef-DOCUMENT',
-    name: `BotaDeviceSDK-${sdkVersion}`,
+    name: `BotaAppleSDK-${sdkVersion}`,
     documentNamespace: `https://bota.dev/spdx/device-sdk/${sdkVersion}/${sourceRevision}`,
     creationInfo: {
       created,

@@ -21,13 +21,13 @@ export function renderPublicSwiftPackage({ sdkVersion, artifactChecksum }) {
 import PackageDescription
 
 let package = Package(
-    name: "BotaDeviceSDK",
+    name: "BotaAppleSDK",
     platforms: [
         .iOS(.v15),
         .macOS(.v13),
     ],
     products: [
-        .library(name: "BotaDeviceSDK", targets: ["BotaDeviceSDK"]),
+        .library(name: "BotaAppleSDK", targets: ["BotaAppleSDK"]),
     ],
     targets: [
         .binaryTarget(
@@ -36,9 +36,9 @@ let package = Package(
             checksum: "${artifactChecksum}"
         ),
         .target(
-            name: "BotaDeviceSDK",
+            name: "BotaAppleSDK",
             dependencies: ["BotaDeviceSDKC"],
-            path: "platforms/apple/Sources/BotaDeviceSDK"
+            path: "platforms/apple/Sources/BotaAppleSDK"
         ),
     ]
 )
