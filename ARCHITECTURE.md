@@ -98,12 +98,14 @@ would exceed the one-byte chunk-count limit.
 
 Workflow coordination uses the command/event/effect boundary in
 `core/device-sdk-core/src/engine/`. Commands are authorized against explicit
-host capabilities before effects can be built. Platform callbacks enter as
-typed events, while every requested host effect carries an operation and
-cancellation ID. Persisted checkpoints intentionally cannot contain
+host capabilities before effects can be built. `WorkflowEngine` permits one
+active command owner, gives every effect a monotonic request ID, and rejects
+stale callbacks or mismatched cancellation IDs. Platform callbacks enter as
+typed host events carrying the completed request ID, while every requested host
+effect also carries an operation and cancellation ID. Persisted checkpoints intentionally cannot contain
 credentials, presigned URLs, private keys, file paths, or recording payloads.
-Milestone 1 defines these contracts only; reducer implementations and the FFI
-mechanism are deferred as specified in
+Deterministic discovery is the first implemented reducer; the remaining
+workflows and FFI mechanism are deferred as specified in
 [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md).
 
 ## Security

@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Command {
-    DiscoverDevices,
+    DiscoverDevices {
+        timeout_ms: u64,
+        allow_duplicates: bool,
+    },
     Connect {
         device: DeviceSerialNumber,
     },
@@ -62,7 +65,7 @@ impl Command {
 
     pub const fn operation(&self) -> Operation {
         match self {
-            Self::DiscoverDevices => Operation::Discover,
+            Self::DiscoverDevices { .. } => Operation::Discover,
             Self::Connect { .. } => Operation::Connect,
             Self::Provision { .. } => Operation::Provision,
             Self::TransferRecording { .. } => Operation::TransferRecording,
@@ -75,9 +78,8 @@ impl Command {
 
     const fn required_capabilities(&self) -> &'static [Capability] {
         match self {
-            Self::DiscoverDevices | Self::Connect { .. } | Self::ReadDeviceLogs { .. } => {
-                &[Capability::Ble]
-            }
+            Self::DiscoverDevices { .. } => &[Capability::Ble, Capability::Timer],
+            Self::Connect { .. } | Self::ReadDeviceLogs { .. } => &[Capability::Ble],
             Self::Provision { .. } | Self::FactoryReset { .. } => {
                 &[Capability::Ble, Capability::SecureStorage]
             }

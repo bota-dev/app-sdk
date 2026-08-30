@@ -3,8 +3,9 @@ use std::{fs, str::FromStr};
 use bota_device_sdk_core::{
     engine::{
         BleEffect, BleEvent, CancellationId, Capability, CapabilitySet, CheckpointPhase, Command,
-        Effect, EffectRequest, Event, NetworkEffect, NetworkEvent, PersistenceEffect,
-        ProgressEffect, SecureStorageEffect, TimerEffect, WorkflowCheckpoint, WorkflowKind,
+        Effect, EffectRequest, Event, HostEvent, HostEventKind, NetworkEffect, NetworkEvent,
+        PersistenceEffect, ProgressEffect, RequestId, SecureStorageEffect, TimerEffect,
+        WorkflowCheckpoint, WorkflowKind,
     },
     error::{ErrorCode, Operation},
     model::{DeviceSerialNumber, RecordingUuid},
@@ -36,6 +37,7 @@ fn unsupported_capability_fails_before_transport_effect_is_built() {
 #[test]
 fn every_effect_request_carries_operation_and_cancellation_identity() {
     let request = EffectRequest::new(
+        RequestId::from_u64(1),
         Operation::TransferRecording,
         CancellationId::from_bytes([7; 16]),
         Effect::Ble(BleEffect::Read {
@@ -45,6 +47,7 @@ fn every_effect_request_carries_operation_and_cancellation_identity() {
     );
 
     assert_eq!(request.operation, Operation::TransferRecording);
+    assert_eq!(request.request_id.as_u64(), 1);
     assert_eq!(request.cancellation_id.as_bytes(), &[7; 16]);
 }
 
@@ -85,15 +88,32 @@ fn host_side_work_is_explicit_in_the_effect_vocabulary() {
 #[test]
 fn platform_callbacks_enter_only_as_typed_events() {
     let events = [
-        Event::Ble(BleEvent::WriteCompleted { request_id: 2 }),
-        Event::TimerFired { timer_id: 1 },
-        Event::CheckpointLoaded { checkpoint: None },
-        Event::SecretLoaded {
-            key: "device-token".into(),
-            value: None,
+        Event::Host(HostEvent {
+            request_id: RequestId::from_u64(1),
+            kind: HostEventKind::Ble(BleEvent::WriteCompleted),
+        }),
+        Event::Host(HostEvent {
+            request_id: RequestId::from_u64(2),
+            kind: HostEventKind::TimerFired { timer_id: 1 },
+        }),
+        Event::Host(HostEvent {
+            request_id: RequestId::from_u64(3),
+            kind: HostEventKind::CheckpointLoaded { checkpoint: None },
+        }),
+        Event::Host(HostEvent {
+            request_id: RequestId::from_u64(4),
+            kind: HostEventKind::SecretLoaded {
+                key: "device-token".into(),
+                value: None,
+            },
+        }),
+        Event::Host(HostEvent {
+            request_id: RequestId::from_u64(5),
+            kind: HostEventKind::Network(NetworkEvent::UploadCompleted { upload_id: 8 }),
+        }),
+        Event::Cancelled {
+            cancellation_id: CancellationId::from_bytes([7; 16]),
         },
-        Event::Network(NetworkEvent::UploadCompleted { upload_id: 8 }),
-        Event::Cancelled,
     ];
 
     assert_eq!(events.len(), 6);

@@ -30,6 +30,8 @@
 - Platform transports and lifecycle integration remain native.
 - Device SDK code does not call the Bota API directly.
 - Unsupported platform capabilities fail before device state changes.
+- One workflow owns the core engine at a time; hosts preserve request and
+  cancellation IDs when returning callbacks.
 - High-volume recording bytes stay off JavaScript and Dart bridges.
 - Never infer identity from an advertised BLE name alone.
 - Do not treat deprovision or unbind as factory reset.

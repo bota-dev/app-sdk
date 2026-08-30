@@ -115,6 +115,8 @@ git commit -m "chore: reserve stable sdk 1.0.0"
 - Create: `core/device-sdk-core/src/engine/runtime.rs`
 - Create: `core/device-sdk-core/src/engine/output.rs`
 - Create: `core/device-sdk-core/src/engine/request.rs`
+- Create: `core/device-sdk-core/src/workflow/discovery.rs`
+- Create: `core/device-sdk-core/src/workflow/mod.rs`
 - Modify: `core/device-sdk-core/src/engine/mod.rs`
 - Modify: `core/device-sdk-core/src/engine/command.rs`
 - Modify: `core/device-sdk-core/src/engine/effect.rs`
@@ -151,19 +153,19 @@ impl WorkflowEngine {
 }
 ```
 
-- [ ] **Step 1: Write runtime tests**
+- [x] **Step 1: Write runtime tests**
 
 Cover capability rejection before effects, monotonic request IDs, one active
 operation, stale request-event rejection, idempotent cancellation, terminal
 completion, and rejection of events after completion.
 
-- [ ] **Step 2: Run the focused test and confirm it fails**
+- [x] **Step 2: Run the focused test and confirm it fails**
 
 Run: `cargo test -p bota-device-sdk-core --test workflow_runtime`
 
 Expected: compile failure because the runtime API does not exist.
 
-- [ ] **Step 3: Implement the minimal runtime**
+- [x] **Step 3: Implement the minimal runtime**
 
 Add `RequestId` to response-producing BLE, persistence, secure-storage, timer,
 and network effects/events. Add `Effect::Notify(WorkflowNotification)` for
@@ -171,13 +173,13 @@ started, progress, retrying, completed, cancelled, and failed outputs. Return
 `operation_in_progress` and `unexpected_event` through stable `ErrorCode`
 variants.
 
-- [ ] **Step 4: Add the deterministic fake host**
+- [x] **Step 4: Add the deterministic fake host**
 
 The test-only host records each effect before returning one scripted event. It
 must reject an event whose request ID does not match the effect being completed.
 No sleeping, threads, filesystem, Bluetooth, or HTTP are used.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 

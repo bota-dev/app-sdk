@@ -1,4 +1,7 @@
-use crate::{engine::WorkflowCheckpoint, error::Operation};
+use crate::{
+    engine::{RequestId, WorkflowCheckpoint, WorkflowNotification},
+    error::Operation,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -16,6 +19,7 @@ impl CancellationId {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EffectRequest {
+    pub request_id: RequestId,
     pub operation: Operation,
     pub cancellation_id: CancellationId,
     pub effect: Effect,
@@ -23,11 +27,13 @@ pub struct EffectRequest {
 
 impl EffectRequest {
     pub const fn new(
+        request_id: RequestId,
         operation: Operation,
         cancellation_id: CancellationId,
         effect: Effect,
     ) -> Self {
         Self {
+            request_id,
             operation,
             cancellation_id,
             effect,
@@ -43,6 +49,7 @@ pub enum Effect {
     Ble(BleEffect),
     Network(NetworkEffect),
     Progress(ProgressEffect),
+    Notify(WorkflowNotification),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
