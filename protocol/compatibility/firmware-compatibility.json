@@ -9,6 +9,17 @@
     "version": "0.0.65",
     "revision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4"
   },
+  "nativeAbi": {
+    "version": 1,
+    "status": "foundation_verified",
+    "workflowCommands": 10,
+    "hostEvents": 34,
+    "hostEffects": 30,
+    "notifications": 12,
+    "protocolDecoders": 10,
+    "protocolEncoders": 13,
+    "publishedFacades": []
+  },
   "features": [
     {
       "feature": "device_status",
@@ -172,6 +183,7 @@
   "notes": [
     "1.0.17 is the earliest version established by the frozen firmware baseline; earlier introduction versions have not been audited.",
     "Supported means at least one positive and one malformed, rejected, or recovery fixture exists.",
-    "Workflow support covers deterministic core behavior only, not native transports or physical-device acceptance."
+    "Workflow support covers deterministic core behavior only, not native transports or physical-device acceptance.",
+    "Native ABI foundation verification does not publish Apple or Android facade capability."
   ]
 }

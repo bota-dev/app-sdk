@@ -45,6 +45,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   shared bounded decoder; disconnect cleanup must not attempt a BLE stop write.
 - Native facades use the manually owned opaque C ABI selected in ADR 0001;
   UniFFI `0.32.0` exists only in the non-published comparison spike.
+- ABI v1 numeric meanings and ownership rules are frozen by
+  `release/evidence/1.0.0-alpha.1-native-abi.md`; facade work may add Swift or
+  Kotlin types but must not redesign the C boundary.
 - Never infer identity from an advertised BLE name alone.
 - Do not treat deprovision or unbind as factory reset.
 - Never commit credentials, tokens, private keys, certificate bodies, or signing
@@ -63,6 +66,8 @@ cargo xtask protocol generate --check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace
+tools/ffi-smoke/run-native-c-smoke.sh
+tools/ffi-smoke/run-native-swift-smoke.sh
 ```
 
 Some commands become available in later milestones. Run all commands applicable
@@ -82,6 +87,8 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
   the React Native-consumable release. Tags use `vVERSION`.
 - Read `docs/releasing.md` before creating or pushing a release tag.
 - Only `bota-device-sdk-core` is currently publishable.
+- `bota-device-sdk-ffi` is shipping source for native packages but is not a
+  standalone registry artifact; no Apple or Android facade is publishable yet.
 - The first crates.io publication requires the protected one-time bootstrap
   token; subsequent releases must migrate to Trusted Publishing.
 - Never push a release tag until `cargo xtask release verify-tag vVERSION`,

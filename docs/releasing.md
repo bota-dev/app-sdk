@@ -4,6 +4,13 @@ All artifacts use the exact version in `sdk-version.toml`. The first public
 artifact is the `bota-device-sdk-core` crate; platform SDKs are not published
 from this workflow.
 
+The typed native ABI is frozen and tested as source in
+`bindings/device-sdk-ffi`, but the local static library is not a distributable
+Apple or Android package. Do not publish or attach it as a platform artifact.
+Apple publication begins only after the XCFramework, Swift package import,
+fake-host, and physical-device gates in the Apple facade plan pass; Android has
+equivalent AAR and device gates in its later plan.
+
 Stable `v1.0.0` is reserved for the first release that Demo and Bota One can
 consume through the React Native compatibility package. Protocol and workflow
 core milestones publish as `1.0.0-alpha.N`.
@@ -49,10 +56,14 @@ cargo xtask protocol generate --check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+tools/ffi-smoke/run-native-c-smoke.sh
+tools/ffi-smoke/run-native-swift-smoke.sh
 cargo deny check
 cargo package --locked --package bota-device-sdk-core
 cargo publish --locked --package bota-device-sdk-core --dry-run
 ```
 
 Do not create a release tag when the environment secret or protection rules are
-missing. Do not publish the `xtask` package or any unfinished platform facade.
+missing. Do not publish the `xtask` package, `bota-device-sdk-ffi` by itself, or
+any unfinished platform facade. Native ABI evidence is recorded separately in
+`release/evidence/1.0.0-alpha.1-native-abi.md`.

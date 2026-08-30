@@ -178,6 +178,12 @@ The public header exposes Swift-importable typed numeric constants and a Clang
 module map. Standalone C and Swift programs compile and run against the shipping
 static library in CI; the old JSON C exports have been removed, leaving JSON
 only inside the explicitly enabled UniFFI decision spike.
+ABI v1 is frozen for facade implementation: existing symbol names, packet-kind
+values, field meanings, ownership rules, and status/error values are additive
+only. The exact tested revision and header digest live in
+`release/evidence/1.0.0-alpha.1-native-abi.md`. This freeze is an interface
+milestone, not an Apple or Android support claim; XCFramework, AAR, platform
+transport, and physical-device gates remain open.
 
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host
