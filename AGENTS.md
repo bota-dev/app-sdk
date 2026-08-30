@@ -61,6 +61,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 ```bash
 npm ci
 npm run check
+npm run sync:apple-fixtures
 npm run test:workflows -- --sdk-path ../react-native-sdk
 cargo xtask protocol generate --check
 cargo fmt --all -- --check

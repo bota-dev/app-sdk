@@ -32,8 +32,10 @@ and platform exclusions are recorded in
 [`release/evidence/1.0.0-alpha.1-native-abi.md`](release/evidence/1.0.0-alpha.1-native-abi.md).
 The Apple package shell now builds an iOS device, universal iOS simulator, and
 universal macOS XCFramework from that frozen header and proves a Swift package
-can import the real ABI. This is a packaging foundation only; CoreBluetooth and
-the public Apple facade workflows are not implemented or published yet.
+can import the real ABI. Its Swift value models and protocol codecs are fixture
+tested against the shared Rust implementation, including unknown wire values
+and Bota Note connection normalization. CoreBluetooth and the public Apple
+facade workflows are not implemented or published yet.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own
@@ -52,6 +54,7 @@ Requirements:
 ```bash
 npm ci
 npm run check
+npm run sync:apple-fixtures
 npm run test:fixtures
 npm run test:workflows -- --sdk-path ../react-native-sdk
 cargo fmt --all -- --check

@@ -199,6 +199,13 @@ copies packet and error views into `Sendable` Swift values, and frees each
 native owner exactly once. The ABI function table is injectable only to verify
 those lifetime rules; production calls remain bound to the frozen v1 symbols.
 
+The Apple facade maps those owned packets into public `Sendable` device,
+recording, connection, progress, and stable-error values. Unknown numeric wire
+states use `WireValue.unknown` rather than legacy fallbacks. Protocol fixtures
+are mirrored into SwiftPM resources by `sync-protocol-fixtures.mjs`, checked for
+drift on every package test, and executed through the Rust decode/encode ABI;
+Swift does not contain a second wire parser.
+
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host
 capabilities, ordered inputs, ordered effects and notifications, and terminal

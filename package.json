@@ -11,6 +11,7 @@
     "check": "npm run check:licenses",
     "check:licenses": "node scripts/check-licenses.mjs",
     "license-check": "npm run check:licenses",
+    "sync:apple-fixtures": "node tools/apple/sync-protocol-fixtures.mjs --check",
     "test:fixtures": "node --test tools/baseline/*.test.mjs",
     "test:tooling": "node --test scripts/*.test.mjs tools/baseline/*.test.mjs",
     "test:workflows": "node tools/baseline/compare-workflows.mjs"
