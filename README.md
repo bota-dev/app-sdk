@@ -50,9 +50,12 @@ public `BotaDeviceClient` now configures those hosts once and exposes
 serial-verified discovery, manual connection, canonical reconnect, explicit
 disconnect, connection observation, and decoded device-status streams. Client
 destruction cancels active work, stops status subscriptions, disconnects the
-verified peripheral, and closes observers. Provisioning, reset, transfer, OTA,
-and log managers remain under implementation; the Apple package is not yet
-published.
+verified peripheral, and closes observers. Public secure-lifecycle managers now
+resolve provisioning and command-bound reset material through application
+callbacks, normalize Bota Note connection settings, keep remove-only
+deprovision separate from destructive reset, and resume only an exact durable
+reset result for the current binding generation. Transfer, OTA, and log
+managers remain under implementation; the Apple package is not yet published.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own

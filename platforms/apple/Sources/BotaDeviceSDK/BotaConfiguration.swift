@@ -13,6 +13,7 @@ public struct BotaConfiguration: @unchecked Sendable {
             let root = configuredDirectory ?? Self.defaultApplicationSupportDirectory()
             let bluetooth = CoreBluetoothHost(driver: CoreBluetoothDriver())
             let mapper = try CoreModelMapper()
+            let connection = DeviceConnectionRegistry()
             let persistence = FilePersistenceHost(
                 rootDirectory: root.appendingPathComponent("State", isDirectory: true)
             )
@@ -33,6 +34,7 @@ public struct BotaConfiguration: @unchecked Sendable {
             return DeviceRuntime(
                 engine: CoreEngineActor(abi: try CoreAbiClient(), host: executor),
                 capabilities: .all,
+                connection: connection,
                 disconnect: { peripheralID in
                     try await bluetooth.disconnect(peripheralID: peripheralID)
                 },
@@ -70,7 +72,36 @@ public struct BotaConfiguration: @unchecked Sendable {
                         serviceUUID: BotaBluetoothUUIDs.controlService,
                         characteristicUUID: BotaBluetoothUUIDs.deviceStatus
                     )
-                }
+                },
+                directWrite: { peripheralID, serviceUUID, characteristicUUID, data in
+                    try await bluetooth.write(
+                        peripheralID: peripheralID,
+                        serviceUUID: serviceUUID,
+                        characteristicUUID: characteristicUUID,
+                        data: data
+                    )
+                },
+                serializeConnectionSettings: { settings, model in
+                    try mapper.serializeConnectionSettings(settings, model: model)
+                },
+                encodeDeviceCommand: { command in try mapper.encodeDeviceCommand(command) },
+                registerProvisioning: { id, provider in
+                    await material.registerProvisioning(id: id, provider: provider)
+                },
+                registerFactoryReset: { id, provider in
+                    await material.registerFactoryReset(id: id, provider: provider)
+                },
+                unregisterMaterial: { id in await material.unregister(id: id) },
+                registerFactoryResetGeneration: { commandID, generation in
+                    await persistence.registerFactoryReset(
+                        commandID: commandID,
+                        bindingGeneration: generation
+                    )
+                },
+                unregisterFactoryResetGeneration: { commandID in
+                    await persistence.unregisterFactoryReset(commandID: commandID)
+                },
+                loadPendingFactoryReset: { try await persistence.loadFactoryResetResult() }
             )
         }
     }

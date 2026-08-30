@@ -24,6 +24,7 @@ final class DurableHostTests: XCTestCase {
             requestID: 2,
             fields: [.bytes(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_CHECKPOINT), value: replacement)]
         ))
+        await first.registerFactoryReset(commandID: "reset-1", bindingGeneration: 12)
         _ = try await payloads(first, effect(
             UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_PERSISTENCE_SAVE_FACTORY_RESET_RESULT),
             requestID: 2,
@@ -42,7 +43,12 @@ final class DurableHostTests: XCTestCase {
         let reset = try await recreated.loadFactoryResetResult()
 
         XCTAssertEqual(loaded.first?.bytes(UInt32(BOTA_DEVICE_SDK_V1_FIELD_CHECKPOINT)), replacement)
-        XCTAssertEqual(reset, PersistedFactoryResetResult(commandID: "reset-1", resultCode: 7, deletedRecordingCount: 42))
+        XCTAssertEqual(reset, PersistedFactoryResetResult(
+            commandID: "reset-1",
+            resultCode: 7,
+            deletedRecordingCount: 42,
+            bindingGeneration: 12
+        ))
     }
 
     func testFactoryResetJournalDeletesOnlyTheExactCommand() async throws {

@@ -257,6 +257,17 @@ publishes a device only after serial verification. One-shot and streaming
 device status bytes are read through the serialized CoreBluetooth host and
 decoded through `CoreModelMapper`; there is no Swift status parser.
 
+`ProvisioningManager` and `FactoryResetManager` register application callbacks
+under opaque material IDs; endpoint bytes, device tokens, nonces, public keys,
+and reset grants never enter public workflow notifications or durable reducer
+checkpoints. Note settings pass through the shared encoder, which removes every
+cellular selection before the serialized BLE write. Remove-only deprovision is
+a direct shared-codec command and cannot invoke the authenticated reset reducer.
+Factory reset binds its application grant request and durable result to both the
+backend command ID and binding generation. Restart recovery rejects a stale
+generation before starting the receipt-only reducer. A facade-wide operation
+coordinator prevents direct writes from interleaving with any active workflow.
+
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host
 capabilities, ordered inputs, ordered effects and notifications, and terminal

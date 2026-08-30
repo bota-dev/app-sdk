@@ -10,6 +10,8 @@ enum BotaBluetoothUUIDs {
     static let diagnosticsService = "B07A0007-0000-1000-8000-00805F9B34FB"
 
     static let deviceStatus = "B07A0002-0001-1000-8000-00805F9B34FB"
+    static let deviceCommand = "B07A0002-0005-1000-8000-00805F9B34FB"
+    static let deviceSettings = "B07A0003-0006-1000-8000-00805F9B34FB"
 
     static let botaServices = [
         audioService,

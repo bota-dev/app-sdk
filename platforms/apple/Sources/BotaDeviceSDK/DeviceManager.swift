@@ -60,10 +60,69 @@ extension CoreEngineActor: CoreWorkflowRunning {}
 struct DeviceRuntime: Sendable {
     let engine: any CoreWorkflowRunning
     let capabilities: CoreCapabilities
+    let connection: DeviceConnectionRegistry
+    let operations: DeviceOperationCoordinator
     let disconnect: @Sendable (String) async throws -> Void
     let readStatus: @Sendable (String) async throws -> DeviceStatus
     let statusUpdates: @Sendable (String) async throws -> AsyncThrowingStream<DeviceStatus, Error>
     let stopStatusUpdates: @Sendable (String) async throws -> Void
+    let directWrite: @Sendable (String, String, String, Data) async throws -> Void
+    let serializeConnectionSettings: @Sendable (DeviceConnectionSettings, DeviceType) throws -> Data
+    let encodeDeviceCommand: @Sendable (UInt8) throws -> Data
+    let registerProvisioning: @Sendable (String, @escaping ProvisioningMaterialProvider) async -> Void
+    let registerFactoryReset: @Sendable (String, @escaping FactoryResetMaterialProvider) async -> Void
+    let unregisterMaterial: @Sendable (String) async -> Void
+    let registerFactoryResetGeneration: @Sendable (String, UInt64) async -> Void
+    let unregisterFactoryResetGeneration: @Sendable (String) async -> Void
+    let loadPendingFactoryReset: @Sendable () async throws -> PersistedFactoryResetResult?
+
+    init(
+        engine: any CoreWorkflowRunning,
+        capabilities: CoreCapabilities,
+        connection: DeviceConnectionRegistry = DeviceConnectionRegistry(),
+        operations: DeviceOperationCoordinator = DeviceOperationCoordinator(),
+        disconnect: @escaping @Sendable (String) async throws -> Void,
+        readStatus: @escaping @Sendable (String) async throws -> DeviceStatus = { _ in
+            throw NativeHostError.missingResource("device status")
+        },
+        statusUpdates: @escaping @Sendable (String) async throws -> AsyncThrowingStream<DeviceStatus, Error> = { _ in
+            throw NativeHostError.missingResource("device status subscription")
+        },
+        stopStatusUpdates: @escaping @Sendable (String) async throws -> Void = { _ in },
+        directWrite: @escaping @Sendable (String, String, String, Data) async throws -> Void = { _, _, _, _ in
+            throw NativeHostError.missingResource("direct device write")
+        },
+        serializeConnectionSettings: @escaping @Sendable (DeviceConnectionSettings, DeviceType) throws -> Data = { _, _ in
+            throw NativeHostError.missingResource("connection-settings encoder")
+        },
+        encodeDeviceCommand: @escaping @Sendable (UInt8) throws -> Data = { _ in
+            throw NativeHostError.missingResource("device-command encoder")
+        },
+        registerProvisioning: @escaping @Sendable (String, @escaping ProvisioningMaterialProvider) async -> Void = { _, _ in },
+        registerFactoryReset: @escaping @Sendable (String, @escaping FactoryResetMaterialProvider) async -> Void = { _, _ in },
+        unregisterMaterial: @escaping @Sendable (String) async -> Void = { _ in },
+        registerFactoryResetGeneration: @escaping @Sendable (String, UInt64) async -> Void = { _, _ in },
+        unregisterFactoryResetGeneration: @escaping @Sendable (String) async -> Void = { _ in },
+        loadPendingFactoryReset: @escaping @Sendable () async throws -> PersistedFactoryResetResult? = { nil }
+    ) {
+        self.engine = engine
+        self.capabilities = capabilities
+        self.connection = connection
+        self.operations = operations
+        self.disconnect = disconnect
+        self.readStatus = readStatus
+        self.statusUpdates = statusUpdates
+        self.stopStatusUpdates = stopStatusUpdates
+        self.directWrite = directWrite
+        self.serializeConnectionSettings = serializeConnectionSettings
+        self.encodeDeviceCommand = encodeDeviceCommand
+        self.registerProvisioning = registerProvisioning
+        self.registerFactoryReset = registerFactoryReset
+        self.unregisterMaterial = unregisterMaterial
+        self.registerFactoryResetGeneration = registerFactoryResetGeneration
+        self.unregisterFactoryResetGeneration = unregisterFactoryResetGeneration
+        self.loadPendingFactoryReset = loadPendingFactoryReset
+    }
 }
 
 extension CoreCapabilities {
@@ -101,9 +160,11 @@ public actor DeviceManager {
         if let activeOperation {
             activeOperation.task?.cancel()
             try? await runtime?.engine.cancel(activeOperation.cancellationID)
+            await runtime?.operations.end(activeOperation.cancellationID)
         }
         await stopAllStatusObservers()
         if let connectedDevice { try? await runtime?.disconnect(connectedDevice.id) }
+        await runtime?.connection.clear()
         activeOperation = nil
         connectedDevice = nil
         runtime = nil
@@ -118,8 +179,8 @@ public actor DeviceManager {
     public func startScan(
         timeoutMilliseconds: UInt64 = 10_000,
         allowDuplicates: Bool = false
-    ) throws -> AsyncThrowingStream<DiscoveredDevice, Error> {
-        let runtime = try beginOperation()
+    ) async throws -> AsyncThrowingStream<DiscoveredDevice, Error> {
+        let runtime = try await beginOperation(operation: .discover)
         let cancellationID = activeOperation!.cancellationID
         let command = CoreCommand.discoverDevices(
             timeoutMilliseconds: timeoutMilliseconds,
@@ -148,7 +209,7 @@ public actor DeviceManager {
             } catch {
                 pair.continuation.finish(throwing: Self.publicError(error))
             }
-            finishOperation(cancellationID)
+            await finishOperation(cancellationID)
         }
         activeOperation?.task = task
         pair.continuation.onTermination = { @Sendable _ in
@@ -159,8 +220,10 @@ public actor DeviceManager {
 
     public func connect(serialNumber: String, device: DiscoveredDevice) async throws -> ConnectedDevice {
         if let connectedDevice, connectedDevice.id != device.id {
+            let runtime = try configuredRuntime()
             await stopAllStatusObservers()
-            try await configuredRuntime().disconnect(connectedDevice.id)
+            try await runtime.disconnect(connectedDevice.id)
+            await runtime.connection.clear()
             self.connectedDevice = nil
             publishConnection()
         }
@@ -195,17 +258,21 @@ public actor DeviceManager {
 
     public func disconnect() async throws {
         guard let connectedDevice else { return }
+        let runtime = try configuredRuntime()
         await stopAllStatusObservers()
-        try await configuredRuntime().disconnect(connectedDevice.id)
+        try await runtime.disconnect(connectedDevice.id)
+        await runtime.connection.clear()
         self.connectedDevice = nil
         publishConnection()
     }
 
     public func cancelCurrentOperation() async throws {
         guard let activeOperation else { return }
+        let runtime = try configuredRuntime()
         activeOperation.task?.cancel()
-        try await configuredRuntime().engine.cancel(activeOperation.cancellationID)
+        try await runtime.engine.cancel(activeOperation.cancellationID)
         self.activeOperation = nil
+        await runtime.operations.end(activeOperation.cancellationID)
     }
 
     public func connectionUpdates() -> AsyncStream<ConnectedDevice?> {
@@ -266,8 +333,10 @@ public actor DeviceManager {
     }
 
     private func runConnection(_ command: CoreCommand, source: DiscoveredDevice?) async throws -> ConnectedDevice {
-        let runtime = try beginOperation(cancellationID: command.cancellationID)
-        defer { finishOperation(command.cancellationID) }
+        let runtime = try await beginOperation(
+            cancellationID: command.cancellationID,
+            operation: command.kind == UInt32(BOTA_DEVICE_SDK_V1_COMMAND_RECONNECT) ? .reconnect : .connect
+        )
         var established: ConnectedDevice?
         do {
             let notifications = await runtime.engine.run(command, capabilities: runtime.capabilities)
@@ -284,9 +353,11 @@ public actor DeviceManager {
                 }
             }
         } catch {
+            await finishOperation(command.cancellationID)
             throw Self.publicError(error)
         }
         guard let established else {
+            await finishOperation(command.cancellationID)
             throw BotaDeviceSDKError(
                 code: .connectionFailed,
                 operation: command.kind == UInt32(BOTA_DEVICE_SDK_V1_COMMAND_RECONNECT) ? .reconnect : .connect,
@@ -295,7 +366,9 @@ public actor DeviceManager {
             )
         }
         connectedDevice = established
+        await runtime.connection.set(established)
         publishConnection()
+        await finishOperation(command.cancellationID)
         return established
     }
 
@@ -311,7 +384,10 @@ public actor DeviceManager {
         return runtime
     }
 
-    private func beginOperation(cancellationID: UUID = UUID()) throws -> DeviceRuntime {
+    private func beginOperation(
+        cancellationID: UUID = UUID(),
+        operation: BotaOperation
+    ) async throws -> DeviceRuntime {
         let runtime = try configuredRuntime()
         guard activeOperation == nil else {
             throw BotaDeviceSDKError(
@@ -321,12 +397,16 @@ public actor DeviceManager {
                 detail: "another device workflow is already active"
             )
         }
+        try await runtime.operations.begin(cancellationID, operation: operation)
         activeOperation = ActiveOperation(cancellationID: cancellationID)
         return runtime
     }
 
-    private func finishOperation(_ cancellationID: UUID) {
-        if activeOperation?.cancellationID == cancellationID { activeOperation = nil }
+    private func finishOperation(_ cancellationID: UUID) async {
+        if activeOperation?.cancellationID == cancellationID {
+            activeOperation = nil
+            await runtime?.operations.end(cancellationID)
+        }
     }
 
     private func cancelIfActive(_ cancellationID: UUID) async {
@@ -334,6 +414,7 @@ public actor DeviceManager {
         activeOperation?.task?.cancel()
         try? await runtime?.engine.cancel(cancellationID)
         activeOperation = nil
+        await runtime?.operations.end(cancellationID)
     }
 
     private func publishConnection() {

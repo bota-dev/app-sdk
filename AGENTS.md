@@ -55,6 +55,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   decoder rather than a Swift parser.
 - Keep manual connect and reconnect policy in the Rust workflows. The Apple
   facade forwards exact identity hints and never chooses a peripheral by name.
+- Apple provisioning and reset callbacks are registered by opaque material ID;
+  do not place callback results in checkpoints, logs, or public notifications.
+- Persist the reset command ID and binding generation with the exact device
+  result. Resume only the receipt workflow and reject a stale generation before
+  starting Rust. Remove-only deprovision must never call factory reset.
+- Direct Apple BLE writes and reducer workflows share one facade operation
+  coordinator; release ownership on success, failure, cancellation, and destroy.
 - Add new ABI effects to the exhaustive `CoreEffect` and `HostEffectExecutor`
   switches. Never route a new kind through a default branch.
 - Keep CoreBluetooth objects inside `CoreBluetoothDriver`'s dedicated serial

@@ -5,6 +5,19 @@ struct PersistedFactoryResetResult: Codable, Equatable, Sendable {
     let commandID: String
     let resultCode: UInt64
     let deletedRecordingCount: UInt64
+    let bindingGeneration: UInt64?
+
+    init(
+        commandID: String,
+        resultCode: UInt64,
+        deletedRecordingCount: UInt64,
+        bindingGeneration: UInt64? = nil
+    ) {
+        self.commandID = commandID
+        self.resultCode = resultCode
+        self.deletedRecordingCount = deletedRecordingCount
+        self.bindingGeneration = bindingGeneration
+    }
 }
 
 private struct PersistedConnectionIdentity: Codable {
@@ -19,6 +32,7 @@ actor FilePersistenceHost: PersistenceHost {
     private let fileManager: FileManager
     private let rootDirectory: URL
     private let secureStorage: any PersistenceHost
+    private var factoryResetGenerations: [String: UInt64] = [:]
 
     init(
         rootDirectory: URL,
@@ -86,6 +100,14 @@ actor FilePersistenceHost: PersistenceHost {
         return try JSONDecoder().decode(PersistedFactoryResetResult.self, from: Data(contentsOf: resetURL))
     }
 
+    func registerFactoryReset(commandID: String, bindingGeneration: UInt64) {
+        factoryResetGenerations[commandID] = bindingGeneration
+    }
+
+    func unregisterFactoryReset(commandID: String) {
+        factoryResetGenerations[commandID] = nil
+    }
+
     private var checkpointURL: URL { rootDirectory.appendingPathComponent("workflow-checkpoint.bin") }
     private var identityURL: URL { rootDirectory.appendingPathComponent("connection-identity.json") }
     private var resetURL: URL { rootDirectory.appendingPathComponent("factory-reset-result.json") }
@@ -120,13 +142,15 @@ actor FilePersistenceHost: PersistenceHost {
     }
 
     private func saveFactoryResetResult(_ effect: CoreEffect) throws {
+        let commandID = try requiredText(effect, UInt32(BOTA_DEVICE_SDK_V1_FIELD_COMMAND_ID))
         let result = PersistedFactoryResetResult(
-            commandID: try requiredText(effect, UInt32(BOTA_DEVICE_SDK_V1_FIELD_COMMAND_ID)),
+            commandID: commandID,
             resultCode: try requiredUnsigned(effect, UInt32(BOTA_DEVICE_SDK_V1_FIELD_RESULT_CODE)),
             deletedRecordingCount: try requiredUnsigned(
                 effect,
                 UInt32(BOTA_DEVICE_SDK_V1_FIELD_DELETED_RECORDING_COUNT)
-            )
+            ),
+            bindingGeneration: factoryResetGenerations[commandID]
         )
         try atomicWrite(try JSONEncoder().encode(result), to: resetURL)
     }
@@ -136,6 +160,7 @@ actor FilePersistenceHost: PersistenceHost {
         guard let saved = try loadFactoryResetResult() else { return }
         guard saved.commandID == commandID else { throw NativeHostError.staleFactoryResetResult }
         try fileManager.removeItem(at: resetURL)
+        factoryResetGenerations[commandID] = nil
     }
 
     private func checkpointSaved() -> CoreHostEventPayload {

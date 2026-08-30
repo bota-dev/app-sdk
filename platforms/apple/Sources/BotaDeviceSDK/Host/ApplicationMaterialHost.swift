@@ -1,35 +1,48 @@
 import BotaDeviceSDKC
 import Foundation
 
-struct ProvisioningMaterialRequest: Sendable {
-    let serialNumber: String
-    let nonce: Data
-    let devicePublicKey: Data
+public struct ProvisioningMaterialRequest: Sendable {
+    public let serialNumber: String
+    public let nonce: Data
+    public let devicePublicKey: Data
+
+    public init(serialNumber: String, nonce: Data, devicePublicKey: Data) {
+        self.serialNumber = serialNumber
+        self.nonce = nonce
+        self.devicePublicKey = devicePublicKey
+    }
 }
 
-struct FactoryResetGrantRequest: Sendable {
+struct FactoryResetMaterialRequest: Sendable {
     let serialNumber: String
     let nonce: Data
 }
 
-struct ProvisioningApplicationMaterial: Sendable {
-    let apiEndpoint: Data
-    let deviceToken: Data
-    let mtu: UInt64
+public struct ProvisioningMaterial: Sendable {
+    public let apiEndpoint: Data
+    public let deviceToken: Data
+    public let mtu: UInt64
+
+    public init(apiEndpoint: Data, deviceToken: Data, mtu: UInt64) {
+        self.apiEndpoint = apiEndpoint
+        self.deviceToken = deviceToken
+        self.mtu = mtu
+    }
 }
+
+public typealias ProvisioningMaterialProvider = @Sendable (ProvisioningMaterialRequest) async throws -> ProvisioningMaterial
+typealias ProvisioningApplicationMaterial = ProvisioningMaterial
+typealias FactoryResetMaterialProvider = @Sendable (FactoryResetMaterialRequest) async throws -> Data
 
 actor ApplicationMaterialHost: MaterialHost {
-    typealias ProvisioningProvider = @Sendable (ProvisioningMaterialRequest) async throws -> ProvisioningApplicationMaterial
-    typealias ResetProvider = @Sendable (FactoryResetGrantRequest) async throws -> Data
+    private var provisioningProviders: [String: ProvisioningMaterialProvider] = [:]
+    private var resetProviders: [String: FactoryResetMaterialProvider] = [:]
 
-    private var provisioningProviders: [String: ProvisioningProvider] = [:]
-    private var resetProviders: [String: ResetProvider] = [:]
-
-    func registerProvisioning(id: String, provider: @escaping ProvisioningProvider) {
+    func registerProvisioning(id: String, provider: @escaping ProvisioningMaterialProvider) {
         provisioningProviders[id] = provider
     }
 
-    func registerFactoryReset(id: String, provider: @escaping ResetProvider) {
+    func registerFactoryReset(id: String, provider: @escaping FactoryResetMaterialProvider) {
         resetProviders[id] = provider
     }
 

@@ -98,6 +98,23 @@ actor CoreBluetoothHost: BluetoothHost {
         }
     }
 
+    func write(
+        peripheralID: String,
+        serviceUUID: String,
+        characteristicUUID: String,
+        data: Data
+    ) async throws {
+        try await serialized(peripheralID) {
+            try await driver.write(
+                peripheralID: peripheralID,
+                serviceUUID: serviceUUID,
+                characteristicUUID: characteristicUUID,
+                data: data,
+                withResponse: true
+            )
+        }
+    }
+
     func unsubscribe(
         peripheralID: String,
         serviceUUID: String,
