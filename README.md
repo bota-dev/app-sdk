@@ -21,8 +21,9 @@ Twenty-nine canonical workflow scenarios are schema validated, pinned to the
 React Native `0.0.65` baseline, and backed by 25 executable Rust tests covering
 positive, rejection, cancellation, and resume or restart-recovery behavior.
 The native-boundary spike selected a manually owned C ABI after comparing it
-with pinned UniFFI `0.32.0`; neither boundary currently ships as a platform
-artifact.
+with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
+command, host effect, and workflow notification through typed packets, but no
+native platform artifact is published yet.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own

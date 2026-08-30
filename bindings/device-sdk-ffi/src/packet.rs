@@ -16,7 +16,49 @@ pub mod kind {
 
     pub const HOST_EVENT_RANGE_START: u32 = 0x0200;
     pub const HOST_EFFECT_RANGE_START: u32 = 0x0300;
+    pub const HOST_EFFECT_TIMER_SCHEDULE: u32 = 0x0301;
+    pub const HOST_EFFECT_TIMER_CANCEL: u32 = 0x0302;
+    pub const HOST_EFFECT_PERSISTENCE_LOAD_CHECKPOINT: u32 = 0x0303;
+    pub const HOST_EFFECT_PERSISTENCE_SAVE_CHECKPOINT: u32 = 0x0304;
+    pub const HOST_EFFECT_PERSISTENCE_DELETE_CHECKPOINT: u32 = 0x0305;
+    pub const HOST_EFFECT_PERSISTENCE_SAVE_CONNECTION_IDENTITY: u32 = 0x0306;
+    pub const HOST_EFFECT_PERSISTENCE_SAVE_FACTORY_RESET_RESULT: u32 = 0x0307;
+    pub const HOST_EFFECT_PERSISTENCE_DELETE_FACTORY_RESET_RESULT: u32 = 0x0308;
+    pub const HOST_EFFECT_SECURE_STORAGE_READ: u32 = 0x0309;
+    pub const HOST_EFFECT_SECURE_STORAGE_WRITE: u32 = 0x030a;
+    pub const HOST_EFFECT_SECURE_STORAGE_DELETE: u32 = 0x030b;
+    pub const HOST_EFFECT_BLE_START_SCAN: u32 = 0x0310;
+    pub const HOST_EFFECT_BLE_STOP_SCAN: u32 = 0x0311;
+    pub const HOST_EFFECT_BLE_CONNECT: u32 = 0x0312;
+    pub const HOST_EFFECT_BLE_DISCOVER_SERVICES: u32 = 0x0313;
+    pub const HOST_EFFECT_BLE_DISCONNECT: u32 = 0x0314;
+    pub const HOST_EFFECT_BLE_READ: u32 = 0x0315;
+    pub const HOST_EFFECT_BLE_WRITE: u32 = 0x0316;
+    pub const HOST_EFFECT_BLE_SUBSCRIBE: u32 = 0x0317;
+    pub const HOST_EFFECT_BLE_UNSUBSCRIBE: u32 = 0x0318;
+    pub const HOST_EFFECT_NETWORK_DOWNLOAD: u32 = 0x0320;
+    pub const HOST_EFFECT_NETWORK_UPLOAD: u32 = 0x0321;
+    pub const HOST_EFFECT_PROGRESS: u32 = 0x0328;
+    pub const HOST_EFFECT_PREPARE_PROVISIONING: u32 = 0x0330;
+    pub const HOST_EFFECT_PREPARE_FACTORY_RESET_GRANT: u32 = 0x0331;
+    pub const HOST_EFFECT_RECORDING_SINK_TRUNCATE: u32 = 0x0338;
+    pub const HOST_EFFECT_RECORDING_SINK_APPEND: u32 = 0x0339;
+    pub const HOST_EFFECT_RECORDING_SINK_FINALIZE: u32 = 0x033a;
+    pub const HOST_EFFECT_RECORDING_SINK_DISCARD: u32 = 0x033b;
+    pub const HOST_EFFECT_FIRMWARE_BLOB_READ: u32 = 0x0340;
     pub const NOTIFICATION_RANGE_START: u32 = 0x0400;
+    pub const NOTIFICATION_STARTED: u32 = 0x0401;
+    pub const NOTIFICATION_DEVICE_DISCOVERED: u32 = 0x0402;
+    pub const NOTIFICATION_CONNECTION_ESTABLISHED: u32 = 0x0403;
+    pub const NOTIFICATION_PROGRESS: u32 = 0x0404;
+    pub const NOTIFICATION_RETRYING: u32 = 0x0405;
+    pub const NOTIFICATION_DEVICE_UPLOAD_PRESERVED: u32 = 0x0406;
+    pub const NOTIFICATION_BLE_FALLBACK_READY: u32 = 0x0407;
+    pub const NOTIFICATION_FIRMWARE_PROGRESS: u32 = 0x0408;
+    pub const NOTIFICATION_DEVICE_LOG: u32 = 0x0409;
+    pub const NOTIFICATION_COMPLETED: u32 = 0x040a;
+    pub const NOTIFICATION_CANCELLED: u32 = 0x040b;
+    pub const NOTIFICATION_FAILED: u32 = 0x040c;
     pub const PROTOCOL_VALUE_RANGE_START: u32 = 0x0500;
 }
 
@@ -54,6 +96,32 @@ pub mod field_id {
     pub const GRANT_ID: u32 = 23;
     pub const RESULT_CODE: u32 = 24;
     pub const DELETED_RECORDING_COUNT: u32 = 25;
+    pub const TIMER_ID: u32 = 26;
+    pub const DELAY_MS: u32 = 27;
+    pub const CHECKPOINT: u32 = 28;
+    pub const KEY: u32 = 29;
+    pub const VALUE: u32 = 30;
+    pub const SERVICE_UUID: u32 = 31;
+    pub const CHARACTERISTIC_UUID: u32 = 32;
+    pub const PAYLOAD: u32 = 33;
+    pub const WITH_RESPONSE: u32 = 34;
+    pub const UPLOAD_SOURCE: u32 = 35;
+    pub const COMPLETED_UNITS: u32 = 36;
+    pub const EXPECTED_CRC32: u32 = 37;
+    pub const SEQUENCE: u32 = 38;
+    pub const OFFSET: u32 = 39;
+    pub const MAX_LENGTH: u32 = 40;
+    pub const NONCE: u32 = 41;
+    pub const DEVICE_PUBLIC_KEY: u32 = 42;
+    pub const ATTEMPT: u32 = 43;
+    pub const CONNECTION_MODE: u32 = 44;
+    pub const FIRMWARE_PHASE: u32 = 45;
+    pub const LOG_MESSAGE: u32 = 46;
+    pub const ERROR_CODE: u32 = 47;
+    pub const RETRYABLE: u32 = 48;
+    pub const PROTOCOL_STATUS: u32 = 49;
+    pub const ERROR_DETAIL: u32 = 50;
+    pub const IS_BACKLOG: u32 = 51;
 }
 
 #[repr(C)]

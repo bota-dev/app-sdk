@@ -1,5 +1,6 @@
 mod command;
 mod error;
+mod output;
 mod packet;
 
 pub use command::capability_bits;
@@ -157,6 +158,47 @@ pub unsafe extern "C" fn bota_device_sdk_v1_engine_start(
             bridge.enqueue(effects);
             Ok(())
         })
+    }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+///
+/// `engine` must be a live SDK engine and `out_packet` must point to writable
+/// pointer storage. A successful packet must be freed exactly once.
+pub unsafe extern "C" fn bota_device_sdk_v1_engine_poll_output(
+    engine: *mut BotaDeviceSdkEngineV1,
+    out_packet: *mut *mut BotaDeviceSdkPacketV1,
+) -> BotaDeviceSdkStatusV1 {
+    if engine.is_null() || out_packet.is_null() {
+        return BotaDeviceSdkStatusV1::InvalidArgument;
+    }
+
+    match catch_unwind(AssertUnwindSafe(|| {
+        unsafe { out_packet.write(ptr::null_mut()) };
+        let engine = unsafe { &*engine };
+        let mut bridge = engine.bridge.lock().map_err(|_| ())?;
+        let Some(effect) = bridge.outputs.pop_front() else {
+            return Ok::<_, ()>(None);
+        };
+        match output::packet_from_effect_request(effect) {
+            Ok(packet) => {
+                bridge.last_error = None;
+                Ok(Some(packet))
+            }
+            Err(error) => {
+                bridge.last_error = Some(error);
+                Err(())
+            }
+        }
+    })) {
+        Ok(Ok(Some(packet))) => {
+            unsafe { out_packet.write(Box::into_raw(Box::new(packet))) };
+            BotaDeviceSdkStatusV1::Ok
+        }
+        Ok(Ok(None)) => BotaDeviceSdkStatusV1::NoOutput,
+        Ok(Err(())) => BotaDeviceSdkStatusV1::OperationFailed,
+        Err(_) => BotaDeviceSdkStatusV1::Panic,
     }
 }
 
