@@ -135,3 +135,19 @@ fn unexpected_event() -> DeviceSdkError {
     DeviceSdkError::new(ErrorCode::UnexpectedEvent, Operation::Discover, false)
         .with_detail("event does not belong to the active discovery request")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::workflow::assert_phase_cancels;
+
+    #[test]
+    fn every_nonterminal_phase_cancels() {
+        for phase in [Phase::Scanning, Phase::Stopping] {
+            let mut workflow =
+                DiscoveryWorkflow::new(CancellationId::from_bytes([1; 16]), 5_000, true);
+            workflow.phase = phase;
+            assert_phase_cancels(&mut workflow, Operation::Discover);
+        }
+    }
+}

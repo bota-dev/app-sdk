@@ -636,4 +636,28 @@ mod tests {
         assert!(workflow.nonce.is_none());
         assert!(workflow.grant.is_empty());
     }
+
+    #[test]
+    fn every_nonterminal_phase_cancels() {
+        for phase in [
+            Phase::ReadingNonce,
+            Phase::PreparingGrant,
+            Phase::Subscribing,
+            Phase::WritingGrant,
+            Phase::WritingOpcode,
+            Phase::AwaitingResult,
+            Phase::PersistingResult,
+            Phase::WritingReceipt,
+            Phase::DeletingResult,
+        ] {
+            let mut workflow = FactoryResetWorkflow::start_new(
+                DeviceSerialNumber::new("EVFXXW67KP").unwrap(),
+                FactoryResetCommandId::new("cmd-1").unwrap(),
+                HostMaterialId::new("grant-1").unwrap(),
+                CancellationId::from_bytes([1; 16]),
+            );
+            workflow.phase = phase;
+            crate::workflow::assert_phase_cancels(&mut workflow, Operation::FactoryReset);
+        }
+    }
 }

@@ -392,15 +392,11 @@ impl WorkflowReducer for ProvisioningWorkflow {
                     Ok(self.fail(Self::protocol_rejection(code), context))
                 }
             }
-            (_, HostEventKind::Ble(BleEvent::Disconnected { .. }))
-                if Some(request_id) == self.subscription_request_id =>
-            {
-                Ok(self.fail(
-                    DeviceSdkError::new(ErrorCode::NotConnected, Operation::Provision, true)
-                        .with_detail("device disconnected during provisioning"),
-                    context,
-                ))
-            }
+            (_, HostEventKind::Ble(BleEvent::Disconnected { .. })) => Ok(self.fail(
+                DeviceSdkError::new(ErrorCode::NotConnected, Operation::Provision, true)
+                    .with_detail("device disconnected during provisioning"),
+                context,
+            )),
             (_, HostEventKind::Ble(BleEvent::Failed { platform_code }))
                 if [
                     self.nonce_request_id,
@@ -499,5 +495,26 @@ mod tests {
         assert!(workflow.device_public_key.is_none());
         assert!(workflow.api_endpoint.is_empty());
         assert!(workflow.token_chunks.is_empty());
+    }
+
+    #[test]
+    fn every_nonterminal_phase_cancels() {
+        for phase in [
+            Phase::ReadingNonce,
+            Phase::ReadingPublicKey,
+            Phase::PreparingMaterial,
+            Phase::Subscribing,
+            Phase::WritingEndpoint,
+            Phase::WritingToken,
+            Phase::AwaitingResult,
+        ] {
+            let mut workflow = ProvisioningWorkflow::new(
+                DeviceSerialNumber::new("EVFXXW67KP").unwrap(),
+                HostMaterialId::new("material-1").unwrap(),
+                CancellationId::from_bytes([1; 16]),
+            );
+            workflow.phase = phase;
+            crate::workflow::assert_phase_cancels(&mut workflow, Operation::Provision);
+        }
     }
 }

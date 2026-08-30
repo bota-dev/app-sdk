@@ -1,31 +1,83 @@
 {
   "schemaVersion": 1,
-  "reference": "@bota.dev/react-native-sdk@0.0.65",
+  "workflow": "connection",
+  "baseline": {
+    "package": "@bota.dev/react-native-sdk",
+    "version": "0.0.65",
+    "revision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4"
+  },
   "scenarios": [
     {
-      "name": "manual-connect-refreshes-serial",
-      "mode": "manual",
-      "expected": "read_serial_before_persist"
+      "name": "connection-manual-success",
+      "classification": "positive",
+      "sourceTest": "__tests__/DeviceManager.test.ts#refreshes identity for user-initiated connects",
+      "rustTest": "connection_workflow::manual_connect_reads_serial_fresh_before_persisting_identity",
+      "command": "connect",
+      "capabilities": ["ble", "timer", "persistence"],
+      "inputs": ["connected", "services_discovered", "serial_read", "identity_saved"],
+      "expected": {
+        "effects": ["connect", "discover_services", "read_serial", "save_identity"],
+        "notifications": ["started", "connection_established", "completed"],
+        "terminalStatus": "completed"
+      }
     },
     {
-      "name": "advertised-address-match-waits-without-name-probe",
-      "mode": "reconnect",
-      "expected": "connect_exact_candidate"
+      "name": "connection-identity-rejection",
+      "classification": "rejection",
+      "sourceTest": "__tests__/DeviceManager.test.ts#reads serial fresh for user-initiated connects",
+      "rustTest": "connection_workflow::manual_connect_rejects_a_serial_mismatch_after_releasing_the_candidate",
+      "command": "connect",
+      "capabilities": ["ble", "timer", "persistence"],
+      "inputs": ["connected", "services_discovered", "mismatched_serial", "disconnected"],
+      "expected": {
+        "effects": ["connect", "discover_services", "read_serial", "disconnect"],
+        "notifications": ["started", "failed"],
+        "terminalStatus": "failed",
+        "errorCode": "identity_mismatch"
+      }
     },
     {
-      "name": "stale-address-recovers-by-serial",
-      "mode": "reconnect",
-      "expected": "probe_candidates_sequentially"
+      "name": "connection-cancellation",
+      "classification": "cancellation",
+      "sourceTest": "__tests__/DeviceManager.test.ts#does not reconnect by probing a same-name Bota device while user work is in flight",
+      "rustTest": "workflow_conformance_matrix::cancellation_matrix_covers_every_operation",
+      "command": "reconnect",
+      "capabilities": ["ble", "timer", "persistence"],
+      "inputs": ["cancelled"],
+      "expected": {
+        "effects": ["stop_scan", "cancel_timer"],
+        "notifications": ["started", "cancelled"],
+        "terminalStatus": "cancelled"
+      }
     },
     {
-      "name": "app-reinstall-recovers-by-serial",
-      "mode": "reconnect",
-      "expected": "probe_candidates_sequentially"
+      "name": "connection-reconnect-resume",
+      "classification": "resume",
+      "sourceTest": "__tests__/DeviceManager.test.ts#recovers after app reinstall by probing Bota candidates for the known serial number",
+      "rustTest": "connection_workflow::reconnect_releases_serial_mismatches_before_probing_the_next_candidate",
+      "command": "reconnect",
+      "capabilities": ["ble", "timer", "persistence"],
+      "inputs": ["checkpoint_loaded", "scan_results", "scan_stopped", "serial_mismatch", "next_candidate"],
+      "expected": {
+        "effects": ["load_checkpoint", "start_scan", "connect", "read_serial", "disconnect", "connect_next"],
+        "notifications": ["started", "retrying"],
+        "terminalStatus": "running"
+      }
     },
     {
-      "name": "manual-owner-blocks-background-reconnect",
-      "mode": "reconnect",
-      "expected": "operation_in_progress"
+      "name": "connection-owner-rejection",
+      "classification": "ownership",
+      "sourceTest": "__tests__/DeviceManager.test.ts#does not reconnect by probing a same-name Bota device while user work is in flight",
+      "rustTest": "connection_workflow::background_reconnect_cannot_replace_a_manual_connection_owner",
+      "command": "reconnect",
+      "capabilities": ["ble", "timer", "persistence"],
+      "inputs": ["second_command"],
+      "expected": {
+        "effects": [],
+        "notifications": [],
+        "terminalStatus": "running",
+        "errorCode": "operation_in_progress"
+      }
     }
   ]
 }

@@ -896,3 +896,42 @@ impl WorkflowReducer for FirmwareUpdateWorkflow {
         self.cancellation_id
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::workflow::assert_phase_cancels;
+
+    #[test]
+    fn every_nonterminal_phase_cancels() {
+        for phase in [
+            Phase::LoadingCheckpoint,
+            Phase::Downloading,
+            Phase::Subscribing,
+            Phase::Starting,
+            Phase::AwaitingReady,
+            Phase::ReadingChunk,
+            Phase::WritingChunk,
+            Phase::WaitingAck,
+            Phase::Verifying,
+            Phase::AwaitingVerify,
+            Phase::AwaitingReboot,
+            Phase::Reconnecting,
+            Phase::ReadingVersion,
+        ] {
+            let mut workflow = FirmwareUpdateWorkflow::new(
+                DeviceSerialNumber::new("EVFXXW67KP").unwrap(),
+                FirmwareImage {
+                    version: "1.0.18".into(),
+                    size_bytes: 1_024,
+                    crc32: 0x1234_5678,
+                },
+                41,
+                ReconnectHint::default(),
+                CancellationId::from_bytes([1; 16]),
+            );
+            workflow.phase = phase;
+            assert_phase_cancels(&mut workflow, Operation::UpdateFirmware);
+        }
+    }
+}

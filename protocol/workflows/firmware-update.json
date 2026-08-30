@@ -1,15 +1,68 @@
 {
   "schemaVersion": 1,
-  "reference": "@bota.dev/react-native-sdk@0.0.65 + firmware le_trans_data.c",
+  "workflow": "firmware-update",
+  "baseline": {
+    "package": "@bota.dev/react-native-sdk",
+    "version": "0.0.65",
+    "revision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4"
+  },
   "scenarios": [
-    { "name": "http-rejection-before-ble", "expected": "download_failed" },
-    { "name": "unknown-download-total-uses-image-size", "expected": "progress_fallback" },
-    { "name": "device-rejects-upload-start", "expected": "protocol_rejected" },
-    { "name": "early-flow-control-ack-is-cached", "expected": "continue" },
-    { "name": "flow-control-ack-timeout", "expected": "timeout" },
-    { "name": "resume-reuses-blob-and-restarts-device-transfer", "expected": "offset_zero" },
-    { "name": "verified-device-reboot-disconnect", "expected": "reconnect" },
-    { "name": "reconnect-timeout", "expected": "timeout" },
-    { "name": "target-version-readback", "expected": "completed" }
+    {
+      "name": "firmware-update-success",
+      "classification": "positive",
+      "sourceTest": "__tests__/OTAManager.test.ts#emits byte-level downloading progress during an OTA update",
+      "rustTest": "firmware_update_workflow::successful_reconnect_reads_back_the_target_firmware_version",
+      "command": "update_firmware",
+      "capabilities": ["ble", "timer", "persistence", "network_transfer", "progress", "firmware_blob"],
+      "inputs": ["downloaded", "device_ready", "chunks_written", "window_acks", "verify_success", "reboot_disconnect", "reconnected", "version_read"],
+      "expected": {
+        "effects": ["download", "subscribe", "start_upload", "read_blob_chunks", "verify", "reconnect", "read_version"],
+        "notifications": ["started", "firmware_progress", "connection_established", "completed"],
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "name": "firmware-update-download-rejection",
+      "classification": "rejection",
+      "sourceTest": "__tests__/OTAManager.test.ts#rejects unsuccessful HTTP responses",
+      "rustTest": "firmware_update_workflow::http_rejection_fails_without_touching_ble",
+      "command": "update_firmware",
+      "capabilities": ["ble", "timer", "persistence", "network_transfer", "progress", "firmware_blob"],
+      "inputs": ["checkpoint_loaded", "download_failed"],
+      "expected": {
+        "effects": ["load_checkpoint", "download"],
+        "notifications": ["started", "failed"],
+        "terminalStatus": "failed",
+        "errorCode": "download_failed"
+      }
+    },
+    {
+      "name": "firmware-update-cancellation",
+      "classification": "cancellation",
+      "sourceTest": "__tests__/ProtocolHandlerFirmwareUpload.test.ts#fails when the expected flow-control ACK never arrives",
+      "rustTest": "workflow_conformance_matrix::cancellation_matrix_covers_every_operation",
+      "command": "update_firmware",
+      "capabilities": ["ble", "timer", "persistence", "network_transfer", "progress", "firmware_blob"],
+      "inputs": ["cancelled"],
+      "expected": {
+        "effects": ["cancel_timer", "unsubscribe"],
+        "notifications": ["started", "cancelled"],
+        "terminalStatus": "cancelled"
+      }
+    },
+    {
+      "name": "firmware-update-checkpoint-resume",
+      "classification": "resume",
+      "sourceTest": "__tests__/ProtocolHandlerFirmwareUpload.test.ts#uses an ACK that arrives before the flow-control wait begins",
+      "rustTest": "firmware_update_workflow::transfer_resume_reuses_blob_but_restarts_device_at_offset_zero",
+      "command": "update_firmware",
+      "capabilities": ["ble", "timer", "persistence", "network_transfer", "progress", "firmware_blob"],
+      "inputs": ["transfer_checkpoint_loaded", "subscribed", "device_ready", "blob_read_zero"],
+      "expected": {
+        "effects": ["load_checkpoint", "subscribe", "start_upload", "read_blob_from_zero"],
+        "notifications": ["started", "firmware_progress"],
+        "terminalStatus": "running"
+      }
+    }
   ]
 }

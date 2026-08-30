@@ -226,6 +226,33 @@ fn disconnect_releases_subscription_without_writing_stop() {
 }
 
 #[test]
+fn disconnect_releases_owner_for_a_fresh_subscription() {
+    let mut engine = WorkflowEngine::default();
+    let subscription_request = activate(&mut engine);
+    engine
+        .dispatch(host(
+            subscription_request,
+            HostEventKind::Ble(BleEvent::Disconnected {
+                peripheral_id: "device-1".into(),
+                reason_code: None,
+            }),
+        ))
+        .unwrap();
+
+    let retry = engine
+        .start(command(), &capabilities(), CANCELLATION)
+        .unwrap();
+    assert!(retry.iter().any(|request| matches!(
+        &request.effect,
+        Effect::Ble(BleEffect::Subscribe {
+            characteristic_uuid,
+            ..
+        }) if characteristic_uuid == CHAR_DEVICE_LOG_DATA
+    )));
+    assert!(matches!(engine.status(), WorkflowStatus::Running { .. }));
+}
+
+#[test]
 fn start_rejection_reports_feature_unavailable_and_releases_subscription() {
     let mut engine = WorkflowEngine::default();
     let (subscription_request, _) = start_subscription(&mut engine);

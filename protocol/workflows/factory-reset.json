@@ -1,13 +1,68 @@
 {
   "schemaVersion": 1,
-  "reference": "@bota.dev/react-native-sdk@0.0.65",
+  "workflow": "factory-reset",
+  "baseline": {
+    "package": "@bota.dev/react-native-sdk",
+    "version": "0.0.65",
+    "revision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4"
+  },
   "scenarios": [
-    { "name": "persist-success-before-receipt", "expected": "ordered" },
-    { "name": "invalid-grant-has-no-receipt", "expected": "protocol_rejected" },
-    { "name": "storage-failure-has-no-receipt", "expected": "protocol_rejected" },
-    { "name": "persistence-failure-has-no-receipt", "expected": "persistence_failed" },
-    { "name": "receipt-failure-retains-result", "expected": "retryable" },
-    { "name": "resume-replay-skips-destructive-command", "expected": "receipt_only" },
-    { "name": "disconnect-before-result-is-ambiguous", "expected": "not_connected" }
+    {
+      "name": "factory-reset-success",
+      "classification": "positive",
+      "sourceTest": "__tests__/DeviceManager.test.ts#persists the three-byte success result before sending receipt opcode 0x0A",
+      "rustTest": "factory_reset_workflow::factory_reset_persists_exact_success_before_receipt_and_deletes_after_receipt",
+      "command": "factory_reset",
+      "capabilities": ["ble", "timer", "persistence", "host_material"],
+      "inputs": ["grant_prepared", "subscribed", "writes_completed", "wiped_result", "result_saved", "receipt_written", "result_deleted"],
+      "expected": {
+        "effects": ["write_grant", "write_reset", "save_result", "write_receipt", "delete_result"],
+        "notifications": ["started", "completed"],
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "name": "factory-reset-device-rejection",
+      "classification": "rejection",
+      "sourceTest": "__tests__/DeviceManager.test.ts#returns a firmware failure without persisting or acknowledging success",
+      "rustTest": "factory_reset_workflow::factory_reset_rejections_never_persist_or_send_receipt",
+      "command": "factory_reset",
+      "capabilities": ["ble", "timer", "persistence", "host_material"],
+      "inputs": ["grant_prepared", "subscribed", "device_rejection"],
+      "expected": {
+        "effects": ["write_grant", "write_reset", "unsubscribe"],
+        "notifications": ["started", "failed"],
+        "terminalStatus": "failed",
+        "errorCode": "protocol_rejected"
+      }
+    },
+    {
+      "name": "factory-reset-cancellation",
+      "classification": "cancellation",
+      "sourceTest": "__tests__/DeviceManager.test.ts#cancels the result subscription when the reset opcode write fails",
+      "rustTest": "workflow_conformance_matrix::cancellation_matrix_covers_every_operation",
+      "command": "factory_reset",
+      "capabilities": ["ble", "timer", "persistence", "host_material"],
+      "inputs": ["cancelled"],
+      "expected": {
+        "effects": ["unsubscribe"],
+        "notifications": ["started", "cancelled"],
+        "terminalStatus": "cancelled"
+      }
+    },
+    {
+      "name": "factory-reset-durable-resume",
+      "classification": "resume",
+      "sourceTest": "__tests__/DeviceManager.test.ts#resumes a replayed WIPED result without re-sending grant or opcode 0x06",
+      "rustTest": "factory_reset_workflow::resume_waits_for_exact_replay_then_sends_only_receipt",
+      "command": "resume_factory_reset",
+      "capabilities": ["ble", "timer", "persistence"],
+      "inputs": ["subscribed", "wiped_replay", "receipt_written", "result_deleted"],
+      "expected": {
+        "effects": ["subscribe", "write_receipt", "delete_result"],
+        "notifications": ["started", "completed"],
+        "terminalStatus": "completed"
+      }
+    }
   ]
 }

@@ -440,3 +440,30 @@ impl WorkflowReducer for UploadHandoffWorkflow {
         self.cancellation_id
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::workflow::assert_phase_cancels;
+
+    #[test]
+    fn every_nonterminal_phase_cancels() {
+        for phase in [
+            Phase::ReadingStatus,
+            Phase::Subscribing,
+            Phase::Triggering,
+            Phase::AwaitingTrigger,
+            Phase::WaitingToMonitor,
+        ] {
+            let mut workflow = UploadHandoffWorkflow::new(
+                DeviceSerialNumber::new("EVFXXW67KP").unwrap(),
+                RecordingUuid::from_bytes([1; 16]),
+                UploadSessionId::new("upload-1").unwrap(),
+                UploadDestinationId::new("destination-1").unwrap(),
+                CancellationId::from_bytes([1; 16]),
+            );
+            workflow.phase = phase;
+            assert_phase_cancels(&mut workflow, Operation::Upload);
+        }
+    }
+}

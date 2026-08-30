@@ -140,6 +140,16 @@ the diagnostics start command returns stable `feature_unavailable`; transport
 loss remains a retryable connection error. The FFI mechanism remains deferred
 as specified in [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md).
 
+Workflow release evidence lives under `protocol/workflows/`. Its schema
+requires the frozen source anchor, executable Rust test, command, host
+capabilities, ordered inputs, ordered effects and notifications, and terminal
+status. `npm run test:workflows` rejects duplicate scenarios, sensitive
+checkpoint fields, missing source/test anchors, and any `supported`
+compatibility claim that lacks positive, rejection, cancellation, and resume
+or restart-recovery coverage. The cross-workflow matrix additionally proves
+that all command variants reject stale callbacks and second owners without
+mutating the active workflow.
+
 Provisioning reads the connection-bound nonce and device public key before it
 asks the host to resolve an opaque material ID. The core validates and chunks
 the returned endpoint and token, subscribes for the result before writing, and

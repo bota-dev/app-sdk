@@ -1,15 +1,68 @@
 {
   "schemaVersion": 1,
-  "reference": "@bota.dev/react-native-sdk@0.0.65 + firmware le_trans_data.c",
+  "workflow": "recording-transfer",
+  "baseline": {
+    "package": "@bota.dev/react-native-sdk",
+    "version": "0.0.65",
+    "revision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4"
+  },
   "scenarios": [
-    { "name": "subscribe-before-start", "expected": "ordered" },
-    { "name": "append-before-checkpoint", "expected": "ordered" },
-    { "name": "duplicate-packet-is-idempotent", "expected": "no_duplicate_append" },
-    { "name": "checkpoint-resume-replays-from-zero", "expected": "skip_durable_sequences" },
-    { "name": "disconnect-retains-retry-state", "expected": "retryable" },
-    { "name": "cancel-aborts-without-device-delete", "expected": "cancelled" },
-    { "name": "integrity-failure-nacks-without-device-delete", "expected": "integrity_failed" },
-    { "name": "final-ack-after-durable-finalize", "expected": "ordered" },
-    { "name": "confirm-delete-after-final-ack", "expected": "ordered" }
+    {
+      "name": "recording-transfer-success",
+      "classification": "positive",
+      "sourceTest": "src/protocol/ProtocolHandler.ts#transferRecording",
+      "rustTest": "recording_transfer_workflow::confirm_delete_occurs_only_after_durable_sink_finalization_and_final_ack",
+      "command": "transfer_recording",
+      "capabilities": ["ble", "persistence", "progress", "recording_sink"],
+      "inputs": ["checkpoint_loaded", "sink_truncated", "subscribed", "data", "append_completed", "eof", "sink_finalized", "ack_written", "confirm_written"],
+      "expected": {
+        "effects": ["truncate_sink", "subscribe", "start_transfer", "append_sink", "save_checkpoint", "finalize_sink", "final_ack", "confirm_delete"],
+        "notifications": ["started", "progress", "completed"],
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "name": "recording-transfer-integrity-rejection",
+      "classification": "rejection",
+      "sourceTest": "__tests__/errors.test.ts#identifies an encrypted recording whose device key is unavailable",
+      "rustTest": "recording_transfer_workflow::integrity_failure_nacks_and_never_confirms_delete",
+      "command": "transfer_recording",
+      "capabilities": ["ble", "persistence", "progress", "recording_sink"],
+      "inputs": ["eof", "sink_integrity_failed"],
+      "expected": {
+        "effects": ["finalize_sink", "nack", "unsubscribe"],
+        "notifications": ["started", "failed"],
+        "terminalStatus": "failed",
+        "errorCode": "integrity_failed"
+      }
+    },
+    {
+      "name": "recording-transfer-cancellation",
+      "classification": "cancellation",
+      "sourceTest": "src/protocol/ProtocolHandler.ts#transferRecording",
+      "rustTest": "recording_transfer_workflow::disconnect_retains_durable_sink_for_retry_and_cancel_never_confirms_delete",
+      "command": "transfer_recording",
+      "capabilities": ["ble", "persistence", "progress", "recording_sink"],
+      "inputs": ["cancelled"],
+      "expected": {
+        "effects": ["abort", "unsubscribe", "discard_sink", "delete_checkpoint"],
+        "notifications": ["started", "cancelled"],
+        "terminalStatus": "cancelled"
+      }
+    },
+    {
+      "name": "recording-transfer-checkpoint-resume",
+      "classification": "resume",
+      "sourceTest": "src/protocol/ProtocolHandler.ts#transferRecording",
+      "rustTest": "recording_transfer_workflow::duplicate_packets_are_idempotent_and_resume_skips_durable_sequences",
+      "command": "transfer_recording",
+      "capabilities": ["ble", "persistence", "progress", "recording_sink"],
+      "inputs": ["checkpoint_loaded", "replayed_data", "new_data"],
+      "expected": {
+        "effects": ["truncate_to_checkpoint", "subscribe", "restart_transfer", "skip_durable_sequence", "append_new_sequence"],
+        "notifications": ["started", "progress"],
+        "terminalStatus": "running"
+      }
+    }
   ]
 }

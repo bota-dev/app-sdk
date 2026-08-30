@@ -656,3 +656,31 @@ impl WorkflowReducer for ConnectionWorkflow {
         self.cancellation_id
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::workflow::assert_phase_cancels;
+
+    #[test]
+    fn every_nonterminal_phase_cancels() {
+        for phase in [
+            Phase::Pending,
+            Phase::Scanning,
+            Phase::StoppingScan,
+            Phase::Connecting,
+            Phase::Discovering,
+            Phase::ReadingSerial,
+            Phase::Disconnecting,
+            Phase::Persisting,
+        ] {
+            let mut workflow = ConnectionWorkflow::reconnect(
+                DeviceSerialNumber::new("EVFXXW67KP").unwrap(),
+                ReconnectHint::default(),
+                CancellationId::from_bytes([1; 16]),
+            );
+            workflow.phase = phase;
+            assert_phase_cancels(&mut workflow, Operation::Reconnect);
+        }
+    }
+}

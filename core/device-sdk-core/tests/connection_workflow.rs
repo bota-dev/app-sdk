@@ -513,11 +513,11 @@ fn connection_trace_fixture_pins_the_react_native_parity_cases() {
     assert_eq!(
         names,
         [
-            "manual-connect-refreshes-serial",
-            "advertised-address-match-waits-without-name-probe",
-            "stale-address-recovers-by-serial",
-            "app-reinstall-recovers-by-serial",
-            "manual-owner-blocks-background-reconnect",
+            "connection-manual-success",
+            "connection-identity-rejection",
+            "connection-cancellation",
+            "connection-reconnect-resume",
+            "connection-owner-rejection",
         ]
     );
 }

@@ -234,3 +234,33 @@ fn provisioning_disconnect_fails_without_exposing_material_in_notifications() {
             if error.code == ErrorCode::NotConnected
     )));
 }
+
+#[test]
+fn provisioning_disconnect_releases_owner_for_a_fresh_retry() {
+    let mut engine = WorkflowEngine::default();
+    let started = engine
+        .start(command(), &capabilities(), CANCELLATION)
+        .unwrap();
+    let nonce_request = request_id(&started, |effect| {
+        matches!(effect, Effect::Ble(BleEffect::Read { .. }))
+    });
+    engine
+        .dispatch(host(
+            nonce_request,
+            HostEventKind::Ble(BleEvent::Disconnected {
+                peripheral_id: "connected-device".into(),
+                reason_code: None,
+            }),
+        ))
+        .unwrap();
+
+    let retry = engine
+        .start(command(), &capabilities(), CANCELLATION)
+        .unwrap();
+    assert!(
+        retry
+            .iter()
+            .any(|request| matches!(request.effect, Effect::Ble(BleEffect::Read { .. })))
+    );
+    assert!(matches!(engine.status(), WorkflowStatus::Running { .. }));
+}

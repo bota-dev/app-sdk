@@ -11,7 +11,8 @@
     "check:licenses": "node scripts/check-licenses.mjs",
     "license-check": "npm run check:licenses",
     "test:fixtures": "node --test tools/baseline/*.test.mjs",
-    "test:tooling": "node --test scripts/*.test.mjs tools/baseline/*.test.mjs"
+    "test:tooling": "node --test scripts/*.test.mjs tools/baseline/*.test.mjs",
+    "test:workflows": "node tools/baseline/compare-workflows.mjs"
   },
   "devDependencies": {
     "ajv": "8.20.0"

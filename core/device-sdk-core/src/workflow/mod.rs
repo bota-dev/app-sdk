@@ -62,3 +62,17 @@ impl<'a> WorkflowContext<'a> {
         EffectRequest::new(request_id, self.operation, self.cancellation_id, effect)
     }
 }
+
+#[cfg(test)]
+pub(crate) fn assert_phase_cancels(workflow: &mut impl WorkflowReducer, operation: Operation) {
+    let mut next_request_id = 1;
+    let cancellation_id = workflow.cancellation_id();
+    let mut context = WorkflowContext::new(&mut next_request_id, operation, cancellation_id);
+    let effects = workflow.cancel(&mut context);
+    assert!(effects.iter().any(|request| matches!(
+        request.effect,
+        Effect::Notify(crate::engine::WorkflowNotification::Cancelled {
+            operation: value
+        }) if value == operation
+    )));
+}

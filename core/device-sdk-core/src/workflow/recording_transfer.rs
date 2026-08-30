@@ -524,3 +524,34 @@ impl WorkflowReducer for RecordingTransferWorkflow {
         self.cancellation_id
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::workflow::assert_phase_cancels;
+
+    #[test]
+    fn every_nonterminal_phase_cancels() {
+        for phase in [
+            Phase::LoadingCheckpoint,
+            Phase::TruncatingSink,
+            Phase::Subscribing,
+            Phase::Starting,
+            Phase::Transferring,
+            Phase::Appending,
+            Phase::Finalizing,
+            Phase::Acknowledging,
+            Phase::Confirming,
+        ] {
+            let mut workflow = RecordingTransferWorkflow::new(
+                DeviceSerialNumber::new("EVFXXW67KP").unwrap(),
+                RecordingUuid::from_bytes([1; 16]),
+                RecordingSinkId::new("sink-1").unwrap(),
+                1_024,
+                CancellationId::from_bytes([1; 16]),
+            );
+            workflow.phase = phase;
+            assert_phase_cancels(&mut workflow, Operation::TransferRecording);
+        }
+    }
+}

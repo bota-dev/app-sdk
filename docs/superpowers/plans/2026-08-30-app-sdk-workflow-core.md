@@ -410,24 +410,24 @@ Reuse `protocol::logs`; do not duplicate decoding. Commit:
 - Produces: `npm run test:workflows`, validating every scenario against the
   schema and the deterministic Rust trace export.
 
-- [ ] **Step 1: Define and test the scenario schema**
+- [x] **Step 1: Define and test the scenario schema**
 
 Require unique scenario names, pinned React Native source test, command,
 capabilities, ordered inputs, ordered effects/notifications, and terminal
 status. Reject credentials, URLs, paths, and payload bodies in checkpoints.
 
-- [ ] **Step 2: Add cancellation and stale-event matrix**
+- [x] **Step 2: Add cancellation and stale-event matrix**
 
 Every workflow must handle cancellation in each nonterminal phase, ignore no
 stale correlated response, and reject a second command without mutating the
 active workflow.
 
-- [ ] **Step 3: Update compatibility claims and evidence**
+- [x] **Step 3: Update compatibility claims and evidence**
 
 Mark a workflow supported only when positive, rejection, cancellation, and
 resume scenarios all pass. Record exact commands and counts.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run all Node, Rust, license, formatting, lint, documentation, package, and
 publish-dry-run gates. Commit: `docs: record workflow core milestone evidence`.

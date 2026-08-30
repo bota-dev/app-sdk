@@ -54,6 +54,7 @@
 ```bash
 npm ci
 npm run check
+npm run test:workflows -- --sdk-path ../react-native-sdk
 cargo xtask protocol generate --check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings

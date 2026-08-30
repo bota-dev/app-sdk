@@ -260,3 +260,21 @@ impl WorkflowReducer for DeviceLogsWorkflow {
         self.cancellation_id
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::workflow::assert_phase_cancels;
+
+    #[test]
+    fn every_nonterminal_phase_cancels() {
+        for phase in [Phase::Subscribing, Phase::Starting, Phase::Active] {
+            let mut workflow = DeviceLogsWorkflow::new(
+                DeviceSerialNumber::new("EVFXXW67KP").unwrap(),
+                CancellationId::from_bytes([1; 16]),
+            );
+            workflow.phase = phase;
+            assert_phase_cancels(&mut workflow, Operation::ReadDeviceLogs);
+        }
+    }
+}
