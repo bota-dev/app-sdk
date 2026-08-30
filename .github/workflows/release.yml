@@ -107,6 +107,30 @@ jobs:
       - name: Test local external Apple consumer
         run: tools/apple/test-consumer.sh
 
+      - name: Compile generic iOS device target
+        working-directory: platforms/apple
+        run: |
+          xcodebuild \
+            -scheme BotaDeviceSDK \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ../../target/release-apple-ios-device \
+            CODE_SIGNING_ALLOWED=NO \
+            SWIFT_STRICT_CONCURRENCY=complete \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+            build
+
+      - name: Compile generic iOS simulator target
+        working-directory: platforms/apple
+        run: |
+          xcodebuild \
+            -scheme BotaDeviceSDK \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ../../target/release-apple-ios-simulator \
+            CODE_SIGNING_ALLOWED=NO \
+            SWIFT_STRICT_CONCURRENCY=complete \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+            build
+
       - name: Test release tooling
         run: npm run test:release
 

@@ -38,6 +38,8 @@ fn release_workflow_publishes_and_smokes_the_public_apple_package() {
     assert!(contents.contains("runs-on: macos-15"));
     assert!(contents.contains("tools/apple/test-package.sh"));
     assert!(contents.contains("tools/apple/test-consumer.sh"));
+    assert!(contents.contains("generic/platform=iOS'"));
+    assert!(contents.contains("generic/platform=iOS Simulator'"));
     assert!(contents.contains("tools/apple/package-release.sh"));
     assert!(contents.contains("tools/apple/test-remote-consumer.sh"));
     assert!(contents.contains("actions/upload-artifact@"));
