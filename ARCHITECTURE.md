@@ -279,6 +279,14 @@ on every terminal facade path. Device logs expose only complete sanitized lines
 emitted by the core. All three managers share the facade operation coordinator,
 so destroy, explicit cancellation, and stream termination release ownership.
 
+The external package under `tests/conformance/apple-consumer` depends on the
+Apple package only through its public product and deliberately cannot import
+the internal C target. It runs on macOS and type-checks the complete facade;
+CI separately compiles the package for generic iOS device and simulator
+destinations with code signing disabled. CI archives the generated XCFramework
+and SwiftPM checksum as verification evidence only. Publication remains gated
+by deterministic packaging, release-manifest, and physical-device acceptance.
+
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host
 capabilities, ordered inputs, ordered effects and notifications, and terminal

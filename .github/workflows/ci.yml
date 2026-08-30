@@ -64,12 +64,12 @@ jobs:
           cargo build -p bota-device-sdk-ffi-smoke --features uniffi-spike
           cargo run -p bota-device-sdk-uniffi-bindgen -- generate --no-format --library --language swift --language kotlin --out-dir target/ffi-smoke target/debug/libbota_device_sdk_ffi_smoke.so
 
-  ffi-swift:
-    name: Swift binding smoke
-    runs-on: macos-latest
+  apple:
+    name: Apple package and consumer
+    runs-on: macos-15
     steps:
       - name: Check out source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
@@ -80,12 +80,57 @@ jobs:
         run: tools/ffi-smoke/run-native-swift-smoke.sh
 
       - name: Test Apple package and XCFramework
-        run: tools/apple/test-package.sh
+        run: tools/apple/test-package.sh -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+
+      - name: Test external Apple consumer
+        run: tools/apple/test-consumer.sh
+
+      - name: Compile generic iOS device target
+        working-directory: platforms/apple
+        run: |
+          xcodebuild \
+            -scheme BotaDeviceSDK \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ../../target/apple-ios-device \
+            CODE_SIGNING_ALLOWED=NO \
+            SWIFT_STRICT_CONCURRENCY=complete \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+            build
+
+      - name: Compile generic iOS simulator target
+        working-directory: platforms/apple
+        run: |
+          xcodebuild \
+            -scheme BotaDeviceSDK \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ../../target/apple-ios-simulator \
+            CODE_SIGNING_ALLOWED=NO \
+            SWIFT_STRICT_CONCURRENCY=complete \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+            build
 
       - name: Inspect Apple binary slices
         run: |
           xcrun lipo -info platforms/apple/Artifacts/BotaDeviceSDKCore.xcframework/ios-arm64_x86_64-simulator/libbota_device_sdk_ffi.a
           xcrun lipo -info platforms/apple/Artifacts/BotaDeviceSDKCore.xcframework/macos-arm64_x86_64/libbota_device_sdk_ffi.a
+
+      - name: Archive unpublished Apple evidence
+        run: |
+          mkdir -p target/apple-ci-artifacts
+          ditto -c -k --sequesterRsrc --keepParent \
+            platforms/apple/Artifacts/BotaDeviceSDKCore.xcframework \
+            target/apple-ci-artifacts/BotaDeviceSDKCore.xcframework.zip
+          swift package compute-checksum \
+            target/apple-ci-artifacts/BotaDeviceSDKCore.xcframework.zip \
+            > target/apple-ci-artifacts/BotaDeviceSDKCore.xcframework.checksum
+
+      - name: Upload unpublished Apple evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: apple-package-${{ github.sha }}
+          path: target/apple-ci-artifacts/
+          if-no-files-found: error
+          compression-level: 0
 
       - name: Run generated comparison binding
         run: tools/ffi-smoke/run-uniffi-swift-smoke.sh

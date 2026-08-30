@@ -11,6 +11,13 @@ Apple publication begins only after the XCFramework, Swift package import,
 fake-host, and physical-device gates in the Apple facade plan pass; Android has
 equivalent AAR and device gates in its later plan.
 
+Every change to the Apple facade must pass `tools/apple/test-package.sh` and
+`tools/apple/test-consumer.sh`, plus generic iOS device and simulator builds
+with code signing disabled. CI stores the generated XCFramework zip and its
+`swift package compute-checksum` output as non-published evidence. Those files
+are not release assets and do not make the Apple package publishable; release
+packaging and physical-device acceptance remain separate gates.
+
 Stable `v1.0.0` is reserved for the first release that Demo and Bota One can
 consume through the React Native compatibility package. Protocol and workflow
 core milestones publish as `1.0.0-alpha.N`.
@@ -58,6 +65,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 tools/ffi-smoke/run-native-c-smoke.sh
 tools/ffi-smoke/run-native-swift-smoke.sh
+tools/apple/test-package.sh
+tools/apple/test-consumer.sh
 cargo deny check
 cargo package --locked --package bota-device-sdk-core
 cargo publish --locked --package bota-device-sdk-core --dry-run

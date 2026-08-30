@@ -57,7 +57,11 @@ deprovision separate from destructive reset, and resume only an exact durable
 reset result for the current binding generation. Public recording, upload
 ownership, OTA, and device-log managers now expose typed async streams while
 keeping recording and firmware bytes in native files and accepting only opaque
-application-supplied upload identifiers. The Apple package is not yet published.
+application-supplied upload identifiers. An unrelated Swift package now imports
+only `BotaDeviceSDK`, runs a macOS smoke executable, and type-checks every public
+manager. CI also compiles generic iOS device and simulator destinations with
+strict concurrency diagnostics and keeps the XCFramework zip plus SwiftPM
+checksum as unpublished evidence. The Apple package is not yet published.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own
@@ -86,6 +90,7 @@ cargo xtask protocol generate --check
 tools/ffi-smoke/run-native-c-smoke.sh
 tools/ffi-smoke/run-native-swift-smoke.sh
 tools/apple/test-package.sh
+tools/apple/test-consumer.sh
 ```
 
 The full reproducible gate, including the frozen React Native comparator, is
