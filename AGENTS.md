@@ -99,6 +99,7 @@ tools/ffi-smoke/run-native-c-smoke.sh
 tools/ffi-smoke/run-native-swift-smoke.sh
 tools/apple/test-package.sh
 tools/apple/test-consumer.sh
+tools/apple/package-release.sh
 ```
 
 Some commands become available in later milestones. Run all commands applicable

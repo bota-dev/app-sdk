@@ -60,8 +60,9 @@ keeping recording and firmware bytes in native files and accepting only opaque
 application-supplied upload identifiers. An unrelated Swift package now imports
 only `BotaDeviceSDK`, runs a macOS smoke executable, and type-checks every public
 manager. CI also compiles generic iOS device and simulator destinations with
-strict concurrency diagnostics and keeps the XCFramework zip plus SwiftPM
-checksum as unpublished evidence. The Apple package is not yet published.
+strict concurrency diagnostics, then produces a deterministic XCFramework zip,
+checksums, SPDX 2.3 SBOM, copied license, and validated release manifest as
+unpublished evidence. The Apple package is not yet published.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own

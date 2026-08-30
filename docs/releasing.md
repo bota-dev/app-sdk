@@ -13,10 +13,20 @@ equivalent AAR and device gates in its later plan.
 
 Every change to the Apple facade must pass `tools/apple/test-package.sh` and
 `tools/apple/test-consumer.sh`, plus generic iOS device and simulator builds
-with code signing disabled. CI stores the generated XCFramework zip and its
-`swift package compute-checksum` output as non-published evidence. Those files
-are not release assets and do not make the Apple package publishable; release
-packaging and physical-device acceptance remain separate gates.
+with code signing disabled. From a clean source tree,
+`tools/apple/package-release.sh` rebuilds and deterministically archives the
+XCFramework, copies `LICENSE`, emits SHA-256 and SwiftPM checksums, generates an
+SPDX 2.3 document from locked Cargo and Swift package metadata, and validates a
+SwiftPM artifact entry against the release schema. It rejects Node versions
+older than 22, a dirty tree, zero or inconsistent checksums, version drift, and
+local checkout paths in the SBOM.
+
+The generated files live under `target/apple-release/`. CI uploads that
+directory as non-published evidence. Those files are not release assets and do
+not make the Apple package publishable; physical-device acceptance remains a
+separate gate. The manifest claims only capabilities marked `supported` in the
+firmware compatibility matrix. A public Apple release must regenerate the same
+metadata from its exact clean release commit.
 
 Stable `v1.0.0` is reserved for the first release that Demo and Bota One can
 consume through the React Native compatibility package. Protocol and workflow
@@ -67,6 +77,8 @@ tools/ffi-smoke/run-native-c-smoke.sh
 tools/ffi-smoke/run-native-swift-smoke.sh
 tools/apple/test-package.sh
 tools/apple/test-consumer.sh
+node --test tools/release/generate-apple-*.test.mjs
+tools/apple/package-release.sh
 cargo deny check
 cargo package --locked --package bota-device-sdk-core
 cargo publish --locked --package bota-device-sdk-core --dry-run

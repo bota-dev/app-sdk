@@ -284,8 +284,10 @@ Apple package only through its public product and deliberately cannot import
 the internal C target. It runs on macOS and type-checks the complete facade;
 CI separately compiles the package for generic iOS device and simulator
 destinations with code signing disabled. CI archives the generated XCFramework
-and SwiftPM checksum as verification evidence only. Publication remains gated
-by deterministic packaging, release-manifest, and physical-device acceptance.
+with deterministic timestamps and entry order, then records SHA-256 and SwiftPM
+checksums, an SPDX 2.3 SBOM, the repository license, and a schema-validated
+SwiftPM artifact manifest as verification evidence only. Publication remains
+gated by physical-device acceptance.
 
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host
