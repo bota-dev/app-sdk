@@ -3,7 +3,7 @@ use crate::{
     error::{DeviceSdkError, ErrorCode, Operation},
     workflow::{
         ConnectionWorkflow, DiscoveryWorkflow, FactoryResetWorkflow, ProvisioningWorkflow,
-        RecordingTransferWorkflow, WorkflowContext, WorkflowReducer,
+        RecordingTransferWorkflow, UploadHandoffWorkflow, WorkflowContext, WorkflowReducer,
     },
 };
 
@@ -13,6 +13,7 @@ enum ActiveWorkflow {
     Provisioning(Box<ProvisioningWorkflow>),
     FactoryReset(Box<FactoryResetWorkflow>),
     RecordingTransfer(Box<RecordingTransferWorkflow>),
+    UploadHandoff(Box<UploadHandoffWorkflow>),
 }
 
 impl ActiveWorkflow {
@@ -23,6 +24,7 @@ impl ActiveWorkflow {
             Self::Provisioning(_) => Operation::Provision,
             Self::FactoryReset(_) => Operation::FactoryReset,
             Self::RecordingTransfer(_) => Operation::TransferRecording,
+            Self::UploadHandoff(_) => Operation::Upload,
         }
     }
 
@@ -33,6 +35,7 @@ impl ActiveWorkflow {
             Self::Provisioning(workflow) => workflow.cancellation_id(),
             Self::FactoryReset(workflow) => workflow.cancellation_id(),
             Self::RecordingTransfer(workflow) => workflow.cancellation_id(),
+            Self::UploadHandoff(workflow) => workflow.cancellation_id(),
         }
     }
 }
@@ -132,6 +135,18 @@ impl WorkflowEngine {
                 total_units,
                 cancellation_id,
             ))),
+            Command::UploadRecording {
+                device,
+                recording,
+                upload_id,
+                destination_id,
+            } => ActiveWorkflow::UploadHandoff(Box::new(UploadHandoffWorkflow::new(
+                device,
+                recording,
+                upload_id,
+                destination_id,
+                cancellation_id,
+            ))),
             _ => {
                 return Err(
                     DeviceSdkError::new(ErrorCode::UnsupportedOperation, operation, false)
@@ -155,6 +170,7 @@ impl WorkflowEngine {
             Some(ActiveWorkflow::Provisioning(workflow)) => workflow.start(&mut context),
             Some(ActiveWorkflow::FactoryReset(workflow)) => workflow.start(&mut context),
             Some(ActiveWorkflow::RecordingTransfer(workflow)) => workflow.start(&mut context),
+            Some(ActiveWorkflow::UploadHandoff(workflow)) => workflow.start(&mut context),
             None => unreachable!("workflow was assigned above"),
         };
         Ok(effects)
@@ -190,6 +206,9 @@ impl WorkflowEngine {
             ActiveWorkflow::RecordingTransfer(workflow) => {
                 workflow.dispatch(host_event, &mut context)?
             }
+            ActiveWorkflow::UploadHandoff(workflow) => {
+                workflow.dispatch(host_event, &mut context)?
+            }
         };
 
         let terminal_status = match active {
@@ -198,6 +217,7 @@ impl WorkflowEngine {
             ActiveWorkflow::Provisioning(workflow) => workflow.terminal_status(),
             ActiveWorkflow::FactoryReset(workflow) => workflow.terminal_status(),
             ActiveWorkflow::RecordingTransfer(workflow) => workflow.terminal_status(),
+            ActiveWorkflow::UploadHandoff(workflow) => workflow.terminal_status(),
         };
         if let Some(status) = terminal_status {
             self.status = status;
@@ -236,6 +256,7 @@ impl WorkflowEngine {
             ActiveWorkflow::Provisioning(workflow) => workflow.cancel(&mut context),
             ActiveWorkflow::FactoryReset(workflow) => workflow.cancel(&mut context),
             ActiveWorkflow::RecordingTransfer(workflow) => workflow.cancel(&mut context),
+            ActiveWorkflow::UploadHandoff(workflow) => workflow.cancel(&mut context),
         };
         self.status = WorkflowStatus::Cancelled { operation };
         self.terminal_cancellation_id = Some(cancellation_id);

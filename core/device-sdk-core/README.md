@@ -19,8 +19,10 @@ Reset success is durably journaled before receipt and replay can resume without
 resending the destructive command. Recording bytes remain in a host-owned sink;
 the core checkpoints only byte and sequence counters, restarts the device stream
 from sequence zero, and confirms device deletion only after the sink has passed
-its durable integrity check. Upload handoff, OTA, and device-log workflows remain
-under development.
+its durable integrity check. Upload handoff keeps destination data host-owned
+behind opaque IDs and permits Bluetooth fallback only after a fresh device
+status proves direct-upload ownership is inactive. OTA and device-log workflows
+remain under development.
 
 The `1.0.0-alpha.*` releases cover protocol and workflow-core milestones. They
 do not replace the production React Native SDK and do not claim native

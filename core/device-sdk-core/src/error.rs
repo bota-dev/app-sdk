@@ -21,6 +21,7 @@ pub enum ErrorCode {
     Cancelled,
     ProtocolRejected,
     IntegrityFailed,
+    UploadOwnershipUnknown,
     Internal,
 }
 
@@ -44,6 +45,7 @@ impl ErrorCode {
             Self::Cancelled => "cancelled",
             Self::ProtocolRejected => "protocol_rejected",
             Self::IntegrityFailed => "integrity_failed",
+            Self::UploadOwnershipUnknown => "upload_ownership_unknown",
             Self::Internal => "internal",
         }
     }

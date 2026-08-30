@@ -115,8 +115,14 @@ orders truncate, append, checkpoint, final integrity verification, final ACK,
 and device delete without persisting file paths or payload bytes. Firmware
 restarts a resumed transfer at sequence zero, so the reducer skips sequence
 numbers already represented by the durable checkpoint before appending new
-data. The remaining workflows and FFI mechanism are deferred as specified in
+data. OTA, device logs, and the FFI mechanism are deferred as specified in
 [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md).
+
+Upload handoff does not carry presigned URLs or credentials. The application
+supplies opaque upload-session and destination IDs, while the reducer reads
+fresh device status to decide ownership. Busy, detached, and unreadable states
+preserve device ownership; only a fresh `sync_active=false` result can emit a
+Bluetooth-fallback notification for the application to act on.
 
 Provisioning reads the connection-bound nonce and device public key before it
 asks the host to resolve an opaque material ID. The core validates and chunks

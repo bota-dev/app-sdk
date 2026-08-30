@@ -4,6 +4,7 @@ use crate::{
     model::{
         DeviceCandidate, DeviceSerialNumber, DurableFactoryResetResult, FactoryResetCommandId,
         FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId, RecordingUuid,
+        UploadDestinationId, UploadSessionId,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -33,7 +34,10 @@ pub enum Command {
         total_units: u64,
     },
     UploadRecording {
+        device: DeviceSerialNumber,
         recording: RecordingUuid,
+        upload_id: UploadSessionId,
+        destination_id: UploadDestinationId,
     },
     UpdateFirmware {
         device: DeviceSerialNumber,
@@ -117,11 +121,9 @@ impl Command {
                 Capability::Progress,
                 Capability::RecordingSink,
             ],
-            Self::UploadRecording { .. } => &[
-                Capability::NetworkTransfer,
-                Capability::Persistence,
-                Capability::Progress,
-            ],
+            Self::UploadRecording { .. } => {
+                &[Capability::Ble, Capability::Timer, Capability::Progress]
+            }
             Self::UpdateFirmware { .. } => &[
                 Capability::Ble,
                 Capability::NetworkTransfer,

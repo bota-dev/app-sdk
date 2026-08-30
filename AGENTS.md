@@ -35,6 +35,8 @@
 - High-volume recording bytes stay off JavaScript and Dart bridges.
 - Recording transfer owns sequence/checkpoint decisions; native hosts own the
   durable sink and validate the final checksum before device deletion.
+- Direct-upload fallback requires a fresh inactive device status; busy,
+  detached, and unreadable ownership never authorize Bluetooth fallback.
 - Never infer identity from an advertised BLE name alone.
 - Do not treat deprovision or unbind as factory reset.
 - Never commit credentials, tokens, private keys, certificate bodies, or signing

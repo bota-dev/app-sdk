@@ -1,7 +1,10 @@
 use crate::{
     engine::CancellationId,
     error::{DeviceSdkError, Operation},
-    model::{ConnectionMode, DeviceCandidate, DeviceSerialNumber},
+    model::{
+        ConnectionMode, DeviceCandidate, DeviceSerialNumber, RecordingUuid, UploadDestinationId,
+        UploadSessionId,
+    },
 };
 use serde::{Deserialize, Serialize};
 
@@ -44,6 +47,14 @@ pub enum WorkflowNotification {
     Retrying {
         operation: Operation,
         attempt: u32,
+    },
+    DeviceUploadPreserved {
+        upload_id: UploadSessionId,
+    },
+    BleFallbackReady {
+        recording: RecordingUuid,
+        upload_id: UploadSessionId,
+        destination_id: UploadDestinationId,
     },
     Completed {
         operation: Operation,

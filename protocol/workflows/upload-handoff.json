@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "reference": "@bota.dev/react-native-sdk@0.0.65",
+  "scenarios": [
+    { "name": "busy-preserves-device-upload", "expected": "no_ble_fallback" },
+    { "name": "detached-monitor-preserves-ownership", "expected": "no_ble_fallback" },
+    { "name": "unknown-ownership-preserves-device-upload", "expected": "no_ble_fallback" },
+    { "name": "fresh-inactive-after-direct-failure", "expected": "ble_fallback_ready" },
+    { "name": "successful-direct-upload", "expected": "completed" }
+  ]
+}

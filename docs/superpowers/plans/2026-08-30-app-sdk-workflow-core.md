@@ -330,13 +330,13 @@ Port busy, detached, unknown ownership, direct-upload failure with fresh
 inactive status, and successful direct upload. BLE fallback is emitted only for
 the fresh-inactive case.
 
-- [ ] **Step 3: Implement transfer and upload reducers**
+- [x] **Step 3: Implement transfer and upload reducers**
 
 The transfer reducer owns sequence and checkpoint decisions; the native host
 owns file and network bytes. The handoff reducer owns channel/fallback policy;
 the application still obtains upload destinations and finalizes backend state.
 
-- [ ] **Step 4: Verify and commit separately**
+- [x] **Step 4: Verify and commit separately**
 
 Commit transfer as `feat: add resumable recording transfer` and handoff as
 `feat: add guarded upload handoff`.

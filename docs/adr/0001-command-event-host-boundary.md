@@ -45,7 +45,11 @@ Recording transfer uses an opaque host-owned sink for truncate, append,
 finalize, and discard effects. The core deduplicates replayed sequence numbers
 after restart and sends the firmware's terminal ACK only after durable sink
 finalization; `CONFIRM` follows that ACK and is therefore the only step that can
-delete the device copy. Upload handoff, OTA, and device-log remain deferred.
+delete the device copy.
+Upload handoff carries only opaque upload and destination IDs. It treats busy,
+detached, and unreadable direct-upload state as device-owned and can expose a
+Bluetooth fallback only after a fresh status read reports inactive ownership.
+OTA and device-log remain deferred.
 
 ## FFI Decision Gate
 
