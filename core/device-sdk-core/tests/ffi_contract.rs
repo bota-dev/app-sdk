@@ -32,6 +32,9 @@ fn c_abi_has_extensible_typed_packet_fields() {
     assert!(HEADER.contains("BotaDeviceSdkPacketV1 *packet"));
     assert!(HEADER.contains("void bota_device_sdk_v1_packet_free"));
     assert!(HEADER.contains("bota_device_sdk_v1_engine_poll_output"));
+    assert!(HEADER.contains("bota_device_sdk_v1_engine_dispatch"));
+    assert!(HEADER.contains("BOTA_DEVICE_SDK_V1_HOST_EVENT_BLE_NOTIFICATION"));
+    assert!(HEADER.contains("BOTA_DEVICE_SDK_V1_HOST_EVENT_NETWORK_FAILED"));
     assert!(HEADER.contains("BOTA_DEVICE_SDK_V1_HOST_EFFECT_BLE_WRITE"));
     assert!(HEADER.contains("BOTA_DEVICE_SDK_V1_NOTIFICATION_FAILED"));
     assert!(HEADER.contains("BOTA_DEVICE_SDK_V1_FIELD_CHECKPOINT"));

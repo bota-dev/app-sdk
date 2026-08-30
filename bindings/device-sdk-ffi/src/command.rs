@@ -271,12 +271,12 @@ pub(crate) unsafe fn command_from_packet(
     }
 }
 
-struct PacketFields<'a> {
+pub(crate) struct PacketFields<'a> {
     fields: &'a [BotaDeviceSdkFieldViewV1],
 }
 
 impl<'a> PacketFields<'a> {
-    unsafe fn new(
+    pub(crate) unsafe fn new(
         fields: *const BotaDeviceSdkFieldViewV1,
         field_count: u64,
     ) -> Result<Self, DeviceSdkError> {
@@ -307,7 +307,7 @@ impl<'a> PacketFields<'a> {
         Ok(Self { fields })
     }
 
-    fn validate_allowed(&self, allowed: &[u32]) -> Result<(), DeviceSdkError> {
+    pub(crate) fn validate_allowed(&self, allowed: &[u32]) -> Result<(), DeviceSdkError> {
         if let Some(field) = self
             .fields
             .iter()
@@ -321,35 +321,35 @@ impl<'a> PacketFields<'a> {
         Ok(())
     }
 
-    fn required_u64(&self, id: u32) -> Result<u64, DeviceSdkError> {
+    pub(crate) fn required_u64(&self, id: u32) -> Result<u64, DeviceSdkError> {
         self.field(id, field_type::UNSIGNED)
             .map(|field| field.unsigned_value)
             .ok_or_else(|| missing(id, field_type::UNSIGNED))
     }
 
-    fn optional_u64(&self, id: u32) -> Result<Option<u64>, DeviceSdkError> {
+    pub(crate) fn optional_u64(&self, id: u32) -> Result<Option<u64>, DeviceSdkError> {
         self.optional_field(id, field_type::UNSIGNED)
             .map(|field| field.map(|field| field.unsigned_value))
     }
 
-    fn required_i64(&self, id: u32) -> Result<i64, DeviceSdkError> {
+    pub(crate) fn required_i64(&self, id: u32) -> Result<i64, DeviceSdkError> {
         self.field(id, field_type::SIGNED)
             .map(|field| field.signed_value)
             .ok_or_else(|| missing(id, field_type::SIGNED))
     }
 
-    fn required_bool(&self, id: u32) -> Result<bool, DeviceSdkError> {
+    pub(crate) fn required_bool(&self, id: u32) -> Result<bool, DeviceSdkError> {
         self.field(id, field_type::BOOL)
             .map(|field| field.unsigned_value != 0)
             .ok_or_else(|| missing(id, field_type::BOOL))
     }
 
-    fn required_text(&self, id: u32) -> Result<String, DeviceSdkError> {
+    pub(crate) fn required_text(&self, id: u32) -> Result<String, DeviceSdkError> {
         self.optional_text(id)?
             .ok_or_else(|| missing(id, field_type::UTF8))
     }
 
-    fn optional_text(&self, id: u32) -> Result<Option<String>, DeviceSdkError> {
+    pub(crate) fn optional_text(&self, id: u32) -> Result<Option<String>, DeviceSdkError> {
         let Some(field) = self.optional_field(id, field_type::UTF8)? else {
             return Ok(None);
         };
@@ -357,6 +357,23 @@ impl<'a> PacketFields<'a> {
         let value = std::str::from_utf8(bytes)
             .map_err(|_| invalid(format!("field {id} is not valid UTF-8")))?;
         Ok(Some(value.to_owned()))
+    }
+
+    pub(crate) fn required_bytes(&self, id: u32) -> Result<Vec<u8>, DeviceSdkError> {
+        self.optional_bytes(id)?
+            .ok_or_else(|| missing(id, field_type::BYTES))
+    }
+
+    pub(crate) fn optional_bytes(&self, id: u32) -> Result<Option<Vec<u8>>, DeviceSdkError> {
+        let Some(field) = self.optional_field(id, field_type::BYTES)? else {
+            return Ok(None);
+        };
+        Ok(Some(unsafe { borrowed_data(field)? }.to_vec()))
+    }
+
+    pub(crate) fn optional_i64(&self, id: u32) -> Result<Option<i64>, DeviceSdkError> {
+        self.optional_field(id, field_type::SIGNED)
+            .map(|field| field.map(|field| field.signed_value))
     }
 
     fn optional_field(

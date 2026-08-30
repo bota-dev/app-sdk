@@ -1,5 +1,6 @@
 mod command;
 mod error;
+mod event;
 mod output;
 mod packet;
 
@@ -15,8 +16,8 @@ pub use packet::{
 };
 
 use bota_device_sdk_core::{
-    engine::{CancellationId, EffectRequest, Event, WorkflowEngine},
-    error::DeviceSdkError,
+    engine::{CancellationId, EffectRequest, Event, WorkflowEngine, WorkflowStatus},
+    error::{DeviceSdkError, ErrorCode, Operation},
 };
 use error::internal_error;
 use std::{
@@ -199,6 +200,78 @@ pub unsafe extern "C" fn bota_device_sdk_v1_engine_poll_output(
         Ok(Ok(None)) => BotaDeviceSdkStatusV1::NoOutput,
         Ok(Err(())) => BotaDeviceSdkStatusV1::OperationFailed,
         Err(_) => BotaDeviceSdkStatusV1::Panic,
+    }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+///
+/// `engine` must be a live SDK engine. `packet` and every non-empty field
+/// slice must remain readable for the duration of this call.
+pub unsafe extern "C" fn bota_device_sdk_v1_engine_dispatch(
+    engine: *mut BotaDeviceSdkEngineV1,
+    packet: *const BotaDeviceSdkPacketViewV1,
+) -> BotaDeviceSdkStatusV1 {
+    if engine.is_null() || packet.is_null() {
+        return BotaDeviceSdkStatusV1::InvalidArgument;
+    }
+    let packet = unsafe { *packet };
+    if packet.abi_version != ABI_VERSION {
+        return BotaDeviceSdkStatusV1::UnsupportedAbi;
+    }
+
+    unsafe {
+        with_engine(engine, |bridge| {
+            let event = event::host_event_from_packet(&packet)?;
+            let supplied_cancellation =
+                cancellation_id(packet.cancellation_id_high, packet.cancellation_id_low);
+            match bridge.engine.status() {
+                WorkflowStatus::Running {
+                    operation,
+                    cancellation_id,
+                } if *operation == operation_from_code(packet.operation)
+                    && *cancellation_id == supplied_cancellation => {}
+                WorkflowStatus::Running { .. } => {
+                    return Err(DeviceSdkError::new(
+                        ErrorCode::UnexpectedEvent,
+                        Operation::Unknown,
+                        false,
+                    )
+                    .with_detail(
+                        "event operation or cancellation ID does not own the active workflow",
+                    ));
+                }
+                _ => {
+                    return Err(DeviceSdkError::new(
+                        ErrorCode::UnexpectedEvent,
+                        Operation::Unknown,
+                        false,
+                    )
+                    .with_detail("no workflow is active"));
+                }
+            }
+            let effects = bridge.engine.dispatch(Event::Host(event))?;
+            bridge.enqueue(effects);
+            Ok(())
+        })
+    }
+}
+
+fn operation_from_code(code: u32) -> Operation {
+    match code {
+        1 => Operation::Validate,
+        2 => Operation::Decode,
+        3 => Operation::Encode,
+        4 => Operation::Discover,
+        5 => Operation::Connect,
+        6 => Operation::Reconnect,
+        7 => Operation::Provision,
+        8 => Operation::TransferRecording,
+        9 => Operation::Upload,
+        10 => Operation::UpdateFirmware,
+        11 => Operation::ReadDeviceLogs,
+        12 => Operation::FactoryReset,
+        _ => Operation::Unknown,
     }
 }
 

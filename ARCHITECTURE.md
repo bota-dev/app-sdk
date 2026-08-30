@@ -164,9 +164,12 @@ capability IDs, reject unknown or duplicate fields, and retain the core's model
 validation. Every current host effect and workflow notification leaves through
 the ordered `bota_device_sdk_v1_engine_poll_output` queue as one explicitly
 freed packet. Durable checkpoints are versioned opaque bytes to native storage,
-not platform-visible reducer models. Typed host-event and protocol-value packets
-must pass the remaining native ABI foundation gates before a platform facade
-can publish.
+not platform-visible reducer models. All current BLE, timer, persistence,
+host-material, recording-sink, firmware-blob, secure-storage, and network
+callbacks return through `bota_device_sdk_v1_engine_dispatch`; operation,
+request, and cancellation ownership are checked before the reducer advances.
+Typed protocol-value packets must pass the remaining native ABI foundation gate
+before a platform facade can publish.
 
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host

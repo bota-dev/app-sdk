@@ -3,10 +3,12 @@ use bota_device_sdk_core::{
     engine::{
         BleEffect, Effect, EffectRequest, FirmwareBlobEffect, HostMaterialEffect, NetworkEffect,
         PersistenceEffect, ProgressEffect, RecordingSinkEffect, SecureStorageEffect, TimerEffect,
-        UploadSource, WorkflowCheckpoint, WorkflowNotification,
+        UploadSource, WorkflowCheckpoint, WorkflowKind, WorkflowNotification,
     },
     error::{DeviceSdkError, ErrorCode, Operation},
-    model::{ConnectionMode, DeviceCandidate, FirmwareUpdatePhase},
+    model::{
+        ConnectionMode, DeviceCandidate, DeviceSerialNumber, FirmwareUpdatePhase, RecordingUuid,
+    },
 };
 
 pub(crate) fn packet_from_effect_request(
@@ -419,7 +421,9 @@ const fn firmware_phase(phase: FirmwareUpdatePhase) -> u64 {
     }
 }
 
-fn encode_checkpoint(checkpoint: &WorkflowCheckpoint) -> Result<Vec<u8>, DeviceSdkError> {
+pub(crate) fn encode_checkpoint(
+    checkpoint: &WorkflowCheckpoint,
+) -> Result<Vec<u8>, DeviceSdkError> {
     let mut bytes = Vec::new();
     bytes.extend_from_slice(b"BOTACKP1");
     bytes.push(workflow_kind(checkpoint.workflow));
@@ -443,6 +447,92 @@ fn encode_checkpoint(checkpoint: &WorkflowCheckpoint) -> Result<Vec<u8>, DeviceS
         push_bytes(&mut bytes, version.as_bytes())?;
     }
     Ok(bytes)
+}
+
+pub(crate) fn decode_checkpoint(bytes: &[u8]) -> Result<WorkflowCheckpoint, DeviceSdkError> {
+    let mut cursor = CheckpointCursor::new(bytes);
+    if cursor.take(8)? != b"BOTACKP1" {
+        return Err(invalid_checkpoint("checkpoint magic or version is invalid"));
+    }
+    let workflow = match cursor.u8()? {
+        1 => WorkflowKind::Discovery,
+        2 => WorkflowKind::Connection,
+        3 => WorkflowKind::Provisioning,
+        4 => WorkflowKind::RecordingTransfer,
+        5 => WorkflowKind::RecordingUpload,
+        6 => WorkflowKind::FirmwareUpdate,
+        7 => WorkflowKind::DeviceLogs,
+        8 => WorkflowKind::FactoryReset,
+        _ => return Err(invalid_checkpoint("checkpoint workflow kind is invalid")),
+    };
+    let operation = match cursor.u8()? {
+        1 => Operation::Validate,
+        2 => Operation::Decode,
+        3 => Operation::Encode,
+        4 => Operation::Discover,
+        5 => Operation::Connect,
+        6 => Operation::Reconnect,
+        7 => Operation::Provision,
+        8 => Operation::TransferRecording,
+        9 => Operation::Upload,
+        10 => Operation::UpdateFirmware,
+        11 => Operation::ReadDeviceLogs,
+        12 => Operation::FactoryReset,
+        13 => Operation::Unknown,
+        _ => return Err(invalid_checkpoint("checkpoint operation is invalid")),
+    };
+    let phase = match cursor.u8()? {
+        1 => bota_device_sdk_core::engine::CheckpointPhase::Pending,
+        2 => bota_device_sdk_core::engine::CheckpointPhase::Connecting,
+        3 => bota_device_sdk_core::engine::CheckpointPhase::Transferring,
+        4 => bota_device_sdk_core::engine::CheckpointPhase::Uploading,
+        5 => bota_device_sdk_core::engine::CheckpointPhase::Verifying,
+        6 => bota_device_sdk_core::engine::CheckpointPhase::Reconnecting,
+        7 => bota_device_sdk_core::engine::CheckpointPhase::AwaitingReceipt,
+        _ => return Err(invalid_checkpoint("checkpoint phase is invalid")),
+    };
+    let completed_units = cursor.u64()?;
+    let retry_count = cursor.u16()?;
+    let flags = cursor.u8()?;
+    if flags & !0x07 != 0 {
+        return Err(invalid_checkpoint("checkpoint flags are invalid"));
+    }
+    let device = DeviceSerialNumber::new(cursor.string()?)?;
+    let recording = if flags & 0x01 != 0 {
+        Some(RecordingUuid::from_bytes(
+            cursor
+                .take(16)?
+                .try_into()
+                .expect("checkpoint recording UUID is fixed width"),
+        ))
+    } else {
+        None
+    };
+    let last_sequence = if flags & 0x02 != 0 {
+        Some(cursor.u16()?)
+    } else {
+        None
+    };
+    let firmware_version = if flags & 0x04 != 0 {
+        Some(cursor.string()?)
+    } else {
+        None
+    };
+    if !cursor.is_empty() {
+        return Err(invalid_checkpoint("checkpoint has trailing bytes"));
+    }
+
+    Ok(WorkflowCheckpoint {
+        workflow,
+        operation,
+        device,
+        recording,
+        phase,
+        completed_units,
+        retry_count,
+        last_sequence,
+        firmware_version,
+    })
 }
 
 fn push_bytes(output: &mut Vec<u8>, value: &[u8]) -> Result<(), DeviceSdkError> {
@@ -480,6 +570,74 @@ const fn checkpoint_phase(phase: bota_device_sdk_core::engine::CheckpointPhase) 
         CheckpointPhase::Reconnecting => 6,
         CheckpointPhase::AwaitingReceipt => 7,
     }
+}
+
+struct CheckpointCursor<'a> {
+    bytes: &'a [u8],
+    offset: usize,
+}
+
+impl<'a> CheckpointCursor<'a> {
+    const fn new(bytes: &'a [u8]) -> Self {
+        Self { bytes, offset: 0 }
+    }
+
+    fn take(&mut self, length: usize) -> Result<&'a [u8], DeviceSdkError> {
+        let end = self
+            .offset
+            .checked_add(length)
+            .ok_or_else(|| invalid_checkpoint("checkpoint length overflow"))?;
+        let value = self
+            .bytes
+            .get(self.offset..end)
+            .ok_or_else(|| invalid_checkpoint("checkpoint is truncated"))?;
+        self.offset = end;
+        Ok(value)
+    }
+
+    fn u8(&mut self) -> Result<u8, DeviceSdkError> {
+        Ok(self.take(1)?[0])
+    }
+
+    fn u16(&mut self) -> Result<u16, DeviceSdkError> {
+        Ok(u16::from_le_bytes(
+            self.take(2)?
+                .try_into()
+                .expect("slice is exactly two bytes"),
+        ))
+    }
+
+    fn u32(&mut self) -> Result<u32, DeviceSdkError> {
+        Ok(u32::from_le_bytes(
+            self.take(4)?
+                .try_into()
+                .expect("slice is exactly four bytes"),
+        ))
+    }
+
+    fn u64(&mut self) -> Result<u64, DeviceSdkError> {
+        Ok(u64::from_le_bytes(
+            self.take(8)?
+                .try_into()
+                .expect("slice is exactly eight bytes"),
+        ))
+    }
+
+    fn string(&mut self) -> Result<String, DeviceSdkError> {
+        let length = usize::try_from(self.u32()?)
+            .map_err(|_| invalid_checkpoint("checkpoint string length is too large"))?;
+        let value = std::str::from_utf8(self.take(length)?)
+            .map_err(|_| invalid_checkpoint("checkpoint string is not valid UTF-8"))?;
+        Ok(value.to_owned())
+    }
+
+    fn is_empty(&self) -> bool {
+        self.offset == self.bytes.len()
+    }
+}
+
+fn invalid_checkpoint(detail: impl Into<String>) -> DeviceSdkError {
+    DeviceSdkError::new(ErrorCode::InvalidInput, Operation::Decode, false).with_detail(detail)
 }
 
 #[cfg(test)]
