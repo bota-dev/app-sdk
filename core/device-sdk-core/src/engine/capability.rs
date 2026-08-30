@@ -11,6 +11,7 @@ pub enum Capability {
     Progress,
     HostMaterial,
     RecordingSink,
+    FirmwareBlob,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]

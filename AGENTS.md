@@ -37,6 +37,8 @@
   durable sink and validate the final checksum before device deletion.
 - Direct-upload fallback requires a fresh inactive device status; busy,
   detached, and unreadable ownership never authorize Bluetooth fallback.
+- Firmware retries reuse the host blob but restart BLE delivery at sequence and
+  offset zero; current firmware does not support partial Bluetooth OTA resume.
 - Never infer identity from an advertised BLE name alone.
 - Do not treat deprovision or unbind as factory reset.
 - Never commit credentials, tokens, private keys, certificate bodies, or signing

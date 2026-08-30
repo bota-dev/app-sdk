@@ -148,6 +148,7 @@ impl FactoryResetWorkflow {
                 completed_units: 0,
                 retry_count: 0,
                 last_sequence: None,
+                firmware_version: None,
             },
         }));
         self.checkpoint_request_ids.insert(request.request_id);

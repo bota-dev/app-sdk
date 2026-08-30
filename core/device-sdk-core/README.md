@@ -21,8 +21,14 @@ the core checkpoints only byte and sequence counters, restarts the device stream
 from sequence zero, and confirms device deletion only after the sink has passed
 its durable integrity check. Upload handoff keeps destination data host-owned
 behind opaque IDs and permits Bluetooth fallback only after a fresh device
-status proves direct-upload ownership is inactive. OTA and device-log workflows
-remain under development.
+status proves direct-upload ownership is inactive. Firmware update downloads
+into an opaque host blob, streams 500-byte chunks
+with the firmware's eight-packet flow-control window, treats reboot disconnect
+as expected, reuses connection recovery, and verifies the target version after
+reconnect. A transfer retry reuses the host blob but restarts device delivery at
+offset zero because current firmware recreates its staging file on every start.
+The host must establish any firmware-required OTA authorization before starting
+this prerelease workflow. Device-log workflow remains under development.
 
 The `1.0.0-alpha.*` releases cover protocol and workflow-core milestones. They
 do not replace the production React Native SDK and do not claim native

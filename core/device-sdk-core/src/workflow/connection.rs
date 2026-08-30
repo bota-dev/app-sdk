@@ -369,6 +369,7 @@ impl ConnectionWorkflow {
                 completed_units: self.candidate_index as u64,
                 retry_count: self.retry_count,
                 last_sequence: None,
+                firmware_version: None,
             },
         }));
         self.checkpoint_request_ids.insert(request.request_id);

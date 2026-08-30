@@ -42,6 +42,8 @@ pub enum Command {
     UpdateFirmware {
         device: DeviceSerialNumber,
         image: FirmwareImage,
+        download_id: u64,
+        reconnect_hint: ReconnectHint,
     },
     ReadDeviceLogs {
         device: DeviceSerialNumber,
@@ -129,6 +131,8 @@ impl Command {
                 Capability::NetworkTransfer,
                 Capability::Persistence,
                 Capability::Progress,
+                Capability::Timer,
+                Capability::FirmwareBlob,
             ],
         }
     }

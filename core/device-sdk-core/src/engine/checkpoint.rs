@@ -38,4 +38,6 @@ pub struct WorkflowCheckpoint {
     pub retry_count: u16,
     #[serde(default)]
     pub last_sequence: Option<u16>,
+    #[serde(default)]
+    pub firmware_version: Option<String>,
 }

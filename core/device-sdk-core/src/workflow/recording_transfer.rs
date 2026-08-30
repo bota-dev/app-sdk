@@ -156,6 +156,7 @@ impl RecordingTransferWorkflow {
                 completed_units: self.completed_units,
                 retry_count: self.retry_count,
                 last_sequence: self.last_sequence,
+                firmware_version: None,
             },
         }));
         self.checkpoint_request_ids.insert(request.request_id);

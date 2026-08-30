@@ -2,8 +2,8 @@ use crate::{
     engine::CancellationId,
     error::{DeviceSdkError, Operation},
     model::{
-        ConnectionMode, DeviceCandidate, DeviceSerialNumber, RecordingUuid, UploadDestinationId,
-        UploadSessionId,
+        ConnectionMode, DeviceCandidate, DeviceSerialNumber, FirmwareUpdateProgress, RecordingUuid,
+        UploadDestinationId, UploadSessionId,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -55,6 +55,9 @@ pub enum WorkflowNotification {
         recording: RecordingUuid,
         upload_id: UploadSessionId,
         destination_id: UploadDestinationId,
+    },
+    FirmwareProgress {
+        progress: FirmwareUpdateProgress,
     },
     Completed {
         operation: Operation,

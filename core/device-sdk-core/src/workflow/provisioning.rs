@@ -93,6 +93,7 @@ impl ProvisioningWorkflow {
                 completed_units: self.chunk_index as u64,
                 retry_count: 0,
                 last_sequence: None,
+                firmware_version: None,
             },
         }));
         self.checkpoint_request_ids.insert(request.request_id);

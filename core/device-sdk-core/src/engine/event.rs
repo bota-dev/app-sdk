@@ -50,6 +50,14 @@ pub enum HostEventKind {
     RecordingSinkFailed {
         platform_code: Option<i64>,
     },
+    FirmwareChunkRead {
+        download_id: u64,
+        offset: u64,
+        bytes: Vec<u8>,
+    },
+    FirmwareBlobFailed {
+        platform_code: Option<i64>,
+    },
     SecretLoaded {
         key: String,
         value: Option<Vec<u8>>,

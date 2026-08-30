@@ -22,6 +22,7 @@ pub enum ErrorCode {
     ProtocolRejected,
     IntegrityFailed,
     UploadOwnershipUnknown,
+    DownloadFailed,
     Internal,
 }
 
@@ -46,6 +47,7 @@ impl ErrorCode {
             Self::ProtocolRejected => "protocol_rejected",
             Self::IntegrityFailed => "integrity_failed",
             Self::UploadOwnershipUnknown => "upload_ownership_unknown",
+            Self::DownloadFailed => "download_failed",
             Self::Internal => "internal",
         }
     }

@@ -56,6 +56,7 @@ pub enum Effect {
     Notify(WorkflowNotification),
     HostMaterial(HostMaterialEffect),
     RecordingSink(RecordingSinkEffect),
+    FirmwareBlob(FirmwareBlobEffect),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -180,5 +181,14 @@ pub enum RecordingSinkEffect {
     },
     Discard {
         sink_id: RecordingSinkId,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum FirmwareBlobEffect {
+    ReadChunk {
+        download_id: u64,
+        offset: u64,
+        max_length: u16,
     },
 }

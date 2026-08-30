@@ -231,6 +231,7 @@ fn duplicate_packets_are_idempotent_and_resume_skips_durable_sequences() {
         completed_units: 8,
         retry_count: 1,
         last_sequence: Some(1),
+        firmware_version: None,
     };
     let (subscription_request, _) = start_with_checkpoint(&mut engine, Some(checkpoint));
 

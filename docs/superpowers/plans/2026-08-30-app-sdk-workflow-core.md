@@ -355,19 +355,19 @@ Commit transfer as `feat: add resumable recording transfer` and handoff as
 - Firmware bytes remain in a host-owned blob identified by `download_id`.
 - Progress uses phase plus byte counts and never emits the image buffer.
 
-- [ ] **Step 1: Add failing OTA scenarios**
+- [x] **Step 1: Add failing OTA scenarios**
 
 Cover HTTP rejection, unknown download total with firmware-size fallback,
 early flow-control ACK, ACK timeout, device rejection, transfer resume,
 expected reboot disconnect, reconnect timeout, and successful version readback.
 
-- [ ] **Step 2: Implement the reducer**
+- [x] **Step 2: Implement the reducer**
 
 Sequence download, device preparation, chunk writes, flow-control ACKs,
 verification, expected reboot, reconnect, and version readback. Cache an ACK
 that arrives before the reducer begins waiting for it.
 
-- [ ] **Step 3: Verify and commit**
+- [x] **Step 3: Verify and commit**
 
 Run focused and full gates. Commit: `feat: add resumable firmware workflow`.
 

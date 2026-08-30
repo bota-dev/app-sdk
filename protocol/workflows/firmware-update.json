@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "reference": "@bota.dev/react-native-sdk@0.0.65 + firmware le_trans_data.c",
+  "scenarios": [
+    { "name": "http-rejection-before-ble", "expected": "download_failed" },
+    { "name": "unknown-download-total-uses-image-size", "expected": "progress_fallback" },
+    { "name": "device-rejects-upload-start", "expected": "protocol_rejected" },
+    { "name": "early-flow-control-ack-is-cached", "expected": "continue" },
+    { "name": "flow-control-ack-timeout", "expected": "timeout" },
+    { "name": "resume-reuses-blob-and-restarts-device-transfer", "expected": "offset_zero" },
+    { "name": "verified-device-reboot-disconnect", "expected": "reconnect" },
+    { "name": "reconnect-timeout", "expected": "timeout" },
+    { "name": "target-version-readback", "expected": "completed" }
+  ]
+}

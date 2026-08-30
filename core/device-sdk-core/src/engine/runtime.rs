@@ -2,8 +2,9 @@ use crate::{
     engine::{CancellationId, CapabilitySet, Command, EffectRequest, Event, WorkflowStatus},
     error::{DeviceSdkError, ErrorCode, Operation},
     workflow::{
-        ConnectionWorkflow, DiscoveryWorkflow, FactoryResetWorkflow, ProvisioningWorkflow,
-        RecordingTransferWorkflow, UploadHandoffWorkflow, WorkflowContext, WorkflowReducer,
+        ConnectionWorkflow, DiscoveryWorkflow, FactoryResetWorkflow, FirmwareUpdateWorkflow,
+        ProvisioningWorkflow, RecordingTransferWorkflow, UploadHandoffWorkflow, WorkflowContext,
+        WorkflowReducer,
     },
 };
 
@@ -14,6 +15,7 @@ enum ActiveWorkflow {
     FactoryReset(Box<FactoryResetWorkflow>),
     RecordingTransfer(Box<RecordingTransferWorkflow>),
     UploadHandoff(Box<UploadHandoffWorkflow>),
+    FirmwareUpdate(Box<FirmwareUpdateWorkflow>),
 }
 
 impl ActiveWorkflow {
@@ -25,6 +27,7 @@ impl ActiveWorkflow {
             Self::FactoryReset(_) => Operation::FactoryReset,
             Self::RecordingTransfer(_) => Operation::TransferRecording,
             Self::UploadHandoff(_) => Operation::Upload,
+            Self::FirmwareUpdate(_) => Operation::UpdateFirmware,
         }
     }
 
@@ -36,6 +39,7 @@ impl ActiveWorkflow {
             Self::FactoryReset(workflow) => workflow.cancellation_id(),
             Self::RecordingTransfer(workflow) => workflow.cancellation_id(),
             Self::UploadHandoff(workflow) => workflow.cancellation_id(),
+            Self::FirmwareUpdate(workflow) => workflow.cancellation_id(),
         }
     }
 }
@@ -147,6 +151,18 @@ impl WorkflowEngine {
                 destination_id,
                 cancellation_id,
             ))),
+            Command::UpdateFirmware {
+                device,
+                image,
+                download_id,
+                reconnect_hint,
+            } => ActiveWorkflow::FirmwareUpdate(Box::new(FirmwareUpdateWorkflow::new(
+                device,
+                image,
+                download_id,
+                reconnect_hint,
+                cancellation_id,
+            ))),
             _ => {
                 return Err(
                     DeviceSdkError::new(ErrorCode::UnsupportedOperation, operation, false)
@@ -171,6 +187,7 @@ impl WorkflowEngine {
             Some(ActiveWorkflow::FactoryReset(workflow)) => workflow.start(&mut context),
             Some(ActiveWorkflow::RecordingTransfer(workflow)) => workflow.start(&mut context),
             Some(ActiveWorkflow::UploadHandoff(workflow)) => workflow.start(&mut context),
+            Some(ActiveWorkflow::FirmwareUpdate(workflow)) => workflow.start(&mut context),
             None => unreachable!("workflow was assigned above"),
         };
         Ok(effects)
@@ -209,6 +226,9 @@ impl WorkflowEngine {
             ActiveWorkflow::UploadHandoff(workflow) => {
                 workflow.dispatch(host_event, &mut context)?
             }
+            ActiveWorkflow::FirmwareUpdate(workflow) => {
+                workflow.dispatch(host_event, &mut context)?
+            }
         };
 
         let terminal_status = match active {
@@ -218,6 +238,7 @@ impl WorkflowEngine {
             ActiveWorkflow::FactoryReset(workflow) => workflow.terminal_status(),
             ActiveWorkflow::RecordingTransfer(workflow) => workflow.terminal_status(),
             ActiveWorkflow::UploadHandoff(workflow) => workflow.terminal_status(),
+            ActiveWorkflow::FirmwareUpdate(workflow) => workflow.terminal_status(),
         };
         if let Some(status) = terminal_status {
             self.status = status;
@@ -257,6 +278,7 @@ impl WorkflowEngine {
             ActiveWorkflow::FactoryReset(workflow) => workflow.cancel(&mut context),
             ActiveWorkflow::RecordingTransfer(workflow) => workflow.cancel(&mut context),
             ActiveWorkflow::UploadHandoff(workflow) => workflow.cancel(&mut context),
+            ActiveWorkflow::FirmwareUpdate(workflow) => workflow.cancel(&mut context),
         };
         self.status = WorkflowStatus::Cancelled { operation };
         self.terminal_cancellation_id = Some(cancellation_id);

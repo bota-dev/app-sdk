@@ -49,7 +49,10 @@ delete the device copy.
 Upload handoff carries only opaque upload and destination IDs. It treats busy,
 detached, and unreadable direct-upload state as device-owned and can expose a
 Bluetooth fallback only after a fresh status read reports inactive ownership.
-OTA and device-log remain deferred.
+Firmware update references a host-owned blob by download ID, requests one
+bounded chunk at a time, and never checkpoints image bytes or a download URL.
+It owns flow-control ACK timing, expected reboot, reconnect, and target-version
+readback. Device-log remains deferred.
 
 ## FFI Decision Gate
 

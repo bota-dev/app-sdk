@@ -168,6 +168,7 @@ fn checkpoint() -> WorkflowCheckpoint {
         completed_units: 4,
         retry_count: 1,
         last_sequence: None,
+        firmware_version: None,
     }
 }
 
