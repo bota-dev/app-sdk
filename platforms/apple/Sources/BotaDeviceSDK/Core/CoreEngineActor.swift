@@ -11,6 +11,7 @@ actor CoreEngineActor {
     private let host: any CoreHost
     private var active: ActiveWorkflow?
     private var isDraining = false
+    private var drainRequested = false
 
     init(abi: CoreAbiClient, host: any CoreHost) {
         self.abi = abi
@@ -53,37 +54,77 @@ actor CoreEngineActor {
     }
 
     private func drain() async {
-        guard !isDraining else { return }
+        guard !isDraining else {
+            drainRequested = true
+            return
+        }
         isDraining = true
         defer { isDraining = false }
 
         do {
-            while let packet = try abi.pollOutput() {
-                if packet.kind > UInt32(BOTA_DEVICE_SDK_V1_NOTIFICATION_RANGE_START) {
-                    let notification = try CoreNotification(packet: packet)
-                    active?.continuation.yield(notification)
-                    if notification.isTerminal {
-                        active?.continuation.finish()
-                        active = nil
-                    }
-                    continue
-                }
-
-                let effect = try CoreEffect(packet: packet)
-                let events = await host.execute(effect)
-                for try await event in events {
-                    do {
-                        try abi.dispatch(event.packet)
-                    } catch let error as CoreError
-                        where error.code == UInt32(BOTA_DEVICE_SDK_V1_ERROR_UNEXPECTED_EVENT)
-                    {
+            repeat {
+                drainRequested = false
+                while let packet = try abi.pollOutput() {
+                    if packet.kind > UInt32(BOTA_DEVICE_SDK_V1_NOTIFICATION_RANGE_START) {
+                        let notification = try CoreNotification(packet: packet)
+                        active?.continuation.yield(notification)
+                        if notification.isTerminal {
+                            active?.continuation.finish()
+                            active = nil
+                        }
                         continue
                     }
+
+                    let effect = try CoreEffect(packet: packet)
+                    let events = await host.execute(effect)
+                    consume(events, for: effect)
+                    await Task.yield()
                 }
-            }
+            } while drainRequested
         } catch {
             active?.continuation.finish(throwing: error)
             active = nil
         }
+    }
+
+    private func consume(
+        _ events: AsyncThrowingStream<CoreHostEvent, Error>,
+        for effect: CoreEffect
+    ) {
+        Task {
+            do {
+                for try await event in events {
+                    await receive(event)
+                }
+            } catch {
+                fail(error, cancellationID: effect.cancellationID)
+            }
+        }
+    }
+
+    private func receive(_ event: CoreHostEvent) async {
+        do {
+            try abi.dispatch(event.packet)
+        } catch let error as CoreError
+            where error.code == UInt32(BOTA_DEVICE_SDK_V1_ERROR_UNEXPECTED_EVENT)
+        {
+            return
+        } catch {
+            fail(
+                error,
+                cancellationID: CoreCancellationID(
+                    high: event.cancellationHigh,
+                    low: event.cancellationLow
+                )
+            )
+            return
+        }
+        await drain()
+    }
+
+    private func fail(_ error: Error, cancellationID: CoreCancellationID) {
+        guard active?.cancellationID == cancellationID else { return }
+        active?.continuation.finish(throwing: error)
+        active = nil
     }
 }

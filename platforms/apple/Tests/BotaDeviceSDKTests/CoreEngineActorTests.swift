@@ -100,4 +100,62 @@ final class CoreEngineActorTests: XCTestCase {
 
         XCTAssertEqual(notifications, [.started, .deviceDiscovered, .completed])
     }
+
+    func testOpenScanStreamDoesNotBlockTimerAndStopEffects() async throws {
+        let host = ConcurrentDiscoveryHost()
+        let engine = CoreEngineActor(abi: try CoreAbiClient(), host: host)
+        let completed = expectation(description: "discovery completed")
+        let stream = await engine.run(
+            .discoverDevices(timeoutMilliseconds: 1, allowDuplicates: false),
+            capabilities: [.bluetooth, .timer]
+        )
+        let collector = Task {
+            for try await notification in stream where notification.kind == .completed {
+                completed.fulfill()
+            }
+        }
+
+        await fulfillment(of: [completed], timeout: 0.5)
+        collector.cancel()
+        await host.finishScan()
+    }
+}
+
+private actor ConcurrentDiscoveryHost: CoreHost {
+    private var scanContinuation: AsyncThrowingStream<CoreHostEvent, Error>.Continuation?
+
+    func execute(_ effect: CoreEffect) async -> AsyncThrowingStream<CoreHostEvent, Error> {
+        switch effect.kind {
+        case UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_BLE_START_SCAN):
+            let pair = AsyncThrowingStream<CoreHostEvent, Error>.makeStream()
+            scanContinuation = pair.continuation
+            return pair.stream
+        case UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_TIMER_SCHEDULE):
+            return AsyncThrowingStream { continuation in
+                continuation.yield(CoreHostEvent(
+                    effect: effect,
+                    kind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_TIMER_FIRED),
+                    fields: [.unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_TIMER_ID), value: 1)]
+                ))
+                continuation.finish()
+            }
+        case UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_BLE_STOP_SCAN):
+            scanContinuation?.finish()
+            scanContinuation = nil
+            return AsyncThrowingStream { continuation in
+                continuation.yield(CoreHostEvent(
+                    effect: effect,
+                    kind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_BLE_SCAN_STOPPED)
+                ))
+                continuation.finish()
+            }
+        default:
+            return AsyncThrowingStream { $0.finish() }
+        }
+    }
+
+    func finishScan() {
+        scanContinuation?.finish()
+        scanContinuation = nil
+    }
 }

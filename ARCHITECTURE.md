@@ -224,6 +224,17 @@ the ABI category event, and cancels suspended work by workflow identity. A late
 completion therefore retains its old request identity and cannot satisfy a
 newer operation.
 
+`CoreBluetoothDriver` contains all `CBCentralManager` and `CBPeripheral`
+ownership on a dedicated serial dispatch queue and exposes only value records
+to `CoreBluetoothHost`. The actor host merges peripherals already connected to
+a Bota service with live advertisements, deduplicates by Apple peripheral UUID,
+serializes connect/discovery/read/write/subscription work per peripheral, and
+allows unrelated peripherals to progress independently. Disconnect bypasses
+that gate so a broken link can fail pending operations exactly once. A manual
+selection preempts a background reconnect owner, and discovery timeout tears
+down the half-open link before releasing radio ownership. Display names are
+never used as device identity.
+
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host
 capabilities, ordered inputs, ordered effects and notifications, and terminal

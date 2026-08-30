@@ -448,7 +448,7 @@ Run:
 
 ```bash
 tools/apple/test-package.sh --filter CoreBluetoothHostTests
-xcodebuild -scheme BotaDeviceSDK -packagePath platforms/apple -destination 'generic/platform=iOS' build CODE_SIGNING_ALLOWED=NO
+(cd platforms/apple && xcodebuild -scheme BotaDeviceSDK -destination 'generic/platform=iOS' build CODE_SIGNING_ALLOWED=NO)
 swift build --package-path platforms/apple
 ```
 

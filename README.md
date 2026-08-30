@@ -39,8 +39,11 @@ real Rust workflow engine, preserves request/cancellation correlation, and
 checks all 29 canonical workflow traces from generated SwiftPM resources. Its
 host executor exhaustively routes all 30 ABI effect kinds through narrow native
 ports, bounds raw payloads, and isolates cancelled or late completions.
-CoreBluetooth, concrete host implementations, and the public Apple facade
-workflows are not implemented or published yet.
+A concrete CoreBluetooth driver now owns Apple delegate state on one serial
+queue, while an actor host merges system-connected peripherals, deduplicates
+scan results, serializes operations per peripheral, and preempts background
+reconnect for manual selection. Durable host implementations and the public
+Apple facade workflows are not implemented or published yet.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own
