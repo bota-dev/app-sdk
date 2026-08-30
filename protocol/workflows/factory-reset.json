@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "reference": "@bota.dev/react-native-sdk@0.0.65",
+  "scenarios": [
+    { "name": "persist-success-before-receipt", "expected": "ordered" },
+    { "name": "invalid-grant-has-no-receipt", "expected": "protocol_rejected" },
+    { "name": "storage-failure-has-no-receipt", "expected": "protocol_rejected" },
+    { "name": "persistence-failure-has-no-receipt", "expected": "persistence_failed" },
+    { "name": "receipt-failure-retains-result", "expected": "retryable" },
+    { "name": "resume-replay-skips-destructive-command", "expected": "receipt_only" },
+    { "name": "disconnect-before-result-is-ambiguous", "expected": "not_connected" }
+  ]
+}

@@ -1,9 +1,11 @@
 mod connection;
 mod discovery;
+mod factory_reset;
 mod provisioning;
 
 pub(crate) use connection::ConnectionWorkflow;
 pub(crate) use discovery::DiscoveryWorkflow;
+pub(crate) use factory_reset::FactoryResetWorkflow;
 pub(crate) use provisioning::ProvisioningWorkflow;
 
 use crate::{

@@ -119,6 +119,13 @@ the returned endpoint and token, subscribes for the result before writing, and
 overwrites volatile nonce, key, and payload buffers on every terminal path.
 Backend requests and durable credential storage remain host responsibilities.
 
+Authenticated factory reset is a durable close-loop. The core subscribes before
+grant/opcode writes, accepts only an exact three-byte success, asks the host to
+persist the command-bound result, then sends receipt opcode `0x0A`. It asks the
+host to delete that journal only after the receipt write succeeds. Resume mode
+waits for firmware's exact replay and can send only the receipt; it cannot
+resolve a grant or resend destructive opcode `0x06`.
+
 ## Security
 
 - Never commit credentials, tokens, private keys, certificate bodies, signing

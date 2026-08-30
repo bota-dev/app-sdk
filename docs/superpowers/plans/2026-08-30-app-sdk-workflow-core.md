@@ -271,31 +271,31 @@ Commit: `feat: add deterministic connection recovery`
   `PersistenceEffect::SaveFactoryResetResult` before the receipt write and
   deletes the durable result only after receipt success.
 
-- [ ] **Step 1: Port provisioning and reset scenario traces**
+- [x] **Step 1: Port provisioning and reset scenario traces**
 
 Include chunk rejection, disconnect recovery, invalid grant, wipe/storage
 failure, persistence failure before receipt, receipt-write failure, and replay
 of an already-persisted successful result without resending the destructive
 command.
 
-- [ ] **Step 2: Confirm focused tests fail**
+- [x] **Step 2: Confirm focused tests fail**
 
 Run both new workflow tests; expect missing reducer APIs.
 
-- [ ] **Step 3: Implement provisioning**
+- [x] **Step 3: Implement provisioning**
 
 Keep nonce, keys, grants, and payload bytes in volatile reducer state only.
 Persist phase and retry counters, redact notifications, and zeroize volatile
 buffers on completion, cancellation, and failure without adding a dependency.
 
-- [ ] **Step 4: Implement reset close-loop**
+- [x] **Step 4: Implement reset close-loop**
 
 Subscribe before writing the grant and reset opcode. Accept only the exact
 command-bound success result. Persist `{command_id, result_code,
 deleted_recording_count}` before receipt opcode `0x0A`. Never send receipt for
 firmware failure or ambiguous disconnect.
 
-- [ ] **Step 5: Verify and commit separately**
+- [x] **Step 5: Verify and commit separately**
 
 Commit provisioning as `feat: add deterministic provisioning workflow` and
 factory reset as `feat: add authenticated reset workflow`.

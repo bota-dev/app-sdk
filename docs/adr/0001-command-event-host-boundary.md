@@ -39,7 +39,9 @@ connection reducer verifies manual selections by serial, uses saved scan-visible
 identity for reconnect, and serial-probes fallback candidates sequentially.
 Provisioning resolves backend-issued material through an opaque host effect and
 keeps nonce, key, and token bytes out of checkpoints and notifications.
-Transfer, upload, OTA, device-log, and reset remain deferred.
+Authenticated reset uses host persistence effects to enforce result-before-
+receipt ordering and retains the durable result when receipt delivery fails.
+Transfer, upload, OTA, and device-log remain deferred.
 
 ## FFI Decision Gate
 

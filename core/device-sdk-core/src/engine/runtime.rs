@@ -2,8 +2,8 @@ use crate::{
     engine::{CancellationId, CapabilitySet, Command, EffectRequest, Event, WorkflowStatus},
     error::{DeviceSdkError, ErrorCode, Operation},
     workflow::{
-        ConnectionWorkflow, DiscoveryWorkflow, ProvisioningWorkflow, WorkflowContext,
-        WorkflowReducer,
+        ConnectionWorkflow, DiscoveryWorkflow, FactoryResetWorkflow, ProvisioningWorkflow,
+        WorkflowContext, WorkflowReducer,
     },
 };
 
@@ -11,6 +11,7 @@ enum ActiveWorkflow {
     Discovery(DiscoveryWorkflow),
     Connection(Box<ConnectionWorkflow>),
     Provisioning(Box<ProvisioningWorkflow>),
+    FactoryReset(Box<FactoryResetWorkflow>),
 }
 
 impl ActiveWorkflow {
@@ -19,6 +20,7 @@ impl ActiveWorkflow {
             Self::Discovery(_) => Operation::Discover,
             Self::Connection(workflow) => workflow.operation(),
             Self::Provisioning(_) => Operation::Provision,
+            Self::FactoryReset(_) => Operation::FactoryReset,
         }
     }
 
@@ -27,6 +29,7 @@ impl ActiveWorkflow {
             Self::Discovery(workflow) => workflow.cancellation_id(),
             Self::Connection(workflow) => workflow.cancellation_id(),
             Self::Provisioning(workflow) => workflow.cancellation_id(),
+            Self::FactoryReset(workflow) => workflow.cancellation_id(),
         }
     }
 }
@@ -97,6 +100,23 @@ impl WorkflowEngine {
                 material_id,
                 cancellation_id,
             ))),
+            Command::FactoryReset {
+                device,
+                command_id,
+                grant_id,
+            } => ActiveWorkflow::FactoryReset(Box::new(FactoryResetWorkflow::start_new(
+                device,
+                command_id,
+                grant_id,
+                cancellation_id,
+            ))),
+            Command::ResumeFactoryReset { device, result } => {
+                ActiveWorkflow::FactoryReset(Box::new(FactoryResetWorkflow::resume(
+                    device,
+                    result,
+                    cancellation_id,
+                )))
+            }
             _ => {
                 return Err(
                     DeviceSdkError::new(ErrorCode::UnsupportedOperation, operation, false)
@@ -118,6 +138,7 @@ impl WorkflowEngine {
             Some(ActiveWorkflow::Discovery(workflow)) => workflow.start(&mut context),
             Some(ActiveWorkflow::Connection(workflow)) => workflow.start(&mut context),
             Some(ActiveWorkflow::Provisioning(workflow)) => workflow.start(&mut context),
+            Some(ActiveWorkflow::FactoryReset(workflow)) => workflow.start(&mut context),
             None => unreachable!("workflow was assigned above"),
         };
         Ok(effects)
@@ -147,12 +168,16 @@ impl WorkflowEngine {
             ActiveWorkflow::Provisioning(workflow) => {
                 workflow.dispatch(host_event, &mut context)?
             }
+            ActiveWorkflow::FactoryReset(workflow) => {
+                workflow.dispatch(host_event, &mut context)?
+            }
         };
 
         let terminal_status = match active {
             ActiveWorkflow::Discovery(workflow) => workflow.terminal_status(),
             ActiveWorkflow::Connection(workflow) => workflow.terminal_status(),
             ActiveWorkflow::Provisioning(workflow) => workflow.terminal_status(),
+            ActiveWorkflow::FactoryReset(workflow) => workflow.terminal_status(),
         };
         if let Some(status) = terminal_status {
             self.status = status;
@@ -189,6 +214,7 @@ impl WorkflowEngine {
             ActiveWorkflow::Discovery(workflow) => workflow.cancel(&mut context),
             ActiveWorkflow::Connection(workflow) => workflow.cancel(&mut context),
             ActiveWorkflow::Provisioning(workflow) => workflow.cancel(&mut context),
+            ActiveWorkflow::FactoryReset(workflow) => workflow.cancel(&mut context),
         };
         self.status = WorkflowStatus::Cancelled { operation };
         self.terminal_cancellation_id = Some(cancellation_id);
