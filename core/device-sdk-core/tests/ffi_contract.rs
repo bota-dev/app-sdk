@@ -38,6 +38,10 @@ fn c_abi_has_extensible_typed_packet_fields() {
     assert!(HEADER.contains("BOTA_DEVICE_SDK_V1_HOST_EFFECT_BLE_WRITE"));
     assert!(HEADER.contains("BOTA_DEVICE_SDK_V1_NOTIFICATION_FAILED"));
     assert!(HEADER.contains("BOTA_DEVICE_SDK_V1_FIELD_CHECKPOINT"));
+    assert!(HEADER.contains("bota_device_sdk_v1_protocol_decode"));
+    assert!(HEADER.contains("bota_device_sdk_v1_protocol_encode"));
+    assert!(HEADER.contains("BOTA_DEVICE_SDK_V1_PROTOCOL_DECODE_DEVICE_STATUS"));
+    assert!(HEADER.contains("BOTA_DEVICE_SDK_V1_PROTOCOL_ENCODE_CONNECTION_SETTINGS"));
 }
 
 #[test]

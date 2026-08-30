@@ -13,6 +13,19 @@ pub enum WiFiConfigResult {
     Unknown(u8),
 }
 
+impl WiFiConfigResult {
+    pub const fn to_wire(self) -> u8 {
+        match self {
+            Self::Success => protocol::WIFI_CONFIG_SUCCESS,
+            Self::InvalidGrant => protocol::WIFI_CONFIG_INVALID_GRANT,
+            Self::GrantExpired => protocol::WIFI_CONFIG_GRANT_EXPIRED,
+            Self::DecryptionError => protocol::WIFI_CONFIG_DECRYPTION_ERROR,
+            Self::StorageError => protocol::WIFI_CONFIG_STORAGE_ERROR,
+            Self::Unknown(value) => value,
+        }
+    }
+}
+
 pub fn parse_wifi_config_result(bytes: &[u8]) -> Result<WiFiConfigResult, DeviceSdkError> {
     let code = Cursor::new(bytes).u8(0)?;
     Ok(match code {

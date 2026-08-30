@@ -3,6 +3,7 @@ mod error;
 mod event;
 mod output;
 mod packet;
+mod protocol;
 
 pub use command::capability_bits;
 pub use error::{
@@ -18,6 +19,7 @@ pub use packet::{
 use bota_device_sdk_core::{
     engine::{CancellationId, EffectRequest, Event, WorkflowEngine, WorkflowStatus},
     error::{DeviceSdkError, ErrorCode, Operation},
+    protocol::DeviceLogDecoder,
 };
 use error::internal_error;
 use std::{
@@ -31,6 +33,7 @@ use std::{
 struct EngineBridge {
     engine: WorkflowEngine,
     outputs: VecDeque<EffectRequest>,
+    log_decoder: DeviceLogDecoder,
     last_error: Option<DeviceSdkError>,
 }
 
@@ -272,6 +275,81 @@ fn operation_from_code(code: u32) -> Operation {
         11 => Operation::ReadDeviceLogs,
         12 => Operation::FactoryReset,
         _ => Operation::Unknown,
+    }
+}
+
+unsafe fn protocol_call(
+    engine: *mut BotaDeviceSdkEngineV1,
+    packet: *const BotaDeviceSdkPacketViewV1,
+    out_packet: *mut *mut BotaDeviceSdkPacketV1,
+    operation: impl FnOnce(
+        &mut EngineBridge,
+        &BotaDeviceSdkPacketViewV1,
+    ) -> Result<BotaDeviceSdkPacketV1, DeviceSdkError>,
+) -> BotaDeviceSdkStatusV1 {
+    if engine.is_null() || packet.is_null() || out_packet.is_null() {
+        return BotaDeviceSdkStatusV1::InvalidArgument;
+    }
+    let packet = unsafe { *packet };
+    if packet.abi_version != ABI_VERSION {
+        return BotaDeviceSdkStatusV1::UnsupportedAbi;
+    }
+
+    match catch_unwind(AssertUnwindSafe(|| {
+        unsafe { out_packet.write(ptr::null_mut()) };
+        let engine = unsafe { &*engine };
+        let mut bridge = engine.bridge.lock().map_err(|_| ())?;
+        match operation(&mut bridge, &packet) {
+            Ok(packet) => {
+                bridge.last_error = None;
+                Ok(packet)
+            }
+            Err(error) => {
+                bridge.last_error = Some(error);
+                Err(())
+            }
+        }
+    })) {
+        Ok(Ok(packet)) => {
+            unsafe { out_packet.write(Box::into_raw(Box::new(packet))) };
+            BotaDeviceSdkStatusV1::Ok
+        }
+        Ok(Err(())) => BotaDeviceSdkStatusV1::OperationFailed,
+        Err(_) => BotaDeviceSdkStatusV1::Panic,
+    }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+///
+/// All pointers must be live for this call. A successful packet must be freed
+/// exactly once. Stateful log decoding is scoped to `engine`.
+pub unsafe extern "C" fn bota_device_sdk_v1_protocol_decode(
+    engine: *mut BotaDeviceSdkEngineV1,
+    packet: *const BotaDeviceSdkPacketViewV1,
+    out_packet: *mut *mut BotaDeviceSdkPacketV1,
+) -> BotaDeviceSdkStatusV1 {
+    unsafe {
+        protocol_call(engine, packet, out_packet, |bridge, packet| {
+            protocol::decode(packet, &mut bridge.log_decoder)
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+///
+/// All pointers must be live for this call. A successful packet must be freed
+/// exactly once.
+pub unsafe extern "C" fn bota_device_sdk_v1_protocol_encode(
+    engine: *mut BotaDeviceSdkEngineV1,
+    packet: *const BotaDeviceSdkPacketViewV1,
+    out_packet: *mut *mut BotaDeviceSdkPacketV1,
+) -> BotaDeviceSdkStatusV1 {
+    unsafe {
+        protocol_call(engine, packet, out_packet, |_bridge, packet| {
+            protocol::encode(packet)
+        })
     }
 }
 

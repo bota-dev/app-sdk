@@ -344,6 +344,11 @@ impl<'a> PacketFields<'a> {
             .ok_or_else(|| missing(id, field_type::BOOL))
     }
 
+    pub(crate) fn optional_bool(&self, id: u32) -> Result<Option<bool>, DeviceSdkError> {
+        self.optional_field(id, field_type::BOOL)
+            .map(|field| field.map(|field| field.unsigned_value != 0))
+    }
+
     pub(crate) fn required_text(&self, id: u32) -> Result<String, DeviceSdkError> {
         self.optional_text(id)?
             .ok_or_else(|| missing(id, field_type::UTF8))

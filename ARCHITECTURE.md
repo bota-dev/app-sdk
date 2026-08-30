@@ -168,8 +168,11 @@ not platform-visible reducer models. All current BLE, timer, persistence,
 host-material, recording-sink, firmware-blob, secure-storage, and network
 callbacks return through `bota_device_sdk_v1_engine_dispatch`; operation,
 request, and cancellation ownership are checked before the reducer advances.
-Typed protocol-value packets must pass the remaining native ABI foundation gate
-before a platform facade can publish.
+The ABI's typed protocol decode/encode entry points delegate status,
+recording-list, transfer, OTA, provisioning,
+connection-settings, and device-log formats to the shared core. Fragmented log
+state is scoped to the engine handle, and unknown wire enum values remain
+numeric fields rather than being discarded.
 
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host

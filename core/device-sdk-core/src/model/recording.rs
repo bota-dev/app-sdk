@@ -93,6 +93,18 @@ pub enum AudioCodec {
     Unknown(u8),
 }
 
+impl AudioCodec {
+    pub const fn to_wire(self) -> u8 {
+        match self {
+            Self::Pcm16k => crate::generated::protocol::CODEC_PCM_16K,
+            Self::Pcm8k => crate::generated::protocol::CODEC_PCM_8K,
+            Self::Opus16k => crate::generated::protocol::CODEC_OPUS_16K,
+            Self::Opus8k => crate::generated::protocol::CODEC_OPUS_8K,
+            Self::Unknown(value) => value,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DeviceRecording {
     pub uuid: RecordingUuid,

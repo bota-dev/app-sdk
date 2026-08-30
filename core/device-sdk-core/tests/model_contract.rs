@@ -3,9 +3,11 @@ use std::str::FromStr;
 use bota_device_sdk_core::{
     error::{DeviceSdkError, ErrorCode, Operation},
     model::{
-        ConnectionType, DeviceConnectionSettings, DeviceModel, DeviceSerialNumber, DeviceState,
-        EnabledConnections, HeartbeatConnections, IdleTimeout, PowerManagement, RecordingUuid,
+        AudioCodec, ConnectionType, DeviceConnectionSettings, DeviceModel, DeviceSerialNumber,
+        DeviceState, EnabledConnections, HeartbeatConnections, IdleTimeout, PowerManagement,
+        RecordingUuid,
     },
+    protocol::WiFiConfigResult,
 };
 
 #[test]
@@ -17,6 +19,8 @@ fn unknown_enum_values_round_trip_without_data_loss() {
     assert_eq!(state.to_wire(), 0xaa);
     assert_eq!(connection, ConnectionType::Unknown(0xbb));
     assert_eq!(connection.to_wire(), 0xbb);
+    assert_eq!(AudioCodec::Unknown(0xcc).to_wire(), 0xcc);
+    assert_eq!(WiFiConfigResult::Unknown(0xdd).to_wire(), 0xdd);
 }
 
 #[test]

@@ -23,7 +23,9 @@ positive, rejection, cancellation, and resume or restart-recovery behavior.
 The native-boundary spike selected a manually owned C ABI after comparing it
 with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed
-packets, but no native platform artifact is published yet.
+packets. Shared protocol decode/encode entry points cover the frozen status,
+recording, transfer, OTA, provisioning, settings, and log fixtures, but no
+native platform artifact is published yet.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own
