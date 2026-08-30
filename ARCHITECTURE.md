@@ -193,6 +193,12 @@ generated XCFramework is ignored build output and is not a published facade;
 the package currently exposes only the synchronized version marker needed to
 prove an external Swift target can import the C ABI.
 
+`CoreAbiClient` is the sole Swift owner of the opaque native engine. It keeps
+every borrowed input buffer alive through the complete C call, immediately
+copies packet and error views into `Sendable` Swift values, and frees each
+native owner exactly once. The ABI function table is injectable only to verify
+those lifetime rules; production calls remain bound to the frozen v1 symbols.
+
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host
 capabilities, ordered inputs, ordered effects and notifications, and terminal
