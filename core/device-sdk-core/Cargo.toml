@@ -1,6 +1,6 @@
 [package]
 name = "bota-device-sdk-core"
-version = "1.0.0-alpha.1"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.98"
 description = "Portable protocol and workflow contracts for Bota wearable devices"

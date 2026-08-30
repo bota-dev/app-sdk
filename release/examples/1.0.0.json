@@ -1,0 +1,20 @@
+{
+  "manifestVersion": 1,
+  "sdkVersion": "1.0.0",
+  "sourceRevision": "8bd13330d5f111ffc6823dd0826ce66a3e1df795",
+  "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
+  "firmwareCompatibility": {
+    "minimum": "1.0.0",
+    "maximum": "1.0.17",
+    "baselineRevision": "8b175a89374c9833bdaa67fe73ada6672618e5f7"
+  },
+  "artifacts": [
+    {
+      "name": "BotaDeviceSDKCore.xcframework.zip",
+      "ecosystem": "swiftpm",
+      "version": "1.0.0",
+      "checksumSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "capabilities": ["apple_device_sdk"]
+    }
+  ]
+}

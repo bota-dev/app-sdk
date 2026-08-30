@@ -6,6 +6,16 @@ OUTPUT="$ROOT/target/apple-release"
 ARTIFACT="$ROOT/platforms/apple/Artifacts/BotaDeviceSDKCore.xcframework"
 ARCHIVE="$OUTPUT/BotaDeviceSDKCore.xcframework.zip"
 NODE=${NODE:-node}
+PACKAGE_MANIFEST_MODE=check
+
+case ${1:-} in
+    "") ;;
+    --write-package-manifest) PACKAGE_MANIFEST_MODE=write ;;
+    *)
+        printf 'usage: %s [--write-package-manifest]\n' "$0" >&2
+        exit 1
+        ;;
+esac
 
 if [ -n "$(git -C "$ROOT" status --porcelain --untracked-files=normal)" ]; then
     printf 'Apple release packaging requires a clean source tree\n' >&2
@@ -105,6 +115,19 @@ if grep -F "$ROOT" "$OUTPUT/BotaDeviceSDK.spdx.json" >/dev/null; then
 fi
 cmp "$ROOT/LICENSE" "$OUTPUT/LICENSE"
 cargo xtask release validate "$OUTPUT/release-manifest.json"
+if [ "$PACKAGE_MANIFEST_MODE" = write ]; then
+    $NODE "$ROOT/tools/release/generate-public-swift-package.mjs" \
+        --sdk-version "$SDK_VERSION" \
+        --artifact-checksum "$SWIFTPM_CHECKSUM" \
+        --output "$ROOT/Package.swift"
+else
+    $NODE "$ROOT/tools/release/generate-public-swift-package.mjs" \
+        --sdk-version "$SDK_VERSION" \
+        --artifact-checksum "$SWIFTPM_CHECKSUM" \
+        --output "$ROOT/Package.swift" \
+        --check
+fi
+swift package --package-path "$ROOT" dump-package >/dev/null
 
 printf 'Packaged Apple SDK %s (%s) at %s\n' \
     "$SDK_VERSION" "$ARTIFACT_CHECKSUM" "$OUTPUT"

@@ -7,7 +7,7 @@ contracts.
 
 ```toml
 [dependencies]
-bota-device-sdk-core = "1.0.0-alpha.1"
+bota-device-sdk-core = "1.0.0"
 ```
 
 This crate does not implement Bluetooth, HTTP, filesystem access, background

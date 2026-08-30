@@ -1,4 +1,4 @@
-name: Release Device SDK Core
+name: Release Bota Device SDK
 
 on:
   push:
@@ -7,25 +7,29 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  CRATE_NAME: bota-device-sdk-core
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Publish ${{ github.ref_name }}
+  verify:
+    name: Verify ${{ github.ref_name }}
     runs-on: ubuntu-latest
-    environment: release
     steps:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
@@ -33,11 +37,20 @@ jobs:
           toolchain: 1.98.0
           components: rustfmt, clippy
 
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Install Node.js dependencies
+        run: npm ci
+
       - name: Verify synchronized release metadata
         run: cargo xtask release verify-tag "$GITHUB_REF_NAME"
 
       - name: Require tagged commit on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - name: Test repository tooling
+        run: npm run test:tooling
 
       - name: Check generated protocol constants
         run: cargo xtask protocol generate --check
@@ -46,10 +59,13 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Lint workspace
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
       - name: Test workspace
         run: cargo test --workspace
+
+      - name: Test shipping native C ABI
+        run: tools/ffi-smoke/run-native-c-smoke.sh
 
       - name: Install cargo-deny
         run: cargo install cargo-deny --version 0.20.2 --locked
@@ -57,42 +73,72 @@ jobs:
       - name: Check Cargo advisories and licenses
         run: cargo deny check
 
-      - name: Package crate
-        run: cargo package --locked --package "$CRATE_NAME"
+  apple:
+    name: Package Apple SDK
+    runs-on: macos-15
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
-      - name: Verify publish payload
-        run: cargo publish --locked --package "$CRATE_NAME" --dry-run
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
 
-      - name: Generate checksummed release manifest
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          crate="target/package/${CRATE_NAME}-${version}.crate"
-          output="release-output/${version}.json"
-          mkdir -p release-output
-          cp "$crate" release-output/
-          checksum="$(sha256sum "$crate" | cut -d ' ' -f 1)"
-          jq \
-            --arg sourceRevision "$GITHUB_SHA" \
-            --arg checksum "$checksum" \
-            '.sourceRevision = $sourceRevision | .artifacts[0].checksumSha256 = $checksum' \
-            "release/examples/${version}.json" > "$output"
-          cargo xtask release validate "$output"
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.98.0
 
-      - name: Publish to crates.io
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$CARGO_REGISTRY_TOKEN"
-          version="${GITHUB_REF_NAME#v}"
-          if cargo info "${CRATE_NAME}@${version}" >/dev/null 2>&1; then
-            echo "${CRATE_NAME}@${version} is already published"
-          else
-            cargo publish --locked --package "$CRATE_NAME"
-          fi
+      - name: Verify synchronized release metadata
+        run: cargo xtask release verify-tag "$GITHUB_REF_NAME"
+
+      - name: Require tagged commit on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - name: Run shipping Swift caller
+        run: tools/ffi-smoke/run-native-swift-smoke.sh
+
+      - name: Test Apple package and XCFramework
+        run: tools/apple/test-package.sh -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
+
+      - name: Test local external Apple consumer
+        run: tools/apple/test-consumer.sh
+
+      - name: Test release tooling
+        run: npm run test:release
+
+      - name: Package checksummed Apple release
+        run: tools/apple/package-release.sh
+
+      - name: Upload Apple release payload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: apple-release-${{ github.ref_name }}
+          path: target/apple-release/
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    name: Publish ${{ github.ref_name }}
+    needs: [verify, apple]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Download Apple release payload
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: apple-release-${{ github.ref_name }}
+          path: target/apple-release/
 
       - name: Create or update GitHub release
         env:
@@ -101,10 +147,21 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" release-output/* --clobber
+            gh release upload "$GITHUB_REF_NAME" target/apple-release/* --clobber
           else
-            gh release create "$GITHUB_REF_NAME" release-output/* \
+            gh release create "$GITHUB_REF_NAME" target/apple-release/* \
               --verify-tag \
               --generate-notes \
               --title "Bota Device SDK ${GITHUB_REF_NAME#v}"
           fi
+
+  smoke-public-package:
+    name: Smoke public Apple package
+    needs: publish
+    runs-on: macos-15
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve and run public package consumer
+        run: tools/apple/test-remote-consumer.sh "${GITHUB_REF_NAME#v}"

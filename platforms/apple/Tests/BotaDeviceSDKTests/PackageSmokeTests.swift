@@ -6,6 +6,6 @@ import XCTest
 final class PackageSmokeTests: XCTestCase {
     func testPackageImportsFrozenAbi() {
         XCTAssertEqual(bota_device_sdk_v1_abi_version(), BOTA_DEVICE_SDK_ABI_VERSION)
-        XCTAssertEqual(BotaDeviceSDKVersion.current, "1.0.0-alpha.1")
+        XCTAssertEqual(BotaDeviceSDKVersion.current, "1.0.0")
     }
 }
