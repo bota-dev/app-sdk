@@ -155,6 +155,12 @@ serialization contract, and no facade artifact is published yet. See
 [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md) and the
 [`FFI evaluation`](docs/spikes/ffi-boundary-evaluation.md).
 
+The shipping ABI implementation lives in `bindings/device-sdk-ffi` and exports
+only versioned `bota_device_sdk_v1_*` symbols. Its opaque engine lifecycle and
+structured error ownership are frozen; typed command, event, effect, and
+protocol packets must pass the native ABI foundation gate before a platform
+facade can publish.
+
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host
 capabilities, ordered inputs, ordered effects and notifications, and terminal

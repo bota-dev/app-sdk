@@ -107,6 +107,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bota-device-sdk-ffi"
+version = "1.0.0-alpha.1"
+dependencies = [
+ "bota-device-sdk-core",
+]
+
+[[package]]
 name = "bota-device-sdk-ffi-smoke"
 version = "1.0.0-alpha.1"
 dependencies = [
