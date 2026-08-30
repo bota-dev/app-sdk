@@ -15,6 +15,7 @@
 
 # Platform build outputs
 /.build/
+/platforms/apple/Artifacts/
 /.dart_tool/
 /build/
 /DerivedData/

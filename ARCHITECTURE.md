@@ -185,6 +185,14 @@ only. The exact tested revision and header digest live in
 milestone, not an Apple or Android support claim; XCFramework, AAR, platform
 transport, and physical-device gates remain open.
 
+The Apple package shell lives in `platforms/apple`. Its local binary target is
+assembled by `tools/apple/build-xcframework.sh` from arm64 iOS, universal iOS
+simulator, and universal macOS Rust archives. Assembly rejects a header digest
+or Swift package version that differs from the frozen repository evidence. The
+generated XCFramework is ignored build output and is not a published facade;
+the package currently exposes only the synchronized version marker needed to
+prove an external Swift target can import the C ABI.
+
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host
 capabilities, ordered inputs, ordered effects and notifications, and terminal

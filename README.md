@@ -30,6 +30,10 @@ ABI v1 is frozen at the typed public header and verified by standalone C and
 Swift callers. Its exact ownership contract, artifact digests, packet coverage,
 and platform exclusions are recorded in
 [`release/evidence/1.0.0-alpha.1-native-abi.md`](release/evidence/1.0.0-alpha.1-native-abi.md).
+The Apple package shell now builds an iOS device, universal iOS simulator, and
+universal macOS XCFramework from that frozen header and proves a Swift package
+can import the real ABI. This is a packaging foundation only; CoreBluetooth and
+the public Apple facade workflows are not implemented or published yet.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own
@@ -56,6 +60,7 @@ cargo test --workspace
 cargo xtask protocol generate --check
 tools/ffi-smoke/run-native-c-smoke.sh
 tools/ffi-smoke/run-native-swift-smoke.sh
+tools/apple/test-package.sh
 ```
 
 The full reproducible gate, including the frozen React Native comparator, is

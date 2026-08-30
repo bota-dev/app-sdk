@@ -79,5 +79,13 @@ jobs:
       - name: Run shipping Swift caller
         run: tools/ffi-smoke/run-native-swift-smoke.sh
 
+      - name: Test Apple package and XCFramework
+        run: tools/apple/test-package.sh
+
+      - name: Inspect Apple binary slices
+        run: |
+          xcrun lipo -info platforms/apple/Artifacts/BotaDeviceSDKCore.xcframework/ios-arm64_x86_64-simulator/libbota_device_sdk_ffi.a
+          xcrun lipo -info platforms/apple/Artifacts/BotaDeviceSDKCore.xcframework/macos-arm64_x86_64/libbota_device_sdk_ffi.a
+
       - name: Run generated comparison binding
         run: tools/ffi-smoke/run-uniffi-swift-smoke.sh
