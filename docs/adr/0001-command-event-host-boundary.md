@@ -75,10 +75,14 @@ gates are recorded in
 [`ffi-boundary-evaluation.md`](../spikes/ffi-boundary-evaluation.md).
 
 The JSON envelope in that spike validates ownership and event flow only. The
-native facade milestone must freeze versioned exported symbols and replace JSON
-on any high-volume or schema-sensitive path. Web remains a native TypeScript
-facade because browsers cannot load this native core for Web Bluetooth without
-a separate WASM/browser design and security review.
+shipping `bota-device-sdk-ffi` crate replaces it with versioned
+`bota_device_sdk_v1_*` symbols and a fixed typed packet view. UTF-8 metadata and
+raw binary payloads occupy separate borrowed slices, output packets have one
+explicit SDK owner, and 64-bit slice lengths keep layout stable across supported
+32-bit and 64-bit targets. Packet kinds define the valid integer, text, and byte
+slots; their mappings are contract-tested before a facade can publish. Web
+remains a native TypeScript facade because browsers cannot load this native core
+for Web Bluetooth without a separate WASM/browser design and security review.
 
 ## Consequences
 

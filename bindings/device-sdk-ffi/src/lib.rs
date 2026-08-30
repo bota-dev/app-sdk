@@ -1,8 +1,13 @@
 mod error;
+mod packet;
 
 pub use error::{
     ABI_VERSION, BotaDeviceSdkErrorV1, BotaDeviceSdkErrorViewV1, BotaDeviceSdkSliceV1,
     BotaDeviceSdkStatusV1,
+};
+pub use packet::{
+    BotaDeviceSdkPacketV1, BotaDeviceSdkPacketViewV1, bota_device_sdk_v1_packet_free,
+    bota_device_sdk_v1_packet_view, kind as packet_kind,
 };
 
 use bota_device_sdk_core::{

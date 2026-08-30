@@ -30,11 +30,34 @@ extern "C" {
 
 typedef struct BotaDeviceSdkEngineV1 BotaDeviceSdkEngineV1;
 typedef struct BotaDeviceSdkErrorV1 BotaDeviceSdkErrorV1;
+typedef struct BotaDeviceSdkPacketV1 BotaDeviceSdkPacketV1;
 
 typedef struct BotaDeviceSdkSliceV1 {
     const uint8_t *data;
-    size_t len;
+    uint64_t len;
 } BotaDeviceSdkSliceV1;
+
+#define BOTA_DEVICE_SDK_V1_COMMAND_RANGE_START UINT32_C(0x0100)
+#define BOTA_DEVICE_SDK_V1_COMMAND_DISCOVER_DEVICES UINT32_C(0x0101)
+#define BOTA_DEVICE_SDK_V1_COMMAND_CONNECT UINT32_C(0x0102)
+#define BOTA_DEVICE_SDK_V1_HOST_EVENT_RANGE_START UINT32_C(0x0200)
+#define BOTA_DEVICE_SDK_V1_HOST_EFFECT_RANGE_START UINT32_C(0x0300)
+#define BOTA_DEVICE_SDK_V1_NOTIFICATION_RANGE_START UINT32_C(0x0400)
+#define BOTA_DEVICE_SDK_V1_PROTOCOL_VALUE_RANGE_START UINT32_C(0x0500)
+
+typedef struct BotaDeviceSdkPacketViewV1 {
+    uint32_t abi_version;
+    uint32_t kind;
+    uint32_t operation;
+    uint32_t reserved;
+    uint64_t request_id;
+    uint64_t cancellation_id_high;
+    uint64_t cancellation_id_low;
+    uint64_t values[4];
+    int64_t signed_values[2];
+    BotaDeviceSdkSliceV1 text[4];
+    BotaDeviceSdkSliceV1 bytes[2];
+} BotaDeviceSdkPacketViewV1;
 
 typedef enum BotaDeviceSdkStatusV1 {
     BOTA_DEVICE_SDK_V1_OK = 0,
@@ -72,6 +95,11 @@ BotaDeviceSdkStatusV1 bota_device_sdk_v1_error_view(
     BotaDeviceSdkErrorViewV1 *out_view
 );
 void bota_device_sdk_v1_error_free(BotaDeviceSdkErrorV1 *error);
+BotaDeviceSdkStatusV1 bota_device_sdk_v1_packet_view(
+    const BotaDeviceSdkPacketV1 *packet,
+    BotaDeviceSdkPacketViewV1 *out_view
+);
+void bota_device_sdk_v1_packet_free(BotaDeviceSdkPacketV1 *packet);
 
 #ifdef __cplusplus
 }

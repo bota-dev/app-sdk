@@ -14,8 +14,20 @@ fn c_abi_uses_versioned_opaque_handles_and_explicit_error_ownership() {
 
 #[test]
 fn c_abi_keeps_request_and_cancellation_identity_numeric() {
+    assert!(HEADER.contains("uint64_t request_id"));
     assert!(HEADER.contains("uint64_t cancellation_id_high"));
     assert!(HEADER.contains("uint64_t cancellation_id_low"));
+    assert!(HEADER.contains("uint64_t values[4]"));
+    assert!(HEADER.contains("int64_t signed_values[2]"));
+    assert!(HEADER.contains("uint64_t len"));
+}
+
+#[test]
+fn c_abi_has_separate_utf8_and_binary_packet_slots() {
+    assert!(HEADER.contains("BotaDeviceSdkSliceV1 text[4]"));
+    assert!(HEADER.contains("BotaDeviceSdkSliceV1 bytes[2]"));
+    assert!(HEADER.contains("BotaDeviceSdkPacketV1 *packet"));
+    assert!(HEADER.contains("void bota_device_sdk_v1_packet_free"));
 }
 
 #[test]

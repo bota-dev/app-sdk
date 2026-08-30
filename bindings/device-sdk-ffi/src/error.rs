@@ -18,7 +18,7 @@ pub enum BotaDeviceSdkStatusV1 {
 #[derive(Clone, Copy, Debug)]
 pub struct BotaDeviceSdkSliceV1 {
     pub data: *const u8,
-    pub len: usize,
+    pub len: u64,
 }
 
 impl Default for BotaDeviceSdkSliceV1 {
@@ -77,7 +77,7 @@ impl BotaDeviceSdkErrorV1 {
             } else {
                 BotaDeviceSdkSliceV1 {
                     data: self.detail.as_ptr(),
-                    len: self.detail.len(),
+                    len: self.detail.len() as u64,
                 }
             },
         }
