@@ -71,17 +71,9 @@ impl WorkflowReducer for DiscoveryWorkflow {
             (
                 Phase::Scanning,
                 request_id,
-                HostEventKind::Ble(BleEvent::ScanResult {
-                    peripheral_id,
-                    name,
-                    advertisement,
-                }),
+                HostEventKind::Ble(BleEvent::ScanResult { candidate }),
             ) if Some(request_id) == self.scan_request_id => Ok(vec![context.request(
-                Effect::Notify(WorkflowNotification::DeviceDiscovered {
-                    peripheral_id,
-                    name,
-                    advertisement,
-                }),
+                Effect::Notify(WorkflowNotification::DeviceDiscovered { candidate }),
             )]),
             (
                 Phase::Scanning,
@@ -128,8 +120,10 @@ impl WorkflowReducer for DiscoveryWorkflow {
         effects
     }
 
-    fn is_completed(&self) -> bool {
-        self.phase == Phase::Completed
+    fn terminal_status(&self) -> Option<crate::engine::WorkflowStatus> {
+        (self.phase == Phase::Completed).then_some(crate::engine::WorkflowStatus::Completed {
+            operation: Operation::Discover,
+        })
     }
 
     fn cancellation_id(&self) -> CancellationId {

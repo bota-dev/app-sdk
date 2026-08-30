@@ -1,5 +1,7 @@
+mod connection;
 mod discovery;
 
+pub(crate) use connection::ConnectionWorkflow;
 pub(crate) use discovery::DiscoveryWorkflow;
 
 use crate::{
@@ -18,7 +20,7 @@ pub(crate) trait WorkflowReducer {
 
     fn cancel(&mut self, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest>;
 
-    fn is_completed(&self) -> bool;
+    fn terminal_status(&self) -> Option<crate::engine::WorkflowStatus>;
 
     fn cancellation_id(&self) -> CancellationId;
 }

@@ -1,4 +1,5 @@
 use crate::engine::{CancellationId, RequestId, WorkflowCheckpoint};
+use crate::model::DeviceCandidate;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -23,6 +24,7 @@ pub enum HostEventKind {
         checkpoint: Option<WorkflowCheckpoint>,
     },
     CheckpointSaved,
+    ConnectionIdentitySaved,
     SecretLoaded {
         key: String,
         value: Option<Vec<u8>>,
@@ -36,12 +38,13 @@ pub enum HostEventKind {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum BleEvent {
     ScanResult {
-        peripheral_id: String,
-        name: Option<String>,
-        advertisement: Vec<u8>,
+        candidate: DeviceCandidate,
     },
     ScanStopped,
     Connected {
+        peripheral_id: String,
+    },
+    ServicesDiscovered {
         peripheral_id: String,
     },
     Disconnected {

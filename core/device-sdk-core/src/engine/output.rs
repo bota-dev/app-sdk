@@ -1,6 +1,7 @@
 use crate::{
     engine::CancellationId,
     error::{DeviceSdkError, Operation},
+    model::{ConnectionMode, DeviceCandidate, DeviceSerialNumber},
 };
 use serde::{Deserialize, Serialize};
 
@@ -28,9 +29,12 @@ pub enum WorkflowNotification {
         operation: Operation,
     },
     DeviceDiscovered {
-        peripheral_id: String,
-        name: Option<String>,
-        advertisement: Vec<u8>,
+        candidate: DeviceCandidate,
+    },
+    ConnectionEstablished {
+        device: DeviceSerialNumber,
+        candidate: DeviceCandidate,
+        mode: ConnectionMode,
     },
     Progress {
         operation: Operation,

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "reference": "@bota.dev/react-native-sdk@0.0.65",
+  "scenarios": [
+    {
+      "name": "manual-connect-refreshes-serial",
+      "mode": "manual",
+      "expected": "read_serial_before_persist"
+    },
+    {
+      "name": "advertised-address-match-waits-without-name-probe",
+      "mode": "reconnect",
+      "expected": "connect_exact_candidate"
+    },
+    {
+      "name": "stale-address-recovers-by-serial",
+      "mode": "reconnect",
+      "expected": "probe_candidates_sequentially"
+    },
+    {
+      "name": "app-reinstall-recovers-by-serial",
+      "mode": "reconnect",
+      "expected": "probe_candidates_sequentially"
+    },
+    {
+      "name": "manual-owner-blocks-background-reconnect",
+      "mode": "reconnect",
+      "expected": "operation_in_progress"
+    }
+  ]
+}

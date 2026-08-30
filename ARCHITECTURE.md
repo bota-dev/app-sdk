@@ -102,11 +102,16 @@ host capabilities before effects can be built. `WorkflowEngine` permits one
 active command owner, gives every effect a monotonic request ID, and rejects
 stale callbacks or mismatched cancellation IDs. Platform callbacks enter as
 typed host events carrying the completed request ID, while every requested host
-effect also carries an operation and cancellation ID. Persisted checkpoints intentionally cannot contain
+effect also carries an operation and cancellation ID. Persisted checkpoints
+intentionally cannot contain
 credentials, presigned URLs, private keys, file paths, or recording payloads.
-Deterministic discovery is the first implemented reducer; the remaining
-workflows and FFI mechanism are deferred as specified in
-[`ADR 0001`](docs/adr/0001-command-event-host-boundary.md).
+Discovery and connection reducers preserve the React Native reference behavior:
+manual selection always verifies serial identity, reconnect prefers an exact
+saved peripheral ID or advertised address, and serial fallback probes one Bota
+candidate at a time after the scan window. Mismatches are disconnected before
+the next probe, and checkpoints retain only stable identity, phase, retry count,
+and candidate index. The remaining workflows and FFI mechanism are deferred as
+specified in [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md).
 
 ## Security
 

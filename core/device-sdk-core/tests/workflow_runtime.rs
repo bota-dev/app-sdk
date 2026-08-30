@@ -110,36 +110,42 @@ fn discovery_streams_candidates_and_completes_after_its_timer() {
         .dispatch(Event::Host(HostEvent {
             request_id: scan_request,
             kind: HostEventKind::Ble(BleEvent::ScanResult {
-                peripheral_id: "ios-peripheral".into(),
-                name: Some("Bota Note".into()),
-                advertisement: vec![0xB0, 0x7A],
+                candidate: bota_device_sdk_core::model::DeviceCandidate {
+                    peripheral_id: "ios-peripheral".into(),
+                    name: Some("Bota Note".into()),
+                    advertised_address: None,
+                    rssi: -40,
+                },
             }),
         }))
         .unwrap();
     assert!(matches!(
         candidate.as_slice(),
         [bota_device_sdk_core::engine::EffectRequest {
-            effect: Effect::Notify(WorkflowNotification::DeviceDiscovered { peripheral_id, .. }),
+            effect: Effect::Notify(WorkflowNotification::DeviceDiscovered { candidate }),
             ..
-        }] if peripheral_id == "ios-peripheral"
+        }] if candidate.peripheral_id == "ios-peripheral"
     ));
 
     let second_candidate = engine
         .dispatch(Event::Host(HostEvent {
             request_id: scan_request,
             kind: HostEventKind::Ble(BleEvent::ScanResult {
-                peripheral_id: "second-peripheral".into(),
-                name: Some("Bota Pin".into()),
-                advertisement: vec![0xB0, 0x7A, 0x02],
+                candidate: bota_device_sdk_core::model::DeviceCandidate {
+                    peripheral_id: "second-peripheral".into(),
+                    name: Some("Bota Pin".into()),
+                    advertised_address: Some("ef7f269cc773".into()),
+                    rssi: -45,
+                },
             }),
         }))
         .unwrap();
     assert!(matches!(
         second_candidate.as_slice(),
         [bota_device_sdk_core::engine::EffectRequest {
-            effect: Effect::Notify(WorkflowNotification::DeviceDiscovered { peripheral_id, .. }),
+            effect: Effect::Notify(WorkflowNotification::DeviceDiscovered { candidate }),
             ..
-        }] if peripheral_id == "second-peripheral"
+        }] if candidate.peripheral_id == "second-peripheral"
     ));
 
     let stopping = engine

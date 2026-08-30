@@ -1,23 +1,26 @@
 use crate::{
     engine::{CancellationId, CapabilitySet, Command, EffectRequest, Event, WorkflowStatus},
     error::{DeviceSdkError, ErrorCode, Operation},
-    workflow::{DiscoveryWorkflow, WorkflowContext, WorkflowReducer},
+    workflow::{ConnectionWorkflow, DiscoveryWorkflow, WorkflowContext, WorkflowReducer},
 };
 
 enum ActiveWorkflow {
     Discovery(DiscoveryWorkflow),
+    Connection(Box<ConnectionWorkflow>),
 }
 
 impl ActiveWorkflow {
-    const fn operation(&self) -> Operation {
+    fn operation(&self) -> Operation {
         match self {
             Self::Discovery(_) => Operation::Discover,
+            Self::Connection(workflow) => workflow.operation(),
         }
     }
 
     fn cancellation_id(&self) -> CancellationId {
         match self {
             Self::Discovery(workflow) => workflow.cancellation_id(),
+            Self::Connection(workflow) => workflow.cancellation_id(),
         }
     }
 }
@@ -74,6 +77,12 @@ impl WorkflowEngine {
                 timeout_ms,
                 allow_duplicates,
             )),
+            Command::Connect { device, candidate } => ActiveWorkflow::Connection(Box::new(
+                ConnectionWorkflow::manual(device, candidate, cancellation_id),
+            )),
+            Command::Reconnect { device, hint } => ActiveWorkflow::Connection(Box::new(
+                ConnectionWorkflow::reconnect(device, hint, cancellation_id),
+            )),
             _ => {
                 return Err(
                     DeviceSdkError::new(ErrorCode::UnsupportedOperation, operation, false)
@@ -93,6 +102,7 @@ impl WorkflowEngine {
             WorkflowContext::new(&mut self.next_request_id, operation, cancellation_id);
         let effects = match self.active.as_mut() {
             Some(ActiveWorkflow::Discovery(workflow)) => workflow.start(&mut context),
+            Some(ActiveWorkflow::Connection(workflow)) => workflow.start(&mut context),
             None => unreachable!("workflow was assigned above"),
         };
         Ok(effects)
@@ -118,13 +128,15 @@ impl WorkflowEngine {
             WorkflowContext::new(&mut self.next_request_id, operation, cancellation_id);
         let effects = match active {
             ActiveWorkflow::Discovery(workflow) => workflow.dispatch(host_event, &mut context)?,
+            ActiveWorkflow::Connection(workflow) => workflow.dispatch(host_event, &mut context)?,
         };
 
-        let completed = match active {
-            ActiveWorkflow::Discovery(workflow) => workflow.is_completed(),
+        let terminal_status = match active {
+            ActiveWorkflow::Discovery(workflow) => workflow.terminal_status(),
+            ActiveWorkflow::Connection(workflow) => workflow.terminal_status(),
         };
-        if completed {
-            self.status = WorkflowStatus::Completed { operation };
+        if let Some(status) = terminal_status {
+            self.status = status;
             self.active = None;
         }
         Ok(effects)
@@ -156,6 +168,7 @@ impl WorkflowEngine {
             WorkflowContext::new(&mut self.next_request_id, operation, cancellation_id);
         let effects = match active {
             ActiveWorkflow::Discovery(workflow) => workflow.cancel(&mut context),
+            ActiveWorkflow::Connection(workflow) => workflow.cancel(&mut context),
         };
         self.status = WorkflowStatus::Cancelled { operation };
         self.terminal_cancellation_id = Some(cancellation_id);

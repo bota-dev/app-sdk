@@ -219,7 +219,7 @@ Command::Reconnect {
 }
 ```
 
-- [ ] **Step 1: Add failing React Native parity scenarios**
+- [x] **Step 1: Add failing React Native parity scenarios**
 
 Pin these reference behaviors from `DeviceManager.test.ts`: manual connects
 always read serial fresh; advertised-address matches keep scanning without
@@ -227,11 +227,11 @@ same-name probing; stale addresses recover by serial probe; rotated iOS IDs and
 app reinstall probe candidates sequentially; background reconnect never starts
 while manual work owns the engine.
 
-- [ ] **Step 2: Run the connection test and confirm it fails**
+- [x] **Step 2: Run the connection test and confirm it fails**
 
 Run: `cargo test -p bota-device-sdk-core --test connection_workflow`
 
-- [ ] **Step 3: Implement candidate selection and identity verification**
+- [x] **Step 3: Implement candidate selection and identity verification**
 
 Manual flow: connect selected handle, discover services, read serial, reject a
 mismatch, persist the verified identity, complete. Reconnect flow: try a stored
@@ -239,13 +239,13 @@ handle, then scan for an advertised-address match, then probe Bota candidates
 one at a time by serial. Disconnect every mismatched probe before considering
 the next candidate.
 
-- [ ] **Step 4: Implement timeout and retry state**
+- [x] **Step 4: Implement timeout and retry state**
 
 Use monotonic timer effects. A single reconnect command owns one scan and at
 most one candidate connection at a time. Persist only phase, retry count,
 device identity, and candidate index; never persist advertisement bytes.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run the focused test, workspace tests, fixture tooling, formatting, and Clippy.
 Commit: `feat: add deterministic connection recovery`

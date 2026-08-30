@@ -1,7 +1,7 @@
 use crate::{
     engine::{Capability, CapabilitySet},
     error::{DeviceSdkError, ErrorCode, Operation},
-    model::{DeviceSerialNumber, FirmwareImage, RecordingUuid},
+    model::{DeviceCandidate, DeviceSerialNumber, FirmwareImage, ReconnectHint, RecordingUuid},
 };
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +13,11 @@ pub enum Command {
     },
     Connect {
         device: DeviceSerialNumber,
+        candidate: DeviceCandidate,
+    },
+    Reconnect {
+        device: DeviceSerialNumber,
+        hint: ReconnectHint,
     },
     Provision {
         device: DeviceSerialNumber,
@@ -67,6 +72,7 @@ impl Command {
         match self {
             Self::DiscoverDevices { .. } => Operation::Discover,
             Self::Connect { .. } => Operation::Connect,
+            Self::Reconnect { .. } => Operation::Reconnect,
             Self::Provision { .. } => Operation::Provision,
             Self::TransferRecording { .. } => Operation::TransferRecording,
             Self::UploadRecording { .. } => Operation::Upload,
@@ -79,7 +85,10 @@ impl Command {
     const fn required_capabilities(&self) -> &'static [Capability] {
         match self {
             Self::DiscoverDevices { .. } => &[Capability::Ble, Capability::Timer],
-            Self::Connect { .. } | Self::ReadDeviceLogs { .. } => &[Capability::Ble],
+            Self::Connect { .. } | Self::Reconnect { .. } => {
+                &[Capability::Ble, Capability::Timer, Capability::Persistence]
+            }
+            Self::ReadDeviceLogs { .. } => &[Capability::Ble],
             Self::Provision { .. } | Self::FactoryReset { .. } => {
                 &[Capability::Ble, Capability::SecureStorage]
             }

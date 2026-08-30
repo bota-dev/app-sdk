@@ -13,11 +13,11 @@ physical-device parity gates.
 
 The protocol core is versioned at `1.0.0-alpha.1`: the repository has a generated
 protocol manifest, 50 language-neutral compatibility fixtures, bounded Rust
-decoders, byte-exact serializers, stable models/errors, and a typed workflow
-host boundary. It does not publish a supported platform SDK or replace the
-production React Native package. The first public artifact is the
-`bota-device-sdk-core` crate; platform SDK artifacts will join the synchronized
-version only after their own acceptance gates pass.
+decoders, byte-exact serializers, stable models/errors, and deterministic
+discovery and connection-recovery reducers. It does not publish a supported
+platform SDK or replace the production React Native package. The first public
+artifact is the `bota-device-sdk-core` crate; platform SDK artifacts will join
+the synchronized version only after their own acceptance gates pass.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and the
 [firmware compatibility matrix](protocol/compatibility/firmware-compatibility.json).
@@ -43,7 +43,7 @@ The full reproducible gate, including the frozen React Native comparator, is
 recorded in `release/evidence/`.
 
 Release maintainers must follow [docs/releasing.md](docs/releasing.md). The
-The stable `v1.0.0` tag is reserved for the React Native-consumable release.
+stable `v1.0.0` tag is reserved for the React Native-consumable release.
 Prerelease tags must not be pushed until the protected `release` environment
 and one-time crates.io bootstrap token are configured.
 

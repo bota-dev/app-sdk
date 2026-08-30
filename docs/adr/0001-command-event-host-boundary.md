@@ -33,9 +33,11 @@ and retry count only. Credentials, presigned URLs, private keys, file paths,
 recording content, and other payload bytes remain host-owned and are referenced
 through opaque request IDs where coordination is required.
 
-Milestone 1 defined this vocabulary and its invariants. Milestone 2 adds
-reducers; deterministic discovery is implemented first, while reconnect,
-provisioning, transfer, upload, OTA, device-log, and reset remain deferred.
+Milestone 1 defined this vocabulary and its invariants. Milestone 2 now includes
+deterministic discovery plus manual connection and reconnect recovery. The
+connection reducer verifies manual selections by serial, uses saved scan-visible
+identity for reconnect, and serial-probes fallback candidates sequentially.
+Provisioning, transfer, upload, OTA, device-log, and reset remain deferred.
 
 ## FFI Decision Gate
 

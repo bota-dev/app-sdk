@@ -1,6 +1,7 @@
 use crate::{
     engine::{RequestId, WorkflowCheckpoint, WorkflowNotification},
     error::Operation,
+    model::{DeviceCandidate, DeviceSerialNumber},
 };
 use serde::{Deserialize, Serialize};
 
@@ -61,8 +62,14 @@ pub enum TimerEffect {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum PersistenceEffect {
     LoadCheckpoint,
-    SaveCheckpoint { checkpoint: WorkflowCheckpoint },
+    SaveCheckpoint {
+        checkpoint: WorkflowCheckpoint,
+    },
     DeleteCheckpoint,
+    SaveConnectionIdentity {
+        device: DeviceSerialNumber,
+        candidate: DeviceCandidate,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -79,6 +86,9 @@ pub enum BleEffect {
     },
     StopScan,
     Connect {
+        peripheral_id: String,
+    },
+    DiscoverServices {
         peripheral_id: String,
     },
     Disconnect {
