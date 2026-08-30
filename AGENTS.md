@@ -93,6 +93,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 ```bash
 npm ci
 npm run check
+npm run test:release
 npm run sync:apple-fixtures
 npm run test:workflows -- --sdk-path ../react-native-sdk
 cargo xtask protocol generate --check
@@ -123,14 +124,17 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
 
 ## Releases
 
-- Public prereleases start at `1.0.0-alpha.1`; stable `1.0.0` is reserved for
-  the React Native-consumable release. Tags use `vVERSION`.
+- Stable `1.0.0` is the first public Apple package release. It does not claim
+  React Native, Android, Flutter, Web, or Windows facade availability. Tags use
+  `vVERSION`.
 - Read `docs/releasing.md` before creating or pushing a release tag.
-- Only `bota-device-sdk-core` is currently publishable.
-- `bota-device-sdk-ffi` is shipping source for native packages but is not a
-  standalone registry artifact; no Apple or Android facade is publishable yet.
-- The first crates.io publication requires the protected one-time bootstrap
-  token; subsequent releases must migrate to Trusted Publishing.
+- The public Apple package is the root `Package.swift`; keep the nested
+  `platforms/apple/Package.swift` for local development against the generated
+  XCFramework.
+- `bota-device-sdk-core` and `bota-device-sdk-ffi` are implementation details
+  of the Apple artifact and are not published to crates.io by this workflow.
+- The protected `release` environment is the human approval gate for external
+  hardware acceptance. CI never manufactures physical-device evidence.
 - Never push a release tag until `cargo xtask release verify-tag vVERSION`,
   package verification, and all quality gates pass.
 

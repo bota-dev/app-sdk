@@ -1,107 +1,129 @@
 # Releasing The Bota Device SDK
 
-All artifacts use the exact version in `sdk-version.toml`. The first public
-artifact is the `bota-device-sdk-core` crate; platform SDKs are not published
-from this workflow.
+The first public platform artifact is the Apple `BotaDeviceSDK` Swift package
+for iOS 15+ and macOS 13+. Consumers add
+`https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
+compiles the Swift facade source and downloads a checksummed
+`BotaDeviceSDKCore.xcframework.zip` from the matching GitHub Release.
 
-The typed native ABI is frozen and tested as source in
-`bindings/device-sdk-ffi`, but the local static library is not a distributable
-Apple or Android package. Do not publish or attach it as a platform artifact.
-Apple publication begins only after the XCFramework, Swift package import,
-fake-host, and physical-device gates in the Apple facade plan pass; Android has
-equivalent AAR and device gates in its later plan.
+The nested `platforms/apple/Package.swift` remains the local-development
+package. It points at the generated XCFramework on disk so facade tests do not
+depend on a published release.
 
-Every change to the Apple facade must pass `tools/apple/test-package.sh` and
-`tools/apple/test-consumer.sh`, plus generic iOS device and simulator builds
-with code signing disabled. From a clean source tree,
-`tools/apple/package-release.sh` rebuilds and deterministically archives the
-XCFramework, copies `LICENSE`, emits SHA-256 and SwiftPM checksums, generates an
-SPDX 2.3 document from locked Cargo and Swift package metadata, and validates a
-SwiftPM artifact entry against the release schema. It rejects Node versions
-older than 22, a dirty tree, zero or inconsistent checksums, version drift, and
-local checkout paths in the SBOM.
+All artifacts use the exact version in `sdk-version.toml`. Release tags use
+`vVERSION`; the tag, package metadata, public Swift version, compatibility
+matrix, release example, GitHub Release URL, and XCFramework checksum must
+agree. The Apple workflow does not publish the Rust core or FFI crates to
+crates.io.
 
-The generated files live under `target/apple-release/`. CI uploads that
-directory as non-published evidence. Those files are not release assets and do
-not make the Apple package publishable; physical-device acceptance remains a
-separate gate. The manifest claims only capabilities marked `supported` in the
-firmware compatibility matrix. A public Apple release must regenerate the same
-metadata from its exact clean release commit.
+## Repository Setup
 
-The supervised Apple matrix and destructive-operation gates are documented in
-[`docs/testing/apple-physical-device.md`](testing/apple-physical-device.md).
-The physical target must skip before client configuration unless
-`BOTA_PHYSICAL_TESTS=1`, an exact serial number, and a model are provided.
-Authenticated reset runs separately and additionally requires
-`BOTA_ALLOW_FACTORY_RESET=1` plus a command-bound backend grant. Never infer a
-pass from a scan result, display name, deprovision, unbind, timeout, or missing
-test output.
+Create a GitHub environment named `release` for `bota-dev/app-sdk`:
 
-The current decision is recorded in
-[`release/evidence/1.0.0-alpha.1-apple-facade.md`](../release/evidence/1.0.0-alpha.1-apple-facade.md).
-While its physical rows are `NOT RUN`, Apple stays absent from
-`nativeAbi.publishedFacades`, the legacy native baseline is retained, and no
-Apple package or release asset may be published.
+1. Require a reviewer before deployment.
+2. Restrict deployment branches and tags to protected release tags.
+3. Do not add a crates.io token; Apple publication uses the repository's
+   short-lived `GITHUB_TOKEN` with job-scoped `contents: write` permission.
 
-Stable `v1.0.0` is reserved for the first release that Demo and Bota One can
-consume through the React Native compatibility package. Protocol and workflow
-core milestones publish as `1.0.0-alpha.N`.
+The environment approval is the human boundary for release authorization and
+external hardware acceptance. Automated tests never claim a physical-device
+result. Keep supervised device evidence separate and follow
+[`docs/testing/apple-physical-device.md`](testing/apple-physical-device.md) when
+new hardware or firmware requires another lab run.
 
-## First crates.io Prerelease
+## Prepare A Version
 
-crates.io requires an API token for a crate's initial publication. Trusted
-Publishing can be configured only after the crate exists.
+Start from a clean `main` branch. Update every synchronized version authority
+and commit that version bump before calculating the Apple checksum. For
+`1.0.0`, the authorities are already synchronized.
 
-Before pushing `v1.0.0-alpha.1`:
-
-1. Create a GitHub environment named `release` for `bota-dev/app-sdk`.
-2. Restrict the environment to protected release tags and require a reviewer.
-3. Create a short-lived crates.io API token allowed to publish a new crate.
-4. Store it as the `CRATES_IO_TOKEN` secret in the `release` environment.
-5. Verify `cargo xtask release verify-tag v1.0.0-alpha.1` and the full local gate.
-6. Create and push the exact `v1.0.0-alpha.1` tag from the reviewed release
-   commit.
-
-The tag workflow tests and packages the crate, runs `cargo publish --dry-run`,
-generates a release manifest containing the source revision and crate checksum,
-publishes to crates.io, and attaches the crate plus manifest to the GitHub
-release. It is safe to rerun after publication.
-
-## After The Bootstrap Release
-
-Immediately configure crates.io Trusted Publishing with:
-
-- Owner: `bota-dev`
-- Repository: `app-sdk`
-- Workflow: `release.yml`
-- Environment: `release`
-
-Then replace the API-token step with the pinned
-`rust-lang/crates-io-auth-action`, remove the GitHub secret, and revoke the
-bootstrap crates.io token. Future releases must use the short-lived OIDC token.
-
-## Release Gate
+Generate the deterministic archive and write the matching root Swift package:
 
 ```bash
-cargo xtask release verify-tag v1.0.0-alpha.1
+tools/apple/package-release.sh --write-package-manifest
+swift package dump-package
+git diff -- Package.swift
+```
+
+The preparation mode still requires a clean tree at startup. It builds the
+archive first, computes its SwiftPM checksum, and changes only `Package.swift`.
+Review and commit that manifest. Then rerun the normal check-only mode from the
+new clean commit:
+
+```bash
+tools/apple/package-release.sh
+```
+
+Normal mode fails if rebuilding the XCFramework produces a checksum different
+from the committed root package. Never hand-edit the release URL or checksum.
+
+## Local Release Gate
+
+Use Node.js 22 or newer and the Rust toolchain pinned by the repository:
+
+```bash
+npm ci
+npm run check
+npm run test:tooling
+npm run test:release
+npm run sync:apple-fixtures
+npm run test:workflows -- --sdk-path ../react-native-sdk
+cargo xtask release verify-tag v1.0.0
 cargo xtask protocol generate --check
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace
 tools/ffi-smoke/run-native-c-smoke.sh
 tools/ffi-smoke/run-native-swift-smoke.sh
 tools/apple/test-package.sh
 tools/apple/test-consumer.sh
-env -u BOTA_PHYSICAL_TESTS -u BOTA_DEVICE_SERIAL -u BOTA_DEVICE_MODEL \
-  tools/apple/test-package.sh --filter PhysicalDeviceTests
-node --test tools/release/generate-apple-*.test.mjs
 tools/apple/package-release.sh
 cargo deny check
-cargo package --locked --package bota-device-sdk-core
-cargo publish --locked --package bota-device-sdk-core --dry-run
 ```
 
-Do not create a release tag when the environment secret or protection rules are
-missing. Do not publish the `xtask` package, `bota-device-sdk-ffi` by itself, or
-any unfinished platform facade. Native ABI evidence is recorded separately in
-`release/evidence/1.0.0-alpha.1-native-abi.md`.
+`tools/apple/package-release.sh` writes the release payload to
+`target/apple-release/`:
+
+- `BotaDeviceSDKCore.xcframework.zip`
+- `BotaDeviceSDKCore.xcframework.zip.sha256`
+- `BotaDeviceSDKCore.xcframework.swiftpm-checksum`
+- `BotaDeviceSDK.spdx.json`
+- `LICENSE`
+- `release-manifest.json`
+
+The XCFramework contains arm64 iOS, arm64/x86_64 iOS Simulator, and
+arm64/x86_64 macOS slices.
+
+## Publish
+
+After the release commit is on `main`, create and push the exact annotated tag:
+
+```bash
+git tag -a v1.0.0 -m "Bota Device SDK 1.0.0"
+git push origin v1.0.0
+```
+
+The tag workflow:
+
+1. Verifies synchronized metadata and that the tagged commit belongs to
+   `origin/main`.
+2. Runs the Rust, tooling, ABI, license, Apple package, and local-consumer gates.
+3. Rebuilds the deterministic XCFramework and rejects root-package checksum
+   drift.
+4. Waits for approval in the protected `release` environment.
+5. Creates the GitHub Release and uploads every Apple release file.
+6. Creates an unrelated macOS package that resolves the public Git tag and runs
+   while importing only `BotaDeviceSDK`.
+
+Do not move or recreate a published tag. If a released artifact or manifest is
+wrong, fix the source and publish a new patch version with a new checksum.
+
+## Consumer Requirements
+
+iOS applications must include `NSBluetoothAlwaysUsageDescription`. Sandboxed
+macOS applications must enable **App Sandbox > Hardware > Bluetooth**, which
+sets `com.apple.security.device.bluetooth`; macOS applications should also
+provide the Bluetooth usage description displayed to users.
+
+The package contains no Bota backend API client. Host applications remain
+responsible for backend grants, device tokens, and presigned upload targets.

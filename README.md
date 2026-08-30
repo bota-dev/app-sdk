@@ -11,7 +11,7 @@ physical-device parity gates.
 
 ## Current Status
 
-The protocol core is versioned at `1.0.0-alpha.1`: the repository has a generated
+The Device SDK is versioned at `1.0.0`: the repository has a generated
 protocol manifest, 50 language-neutral compatibility fixtures, bounded Rust
 decoders, byte-exact serializers, stable models/errors, and deterministic
 discovery, connection-recovery, provisioning, authenticated-reset, resumable
@@ -24,8 +24,9 @@ The native-boundary spike selected a manually owned C ABI after comparing it
 with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed
 packets. Shared protocol decode/encode entry points cover the frozen status,
-recording, transfer, OTA, provisioning, settings, and log fixtures, but no
-native platform artifact is published yet.
+recording, transfer, OTA, provisioning, settings, and log fixtures. The Apple
+package is the first public platform distribution; other native facades remain
+unpublished.
 ABI v1 is frozen at the typed public header and verified by standalone C and
 Swift callers. Its exact ownership contract, artifact digests, packet coverage,
 and platform exclusions are recorded in
@@ -62,18 +63,47 @@ only `BotaDeviceSDK`, runs a macOS smoke executable, and type-checks every publi
 manager. CI also compiles generic iOS device and simulator destinations with
 strict concurrency diagnostics, then produces a deterministic XCFramework zip,
 checksums, SPDX 2.3 SBOM, copied license, and validated release manifest as
-unpublished evidence. An opt-in physical target selects a device only by exact
+release evidence. An opt-in physical target selects a device only by exact
 serial verification and keeps settings, provisioning, recording deletion, OTA,
 deprovision, and authenticated reset behind separate gates. Its default run
 skips before client configuration. The supervised Bota Pin and Bota Note matrix
-has not been run, so the Apple package is not yet published.
-It does not publish a supported platform SDK or replace the production React
-Native package. The first public artifact is the `bota-device-sdk-core` crate;
-platform SDK artifacts will join the synchronized version only after their own
-acceptance gates pass.
+is not inferred from CI and remains a human release approval. The root Swift
+package distributes the Apple facade for iOS and macOS while keeping the Rust
+core in a checksummed XCFramework. This release does not replace the production
+React Native package or claim Android, Flutter, Web, or Windows availability.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and the
 [firmware compatibility matrix](protocol/compatibility/firmware-compatibility.json).
+
+## Apple Installation
+
+In Xcode, choose **File > Add Package Dependencies** and enter:
+
+```text
+https://github.com/bota-dev/app-sdk.git
+```
+
+Select version `1.0.0` or **Up to Next Major Version**, then add the
+`BotaDeviceSDK` product to an iOS 15+ or macOS 13+ target. Swift packages can
+declare the dependency directly:
+
+```swift
+.package(url: "https://github.com/bota-dev/app-sdk.git", from: "1.0.0")
+```
+
+Import and configure the client from application code:
+
+```swift
+import BotaDeviceSDK
+
+let bota = BotaDeviceClient.shared
+try await bota.configure()
+```
+
+iOS applications must provide `NSBluetoothAlwaysUsageDescription`. Sandboxed
+macOS applications must enable **App Sandbox > Hardware > Bluetooth**, which
+adds `com.apple.security.device.bluetooth`; macOS applications should also
+provide the Bluetooth usage description shown to users.
 
 ## Development
 
@@ -85,6 +115,7 @@ Requirements:
 ```bash
 npm ci
 npm run check
+npm run test:release
 npm run sync:apple-fixtures
 npm run test:fixtures
 npm run test:workflows -- --sdk-path ../react-native-sdk
@@ -105,10 +136,9 @@ Normal development and CI must leave `BOTA_PHYSICAL_TESTS` unset.
 The full reproducible gate, including the frozen React Native comparator, is
 recorded in `release/evidence/`.
 
-Release maintainers must follow [docs/releasing.md](docs/releasing.md). The
-stable `v1.0.0` tag is reserved for the React Native-consumable release.
-Prerelease tags must not be pushed until the protected `release` environment
-and one-time crates.io bootstrap token are configured.
+Release maintainers must follow [docs/releasing.md](docs/releasing.md). Release
+tags must not be pushed until the protected `release` environment and its human
+approval are configured.
 
 ## Naming
 

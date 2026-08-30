@@ -190,14 +190,15 @@ milestone, not an Android support claim. Apple now has an automated facade
 acceptance record, while its supervised physical-device gate and Android's AAR,
 transport, and device gates remain open.
 
-The Apple package lives in `platforms/apple`. Its local binary target is
-assembled by `tools/apple/build-xcframework.sh` from arm64 iOS, universal iOS
-simulator, and universal macOS Rust archives. Assembly rejects a header digest
-or Swift package version that differs from the frozen repository evidence. The
-generated XCFramework is ignored build output and is not a published facade.
-The source package exposes the full `BotaDeviceSDK` facade described below, and
-an unrelated consumer verifies that public surface without importing the
-internal C module.
+Apple facade development uses `platforms/apple/Package.swift` with a local
+binary target assembled by `tools/apple/build-xcframework.sh` from arm64 iOS,
+universal iOS simulator, and universal macOS Rust archives. Public consumers
+use the root `Package.swift`, which compiles the same Swift facade source and
+downloads the matching `BotaDeviceSDKCore.xcframework.zip` from the immutable
+GitHub Release URL declared for that SDK version. SwiftPM verifies that archive
+against the checked-in checksum before exposing product `BotaDeviceSDK`.
+Assembly rejects a header digest or Swift package version that differs from the
+frozen repository evidence.
 
 `CoreAbiClient` is the sole Swift owner of the opaque native engine. It keeps
 every borrowed input buffer alive through the complete C call, immediately
@@ -286,14 +287,17 @@ emitted by the core. All three managers share the facade operation coordinator,
 so destroy, explicit cancellation, and stream termination release ownership.
 
 The external package under `tests/conformance/apple-consumer` depends on the
-Apple package only through its public product and deliberately cannot import
-the internal C target. It runs on macOS and type-checks the complete facade;
-CI separately compiles the package for generic iOS device and simulator
-destinations with code signing disabled. CI archives the generated XCFramework
-with deterministic timestamps and entry order, then records SHA-256 and SwiftPM
-checksums, an SPDX 2.3 SBOM, the repository license, and a schema-validated
-SwiftPM artifact manifest as verification evidence only. Publication remains
-gated by physical-device acceptance.
+local Apple package only through its public product and deliberately cannot
+import the internal C target. It runs on macOS and type-checks the complete
+facade; CI separately compiles the package for generic iOS device and simulator
+destinations with code signing disabled. Release CI archives the generated
+XCFramework with deterministic timestamps and entry order, verifies the root
+package checksum, and publishes the archive, SHA-256 and SwiftPM checksums, SPDX
+2.3 SBOM, repository license, and schema-validated artifact manifest. After
+publication, a fresh macOS package resolves the release through the public Git
+URL and imports only `BotaDeviceSDK`. The protected release environment is the
+manual approval boundary for hardware acceptance; automated CI does not claim
+physical-device results.
 
 The opt-in physical target requires `BOTA_PHYSICAL_TESTS=1`, an exact serial,
 and an explicit device model. It returns `XCTSkip` before client configuration
