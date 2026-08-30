@@ -841,8 +841,8 @@ CI, and release credentials are configured.
 
 ### Milestone 2: Deterministic workflow core
 
-Create the next execution plan at
-`docs/superpowers/plans/2026-09-08-app-sdk-workflow-core.md` after Milestone 1
+Execute
+`docs/superpowers/plans/2026-08-30-app-sdk-workflow-core.md` after Milestone 1
 passes.
 It must cover one workflow per focused commit in this order:
 

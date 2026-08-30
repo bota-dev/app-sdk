@@ -11,7 +11,7 @@ physical-device parity gates.
 
 ## Current Status
 
-The protocol core is versioned at `1.0.0`: the repository has a generated
+The protocol core is versioned at `1.0.0-alpha.1`: the repository has a generated
 protocol manifest, 50 language-neutral compatibility fixtures, bounded Rust
 decoders, byte-exact serializers, stable models/errors, and a typed workflow
 host boundary. It does not publish a supported platform SDK or replace the
@@ -43,8 +43,9 @@ The full reproducible gate, including the frozen React Native comparator, is
 recorded in `release/evidence/`.
 
 Release maintainers must follow [docs/releasing.md](docs/releasing.md). The
-`v1.0.0` tag must not be pushed until the protected `release` environment and
-one-time crates.io bootstrap token are configured.
+The stable `v1.0.0` tag is reserved for the React Native-consumable release.
+Prerelease tags must not be pushed until the protected `release` environment
+and one-time crates.io bootstrap token are configured.
 
 ## Naming
 

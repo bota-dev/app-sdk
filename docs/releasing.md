@@ -4,19 +4,24 @@ All artifacts use the exact version in `sdk-version.toml`. The first public
 artifact is the `bota-device-sdk-core` crate; platform SDKs are not published
 from this workflow.
 
-## First crates.io Release
+Stable `v1.0.0` is reserved for the first release that Demo and Bota One can
+consume through the React Native compatibility package. Protocol and workflow
+core milestones publish as `1.0.0-alpha.N`.
+
+## First crates.io Prerelease
 
 crates.io requires an API token for a crate's initial publication. Trusted
 Publishing can be configured only after the crate exists.
 
-Before pushing `v1.0.0`:
+Before pushing `v1.0.0-alpha.1`:
 
 1. Create a GitHub environment named `release` for `bota-dev/app-sdk`.
 2. Restrict the environment to protected release tags and require a reviewer.
 3. Create a short-lived crates.io API token allowed to publish a new crate.
 4. Store it as the `CRATES_IO_TOKEN` secret in the `release` environment.
-5. Verify `cargo xtask release verify-tag v1.0.0` and the full local gate.
-6. Create and push the exact `v1.0.0` tag from the reviewed release commit.
+5. Verify `cargo xtask release verify-tag v1.0.0-alpha.1` and the full local gate.
+6. Create and push the exact `v1.0.0-alpha.1` tag from the reviewed release
+   commit.
 
 The tag workflow tests and packages the crate, runs `cargo publish --dry-run`,
 generates a release manifest containing the source revision and crate checksum,
@@ -39,7 +44,7 @@ bootstrap crates.io token. Future releases must use the short-lived OIDC token.
 ## Release Gate
 
 ```bash
-cargo xtask release verify-tag v1.0.0
+cargo xtask release verify-tag v1.0.0-alpha.1
 cargo xtask protocol generate --check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings

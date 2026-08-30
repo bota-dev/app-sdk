@@ -63,7 +63,8 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
 
 ## Releases
 
-- Public releases start at `1.0.0` and use tags shaped as `vVERSION`.
+- Public prereleases start at `1.0.0-alpha.1`; stable `1.0.0` is reserved for
+  the React Native-consumable release. Tags use `vVERSION`.
 - Read `docs/releasing.md` before creating or pushing a release tag.
 - Only `bota-device-sdk-core` is currently publishable.
 - The first crates.io publication requires the protected one-time bootstrap
