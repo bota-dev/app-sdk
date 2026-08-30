@@ -6,8 +6,9 @@ pub use error::{
     BotaDeviceSdkStatusV1,
 };
 pub use packet::{
-    BotaDeviceSdkPacketV1, BotaDeviceSdkPacketViewV1, bota_device_sdk_v1_packet_free,
-    bota_device_sdk_v1_packet_view, kind as packet_kind,
+    BotaDeviceSdkFieldViewV1, BotaDeviceSdkPacketV1, BotaDeviceSdkPacketViewV1,
+    bota_device_sdk_v1_packet_free, bota_device_sdk_v1_packet_view, field_id, field_type,
+    kind as packet_kind,
 };
 
 use bota_device_sdk_core::{

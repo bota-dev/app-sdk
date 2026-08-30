@@ -17,15 +17,18 @@ fn c_abi_keeps_request_and_cancellation_identity_numeric() {
     assert!(HEADER.contains("uint64_t request_id"));
     assert!(HEADER.contains("uint64_t cancellation_id_high"));
     assert!(HEADER.contains("uint64_t cancellation_id_low"));
-    assert!(HEADER.contains("uint64_t values[4]"));
-    assert!(HEADER.contains("int64_t signed_values[2]"));
+    assert!(HEADER.contains("uint64_t unsigned_value"));
+    assert!(HEADER.contains("int64_t signed_value"));
     assert!(HEADER.contains("uint64_t len"));
 }
 
 #[test]
-fn c_abi_has_separate_utf8_and_binary_packet_slots() {
-    assert!(HEADER.contains("BotaDeviceSdkSliceV1 text[4]"));
-    assert!(HEADER.contains("BotaDeviceSdkSliceV1 bytes[2]"));
+fn c_abi_has_extensible_typed_packet_fields() {
+    assert!(HEADER.contains("typedef struct BotaDeviceSdkFieldViewV1"));
+    assert!(HEADER.contains("const BotaDeviceSdkFieldViewV1 *fields"));
+    assert!(HEADER.contains("uint64_t field_count"));
+    assert!(HEADER.contains("BOTA_DEVICE_SDK_V1_FIELD_TYPE_UTF8"));
+    assert!(HEADER.contains("BOTA_DEVICE_SDK_V1_FIELD_TYPE_BYTES"));
     assert!(HEADER.contains("BotaDeviceSdkPacketV1 *packet"));
     assert!(HEADER.contains("void bota_device_sdk_v1_packet_free"));
 }

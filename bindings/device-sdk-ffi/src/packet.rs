@@ -1,8 +1,5 @@
 use crate::{ABI_VERSION, BotaDeviceSdkSliceV1, BotaDeviceSdkStatusV1};
-use std::{
-    array,
-    panic::{AssertUnwindSafe, catch_unwind},
-};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 pub mod kind {
     pub const COMMAND_RANGE_START: u32 = 0x0100;
@@ -15,6 +12,34 @@ pub mod kind {
     pub const PROTOCOL_VALUE_RANGE_START: u32 = 0x0500;
 }
 
+pub mod field_type {
+    pub const UNSIGNED: u32 = 1;
+    pub const SIGNED: u32 = 2;
+    pub const BOOL: u32 = 3;
+    pub const UTF8: u32 = 4;
+    pub const BYTES: u32 = 5;
+}
+
+pub mod field_id {
+    pub const TIMEOUT_MS: u32 = 1;
+    pub const ALLOW_DUPLICATES: u32 = 2;
+    pub const SERIAL_NUMBER: u32 = 3;
+    pub const PERIPHERAL_ID: u32 = 4;
+    pub const NAME: u32 = 5;
+    pub const ADVERTISED_ADDRESS: u32 = 6;
+    pub const RSSI: u32 = 7;
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct BotaDeviceSdkFieldViewV1 {
+    pub field_id: u32,
+    pub field_type: u32,
+    pub unsigned_value: u64,
+    pub signed_value: i64,
+    pub data: BotaDeviceSdkSliceV1,
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct BotaDeviceSdkPacketViewV1 {
@@ -25,10 +50,8 @@ pub struct BotaDeviceSdkPacketViewV1 {
     pub request_id: u64,
     pub cancellation_id_high: u64,
     pub cancellation_id_low: u64,
-    pub values: [u64; 4],
-    pub signed_values: [i64; 2],
-    pub text: [BotaDeviceSdkSliceV1; 4],
-    pub bytes: [BotaDeviceSdkSliceV1; 2],
+    pub fields: *const BotaDeviceSdkFieldViewV1,
+    pub field_count: u64,
 }
 
 impl Default for BotaDeviceSdkPacketViewV1 {
@@ -41,10 +64,28 @@ impl Default for BotaDeviceSdkPacketViewV1 {
             request_id: 0,
             cancellation_id_high: 0,
             cancellation_id_low: 0,
-            values: [0; 4],
-            signed_values: [0; 2],
-            text: [BotaDeviceSdkSliceV1::default(); 4],
-            bytes: [BotaDeviceSdkSliceV1::default(); 2],
+            fields: std::ptr::null(),
+            field_count: 0,
+        }
+    }
+}
+
+struct OwnedFieldV1 {
+    field_id: u32,
+    field_type: u32,
+    unsigned_value: u64,
+    signed_value: i64,
+    data: Vec<u8>,
+}
+
+impl OwnedFieldV1 {
+    fn view(&self) -> BotaDeviceSdkFieldViewV1 {
+        BotaDeviceSdkFieldViewV1 {
+            field_id: self.field_id,
+            field_type: self.field_type,
+            unsigned_value: self.unsigned_value,
+            signed_value: self.signed_value,
+            data: slice_view(&self.data),
         }
     }
 }
@@ -56,10 +97,8 @@ pub struct BotaDeviceSdkPacketV1 {
     request_id: u64,
     cancellation_id_high: u64,
     cancellation_id_low: u64,
-    values: [u64; 4],
-    signed_values: [i64; 2],
-    text: [Vec<u8>; 4],
-    bytes: [Vec<u8>; 2],
+    fields: Vec<OwnedFieldV1>,
+    field_views: Vec<BotaDeviceSdkFieldViewV1>,
 }
 
 impl BotaDeviceSdkPacketV1 {
@@ -70,10 +109,8 @@ impl BotaDeviceSdkPacketV1 {
             request_id: 0,
             cancellation_id_high: 0,
             cancellation_id_low: 0,
-            values: [0; 4],
-            signed_values: [0; 2],
-            text: array::from_fn(|_| Vec::new()),
-            bytes: array::from_fn(|_| Vec::new()),
+            fields: Vec::new(),
+            field_views: Vec::new(),
         }
     }
 
@@ -93,24 +130,64 @@ impl BotaDeviceSdkPacketV1 {
         self
     }
 
-    pub fn with_value(mut self, index: usize, value: u64) -> Self {
-        self.values[index] = value;
+    pub fn with_u64(self, field_id: u32, value: u64) -> Self {
+        self.with_field(OwnedFieldV1 {
+            field_id,
+            field_type: field_type::UNSIGNED,
+            unsigned_value: value,
+            signed_value: 0,
+            data: Vec::new(),
+        })
+    }
+
+    pub fn with_i64(self, field_id: u32, value: i64) -> Self {
+        self.with_field(OwnedFieldV1 {
+            field_id,
+            field_type: field_type::SIGNED,
+            unsigned_value: 0,
+            signed_value: value,
+            data: Vec::new(),
+        })
+    }
+
+    pub fn with_bool(self, field_id: u32, value: bool) -> Self {
+        self.with_field(OwnedFieldV1 {
+            field_id,
+            field_type: field_type::BOOL,
+            unsigned_value: u64::from(value),
+            signed_value: 0,
+            data: Vec::new(),
+        })
+    }
+
+    pub fn with_text(self, field_id: u32, value: impl Into<String>) -> Self {
+        self.with_field(OwnedFieldV1 {
+            field_id,
+            field_type: field_type::UTF8,
+            unsigned_value: 0,
+            signed_value: 0,
+            data: value.into().into_bytes(),
+        })
+    }
+
+    pub fn with_bytes(self, field_id: u32, value: Vec<u8>) -> Self {
+        self.with_field(OwnedFieldV1 {
+            field_id,
+            field_type: field_type::BYTES,
+            unsigned_value: 0,
+            signed_value: 0,
+            data: value,
+        })
+    }
+
+    fn with_field(mut self, field: OwnedFieldV1) -> Self {
+        self.fields.push(field);
+        self.rebuild_views();
         self
     }
 
-    pub fn with_signed_value(mut self, index: usize, value: i64) -> Self {
-        self.signed_values[index] = value;
-        self
-    }
-
-    pub fn with_text(mut self, index: usize, value: impl Into<String>) -> Self {
-        self.text[index] = value.into().into_bytes();
-        self
-    }
-
-    pub fn with_bytes(mut self, index: usize, value: Vec<u8>) -> Self {
-        self.bytes[index] = value;
-        self
+    fn rebuild_views(&mut self) {
+        self.field_views = self.fields.iter().map(OwnedFieldV1::view).collect();
     }
 
     pub fn view(&self) -> BotaDeviceSdkPacketViewV1 {
@@ -122,10 +199,12 @@ impl BotaDeviceSdkPacketV1 {
             request_id: self.request_id,
             cancellation_id_high: self.cancellation_id_high,
             cancellation_id_low: self.cancellation_id_low,
-            values: self.values,
-            signed_values: self.signed_values,
-            text: self.text.each_ref().map(|value| slice_view(value)),
-            bytes: self.bytes.each_ref().map(|value| slice_view(value)),
+            fields: if self.field_views.is_empty() {
+                std::ptr::null()
+            } else {
+                self.field_views.as_ptr()
+            },
+            field_count: self.field_views.len() as u64,
         }
     }
 }
@@ -145,7 +224,7 @@ fn slice_view(value: &[u8]) -> BotaDeviceSdkSliceV1 {
 /// # Safety
 ///
 /// `packet` must be a live SDK-owned packet and `out_view` must point to
-/// writable storage. Slices in the view remain valid until `packet` is freed.
+/// writable storage. Fields and slices remain valid until `packet` is freed.
 pub unsafe extern "C" fn bota_device_sdk_v1_packet_view(
     packet: *const BotaDeviceSdkPacketV1,
     out_view: *mut BotaDeviceSdkPacketViewV1,

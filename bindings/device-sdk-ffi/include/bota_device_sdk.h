@@ -45,6 +45,28 @@ typedef struct BotaDeviceSdkSliceV1 {
 #define BOTA_DEVICE_SDK_V1_NOTIFICATION_RANGE_START UINT32_C(0x0400)
 #define BOTA_DEVICE_SDK_V1_PROTOCOL_VALUE_RANGE_START UINT32_C(0x0500)
 
+#define BOTA_DEVICE_SDK_V1_FIELD_TYPE_UNSIGNED UINT32_C(1)
+#define BOTA_DEVICE_SDK_V1_FIELD_TYPE_SIGNED UINT32_C(2)
+#define BOTA_DEVICE_SDK_V1_FIELD_TYPE_BOOL UINT32_C(3)
+#define BOTA_DEVICE_SDK_V1_FIELD_TYPE_UTF8 UINT32_C(4)
+#define BOTA_DEVICE_SDK_V1_FIELD_TYPE_BYTES UINT32_C(5)
+
+#define BOTA_DEVICE_SDK_V1_FIELD_TIMEOUT_MS UINT32_C(1)
+#define BOTA_DEVICE_SDK_V1_FIELD_ALLOW_DUPLICATES UINT32_C(2)
+#define BOTA_DEVICE_SDK_V1_FIELD_SERIAL_NUMBER UINT32_C(3)
+#define BOTA_DEVICE_SDK_V1_FIELD_PERIPHERAL_ID UINT32_C(4)
+#define BOTA_DEVICE_SDK_V1_FIELD_NAME UINT32_C(5)
+#define BOTA_DEVICE_SDK_V1_FIELD_ADVERTISED_ADDRESS UINT32_C(6)
+#define BOTA_DEVICE_SDK_V1_FIELD_RSSI UINT32_C(7)
+
+typedef struct BotaDeviceSdkFieldViewV1 {
+    uint32_t field_id;
+    uint32_t field_type;
+    uint64_t unsigned_value;
+    int64_t signed_value;
+    BotaDeviceSdkSliceV1 data;
+} BotaDeviceSdkFieldViewV1;
+
 typedef struct BotaDeviceSdkPacketViewV1 {
     uint32_t abi_version;
     uint32_t kind;
@@ -53,10 +75,8 @@ typedef struct BotaDeviceSdkPacketViewV1 {
     uint64_t request_id;
     uint64_t cancellation_id_high;
     uint64_t cancellation_id_low;
-    uint64_t values[4];
-    int64_t signed_values[2];
-    BotaDeviceSdkSliceV1 text[4];
-    BotaDeviceSdkSliceV1 bytes[2];
+    const BotaDeviceSdkFieldViewV1 *fields;
+    uint64_t field_count;
 } BotaDeviceSdkPacketViewV1;
 
 typedef enum BotaDeviceSdkStatusV1 {

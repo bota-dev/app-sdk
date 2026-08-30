@@ -4,7 +4,7 @@
 
 **Goal:** Replace the comparison-only JSON FFI spike with a tested, versioned, typed C ABI that Apple and Android facades can ship.
 
-**Architecture:** A new `bota-device-sdk-ffi` crate wraps `WorkflowEngine` behind opaque handles and fixed ABI-v1 packet views. Commands and host events enter as borrowed typed packets; effects and notifications leave as owned packets. UTF-8 metadata and binary payloads occupy explicit slices, so no JSON or base64 representation crosses the shipping ABI.
+**Architecture:** A new `bota-device-sdk-ffi` crate wraps `WorkflowEngine` behind opaque handles and ABI-v1 typed field-list packet views. Commands and host events enter as borrowed typed packets; effects and notifications leave as owned packets. UTF-8 metadata and binary payloads occupy explicit slices, so no JSON or base64 representation crosses the shipping ABI.
 
 **Tech Stack:** Rust 1.98, C17, Swift 6, Cargo, Swift compiler smoke tests
 
@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Every exported symbol begins with `bota_device_sdk_v1_`.
-- Existing enum numeric values and packet-slot meanings never change within ABI v1.
+- Existing enum numeric values and packet-field meanings never change within ABI v1.
 - Input slices are borrowed for one call; output packets are SDK-owned until exactly one free.
 - Panics never unwind across FFI.
 - Recording, firmware, characteristic, key, grant, and token bytes use raw slices, never JSON or base64.
@@ -202,6 +202,14 @@ Packet kind ranges are fixed:
 The view layout is:
 
 ```c
+typedef struct BotaDeviceSdkFieldViewV1 {
+    uint32_t field_id;
+    uint32_t field_type;
+    uint64_t unsigned_value;
+    int64_t signed_value;
+    BotaDeviceSdkSliceV1 data;
+} BotaDeviceSdkFieldViewV1;
+
 typedef struct BotaDeviceSdkPacketViewV1 {
     uint32_t abi_version;
     uint32_t kind;
@@ -210,10 +218,8 @@ typedef struct BotaDeviceSdkPacketViewV1 {
     uint64_t request_id;
     uint64_t cancellation_id_high;
     uint64_t cancellation_id_low;
-    uint64_t values[4];
-    int64_t signed_values[2];
-    BotaDeviceSdkSliceV1 text[4];
-    BotaDeviceSdkSliceV1 bytes[2];
+    const BotaDeviceSdkFieldViewV1 *fields;
+    uint64_t field_count;
 } BotaDeviceSdkPacketViewV1;
 ```
 
@@ -415,9 +421,9 @@ Expected: FAIL because typed event dispatch is absent.
 
 - [ ] **Step 3: Implement event conversion and dispatch**
 
-Binary values read only from `bytes[0]` or `bytes[1]` according to the header.
-Optional text uses null/zero for none and non-null UTF-8 for some. Native
-platform codes use `signed_values[0]`; protocol status uses `values[0]`.
+Binary values read from the raw byte slice of the declared field. Optional text
+omits its field for none and uses an explicit UTF-8 field for some. Native
+platform codes use signed fields; protocol statuses use unsigned fields.
 
 - [ ] **Step 4: Run event and cross-workflow correlation tests**
 
@@ -465,7 +471,7 @@ Expected: FAIL because protocol exports are absent.
 - [ ] **Step 3: Implement thin codec mappings**
 
 All parsing and serialization calls the core. The FFI layer only maps owned
-models to packet slots. Unknown wire enum values remain numeric and available to
+models to packet fields. Unknown wire enum values remain numeric and available to
 facades.
 
 - [ ] **Step 4: Run codec and fixture parity tests**

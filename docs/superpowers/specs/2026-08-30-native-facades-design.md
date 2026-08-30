@@ -97,21 +97,22 @@ crate remains comparison tooling until its tests move to the shipping crate.
 - The header uses fixed-width integers, opaque handles, and explicit ownership.
 - New optional packet kinds may be added within ABI v1; changing layout,
   ownership, or existing numeric values requires ABI v2.
-- Enum discriminants and packet-slot meanings are contract-tested.
+- Enum discriminants and packet-field meanings are contract-tested.
 
 ### Typed packets
 
-Commands, host events, effects, and notifications cross the ABI as a fixed
+Commands, host events, effects, and notifications cross the ABI as a
 `BotaDeviceSdkPacketV1` view. It contains:
 
 - packet kind, operation, request ID, and 128-bit cancellation ID;
-- four unsigned integer slots and two signed integer slots;
-- four UTF-8 byte-slice slots;
-- two raw byte-slice slots.
+- an extensible borrowed list of fields with stable numeric field IDs;
+- an explicit field type for unsigned, signed, Boolean, UTF-8, or raw bytes;
+- scalar storage or a borrowed byte slice according to that field type.
 
-Each packet kind defines exactly which slots are valid. Input slices are
-borrowed for a call. Polled outputs are opaque owned packets whose views remain
-valid until `bota_device_sdk_v1_packet_free`.
+Each packet kind defines exactly which field IDs and types are valid. Duplicate,
+unknown, or mistyped input fields are rejected. Input slices are borrowed for a
+call. Polled outputs are opaque owned packets whose views remain valid until
+`bota_device_sdk_v1_packet_free`.
 
 This interface has no JSON serialization. Recording packets, firmware chunks,
 provisioning keys, grants, and characteristic values use raw byte slices.
