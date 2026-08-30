@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "reference": "@bota.dev/react-native-sdk@0.0.65",
+  "scenarios": [
+    { "name": "subscribe-before-start", "expected": "ordered" },
+    { "name": "single-subscription-owner", "expected": "operation_in_progress" },
+    { "name": "user-cancel-stops-and-unsubscribes", "expected": "cancelled" },
+    { "name": "disconnect-cleans-up-without-stop", "expected": "not_connected" },
+    { "name": "start-rejection", "expected": "feature_unavailable" },
+    { "name": "sequence-wrap", "expected": "continuous_line" },
+    { "name": "sequence-gap", "expected": "discard_partial_line" },
+    { "name": "dropped-byte-flag", "expected": "discard_partial_line" },
+    { "name": "split-utf8", "expected": "continuous_line" }
+  ]
+}

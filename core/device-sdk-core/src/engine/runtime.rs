@@ -2,9 +2,9 @@ use crate::{
     engine::{CancellationId, CapabilitySet, Command, EffectRequest, Event, WorkflowStatus},
     error::{DeviceSdkError, ErrorCode, Operation},
     workflow::{
-        ConnectionWorkflow, DiscoveryWorkflow, FactoryResetWorkflow, FirmwareUpdateWorkflow,
-        ProvisioningWorkflow, RecordingTransferWorkflow, UploadHandoffWorkflow, WorkflowContext,
-        WorkflowReducer,
+        ConnectionWorkflow, DeviceLogsWorkflow, DiscoveryWorkflow, FactoryResetWorkflow,
+        FirmwareUpdateWorkflow, ProvisioningWorkflow, RecordingTransferWorkflow,
+        UploadHandoffWorkflow, WorkflowContext, WorkflowReducer,
     },
 };
 
@@ -16,6 +16,7 @@ enum ActiveWorkflow {
     RecordingTransfer(Box<RecordingTransferWorkflow>),
     UploadHandoff(Box<UploadHandoffWorkflow>),
     FirmwareUpdate(Box<FirmwareUpdateWorkflow>),
+    DeviceLogs(Box<DeviceLogsWorkflow>),
 }
 
 impl ActiveWorkflow {
@@ -28,6 +29,7 @@ impl ActiveWorkflow {
             Self::RecordingTransfer(_) => Operation::TransferRecording,
             Self::UploadHandoff(_) => Operation::Upload,
             Self::FirmwareUpdate(_) => Operation::UpdateFirmware,
+            Self::DeviceLogs(_) => Operation::ReadDeviceLogs,
         }
     }
 
@@ -40,6 +42,7 @@ impl ActiveWorkflow {
             Self::RecordingTransfer(workflow) => workflow.cancellation_id(),
             Self::UploadHandoff(workflow) => workflow.cancellation_id(),
             Self::FirmwareUpdate(workflow) => workflow.cancellation_id(),
+            Self::DeviceLogs(workflow) => workflow.cancellation_id(),
         }
     }
 }
@@ -163,12 +166,9 @@ impl WorkflowEngine {
                 reconnect_hint,
                 cancellation_id,
             ))),
-            _ => {
-                return Err(
-                    DeviceSdkError::new(ErrorCode::UnsupportedOperation, operation, false)
-                        .with_detail("workflow reducer is not implemented"),
-                );
-            }
+            Command::ReadDeviceLogs { device } => ActiveWorkflow::DeviceLogs(Box::new(
+                DeviceLogsWorkflow::new(device, cancellation_id),
+            )),
         };
 
         self.status = WorkflowStatus::Running {
@@ -188,6 +188,7 @@ impl WorkflowEngine {
             Some(ActiveWorkflow::RecordingTransfer(workflow)) => workflow.start(&mut context),
             Some(ActiveWorkflow::UploadHandoff(workflow)) => workflow.start(&mut context),
             Some(ActiveWorkflow::FirmwareUpdate(workflow)) => workflow.start(&mut context),
+            Some(ActiveWorkflow::DeviceLogs(workflow)) => workflow.start(&mut context),
             None => unreachable!("workflow was assigned above"),
         };
         Ok(effects)
@@ -229,6 +230,7 @@ impl WorkflowEngine {
             ActiveWorkflow::FirmwareUpdate(workflow) => {
                 workflow.dispatch(host_event, &mut context)?
             }
+            ActiveWorkflow::DeviceLogs(workflow) => workflow.dispatch(host_event, &mut context)?,
         };
 
         let terminal_status = match active {
@@ -239,6 +241,7 @@ impl WorkflowEngine {
             ActiveWorkflow::RecordingTransfer(workflow) => workflow.terminal_status(),
             ActiveWorkflow::UploadHandoff(workflow) => workflow.terminal_status(),
             ActiveWorkflow::FirmwareUpdate(workflow) => workflow.terminal_status(),
+            ActiveWorkflow::DeviceLogs(workflow) => workflow.terminal_status(),
         };
         if let Some(status) = terminal_status {
             self.status = status;
@@ -279,6 +282,7 @@ impl WorkflowEngine {
             ActiveWorkflow::RecordingTransfer(workflow) => workflow.cancel(&mut context),
             ActiveWorkflow::UploadHandoff(workflow) => workflow.cancel(&mut context),
             ActiveWorkflow::FirmwareUpdate(workflow) => workflow.cancel(&mut context),
+            ActiveWorkflow::DeviceLogs(workflow) => workflow.cancel(&mut context),
         };
         self.status = WorkflowStatus::Cancelled { operation };
         self.terminal_cancellation_id = Some(cancellation_id);

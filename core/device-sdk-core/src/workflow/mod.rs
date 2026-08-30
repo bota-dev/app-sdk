@@ -1,4 +1,5 @@
 mod connection;
+mod device_logs;
 mod discovery;
 mod factory_reset;
 mod firmware_update;
@@ -7,6 +8,7 @@ mod recording_transfer;
 mod upload_handoff;
 
 pub(crate) use connection::ConnectionWorkflow;
+pub(crate) use device_logs::DeviceLogsWorkflow;
 pub(crate) use discovery::DiscoveryWorkflow;
 pub(crate) use factory_reset::FactoryResetWorkflow;
 pub(crate) use firmware_update::FirmwareUpdateWorkflow;

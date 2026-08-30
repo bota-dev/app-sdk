@@ -115,8 +115,7 @@ orders truncate, append, checkpoint, final integrity verification, final ACK,
 and device delete without persisting file paths or payload bytes. Firmware
 restarts a resumed transfer at sequence zero, so the reducer skips sequence
 numbers already represented by the durable checkpoint before appending new
-data. Device logs and the FFI mechanism are deferred as specified in
-[`ADR 0001`](docs/adr/0001-command-event-host-boundary.md).
+data.
 
 Upload handoff does not carry presigned URLs or credentials. The application
 supplies opaque upload-session and destination IDs, while the reducer reads
@@ -131,6 +130,15 @@ Current firmware recreates `update.ufw` on `UPLOAD_START`, so recovery reuses th
 downloaded blob but restarts BLE delivery at offset zero. After CRC acceptance,
 the expected reboot disconnect enters the existing reconnect reducer and the
 workflow completes only after reading back the requested firmware version.
+
+Device-log streaming has one pending or active owner in the workflow engine.
+The reducer subscribes before sending the firmware start command, forwards only
+sanitized complete lines from the shared decoder, and sends stop before
+unsubscribe on user cancellation. A physical disconnect releases host
+subscription state without attempting a BLE stop write. Firmware that rejects
+the diagnostics start command returns stable `feature_unavailable`; transport
+loss remains a retryable connection error. The FFI mechanism remains deferred
+as specified in [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md).
 
 Provisioning reads the connection-bound nonce and device public key before it
 asks the host to resolve an opaque material ID. The core validates and chunks

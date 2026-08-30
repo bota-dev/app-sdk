@@ -52,7 +52,10 @@ Bluetooth fallback only after a fresh status read reports inactive ownership.
 Firmware update references a host-owned blob by download ID, requests one
 bounded chunk at a time, and never checkpoints image bytes or a download URL.
 It owns flow-control ACK timing, expected reboot, reconnect, and target-version
-readback. Device-log remains deferred.
+readback. Device-log streaming uses the same owner and correlation boundary:
+subscribe precedes start, shared decoder output becomes sanitized line
+notifications, cancellation sends stop before unsubscribe, and disconnect
+cleanup releases subscription state without an invalid BLE stop write.
 
 ## FFI Decision Gate
 

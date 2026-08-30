@@ -39,6 +39,8 @@
   detached, and unreadable ownership never authorize Bluetooth fallback.
 - Firmware retries reuse the host blob but restart BLE delivery at sequence and
   offset zero; current firmware does not support partial Bluetooth OTA resume.
+- Device logs subscribe before start, have one workflow owner, and use the
+  shared bounded decoder; disconnect cleanup must not attempt a BLE stop write.
 - Never infer identity from an advertised BLE name alone.
 - Do not treat deprovision or unbind as factory reset.
 - Never commit credentials, tokens, private keys, certificate bodies, or signing

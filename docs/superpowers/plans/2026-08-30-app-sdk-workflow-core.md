@@ -383,13 +383,13 @@ Run focused and full gates. Commit: `feat: add resumable firmware workflow`.
 - Produces sanitized line notifications from the existing decoder.
 - One pending or active subscription owns diagnostics for a device.
 
-- [ ] **Step 1: Add failing ownership scenarios**
+- [x] **Step 1: Add failing ownership scenarios**
 
 Port subscribe-before-start, overlapping-subscription rejection, stop-on-user
 cancel, cleanup-without-stop on disconnect, feature-unavailable start failure,
 sequence wrap, gaps, dropped-byte recovery, and split UTF-8 input.
 
-- [ ] **Step 2: Implement and verify**
+- [x] **Step 2: Implement and verify**
 
 Reuse `protocol::logs`; do not duplicate decoding. Commit:
 `feat: add device log workflow`.

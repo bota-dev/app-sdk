@@ -5,6 +5,7 @@ use crate::{
         ConnectionMode, DeviceCandidate, DeviceSerialNumber, FirmwareUpdateProgress, RecordingUuid,
         UploadDestinationId, UploadSessionId,
     },
+    protocol::DeviceLogEvent,
 };
 use serde::{Deserialize, Serialize};
 
@@ -58,6 +59,9 @@ pub enum WorkflowNotification {
     },
     FirmwareProgress {
         progress: FirmwareUpdateProgress,
+    },
+    DeviceLog {
+        event: DeviceLogEvent,
     },
     Completed {
         operation: Operation,

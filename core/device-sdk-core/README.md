@@ -28,7 +28,9 @@ as expected, reuses connection recovery, and verifies the target version after
 reconnect. A transfer retry reuses the host blob but restarts device delivery at
 offset zero because current firmware recreates its staging file on every start.
 The host must establish any firmware-required OTA authorization before starting
-this prerelease workflow. Device-log workflow remains under development.
+this prerelease workflow. Device-log streaming subscribes before start, permits
+one owner, reuses the bounded line decoder for sequence-gap and UTF-8 recovery,
+and deterministically stops or releases the subscription on terminal paths.
 
 The `1.0.0-alpha.*` releases cover protocol and workflow-core milestones. They
 do not replace the production React Native SDK and do not claim native
