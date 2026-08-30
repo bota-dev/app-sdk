@@ -4,12 +4,18 @@ public final class BotaDeviceClient: @unchecked Sendable {
     public let devices: DeviceManager
     public let provisioning: ProvisioningManager
     public let factoryReset: FactoryResetManager
+    public let recordings: RecordingManager
+    public let ota: OTAManager
+    public let logs: DeviceLogManager
     private let lifecycle = BotaClientLifecycle()
 
     public init() {
         devices = DeviceManager()
         provisioning = ProvisioningManager()
         factoryReset = FactoryResetManager()
+        recordings = RecordingManager()
+        ota = OTAManager()
+        logs = DeviceLogManager()
     }
 
     public func configure(_ configuration: BotaConfiguration = .init()) async throws {
@@ -17,7 +23,10 @@ public final class BotaDeviceClient: @unchecked Sendable {
             configuration,
             devices: devices,
             provisioning: provisioning,
-            factoryReset: factoryReset
+            factoryReset: factoryReset,
+            recordings: recordings,
+            ota: ota,
+            logs: logs
         )
     }
 
@@ -25,7 +34,10 @@ public final class BotaDeviceClient: @unchecked Sendable {
         await lifecycle.destroy(
             devices: devices,
             provisioning: provisioning,
-            factoryReset: factoryReset
+            factoryReset: factoryReset,
+            recordings: recordings,
+            ota: ota,
+            logs: logs
         )
     }
 }
@@ -37,7 +49,10 @@ private actor BotaClientLifecycle {
         _ configuration: BotaConfiguration,
         devices: DeviceManager,
         provisioning: ProvisioningManager,
-        factoryReset: FactoryResetManager
+        factoryReset: FactoryResetManager,
+        recordings: RecordingManager,
+        ota: OTAManager,
+        logs: DeviceLogManager
     ) async throws {
         guard runtime == nil else { return }
         let runtime = try await configuration.runtimeFactory()
@@ -45,14 +60,23 @@ private actor BotaClientLifecycle {
         await devices.attach(runtime)
         await provisioning.attach(runtime)
         await factoryReset.attach(runtime)
+        await recordings.attach(runtime)
+        await ota.attach(runtime)
+        await logs.attach(runtime)
     }
 
     func destroy(
         devices: DeviceManager,
         provisioning: ProvisioningManager,
-        factoryReset: FactoryResetManager
+        factoryReset: FactoryResetManager,
+        recordings: RecordingManager,
+        ota: OTAManager,
+        logs: DeviceLogManager
     ) async {
         guard runtime != nil else { return }
+        await logs.detach()
+        await ota.detach()
+        await recordings.detach()
         await provisioning.detach()
         await factoryReset.detach()
         await devices.detach()

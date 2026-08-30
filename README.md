@@ -54,8 +54,10 @@ verified peripheral, and closes observers. Public secure-lifecycle managers now
 resolve provisioning and command-bound reset material through application
 callbacks, normalize Bota Note connection settings, keep remove-only
 deprovision separate from destructive reset, and resume only an exact durable
-reset result for the current binding generation. Transfer, OTA, and log
-managers remain under implementation; the Apple package is not yet published.
+reset result for the current binding generation. Public recording, upload
+ownership, OTA, and device-log managers now expose typed async streams while
+keeping recording and firmware bytes in native files and accepting only opaque
+application-supplied upload identifiers. The Apple package is not yet published.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own

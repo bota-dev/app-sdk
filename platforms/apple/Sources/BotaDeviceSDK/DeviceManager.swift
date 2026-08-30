@@ -67,8 +67,16 @@ struct DeviceRuntime: Sendable {
     let statusUpdates: @Sendable (String) async throws -> AsyncThrowingStream<DeviceStatus, Error>
     let stopStatusUpdates: @Sendable (String) async throws -> Void
     let directWrite: @Sendable (String, String, String, Data) async throws -> Void
+    let directSubscribe: @Sendable (String, String, String) async throws -> AsyncThrowingStream<Data, Error>
+    let directUnsubscribe: @Sendable (String, String, String) async throws -> Void
     let serializeConnectionSettings: @Sendable (DeviceConnectionSettings, DeviceType) throws -> Data
     let encodeDeviceCommand: @Sendable (UInt8) throws -> Data
+    let parseRecordingList: @Sendable (Data) throws -> [DeviceRecording]
+    let createTransferCommand: @Sendable (TransferCommand) throws -> Data
+    let recordingFileURL: @Sendable (String) async throws -> URL
+    let registerFirmwareDownload: @Sendable (UInt64, URLRequest, URL) async throws -> Void
+    let unregisterFirmwareDownload: @Sendable (UInt64) async -> Void
+    let firmwareFileURL: @Sendable (UInt64) -> URL
     let registerProvisioning: @Sendable (String, @escaping ProvisioningMaterialProvider) async -> Void
     let registerFactoryReset: @Sendable (String, @escaping FactoryResetMaterialProvider) async -> Void
     let unregisterMaterial: @Sendable (String) async -> Void
@@ -92,11 +100,31 @@ struct DeviceRuntime: Sendable {
         directWrite: @escaping @Sendable (String, String, String, Data) async throws -> Void = { _, _, _, _ in
             throw NativeHostError.missingResource("direct device write")
         },
+        directSubscribe: @escaping @Sendable (String, String, String) async throws -> AsyncThrowingStream<Data, Error> = { _, _, _ in
+            throw NativeHostError.missingResource("direct device subscription")
+        },
+        directUnsubscribe: @escaping @Sendable (String, String, String) async throws -> Void = { _, _, _ in },
         serializeConnectionSettings: @escaping @Sendable (DeviceConnectionSettings, DeviceType) throws -> Data = { _, _ in
             throw NativeHostError.missingResource("connection-settings encoder")
         },
         encodeDeviceCommand: @escaping @Sendable (UInt8) throws -> Data = { _ in
             throw NativeHostError.missingResource("device-command encoder")
+        },
+        parseRecordingList: @escaping @Sendable (Data) throws -> [DeviceRecording] = { _ in
+            throw NativeHostError.missingResource("recording-list decoder")
+        },
+        createTransferCommand: @escaping @Sendable (TransferCommand) throws -> Data = { _ in
+            throw NativeHostError.missingResource("transfer-command encoder")
+        },
+        recordingFileURL: @escaping @Sendable (String) async throws -> URL = { _ in
+            throw NativeHostError.missingResource("recording sink")
+        },
+        registerFirmwareDownload: @escaping @Sendable (UInt64, URLRequest, URL) async throws -> Void = { _, _, _ in
+            throw NativeHostError.missingResource("firmware download")
+        },
+        unregisterFirmwareDownload: @escaping @Sendable (UInt64) async -> Void = { _ in },
+        firmwareFileURL: @escaping @Sendable (UInt64) -> URL = { id in
+            FileManager.default.temporaryDirectory.appendingPathComponent("bota-firmware-\(id).bin")
         },
         registerProvisioning: @escaping @Sendable (String, @escaping ProvisioningMaterialProvider) async -> Void = { _, _ in },
         registerFactoryReset: @escaping @Sendable (String, @escaping FactoryResetMaterialProvider) async -> Void = { _, _ in },
@@ -114,8 +142,16 @@ struct DeviceRuntime: Sendable {
         self.statusUpdates = statusUpdates
         self.stopStatusUpdates = stopStatusUpdates
         self.directWrite = directWrite
+        self.directSubscribe = directSubscribe
+        self.directUnsubscribe = directUnsubscribe
         self.serializeConnectionSettings = serializeConnectionSettings
         self.encodeDeviceCommand = encodeDeviceCommand
+        self.parseRecordingList = parseRecordingList
+        self.createTransferCommand = createTransferCommand
+        self.recordingFileURL = recordingFileURL
+        self.registerFirmwareDownload = registerFirmwareDownload
+        self.unregisterFirmwareDownload = unregisterFirmwareDownload
+        self.firmwareFileURL = firmwareFileURL
         self.registerProvisioning = registerProvisioning
         self.registerFactoryReset = registerFactoryReset
         self.unregisterMaterial = unregisterMaterial

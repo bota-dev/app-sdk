@@ -23,6 +23,7 @@ public struct BotaConfiguration: @unchecked Sendable {
                 rootDirectory: root.appendingPathComponent("Recordings", isDirectory: true)
             )
             let firmwareBlob = FileFirmwareBlobHost()
+            let firmwareDirectory = root.appendingPathComponent("Firmware", isDirectory: true)
             let executor = HostEffectExecutor(
                 bluetooth: bluetooth,
                 persistence: persistence,
@@ -81,10 +82,42 @@ public struct BotaConfiguration: @unchecked Sendable {
                         data: data
                     )
                 },
+                directSubscribe: { peripheralID, serviceUUID, characteristicUUID in
+                    try await bluetooth.subscribe(
+                        peripheralID: peripheralID,
+                        serviceUUID: serviceUUID,
+                        characteristicUUID: characteristicUUID
+                    )
+                },
+                directUnsubscribe: { peripheralID, serviceUUID, characteristicUUID in
+                    try await bluetooth.unsubscribe(
+                        peripheralID: peripheralID,
+                        serviceUUID: serviceUUID,
+                        characteristicUUID: characteristicUUID
+                    )
+                },
                 serializeConnectionSettings: { settings, model in
                     try mapper.serializeConnectionSettings(settings, model: model)
                 },
                 encodeDeviceCommand: { command in try mapper.encodeDeviceCommand(command) },
+                parseRecordingList: { data in try mapper.parseRecordingList(data) },
+                createTransferCommand: { command in try mapper.createTransferCommand(command) },
+                recordingFileURL: { sinkID in try await recordingSink.fileURL(for: sinkID) },
+                registerFirmwareDownload: { id, request, fileURL in
+                    try FileManager.default.createDirectory(
+                        at: firmwareDirectory,
+                        withIntermediateDirectories: true
+                    )
+                    await network.registerDownload(id: id, request: request, destinationURL: fileURL)
+                    await firmwareBlob.register(downloadID: id, fileURL: fileURL)
+                },
+                unregisterFirmwareDownload: { id in
+                    await network.unregister(id: id)
+                    await firmwareBlob.unregister(downloadID: id)
+                },
+                firmwareFileURL: { id in
+                    firmwareDirectory.appendingPathComponent("\(id).firmware")
+                },
                 registerProvisioning: { id, provider in
                     await material.registerProvisioning(id: id, provider: provider)
                 },

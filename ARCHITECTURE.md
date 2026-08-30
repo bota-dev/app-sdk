@@ -268,6 +268,17 @@ backend command ID and binding generation. Restart recovery rejects a stale
 generation before starting the receipt-only reducer. A facade-wide operation
 coordinator prevents direct writes from interleaving with any active workflow.
 
+`RecordingManager`, `OTAManager`, and `DeviceLogManager` expose the remaining
+public Apple workflows as typed `AsyncThrowingStream` values. Recording list
+bytes use the shared decoder, transferred recordings complete as native file
+URLs, and upload handoff returns only the reducer's direct, preserved, or BLE
+fallback ownership result for application-supplied opaque IDs. OTA downloads
+use application-provided `URLRequest` values registered behind a numeric ID,
+reuse the native file across reducer recovery, and release host registrations
+on every terminal facade path. Device logs expose only complete sanitized lines
+emitted by the core. All three managers share the facade operation coordinator,
+so destroy, explicit cancellation, and stream termination release ownership.
+
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host
 capabilities, ordered inputs, ordered effects and notifications, and terminal

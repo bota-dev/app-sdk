@@ -62,6 +62,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   starting Rust. Remove-only deprovision must never call factory reset.
 - Direct Apple BLE writes and reducer workflows share one facade operation
   coordinator; release ownership on success, failure, cancellation, and destroy.
+- Apple recording, upload-ownership, OTA, and device-log APIs expose typed
+  streams and native file URLs only. Keep upload destinations opaque, let only
+  the reducer authorize BLE fallback, and unregister OTA host resources on
+  every terminal path.
 - Add new ABI effects to the exhaustive `CoreEffect` and `HostEffectExecutor`
   switches. Never route a new kind through a default branch.
 - Keep CoreBluetooth objects inside `CoreBluetoothDriver`'s dedicated serial
