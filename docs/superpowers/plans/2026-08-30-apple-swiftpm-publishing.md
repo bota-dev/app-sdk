@@ -162,7 +162,7 @@ download the Apple output under a release job with `contents: write` and the
 protected `release` environment, then create or update the GitHub Release. A
 final `macos-15` job runs the remote consumer against the released tag.
 
-- [ ] **Step 4: Verify local release behavior and documentation**
+- [x] **Step 4: Verify local release behavior and documentation**
 
 Run:
 
@@ -177,7 +177,7 @@ cargo test -p xtask --test release_readiness --test release_manifest
 Expected: all checks pass and the checked-in package checksum equals the
 generated archive checksum.
 
-- [ ] **Step 5: Commit and push focused changes**
+- [x] **Step 5: Commit and push focused changes**
 
 Create one version/public-package commit and one workflow/documentation commit,
 each with `Co-Authored-By: OpenAI Codex <noreply@openai.com>`, then push `main`.
