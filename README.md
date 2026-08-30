@@ -46,7 +46,13 @@ reconnect for manual selection. Native host services now atomically persist
 non-secret workflow journals, isolate secrets in Keychain, keep recording and
 firmware bytes in bounded files, resolve application material by opaque ID, and
 stream URLSession progress without exposing paths or credentials to Rust. The
-public Apple facade workflows are not implemented or published yet.
+public `BotaDeviceClient` now configures those hosts once and exposes
+serial-verified discovery, manual connection, canonical reconnect, explicit
+disconnect, connection observation, and decoded device-status streams. Client
+destruction cancels active work, stops status subscriptions, disconnects the
+verified peripheral, and closes observers. Provisioning, reset, transfer, OTA,
+and log managers remain under implementation; the Apple package is not yet
+published.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own

@@ -213,7 +213,7 @@ active cancellation identity until a terminal notification. Unexpected stale
 host events are rejected by Rust without releasing the current owner. The
 compact SwiftPM workflow resource is generated from all seven canonical suites;
 package tests reject drift and cover all 29 scenario labels. Concrete native
-effect implementations remain the next facade layer.
+effect implementations route through the native hosts described below.
 
 `HostEffectExecutor` converts the ABI boundary into six narrow native host
 ports plus executor-owned timers and progress delivery. `CoreEffect` is an
@@ -246,6 +246,16 @@ application callbacks for provisioning/reset grants in memory. Network URLs,
 headers, source files, and destinations are registered with
 `URLSessionNetworkHost`; its delegate emits byte progress and cancellation
 without placing those resources in a core packet or checkpoint.
+
+`BotaDeviceClient` owns one configured `DeviceRuntime` and one public
+`DeviceManager`. Configuration is idempotent until `destroy()`, which cancels
+the active workflow, stops notification streams, disconnects the current
+peripheral, and finishes observers. Manual connection and reconnect remain Rust
+workflow commands, so Swift cannot introduce name-based selection or a second
+retry policy. The facade forwards exact saved peripheral/address hints and
+publishes a device only after serial verification. One-shot and streaming
+device status bytes are read through the serialized CoreBluetooth host and
+decoded through `CoreModelMapper`; there is no Swift status parser.
 
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host

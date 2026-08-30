@@ -50,6 +50,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   Kotlin types but must not redesign the C boundary.
 - Apple workflow calls pass through one `CoreEngineActor`; host callbacks must
   preserve the effect operation, request ID, and cancellation identity exactly.
+- `BotaDeviceClient.configure()` is idempotent until `destroy()`. Public device
+  observation must finish on destroy, and status bytes must use the shared ABI
+  decoder rather than a Swift parser.
+- Keep manual connect and reconnect policy in the Rust workflows. The Apple
+  facade forwards exact identity hints and never chooses a peripheral by name.
 - Add new ABI effects to the exhaustive `CoreEffect` and `HostEffectExecutor`
   switches. Never route a new kind through a default branch.
 - Keep CoreBluetooth objects inside `CoreBluetoothDriver`'s dedicated serial

@@ -21,7 +21,7 @@ actor CoreEngineActor {
     func run(
         _ command: CoreCommand,
         capabilities: CoreCapabilities
-    ) -> AsyncThrowingStream<CoreNotification, Error> {
+    ) async -> AsyncThrowingStream<CoreNotification, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 await self.start(command, capabilities: capabilities, continuation: continuation)

@@ -30,6 +30,7 @@ public enum BotaOperation: Equatable, Sendable {
     case discover
     case connect
     case reconnect
+    case readStatus
     case provision
     case transferRecording
     case upload

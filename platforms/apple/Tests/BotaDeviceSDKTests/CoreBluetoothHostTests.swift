@@ -118,6 +118,23 @@ final class CoreBluetoothHostTests: XCTestCase {
         XCTAssertEqual(disconnectCount, 1)
     }
 
+    func testCharacteristicOperationUsesTheCurrentRadioOwnerWhenPeripheralFieldIsAbsent() async throws {
+        let driver = FakeCentralDriver()
+        let host = CoreBluetoothHost(driver: driver)
+        _ = try await Self.payloads(
+            host: host,
+            effect: effect(.bluetoothConnect, peripheralID: "owner")
+        )
+
+        _ = try await Self.payloads(
+            host: host,
+            effect: effect(.bluetoothRead, requestID: 2)
+        )
+
+        let log = await driver.log
+        XCTAssertTrue(log.contains("read:start:owner"))
+    }
+
     private static func payloads(host: CoreBluetoothHost, effect: CoreEffect) async throws -> [CoreHostEventPayload] {
         let stream = await host.execute(effect)
         var values: [CoreHostEventPayload] = []
@@ -167,6 +184,7 @@ final class CoreBluetoothHostTests: XCTestCase {
 
 private enum EffectKind: UInt32 {
     case bluetoothStartScan = 0x0310
+    case bluetoothConnect = 0x0312
     case bluetoothDiscoverServices = 0x0313
     case bluetoothDisconnect = 0x0314
     case bluetoothRead = 0x0315

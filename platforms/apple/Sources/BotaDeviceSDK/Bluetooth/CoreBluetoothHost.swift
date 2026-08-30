@@ -33,8 +33,7 @@ actor CoreBluetoothHost: BluetoothHost {
                     try await discover(effect, continuation: pair.continuation)
                 case .bluetoothDisconnect:
                     let peripheralID = try requiredText(effect, UInt32(BOTA_DEVICE_SDK_V1_FIELD_PERIPHERAL_ID))
-                    try await driver.disconnect(peripheralID: peripheralID)
-                    await radioArbiter.release(peripheralID: peripheralID)
+                    try await disconnect(peripheralID: peripheralID)
                     pair.continuation.yield(.init(
                         kind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_BLE_DISCONNECTED),
                         fields: [.text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_PERIPHERAL_ID), value: peripheralID)]
@@ -64,6 +63,53 @@ actor CoreBluetoothHost: BluetoothHost {
         }
         pair.continuation.onTermination = { @Sendable _ in task.cancel() }
         return pair.stream
+    }
+
+    func disconnect(peripheralID: String) async throws {
+        try await driver.disconnect(peripheralID: peripheralID)
+        await radioArbiter.release(peripheralID: peripheralID)
+    }
+
+    func read(
+        peripheralID: String,
+        serviceUUID: String,
+        characteristicUUID: String
+    ) async throws -> Data {
+        try await serialized(peripheralID) {
+            try await driver.read(
+                peripheralID: peripheralID,
+                serviceUUID: serviceUUID,
+                characteristicUUID: characteristicUUID
+            )
+        }
+    }
+
+    func subscribe(
+        peripheralID: String,
+        serviceUUID: String,
+        characteristicUUID: String
+    ) async throws -> AsyncThrowingStream<Data, Error> {
+        try await serialized(peripheralID) {
+            try await driver.subscribe(
+                peripheralID: peripheralID,
+                serviceUUID: serviceUUID,
+                characteristicUUID: characteristicUUID
+            )
+        }
+    }
+
+    func unsubscribe(
+        peripheralID: String,
+        serviceUUID: String,
+        characteristicUUID: String
+    ) async throws {
+        try await serialized(peripheralID) {
+            try await driver.unsubscribe(
+                peripheralID: peripheralID,
+                serviceUUID: serviceUUID,
+                characteristicUUID: characteristicUUID
+            )
+        }
     }
 
     private func scan(
@@ -138,7 +184,7 @@ actor CoreBluetoothHost: BluetoothHost {
         _ effect: CoreEffect,
         continuation: AsyncThrowingStream<CoreHostEventPayload, Error>.Continuation
     ) async throws {
-        let values = try characteristicFields(effect)
+        let values = try await characteristicFields(effect)
         let data = try await serialized(values.peripheralID) {
             try await driver.read(
                 peripheralID: values.peripheralID,
@@ -156,7 +202,7 @@ actor CoreBluetoothHost: BluetoothHost {
         _ effect: CoreEffect,
         continuation: AsyncThrowingStream<CoreHostEventPayload, Error>.Continuation
     ) async throws {
-        let values = try characteristicFields(effect)
+        let values = try await characteristicFields(effect)
         let payload = try requiredBytes(effect, UInt32(BOTA_DEVICE_SDK_V1_FIELD_PAYLOAD))
         let withResponse = try requiredBool(effect, UInt32(BOTA_DEVICE_SDK_V1_FIELD_WITH_RESPONSE))
         try await serialized(values.peripheralID) {
@@ -175,7 +221,7 @@ actor CoreBluetoothHost: BluetoothHost {
         _ effect: CoreEffect,
         continuation: AsyncThrowingStream<CoreHostEventPayload, Error>.Continuation
     ) async throws {
-        let values = try characteristicFields(effect)
+        let values = try await characteristicFields(effect)
         let notifications = try await serialized(values.peripheralID) {
             try await driver.subscribe(
                 peripheralID: values.peripheralID,
@@ -202,7 +248,7 @@ actor CoreBluetoothHost: BluetoothHost {
     }
 
     private func unsubscribe(_ effect: CoreEffect) async throws {
-        let values = try characteristicFields(effect)
+        let values = try await characteristicFields(effect)
         try await serialized(values.peripheralID) {
             try await driver.unsubscribe(
                 peripheralID: values.peripheralID,
@@ -227,13 +273,19 @@ actor CoreBluetoothHost: BluetoothHost {
         }
     }
 
-    private func characteristicFields(_ effect: CoreEffect) throws -> (
+    private func characteristicFields(_ effect: CoreEffect) async throws -> (
         peripheralID: String,
         serviceUUID: String,
         characteristicUUID: String
     ) {
-        (
-            try requiredText(effect, UInt32(BOTA_DEVICE_SDK_V1_FIELD_PERIPHERAL_ID)),
+        let currentOwner = await radioArbiter.owner
+        let peripheralID = effect.packet.fields.text(UInt32(BOTA_DEVICE_SDK_V1_FIELD_PERIPHERAL_ID))
+            ?? currentOwner?.peripheralID
+        guard let peripheralID else {
+            throw invalid(effect, "Bluetooth operation has no current peripheral")
+        }
+        return (
+            peripheralID,
             try requiredText(effect, UInt32(BOTA_DEVICE_SDK_V1_FIELD_SERVICE_UUID)),
             try requiredText(effect, UInt32(BOTA_DEVICE_SDK_V1_FIELD_CHARACTERISTIC_UUID))
         )

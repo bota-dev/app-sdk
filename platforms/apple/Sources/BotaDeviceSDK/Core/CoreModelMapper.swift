@@ -568,7 +568,7 @@ private struct PacketFields {
     }
 }
 
-private extension BotaDeviceSDKError {
+extension BotaDeviceSDKError {
     init(_ error: CoreError) {
         self.init(
             code: Self.code(error.code),
