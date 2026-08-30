@@ -28,6 +28,21 @@ separate gate. The manifest claims only capabilities marked `supported` in the
 firmware compatibility matrix. A public Apple release must regenerate the same
 metadata from its exact clean release commit.
 
+The supervised Apple matrix and destructive-operation gates are documented in
+[`docs/testing/apple-physical-device.md`](testing/apple-physical-device.md).
+The physical target must skip before client configuration unless
+`BOTA_PHYSICAL_TESTS=1`, an exact serial number, and a model are provided.
+Authenticated reset runs separately and additionally requires
+`BOTA_ALLOW_FACTORY_RESET=1` plus a command-bound backend grant. Never infer a
+pass from a scan result, display name, deprovision, unbind, timeout, or missing
+test output.
+
+The current decision is recorded in
+[`release/evidence/1.0.0-alpha.1-apple-facade.md`](../release/evidence/1.0.0-alpha.1-apple-facade.md).
+While its physical rows are `NOT RUN`, Apple stays absent from
+`nativeAbi.publishedFacades`, the legacy native baseline is retained, and no
+Apple package or release asset may be published.
+
 Stable `v1.0.0` is reserved for the first release that Demo and Bota One can
 consume through the React Native compatibility package. Protocol and workflow
 core milestones publish as `1.0.0-alpha.N`.
@@ -77,6 +92,8 @@ tools/ffi-smoke/run-native-c-smoke.sh
 tools/ffi-smoke/run-native-swift-smoke.sh
 tools/apple/test-package.sh
 tools/apple/test-consumer.sh
+env -u BOTA_PHYSICAL_TESTS -u BOTA_DEVICE_SERIAL -u BOTA_DEVICE_MODEL \
+  tools/apple/test-package.sh --filter PhysicalDeviceTests
 node --test tools/release/generate-apple-*.test.mjs
 tools/apple/package-release.sh
 cargo deny check

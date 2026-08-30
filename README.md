@@ -62,7 +62,11 @@ only `BotaDeviceSDK`, runs a macOS smoke executable, and type-checks every publi
 manager. CI also compiles generic iOS device and simulator destinations with
 strict concurrency diagnostics, then produces a deterministic XCFramework zip,
 checksums, SPDX 2.3 SBOM, copied license, and validated release manifest as
-unpublished evidence. The Apple package is not yet published.
+unpublished evidence. An opt-in physical target selects a device only by exact
+serial verification and keeps settings, provisioning, recording deletion, OTA,
+deprovision, and authenticated reset behind separate gates. Its default run
+skips before client configuration. The supervised Bota Pin and Bota Note matrix
+has not been run, so the Apple package is not yet published.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own
@@ -93,6 +97,10 @@ tools/ffi-smoke/run-native-swift-smoke.sh
 tools/apple/test-package.sh
 tools/apple/test-consumer.sh
 ```
+
+The supervised Apple lab procedure is documented in
+[docs/testing/apple-physical-device.md](docs/testing/apple-physical-device.md).
+Normal development and CI must leave `BOTA_PHYSICAL_TESTS` unset.
 
 The full reproducible gate, including the frozen React Native comparator, is
 recorded in `release/evidence/`.

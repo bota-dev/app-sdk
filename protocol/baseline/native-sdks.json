@@ -20,6 +20,17 @@
       "testCommand": "ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew testDebugUnitTest"
     }
   },
+  "migrationTargets": {
+    "apple": {
+      "repository": "https://github.com/bota-dev/app-sdk.git",
+      "package": "BotaDeviceSDK",
+      "product": "BotaDeviceSDK",
+      "entryPoint": "BotaDeviceClient",
+      "minimumPlatform": "iOS 15 / macOS 13",
+      "status": "automated_verified_physical_pending",
+      "evidence": "release/evidence/1.0.0-alpha.1-apple-facade.md"
+    }
+  },
   "behavioralAuthority": {
     "repository": "https://github.com/bota-dev/react-native-sdk.git",
     "revision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4",

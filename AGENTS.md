@@ -74,6 +74,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Keep Apple URLs, headers, file paths, Keychain values, and material callbacks
   behind native opaque-ID registries. Core checkpoints may contain workflow
   state only; recording integrity uses the protocol's CRC32.
+- Keep Apple physical tests opt-in and serial verified. The default path must
+  skip before configuring `BotaDeviceClient`; feature-changing operations need
+  their individual gates, and authenticated reset additionally needs
+  `BOTA_ALLOW_FACTORY_RESET=1` plus a command-bound grant.
 - Keep `ProtocolFixtures` and `WorkflowFixtures` generated. Run
   `npm run sync:apple-fixtures` instead of editing either resource by hand.
 - Never infer identity from an advertised BLE name alone.
@@ -101,6 +105,10 @@ tools/apple/test-package.sh
 tools/apple/test-consumer.sh
 tools/apple/package-release.sh
 ```
+
+Use `docs/testing/apple-physical-device.md` only for supervised lab runs. Do not
+set physical-test variables in CI or claim physical verification from skipped
+tests.
 
 Some commands become available in later milestones. Run all commands applicable
 to the files currently present.

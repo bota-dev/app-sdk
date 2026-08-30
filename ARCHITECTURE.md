@@ -57,9 +57,13 @@ acceptance gates.
 
 Native migration inputs are pinned separately in
 `protocol/baseline/native-sdks.json`. Apple revision `cd15e545cabb8` and Android
-revision `0f06d2a22c55` provide package shape, public models, and idiomatic async
-conventions, but both are incomplete transport scaffolds. They do not supersede
-the React Native behavioral baseline or the Rust workflow conformance matrix.
+revision `0f06d2a22c55` provided package shape, public models, and idiomatic async
+conventions as incomplete transport scaffolds. The monorepo Apple migration
+target now passes automated facade and packaging gates, but its supervised
+physical-device matrix is not run. The pinned Apple repository therefore
+remains a migration input rather than being replaced as accepted authority.
+Neither native input supersedes the React Native behavioral baseline or the
+Rust workflow conformance matrix.
 `npm run baseline:native` verifies exact revisions and refuses unaudited dirty
 checkouts before native source is imported.
 
@@ -182,16 +186,18 @@ ABI v1 is frozen for facade implementation: existing symbol names, packet-kind
 values, field meanings, ownership rules, and status/error values are additive
 only. The exact tested revision and header digest live in
 `release/evidence/1.0.0-alpha.1-native-abi.md`. This freeze is an interface
-milestone, not an Apple or Android support claim; XCFramework, AAR, platform
-transport, and physical-device gates remain open.
+milestone, not an Android support claim. Apple now has an automated facade
+acceptance record, while its supervised physical-device gate and Android's AAR,
+transport, and device gates remain open.
 
-The Apple package shell lives in `platforms/apple`. Its local binary target is
+The Apple package lives in `platforms/apple`. Its local binary target is
 assembled by `tools/apple/build-xcframework.sh` from arm64 iOS, universal iOS
 simulator, and universal macOS Rust archives. Assembly rejects a header digest
 or Swift package version that differs from the frozen repository evidence. The
-generated XCFramework is ignored build output and is not a published facade;
-the package currently exposes only the synchronized version marker needed to
-prove an external Swift target can import the C ABI.
+generated XCFramework is ignored build output and is not a published facade.
+The source package exposes the full `BotaDeviceSDK` facade described below, and
+an unrelated consumer verifies that public surface without importing the
+internal C module.
 
 `CoreAbiClient` is the sole Swift owner of the opaque native engine. It keeps
 every borrowed input buffer alive through the complete C call, immediately
@@ -288,6 +294,15 @@ with deterministic timestamps and entry order, then records SHA-256 and SwiftPM
 checksums, an SPDX 2.3 SBOM, the repository license, and a schema-validated
 SwiftPM artifact manifest as verification evidence only. Publication remains
 gated by physical-device acceptance.
+
+The opt-in physical target requires `BOTA_PHYSICAL_TESTS=1`, an exact serial,
+and an explicit device model. It returns `XCTSkip` before client configuration
+when that global gate is absent. Serial identity is verified after connection;
+display names never select a device. Settings, provisioning, recording
+deletion, OTA, and deprovision each require an operation-specific gate, while
+authenticated reset runs separately with a command-bound grant and
+`BOTA_ALLOW_FACTORY_RESET=1`. The accepted status and unrun model matrix live in
+`release/evidence/1.0.0-alpha.1-apple-facade.md`.
 
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host

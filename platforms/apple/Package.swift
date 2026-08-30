@@ -28,5 +28,9 @@ let package = Package(
                 .copy("Resources/WorkflowFixtures"),
             ]
         ),
+        .testTarget(
+            name: "BotaDeviceSDKPhysicalTests",
+            dependencies: ["BotaDeviceSDK"]
+        ),
     ]
 )

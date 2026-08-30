@@ -20,6 +20,18 @@
     "protocolEncoders": 13,
     "publishedFacades": []
   },
+  "platformFacades": {
+    "apple": {
+      "implementationStatus": "automated_verified",
+      "physicalDeviceStatus": "not_run",
+      "publicationStatus": "blocked_pending_physical_device_acceptance",
+      "evidence": "release/evidence/1.0.0-alpha.1-apple-facade.md",
+      "models": {
+        "bota_pin": "not_run",
+        "bota_note": "not_run"
+      }
+    }
+  },
   "features": [
     {
       "feature": "device_status",
@@ -184,6 +196,7 @@
     "1.0.17 is the earliest version established by the frozen firmware baseline; earlier introduction versions have not been audited.",
     "Supported means at least one positive and one malformed, rejected, or recovery fixture exists.",
     "Workflow support covers deterministic core behavior only, not native transports or physical-device acceptance.",
-    "Native ABI foundation verification does not publish Apple or Android facade capability."
+    "Native ABI foundation verification does not publish Apple or Android facade capability.",
+    "Apple automated facade acceptance does not imply physical-device verification or publication approval."
   ]
 }
