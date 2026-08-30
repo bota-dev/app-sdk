@@ -206,6 +206,15 @@ are mirrored into SwiftPM resources by `sync-protocol-fixtures.mjs`, checked for
 drift on every package test, and executed through the Rust decode/encode ABI;
 Swift does not contain a second wire parser.
 
+`CoreEngineActor` is the single Swift workflow executor. It submits all ten
+typed command shapes to Rust, drains notifications and host effects in order,
+dispatches correlated host completions before polling again, and keeps the
+active cancellation identity until a terminal notification. Unexpected stale
+host events are rejected by Rust without releasing the current owner. The
+compact SwiftPM workflow resource is generated from all seven canonical suites;
+package tests reject drift and cover all 29 scenario labels. Concrete native
+effect ports remain the next facade layer.
+
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host
 capabilities, ordered inputs, ordered effects and notifications, and terminal

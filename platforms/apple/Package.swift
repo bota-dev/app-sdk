@@ -23,7 +23,10 @@ let package = Package(
         .testTarget(
             name: "BotaDeviceSDKTests",
             dependencies: ["BotaDeviceSDK", "BotaDeviceSDKC"],
-            resources: [.copy("Resources/ProtocolFixtures")]
+            resources: [
+                .copy("Resources/ProtocolFixtures"),
+                .copy("Resources/WorkflowFixtures"),
+            ]
         ),
     ]
 )

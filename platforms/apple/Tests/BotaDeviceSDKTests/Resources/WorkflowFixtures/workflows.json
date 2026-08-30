@@ -1,0 +1,782 @@
+{
+  "schemaVersion": 1,
+  "scenarios": [
+    {
+      "workflow": "connection",
+      "name": "connection-manual-success",
+      "classification": "positive",
+      "command": "connect",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence"
+      ],
+      "inputs": [
+        "connected",
+        "services_discovered",
+        "serial_read",
+        "identity_saved"
+      ],
+      "effects": [
+        "connect",
+        "discover_services",
+        "read_serial",
+        "save_identity"
+      ],
+      "notifications": [
+        "started",
+        "connection_established",
+        "completed"
+      ],
+      "terminalStatus": "completed"
+    },
+    {
+      "workflow": "connection",
+      "name": "connection-identity-rejection",
+      "classification": "rejection",
+      "command": "connect",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence"
+      ],
+      "inputs": [
+        "connected",
+        "services_discovered",
+        "mismatched_serial",
+        "disconnected"
+      ],
+      "effects": [
+        "connect",
+        "discover_services",
+        "read_serial",
+        "disconnect"
+      ],
+      "notifications": [
+        "started",
+        "failed"
+      ],
+      "terminalStatus": "failed",
+      "errorCode": "identity_mismatch"
+    },
+    {
+      "workflow": "connection",
+      "name": "connection-cancellation",
+      "classification": "cancellation",
+      "command": "reconnect",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence"
+      ],
+      "inputs": [
+        "cancelled"
+      ],
+      "effects": [
+        "stop_scan",
+        "cancel_timer"
+      ],
+      "notifications": [
+        "started",
+        "cancelled"
+      ],
+      "terminalStatus": "cancelled"
+    },
+    {
+      "workflow": "connection",
+      "name": "connection-reconnect-resume",
+      "classification": "resume",
+      "command": "reconnect",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence"
+      ],
+      "inputs": [
+        "checkpoint_loaded",
+        "scan_results",
+        "scan_stopped",
+        "serial_mismatch",
+        "next_candidate"
+      ],
+      "effects": [
+        "load_checkpoint",
+        "start_scan",
+        "connect",
+        "read_serial",
+        "disconnect",
+        "connect_next"
+      ],
+      "notifications": [
+        "started",
+        "retrying"
+      ],
+      "terminalStatus": "running"
+    },
+    {
+      "workflow": "connection",
+      "name": "connection-owner-rejection",
+      "classification": "ownership",
+      "command": "reconnect",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence"
+      ],
+      "inputs": [
+        "second_command"
+      ],
+      "effects": [],
+      "notifications": [],
+      "terminalStatus": "running",
+      "errorCode": "operation_in_progress"
+    },
+    {
+      "workflow": "device-logs",
+      "name": "device-logs-subscription-success",
+      "classification": "positive",
+      "command": "read_device_logs",
+      "capabilities": [
+        "ble"
+      ],
+      "inputs": [
+        "subscribed",
+        "start_written",
+        "log_notification"
+      ],
+      "effects": [
+        "subscribe",
+        "start_logging"
+      ],
+      "notifications": [
+        "started",
+        "device_log"
+      ],
+      "terminalStatus": "running"
+    },
+    {
+      "workflow": "device-logs",
+      "name": "device-logs-feature-rejection",
+      "classification": "rejection",
+      "command": "read_device_logs",
+      "capabilities": [
+        "ble"
+      ],
+      "inputs": [
+        "subscribed",
+        "start_failed"
+      ],
+      "effects": [
+        "subscribe",
+        "start_logging",
+        "unsubscribe"
+      ],
+      "notifications": [
+        "started",
+        "failed"
+      ],
+      "terminalStatus": "failed",
+      "errorCode": "feature_unavailable"
+    },
+    {
+      "workflow": "device-logs",
+      "name": "device-logs-cancellation",
+      "classification": "cancellation",
+      "command": "read_device_logs",
+      "capabilities": [
+        "ble"
+      ],
+      "inputs": [
+        "cancelled"
+      ],
+      "effects": [
+        "stop_logging",
+        "unsubscribe"
+      ],
+      "notifications": [
+        "started",
+        "cancelled"
+      ],
+      "terminalStatus": "cancelled"
+    },
+    {
+      "workflow": "device-logs",
+      "name": "device-logs-restart-after-disconnect",
+      "classification": "resume",
+      "command": "read_device_logs",
+      "capabilities": [
+        "ble"
+      ],
+      "inputs": [
+        "disconnected",
+        "new_command"
+      ],
+      "effects": [
+        "unsubscribe"
+      ],
+      "notifications": [
+        "started",
+        "failed"
+      ],
+      "terminalStatus": "failed",
+      "errorCode": "not_connected"
+    },
+    {
+      "workflow": "factory-reset",
+      "name": "factory-reset-success",
+      "classification": "positive",
+      "command": "factory_reset",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence",
+        "host_material"
+      ],
+      "inputs": [
+        "grant_prepared",
+        "subscribed",
+        "writes_completed",
+        "wiped_result",
+        "result_saved",
+        "receipt_written",
+        "result_deleted"
+      ],
+      "effects": [
+        "write_grant",
+        "write_reset",
+        "save_result",
+        "write_receipt",
+        "delete_result"
+      ],
+      "notifications": [
+        "started",
+        "completed"
+      ],
+      "terminalStatus": "completed"
+    },
+    {
+      "workflow": "factory-reset",
+      "name": "factory-reset-device-rejection",
+      "classification": "rejection",
+      "command": "factory_reset",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence",
+        "host_material"
+      ],
+      "inputs": [
+        "grant_prepared",
+        "subscribed",
+        "device_rejection"
+      ],
+      "effects": [
+        "write_grant",
+        "write_reset",
+        "unsubscribe"
+      ],
+      "notifications": [
+        "started",
+        "failed"
+      ],
+      "terminalStatus": "failed",
+      "errorCode": "protocol_rejected"
+    },
+    {
+      "workflow": "factory-reset",
+      "name": "factory-reset-cancellation",
+      "classification": "cancellation",
+      "command": "factory_reset",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence",
+        "host_material"
+      ],
+      "inputs": [
+        "cancelled"
+      ],
+      "effects": [
+        "unsubscribe"
+      ],
+      "notifications": [
+        "started",
+        "cancelled"
+      ],
+      "terminalStatus": "cancelled"
+    },
+    {
+      "workflow": "factory-reset",
+      "name": "factory-reset-durable-resume",
+      "classification": "resume",
+      "command": "resume_factory_reset",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence"
+      ],
+      "inputs": [
+        "subscribed",
+        "wiped_replay",
+        "receipt_written",
+        "result_deleted"
+      ],
+      "effects": [
+        "subscribe",
+        "write_receipt",
+        "delete_result"
+      ],
+      "notifications": [
+        "started",
+        "completed"
+      ],
+      "terminalStatus": "completed"
+    },
+    {
+      "workflow": "firmware-update",
+      "name": "firmware-update-success",
+      "classification": "positive",
+      "command": "update_firmware",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence",
+        "network_transfer",
+        "progress",
+        "firmware_blob"
+      ],
+      "inputs": [
+        "downloaded",
+        "device_ready",
+        "chunks_written",
+        "window_acks",
+        "verify_success",
+        "reboot_disconnect",
+        "reconnected",
+        "version_read"
+      ],
+      "effects": [
+        "download",
+        "subscribe",
+        "start_upload",
+        "read_blob_chunks",
+        "verify",
+        "reconnect",
+        "read_version"
+      ],
+      "notifications": [
+        "started",
+        "firmware_progress",
+        "connection_established",
+        "completed"
+      ],
+      "terminalStatus": "completed"
+    },
+    {
+      "workflow": "firmware-update",
+      "name": "firmware-update-download-rejection",
+      "classification": "rejection",
+      "command": "update_firmware",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence",
+        "network_transfer",
+        "progress",
+        "firmware_blob"
+      ],
+      "inputs": [
+        "checkpoint_loaded",
+        "download_failed"
+      ],
+      "effects": [
+        "load_checkpoint",
+        "download"
+      ],
+      "notifications": [
+        "started",
+        "failed"
+      ],
+      "terminalStatus": "failed",
+      "errorCode": "download_failed"
+    },
+    {
+      "workflow": "firmware-update",
+      "name": "firmware-update-cancellation",
+      "classification": "cancellation",
+      "command": "update_firmware",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence",
+        "network_transfer",
+        "progress",
+        "firmware_blob"
+      ],
+      "inputs": [
+        "cancelled"
+      ],
+      "effects": [
+        "cancel_timer",
+        "unsubscribe"
+      ],
+      "notifications": [
+        "started",
+        "cancelled"
+      ],
+      "terminalStatus": "cancelled"
+    },
+    {
+      "workflow": "firmware-update",
+      "name": "firmware-update-checkpoint-resume",
+      "classification": "resume",
+      "command": "update_firmware",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence",
+        "network_transfer",
+        "progress",
+        "firmware_blob"
+      ],
+      "inputs": [
+        "transfer_checkpoint_loaded",
+        "subscribed",
+        "device_ready",
+        "blob_read_zero"
+      ],
+      "effects": [
+        "load_checkpoint",
+        "subscribe",
+        "start_upload",
+        "read_blob_from_zero"
+      ],
+      "notifications": [
+        "started",
+        "firmware_progress"
+      ],
+      "terminalStatus": "running"
+    },
+    {
+      "workflow": "provisioning",
+      "name": "provisioning-success",
+      "classification": "positive",
+      "command": "provision",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence",
+        "host_material"
+      ],
+      "inputs": [
+        "nonce_read",
+        "public_key_read",
+        "material_prepared",
+        "subscribed",
+        "writes_completed",
+        "device_success"
+      ],
+      "effects": [
+        "read_nonce",
+        "read_public_key",
+        "prepare_material",
+        "subscribe",
+        "write_chunks"
+      ],
+      "notifications": [
+        "started",
+        "completed"
+      ],
+      "terminalStatus": "completed"
+    },
+    {
+      "workflow": "provisioning",
+      "name": "provisioning-payload-rejection",
+      "classification": "rejection",
+      "command": "provision",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence",
+        "host_material"
+      ],
+      "inputs": [
+        "nonce_read",
+        "public_key_read",
+        "oversized_material"
+      ],
+      "effects": [
+        "read_nonce",
+        "read_public_key",
+        "prepare_material"
+      ],
+      "notifications": [
+        "started",
+        "failed"
+      ],
+      "terminalStatus": "failed",
+      "errorCode": "payload_too_large"
+    },
+    {
+      "workflow": "provisioning",
+      "name": "provisioning-cancellation",
+      "classification": "cancellation",
+      "command": "provision",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence",
+        "host_material"
+      ],
+      "inputs": [
+        "cancelled"
+      ],
+      "effects": [
+        "cleanup_subscription"
+      ],
+      "notifications": [
+        "started",
+        "cancelled"
+      ],
+      "terminalStatus": "cancelled"
+    },
+    {
+      "workflow": "provisioning",
+      "name": "provisioning-retry-after-disconnect",
+      "classification": "resume",
+      "command": "provision",
+      "capabilities": [
+        "ble",
+        "timer",
+        "persistence",
+        "host_material"
+      ],
+      "inputs": [
+        "material_prepared",
+        "disconnected",
+        "new_command"
+      ],
+      "effects": [
+        "cleanup_subscription"
+      ],
+      "notifications": [
+        "started",
+        "failed"
+      ],
+      "terminalStatus": "failed",
+      "errorCode": "not_connected"
+    },
+    {
+      "workflow": "recording-transfer",
+      "name": "recording-transfer-success",
+      "classification": "positive",
+      "command": "transfer_recording",
+      "capabilities": [
+        "ble",
+        "persistence",
+        "progress",
+        "recording_sink"
+      ],
+      "inputs": [
+        "checkpoint_loaded",
+        "sink_truncated",
+        "subscribed",
+        "data",
+        "append_completed",
+        "eof",
+        "sink_finalized",
+        "ack_written",
+        "confirm_written"
+      ],
+      "effects": [
+        "truncate_sink",
+        "subscribe",
+        "start_transfer",
+        "append_sink",
+        "save_checkpoint",
+        "finalize_sink",
+        "final_ack",
+        "confirm_delete"
+      ],
+      "notifications": [
+        "started",
+        "progress",
+        "completed"
+      ],
+      "terminalStatus": "completed"
+    },
+    {
+      "workflow": "recording-transfer",
+      "name": "recording-transfer-integrity-rejection",
+      "classification": "rejection",
+      "command": "transfer_recording",
+      "capabilities": [
+        "ble",
+        "persistence",
+        "progress",
+        "recording_sink"
+      ],
+      "inputs": [
+        "eof",
+        "sink_integrity_failed"
+      ],
+      "effects": [
+        "finalize_sink",
+        "nack",
+        "unsubscribe"
+      ],
+      "notifications": [
+        "started",
+        "failed"
+      ],
+      "terminalStatus": "failed",
+      "errorCode": "integrity_failed"
+    },
+    {
+      "workflow": "recording-transfer",
+      "name": "recording-transfer-cancellation",
+      "classification": "cancellation",
+      "command": "transfer_recording",
+      "capabilities": [
+        "ble",
+        "persistence",
+        "progress",
+        "recording_sink"
+      ],
+      "inputs": [
+        "cancelled"
+      ],
+      "effects": [
+        "abort",
+        "unsubscribe",
+        "discard_sink",
+        "delete_checkpoint"
+      ],
+      "notifications": [
+        "started",
+        "cancelled"
+      ],
+      "terminalStatus": "cancelled"
+    },
+    {
+      "workflow": "recording-transfer",
+      "name": "recording-transfer-checkpoint-resume",
+      "classification": "resume",
+      "command": "transfer_recording",
+      "capabilities": [
+        "ble",
+        "persistence",
+        "progress",
+        "recording_sink"
+      ],
+      "inputs": [
+        "checkpoint_loaded",
+        "replayed_data",
+        "new_data"
+      ],
+      "effects": [
+        "truncate_to_checkpoint",
+        "subscribe",
+        "restart_transfer",
+        "skip_durable_sequence",
+        "append_new_sequence"
+      ],
+      "notifications": [
+        "started",
+        "progress"
+      ],
+      "terminalStatus": "running"
+    },
+    {
+      "workflow": "upload-handoff",
+      "name": "upload-handoff-direct-success",
+      "classification": "positive",
+      "command": "upload_recording",
+      "capabilities": [
+        "ble",
+        "timer",
+        "progress"
+      ],
+      "inputs": [
+        "fresh_status_complete"
+      ],
+      "effects": [
+        "read_status"
+      ],
+      "notifications": [
+        "started",
+        "completed"
+      ],
+      "terminalStatus": "completed"
+    },
+    {
+      "workflow": "upload-handoff",
+      "name": "upload-handoff-unknown-ownership-rejection",
+      "classification": "rejection",
+      "command": "upload_recording",
+      "capabilities": [
+        "ble",
+        "timer",
+        "progress"
+      ],
+      "inputs": [
+        "status_read_failed"
+      ],
+      "effects": [
+        "read_status"
+      ],
+      "notifications": [
+        "started",
+        "failed"
+      ],
+      "terminalStatus": "failed",
+      "errorCode": "upload_ownership_unknown"
+    },
+    {
+      "workflow": "upload-handoff",
+      "name": "upload-handoff-cancellation",
+      "classification": "cancellation",
+      "command": "upload_recording",
+      "capabilities": [
+        "ble",
+        "timer",
+        "progress"
+      ],
+      "inputs": [
+        "cancelled"
+      ],
+      "effects": [
+        "cancel_timer",
+        "unsubscribe"
+      ],
+      "notifications": [
+        "started",
+        "cancelled"
+      ],
+      "terminalStatus": "cancelled"
+    },
+    {
+      "workflow": "upload-handoff",
+      "name": "upload-handoff-restart-recovers-ownership",
+      "classification": "resume",
+      "command": "upload_recording",
+      "capabilities": [
+        "ble",
+        "timer",
+        "progress"
+      ],
+      "inputs": [
+        "fresh_inactive_status"
+      ],
+      "effects": [
+        "read_status"
+      ],
+      "notifications": [
+        "started",
+        "ble_fallback_ready",
+        "completed"
+      ],
+      "terminalStatus": "completed"
+    }
+  ]
+}

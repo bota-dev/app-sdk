@@ -34,8 +34,11 @@ The Apple package shell now builds an iOS device, universal iOS simulator, and
 universal macOS XCFramework from that frozen header and proves a Swift package
 can import the real ABI. Its Swift value models and protocol codecs are fixture
 tested against the shared Rust implementation, including unknown wire values
-and Bota Note connection normalization. CoreBluetooth and the public Apple
-facade workflows are not implemented or published yet.
+and Bota Note connection normalization. A serialized Swift actor now drives the
+real Rust workflow engine, preserves request/cancellation correlation, and
+checks all 29 canonical workflow traces from generated SwiftPM resources.
+CoreBluetooth, concrete host ports, and the public Apple facade workflows are
+not implemented or published yet.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own
