@@ -213,7 +213,16 @@ active cancellation identity until a terminal notification. Unexpected stale
 host events are rejected by Rust without releasing the current owner. The
 compact SwiftPM workflow resource is generated from all seven canonical suites;
 package tests reject drift and cover all 29 scenario labels. Concrete native
-effect ports remain the next facade layer.
+effect implementations remain the next facade layer.
+
+`HostEffectExecutor` converts the ABI boundary into six narrow native host
+ports plus executor-owned timers and progress delivery. `CoreEffect` is an
+exhaustive 30-case enum; routing has no catch-all branch. The executor preserves
+the operation, request, and cancellation identity on every callback, rejects
+oversized raw fields and mismatched event kinds, maps thrown host failures to
+the ABI category event, and cancels suspended work by workflow identity. A late
+completion therefore retains its old request identity and cannot satisfy a
+newer operation.
 
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host

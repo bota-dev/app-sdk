@@ -30,6 +30,7 @@ actor CoreEngineActor {
 
     func cancel(_ id: UUID) async throws {
         let cancellation = CoreCancellationID(id)
+        await host.cancel(cancellation)
         try abi.cancel(cancellationHigh: cancellation.high, cancellationLow: cancellation.low)
         await drain()
     }

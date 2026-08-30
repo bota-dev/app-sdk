@@ -50,6 +50,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   Kotlin types but must not redesign the C boundary.
 - Apple workflow calls pass through one `CoreEngineActor`; host callbacks must
   preserve the effect operation, request ID, and cancellation identity exactly.
+- Add new ABI effects to the exhaustive `CoreEffect` and `HostEffectExecutor`
+  switches. Never route a new kind through a default branch.
 - Keep `ProtocolFixtures` and `WorkflowFixtures` generated. Run
   `npm run sync:apple-fixtures` instead of editing either resource by hand.
 - Never infer identity from an advertised BLE name alone.
