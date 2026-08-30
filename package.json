@@ -6,6 +6,7 @@
     "node": ">=22"
   },
   "scripts": {
+    "baseline:native": "node tools/baseline/verify-native-baselines.mjs",
     "baseline:react-native": "node tools/baseline/compare-react-native.mjs",
     "check": "npm run check:licenses",
     "check:licenses": "node scripts/check-licenses.mjs",

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "platforms": {
+    "apple": {
+      "repository": "https://github.com/bota-dev/bota-mobile-sdk-ios.git",
+      "revision": "cd15e545cabb8d6186dea93208b512a4f46cb5fd",
+      "package": "BotaSDK",
+      "product": "BotaSDK",
+      "entryPoint": "BotaClient",
+      "minimumPlatform": "iOS 15 / macOS 13",
+      "testCommand": "swift test"
+    },
+    "android": {
+      "repository": "https://github.com/bota-dev/bota-mobile-sdk-android.git",
+      "revision": "0f06d2a22c55e4976778520cce42230d23ca4226",
+      "package": "com.bota.sdk",
+      "product": "bota-mobile-sdk-android",
+      "entryPoint": "BotaClient",
+      "minimumPlatform": "Android API 26",
+      "testCommand": "ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew testDebugUnitTest"
+    }
+  },
+  "behavioralAuthority": {
+    "repository": "https://github.com/bota-dev/react-native-sdk.git",
+    "revision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4",
+    "version": "0.0.65"
+  }
+}

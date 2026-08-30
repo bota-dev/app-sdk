@@ -55,6 +55,14 @@ behavioral baseline. It remains authoritative until the monorepo implementation
 passes the relevant fixture, workflow, native, application, and physical-device
 acceptance gates.
 
+Native migration inputs are pinned separately in
+`protocol/baseline/native-sdks.json`. Apple revision `cd15e545cabb8` and Android
+revision `0f06d2a22c55` provide package shape, public models, and idiomatic async
+conventions, but both are incomplete transport scaffolds. They do not supersede
+the React Native behavioral baseline or the Rust workflow conformance matrix.
+`npm run baseline:native` verifies exact revisions and refuses unaudited dirty
+checkouts before native source is imported.
+
 Language-neutral protocol fixtures live under `protocol/fixtures/`. The baseline
 record under `protocol/baseline/` pins the SDK and firmware revisions, source
 digests, fixture digest, and passing test counts. `npm run baseline:react-native`
