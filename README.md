@@ -52,6 +52,11 @@ one-time crates.io bootstrap token are configured.
 to the **Bota Device SDK** family. Future backend API clients belong to a
 separate **Bota API SDK** family and repository.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development and verification rules.
+Report vulnerabilities using [SECURITY.md](SECURITY.md), not a public issue.
+
 ## License
 
 MIT

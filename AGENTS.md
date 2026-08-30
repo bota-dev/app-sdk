@@ -2,18 +2,26 @@
 
 ## Repository Purpose
 
-`app-sdk` is the source monorepo for the Bota Device SDK family. The public
-family name is **Bota Device SDK**; the repository name is not a public package
-name. The future backend-facing **Bota API SDK** is separate.
+- `app-sdk` is the source monorepo for the **Bota Device SDK** family.
+- The future backend-facing **Bota API SDK** is a separate family.
+- Read [ARCHITECTURE.md](ARCHITECTURE.md) and the active plan under
+  `docs/superpowers/plans/` before architectural changes.
 
-Read [ARCHITECTURE.md](ARCHITECTURE.md) and the current plan under
-`docs/superpowers/plans/` before making architectural changes.
+## Repository Context
+
+- `AGENTS.md` is the canonical agent context; `CLAUDE.md` is its symlink.
+- Keep public architecture in `ARCHITECTURE.md` and contributor workflow in
+  `CONTRIBUTING.md`; do not duplicate them here.
+- Do not add private repository links, machine-specific paths, or credentials
+  to public files.
 
 ## Current Authority
 
-Until migration gates pass, `/Users/zhangqi/ws/bota/react-native-sdk` remains
-the production behavioral reference. Do not silently reinterpret its protocol
-behavior. Capture behavior in language-neutral fixtures and compare bytes.
+- [`@bota.dev/react-native-sdk`](https://github.com/bota-dev/react-native-sdk)
+  remains the production behavioral reference until migration gates pass.
+- The Bota workspace normally checks it out at `../react-native-sdk`.
+- Capture reference behavior in language-neutral fixtures and compare bytes;
+  do not silently reinterpret protocol behavior.
 
 ## Invariants
 
@@ -30,7 +38,8 @@ behavior. Capture behavior in language-neutral fixtures and compare bytes.
 
 ## Development
 
-Use Node.js 22 and the Rust toolchain pinned in `rust-toolchain.toml`.
+- Use npm with Node.js 22: `npm ci`, `npm run check`, `npm run test:tooling`.
+- Use Cargo with the toolchain pinned in `rust-toolchain.toml`.
 
 ```bash
 npm ci
@@ -43,6 +52,14 @@ cargo test --workspace
 
 Some commands become available in later milestones. Run all commands applicable
 to the files currently present.
+
+## Commit Attribution
+
+AI commits MUST include:
+
+```text
+Co-Authored-By: OpenAI Codex <noreply@openai.com>
+```
 
 ## Releases
 

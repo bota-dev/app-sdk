@@ -3,8 +3,9 @@
 ## Before You Start
 
 Read [AGENTS.md](AGENTS.md), [ARCHITECTURE.md](ARCHITECTURE.md), and the active
-implementation plan. Protocol and security behavior must agree with the
-normative documents in `/Users/zhangqi/ws/bota/internal-docs/device/`.
+implementation plan. Protocol and security changes require maintainer review
+against Bota's private normative specifications before merge; contributors do
+not need access to those documents to open an issue or propose a change.
 
 ## Development Workflow
 

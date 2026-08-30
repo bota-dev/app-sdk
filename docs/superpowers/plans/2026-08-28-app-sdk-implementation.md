@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 1.98.0, Cargo workspace, Node.js 22 tooling, TypeScript, Swift Package Manager, Kotlin/Gradle, C#/.NET, Flutter/Dart, WebAssembly, GitHub Actions.
 
-**Normative design:** `/Users/zhangqi/ws/bota/internal-docs/Device SDK Architecture.md`
+**Normative design:** private Bota cross-system `Device SDK Architecture.md`
 
 ## Program Baseline
 
@@ -148,7 +148,8 @@ Document these invariants in `ARCHITECTURE.md` and `AGENTS.md`:
 - No literal credentials, tokens, certificate bodies, or private keys may be
   committed.
 
-Make `CLAUDE.md` contain only `@AGENTS.md`.
+Make `CLAUDE.md` a symlink to `AGENTS.md` so agent guidance has one canonical
+source.
 
 **Step 5: Generate lockfiles and run repository checks**
 
@@ -330,9 +331,9 @@ git commit -m "feat: define synchronized sdk release manifest"
 - Test: `tools/baseline/compare-react-native.test.mjs`
 - Modify: `package.json`
 - Modify: `ARCHITECTURE.md`
-- Reference: `/Users/zhangqi/ws/bota/react-native-sdk/__tests__/`
-- Reference: `/Users/zhangqi/ws/bota/react-native-sdk/src/ble/`
-- Reference: `/Users/zhangqi/ws/bota/firmware/sdk/apps/common/ble/le_trans_data.c`
+- Reference: sibling `react-native-sdk/__tests__/` checkout
+- Reference: sibling `react-native-sdk/src/ble/` checkout
+- Reference: sibling `firmware/sdk/apps/common/ble/le_trans_data.c` checkout
 
 **Step 1: Define a fixture suite and make schema validation fail**
 
@@ -383,7 +384,7 @@ reinterpreted from prose.
 
 ```bash
 npm run baseline:react-native -- \
-  --sdk-path /Users/zhangqi/ws/bota/react-native-sdk \
+  --sdk-path ../react-native-sdk \
   --expected-commit 44ac1221cb71
 ```
 
@@ -407,7 +408,7 @@ Run:
 ```bash
 npm run test:fixtures
 npm run baseline:react-native -- \
-  --sdk-path /Users/zhangqi/ws/bota/react-native-sdk \
+  --sdk-path ../react-native-sdk \
   --expected-commit 44ac1221cb71
 ```
 
@@ -671,7 +672,7 @@ Run:
 
 ```bash
 npm run baseline:react-native -- \
-  --sdk-path /Users/zhangqi/ws/bota/react-native-sdk \
+  --sdk-path ../react-native-sdk \
   --expected-commit 44ac1221cb71
 cargo test --workspace
 ```
@@ -790,7 +791,7 @@ npm ci
 npm run check
 npm run test:fixtures
 npm run baseline:react-native -- \
-  --sdk-path /Users/zhangqi/ws/bota/react-native-sdk \
+  --sdk-path ../react-native-sdk \
   --expected-commit 44ac1221cb71
 cargo xtask protocol generate --check
 cargo xtask release validate release/examples/0.1.0-alpha.1.json

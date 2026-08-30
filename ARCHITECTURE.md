@@ -6,8 +6,9 @@
 protocol and workflow behavior without hiding operating-system Bluetooth and
 lifecycle differences.
 
-The normative cross-system design is
-[`internal-docs/Device SDK Architecture.md`](../internal-docs/Device%20SDK%20Architecture.md).
+This file is the public architecture contract for the repository. Maintainers
+also validate protocol, security, and cross-system changes against Bota's
+private normative design before merge.
 
 ## Boundaries
 
