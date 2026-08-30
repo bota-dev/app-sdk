@@ -94,7 +94,7 @@ jobs:
         working-directory: platforms/apple
         run: |
           xcodebuild \
-            -scheme BotaDeviceSDK \
+            -scheme BotaAppleSDK \
             -destination 'generic/platform=iOS' \
             -derivedDataPath ../../target/apple-ios-device \
             CODE_SIGNING_ALLOWED=NO \
@@ -106,7 +106,7 @@ jobs:
         working-directory: platforms/apple
         run: |
           xcodebuild \
-            -scheme BotaDeviceSDK \
+            -scheme BotaAppleSDK \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath ../../target/apple-ios-simulator \
             CODE_SIGNING_ALLOWED=NO \

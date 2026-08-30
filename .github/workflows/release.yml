@@ -1,4 +1,4 @@
-name: Release Bota Device SDK
+name: Release Bota App SDK
 
 on:
   push:
@@ -111,7 +111,7 @@ jobs:
         working-directory: platforms/apple
         run: |
           xcodebuild \
-            -scheme BotaDeviceSDK \
+            -scheme BotaAppleSDK \
             -destination 'generic/platform=iOS' \
             -derivedDataPath ../../target/release-apple-ios-device \
             CODE_SIGNING_ALLOWED=NO \
@@ -123,7 +123,7 @@ jobs:
         working-directory: platforms/apple
         run: |
           xcodebuild \
-            -scheme BotaDeviceSDK \
+            -scheme BotaAppleSDK \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath ../../target/release-apple-ios-simulator \
             CODE_SIGNING_ALLOWED=NO \
@@ -176,7 +176,7 @@ jobs:
             gh release create "$GITHUB_REF_NAME" target/apple-release/* \
               --verify-tag \
               --generate-notes \
-              --title "Bota Device SDK ${GITHUB_REF_NAME#v}"
+              --title "Bota App SDK ${GITHUB_REF_NAME#v}"
           fi
 
   smoke-public-package:
