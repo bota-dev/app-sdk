@@ -32,7 +32,19 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Platform transports and lifecycle integration remain native.
 - Device SDK code does not call the Bota API directly.
 - Unsupported platform capabilities fail before device state changes.
+- One workflow owns the core engine at a time; hosts preserve request and
+  cancellation IDs when returning callbacks.
 - High-volume recording bytes stay off JavaScript and Dart bridges.
+- Recording transfer owns sequence/checkpoint decisions; native hosts own the
+  durable sink and validate the final checksum before device deletion.
+- Direct-upload fallback requires a fresh inactive device status; busy,
+  detached, and unreadable ownership never authorize Bluetooth fallback.
+- Firmware retries reuse the host blob but restart BLE delivery at sequence and
+  offset zero; current firmware does not support partial Bluetooth OTA resume.
+- Device logs subscribe before start, have one workflow owner, and use the
+  shared bounded decoder; disconnect cleanup must not attempt a BLE stop write.
+- Native facades use the manually owned opaque C ABI selected in ADR 0001;
+  UniFFI `0.32.0` exists only in the non-published comparison spike.
 - Never infer identity from an advertised BLE name alone.
 - Do not treat deprovision or unbind as factory reset.
 - Never commit credentials, tokens, private keys, certificate bodies, or signing
@@ -46,9 +58,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 ```bash
 npm ci
 npm run check
+npm run test:workflows -- --sdk-path ../react-native-sdk
 cargo xtask protocol generate --check
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace
 ```
 
@@ -65,7 +78,8 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
 
 ## Releases
 
-- Public releases start at `1.0.0` and use tags shaped as `vVERSION`.
+- Public prereleases start at `1.0.0-alpha.1`; stable `1.0.0` is reserved for
+  the React Native-consumable release. Tags use `vVERSION`.
 - Read `docs/releasing.md` before creating or pushing a release tag.
 - Only `bota-device-sdk-core` is currently publishable.
 - The first crates.io publication requires the protected one-time bootstrap

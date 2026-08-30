@@ -1,8 +1,21 @@
-use crate::engine::WorkflowCheckpoint;
+use crate::engine::{CancellationId, RequestId, WorkflowCheckpoint};
+use crate::model::{DeviceCandidate, ProvisioningMaterial};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Event {
+    Host(HostEvent),
+    Cancelled { cancellation_id: CancellationId },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HostEvent {
+    pub request_id: RequestId,
+    pub kind: HostEventKind,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum HostEventKind {
     Ble(BleEvent),
     TimerFired {
         timer_id: u64,
@@ -11,6 +24,40 @@ pub enum Event {
         checkpoint: Option<WorkflowCheckpoint>,
     },
     CheckpointSaved,
+    ConnectionIdentitySaved,
+    FactoryResetResultSaved,
+    FactoryResetResultDeleted,
+    PersistenceFailed {
+        platform_code: Option<i64>,
+    },
+    ProvisioningMaterialPrepared {
+        material: ProvisioningMaterial,
+    },
+    FactoryResetGrantPrepared {
+        grant: Vec<u8>,
+    },
+    HostMaterialFailed {
+        platform_code: Option<i64>,
+    },
+    RecordingSinkTruncated,
+    RecordingSinkAppendCompleted {
+        durable_units: u64,
+    },
+    RecordingSinkFinalized {
+        durable_units: u64,
+    },
+    RecordingSinkIntegrityFailed,
+    RecordingSinkFailed {
+        platform_code: Option<i64>,
+    },
+    FirmwareChunkRead {
+        download_id: u64,
+        offset: u64,
+        bytes: Vec<u8>,
+    },
+    FirmwareBlobFailed {
+        platform_code: Option<i64>,
+    },
     SecretLoaded {
         key: String,
         value: Option<Vec<u8>>,
@@ -19,37 +66,36 @@ pub enum Event {
         key: String,
     },
     Network(NetworkEvent),
-    Cancelled,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum BleEvent {
     ScanResult {
-        peripheral_id: String,
-        name: Option<String>,
-        advertisement: Vec<u8>,
+        candidate: DeviceCandidate,
     },
     ScanStopped,
     Connected {
         peripheral_id: String,
+    },
+    ServicesDiscovered {
+        peripheral_id: String,
+    },
+    Subscribed {
+        characteristic_uuid: String,
     },
     Disconnected {
         peripheral_id: String,
         reason_code: Option<u16>,
     },
     ReadCompleted {
-        request_id: u64,
         value: Vec<u8>,
     },
-    WriteCompleted {
-        request_id: u64,
-    },
+    WriteCompleted,
     Notification {
         characteristic_uuid: String,
         value: Vec<u8>,
     },
     Failed {
-        request_id: u64,
         platform_code: Option<i64>,
     },
 }

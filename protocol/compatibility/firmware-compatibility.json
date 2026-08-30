@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sdkVersion": "1.0.0",
+  "sdkVersion": "1.0.0-alpha.1",
   "firmwareBaseline": {
     "version": "1.0.17",
     "revision": "8b175a89374c9833bdaa67fe73ada6672618e5f7"
@@ -124,9 +124,54 @@
       "status": "supported"
     }
   ],
+  "workflowCoveragePolicy": "supported requires positive, rejection, cancellation, and resume or restart-recovery scenarios backed by executable Rust tests",
+  "workflows": [
+    {
+      "workflow": "connection",
+      "scenarios": 5,
+      "classifications": ["positive", "rejection", "cancellation", "resume", "ownership"],
+      "status": "supported"
+    },
+    {
+      "workflow": "provisioning",
+      "scenarios": 4,
+      "classifications": ["positive", "rejection", "cancellation", "resume"],
+      "status": "supported"
+    },
+    {
+      "workflow": "factory-reset",
+      "scenarios": 4,
+      "classifications": ["positive", "rejection", "cancellation", "resume"],
+      "status": "supported"
+    },
+    {
+      "workflow": "recording-transfer",
+      "scenarios": 4,
+      "classifications": ["positive", "rejection", "cancellation", "resume"],
+      "status": "supported"
+    },
+    {
+      "workflow": "upload-handoff",
+      "scenarios": 4,
+      "classifications": ["positive", "rejection", "cancellation", "resume"],
+      "status": "supported"
+    },
+    {
+      "workflow": "firmware-update",
+      "scenarios": 4,
+      "classifications": ["positive", "rejection", "cancellation", "resume"],
+      "status": "supported"
+    },
+    {
+      "workflow": "device-logs",
+      "scenarios": 4,
+      "classifications": ["positive", "rejection", "cancellation", "resume"],
+      "status": "supported"
+    }
+  ],
   "notes": [
     "1.0.17 is the earliest version established by the frozen firmware baseline; earlier introduction versions have not been audited.",
     "Supported means at least one positive and one malformed, rejected, or recovery fixture exists.",
-    "This matrix covers pure protocol behavior only, not native transports or physical-device acceptance."
+    "Workflow support covers deterministic core behavior only, not native transports or physical-device acceptance."
   ]
 }

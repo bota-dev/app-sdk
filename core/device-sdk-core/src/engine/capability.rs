@@ -9,6 +9,9 @@ pub enum Capability {
     SecureStorage,
     NetworkTransfer,
     Progress,
+    HostMaterial,
+    RecordingSink,
+    FirmwareBlob,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]

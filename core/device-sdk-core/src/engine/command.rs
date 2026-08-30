@@ -1,35 +1,61 @@
 use crate::{
     engine::{Capability, CapabilitySet},
     error::{DeviceSdkError, ErrorCode, Operation},
-    model::{DeviceSerialNumber, FirmwareImage, RecordingUuid},
+    model::{
+        DeviceCandidate, DeviceSerialNumber, DurableFactoryResetResult, FactoryResetCommandId,
+        FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId, RecordingUuid,
+        UploadDestinationId, UploadSessionId,
+    },
 };
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Command {
-    DiscoverDevices,
+    DiscoverDevices {
+        timeout_ms: u64,
+        allow_duplicates: bool,
+    },
     Connect {
         device: DeviceSerialNumber,
+        candidate: DeviceCandidate,
+    },
+    Reconnect {
+        device: DeviceSerialNumber,
+        hint: ReconnectHint,
     },
     Provision {
         device: DeviceSerialNumber,
+        material_id: HostMaterialId,
     },
     TransferRecording {
         device: DeviceSerialNumber,
         recording: RecordingUuid,
+        sink_id: RecordingSinkId,
+        total_units: u64,
     },
     UploadRecording {
+        device: DeviceSerialNumber,
         recording: RecordingUuid,
+        upload_id: UploadSessionId,
+        destination_id: UploadDestinationId,
     },
     UpdateFirmware {
         device: DeviceSerialNumber,
         image: FirmwareImage,
+        download_id: u64,
+        reconnect_hint: ReconnectHint,
     },
     ReadDeviceLogs {
         device: DeviceSerialNumber,
     },
     FactoryReset {
         device: DeviceSerialNumber,
+        command_id: FactoryResetCommandId,
+        grant_id: HostMaterialId,
+    },
+    ResumeFactoryReset {
+        device: DeviceSerialNumber,
+        result: DurableFactoryResetResult,
     },
 }
 
@@ -62,40 +88,51 @@ impl Command {
 
     pub const fn operation(&self) -> Operation {
         match self {
-            Self::DiscoverDevices => Operation::Discover,
+            Self::DiscoverDevices { .. } => Operation::Discover,
             Self::Connect { .. } => Operation::Connect,
+            Self::Reconnect { .. } => Operation::Reconnect,
             Self::Provision { .. } => Operation::Provision,
             Self::TransferRecording { .. } => Operation::TransferRecording,
             Self::UploadRecording { .. } => Operation::Upload,
             Self::UpdateFirmware { .. } => Operation::UpdateFirmware,
             Self::ReadDeviceLogs { .. } => Operation::ReadDeviceLogs,
             Self::FactoryReset { .. } => Operation::FactoryReset,
+            Self::ResumeFactoryReset { .. } => Operation::FactoryReset,
         }
     }
 
     const fn required_capabilities(&self) -> &'static [Capability] {
         match self {
-            Self::DiscoverDevices | Self::Connect { .. } | Self::ReadDeviceLogs { .. } => {
-                &[Capability::Ble]
+            Self::DiscoverDevices { .. } => &[Capability::Ble, Capability::Timer],
+            Self::Connect { .. } | Self::Reconnect { .. } => {
+                &[Capability::Ble, Capability::Timer, Capability::Persistence]
             }
-            Self::Provision { .. } | Self::FactoryReset { .. } => {
-                &[Capability::Ble, Capability::SecureStorage]
+            Self::ReadDeviceLogs { .. } => &[Capability::Ble],
+            Self::Provision { .. } | Self::FactoryReset { .. } => &[
+                Capability::Ble,
+                Capability::Timer,
+                Capability::Persistence,
+                Capability::HostMaterial,
+            ],
+            Self::ResumeFactoryReset { .. } => {
+                &[Capability::Ble, Capability::Timer, Capability::Persistence]
             }
             Self::TransferRecording { .. } => &[
                 Capability::Ble,
                 Capability::Persistence,
                 Capability::Progress,
+                Capability::RecordingSink,
             ],
-            Self::UploadRecording { .. } => &[
-                Capability::NetworkTransfer,
-                Capability::Persistence,
-                Capability::Progress,
-            ],
+            Self::UploadRecording { .. } => {
+                &[Capability::Ble, Capability::Timer, Capability::Progress]
+            }
             Self::UpdateFirmware { .. } => &[
                 Capability::Ble,
                 Capability::NetworkTransfer,
                 Capability::Persistence,
                 Capability::Progress,
+                Capability::Timer,
+                Capability::FirmwareBlob,
             ],
         }
     }

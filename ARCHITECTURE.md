@@ -98,13 +98,77 @@ would exceed the one-byte chunk-count limit.
 
 Workflow coordination uses the command/event/effect boundary in
 `core/device-sdk-core/src/engine/`. Commands are authorized against explicit
-host capabilities before effects can be built. Platform callbacks enter as
-typed events, while every requested host effect carries an operation and
-cancellation ID. Persisted checkpoints intentionally cannot contain
+host capabilities before effects can be built. `WorkflowEngine` permits one
+active command owner, gives every effect a monotonic request ID, and rejects
+stale callbacks or mismatched cancellation IDs. Platform callbacks enter as
+typed host events carrying the completed request ID, while every requested host
+effect also carries an operation and cancellation ID. Persisted checkpoints
+intentionally cannot contain
 credentials, presigned URLs, private keys, file paths, or recording payloads.
-Milestone 1 defines these contracts only; reducer implementations and the FFI
-mechanism are deferred as specified in
-[`ADR 0001`](docs/adr/0001-command-event-host-boundary.md).
+Discovery and connection reducers preserve the React Native reference behavior:
+manual selection always verifies serial identity, reconnect prefers an exact
+saved peripheral ID or advertised address, and serial fallback probes one Bota
+candidate at a time after the scan window. Mismatches are disconnected before
+the next probe, and checkpoints retain only stable identity, phase, retry count,
+and candidate index. Recording transfer uses an opaque host sink: the core
+orders truncate, append, checkpoint, final integrity verification, final ACK,
+and device delete without persisting file paths or payload bytes. Firmware
+restarts a resumed transfer at sequence zero, so the reducer skips sequence
+numbers already represented by the durable checkpoint before appending new
+data.
+
+Upload handoff does not carry presigned URLs or credentials. The application
+supplies opaque upload-session and destination IDs, while the reducer reads
+fresh device status to decide ownership. Busy, detached, and unreadable states
+preserve device ownership; only a fresh `sync_active=false` result can emit a
+Bluetooth-fallback notification for the application to act on.
+
+Firmware images live in a host-owned blob named by an opaque numeric download
+ID. The core sees one bounded chunk at a time, owns the eight-packet ACK window,
+and checkpoints only version, phase, byte count, sequence, and retry count.
+Current firmware recreates `update.ufw` on `UPLOAD_START`, so recovery reuses the
+downloaded blob but restarts BLE delivery at offset zero. After CRC acceptance,
+the expected reboot disconnect enters the existing reconnect reducer and the
+workflow completes only after reading back the requested firmware version.
+
+Device-log streaming has one pending or active owner in the workflow engine.
+The reducer subscribes before sending the firmware start command, forwards only
+sanitized complete lines from the shared decoder, and sends stop before
+unsubscribe on user cancellation. A physical disconnect releases host
+subscription state without attempting a BLE stop write. Firmware that rejects
+the diagnostics start command returns stable `feature_unavailable`; transport
+loss remains a retryable connection error.
+
+Native facades call the Rust reducer through a manually owned C ABI with opaque
+engine handles, borrowed inputs, explicitly freed SDK-owned outputs, and stable
+numeric request/cancellation identity. UniFFI `0.32.0` remains a non-shipping
+comparison spike only. The current JSON smoke envelope is not the final public
+serialization contract, and no facade artifact is published yet. See
+[`ADR 0001`](docs/adr/0001-command-event-host-boundary.md) and the
+[`FFI evaluation`](docs/spikes/ffi-boundary-evaluation.md).
+
+Workflow release evidence lives under `protocol/workflows/`. Its schema
+requires the frozen source anchor, executable Rust test, command, host
+capabilities, ordered inputs, ordered effects and notifications, and terminal
+status. `npm run test:workflows` rejects duplicate scenarios, sensitive
+checkpoint fields, missing source/test anchors, and any `supported`
+compatibility claim that lacks positive, rejection, cancellation, and resume
+or restart-recovery coverage. The cross-workflow matrix additionally proves
+that all command variants reject stale callbacks and second owners without
+mutating the active workflow.
+
+Provisioning reads the connection-bound nonce and device public key before it
+asks the host to resolve an opaque material ID. The core validates and chunks
+the returned endpoint and token, subscribes for the result before writing, and
+overwrites volatile nonce, key, and payload buffers on every terminal path.
+Backend requests and durable credential storage remain host responsibilities.
+
+Authenticated factory reset is a durable close-loop. The core subscribes before
+grant/opcode writes, accepts only an exact three-byte success, asks the host to
+persist the command-bound result, then sends receipt opcode `0x0A`. It asks the
+host to delete that journal only after the receipt write succeeds. Resume mode
+waits for firmware's exact replay and can send only the receipt; it cannot
+resolve a grant or resend destructive opcode `0x06`.
 
 ## Security
 

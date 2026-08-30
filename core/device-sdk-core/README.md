@@ -7,16 +7,37 @@ contracts.
 
 ```toml
 [dependencies]
-bota-device-sdk-core = "1.0.0"
+bota-device-sdk-core = "1.0.0-alpha.1"
 ```
 
 This crate does not implement Bluetooth, HTTP, filesystem access, background
 execution, or a Bota backend API client. Platform SDKs provide those host
-capabilities and execute the typed effects emitted by future workflow reducers.
+capabilities and execute typed effects emitted by `WorkflowEngine`. The current
+prerelease implements deterministic discovery, connection recovery,
+provisioning, authenticated factory reset, and resumable recording transfer.
+Reset success is durably journaled before receipt and replay can resume without
+resending the destructive command. Recording bytes remain in a host-owned sink;
+the core checkpoints only byte and sequence counters, restarts the device stream
+from sequence zero, and confirms device deletion only after the sink has passed
+its durable integrity check. Upload handoff keeps destination data host-owned
+behind opaque IDs and permits Bluetooth fallback only after a fresh device
+status proves direct-upload ownership is inactive. Firmware update downloads
+into an opaque host blob, streams 500-byte chunks
+with the firmware's eight-packet flow-control window, treats reboot disconnect
+as expected, reuses connection recovery, and verifies the target version after
+reconnect. A transfer retry reuses the host blob but restarts device delivery at
+offset zero because current firmware recreates its staging file on every start.
+The host must establish any firmware-required OTA authorization before starting
+this prerelease workflow. Device-log streaming subscribes before start, permits
+one owner, reuses the bounded line decoder for sequence-gap and UTF-8 recovery,
+and deterministically stops or releases the subscription on terminal paths.
+The workflow compatibility claim is guarded by 29 schema-validated scenarios
+and 25 referenced Rust tests; see `protocol/workflows/` in the repository.
 
-The initial `1.0.0` release covers the pure protocol core. It does not replace
-the production React Native SDK and does not claim native transport or
-physical-device acceptance. See the
+The `1.0.0-alpha.*` releases cover protocol and workflow-core milestones. They
+do not replace the production React Native SDK and do not claim native
+transport or physical-device acceptance. Stable `1.0.0` is reserved for the
+React Native-consumable release. See the
 [repository](https://github.com/bota-dev/app-sdk) for architecture,
 compatibility, and release evidence.
 

@@ -6,16 +6,16 @@ fn root() -> PathBuf {
 
 #[test]
 fn version_tag_and_publishable_metadata_are_synchronized() {
-    let release = xtask::release::verify_release(&root(), "v1.0.0").unwrap();
+    let release = xtask::release::verify_release(&root(), "v1.0.0-alpha.1").unwrap();
 
-    assert_eq!(release.version, "1.0.0");
+    assert_eq!(release.version, "1.0.0-alpha.1");
     assert_eq!(release.crate_name, "bota-device-sdk-core");
 }
 
 #[test]
 fn mismatched_or_unprefixed_tags_are_rejected() {
-    let wrong_version = xtask::release::verify_release(&root(), "v2.0.0").unwrap_err();
-    let missing_prefix = xtask::release::verify_release(&root(), "1.0.0").unwrap_err();
+    let wrong_version = xtask::release::verify_release(&root(), "v1.0.0").unwrap_err();
+    let missing_prefix = xtask::release::verify_release(&root(), "1.0.0-alpha.1").unwrap_err();
 
     assert!(wrong_version.contains("does not match"));
     assert!(missing_prefix.contains("must start with v"));

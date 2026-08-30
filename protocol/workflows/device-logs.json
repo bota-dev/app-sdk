@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "workflow": "device-logs",
+  "baseline": {
+    "package": "@bota.dev/react-native-sdk",
+    "version": "0.0.65",
+    "revision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4"
+  },
+  "scenarios": [
+    {
+      "name": "device-logs-subscription-success",
+      "classification": "positive",
+      "sourceTest": "__tests__/DeviceManager.test.ts#subscribes before Start and cleanup sends Stop once",
+      "rustTest": "device_logs_workflow::subscribes_before_start_and_rejects_overlapping_ownership",
+      "command": "read_device_logs",
+      "capabilities": ["ble"],
+      "inputs": ["subscribed", "start_written", "log_notification"],
+      "expected": {
+        "effects": ["subscribe", "start_logging"],
+        "notifications": ["started", "device_log"],
+        "terminalStatus": "running"
+      }
+    },
+    {
+      "name": "device-logs-feature-rejection",
+      "classification": "rejection",
+      "sourceTest": "__tests__/DeviceManager.test.ts#removes the monitor and reports FEATURE_UNAVAILABLE when Start fails",
+      "rustTest": "device_logs_workflow::start_rejection_reports_feature_unavailable_and_releases_subscription",
+      "command": "read_device_logs",
+      "capabilities": ["ble"],
+      "inputs": ["subscribed", "start_failed"],
+      "expected": {
+        "effects": ["subscribe", "start_logging", "unsubscribe"],
+        "notifications": ["started", "failed"],
+        "terminalStatus": "failed",
+        "errorCode": "feature_unavailable"
+      }
+    },
+    {
+      "name": "device-logs-cancellation",
+      "classification": "cancellation",
+      "sourceTest": "__tests__/DeviceManager.test.ts#subscribes before Start and cleanup sends Stop once",
+      "rustTest": "device_logs_workflow::user_cancellation_stops_logging_before_releasing_the_subscription",
+      "command": "read_device_logs",
+      "capabilities": ["ble"],
+      "inputs": ["cancelled"],
+      "expected": {
+        "effects": ["stop_logging", "unsubscribe"],
+        "notifications": ["started", "cancelled"],
+        "terminalStatus": "cancelled"
+      }
+    },
+    {
+      "name": "device-logs-restart-after-disconnect",
+      "classification": "resume",
+      "sourceTest": "__tests__/DeviceManager.test.ts#removes an active log monitor after an unexpected disconnect without writing Stop",
+      "rustTest": "device_logs_workflow::disconnect_releases_owner_for_a_fresh_subscription",
+      "command": "read_device_logs",
+      "capabilities": ["ble"],
+      "inputs": ["disconnected", "new_command"],
+      "expected": {
+        "effects": ["unsubscribe"],
+        "notifications": ["started", "failed"],
+        "terminalStatus": "failed",
+        "errorCode": "not_connected"
+      }
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "name": "@bota.dev/app-sdk-workspace",
-  "version": "1.0.0",
+  "version": "1.0.0-alpha.1",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -11,7 +11,8 @@
     "check:licenses": "node scripts/check-licenses.mjs",
     "license-check": "npm run check:licenses",
     "test:fixtures": "node --test tools/baseline/*.test.mjs",
-    "test:tooling": "node --test scripts/*.test.mjs tools/baseline/*.test.mjs"
+    "test:tooling": "node --test scripts/*.test.mjs tools/baseline/*.test.mjs",
+    "test:workflows": "node tools/baseline/compare-workflows.mjs"
   },
   "devDependencies": {
     "ajv": "8.20.0"

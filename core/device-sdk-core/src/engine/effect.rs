@@ -1,4 +1,11 @@
-use crate::{engine::WorkflowCheckpoint, error::Operation};
+use crate::{
+    engine::{RequestId, WorkflowCheckpoint, WorkflowNotification},
+    error::Operation,
+    model::{
+        DeviceCandidate, DevicePublicKey, DeviceSerialNumber, DurableFactoryResetResult,
+        FactoryResetCommandId, HostMaterialId, ProvisioningNonce, RecordingSinkId,
+    },
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
@@ -16,6 +23,7 @@ impl CancellationId {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EffectRequest {
+    pub request_id: RequestId,
     pub operation: Operation,
     pub cancellation_id: CancellationId,
     pub effect: Effect,
@@ -23,11 +31,13 @@ pub struct EffectRequest {
 
 impl EffectRequest {
     pub const fn new(
+        request_id: RequestId,
         operation: Operation,
         cancellation_id: CancellationId,
         effect: Effect,
     ) -> Self {
         Self {
+            request_id,
             operation,
             cancellation_id,
             effect,
@@ -43,6 +53,10 @@ pub enum Effect {
     Ble(BleEffect),
     Network(NetworkEffect),
     Progress(ProgressEffect),
+    Notify(WorkflowNotification),
+    HostMaterial(HostMaterialEffect),
+    RecordingSink(RecordingSinkEffect),
+    FirmwareBlob(FirmwareBlobEffect),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -54,8 +68,20 @@ pub enum TimerEffect {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum PersistenceEffect {
     LoadCheckpoint,
-    SaveCheckpoint { checkpoint: WorkflowCheckpoint },
+    SaveCheckpoint {
+        checkpoint: WorkflowCheckpoint,
+    },
     DeleteCheckpoint,
+    SaveConnectionIdentity {
+        device: DeviceSerialNumber,
+        candidate: DeviceCandidate,
+    },
+    SaveFactoryResetResult {
+        result: DurableFactoryResetResult,
+    },
+    DeleteFactoryResetResult {
+        command_id: FactoryResetCommandId,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -72,6 +98,9 @@ pub enum BleEffect {
     },
     StopScan,
     Connect {
+        peripheral_id: String,
+    },
+    DiscoverServices {
         peripheral_id: String,
     },
     Disconnect {
@@ -118,4 +147,48 @@ pub enum NetworkEffect {
 pub struct ProgressEffect {
     pub completed_units: u64,
     pub total_units: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum HostMaterialEffect {
+    PrepareProvisioning {
+        material_id: HostMaterialId,
+        device: DeviceSerialNumber,
+        nonce: ProvisioningNonce,
+        device_public_key: DevicePublicKey,
+    },
+    PrepareFactoryResetGrant {
+        grant_id: HostMaterialId,
+        device: DeviceSerialNumber,
+        nonce: ProvisioningNonce,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum RecordingSinkEffect {
+    Truncate {
+        sink_id: RecordingSinkId,
+        completed_units: u64,
+    },
+    Append {
+        sink_id: RecordingSinkId,
+        sequence: u16,
+        payload: Vec<u8>,
+    },
+    Finalize {
+        sink_id: RecordingSinkId,
+        expected_crc32: Option<u32>,
+    },
+    Discard {
+        sink_id: RecordingSinkId,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum FirmwareBlobEffect {
+    ReadChunk {
+        download_id: u64,
+        offset: u64,
+        max_length: u16,
+    },
 }

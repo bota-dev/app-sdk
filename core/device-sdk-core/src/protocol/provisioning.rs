@@ -29,7 +29,7 @@ pub fn parse_factory_reset_result(bytes: &[u8]) -> Result<FactoryResetResult, De
     let cursor = Cursor::new(bytes);
     cursor.require(3)?;
     Ok(FactoryResetResult {
-        command_id: cursor.u16_le(0)?,
-        result_code: cursor.u8(2)?,
+        result_code: cursor.u8(0)?,
+        deleted_recording_count: cursor.u16_le(1)?,
     })
 }

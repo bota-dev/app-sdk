@@ -3,15 +3,15 @@ mod checkpoint;
 mod command;
 mod effect;
 mod event;
+mod output;
+mod request;
+mod runtime;
 
 pub use capability::*;
 pub use checkpoint::*;
 pub use command::*;
 pub use effect::*;
 pub use event::*;
-
-use crate::error::DeviceSdkError;
-
-pub trait Workflow {
-    fn dispatch(&mut self, event: Event) -> Result<Vec<EffectRequest>, DeviceSdkError>;
-}
+pub use output::*;
+pub use request::*;
+pub use runtime::*;

@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "workflow": "upload-handoff",
+  "baseline": {
+    "package": "@bota.dev/react-native-sdk",
+    "version": "0.0.65",
+    "revision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4"
+  },
+  "scenarios": [
+    {
+      "name": "upload-handoff-direct-success",
+      "classification": "positive",
+      "sourceTest": "__tests__/deviceUploadHandoff.test.ts#allows BLE fallback only after fresh inactive status",
+      "rustTest": "upload_handoff_workflow::successful_direct_upload_completes_without_ble_fallback",
+      "command": "upload_recording",
+      "capabilities": ["ble", "timer", "progress"],
+      "inputs": ["fresh_status_complete"],
+      "expected": {
+        "effects": ["read_status"],
+        "notifications": ["started", "completed"],
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "name": "upload-handoff-unknown-ownership-rejection",
+      "classification": "rejection",
+      "sourceTest": "__tests__/deviceUploadHandoff.test.ts#does not start BLE when trigger failure leaves ownership unreadable",
+      "rustTest": "upload_handoff_workflow::detached_or_unknown_ownership_never_falls_back",
+      "command": "upload_recording",
+      "capabilities": ["ble", "timer", "progress"],
+      "inputs": ["status_read_failed"],
+      "expected": {
+        "effects": ["read_status"],
+        "notifications": ["started", "failed"],
+        "terminalStatus": "failed",
+        "errorCode": "upload_ownership_unknown"
+      }
+    },
+    {
+      "name": "upload-handoff-cancellation",
+      "classification": "cancellation",
+      "sourceTest": "__tests__/deviceUploadHandoff.test.ts#does not start BLE after a detached monitor even if reconnect reads inactive",
+      "rustTest": "workflow_conformance_matrix::cancellation_matrix_covers_every_operation",
+      "command": "upload_recording",
+      "capabilities": ["ble", "timer", "progress"],
+      "inputs": ["cancelled"],
+      "expected": {
+        "effects": ["cancel_timer", "unsubscribe"],
+        "notifications": ["started", "cancelled"],
+        "terminalStatus": "cancelled"
+      }
+    },
+    {
+      "name": "upload-handoff-restart-recovers-ownership",
+      "classification": "resume",
+      "sourceTest": "__tests__/deviceUploadHandoff.test.ts#starts BLE only after direct upload fails and fresh status is inactive",
+      "rustTest": "upload_handoff_workflow::direct_failure_falls_back_only_after_fresh_inactive_status",
+      "command": "upload_recording",
+      "capabilities": ["ble", "timer", "progress"],
+      "inputs": ["fresh_inactive_status"],
+      "expected": {
+        "effects": ["read_status"],
+        "notifications": ["started", "ble_fallback_ready", "completed"],
+        "terminalStatus": "completed"
+      }
+    }
+  ]
+}

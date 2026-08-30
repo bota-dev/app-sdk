@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bota.dev/schemas/device-sdk-workflow-suite.schema.json",
+  "title": "Bota Device SDK workflow conformance suite",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "workflow", "baseline", "scenarios"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "workflow": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package", "version", "revision"],
+      "properties": {
+        "package": { "const": "@bota.dev/react-native-sdk" },
+        "version": { "const": "0.0.65" },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/scenario" }
+    }
+  },
+  "$defs": {
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "classification",
+        "sourceTest",
+        "rustTest",
+        "command",
+        "capabilities",
+        "inputs",
+        "expected"
+      ],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "classification": {
+          "enum": ["positive", "rejection", "cancellation", "resume", "stale-event", "ownership"]
+        },
+        "sourceTest": { "type": "string", "pattern": "^[^#\\n]+#[^#\\n]+$" },
+        "rustTest": { "type": "string", "pattern": "^[a-z0-9_]+::[a-z0-9_]+$" },
+        "command": {
+          "enum": [
+            "discover_devices",
+            "connect",
+            "reconnect",
+            "provision",
+            "transfer_recording",
+            "upload_recording",
+            "update_firmware",
+            "read_device_logs",
+            "factory_reset",
+            "resume_factory_reset"
+          ]
+        },
+        "capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "ble",
+              "timer",
+              "persistence",
+              "secure_storage",
+              "network_transfer",
+              "progress",
+              "host_material",
+              "recording_sink",
+              "firmware_blob"
+            ]
+          }
+        },
+        "inputs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "expected": { "$ref": "#/$defs/expected" }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effects", "notifications", "terminalStatus"],
+      "properties": {
+        "effects": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "notifications": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "terminalStatus": {
+          "enum": ["idle", "running", "completed", "cancelled", "failed"]
+        },
+        "errorCode": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "checkpoint": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/checkpoint" }
+          ]
+        }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow",
+        "operation",
+        "device",
+        "phase",
+        "completedUnits",
+        "retryCount"
+      ],
+      "properties": {
+        "workflow": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "operation": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "device": { "type": "string", "pattern": "^[A-Z0-9]{10}$" },
+        "recording": { "type": ["string", "null"], "pattern": "^[0-9a-f]{32}$" },
+        "phase": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "completedUnits": { "type": "integer", "minimum": 0 },
+        "retryCount": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "lastSequence": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 },
+        "firmwareVersion": { "type": ["string", "null"], "pattern": "^[0-9A-Za-z._+-]+$" }
+      }
+    }
+  }
+}

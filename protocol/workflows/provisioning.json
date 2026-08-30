@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "workflow": "provisioning",
+  "baseline": {
+    "package": "@bota.dev/react-native-sdk",
+    "version": "0.0.65",
+    "revision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4"
+  },
+  "scenarios": [
+    {
+      "name": "provisioning-success",
+      "classification": "positive",
+      "sourceTest": "src/managers/DeviceManager.ts#async provision(",
+      "rustTest": "provisioning_workflow::provisioning_reads_nonce_and_key_then_writes_bounded_chunks_after_subscribing",
+      "command": "provision",
+      "capabilities": ["ble", "timer", "persistence", "host_material"],
+      "inputs": ["nonce_read", "public_key_read", "material_prepared", "subscribed", "writes_completed", "device_success"],
+      "expected": {
+        "effects": ["read_nonce", "read_public_key", "prepare_material", "subscribe", "write_chunks"],
+        "notifications": ["started", "completed"],
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "name": "provisioning-payload-rejection",
+      "classification": "rejection",
+      "sourceTest": "src/managers/DeviceManager.ts#async provision(",
+      "rustTest": "provisioning_workflow::provisioning_rejects_too_many_chunks_before_any_material_write",
+      "command": "provision",
+      "capabilities": ["ble", "timer", "persistence", "host_material"],
+      "inputs": ["nonce_read", "public_key_read", "oversized_material"],
+      "expected": {
+        "effects": ["read_nonce", "read_public_key", "prepare_material"],
+        "notifications": ["started", "failed"],
+        "terminalStatus": "failed",
+        "errorCode": "payload_too_large"
+      }
+    },
+    {
+      "name": "provisioning-cancellation",
+      "classification": "cancellation",
+      "sourceTest": "src/managers/DeviceManager.ts#async provision(",
+      "rustTest": "workflow_conformance_matrix::cancellation_matrix_covers_every_operation",
+      "command": "provision",
+      "capabilities": ["ble", "timer", "persistence", "host_material"],
+      "inputs": ["cancelled"],
+      "expected": {
+        "effects": ["cleanup_subscription"],
+        "notifications": ["started", "cancelled"],
+        "terminalStatus": "cancelled"
+      }
+    },
+    {
+      "name": "provisioning-retry-after-disconnect",
+      "classification": "resume",
+      "sourceTest": "src/managers/DeviceManager.ts#async provision(",
+      "rustTest": "provisioning_workflow::provisioning_disconnect_releases_owner_for_a_fresh_retry",
+      "command": "provision",
+      "capabilities": ["ble", "timer", "persistence", "host_material"],
+      "inputs": ["material_prepared", "disconnected", "new_command"],
+      "expected": {
+        "effects": ["cleanup_subscription"],
+        "notifications": ["started", "failed"],
+        "terminalStatus": "failed",
+        "errorCode": "not_connected"
+      }
+    }
+  ]
+}
