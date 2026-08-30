@@ -3,7 +3,7 @@ use crate::{
     error::{DeviceSdkError, ErrorCode, Operation},
     model::{
         DeviceCandidate, DeviceSerialNumber, DurableFactoryResetResult, FactoryResetCommandId,
-        FirmwareImage, HostMaterialId, ReconnectHint, RecordingUuid,
+        FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId, RecordingUuid,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -29,6 +29,8 @@ pub enum Command {
     TransferRecording {
         device: DeviceSerialNumber,
         recording: RecordingUuid,
+        sink_id: RecordingSinkId,
+        total_units: u64,
     },
     UploadRecording {
         recording: RecordingUuid,
@@ -113,6 +115,7 @@ impl Command {
                 Capability::Ble,
                 Capability::Persistence,
                 Capability::Progress,
+                Capability::RecordingSink,
             ],
             Self::UploadRecording { .. } => &[
                 Capability::NetworkTransfer,

@@ -39,6 +39,17 @@ pub enum HostEventKind {
     HostMaterialFailed {
         platform_code: Option<i64>,
     },
+    RecordingSinkTruncated,
+    RecordingSinkAppendCompleted {
+        durable_units: u64,
+    },
+    RecordingSinkFinalized {
+        durable_units: u64,
+    },
+    RecordingSinkIntegrityFailed,
+    RecordingSinkFailed {
+        platform_code: Option<i64>,
+    },
     SecretLoaded {
         key: String,
         value: Option<Vec<u8>>,

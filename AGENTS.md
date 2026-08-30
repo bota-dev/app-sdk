@@ -33,6 +33,8 @@
 - One workflow owns the core engine at a time; hosts preserve request and
   cancellation IDs when returning callbacks.
 - High-volume recording bytes stay off JavaScript and Dart bridges.
+- Recording transfer owns sequence/checkpoint decisions; native hosts own the
+  durable sink and validate the final checksum before device deletion.
 - Never infer identity from an advertised BLE name alone.
 - Do not treat deprovision or unbind as factory reset.
 - Never commit credentials, tokens, private keys, certificate bodies, or signing

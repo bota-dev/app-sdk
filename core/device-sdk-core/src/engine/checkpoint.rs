@@ -36,4 +36,6 @@ pub struct WorkflowCheckpoint {
     pub phase: CheckpointPhase,
     pub completed_units: u64,
     pub retry_count: u16,
+    #[serde(default)]
+    pub last_sequence: Option<u16>,
 }

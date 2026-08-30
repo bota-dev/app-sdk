@@ -8,7 +8,7 @@ use bota_device_sdk_core::{
         WorkflowCheckpoint, WorkflowKind,
     },
     error::{ErrorCode, Operation},
-    model::{DeviceSerialNumber, RecordingUuid},
+    model::{DeviceSerialNumber, RecordingSinkId, RecordingUuid},
 };
 
 #[test]
@@ -16,6 +16,8 @@ fn unsupported_capability_fails_before_transport_effect_is_built() {
     let command = Command::TransferRecording {
         device: DeviceSerialNumber::new("C8SU2XXWHI").unwrap(),
         recording: recording_id(),
+        sink_id: RecordingSinkId::new("sink-1").unwrap(),
+        total_units: 4,
     };
     let capabilities = CapabilitySet::from([Capability::Persistence]);
     let mut transport_effect_built = false;
@@ -165,6 +167,7 @@ fn checkpoint() -> WorkflowCheckpoint {
         phase: CheckpointPhase::Transferring,
         completed_units: 4,
         retry_count: 1,
+        last_sequence: None,
     }
 }
 

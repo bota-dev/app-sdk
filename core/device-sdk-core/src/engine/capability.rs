@@ -10,6 +10,7 @@ pub enum Capability {
     NetworkTransfer,
     Progress,
     HostMaterial,
+    RecordingSink,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]

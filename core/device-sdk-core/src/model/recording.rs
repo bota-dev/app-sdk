@@ -64,6 +64,26 @@ impl fmt::Display for RecordingUuid {
     }
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub struct RecordingSinkId(String);
+
+impl RecordingSinkId {
+    pub fn new(value: impl Into<String>) -> Result<Self, DeviceSdkError> {
+        let value = value.into();
+        if value.is_empty() || value.len() > 128 || value.chars().any(char::is_whitespace) {
+            return Err(
+                DeviceSdkError::new(ErrorCode::InvalidInput, Operation::Validate, false)
+                    .with_detail("recording sink ID must be 1-128 characters without whitespace"),
+            );
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum AudioCodec {
     Pcm16k,

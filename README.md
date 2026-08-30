@@ -14,7 +14,8 @@ physical-device parity gates.
 The protocol core is versioned at `1.0.0-alpha.1`: the repository has a generated
 protocol manifest, 50 language-neutral compatibility fixtures, bounded Rust
 decoders, byte-exact serializers, stable models/errors, and deterministic
-discovery, connection-recovery, provisioning, and authenticated-reset reducers.
+discovery, connection-recovery, provisioning, authenticated-reset, and
+resumable recording-transfer reducers.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own

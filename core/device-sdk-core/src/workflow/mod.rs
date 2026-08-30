@@ -2,11 +2,13 @@ mod connection;
 mod discovery;
 mod factory_reset;
 mod provisioning;
+mod recording_transfer;
 
 pub(crate) use connection::ConnectionWorkflow;
 pub(crate) use discovery::DiscoveryWorkflow;
 pub(crate) use factory_reset::FactoryResetWorkflow;
 pub(crate) use provisioning::ProvisioningWorkflow;
+pub(crate) use recording_transfer::RecordingTransferWorkflow;
 
 use crate::{
     engine::{CancellationId, Effect, EffectRequest, HostEvent, RequestId},

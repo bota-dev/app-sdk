@@ -318,13 +318,13 @@ factory reset as `feat: add authenticated reset workflow`.
 - Upload handoff accepts opaque upload and destination IDs; URLs and credentials
   never enter core state or checkpoints.
 
-- [ ] **Step 1: Add failing transfer scenarios**
+- [x] **Step 1: Add failing transfer scenarios**
 
 Cover subscribe-before-start, ACK sequencing, duplicate packet idempotence,
 checkpoint resume, disconnect retry, cancellation without device deletion,
 integrity failure, and confirm-delete only after durable sink finalization.
 
-- [ ] **Step 2: Add failing upload-ownership scenarios**
+- [x] **Step 2: Add failing upload-ownership scenarios**
 
 Port busy, detached, unknown ownership, direct-upload failure with fresh
 inactive status, and successful direct upload. BLE fallback is emitted only for

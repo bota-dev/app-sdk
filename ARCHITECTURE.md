@@ -110,8 +110,13 @@ manual selection always verifies serial identity, reconnect prefers an exact
 saved peripheral ID or advertised address, and serial fallback probes one Bota
 candidate at a time after the scan window. Mismatches are disconnected before
 the next probe, and checkpoints retain only stable identity, phase, retry count,
-and candidate index. The remaining workflows and FFI mechanism are deferred as
-specified in [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md).
+and candidate index. Recording transfer uses an opaque host sink: the core
+orders truncate, append, checkpoint, final integrity verification, final ACK,
+and device delete without persisting file paths or payload bytes. Firmware
+restarts a resumed transfer at sequence zero, so the reducer skips sequence
+numbers already represented by the durable checkpoint before appending new
+data. The remaining workflows and FFI mechanism are deferred as specified in
+[`ADR 0001`](docs/adr/0001-command-event-host-boundary.md).
 
 Provisioning reads the connection-bound nonce and device public key before it
 asks the host to resolve an opaque material ID. The core validates and chunks

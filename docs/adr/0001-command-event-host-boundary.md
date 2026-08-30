@@ -41,7 +41,11 @@ Provisioning resolves backend-issued material through an opaque host effect and
 keeps nonce, key, and token bytes out of checkpoints and notifications.
 Authenticated reset uses host persistence effects to enforce result-before-
 receipt ordering and retains the durable result when receipt delivery fails.
-Transfer, upload, OTA, and device-log remain deferred.
+Recording transfer uses an opaque host-owned sink for truncate, append,
+finalize, and discard effects. The core deduplicates replayed sequence numbers
+after restart and sends the firmware's terminal ACK only after durable sink
+finalization; `CONFIRM` follows that ACK and is therefore the only step that can
+delete the device copy. Upload handoff, OTA, and device-log remain deferred.
 
 ## FFI Decision Gate
 

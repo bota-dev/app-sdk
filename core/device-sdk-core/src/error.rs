@@ -20,6 +20,7 @@ pub enum ErrorCode {
     Timeout,
     Cancelled,
     ProtocolRejected,
+    IntegrityFailed,
     Internal,
 }
 
@@ -42,6 +43,7 @@ impl ErrorCode {
             Self::Timeout => "timeout",
             Self::Cancelled => "cancelled",
             Self::ProtocolRejected => "protocol_rejected",
+            Self::IntegrityFailed => "integrity_failed",
             Self::Internal => "internal",
         }
     }

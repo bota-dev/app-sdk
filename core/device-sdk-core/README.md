@@ -14,10 +14,13 @@ This crate does not implement Bluetooth, HTTP, filesystem access, background
 execution, or a Bota backend API client. Platform SDKs provide those host
 capabilities and execute typed effects emitted by `WorkflowEngine`. The current
 prerelease implements deterministic discovery, connection recovery,
-provisioning, and authenticated factory reset. Reset success is durably
-journaled before receipt and replay can resume without resending the destructive
-command. Recording transfer, upload, OTA, and device-log workflows remain under
-development.
+provisioning, authenticated factory reset, and resumable recording transfer.
+Reset success is durably journaled before receipt and replay can resume without
+resending the destructive command. Recording bytes remain in a host-owned sink;
+the core checkpoints only byte and sequence counters, restarts the device stream
+from sequence zero, and confirms device deletion only after the sink has passed
+its durable integrity check. Upload handoff, OTA, and device-log workflows remain
+under development.
 
 The `1.0.0-alpha.*` releases cover protocol and workflow-core milestones. They
 do not replace the production React Native SDK and do not claim native

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "reference": "@bota.dev/react-native-sdk@0.0.65 + firmware le_trans_data.c",
+  "scenarios": [
+    { "name": "subscribe-before-start", "expected": "ordered" },
+    { "name": "append-before-checkpoint", "expected": "ordered" },
+    { "name": "duplicate-packet-is-idempotent", "expected": "no_duplicate_append" },
+    { "name": "checkpoint-resume-replays-from-zero", "expected": "skip_durable_sequences" },
+    { "name": "disconnect-retains-retry-state", "expected": "retryable" },
+    { "name": "cancel-aborts-without-device-delete", "expected": "cancelled" },
+    { "name": "integrity-failure-nacks-without-device-delete", "expected": "integrity_failed" },
+    { "name": "final-ack-after-durable-finalize", "expected": "ordered" },
+    { "name": "confirm-delete-after-final-ack", "expected": "ordered" }
+  ]
+}

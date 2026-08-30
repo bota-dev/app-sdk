@@ -3,7 +3,7 @@ use crate::{
     error::Operation,
     model::{
         DeviceCandidate, DevicePublicKey, DeviceSerialNumber, DurableFactoryResetResult,
-        FactoryResetCommandId, HostMaterialId, ProvisioningNonce,
+        FactoryResetCommandId, HostMaterialId, ProvisioningNonce, RecordingSinkId,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -55,6 +55,7 @@ pub enum Effect {
     Progress(ProgressEffect),
     Notify(WorkflowNotification),
     HostMaterial(HostMaterialEffect),
+    RecordingSink(RecordingSinkEffect),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -159,5 +160,25 @@ pub enum HostMaterialEffect {
         grant_id: HostMaterialId,
         device: DeviceSerialNumber,
         nonce: ProvisioningNonce,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum RecordingSinkEffect {
+    Truncate {
+        sink_id: RecordingSinkId,
+        completed_units: u64,
+    },
+    Append {
+        sink_id: RecordingSinkId,
+        sequence: u16,
+        payload: Vec<u8>,
+    },
+    Finalize {
+        sink_id: RecordingSinkId,
+        expected_crc32: Option<u32>,
+    },
+    Discard {
+        sink_id: RecordingSinkId,
     },
 }
