@@ -28,3 +28,9 @@ impl<const N: usize> From<[Capability; N]> for CapabilitySet {
         Self(capabilities.into_iter().collect())
     }
 }
+
+impl FromIterator<Capability> for CapabilitySet {
+    fn from_iter<T: IntoIterator<Item = Capability>>(capabilities: T) -> Self {
+        Self(capabilities.into_iter().collect())
+    }
+}

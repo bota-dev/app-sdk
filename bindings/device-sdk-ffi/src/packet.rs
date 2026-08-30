@@ -5,6 +5,14 @@ pub mod kind {
     pub const COMMAND_RANGE_START: u32 = 0x0100;
     pub const COMMAND_DISCOVER_DEVICES: u32 = 0x0101;
     pub const COMMAND_CONNECT: u32 = 0x0102;
+    pub const COMMAND_RECONNECT: u32 = 0x0103;
+    pub const COMMAND_PROVISION: u32 = 0x0104;
+    pub const COMMAND_TRANSFER_RECORDING: u32 = 0x0105;
+    pub const COMMAND_UPLOAD_RECORDING: u32 = 0x0106;
+    pub const COMMAND_UPDATE_FIRMWARE: u32 = 0x0107;
+    pub const COMMAND_READ_DEVICE_LOGS: u32 = 0x0108;
+    pub const COMMAND_FACTORY_RESET: u32 = 0x0109;
+    pub const COMMAND_RESUME_FACTORY_RESET: u32 = 0x010a;
 
     pub const HOST_EVENT_RANGE_START: u32 = 0x0200;
     pub const HOST_EFFECT_RANGE_START: u32 = 0x0300;
@@ -28,6 +36,24 @@ pub mod field_id {
     pub const NAME: u32 = 5;
     pub const ADVERTISED_ADDRESS: u32 = 6;
     pub const RSSI: u32 = 7;
+    pub const STORED_PERIPHERAL_ID: u32 = 8;
+    pub const STORED_NAME: u32 = 9;
+    pub const SCAN_TIMEOUT_MS: u32 = 10;
+    pub const CONNECTION_TIMEOUT_MS: u32 = 11;
+    pub const MATERIAL_ID: u32 = 12;
+    pub const RECORDING_UUID: u32 = 13;
+    pub const SINK_ID: u32 = 14;
+    pub const TOTAL_UNITS: u32 = 15;
+    pub const UPLOAD_ID: u32 = 16;
+    pub const DESTINATION_ID: u32 = 17;
+    pub const FIRMWARE_VERSION: u32 = 18;
+    pub const FIRMWARE_SIZE_BYTES: u32 = 19;
+    pub const FIRMWARE_CRC32: u32 = 20;
+    pub const DOWNLOAD_ID: u32 = 21;
+    pub const COMMAND_ID: u32 = 22;
+    pub const GRANT_ID: u32 = 23;
+    pub const RESULT_CODE: u32 = 24;
+    pub const DELETED_RECORDING_COUNT: u32 = 25;
 }
 
 #[repr(C)]

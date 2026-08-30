@@ -150,16 +150,19 @@ loss remains a retryable connection error.
 Native facades call the Rust reducer through a manually owned C ABI with opaque
 engine handles, borrowed inputs, explicitly freed SDK-owned outputs, and stable
 numeric request/cancellation identity. UniFFI `0.32.0` remains a non-shipping
-comparison spike only. The current JSON smoke envelope is not the final public
-serialization contract, and no facade artifact is published yet. See
+comparison spike only. The shipping boundary uses versioned typed field-list
+packets; the JSON smoke envelope remains comparison tooling and is not a public
+serialization contract. No facade artifact is published yet. See
 [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md) and the
 [`FFI evaluation`](docs/spikes/ffi-boundary-evaluation.md).
 
 The shipping ABI implementation lives in `bindings/device-sdk-ffi` and exports
 only versioned `bota_device_sdk_v1_*` symbols. Its opaque engine lifecycle and
-structured error ownership are frozen; typed command, event, effect, and
-protocol packets must pass the native ABI foundation gate before a platform
-facade can publish.
+structured error ownership are frozen. All ten core workflow commands enter
+through `bota_device_sdk_v1_engine_start`, use stable numeric field and
+capability IDs, reject unknown or duplicate fields, and retain the core's model
+validation. Typed event, effect, and protocol packets must pass the remaining
+native ABI foundation gates before a platform facade can publish.
 
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host

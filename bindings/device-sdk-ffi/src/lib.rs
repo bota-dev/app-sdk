@@ -1,6 +1,8 @@
+mod command;
 mod error;
 mod packet;
 
+pub use command::capability_bits;
 pub use error::{
     ABI_VERSION, BotaDeviceSdkErrorV1, BotaDeviceSdkErrorViewV1, BotaDeviceSdkSliceV1,
     BotaDeviceSdkStatusV1,
@@ -12,11 +14,12 @@ pub use packet::{
 };
 
 use bota_device_sdk_core::{
-    engine::{CancellationId, Event, WorkflowEngine},
+    engine::{CancellationId, EffectRequest, Event, WorkflowEngine},
     error::DeviceSdkError,
 };
 use error::internal_error;
 use std::{
+    collections::VecDeque,
     panic::{AssertUnwindSafe, catch_unwind},
     ptr,
     sync::Mutex,
@@ -25,7 +28,14 @@ use std::{
 #[derive(Default)]
 struct EngineBridge {
     engine: WorkflowEngine,
+    outputs: VecDeque<EffectRequest>,
     last_error: Option<DeviceSdkError>,
+}
+
+impl EngineBridge {
+    fn enqueue(&mut self, effects: Vec<EffectRequest>) {
+        self.outputs.extend(effects);
+    }
 }
 
 #[repr(C)]
@@ -108,12 +118,44 @@ pub unsafe extern "C" fn bota_device_sdk_v1_engine_cancel(
 ) -> BotaDeviceSdkStatusV1 {
     unsafe {
         with_engine(engine, |bridge| {
-            bridge
-                .engine
-                .dispatch(Event::Cancelled {
-                    cancellation_id: cancellation_id(cancellation_id_high, cancellation_id_low),
-                })
-                .map(|_| ())
+            let effects = bridge.engine.dispatch(Event::Cancelled {
+                cancellation_id: cancellation_id(cancellation_id_high, cancellation_id_low),
+            })?;
+            bridge.enqueue(effects);
+            Ok(())
+        })
+    }
+}
+
+#[unsafe(no_mangle)]
+/// # Safety
+///
+/// `engine` must be a live SDK engine. `packet` and every non-empty field
+/// slice must remain readable for the duration of this call.
+pub unsafe extern "C" fn bota_device_sdk_v1_engine_start(
+    engine: *mut BotaDeviceSdkEngineV1,
+    packet: *const BotaDeviceSdkPacketViewV1,
+    capability_bits: u64,
+) -> BotaDeviceSdkStatusV1 {
+    if engine.is_null() || packet.is_null() {
+        return BotaDeviceSdkStatusV1::InvalidArgument;
+    }
+    let packet = unsafe { *packet };
+    if packet.abi_version != ABI_VERSION {
+        return BotaDeviceSdkStatusV1::UnsupportedAbi;
+    }
+
+    unsafe {
+        with_engine(engine, |bridge| {
+            let command = command::command_from_packet(&packet)?;
+            let capabilities = command::capabilities_from_bits(capability_bits)?;
+            let effects = bridge.engine.start(
+                command,
+                &capabilities,
+                cancellation_id(packet.cancellation_id_high, packet.cancellation_id_low),
+            )?;
+            bridge.enqueue(effects);
+            Ok(())
         })
     }
 }
