@@ -1,5 +1,7 @@
 # AGENTS.md
 
+CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xtask manifest uses `toml` 1.x; validate future major changes with the full Rust and tooling workflow.
+
 ## Repository Purpose
 
 - `app-sdk` is the source monorepo for the **Bota Device SDK** family.
