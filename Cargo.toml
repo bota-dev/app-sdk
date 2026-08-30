@@ -2,5 +2,7 @@
 resolver = "2"
 members = [
   "core/device-sdk-core",
+  "tools/ffi-smoke",
+  "tools/uniffi-bindgen",
   "tools/xtask",
 ]

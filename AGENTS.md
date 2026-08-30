@@ -41,6 +41,8 @@
   offset zero; current firmware does not support partial Bluetooth OTA resume.
 - Device logs subscribe before start, have one workflow owner, and use the
   shared bounded decoder; disconnect cleanup must not attempt a BLE stop write.
+- Native facades use the manually owned opaque C ABI selected in ADR 0001;
+  UniFFI `0.32.0` exists only in the non-published comparison spike.
 - Never infer identity from an advertised BLE name alone.
 - Do not treat deprovision or unbind as factory reset.
 - Never commit credentials, tokens, private keys, certificate bodies, or signing
@@ -57,7 +59,7 @@ npm run check
 npm run test:workflows -- --sdk-path ../react-native-sdk
 cargo xtask protocol generate --check
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace
 ```
 

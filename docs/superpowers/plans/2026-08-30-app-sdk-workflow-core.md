@@ -451,23 +451,23 @@ publish-dry-run gates. Commit: `docs: record workflow core milestone evidence`.
 - Does not publish Apple, Android, React Native, Flutter, Web, or Windows
   artifacts.
 
-- [ ] **Step 1: Write the ABI contract test before the spike**
+- [x] **Step 1: Write the ABI contract test before the spike**
 
 Require opaque engine handles, caller-owned input buffers, SDK-owned output
 buffers with an explicit free function, numeric request/cancellation IDs, and
 no Rust layout or async-runtime types in the header.
 
-- [ ] **Step 2: Implement both smoke boundaries and measure them**
+- [x] **Step 2: Implement both smoke boundaries and measure them**
 
 Expose engine create/free, command JSON decode for the spike only, event
 dispatch, output polling, and buffer free. Record generated source, binary
 size, dependency tree, license result, and minimal Swift/Kotlin call sites.
 
-- [ ] **Step 3: Update ADR 0001 with the decision**
+- [x] **Step 3: Update ADR 0001 with the decision**
 
 Choose only after both paths pass the same smoke contract. Document rejected
 trade-offs and pin every adopted tool version.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run all repository gates. Commit: `docs: decide native sdk binding boundary`.

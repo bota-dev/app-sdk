@@ -137,8 +137,15 @@ sanitized complete lines from the shared decoder, and sends stop before
 unsubscribe on user cancellation. A physical disconnect releases host
 subscription state without attempting a BLE stop write. Firmware that rejects
 the diagnostics start command returns stable `feature_unavailable`; transport
-loss remains a retryable connection error. The FFI mechanism remains deferred
-as specified in [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md).
+loss remains a retryable connection error.
+
+Native facades call the Rust reducer through a manually owned C ABI with opaque
+engine handles, borrowed inputs, explicitly freed SDK-owned outputs, and stable
+numeric request/cancellation identity. UniFFI `0.32.0` remains a non-shipping
+comparison spike only. The current JSON smoke envelope is not the final public
+serialization contract, and no facade artifact is published yet. See
+[`ADR 0001`](docs/adr/0001-command-event-host-boundary.md) and the
+[`FFI evaluation`](docs/spikes/ffi-boundary-evaluation.md).
 
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host

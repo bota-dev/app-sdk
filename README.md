@@ -20,6 +20,9 @@ reducers, plus exclusive device-log subscription ownership and line delivery.
 Twenty-nine canonical workflow scenarios are schema validated, pinned to the
 React Native `0.0.65` baseline, and backed by 25 executable Rust tests covering
 positive, rejection, cancellation, and resume or restart-recovery behavior.
+The native-boundary spike selected a manually owned C ABI after comparing it
+with pinned UniFFI `0.32.0`; neither boundary currently ships as a platform
+artifact.
 It does not publish a supported platform SDK or replace the production React
 Native package. The first public artifact is the `bota-device-sdk-core` crate;
 platform SDK artifacts will join the synchronized version only after their own
@@ -41,7 +44,7 @@ npm run check
 npm run test:fixtures
 npm run test:workflows -- --sdk-path ../react-native-sdk
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace
 cargo xtask protocol generate --check
 ```

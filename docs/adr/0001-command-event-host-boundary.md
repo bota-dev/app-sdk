@@ -57,22 +57,28 @@ subscribe precedes start, shared decoder output becomes sanitized line
 notifications, cancellation sends stop before unsubscribe, and disconnect
 cleanup releases subscription state without an invalid BLE stop write.
 
-## FFI Decision Gate
+## Native Binding Decision
 
-Milestone 2 must compare at least one binding generator with a manually owned C
-ABI. The spike must measure and record:
+Milestone 2 compared a manually owned C ABI with UniFFI `0.32.0` and selected
+the C ABI for native facades. The boundary uses opaque handles, borrowed input
+spans, explicitly freed SDK-owned outputs, and numeric request/cancellation
+identity. Platform facades expose idiomatic Swift, Kotlin, C#, and Dart APIs
+above that stable language-neutral surface.
 
-- Swift, Kotlin/JNI, C#, and Dart support;
-- async cancellation and event delivery behavior;
-- copies and ownership transitions for large byte buffers;
-- generated-code reviewability and API stability;
-- binary-size impact for each shipping platform;
-- compatibility with the repository dependency-license gate;
-- reproducible CI builds and pinned toolchains.
+UniFFI generated useful Swift and Kotlin APIs, but its pinned first-party
+generator does not cover C# or Dart, adds a larger runtime dependency and
+binary surface, and does not remove the native BLE/lifecycle adapters Bota must
+own. It remains a non-published, exact-version smoke dependency so the decision
+is reproducible; it is not a dependency of the core crate or a shipping SDK.
+The measurements, call sites, license treatment, and remaining platform-size
+gates are recorded in
+[`ffi-boundary-evaluation.md`](../spikes/ffi-boundary-evaluation.md).
 
-No generator is adopted solely because it targets more languages. Web remains
-a native TypeScript facade because browsers cannot load this native Rust core
-for Web Bluetooth without a separate WASM/browser design and security review.
+The JSON envelope in that spike validates ownership and event flow only. The
+native facade milestone must freeze versioned exported symbols and replace JSON
+on any high-volume or schema-sensitive path. Web remains a native TypeScript
+facade because browsers cannot load this native core for Web Bluetooth without
+a separate WASM/browser design and security review.
 
 ## Consequences
 
@@ -80,5 +86,8 @@ for Web Bluetooth without a separate WASM/browser design and security review.
   filesystem, thread, or async-runtime dependencies.
 - Native facades retain control over OS permissions, background execution,
   Bluetooth identity, transport buffers, and secure storage.
-- The public facade can remain stable while the FFI mechanism is evaluated.
+- Public facades can remain idiomatic while sharing one reviewed native ABI.
 - Hosts must implement the declared capability and effect contracts.
+- Native adapters must explicitly manage handle, input, and output lifetimes.
+- Per-platform ABI compilation, package size, and ownership tests remain
+  release gates; this decision does not publish a facade.
