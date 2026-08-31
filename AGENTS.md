@@ -50,6 +50,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   Kotlin types but must not redesign the C boundary.
 - Apple workflow calls pass through one `CoreEngineActor`; host callbacks must
   preserve the effect operation, request ID, and cancellation identity exactly.
+- Apple concurrency tests must await explicit callback handshakes; stream
+  completion does not order bookkeeping launched in a separate task.
 - `BotaDeviceClient.configure()` is idempotent until `destroy()`. Public device
   observation must finish on destroy, and status bytes must use the shared ABI
   decoder rather than a Swift parser.

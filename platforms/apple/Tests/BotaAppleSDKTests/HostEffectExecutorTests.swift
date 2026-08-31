@@ -86,7 +86,9 @@ final class HostEffectExecutorTests: XCTestCase {
     }
 
     func testCancellingASuspendedPortFinishesItsStream() async throws {
-        let suspended = SuspendedPort()
+        let terminated = expectation(description: "upstream port terminated")
+        let finished = expectation(description: "downstream stream finished")
+        let suspended = SuspendedPort(terminated: terminated)
         let executor = HostEffectExecutor(
             bluetooth: suspended,
             persistence: ProbePort(name: "persistence", recorder: PortRecorder()),
@@ -99,15 +101,16 @@ final class HostEffectExecutorTests: XCTestCase {
         let effect = try CoreEffect(packet: vector.packet)
         let stream = await executor.execute(effect)
         let consumer = Task {
+            defer { finished.fulfill() }
             for try await _ in stream {}
         }
         await suspended.waitUntilStarted()
 
         await executor.cancel(effect.cancellationID)
 
+        await fulfillment(of: [terminated, finished], timeout: 1)
+        consumer.cancel()
         try await consumer.value
-        let wasCancelled = await suspended.wasCancelled
-        XCTAssertTrue(wasCancelled)
     }
 
     func testLateCompletionCannotCompleteANewerRequest() async throws {
@@ -182,25 +185,24 @@ private struct FailingPort: BluetoothHost, PersistenceHost, NetworkHost, Materia
 }
 
 private actor SuspendedPort: BluetoothHost {
+    private let terminated: XCTestExpectation
     private var continuation: AsyncThrowingStream<CoreHostEventPayload, Error>.Continuation?
-    private(set) var wasCancelled = false
+
+    init(terminated: XCTestExpectation) {
+        self.terminated = terminated
+    }
 
     func execute(_ effect: CoreEffect) async -> AsyncThrowingStream<CoreHostEventPayload, Error> {
         AsyncThrowingStream { continuation in
             self.continuation = continuation
             continuation.onTermination = { @Sendable _ in
-                Task { await self.markCancelled() }
+                self.terminated.fulfill()
             }
         }
     }
 
     func waitUntilStarted() async {
         while continuation == nil { await Task.yield() }
-    }
-
-    private func markCancelled() {
-        wasCancelled = true
-        continuation = nil
     }
 }
 
