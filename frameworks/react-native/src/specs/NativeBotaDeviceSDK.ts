@@ -149,6 +149,11 @@ export type NativeFirmwareUpdateProgress = {
   totalUnits: number;
 };
 
+export type NativeDeviceLogLine = {
+  message: string;
+  isBacklog: boolean;
+};
+
 export interface Spec extends TurboModule {
   readonly onDeviceDiscovered: EventEmitter<NativeDiscoveredDevice>;
   readonly onDeviceStatusUpdated: EventEmitter<NativeDeviceStatus>;
@@ -157,6 +162,7 @@ export interface Spec extends TurboModule {
   readonly onRecordingTransferProgress: EventEmitter<NativeRecordingTransferProgress>;
   readonly onUploadOwnershipProgress: EventEmitter<NativeRecordingTransferProgress>;
   readonly onFirmwareUpdateProgress: EventEmitter<NativeFirmwareUpdateProgress>;
+  readonly onDeviceLog: EventEmitter<NativeDeviceLogLine>;
   configure: (configuration: NativeConfiguration) => Promise<void>;
   connectSelected: (
     device: NativeDiscoveredDevice
@@ -202,6 +208,8 @@ export interface Spec extends TurboModule {
   startScan: (timeoutMs: number, allowDuplicates: boolean) => Promise<void>;
   readStatus: () => Promise<NativeDeviceStatus>;
   startStatusUpdates: () => Promise<void>;
+  startDeviceLogs: (device: NativeConnectedDevice) => Promise<void>;
+  stopDeviceLogs: () => Promise<void>;
   stopStatusUpdates: () => Promise<void>;
   stopScan: () => Promise<void>;
   syncRecording: (

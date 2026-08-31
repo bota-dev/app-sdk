@@ -21,6 +21,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
 
     private let lifecycle: BotaDeviceSDKAppleLifecycle
     private let devices: BotaDeviceSDKAppleDevices
+    private let logs: BotaDeviceSDKAppleLogs
     private let ota: BotaDeviceSDKAppleOTA
     private let recordings: BotaDeviceSDKAppleRecordings
     private let security: BotaDeviceSDKAppleSecurity
@@ -28,6 +29,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
     override private init() {
         lifecycle = BotaDeviceSDKAppleLifecycle()
         devices = BotaDeviceSDKAppleDevices()
+        logs = BotaDeviceSDKAppleLogs()
         ota = BotaDeviceSDKAppleOTA()
         recordings = BotaDeviceSDKAppleRecordings()
         security = BotaDeviceSDKAppleSecurity()
@@ -57,6 +59,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
     public func destroy(completion: @escaping @Sendable () -> Void) {
         Task {
             await security.cancelAll()
+            await logs.stop()
             await ota.cancelAll()
             await recordings.cancelAll()
             await devices.stopAll()
@@ -343,6 +346,56 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
             } catch {
                 completion(error as NSError)
             }
+        }
+    }
+
+    @objc(startDeviceLogsWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:onLine:onError:completion:)
+    public func startDeviceLogs(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        onLine: @escaping @Sendable ([String: Any]) -> Void,
+        onError: @escaping @Sendable (NSError) -> Void,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await logs.start(
+                    Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    ),
+                    onLine: {
+                        onLine([
+                            "message": $0.message,
+                            "isBacklog": $0.isBacklog,
+                        ])
+                    },
+                    onError: { onError($0 as NSError) }
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(stopDeviceLogsWithCompletion:)
+    public func stopDeviceLogs(completion: @escaping @Sendable () -> Void) {
+        Task {
+            await logs.stop()
+            completion()
         }
     }
 

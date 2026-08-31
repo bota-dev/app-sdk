@@ -27,11 +27,12 @@ to the protocol and workflow gates. A private `frameworks/react-native`
 foundation now pins the apps' React Native 0.86.3 New Architecture floor,
 validates a low-volume lifecycle, device-connection, device-status,
 nonce-bound provisioning, authenticated-reset, native-file recording transfer,
-guarded upload ownership, and native-download OTA TurboModule contract for iOS
-and Android, and
-rejects Codegen drift or bridge fields that could carry recording or firmware
-bytes. Its Apple lifecycle adapter now serializes configuration and destruction
-through `BotaAppleSDK`; its device adapter owns discovery/status subscriptions
+guarded upload ownership, native-download OTA, and sanitized device-log
+TurboModule contract for iOS and Android, and
+rejects Codegen drift or bridge fields that could carry recording bytes,
+firmware bytes, or raw log packets. Its Apple lifecycle adapter now serializes
+configuration and destruction through `BotaAppleSDK`; its device adapter owns
+discovery/status subscriptions
 and delegates selected connect, serial-strict reconnect, disconnect, and status
 reads. Its one-shot material broker delegates provisioning, remove-only
 deprovision, authenticated reset, and receipt-only reset recovery without
@@ -41,7 +42,7 @@ disposable CocoaPods application proves that the generated TurboModule, typed ev
 Objective-C++, Swift, Swift Package, and Rust XCFramework layers compile and
 link together. Its Android adapters provide the same lifecycle, connection,
 status, provisioning, authenticated-reset, recording-transfer, upload
-ownership, and OTA slices through `BotaDeviceClient.shared`; a
+ownership, OTA, and device-log slices through `BotaDeviceClient.shared`; a
 checked-in React Native Gradle consumer runs Codegen, Kotlin tests, lint, and
 release assembly against the exact locally packaged AAR. The package now
 matches 75 of the 80 frozen `0.0.65` root exports: every public type plus the

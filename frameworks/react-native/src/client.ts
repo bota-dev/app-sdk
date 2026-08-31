@@ -19,6 +19,7 @@ import type {
   DeviceState,
   DeviceStatus,
   DeviceType,
+  DeviceLogEvent,
   DiscoveredDevice,
   PairingState,
   ReconnectOptions,
@@ -153,6 +154,13 @@ export type BotaDeviceSDKOTAClient = {
   ): Promise<void>;
 };
 
+export type BotaDeviceSDKLogClient = {
+  subscribe(
+    device: ConnectedDevice,
+    onLine: (line: DeviceLogEvent) => void
+  ): Promise<BotaAsyncEventSubscription>;
+};
+
 export type BotaDeviceSDKRecordingClient = {
   listRecordings(device: ConnectedDevice): Promise<DeviceRecording[]>;
   syncRecording(
@@ -199,6 +207,7 @@ export class BotaNativeModuleError extends Error {
 export type BotaDeviceSDKClient = {
   readonly devices: BotaDeviceSDKDeviceClient;
   readonly factoryReset: BotaDeviceSDKFactoryResetClient;
+  readonly logs: BotaDeviceSDKLogClient;
   readonly ota: BotaDeviceSDKOTAClient;
   readonly provisioning: BotaDeviceSDKProvisioningClient;
   readonly recordings: BotaDeviceSDKRecordingClient;
@@ -581,9 +590,38 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
   };
 
+  const logs: BotaDeviceSDKLogClient = {
+    async subscribe(device, onLine) {
+      const module = requireNativeModule();
+      const eventSubscription = module.onDeviceLog((line) => {
+        onLine({
+          level: 'debug',
+          message: line.message,
+          isBacklog: line.isBacklog,
+        });
+      });
+      try {
+        await module.startDeviceLogs(toNativeConnectedDevice(device));
+      } catch (error) {
+        eventSubscription.remove();
+        throw error;
+      }
+      let removed = false;
+      return {
+        async remove() {
+          if (removed) return;
+          removed = true;
+          eventSubscription.remove();
+          await module.stopDeviceLogs();
+        },
+      };
+    },
+  };
+
   return {
     devices,
     factoryReset,
+    logs,
     ota,
     provisioning,
     recordings,

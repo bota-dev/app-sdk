@@ -87,7 +87,8 @@ The bridge contract contains configure, destroy, state, capabilities, device
 discovery, selected-device connect, serial-strict reconnect, disconnect, a
 device-status read, a typed device-status event subscription, nonce-bound
 provision/deprovision operations, native-file recording transfer, and guarded
-upload ownership, plus native-download firmware update. Provisioning uses a
+upload ownership, plus native-download firmware update and sanitized device-log
+subscription. Provisioning uses a
 one-shot application material event and response rather than separating
 nonce/public-key reads from the native workflow. Upload ownership passes opaque
 recording, upload, and destination identifiers into native code; JavaScript
@@ -96,6 +97,10 @@ destination URL or upload credential.
 Firmware update accepts version, size, CRC32, and a presigned URL; native code
 generates the download registration, owns HTTP and BLE bytes, and emits only
 typed phase and byte progress.
+Device-log framing, sequence recovery, and UTF-8 assembly stay in the Apple and
+Android facades. Codegen carries only complete `message` and `isBacklog`
+values, while the JavaScript subscription preserves the frozen
+`DeviceLogEvent` shape and owns one native stop.
 React Native Codegen produces a canonical schema plus iOS and Android artifact
 digests in
 `frameworks/react-native/generated/codegen-contract.json`; CI regenerates and
@@ -138,8 +143,9 @@ that the default package URL resolves the synchronized immutable release. A
 target-scoped CocoaPods hook carries React Native's upstream fix for duplicate
 binary Swift-package module maps on Xcode 26.3 while the package floor remains
 0.86.3. This proves lifecycle plus device discovery, connection, status,
-provisioning, authenticated-reset, recording-transfer, upload-ownership, and
-OTA integration, not the remaining workflow surface or application parity.
+provisioning, authenticated-reset, recording-transfer, upload-ownership, OTA,
+and device-log integration, not the remaining workflow surface or
+application parity.
 
 The Android host is also executable. A coroutine mutex serializes
 configuration and destruction through `BotaDeviceClient.shared`, and a
@@ -152,9 +158,9 @@ the public Android facade. A checked-in React Native 0.86.3
 Gradle consumer regenerates Codegen, runs lifecycle unit tests and lint, and
 assembles the adapter against the exact AAR reconstructed from the immutable
 local Maven payload. This proves Android lifecycle plus device discovery,
-connection, status, provisioning, authenticated-reset, and recording-transfer
-integration only; the remaining workflow bindings and application parity
-remain open.
+connection, status, provisioning, authenticated-reset, recording-transfer,
+upload-ownership, OTA, and device-log integration only; the remaining
+workflow bindings and application parity remain open.
 
 The React Native reset broker exposes only the nonce, command ID, binding
 generation, and an encoded grant string. Apple and Android decode the grant into
@@ -169,6 +175,12 @@ JavaScript shape and emits transfer progress as counts only. Apple and Android
 consume their public recording streams behind the TurboModule and return the
 completed native file path. Audio content, transfer packets, and sink handles
 never enter Codegen, and teardown cancels the native recording owner.
+
+The React Native device-log broker subscribes to the public native log stream
+before starting delivery. Apple and Android retain packet decoding and emit
+only complete sanitized lines through Codegen. JavaScript assigns the frozen
+`debug` level, preserves the backlog marker, and idempotently removes the event
+listener before stopping the native stream.
 
 The Android migration has a native package foundation in `platforms/android`.
 `sdk-version.toml` is mirrored as `VERSION_NAME`, while release-readiness tests

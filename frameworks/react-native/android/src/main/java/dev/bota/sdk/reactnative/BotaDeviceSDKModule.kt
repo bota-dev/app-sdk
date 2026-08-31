@@ -21,6 +21,7 @@ internal class BotaDeviceSDKModule(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : NativeBotaDeviceSDKSpec(reactContext) {
     private val devices = BotaDeviceSDKAndroidDevices(BotaDeviceSDKSharedAndroidDeviceClient(), scope)
+    private val logs = BotaDeviceSDKAndroidLogs(BotaDeviceSDKSharedAndroidLogClient(), scope)
     private val ota = BotaDeviceSDKAndroidOTA()
     private val recordings = BotaDeviceSDKAndroidRecordings()
     private val security = BotaDeviceSDKAndroidSecurity()
@@ -40,6 +41,7 @@ internal class BotaDeviceSDKModule(
     override fun destroy(promise: Promise) {
         launch(promise) {
             security.cancelAll()
+            logs.cancelAll()
             ota.cancelAll()
             recordings.cancelAll()
             devices.stopAll()
@@ -141,6 +143,18 @@ internal class BotaDeviceSDKModule(
                 emitOnFirmwareUpdateProgress(it.toWritableMap())
             }
         }
+    }
+
+    override fun startDeviceLogs(device: ReadableMap, promise: Promise) {
+        launch(promise) {
+            logs.start(device.toConnectedDevice()) {
+                emitOnDeviceLog(it.toWritableMap())
+            }
+        }
+    }
+
+    override fun stopDeviceLogs(promise: Promise) {
+        launch(promise) { logs.stop() }
     }
 
     override fun readStatus(promise: Promise) {
@@ -251,6 +265,7 @@ internal class BotaDeviceSDKModule(
         scope.launch {
             try {
                 security.cancelAll()
+                logs.cancelAll()
                 ota.cancelAll()
                 recordings.cancelAll()
                 devices.stopAll()

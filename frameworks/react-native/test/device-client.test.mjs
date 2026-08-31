@@ -62,6 +62,7 @@ function nativeFixture() {
   let recordingProgressHandler = null;
   let uploadOwnershipProgressHandler = null;
   let firmwareUpdateProgressHandler = null;
+  let deviceLogHandler = null;
   let provisioningResolve = null;
   let provisioningReject = null;
   let factoryResetResolve = null;
@@ -141,6 +142,14 @@ function nativeFixture() {
         return {
           remove() {
             firmwareUpdateProgressHandler = null;
+          },
+        };
+      },
+      onDeviceLog(handler) {
+        deviceLogHandler = handler;
+        return {
+          remove() {
+            deviceLogHandler = null;
           },
         };
       },
@@ -274,6 +283,13 @@ function nativeFixture() {
           completedUnits: 1_024_000,
           totalUnits: 1_024_000,
         });
+      },
+      async startDeviceLogs(device) {
+        calls.push(['startDeviceLogs', device]);
+        deviceLogHandler?.({ message: 'boot pass', isBacklog: true });
+      },
+      async stopDeviceLogs() {
+        calls.push(['stopDeviceLogs']);
       },
     },
   };
@@ -611,5 +627,25 @@ test('firmware update keeps download bytes native and emits typed progress', asy
         url: 'https://firmware.bota.dev/update.ufw',
       },
     ],
+  ]);
+});
+
+test('device log subscription receives only complete native lines and owns teardown', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+  const lines = [];
+
+  const subscription = await client.logs.subscribe(connected, (line) => {
+    lines.push(line);
+  });
+  await subscription.remove();
+  await subscription.remove();
+
+  assert.deepEqual(lines, [
+    { level: 'debug', message: 'boot pass', isBacklog: true },
+  ]);
+  assert.deepEqual(fixture.calls, [
+    ['startDeviceLogs', connected],
+    ['stopDeviceLogs'],
   ]);
 });

@@ -12,6 +12,7 @@ export type {
   BotaDeviceSDKConfiguration,
   BotaDeviceSDKDeviceClient,
   BotaDeviceSDKFactoryResetClient,
+  BotaDeviceSDKLogClient,
   BotaDeviceSDKProvisioningClient,
   BotaDeviceSDKRecordingClient,
   BotaDeviceSDKState,

@@ -90,12 +90,18 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   download into native storage, and run the native OTA workflow. Codegen emits
   only phase and byte progress; firmware bodies never cross JavaScript. Destroy
   and invalidation cancel the active native OTA operation.
+- `BotaDeviceSDK.logs` delegates device-log subscription to the native facades.
+  Apple and Android own BLE packet framing, sequence recovery, UTF-8 assembly,
+  and cancellation. Codegen emits only complete sanitized `message` and
+  `isBacklog` values, which JavaScript maps to the frozen `DeviceLogEvent`
+  shape. Subscribe before starting native logs, and stop native ownership
+  exactly once when the asynchronous subscription is removed.
 - Keep the Codegen names `BotaDeviceSDKSpec` and `BotaDeviceSDK` frozen. Import
   uses optional TurboModule lookup; missing native code fails on invocation as
   `native_module_unavailable`, not while the JavaScript module is imported.
-- Keep recording and firmware bytes out of React Native Codegen types. Commit
-  only the canonical schema and native artifact digests, not generated build
-  directories.
+- Keep recording bytes, firmware bytes, and raw device-log packets out of React
+  Native Codegen types. Commit only the canonical schema and native artifact
+  digests, not generated build directories.
 - The React Native Apple pod uses the React Native 0.86 iOS 15.1 floor and
   requires CocoaPods 1.13 or newer. It resolves the exact matching
   `BotaAppleSDK` release by default; `BOTA_APPLE_SDK_PACKAGE_PATH` is only for
@@ -116,7 +122,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Keep React Native lifecycle serialization in the Swift actor. Concurrent
   configure calls coalesce, destroy waits for an in-flight configure, and the
   device actor owns its scan and status tasks and waits for those collectors to
-  finish during teardown. `BotaDeviceSDKAppleSecurity` owns one-shot
+  finish during teardown. `BotaDeviceSDKAppleLogs` owns the single native log
+  stream and waits for its collector during explicit stop or destruction.
+  `BotaDeviceSDKAppleSecurity` owns one-shot
   provisioning continuations and cancels them during teardown. Objective-C++
   translates generated-spec promises and must subclass
   `NativeBotaDeviceSDKSpecBase` before emitting Codegen events.
@@ -131,6 +139,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Keep React Native recording stream ownership in
   `BotaDeviceSDKAndroidRecordings`. Collect the public facade flow natively,
   emit only progress, and return only the completed native path.
+- Keep React Native device-log stream ownership in
+  `BotaDeviceSDKAndroidLogs`. It owns one native collector, contains
+  asynchronous stream failures, and stops that collector during explicit
+  removal, destroy, or React Native invalidation.
 - Keep React Native Android provisioning and factory-reset material ownership
   in `BotaDeviceSDKAndroidSecurity`. Request IDs are one-shot, material is
   copied into the public Android facade, and destroy/invalidation cancels

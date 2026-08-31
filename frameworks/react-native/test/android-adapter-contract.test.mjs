@@ -71,6 +71,8 @@ test('Android adapter implements the generated lifecycle module and package', ()
     'resolveProvisioningMaterial',
     'resumePendingFactoryReset',
     'startStatusUpdates',
+    'startDeviceLogs',
+    'stopDeviceLogs',
     'stopStatusUpdates',
     'syncRecording',
     'updateFirmware',

@@ -115,13 +115,14 @@
 
 As of 2026-08-31, both lifecycle adapters and the discovery, connection,
 device-status, provisioning, authenticated-reset, recording-list/transfer, and
-upload-ownership plus OTA workflow slices are complete. Apple configure,
-destroy, state, capabilities, discovery, selected-device connect,
+upload-ownership plus OTA and device-log workflow slices are complete. Apple
+configure, destroy, state, capabilities, discovery, selected-device connect,
 serial-strict reconnect, disconnect, status reads, status subscriptions,
 provision, remove-only deprovision, factory reset, exact-generation reset
-receipt recovery, recording list, recording transfer, upload ownership, and OTA call
-`BotaAppleSDK` through serialized Swift actors and pass a full CocoaPods
-application compile-and-link gate. Android delegates the same surface to
+receipt recovery, recording list, recording transfer, upload ownership, OTA,
+and device logs call `BotaAppleSDK` through serialized Swift actors and pass a
+full CocoaPods application compile-and-link gate. Android delegates the same
+surface to
 `BotaDeviceClient.shared`, contains asynchronous scan/status failures, and
 passes a
 checked-in Codegen, Kotlin-test, lint, and release-assembly consumer against the
@@ -134,8 +135,11 @@ file and JavaScript receives only its path. Upload handoff crosses Codegen as
 opaque identifiers, progress, and the reducer-authorized ownership result;
 destination URLs and credentials remain native. OTA accepts a presigned
 firmware URL with version, size, and CRC32; native hosts own the download file
-and BLE bytes while Codegen carries only phase and byte progress. The package
-also matches the 75 frozen `0.0.65` exports that do not own native workflows,
+and BLE bytes while Codegen carries only phase and byte progress. Device-log
+packet framing, sequence recovery, and UTF-8 assembly also stay native;
+JavaScript receives only complete sanitized lines and owns idempotent native
+teardown. The package also matches the 75 frozen `0.0.65` exports that do not
+own native workflows,
 with runtime coverage for
 errors, sync-status derivation, and device-log decoding. `BotaClient`,
 `DeviceManager`, `RecordingManager`, `StreamingSession`, `OTAManager`, app

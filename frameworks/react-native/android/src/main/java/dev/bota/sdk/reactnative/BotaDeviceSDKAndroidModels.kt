@@ -8,6 +8,7 @@ import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.model.ConnectionState
 import dev.bota.sdk.model.AudioCodec
 import dev.bota.sdk.model.DeviceFlags
+import dev.bota.sdk.model.DeviceLogLine
 import dev.bota.sdk.model.DeviceRecording
 import dev.bota.sdk.model.DeviceState
 import dev.bota.sdk.model.DeviceStatus
@@ -123,6 +124,11 @@ internal fun FirmwareUpdateProgress.toWritableMap(): WritableMap = Arguments.cre
     putString("phase", phase.toBridgeValue())
     putDouble("completedUnits", completedBytes.toDouble())
     putDouble("totalUnits", totalBytes.toDouble())
+}
+
+internal fun DeviceLogLine.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putString("message", message)
+    putBoolean("isBacklog", isBacklog)
 }
 
 internal fun DeviceStatus.toWritableMap(): WritableMap = Arguments.createMap().apply {
