@@ -56,13 +56,13 @@
 - Consumes: `BotaDeviceClient.shared.configure(BotaConfiguration)` and `destroy()`, generated `NativeBotaDeviceSDKSpec`, `ReactApplicationContext`, `ReadableMap`, and `Promise`.
 - Produces: `BotaDeviceSDKAndroidLifecycle.configure(File?)`, `destroy()`, `state()`, fixed Android capabilities, module name `BotaDeviceSDK`, and `BotaDeviceSDKPackage`.
 
-- [ ] **Step 1: Write failing Kotlin tests** with an injectable fake client for initial state, exact directory forwarding, successful configure, recoverable failure, concurrent configure coalescing, destroy waiting behind configure, idempotent destroy, and capability values.
-- [ ] **Step 2: Write failing source-contract assertions** for all four generated selectors, `@ReactModule`, stable error code `android_sdk_error`, `BaseReactPackage`, and TurboModule metadata.
-- [ ] **Step 3: Run the focused tests** and confirm missing lifecycle/module/package failures.
-- [ ] **Step 4: Implement the lifecycle** with `Mutex`, a volatile phase, and a narrow client interface. Set `initializing` before the native call, `ready` after success, `error` after failure, and always restore `uninitialized` after destroy.
-- [ ] **Step 5: Implement the module and package**. Launch suspend work on a `SupervisorJob + Dispatchers.Default` scope, convert the optional directory to `File`, resolve capabilities with a writable map, and reject all native failures with `android_sdk_error`.
-- [ ] **Step 6: Run Kotlin, Node contract, Codegen, typecheck, and package tests** and confirm they pass.
-- [ ] **Step 7: Commit** with `feat(react-native): add Android lifecycle adapter` and the required Codex trailer.
+- [x] **Step 1: Write failing Kotlin tests** with an injectable fake client for initial state, exact directory forwarding, successful configure, recoverable failure, concurrent configure coalescing, destroy waiting behind configure, idempotent destroy, and capability values.
+- [x] **Step 2: Write failing source-contract assertions** for all four generated selectors, `@ReactModule`, stable error code `android_sdk_error`, `BaseReactPackage`, and TurboModule metadata.
+- [x] **Step 3: Run the focused tests** and confirm missing lifecycle/module/package failures.
+- [x] **Step 4: Implement the lifecycle** with `Mutex`, a volatile phase, and a narrow client interface. Set `initializing` before the native call, `ready` after success, `error` after failure, and always restore `uninitialized` after destroy.
+- [x] **Step 5: Implement the module and package**. Launch suspend work on a `SupervisorJob + Dispatchers.Default` scope, convert the optional directory to `File`, resolve capabilities with a writable map, and reject all native failures with `android_sdk_error`.
+- [x] **Step 6: Run Kotlin, Node contract, Codegen, typecheck, and package tests** and confirm they pass.
+- [x] **Step 7: Commit** with `feat(react-native): add Android lifecycle adapter` and the required Codex trailer.
 
 ### Task 3: Packaged-AAR Consumer And CI Gate
 

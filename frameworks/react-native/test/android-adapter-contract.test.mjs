@@ -39,3 +39,27 @@ test('Android adapter package does not bypass the public facade', () => {
   });
   assert.ok(packageJson.files.includes('android/'));
 });
+
+test('Android adapter implements the generated lifecycle module and package', () => {
+  const lifecycle = read(
+    '../android/src/main/java/dev/bota/sdk/reactnative/BotaDeviceSDKAndroidLifecycle.kt'
+  );
+  const module = read(
+    '../android/src/main/java/dev/bota/sdk/reactnative/BotaDeviceSDKModule.kt'
+  );
+  const packageSource = read(
+    '../android/src/main/java/dev/bota/sdk/reactnative/BotaDeviceSDKPackage.kt'
+  );
+  const combined = `${lifecycle}\n${module}\n${packageSource}`;
+
+  assert.match(module, /class BotaDeviceSDKModule/);
+  assert.match(module, /NativeBotaDeviceSDKSpec\(reactContext\)/);
+  assert.match(module, /@ReactModule\(name = NativeBotaDeviceSDKSpec\.NAME\)/);
+  for (const method of ['configure', 'destroy', 'getCapabilities', 'getState']) {
+    assert.match(module, new RegExp(`override fun ${method}\\(`));
+  }
+  assert.match(module, /android_sdk_error/);
+  assert.match(packageSource, /class BotaDeviceSDKPackage : BaseReactPackage\(\)/);
+  assert.match(packageSource, /isTurboModule = true/);
+  assert.doesNotMatch(combined, /NativeCoreBridge|System\.loadLibrary|bota_device_sdk_v1/);
+});
