@@ -51,6 +51,7 @@ actor BotaDeviceSDKAppleLifecycle {
 
     private let client: any BotaDeviceSDKAppleClient
     private var phase = Phase.uninitialized
+    private var destroyingWaiters: [CheckedContinuation<Void, Never>] = []
 
     init(client: any BotaDeviceSDKAppleClient = BotaDeviceSDKSharedAppleClient()) {
         self.client = client
@@ -92,7 +93,7 @@ actor BotaDeviceSDKAppleLifecycle {
                     _ = try? await configureTask.value
                     await client.destroy()
                 }
-                phase = .destroying(id, task)
+                beginDestroying(id: id, task: task)
                 await task.value
                 finishDestroy(id: id)
                 return
@@ -103,7 +104,7 @@ actor BotaDeviceSDKAppleLifecycle {
             case .ready, .error:
                 let id = UUID()
                 let task = Task { await client.destroy() }
-                phase = .destroying(id, task)
+                beginDestroying(id: id, task: task)
                 await task.value
                 finishDestroy(id: id)
                 return
@@ -128,6 +129,15 @@ actor BotaDeviceSDKAppleLifecycle {
         .current
     }
 
+    func waitUntilDestroying() async {
+        if case .destroying = phase {
+            return
+        }
+        await withCheckedContinuation { continuation in
+            destroyingWaiters.append(continuation)
+        }
+    }
+
     private func finishConfigure(id: UUID, task: Task<Void, Error>) async throws {
         do {
             try await task.value
@@ -140,6 +150,13 @@ actor BotaDeviceSDKAppleLifecycle {
             }
             throw error
         }
+    }
+
+    private func beginDestroying(id: UUID, task: Task<Void, Never>) {
+        phase = .destroying(id, task)
+        let waiters = destroyingWaiters
+        destroyingWaiters.removeAll()
+        waiters.forEach { $0.resume() }
     }
 
     private func finishDestroy(id: UUID) {

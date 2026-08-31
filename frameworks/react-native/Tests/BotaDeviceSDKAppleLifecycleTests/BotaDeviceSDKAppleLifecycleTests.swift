@@ -110,11 +110,10 @@ final class BotaDeviceSDKAppleLifecycleTests: XCTestCase {
         let destroy = Task {
             await lifecycle.destroy()
         }
-        await Task.yield()
+        await lifecycle.waitUntilDestroying()
         let secondConfigure = Task {
             try await lifecycle.configure(applicationSupportDirectory: nil)
         }
-        await Task.yield()
 
         await client.releaseConfigure()
         try await firstConfigure.value
