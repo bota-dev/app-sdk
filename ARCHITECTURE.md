@@ -122,8 +122,14 @@ connection, progress, and stable error models. `CoreModelMapper` converts typed
 ABI fields but never parses or serializes a wire packet in Kotlin. API-35
 instrumentation runs all 50 language-neutral fixtures through JNI, including
 unknown values, encrypted payload metadata, settings, OTA, WiFi, and logs. No
-BluetoothGatt transport, workflow facade, Maven Central artifact, physical
-acceptance, or React Native Android runtime support is claimed by this stage.
+Kotlin workflow state machine exists: one closeable single-thread coroutine
+runtime submits all 10 commands to Rust, drains all 30 effect and 12
+notification kinds, and returns all 34 correlated host-event kinds with the
+original request and 128-bit cancellation IDs. API-35 instrumentation verifies
+the Android resource generated from all 29 canonical workflow scenarios.
+BluetoothGatt transport, exhaustive host-effect execution, public workflow
+facade, Maven Central artifact, physical acceptance, and React Native Android
+runtime support are not claimed by this stage.
 
 Native migration inputs are pinned separately in
 `protocol/baseline/native-sdks.json`. Apple revision `cd15e545cabb8` and Android

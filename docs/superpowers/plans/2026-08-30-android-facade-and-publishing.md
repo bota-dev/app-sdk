@@ -428,14 +428,14 @@ internal interface CoreWorkflowRunner : AutoCloseable {
 }
 ```
 
-- [ ] **Step 1: Write failing ownership, cancellation, and trace tests**
+- [x] **Step 1: Write failing ownership, cancellation, and trace tests**
 
 Generate Android resources from all seven `protocol/workflows/*.json` suites.
 Tests assert monotonic request IDs, exact effect/notification ordering, one
 active owner, unchanged cancellation halves, stale callback rejection without
 owner loss, close-after-cancel behavior, and all 29 canonical scenario labels.
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run:
 
@@ -445,7 +445,7 @@ platforms/android/gradlew -p platforms/android :sdk:testDebugUnitTest --tests '*
 
 Expected: FAIL because the coroutine runtime does not exist.
 
-- [ ] **Step 3: Implement the confined engine loop**
+- [x] **Step 3: Implement the confined engine loop**
 
 Create one closeable single-thread dispatcher per configured client. Every JNI
 engine call runs on that dispatcher. `run` submits one typed command, drains
@@ -455,7 +455,7 @@ returns `operation_in_progress`; Kotlin does not invent parallel workflow
 ownership. Flow cancellation sends the original 128-bit cancellation ID and
 waits for the terminal notification before releasing the owner.
 
-- [ ] **Step 4: Run workflow conformance through Kotlin and Rust**
+- [x] **Step 4: Run workflow conformance through Kotlin and Rust**
 
 Run:
 
@@ -468,7 +468,7 @@ npm run test:workflows -- --sdk-path "$BOTA_REACT_NATIVE_SDK_PATH"
 Expected: 29 Kotlin/JNI traces and 29 Rust/React Native traces agree on ordered
 effects, notifications, errors, cancellation, and terminal state.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add package.json tools/android platforms/android

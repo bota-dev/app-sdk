@@ -42,9 +42,14 @@ thin JNI ownership adapter for four Android ABIs; real API 35 instrumentation
 proves typed codec calls, workflow polling, and exact-once native ownership.
 Immutable public Kotlin models now map all 50 canonical protocol fixtures
 through the Rust codec, preserve unknown wire values, normalize Bota Note
-settings, and expose stable machine-readable errors.
-BluetoothGatt, public workflow facades, physical-device acceptance, Maven
-Central publication, and the React Native Android adapter remain open.
+settings, and expose stable machine-readable errors. A single-thread coroutine
+runtime now owns every Android JNI call, preserves 128-bit cancellation and
+host callback correlation, and maps all 10 commands, 30 effects, 34 events,
+and 12 notifications. API 35 instrumentation validates the generated resource
+covering all 29 canonical workflow scenarios.
+BluetoothGatt, exhaustive native host execution, public workflow facades,
+physical-device acceptance, Maven Central publication, and the React Native
+Android adapter remain open.
 The native-boundary spike selected a manually owned C ABI after comparing it
 with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed

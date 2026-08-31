@@ -63,6 +63,22 @@ Do not edit `src/androidTest/assets/ProtocolFixtures` directly. Run
 `node tools/android/sync-protocol-fixtures.mjs` after changing a canonical
 fixture, then rerun the check above.
 
+One closeable, single-thread coroutine runtime owns every JNI engine call. It
+preserves 128-bit cancellation IDs, lets Rust reject concurrent commands, and
+converts all 10 commands, 30 host effects, 34 host events, and 12 notifications
+without a Kotlin workflow implementation. The 29 canonical workflow scenarios
+are mirrored into Android instrumentation assets:
+
+```bash
+npm run sync:android-workflows
+tools/android/test-package.sh --api 35 \
+  --instrumentation-class dev.bota.sdk.internal.core.WorkflowConformanceTest
+```
+
+Do not edit `src/androidTest/assets/WorkflowFixtures` directly. Regenerate it
+with `node tools/android/sync-workflow-fixtures.mjs` after changing a canonical
+workflow suite.
+
 Normal builds can publish unsigned artifacts only to the `Local` repository at
 `target/android-m2`. Remote publication and signing require the exact
 `botaProtectedSigning=true` Gradle property and release-environment credentials.

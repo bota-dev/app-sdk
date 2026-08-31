@@ -93,6 +93,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Keep Android JNI as an ownership adapter only. Pass primitive typed fields
   and raw byte arrays or direct buffers; copy Rust-owned packets and errors
   before exactly one matching free. Test counters belong to debug builds only.
+- Android workflow calls pass through one closeable `CoreEngineRuntime` and one
+  dedicated coroutine dispatcher. Every JNI call stays on that dispatcher;
+  Rust owns concurrent-command rejection, and host callbacks preserve the
+  original operation, request ID, and both cancellation-ID halves.
+- Keep Android `WorkflowFixtures` generated from all seven canonical workflow
+  suites. `preDebugAndroidTestBuild` must reject stale protocol or workflow
+  resources before packaged instrumentation runs.
 - Recording transfer owns sequence/checkpoint decisions; native hosts own the
   durable sink and validate the final checksum before device deletion.
 - Direct-upload fallback requires a fresh inactive device status; busy,

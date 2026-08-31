@@ -117,12 +117,22 @@ val verifyProtocolFixtures by tasks.registering(Exec::class) {
     inputs.dir(file("src/androidTest/assets/ProtocolFixtures"))
 }
 
+val verifyWorkflowFixtures by tasks.registering(Exec::class) {
+    group = "verification"
+    description = "Verifies that Android workflow fixture assets match the canonical suites."
+    val repositoryRoot = rootProject.projectDir.parentFile.parentFile
+    commandLine("node", repositoryRoot.resolve("tools/android/sync-workflow-fixtures.mjs"), "--check")
+    inputs.dir(repositoryRoot.resolve("protocol/workflows"))
+    inputs.file(file("src/androidTest/assets/WorkflowFixtures/workflows.json"))
+}
+
 tasks.configureEach {
     if (name.startsWith("configureCMake") || name.endsWith("JniLibFolders")) {
         dependsOn(buildRustNative)
     }
     if (name == "preDebugAndroidTestBuild") {
         dependsOn(verifyProtocolFixtures)
+        dependsOn(verifyWorkflowFixtures)
     }
 }
 
