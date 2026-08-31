@@ -56,6 +56,10 @@ export COPYFILE_DISABLE=1
 export LC_ALL=C
 export TZ=UTC
 find "$TEMP/archive" -exec touch -h -t 198001010000 {} +
+printf 'Apple archive input digests:\n'
+find "$TEMP/archive/BotaDeviceSDKCore.xcframework" -type f -print0 \
+    | LC_ALL=C sort -z \
+    | xargs -0 shasum -a 256
 (
     cd "$TEMP/archive"
     find BotaDeviceSDKCore.xcframework -print \
@@ -65,6 +69,7 @@ find "$TEMP/archive" -exec touch -h -t 198001010000 {} +
 
 ARTIFACT_CHECKSUM=$(shasum -a 256 "$ARCHIVE" | awk '{print $1}')
 SWIFTPM_CHECKSUM=$(swift package compute-checksum "$ARCHIVE")
+printf 'Apple archive checksum: %s\n' "$ARTIFACT_CHECKSUM"
 if [ "$ARTIFACT_CHECKSUM" != "$SWIFTPM_CHECKSUM" ] || [ "$ARTIFACT_CHECKSUM" = "$(printf '%064d' 0)" ]; then
     printf 'Apple artifact checksum validation failed\n' >&2
     exit 1

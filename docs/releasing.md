@@ -91,6 +91,10 @@ cargo deny check
 - `LICENSE`
 - `release-manifest.json`
 
+The packaging log includes SHA-256 digests for every normalized XCFramework
+input and for the final archive. Use those values to identify toolchain-specific
+output before changing the checksum pinned in `Package.swift`.
+
 The XCFramework contains arm64 iOS, arm64/x86_64 iOS Simulator, and
 arm64/x86_64 macOS slices.
 
