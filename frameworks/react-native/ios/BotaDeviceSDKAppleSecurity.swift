@@ -22,6 +22,7 @@ protocol BotaDeviceSDKAppleSecurityClient: Sendable {
         using provider: @escaping ProvisioningMaterialProvider
     ) async throws
     func deprovision(_ device: ConnectedDevice) async throws
+    func readConnectionSettings(from device: ConnectedDevice) async throws -> DeviceConnectionSettings
     func writeConnectionSettings(
         _ settings: DeviceConnectionSettings,
         to device: ConnectedDevice
@@ -62,6 +63,10 @@ struct BotaDeviceSDKSharedAppleSecurityClient: BotaDeviceSDKAppleSecurityClient 
 
     func deprovision(_ device: ConnectedDevice) async throws {
         try await provisioning.deprovision(device)
+    }
+
+    func readConnectionSettings(from device: ConnectedDevice) async throws -> DeviceConnectionSettings {
+        try await provisioning.readConnectionSettings(from: device)
     }
 
     func writeConnectionSettings(
@@ -143,6 +148,10 @@ actor BotaDeviceSDKAppleSecurity {
 
     func deprovision(_ device: ConnectedDevice) async throws {
         try await client.deprovision(device)
+    }
+
+    func readConnectionSettings(from device: ConnectedDevice) async throws -> DeviceConnectionSettings {
+        try await client.readConnectionSettings(from: device)
     }
 
     func writeConnectionSettings(

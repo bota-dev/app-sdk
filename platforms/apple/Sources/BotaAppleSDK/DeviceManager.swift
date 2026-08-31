@@ -66,9 +66,11 @@ struct DeviceRuntime: Sendable {
     let readStatus: @Sendable (String) async throws -> DeviceStatus
     let statusUpdates: @Sendable (String) async throws -> AsyncThrowingStream<DeviceStatus, Error>
     let stopStatusUpdates: @Sendable (String) async throws -> Void
+    let directRead: @Sendable (String, String, String) async throws -> Data
     let directWrite: @Sendable (String, String, String, Data) async throws -> Void
     let directSubscribe: @Sendable (String, String, String) async throws -> AsyncThrowingStream<Data, Error>
     let directUnsubscribe: @Sendable (String, String, String) async throws -> Void
+    let parseConnectionSettings: @Sendable (Data) throws -> ParsedConnectionSettings
     let serializeConnectionSettings: @Sendable (DeviceConnectionSettings, DeviceType) throws -> Data
     let encodeDeviceCommand: @Sendable (UInt8) throws -> Data
     let parseRecordingList: @Sendable (Data) throws -> [DeviceRecording]
@@ -97,6 +99,9 @@ struct DeviceRuntime: Sendable {
             throw NativeHostError.missingResource("device status subscription")
         },
         stopStatusUpdates: @escaping @Sendable (String) async throws -> Void = { _ in },
+        directRead: @escaping @Sendable (String, String, String) async throws -> Data = { _, _, _ in
+            throw NativeHostError.missingResource("direct device read")
+        },
         directWrite: @escaping @Sendable (String, String, String, Data) async throws -> Void = { _, _, _, _ in
             throw NativeHostError.missingResource("direct device write")
         },
@@ -104,6 +109,9 @@ struct DeviceRuntime: Sendable {
             throw NativeHostError.missingResource("direct device subscription")
         },
         directUnsubscribe: @escaping @Sendable (String, String, String) async throws -> Void = { _, _, _ in },
+        parseConnectionSettings: @escaping @Sendable (Data) throws -> ParsedConnectionSettings = { _ in
+            throw NativeHostError.missingResource("connection-settings decoder")
+        },
         serializeConnectionSettings: @escaping @Sendable (DeviceConnectionSettings, DeviceType) throws -> Data = { _, _ in
             throw NativeHostError.missingResource("connection-settings encoder")
         },
@@ -141,9 +149,11 @@ struct DeviceRuntime: Sendable {
         self.readStatus = readStatus
         self.statusUpdates = statusUpdates
         self.stopStatusUpdates = stopStatusUpdates
+        self.directRead = directRead
         self.directWrite = directWrite
         self.directSubscribe = directSubscribe
         self.directUnsubscribe = directUnsubscribe
+        self.parseConnectionSettings = parseConnectionSettings
         self.serializeConnectionSettings = serializeConnectionSettings
         self.encodeDeviceCommand = encodeDeviceCommand
         self.parseRecordingList = parseRecordingList

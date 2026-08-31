@@ -30,6 +30,12 @@ actor SecureWorkflowRunner: CoreWorkflowRunning {
 }
 
 actor SecureLifecycleRecorder {
+    struct Read: Equatable, Sendable {
+        let peripheralID: String
+        let serviceUUID: String
+        let characteristicUUID: String
+    }
+
     struct Write: Equatable, Sendable {
         let peripheralID: String
         let serviceUUID: String
@@ -38,6 +44,8 @@ actor SecureLifecycleRecorder {
     }
 
     private(set) var writes: [Write] = []
+    private(set) var reads: [Read] = []
+    private var readData = Data()
     private(set) var provisioningIDs: [String] = []
     private(set) var resetIDs: [String] = []
     private(set) var unregisteredIDs: [String] = []
@@ -45,6 +53,11 @@ actor SecureLifecycleRecorder {
     var pendingReset: PersistedFactoryResetResult?
 
     func recordWrite(_ write: Write) { writes.append(write) }
+    func recordRead(_ read: Read) -> Data {
+        reads.append(read)
+        return readData
+    }
+    func setReadData(_ data: Data) { readData = data }
     func registerProvisioning(_ id: String) { provisioningIDs.append(id) }
     func registerReset(_ id: String, provider: @escaping FactoryResetMaterialProvider) {
         resetIDs.append(id)
@@ -67,6 +80,13 @@ func secureRuntime(
         capabilities: [.bluetooth, .timer, .persistence, .hostMaterial],
         connection: connection,
         disconnect: { _ in },
+        directRead: { peripheralID, serviceUUID, characteristicUUID in
+            await recorder.recordRead(.init(
+                peripheralID: peripheralID,
+                serviceUUID: serviceUUID,
+                characteristicUUID: characteristicUUID
+            ))
+        },
         directWrite: { peripheralID, serviceUUID, characteristicUUID, data in
             await recorder.recordWrite(.init(
                 peripheralID: peripheralID,
@@ -75,6 +95,7 @@ func secureRuntime(
                 data: data
             ))
         },
+        parseConnectionSettings: { try mapper.parseConnectionSettings($0) },
         serializeConnectionSettings: { settings, model in
             try mapper.serializeConnectionSettings(settings, model: model)
         },

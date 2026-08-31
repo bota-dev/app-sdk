@@ -1359,6 +1359,30 @@
               }
             },
             {
+              "name": "readConnectionSettings",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeDeviceConnectionSettings"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
+              }
+            },
+            {
               "name": "startScan",
               "optional": false,
               "typeAnnotation": {
@@ -1584,11 +1608,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "5b6f787bcf02d87e844b1a24c0b82bb01af5d272a2f36f925ea20528b83543a3"
+        "sha256": "f645bcacf0463da6fce3351d8c3b1a6a8f97388e336c15effa2c39b1d9394ca5"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "1adc73b3a9f069de25d7b469667dd8006e1a3d2c874b019277053eaea2c4c4fd"
+        "sha256": "fe8fb71ddebaed8cb190d672c4bd92107ed35a5432c5c7feb5b8bc8edda72b5f"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -1600,23 +1624,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "faf1882ab0ba4a077f3d8eea0e2b23c5df4642d7fc23b8aba263898db47ebfab"
+        "sha256": "e428381382445d87fb431f9d78acfd6b394a8c14fe348c59e50b5bbb7505df8a"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "65f5bd94f752ec1b148382292b696322c13171282fc99318c18a01c7cb6b7d8a"
+        "sha256": "f506710b15b0447e733a77746f23753a673bea98bc94423087afafb8cb89619a"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "d78962e5348d5b58c5ae1b51874778884c5de794d92a387cd6ad4dc923036029"
+        "sha256": "36292f2d9cfcdee45521795fd9147ce94bda88d2c9ba011a90d3670fe20472c7"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "faf1882ab0ba4a077f3d8eea0e2b23c5df4642d7fc23b8aba263898db47ebfab"
+        "sha256": "e428381382445d87fb431f9d78acfd6b394a8c14fe348c59e50b5bbb7505df8a"
       }
     ]
   },
-  "contractDigest": "6eb3b950e4000d22a1e152cfd8fd939a6bf7f1ece1cbd7e8a3147b69777283d5"
+  "contractDigest": "6c1111df961764572ef6e9f1c534a6c4b150639b7373abeec3271c9245bfbf85"
 }

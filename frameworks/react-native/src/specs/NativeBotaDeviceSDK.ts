@@ -224,6 +224,9 @@ export interface Spec extends TurboModule {
     device: NativeConnectedDevice,
     currentBindingGeneration: number
   ) => Promise<NativeFactoryResetCompletion | null>;
+  readConnectionSettings: (
+    device: NativeConnectedDevice
+  ) => Promise<NativeDeviceConnectionSettings>;
   startScan: (timeoutMs: number, allowDuplicates: boolean) => Promise<void>;
   readStatus: () => Promise<NativeDeviceStatus>;
   startStatusUpdates: () => Promise<void>;

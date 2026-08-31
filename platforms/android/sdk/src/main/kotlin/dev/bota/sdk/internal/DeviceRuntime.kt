@@ -52,6 +52,9 @@ internal class DeviceRuntime(
     private val closeResources: () -> Unit,
     val connection: DeviceConnectionRegistry = DeviceConnectionRegistry(),
     val operations: DeviceOperationCoordinator = DeviceOperationCoordinator(),
+    val directRead: suspend (String, UUID, UUID) -> ByteArray = { _, _, _ ->
+        error("direct read unavailable")
+    },
     val directWrite: suspend (String, UUID, UUID, ByteArray) -> Unit = { _, _, _, _ ->
         error("direct write unavailable")
     },
@@ -59,6 +62,9 @@ internal class DeviceRuntime(
         error("direct subscription unavailable")
     },
     val directUnsubscribe: suspend (String, UUID, UUID) -> Unit = { _, _, _ -> },
+    val parseConnectionSettings: (ByteArray) -> DeviceConnectionSettings = {
+        error("connection-settings decoder unavailable")
+    },
     val serializeConnectionSettings: (DeviceConnectionSettings, DeviceType) -> ByteArray = { _, _ ->
         error("connection-settings encoder unavailable")
     },
@@ -157,6 +163,7 @@ internal class DeviceRuntime(
                     },
                     decodeStatus = mapper::parseDeviceStatus,
                     closeResources = { closeAll(*closeActions.asReversed().toTypedArray()) },
+                    directRead = driver::read,
                     directWrite = { peripheralId, service, characteristic, value ->
                         driver.write(peripheralId, service, characteristic, value, withResponse = true)
                     },
@@ -166,6 +173,7 @@ internal class DeviceRuntime(
                     directUnsubscribe = { peripheralId, service, characteristic ->
                         driver.unsubscribe(peripheralId, service, characteristic)
                     },
+                    parseConnectionSettings = { mapper.parseConnectionSettings(it).settings },
                     serializeConnectionSettings = mapper::serializeConnectionSettings,
                     encodeDeviceCommand = mapper::encodeDeviceCommand,
                     registerProvisioning = { id, provider ->

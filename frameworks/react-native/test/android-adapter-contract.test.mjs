@@ -66,6 +66,7 @@ test('Android adapter implements the generated lifecycle module and package', ()
     'observeUploadOwnership',
     'provision',
     'rejectApplicationMaterial',
+    'readConnectionSettings',
     'readStatus',
     'resolveFactoryResetGrant',
     'resolveProvisioningMaterial',

@@ -991,6 +991,7 @@ public final class dev/bota/sdk/DeviceLogManager {
 public final class dev/bota/sdk/DeviceManager {
 	public final fun cancelCurrentOperation (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun capabilities ()Ldev/bota/sdk/DeviceCapabilities;
+	public final fun connect (Ldev/bota/sdk/model/DiscoveredDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun connect (Ljava/lang/String;Ldev/bota/sdk/model/DiscoveredDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun connectionUpdates ()Lkotlinx/coroutines/flow/Flow;
 	public final fun disconnect (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -1057,6 +1058,7 @@ public final class dev/bota/sdk/ProvisioningManager {
 	public final fun cancelCurrentOperation (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun deprovision (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun provision (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun readConnectionSettings (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun writeConnectionSettings (Ldev/bota/sdk/model/DeviceConnectionSettings;Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

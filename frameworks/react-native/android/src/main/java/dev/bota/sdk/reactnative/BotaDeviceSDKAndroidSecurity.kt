@@ -34,6 +34,8 @@ internal interface BotaDeviceSDKAndroidSecurityClient {
 
     suspend fun deprovision(device: ConnectedDevice)
 
+    suspend fun readConnectionSettings(device: ConnectedDevice): DeviceConnectionSettings
+
     suspend fun writeConnectionSettings(
         settings: DeviceConnectionSettings,
         device: ConnectedDevice,
@@ -69,6 +71,9 @@ internal class BotaDeviceSDKSharedAndroidSecurityClient(
     override suspend fun deprovision(device: ConnectedDevice) {
         client.provisioning.deprovision(device)
     }
+
+    override suspend fun readConnectionSettings(device: ConnectedDevice): DeviceConnectionSettings =
+        client.provisioning.readConnectionSettings(device)
 
     override suspend fun writeConnectionSettings(
         settings: DeviceConnectionSettings,
@@ -125,6 +130,9 @@ internal class BotaDeviceSDKAndroidSecurity(
     suspend fun deprovision(device: ConnectedDevice) {
         client.deprovision(device)
     }
+
+    suspend fun readConnectionSettings(device: ConnectedDevice): DeviceConnectionSettings =
+        client.readConnectionSettings(device)
 
     suspend fun writeConnectionSettings(
         settings: DeviceConnectionSettings,

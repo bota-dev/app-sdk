@@ -78,6 +78,23 @@ public class ProvisioningManager internal constructor() {
         }
     }
 
+    public suspend fun readConnectionSettings(device: ConnectedDevice): DeviceConnectionSettings {
+        val configured = configuredRuntime()
+        configured.connection.require(device)
+        val operationId = UUID.randomUUID()
+        configured.operations.begin(operationId, BotaOperation.Decode)
+        try {
+            val encoded = configured.directRead(
+                device.id,
+                SecureUUIDs.ProvisioningService,
+                SecureUUIDs.DeviceSettings,
+            )
+            return configured.parseConnectionSettings(encoded)
+        } finally {
+            configured.operations.end(operationId)
+        }
+    }
+
     public suspend fun deprovision(device: ConnectedDevice) {
         val configured = configuredRuntime()
         configured.connection.require(device)

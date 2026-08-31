@@ -51,6 +51,27 @@ final class ProvisioningManagerTests: XCTestCase {
         XCTAssertEqual(write.characteristicUUID, BotaBluetoothUUIDs.deviceSettings)
     }
 
+    func testReadConnectionSettingsUsesTheSharedDecoder() async throws {
+        let runner = SecureWorkflowRunner()
+        let recorder = SecureLifecycleRecorder()
+        await recorder.setReadData(Data([
+            0x02, 0x03, 0x01, 0x02, 0x03, 0xff,
+            0x00, 0x00, 0x3c, 0x81, 0x00, 0x00,
+        ]))
+        let manager = ProvisioningManager()
+        await manager.attach(await secureRuntime(runner: runner, recorder: recorder))
+
+        let settings = try await manager.readConnectionSettings(from: secureDevice(model: .botaPin4G))
+
+        XCTAssertEqual(settings.enabledConnections, .init(wifi: true, cellular: true))
+        XCTAssertEqual(settings.heartbeatEnabledConnections, .init(wifi: true, cellular: false))
+        XCTAssertEqual(settings.uploadNetworkPreference, [.wifi, .ble, .cellular])
+        XCTAssertEqual(settings.powerManagement, .init(wifiIdleTimeoutSeconds: 0, cellularIdleTimeoutSeconds: -1))
+        XCTAssertFalse(settings.streamingEnabled)
+        let reads = await recorder.reads
+        XCTAssertEqual(reads.first?.characteristicUUID, BotaBluetoothUUIDs.deviceSettings)
+    }
+
     func testDeprovisionWritesOnlyTheRemoveOpcode() async throws {
         let runner = SecureWorkflowRunner()
         let recorder = SecureLifecycleRecorder()

@@ -26,7 +26,8 @@ public members; future React Native packages must match that digest in addition
 to the protocol and workflow gates. A private `frameworks/react-native`
 foundation now pins the apps' React Native 0.86.3 New Architecture floor,
 validates a low-volume lifecycle, device-connection, device-status,
-nonce-bound provisioning, normalized connection-settings writes,
+nonce-bound provisioning, native-decoded connection-settings reads and
+normalized writes,
 authenticated-reset, native-file recording transfer, guarded upload ownership,
 native-download OTA, and sanitized device-log TurboModule contract for iOS and
 Android, and
@@ -42,11 +43,13 @@ application value and becomes bytes only inside the native adapter. The same
 facade expands frozen connection-setting defaults in JavaScript, then delegates
 device-model normalization, serialization, and BLE writes to Apple and Android.
 An omitted heartbeat setting retains the frozen both-channels-enabled default.
+Reads keep characteristic bytes and decoding native, returning only the typed
+settings value for mapping to the frozen JavaScript field names.
 A disposable CocoaPods application proves that the generated TurboModule,
 typed event emitter,
 Objective-C++, Swift, Swift Package, and Rust XCFramework layers compile and
 link together. Its Android adapters provide the same lifecycle, connection,
-status, provisioning, connection-settings writes, authenticated-reset,
+status, provisioning, connection-settings reads and writes, authenticated-reset,
 recording-transfer, upload ownership, OTA, and device-log slices through
 `BotaDeviceClient.shared`; a checked-in React Native Gradle consumer runs
 Codegen, Kotlin tests, lint, and release assembly against the exact locally

@@ -100,6 +100,33 @@ internal fun ReadableMap.toDeviceConnectionSettings(): DeviceConnectionSettings 
     )
 }
 
+internal fun DeviceConnectionSettings.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putMap("enabledConnections", Arguments.createMap().apply {
+        putBoolean("wifi", enabledConnections.wifi)
+        putBoolean("cellular", enabledConnections.cellular)
+    })
+    putMap("heartbeatEnabledConnections", Arguments.createMap().apply {
+        putBoolean("wifi", heartbeatEnabledConnections.wifi)
+        putBoolean("cellular", heartbeatEnabledConnections.cellular)
+    })
+    putArray("uploadNetworkPreference", Arguments.createArray().apply {
+        uploadNetworkPreference.forEach { connection ->
+            when (connection) {
+                DeviceConnectionSettings.ConnectionType.Wifi -> pushString("wifi")
+                DeviceConnectionSettings.ConnectionType.Ble -> pushString("ble")
+                DeviceConnectionSettings.ConnectionType.Cellular -> pushString("cellular")
+                is DeviceConnectionSettings.ConnectionType.Unknown -> Unit
+            }
+        }
+    })
+    putMap("powerManagement", Arguments.createMap().apply {
+        putInt("wifiIdleTimeoutSeconds", powerManagement.wifiIdleTimeoutSeconds)
+        putInt("cellularIdleTimeoutSeconds", powerManagement.cellularIdleTimeoutSeconds)
+    })
+    putBoolean("streamingEnabled", streamingEnabled)
+    putInt("streamingFlushIntervalSeconds", streamingFlushIntervalSeconds)
+}
+
 internal fun DiscoveredDevice.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putString("id", id)
     name?.let { putString("name", it) }

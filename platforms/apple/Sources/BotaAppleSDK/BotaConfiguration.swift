@@ -74,6 +74,13 @@ public struct BotaConfiguration: @unchecked Sendable {
                         characteristicUUID: BotaBluetoothUUIDs.deviceStatus
                     )
                 },
+                directRead: { peripheralID, serviceUUID, characteristicUUID in
+                    try await bluetooth.read(
+                        peripheralID: peripheralID,
+                        serviceUUID: serviceUUID,
+                        characteristicUUID: characteristicUUID
+                    )
+                },
                 directWrite: { peripheralID, serviceUUID, characteristicUUID, data in
                     try await bluetooth.write(
                         peripheralID: peripheralID,
@@ -96,6 +103,7 @@ public struct BotaConfiguration: @unchecked Sendable {
                         characteristicUUID: characteristicUUID
                     )
                 },
+                parseConnectionSettings: { data in try mapper.parseConnectionSettings(data) },
                 serializeConnectionSettings: { settings, model in
                     try mapper.serializeConnectionSettings(settings, model: model)
                 },

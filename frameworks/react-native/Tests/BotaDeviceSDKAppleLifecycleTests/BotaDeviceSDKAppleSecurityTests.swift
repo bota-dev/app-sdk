@@ -126,6 +126,29 @@ final class BotaDeviceSDKAppleSecurityTests: XCTestCase {
         XCTAssertEqual(snapshot.connectionSettings, settings)
     }
 
+    func testConnectionSettingsReadDelegatesToAppleFacade() async throws {
+        let connected = ConnectedDevice(
+            id: "selected",
+            serialNumber: "EVFXXW67KP",
+            deviceType: .botaNote,
+            firmwareVersion: "1.0.11",
+            isProvisioned: true,
+            connectionState: .connected,
+            mtu: 247
+        )
+        let expected = DeviceConnectionSettings(
+            enabledConnections: .init(wifi: true, cellular: false),
+            heartbeatEnabledConnections: .init(wifi: true, cellular: false),
+            uploadNetworkPreference: [.wifi, .ble]
+        )
+        let client = TestAppleSecurityClient(connectionSettingsReadResult: expected)
+        let security = BotaDeviceSDKAppleSecurity(client: client)
+
+        let settings = try await security.readConnectionSettings(from: connected)
+
+        XCTAssertEqual(settings, expected)
+    }
+
     func testFactoryResetRejectsMalformedGrantAndCancelsPendingRequestsOnDestroy() async {
         let connected = ConnectedDevice(
             id: "selected",
@@ -242,6 +265,14 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
     private var factoryResetCancelled = false
     private var resumedBindingGenerations: [UInt64] = []
     private var connectionSettings: DeviceConnectionSettings?
+    private let connectionSettingsReadResult: DeviceConnectionSettings
+
+    init(connectionSettingsReadResult: DeviceConnectionSettings = .init(
+        enabledConnections: .init(wifi: true, cellular: false),
+        uploadNetworkPreference: [.wifi, .ble]
+    )) {
+        self.connectionSettingsReadResult = connectionSettingsReadResult
+    }
 
     func provision(
         _ device: ConnectedDevice,
@@ -263,6 +294,10 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
         to device: ConnectedDevice
     ) async throws {
         connectionSettings = settings
+    }
+
+    func readConnectionSettings(from device: ConnectedDevice) async throws -> DeviceConnectionSettings {
+        connectionSettingsReadResult
     }
 
     func cancelCurrentOperation() async throws {}

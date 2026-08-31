@@ -35,6 +35,7 @@ material. Call `bota.destroy()` when the owning application scope ends.
 | `connect(device)` | Connects the selected OS peripheral and learns its identity from the fresh Device Information serial read. Generic advertised names such as `Bota Pin` remain display metadata, never identity. |
 | `provision` | Registers token and environment bytes as one-use in-memory material. Native workflow cleanup removes them on every terminal path. |
 | `writeConnectionSettings` | Converts the complete model and applies Bota Note cellular normalization. |
+| `readConnectionSettings` | Reads and decodes the complete device settings through the native facade. |
 | Recording list, transfer, and confirmation | Delegate to the Rust-owned recording workflow. Migrate upload ownership to the new application-authorized API. |
 | `destroy()` | Returns immediately, rejects new work, and finishes native teardown on the SDK dispatcher. A later suspending `configure()` waits for teardown. |
 | `BotaProtocol` raw helpers | Throw `BotaSdkException.UnsupportedOperation("Raw protocol helpers moved to the Rust core")`. |

@@ -3,6 +3,7 @@ import type {
   NativeConnectedDevice,
   NativeConfiguration,
   NativeDeviceStatus,
+  NativeDeviceConnectionSettings,
   NativeDeviceRecording,
   NativeDiscoveredDevice,
   NativeFactoryResetCompletion,
@@ -15,6 +16,7 @@ import type {
 } from './specs/NativeBotaDeviceSDK';
 import type {
   ConnectedDevice,
+  ConnectionType,
   ConnectionState,
   DeviceConnectionSettings,
   DeviceState,
@@ -74,6 +76,7 @@ export type BotaDeviceSDKProvisioningClient = {
     provider: BotaProvisioningMaterialProvider
   ): Promise<void>;
   deprovision(device: ConnectedDevice): Promise<void>;
+  readConnectionSettings(device: ConnectedDevice): Promise<DeviceConnectionSettings>;
   writeConnectionSettings(
     device: ConnectedDevice,
     settings: DeviceConnectionSettings
@@ -288,6 +291,24 @@ const toNativeConnectionSettings = (settings: DeviceConnectionSettings) => ({
   streamingEnabled: settings.streaming_enabled ?? true,
   streamingFlushIntervalSeconds:
     settings.streaming_flush_interval_seconds ?? 60,
+});
+
+const isConnectionType = (value: string): value is ConnectionType =>
+  value === 'wifi' || value === 'ble' || value === 'cellular';
+
+const mapNativeConnectionSettings = (
+  settings: NativeDeviceConnectionSettings
+): DeviceConnectionSettings => ({
+  enabled_connections: settings.enabledConnections,
+  heartbeat_enabled_connections: settings.heartbeatEnabledConnections,
+  upload_network_preference: settings.uploadNetworkPreference.filter(isConnectionType),
+  power_management: {
+    wifi_idle_timeout_seconds: settings.powerManagement.wifiIdleTimeoutSeconds,
+    cellular_idle_timeout_seconds:
+      settings.powerManagement.cellularIdleTimeoutSeconds,
+  },
+  streaming_enabled: settings.streamingEnabled,
+  streaming_flush_interval_seconds: settings.streamingFlushIntervalSeconds,
 });
 
 const matchesScanOptions = (
@@ -508,6 +529,14 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
 
     async deprovision(device) {
       await requireNativeModule().deprovision(toNativeConnectedDevice(device));
+    },
+
+    async readConnectionSettings(device) {
+      return mapNativeConnectionSettings(
+        await requireNativeModule().readConnectionSettings(
+          toNativeConnectedDevice(device)
+        )
+      );
     },
 
     async writeConnectionSettings(device, settings) {

@@ -213,6 +213,20 @@ function nativeFixture() {
       async writeConnectionSettings(device, settings) {
         calls.push(['writeConnectionSettings', device, settings]);
       },
+      async readConnectionSettings(device) {
+        calls.push(['readConnectionSettings', device]);
+        return {
+          enabledConnections: { wifi: true, cellular: false },
+          heartbeatEnabledConnections: { wifi: true, cellular: true },
+          uploadNetworkPreference: ['wifi', 'ble'],
+          powerManagement: {
+            wifiIdleTimeoutSeconds: 0,
+            cellularIdleTimeoutSeconds: -1,
+          },
+          streamingEnabled: false,
+          streamingFlushIntervalSeconds: 30,
+        };
+      },
       async factoryReset(device, commandId, bindingGeneration) {
         calls.push(['factoryReset', device, commandId, bindingGeneration]);
         queueMicrotask(() => {
@@ -489,6 +503,26 @@ test('connection settings expand frozen defaults before native normalization', a
       },
     ],
   ]);
+});
+
+test('connection settings reads map the complete native value to the frozen shape', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+
+  const settings = await client.provisioning.readConnectionSettings(connected);
+
+  assert.deepEqual(settings, {
+    enabled_connections: { wifi: true, cellular: false },
+    heartbeat_enabled_connections: { wifi: true, cellular: true },
+    upload_network_preference: ['wifi', 'ble'],
+    power_management: {
+      wifi_idle_timeout_seconds: 0,
+      cellular_idle_timeout_seconds: -1,
+    },
+    streaming_enabled: false,
+    streaming_flush_interval_seconds: 30,
+  });
+  assert.deepEqual(fixture.calls, [['readConnectionSettings', connected]]);
 });
 
 test('factory reset resolves a nonce-bound grant and resumes only the exact generation', async () => {

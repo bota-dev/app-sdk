@@ -81,6 +81,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   and own serialization plus the BLE write. Keep encoded settings bytes out of
   Codegen, and preserve heartbeat channel selection independently from upload
   preference.
+- `BotaDeviceSDK.provisioning.readConnectionSettings` performs the
+  characteristic read and shared decoding in the native facade. Codegen carries
+  only the complete typed settings value; JavaScript restores the frozen
+  snake-case field names and filters unknown future connection types.
 - `BotaDeviceSDK.factoryReset` delegates the authenticated reset reducer to the
   native facades. JavaScript resolves a one-shot request containing the fresh
   nonce, command ID, and binding generation with the backend's encoded grant;

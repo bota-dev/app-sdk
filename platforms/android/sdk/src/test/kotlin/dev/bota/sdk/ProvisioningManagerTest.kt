@@ -93,6 +93,44 @@ class ProvisioningManagerTest {
     }
 
     @Test
+    fun readConnectionSettingsUsesTheSharedDecoder() = runTest {
+        val fixture = SecureRuntimeFixture()
+        fixture.readValue = byteArrayOf(0x02, 0x03)
+        fixture.parsedSettings = DeviceConnectionSettings(
+            enabledConnections = DeviceConnectionSettings.EnabledConnections(true, true),
+            heartbeatEnabledConnections = DeviceConnectionSettings.EnabledConnections(true, false),
+            uploadNetworkPreference = listOf(
+                DeviceConnectionSettings.ConnectionType.Wifi,
+                DeviceConnectionSettings.ConnectionType.Ble,
+                DeviceConnectionSettings.ConnectionType.Cellular,
+            ),
+            powerManagement = DeviceConnectionSettings.PowerManagement(0, -1),
+            streamingEnabled = false,
+        )
+        val manager = ProvisioningManager()
+        fixture.connect()
+        manager.attach(fixture.runtime)
+
+        val settings = manager.readConnectionSettings(fixture.device)
+
+        assertEquals(DeviceConnectionSettings.EnabledConnections(true, true), settings.enabledConnections)
+        assertEquals(DeviceConnectionSettings.EnabledConnections(true, false), settings.heartbeatEnabledConnections)
+        assertEquals(
+            listOf(
+                DeviceConnectionSettings.ConnectionType.Wifi,
+                DeviceConnectionSettings.ConnectionType.Ble,
+                DeviceConnectionSettings.ConnectionType.Cellular,
+            ),
+            settings.uploadNetworkPreference,
+        )
+        assertEquals(DeviceConnectionSettings.PowerManagement(0, -1), settings.powerManagement)
+        assertFalse(settings.streamingEnabled)
+        assertEquals(BotaSecureUUIDs.DeviceSettings, fixture.reads.single().characteristic)
+        assertArrayEquals(fixture.readValue, fixture.decodedSettingsBytes.single())
+        manager.detach()
+    }
+
+    @Test
     fun deprovisionWritesOnlyTheRemoveCommandAndStartsNoResetWorkflow() = runTest {
         val fixture = SecureRuntimeFixture()
         val manager = ProvisioningManager()
@@ -142,6 +180,7 @@ internal class SecureRuntimeFixture(
     pendingReset: PersistedFactoryResetResult? = null,
 ) {
     data class Write(val peripheralId: String, val service: UUID, val characteristic: UUID, val value: ByteArray)
+    data class Read(val peripheralId: String, val service: UUID, val characteristic: UUID)
 
     val device = ConnectedDevice(
         id = "peripheral-1",
@@ -155,6 +194,13 @@ internal class SecureRuntimeFixture(
     val connection = DeviceConnectionRegistry()
     val operations = DeviceOperationCoordinator()
     val writes = mutableListOf<Write>()
+    val reads = mutableListOf<Read>()
+    val decodedSettingsBytes = mutableListOf<ByteArray>()
+    var readValue = byteArrayOf()
+    var parsedSettings = DeviceConnectionSettings(
+        enabledConnections = DeviceConnectionSettings.EnabledConnections(true, false),
+        uploadNetworkPreference = listOf(DeviceConnectionSettings.ConnectionType.Wifi),
+    )
     val encodedSettings = mutableListOf<Pair<DeviceConnectionSettings, DeviceType>>()
     val encodedDeviceCommands = mutableListOf<UByte>()
     val provisioningProviders = mutableMapOf<String, suspend (ProvisioningMaterialRequest) -> ProvisioningMaterial>()
@@ -181,6 +227,14 @@ internal class SecureRuntimeFixture(
         operations = operations,
         directWrite = { peripheralId, service, characteristic, value ->
             writes += Write(peripheralId, service, characteristic, value.copyOf())
+        },
+        directRead = { peripheralId, service, characteristic ->
+            reads += Read(peripheralId, service, characteristic)
+            readValue.copyOf()
+        },
+        parseConnectionSettings = {
+            decodedSettingsBytes += it.copyOf()
+            parsedSettings
         },
         serializeConnectionSettings = { settings, model ->
             val normalized = settings.normalized(model)

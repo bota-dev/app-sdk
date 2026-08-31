@@ -899,6 +899,9 @@ JavaScript defaults before Codegen, then delegate device-model normalization,
 serialization, and BLE ownership to Apple and Android while preserving
 heartbeat channel selection independently from upload preference.
 The omitted heartbeat value retains the frozen both-channels-enabled default.
+Connection-settings reads keep characteristic bytes and shared decoding in the
+native facades, carry only the complete typed value through Codegen, and restore
+the frozen snake-case JavaScript shape while filtering unknown future channels.
 Authenticated factory reset now uses the same one-shot request ownership while
 binding every grant and completion to the backend command ID and binding
 generation. Apple and Android decode the
@@ -917,7 +920,7 @@ JavaScript owns idempotent subscription teardown.
 A real CocoaPods application compiles and links the generated typed event spec,
 Objective-C++, Swift, Swift Package, and Rust XCFramework layers. The Android
 adapters provide the same lifecycle, connection, status, provisioning,
-connection-settings, authenticated-reset, recording-transfer,
+connection-settings reads and writes, authenticated-reset, recording-transfer,
 upload-ownership, and OTA slices plus device logs through the public Android
 facade, and a checked-in React Native Gradle
 consumer runs Codegen, Kotlin tests,

@@ -584,6 +584,39 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
+    @objc(readConnectionSettingsWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:completion:)
+    public func readConnectionSettings(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let settings = try await security.readConnectionSettings(
+                    from: Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    )
+                )
+                completion(Self.connectionSettings(settings), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
     @objc(factoryResetWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:commandID:bindingGeneration:onGrantRequest:completion:)
     public func factoryReset(
         id: String,
@@ -848,6 +881,35 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         case "cellular": .cellular
         default: nil
         }
+    }
+
+    private static func connectionTypeValue(_ value: ConnectionType) -> String? {
+        switch value {
+        case .wifi: "wifi"
+        case .ble: "ble"
+        case .cellular: "cellular"
+        case .unknown: nil
+        }
+    }
+
+    private static func connectionSettings(_ settings: DeviceConnectionSettings) -> [String: Any] {
+        [
+            "enabledConnections": [
+                "wifi": settings.enabledConnections.wifi,
+                "cellular": settings.enabledConnections.cellular,
+            ],
+            "heartbeatEnabledConnections": [
+                "wifi": settings.heartbeatEnabledConnections.wifi,
+                "cellular": settings.heartbeatEnabledConnections.cellular,
+            ],
+            "uploadNetworkPreference": settings.uploadNetworkPreference.compactMap(connectionTypeValue),
+            "powerManagement": [
+                "wifiIdleTimeoutSeconds": settings.powerManagement.wifiIdleTimeoutSeconds,
+                "cellularIdleTimeoutSeconds": settings.powerManagement.cellularIdleTimeoutSeconds,
+            ],
+            "streamingEnabled": settings.streamingEnabled,
+            "streamingFlushIntervalSeconds": settings.streamingFlushIntervalSeconds,
+        ]
     }
 
     private static func factoryResetCompletion(

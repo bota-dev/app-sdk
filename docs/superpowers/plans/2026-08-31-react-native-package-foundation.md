@@ -114,12 +114,14 @@
 ## Follow-On Status
 
 As of 2026-08-31, both lifecycle adapters and the discovery, connection,
-device-status, provisioning, connection-settings, authenticated-reset,
+device-status, provisioning, connection-settings reads and writes,
+authenticated-reset,
 recording-list/transfer, upload-ownership, OTA, and device-log workflow slices
 are complete. Apple
 configure, destroy, state, capabilities, discovery, selected-device connect,
 serial-strict reconnect, disconnect, status reads, status subscriptions,
-provision, connection-settings writes, remove-only deprovision, factory reset,
+provision, connection-settings reads and writes, remove-only deprovision,
+factory reset,
 exact-generation reset receipt recovery, recording list, recording transfer,
 upload ownership, OTA, and device logs call `BotaAppleSDK` through serialized
 Swift actors and pass a full CocoaPods application compile-and-link gate.
@@ -135,6 +137,9 @@ expands frozen connection-settings defaults before Codegen; native facades
 normalize the complete value for the device model and own serialization plus
 the BLE write. Heartbeat channel selection remains independent from upload
 preference, and omission retains the frozen both-channels-enabled default.
+Reads keep the characteristic payload and shared decoder native, return only a
+complete typed value through Codegen, and restore the frozen snake-case shape
+in JavaScript while omitting unknown future connection types.
 Recording
 metadata and progress cross Codegen, while completed audio remains a native
 file and JavaScript receives only its path. Upload handoff crosses Codegen as

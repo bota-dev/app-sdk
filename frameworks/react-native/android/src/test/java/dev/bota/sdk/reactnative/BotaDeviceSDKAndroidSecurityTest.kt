@@ -129,6 +129,32 @@ class BotaDeviceSDKAndroidSecurityTest {
     }
 
     @Test
+    fun connectionSettingsReadDelegatesToAndroidFacade() = runTest {
+        val connected = ConnectedDevice(
+            id = "selected",
+            serialNumber = "EVFXXW67KP",
+            deviceType = DeviceType.BotaNote,
+            firmwareVersion = "1.0.11",
+            isProvisioned = true,
+            connectionState = ConnectionState.Connected,
+            mtu = 247,
+        )
+        val expected = DeviceConnectionSettings(
+            enabledConnections = DeviceConnectionSettings.EnabledConnections(true, false),
+            uploadNetworkPreference = listOf(
+                DeviceConnectionSettings.ConnectionType.Wifi,
+                DeviceConnectionSettings.ConnectionType.Ble,
+            ),
+        )
+        val client = TestAndroidSecurityClient().apply { connectionSettingsReadResult = expected }
+        val security = BotaDeviceSDKAndroidSecurity(client)
+
+        val settings = security.readConnectionSettings(connected)
+
+        assertEquals(expected, settings)
+    }
+
+    @Test
     fun factoryResetRejectsMalformedGrantAndCancelsPendingRequestsOnDestroy() = runTest {
         val connected = ConnectedDevice(
             id = "selected",
@@ -183,6 +209,10 @@ class BotaDeviceSDKAndroidSecurityTest {
         var factoryResetCancelled = false
         val resumedBindingGenerations = mutableListOf<ULong>()
         var connectionSettings: DeviceConnectionSettings? = null
+        var connectionSettingsReadResult = DeviceConnectionSettings(
+            enabledConnections = DeviceConnectionSettings.EnabledConnections(true, false),
+            uploadNetworkPreference = listOf(DeviceConnectionSettings.ConnectionType.Wifi),
+        )
 
         override suspend fun provision(
             device: ConnectedDevice,
@@ -207,6 +237,9 @@ class BotaDeviceSDKAndroidSecurityTest {
         ) {
             connectionSettings = settings
         }
+
+        override suspend fun readConnectionSettings(device: ConnectedDevice): DeviceConnectionSettings =
+            connectionSettingsReadResult
 
         override suspend fun cancelCurrentOperation() = Unit
 

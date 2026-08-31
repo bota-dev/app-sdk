@@ -62,6 +62,28 @@ public actor ProvisioningManager {
         }
     }
 
+    public func readConnectionSettings(
+        from device: ConnectedDevice
+    ) async throws -> DeviceConnectionSettings {
+        let runtime = try configuredRuntime()
+        try await runtime.connection.require(device)
+        let operationID = UUID()
+        try await runtime.operations.begin(operationID, operation: .decode)
+        do {
+            let data = try await runtime.directRead(
+                device.id,
+                BotaBluetoothUUIDs.provisioningService,
+                BotaBluetoothUUIDs.deviceSettings
+            )
+            let settings = try runtime.parseConnectionSettings(data).settings
+            await runtime.operations.end(operationID)
+            return settings
+        } catch {
+            await runtime.operations.end(operationID)
+            throw error
+        }
+    }
+
     public func deprovision(_ device: ConnectedDevice) async throws {
         let runtime = try configuredRuntime()
         try await runtime.connection.require(device)

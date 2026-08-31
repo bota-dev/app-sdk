@@ -134,6 +134,11 @@ facades' device-model normalization and own serialization plus the BLE write;
 raw encoded settings bytes never enter JavaScript. Heartbeat channel selection
 remains distinct from upload preference through the complete path, and an
 omitted heartbeat setting retains the frozen both-channels-enabled default.
+The paired `readConnectionSettings` path keeps the characteristic bytes and
+shared decoder native, returns only a complete typed settings value through
+Codegen, and maps it back to the frozen snake-case JavaScript shape. Unknown
+future connection types remain representable natively and are omitted from the
+legacy JavaScript union.
 
 The Apple host is now executable. A Swift actor coalesces concurrent
 configuration, orders destruction after any in-flight configuration, and calls
@@ -150,7 +155,7 @@ that the default package URL resolves the synchronized immutable release. A
 target-scoped CocoaPods hook carries React Native's upstream fix for duplicate
 binary Swift-package module maps on Xcode 26.3 while the package floor remains
 0.86.3. This proves lifecycle plus device discovery, connection, status,
-provisioning, connection-settings writes, authenticated-reset,
+provisioning, connection-settings reads and writes, authenticated-reset,
 recording-transfer, upload-ownership, OTA, and device-log integration, not the
 remaining workflow surface or application parity.
 
@@ -165,7 +170,7 @@ the public Android facade. A checked-in React Native 0.86.3
 Gradle consumer regenerates Codegen, runs lifecycle unit tests and lint, and
 assembles the adapter against the exact AAR reconstructed from the immutable
 local Maven payload. This proves Android lifecycle plus device discovery,
-connection, status, provisioning, connection-settings writes,
+connection, status, provisioning, connection-settings reads and writes,
 authenticated-reset, recording-transfer, upload-ownership, OTA, and device-log
 integration only; the remaining workflow bindings and application parity
 remain open.
