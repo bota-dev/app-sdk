@@ -64,6 +64,14 @@
   "bota": {
     "nativeModuleName": "BotaDeviceSDK",
     "reactNativeFloor": "0.86.3",
+    "android": {
+      "compileSdkVersion": 36,
+      "coroutinesVersion": "1.11.0",
+      "kotlinVersion": "2.3.20",
+      "mavenCoordinate": "dev.bota:bota-android-sdk",
+      "minSdkVersion": 26,
+      "namespace": "dev.bota.sdk.reactnative"
+    },
     "apple": {
       "podName": "BotaDeviceSDK",
       "moduleName": "BotaDeviceSDK",

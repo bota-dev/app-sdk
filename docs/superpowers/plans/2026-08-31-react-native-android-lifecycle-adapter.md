@@ -6,7 +6,7 @@
 
 **Architecture:** A small Kotlin lifecycle object serializes `configure` and `destroy` with a coroutine mutex and delegates to `BotaDeviceClient.shared`. A generated-spec module translates `ReadableMap` and `Promise` values only, while a `BaseReactPackage` registers the TurboModule. The package depends on the exact App SDK version from its own `package.json`; local tests resolve the same AAR from `target/android-m2`, while applications resolve it from Maven Central.
 
-**Tech Stack:** Kotlin 2.3.20, coroutines 1.10.2, Android Gradle Plugin 8.13.2, JDK 17, Android API 26/36, React Native 0.86.3 Codegen, Gradle 8.13, Node.js 22, JUnit 4.
+**Tech Stack:** Kotlin 2.3.20, coroutines 1.11.0, Android Gradle Plugin 8.13.2, JDK 17, Android API 26/36, React Native 0.86.3 Codegen, Gradle 8.13, Node.js 22, JUnit 4.
 
 **Spec:** `ARCHITECTURE.md` React Native boundary and `docs/superpowers/plans/2026-08-28-app-sdk-implementation.md` Milestone 4.
 
@@ -36,12 +36,12 @@
 - Consumes: `package.json.version`, `codegenConfig.name`, `codegenConfig.android.javaPackageName`, React Native's `com.facebook.react` Gradle plugin, and Maven coordinate `dev.bota:bota-android-sdk`.
 - Produces: Android namespace `dev.bota.sdk.reactnative`, API 26 minimum, exact synchronized facade dependency, and generated `NativeBotaDeviceSDKSpec` source under the configured package.
 
-- [ ] **Step 1: Write failing contract tests** that require the manifest, Gradle library and React plugins, API 26/36, JDK 17, the exact package-version-derived Android facade dependency, and no direct JNI/Rust calls in adapter sources.
-- [ ] **Step 2: Run `node --test test/android-adapter-contract.test.mjs` and verifier tests** and confirm failure because the Android package is absent.
-- [ ] **Step 3: Add the minimum Android library build** using root-project overrides where available and synchronized defaults otherwise. Configure `react { libraryName = "BotaDeviceSDKSpec"; codegenJavaPackageName = "dev.bota.sdk.reactnative" }` and depend on `com.facebook.react:react-android`, `dev.bota:bota-android-sdk:${packageVersion}`, and coroutines.
-- [ ] **Step 4: Extend package verification** to reject missing Android files, namespace/name drift, API-floor drift, and a facade version not derived from package metadata.
-- [ ] **Step 5: Run focused Node tests and `npm run verify`** and confirm they pass.
-- [ ] **Step 6: Commit** with `feat(react-native): define Android adapter package` and the required Codex trailer.
+- [x] **Step 1: Write failing contract tests** that require the manifest, Gradle library and React plugins, API 26/36, JDK 17, the exact package-version-derived Android facade dependency, and no direct JNI/Rust calls in adapter sources.
+- [x] **Step 2: Run `node --test test/android-adapter-contract.test.mjs` and verifier tests** and confirm failure because the Android package is absent.
+- [x] **Step 3: Add the minimum Android library build** using root-project overrides where available and synchronized defaults otherwise. Configure `react { libraryName = "BotaDeviceSDKSpec"; codegenJavaPackageName = "dev.bota.sdk.reactnative" }` and depend on `com.facebook.react:react-android`, `dev.bota:bota-android-sdk:${packageVersion}`, and coroutines.
+- [x] **Step 4: Extend package verification** to reject missing Android files, namespace/name drift, API-floor drift, and a facade version not derived from package metadata.
+- [x] **Step 5: Run focused Node tests and `npm run verify`** and confirm they pass.
+- [x] **Step 6: Commit** with `feat(react-native): define Android adapter package` and the required Codex trailer.
 
 ### Task 2: Serialized Kotlin Lifecycle And TurboModule
 

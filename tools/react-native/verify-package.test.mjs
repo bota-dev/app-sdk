@@ -39,6 +39,14 @@ const validPackage = () => ({
   bota: {
     nativeModuleName: 'BotaDeviceSDK',
     reactNativeFloor: '0.86.3',
+    android: {
+      compileSdkVersion: 36,
+      coroutinesVersion: '1.11.0',
+      kotlinVersion: '2.3.20',
+      mavenCoordinate: 'dev.bota:bota-android-sdk',
+      minSdkVersion: 26,
+      namespace: 'dev.bota.sdk.reactnative',
+    },
     apple: {
       podName: 'BotaDeviceSDK',
       moduleName: 'BotaDeviceSDK',
@@ -56,7 +64,10 @@ const validPackage = () => ({
 const runVerifier = (mutate = () => {}) => {
   const root = mkdtempSync(join(tmpdir(), 'bota-rn-package-'));
   const packageRoot = join(root, 'frameworks', 'react-native');
-  mkdirSync(packageRoot, { recursive: true });
+  const androidSourceRoot = join(packageRoot, 'android', 'src', 'main');
+  mkdirSync(androidSourceRoot, { recursive: true });
+  writeFileSync(join(packageRoot, 'android', 'build.gradle'), '// fixture\n');
+  writeFileSync(join(androidSourceRoot, 'AndroidManifest.xml'), '<manifest />\n');
   writeFileSync(join(root, 'sdk-version.toml'), 'version = "1.0.2"\n');
   writeFileSync(
     join(root, 'package.json'),
@@ -128,6 +139,39 @@ test('rejects an unexpected native module name', () => {
 
   assert.notEqual(result.status, 0);
   assert.match(outputOf(result), /native module name/);
+});
+
+test('rejects Android namespace and SDK floor drift', () => {
+  const namespaceResult = runVerifier((pkg) => {
+    pkg.bota.android.namespace = 'dev.bota.reactnative';
+  });
+  const floorResult = runVerifier((pkg) => {
+    pkg.bota.android.minSdkVersion = 24;
+  });
+
+  assert.notEqual(namespaceResult.status, 0);
+  assert.match(outputOf(namespaceResult), /Android namespace/);
+  assert.notEqual(floorResult.status, 0);
+  assert.match(outputOf(floorResult), /Android minimum SDK/);
+});
+
+test('rejects Android facade coordinate and toolchain drift', () => {
+  const coordinateResult = runVerifier((pkg) => {
+    pkg.bota.android.mavenCoordinate = 'dev.bota:android-sdk';
+  });
+  const kotlinResult = runVerifier((pkg) => {
+    pkg.bota.android.kotlinVersion = '2.2.0';
+  });
+  const coroutinesResult = runVerifier((pkg) => {
+    pkg.bota.android.coroutinesVersion = '1.10.2';
+  });
+
+  assert.notEqual(coordinateResult.status, 0);
+  assert.match(outputOf(coordinateResult), /Android Maven coordinate/);
+  assert.notEqual(kotlinResult.status, 0);
+  assert.match(outputOf(kotlinResult), /Android Kotlin version/);
+  assert.notEqual(coroutinesResult.status, 0);
+  assert.match(outputOf(coroutinesResult), /Android coroutines version/);
 });
 
 test('rejects a package that omits the podspec from npm files', () => {

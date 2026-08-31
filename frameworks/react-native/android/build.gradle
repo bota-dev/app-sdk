@@ -1,0 +1,76 @@
+import groovy.json.JsonSlurper
+
+def packageJson = new JsonSlurper().parse(file("../package.json"))
+def androidMetadata = packageJson.bota.android
+def packageVersion = packageJson.version
+
+buildscript {
+  ext.BotaDeviceSDK = [
+    kotlinVersion: "2.3.20",
+    minSdkVersion: 26,
+    compileSdkVersion: 36,
+  ]
+
+  ext.getExtOrDefault = { prop ->
+    if (rootProject.ext.has(prop)) {
+      return rootProject.ext.get(prop)
+    }
+    return BotaDeviceSDK[prop]
+  }
+
+  repositories {
+    google()
+    mavenCentral()
+  }
+
+  dependencies {
+    classpath "com.android.tools.build:gradle:8.13.2"
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${getExtOrDefault('kotlinVersion')}"
+  }
+}
+
+apply plugin: "com.android.library"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+
+react {
+  root = file("..")
+  reactNativeDir = file("../node_modules/react-native")
+  codegenDir = file("../node_modules/@react-native/codegen")
+  jsRootDir = file("../src")
+  libraryName = "BotaDeviceSDKSpec"
+  codegenJavaPackageName = "dev.bota.sdk.reactnative"
+}
+
+android {
+  namespace "dev.bota.sdk.reactnative"
+  compileSdkVersion getExtOrDefault("compileSdkVersion")
+
+  defaultConfig {
+    minSdkVersion getExtOrDefault("minSdkVersion")
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+
+  kotlinOptions {
+    jvmTarget = "17"
+    allWarningsAsErrors = true
+  }
+
+  lint {
+    abortOnError = true
+    checkReleaseBuilds = true
+    warningsAsErrors = true
+  }
+}
+
+dependencies {
+  implementation "com.facebook.react:react-android"
+  implementation "${androidMetadata.mavenCoordinate}:${packageVersion}"
+  implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:${androidMetadata.coroutinesVersion}"
+  testImplementation "junit:junit:4.13.2"
+  testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:${androidMetadata.coroutinesVersion}"
+}

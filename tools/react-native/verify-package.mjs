@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,6 +15,12 @@ const EXPECTED_COCOAPODS_VERSION = '1.13.0';
 const EXPECTED_LOCAL_APPLE_PATH_ENV = 'BOTA_APPLE_SDK_PACKAGE_PATH';
 const EXPECTED_SWIFT_VERSION = '6.0';
 const EXPECTED_APPLE_SPM_WORKAROUND = 'scripts/bota_device_sdk_spm_workaround.rb';
+const EXPECTED_ANDROID_COMPILE_SDK = 36;
+const EXPECTED_ANDROID_COROUTINES_VERSION = '1.11.0';
+const EXPECTED_ANDROID_KOTLIN_VERSION = '2.3.20';
+const EXPECTED_ANDROID_MAVEN_COORDINATE = 'dev.bota:bota-android-sdk';
+const EXPECTED_ANDROID_MIN_SDK = 26;
+const EXPECTED_ANDROID_NAMESPACE = 'dev.bota.sdk.reactnative';
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
@@ -99,6 +105,42 @@ export const verifyPackage = ({ workspaceRoot, packageRoot }) => {
   }
   if (!packageJson.files?.includes(EXPECTED_APPLE_SPM_WORKAROUND)) {
     throw new Error('React Native npm files must include the Apple SPM workaround');
+  }
+  if (!packageJson.files?.includes('android/')) {
+    throw new Error('React Native npm files must include android/');
+  }
+
+  for (const path of [
+    'android/build.gradle',
+    'android/src/main/AndroidManifest.xml',
+  ]) {
+    if (!existsSync(resolve(packageRoot, path))) {
+      throw new Error(`React Native Android package is missing ${path}`);
+    }
+  }
+
+  const android = packageJson.bota?.android;
+  if (android?.namespace !== EXPECTED_ANDROID_NAMESPACE) {
+    throw new Error(`Android namespace must be ${EXPECTED_ANDROID_NAMESPACE}`);
+  }
+  if (android?.minSdkVersion !== EXPECTED_ANDROID_MIN_SDK) {
+    throw new Error(`Android minimum SDK must be ${EXPECTED_ANDROID_MIN_SDK}`);
+  }
+  if (android?.compileSdkVersion !== EXPECTED_ANDROID_COMPILE_SDK) {
+    throw new Error(`Android compile SDK must be ${EXPECTED_ANDROID_COMPILE_SDK}`);
+  }
+  if (android?.kotlinVersion !== EXPECTED_ANDROID_KOTLIN_VERSION) {
+    throw new Error(`Android Kotlin version must be ${EXPECTED_ANDROID_KOTLIN_VERSION}`);
+  }
+  if (android?.coroutinesVersion !== EXPECTED_ANDROID_COROUTINES_VERSION) {
+    throw new Error(
+      `Android coroutines version must be ${EXPECTED_ANDROID_COROUTINES_VERSION}`
+    );
+  }
+  if (android?.mavenCoordinate !== EXPECTED_ANDROID_MAVEN_COORDINATE) {
+    throw new Error(
+      `Android Maven coordinate must be ${EXPECTED_ANDROID_MAVEN_COORDINATE}`
+    );
   }
 
   const apple = packageJson.bota?.apple;
