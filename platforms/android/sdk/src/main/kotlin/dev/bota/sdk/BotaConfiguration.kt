@@ -20,7 +20,9 @@ public class BotaConfiguration internal constructor(
             networkClient: OkHttpClient,
             storageDirectory: File?,
         ): suspend () -> DeviceRuntime {
-            val applicationContext = context.applicationContext ?: context
+            val applicationContext = requireNotNull(context.applicationContext) {
+                "BotaConfiguration requires a Context with an application context"
+            }
             return { DeviceRuntime.create(applicationContext, networkClient, storageDirectory) }
         }
     }

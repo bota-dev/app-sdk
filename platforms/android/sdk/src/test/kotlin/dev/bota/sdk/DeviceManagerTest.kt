@@ -18,11 +18,17 @@ import dev.bota.sdk.model.DiscoveredDevice
 import dev.bota.sdk.model.LteStatus
 import dev.bota.sdk.model.WireValue
 import java.util.UUID
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -47,7 +53,7 @@ class DeviceManagerTest {
             ).runtime,
         )
 
-        val error = runCatching { manager.startScan() }.exceptionOrNull()
+        val error = runCatching { manager.startScan().toList() }.exceptionOrNull()
 
         assertTrue(error is BotaSDKError.AuthorizationRequired)
         assertTrue(runner.commands.isEmpty())
@@ -56,6 +62,52 @@ class DeviceManagerTest {
         manager.startScan().toList()
 
         assertEquals(1, runner.commands.size)
+        manager.detach()
+    }
+
+    @Test
+    fun uncollectedScanDoesNotBlockConnection() = runTest {
+        val runner = FakeWorkflowRunner(connectionResponses())
+        val manager = DeviceManager()
+        manager.attach(RuntimeFixture(runner = runner).runtime)
+
+        manager.startScan()
+        val connected = manager.connect("SERIAL-1", DiscoveredDevice(id = "peripheral-1", rssi = -30))
+
+        assertEquals("SERIAL-1", connected.serialNumber)
+        assertEquals(1, runner.commands.size)
+        manager.detach()
+    }
+
+    @Test
+    fun eachScanCollectionOwnsAFreshCommand() = runTest {
+        val runner = FakeWorkflowRunner()
+        val manager = DeviceManager()
+        manager.attach(RuntimeFixture(runner = runner).runtime)
+        val scan = manager.startScan()
+
+        scan.toList()
+        scan.toList()
+
+        assertEquals(2, runner.commands.size)
+        assertTrue(runner.commands[0].cancellationId != runner.commands[1].cancellationId)
+        manager.detach()
+    }
+
+    @Test
+    fun cancellingActiveScanCompletesItsCollector() = runTest {
+        val runner = FakeWorkflowRunner(keepOpen = true)
+        val manager = DeviceManager()
+        manager.attach(RuntimeFixture(runner = runner).runtime)
+        val collecting = async { manager.startScan().toList() }
+        withTimeout(1_000) {
+            while (runner.commands.isEmpty()) delay(1)
+        }
+
+        manager.cancelCurrentOperation()
+
+        withTimeout(1_000) { collecting.await() }
+        assertEquals(runner.commands.single().cancellationId, runner.cancelledIds.single())
         manager.detach()
     }
 
@@ -146,13 +198,50 @@ class DeviceManagerTest {
     }
 
     @Test
+    fun staleConnectionCompletionCannotRestoreStateAfterRuntimeReplacement() = runTest {
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val runner = FakeWorkflowRunner(
+            responses = connectionResponses(),
+            beforeResponses = {
+                started.complete(Unit)
+                release.await()
+            },
+        )
+        val manager = DeviceManager()
+        manager.attach(RuntimeFixture(runner = runner).runtime)
+        val connecting = async {
+            runCatching {
+                manager.connect("SERIAL-1", DiscoveredDevice(id = "peripheral-1", rssi = -30))
+            }
+        }
+        started.await()
+
+        manager.detach()
+        manager.attach(RuntimeFixture().runtime)
+        release.complete(Unit)
+
+        val error = connecting.await().exceptionOrNull() as BotaSDKError.Core
+        assertEquals(BotaErrorCode.Cancelled, error.code)
+        val statusError = runCatching { manager.readStatus() }.exceptionOrNull() as BotaSDKError.Core
+        assertEquals(BotaErrorCode.NotConnected, statusError.code)
+        manager.detach()
+    }
+
+    @Test
     fun rejectedConcurrentConnectDoesNotDisconnectTheVerifiedDevice() = runTest {
-        val runner = FakeWorkflowRunner(connectionResponses())
+        val runner = FakeWorkflowRunner(
+            responses = connectionResponses(),
+            keepOpenForCommand = { it.kind == 0x0101 },
+        )
         val fixture = RuntimeFixture(runner = runner)
         val manager = DeviceManager()
         manager.attach(fixture.runtime)
         manager.connect("SERIAL-1", DiscoveredDevice(id = "first", rssi = -30))
-        manager.startScan()
+        val scanning = launch { manager.startScan().collect() }
+        withTimeout(1_000) {
+            while (runner.commands.size < 2) delay(1)
+        }
 
         val error = runCatching {
             manager.connect("SERIAL-2", DiscoveredDevice(id = "second", rssi = -25))
@@ -161,6 +250,7 @@ class DeviceManagerTest {
         assertEquals(BotaErrorCode.OperationInProgress, error.code)
         assertTrue(fixture.disconnects.isEmpty())
         manager.cancelCurrentOperation()
+        scanning.join()
         manager.detach()
     }
 
@@ -191,6 +281,101 @@ class DeviceManagerTest {
         assertArrayEquals(updateBytes, decoded[1])
         assertEquals(listOf("peripheral-1"), fixture.stoppedStatusUpdates)
         manager.detach()
+    }
+
+    @Test
+    fun statusTransportFailuresAreStablePublicErrors() = runTest {
+        val manager = DeviceManager()
+        val fixture = RuntimeFixture(
+            runner = FakeWorkflowRunner(connectionResponses()),
+            readStatus = { error("read failed") },
+            statusUpdates = { flow { error("notify failed") } },
+        )
+        manager.attach(fixture.runtime)
+        manager.connect("SERIAL-1", DiscoveredDevice(id = "peripheral-1", rssi = -30))
+
+        val readError = runCatching { manager.readStatus() }.exceptionOrNull() as BotaSDKError.Core
+        val updateError = runCatching { manager.statusUpdates().toList() }.exceptionOrNull() as BotaSDKError.Core
+
+        assertEquals(BotaErrorCode.Internal, readError.code)
+        assertEquals(BotaOperation.ReadStatus, readError.operation)
+        assertEquals(BotaErrorCode.Internal, updateError.code)
+        assertEquals(BotaOperation.ReadStatus, updateError.operation)
+        manager.detach()
+    }
+
+    @Test
+    fun statusSubscriptionStopsOnlyAfterTheLastCollectorLeaves() = runTest {
+        val subscriptions = Channel<Unit>(Channel.UNLIMITED)
+        val manager = DeviceManager()
+        val fixture = RuntimeFixture(
+            runner = FakeWorkflowRunner(connectionResponses()),
+            statusUpdates = {
+                flow {
+                    subscriptions.send(Unit)
+                    awaitCancellation()
+                }
+            },
+        )
+        manager.attach(fixture.runtime)
+        manager.connect("SERIAL-1", DiscoveredDevice(id = "peripheral-1", rssi = -30))
+        val first = launch { manager.statusUpdates().collect() }
+        subscriptions.receive()
+        val second = launch { manager.statusUpdates().collect() }
+        subscriptions.receive()
+
+        first.cancelAndJoin()
+        delay(10)
+        assertTrue(fixture.stoppedStatusUpdates.isEmpty())
+
+        second.cancelAndJoin()
+        withTimeout(1_000) {
+            while (fixture.stoppedStatusUpdates.isEmpty()) delay(1)
+        }
+        assertEquals(listOf("peripheral-1"), fixture.stoppedStatusUpdates)
+        manager.detach()
+    }
+
+    @Test
+    fun rejectedDisconnectDoesNotTearDownStatusObservers() = runTest {
+        val subscriptions = Channel<Unit>(Channel.UNLIMITED)
+        var rejectDisconnect = false
+        val manager = DeviceManager()
+        val fixture = RuntimeFixture(
+            runner = FakeWorkflowRunner(connectionResponses()),
+            authorize = {
+                if (rejectDisconnect && it == BotaOperation.Connect) {
+                    throw BotaSDKError.AuthorizationRequired(setOf("connect"), it)
+                }
+            },
+            statusUpdates = {
+                flow {
+                    subscriptions.send(Unit)
+                    awaitCancellation()
+                }
+            },
+        )
+        manager.attach(fixture.runtime)
+        manager.connect("SERIAL-1", DiscoveredDevice(id = "peripheral-1", rssi = -30))
+        val status = launch { manager.statusUpdates().collect() }
+        subscriptions.receive()
+        rejectDisconnect = true
+
+        val error = runCatching { manager.disconnect() }.exceptionOrNull()
+
+        assertTrue(error is BotaSDKError.AuthorizationRequired)
+        assertTrue(fixture.stoppedStatusUpdates.isEmpty())
+        status.cancelAndJoin()
+        manager.detach()
+    }
+
+    @Test
+    fun connectionUpdatesRequiresConfigurationAtFlowCreation() {
+        val manager = DeviceManager()
+
+        val error = runCatching { manager.connectionUpdates() }.exceptionOrNull() as BotaSDKError.Core
+
+        assertEquals(BotaErrorCode.FeatureUnavailable, error.code)
     }
 
     @Test
@@ -225,6 +410,8 @@ class DeviceManagerTest {
 internal class FakeWorkflowRunner(
     private val responses: List<CoreNotification> = emptyList(),
     private val keepOpen: Boolean = false,
+    private val beforeResponses: suspend () -> Unit = {},
+    private val keepOpenForCommand: (CoreCommand) -> Boolean = { keepOpen },
 ) : CoreWorkflowRunner {
     val commands = mutableListOf<CoreCommand>()
     val cancelledIds = mutableListOf<UUID>()
@@ -232,8 +419,9 @@ internal class FakeWorkflowRunner(
 
     override fun run(command: CoreCommand, capabilities: CoreCapabilities): Flow<CoreNotification> = flow {
         commands += command
+        beforeResponses()
         responses.forEach { emit(it) }
-        if (keepOpen) awaitCancellation()
+        if (keepOpenForCommand(command)) awaitCancellation()
     }
 
     override suspend fun cancel(cancellationId: UUID) {

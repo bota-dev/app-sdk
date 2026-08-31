@@ -780,6 +780,11 @@ models are immutable. `DeviceManager` translates flow cancellation to the
 original core cancellation ID and delegates manual/reconnect policy to Rust.
 It publishes a `ConnectedDevice` only after exact serial verification, never
 selects by display name, and routes status bytes through `CoreModelMapper`.
+Scan ownership begins on collection and every collection creates a fresh core
+command. Runtime generations reject stale completion after destroy or
+reconfiguration; status transport teardown is tied to its originating runtime
+and waits for the last collector. Construction rollback and destroy attempt all
+registered close actions while preserving the first failure.
 
 - [x] **Step 4: Run focused and shared connection gates**
 

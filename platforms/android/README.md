@@ -45,6 +45,11 @@ are never identity. Connection and device-status observations are Kotlin
 `Flow`s, and status payloads use the shared Rust decoder. Destroy cancels the
 active workflow, ends status subscriptions, disconnects the verified device,
 closes observers, and releases the native engine and Android Bluetooth thread.
+Scan flows are cold: creating one does not reserve the engine, and every
+collection owns a fresh command and cancellation ID. Late callbacks from a
+destroyed or replaced runtime cannot publish connection state. Multiple status
+collectors share device notification ownership, so one collector stopping does
+not disable notifications for the others.
 
 ## Verify
 

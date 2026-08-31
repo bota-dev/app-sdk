@@ -5,9 +5,12 @@ import dev.bota.sdk.internal.core.CoreCapabilities
 import dev.bota.sdk.model.DiscoveredDevice
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -80,6 +83,24 @@ class BotaDeviceClientTest {
         assertNull(values.first())
         assertEquals("peripheral-1", values[1]?.id)
         assertEquals(listOf("peripheral-1"), fixture.disconnects)
+        assertEquals(1, fixture.closeCount)
+    }
+
+    @Test
+    fun destroyCancelsActiveScanAndCompletesItsCollector() = runTest {
+        val runner = FakeWorkflowRunner(keepOpen = true)
+        val fixture = RuntimeFixture(runner = runner)
+        val client = BotaDeviceClient()
+        client.configure(BotaConfiguration { fixture.runtime })
+        val scanning = async { client.devices.startScan().collect() }
+        withTimeout(1_000) {
+            while (runner.commands.isEmpty()) delay(1)
+        }
+
+        client.destroy()
+
+        withTimeout(1_000) { scanning.await() }
+        assertEquals(runner.commands.single().cancellationId, runner.cancelledIds.single())
         assertEquals(1, fixture.closeCount)
     }
 }

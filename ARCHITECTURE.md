@@ -159,6 +159,13 @@ exact serial, and reconnect only forwards saved peripheral/address/name hints
 to the canonical reducer. A device is published only after Rust reports the
 verified serial. Connection observers complete on destroy, while direct status
 reads and streams use the shared ABI decoder and serialized GATT driver. The
+scan flow acquires workflow ownership at collection time, with a fresh command
+and cancellation identity for every collection. Runtime generations reject
+late workflow completion after destroy or reconfiguration. Status teardown is
+bound to its originating runtime and disables the device-wide CCCD only after
+the last collector leaves. Runtime construction rollback and destroy attempt
+every registered resource close, preserving cleanup failures without leaking
+the Bluetooth thread or native engine. The
 secure lifecycle, recording, OTA, log, Maven Central, physical acceptance, and
 React Native Android runtime gates are not claimed by this stage.
 

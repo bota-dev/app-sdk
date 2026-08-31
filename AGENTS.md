@@ -112,6 +112,14 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   starting Rust, require exact serial verification for manual connect, forward
   reconnect hints without name-based selection, decode status through the
   shared mapper, and finish every connection/status observer on destroy.
+- Android scan flows acquire workflow ownership only when collected; each
+  collection owns a fresh cancellation ID. Bind active work and status cleanup
+  to the runtime generation that created it so late callbacks cannot restore
+  state after destroy/reconfigure, and disable status notifications only after
+  the last collector for that runtime and peripheral leaves.
+- Android runtime construction and destroy must attempt every owned close
+  action even when one close fails. Preserve the first cleanup failure and add
+  later failures as suppressed exceptions.
 - Keep Android `WorkflowFixtures` generated from all seven canonical workflow
   suites. `preDebugAndroidTestBuild` must reject stale protocol or workflow
   resources before packaged instrumentation runs.

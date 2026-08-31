@@ -54,12 +54,23 @@ public data class DeviceReconnectHint(
 )
 
 public class DeviceManager internal constructor() {
-    private data class ActiveOperation(val cancellationId: UUID, var task: Job? = null)
-    private data class StatusObserver(val peripheralId: String, val channel: SendChannel<DeviceStatus>, val task: Job)
+    private data class RuntimeLease(val runtime: DeviceRuntime, val generation: Long)
+    private data class ActiveOperation(
+        val cancellationId: UUID,
+        val lease: RuntimeLease,
+        var task: Job? = null,
+    )
+    private data class StatusObserver(
+        val runtime: DeviceRuntime,
+        val peripheralId: String,
+        val channel: SendChannel<DeviceStatus>,
+        val task: Job,
+    )
 
     private val lock = Any()
     private var callbackScope: CoroutineScope? = null
     private var runtime: DeviceRuntime? = null
+    private var runtimeGeneration: Long = 0
     private var activeOperation: ActiveOperation? = null
     private var connectedDevice: ConnectedDevice? = null
     private val connectionObservers = mutableMapOf<UUID, SendChannel<ConnectedDevice?>>()
@@ -67,6 +78,7 @@ public class DeviceManager internal constructor() {
 
     internal fun attach(runtime: DeviceRuntime) {
         synchronized(lock) {
+            runtimeGeneration += 1
             this.runtime = runtime
             callbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         }
@@ -82,6 +94,7 @@ public class DeviceManager internal constructor() {
                 connection = connectionObservers.values.toList(),
                 callbackScope = callbackScope,
             )
+            runtimeGeneration += 1
             runtime = null
             activeOperation = null
             connectedDevice = null
@@ -91,12 +104,12 @@ public class DeviceManager internal constructor() {
             value
         }
         snapshot.active?.task?.cancel()
-        snapshot.active?.let { runCatching { snapshot.runtime?.engine?.cancel(it.cancellationId) } }
+        snapshot.active?.let { runCatching { it.lease.runtime.engine.cancel(it.cancellationId) } }
         snapshot.status.forEach { observer ->
             observer.task.cancel()
             observer.channel.close()
-            runCatching { snapshot.runtime?.stopStatusUpdates?.invoke(observer.peripheralId) }
         }
+        stopStatusTransports(snapshot.status)
         snapshot.connected?.let { device -> runCatching { snapshot.runtime?.disconnect?.invoke(device.id) } }
         snapshot.connection.forEach { it.close() }
         snapshot.callbackScope?.cancel()
@@ -107,50 +120,48 @@ public class DeviceManager internal constructor() {
     public suspend fun startScan(
         timeoutMilliseconds: ULong = 10_000u,
         allowDuplicates: Boolean = false,
-    ): Flow<DiscoveredDevice> {
-        val configured = configuredRuntime()
-        configured.authorize(BotaOperation.Discover)
+    ): Flow<DiscoveredDevice> = callbackFlow {
+        val lease = configuredLease()
+        lease.runtime.authorize(BotaOperation.Discover)
         val managerScope = configuredCallbackScope()
-        beginOperation(BotaOperation.Discover)
-        val operation = synchronized(lock) { requireNotNull(activeOperation) }
+        val operation = beginOperation(BotaOperation.Discover, lease = lease)
         val command = CoreCommand.discoverDevices(
             timeoutMilliseconds = timeoutMilliseconds,
             allowDuplicates = allowDuplicates,
             cancellationId = operation.cancellationId,
         )
-        return callbackFlow {
-            val task = launch(start = CoroutineStart.LAZY) {
-                var cancelled = false
-                try {
-                    configured.engine.run(command, configured.capabilities).collect { notification ->
-                        when (notification.kind) {
-                            CoreNotificationKind.DeviceDiscovered -> send(notification.discoveredDevice())
-                            CoreNotificationKind.Failed -> throw notification.workflowError()
-                            CoreNotificationKind.Cancelled -> throw cancelled(BotaOperation.Discover)
-                            else -> Unit
-                        }
-                    }
-                    close()
-                } catch (error: CancellationException) {
-                    cancelled = true
-                    throw error
-                } catch (error: Throwable) {
-                    close(error.toPublicError())
-                } finally {
-                    withContext(NonCancellable) {
-                        if (cancelled) cancelIfActive(operation.cancellationId)
-                        else finishOperation(operation.cancellationId)
+        val task = launch(start = CoroutineStart.LAZY) {
+            var cancelled = false
+            try {
+                lease.runtime.engine.run(command, lease.runtime.capabilities).collect { notification ->
+                    when (notification.kind) {
+                        CoreNotificationKind.DeviceDiscovered -> send(notification.discoveredDevice())
+                        CoreNotificationKind.Failed -> throw notification.workflowError()
+                        CoreNotificationKind.Cancelled -> throw cancelled(BotaOperation.Discover)
+                        else -> Unit
                     }
                 }
+                close()
+            } catch (error: CancellationException) {
+                cancelled = true
+                close()
+                throw error
+            } catch (error: Throwable) {
+                close(error.toPublicError())
+            } finally {
+                withContext(NonCancellable) {
+                    if (cancelled) cancelIfActive(operation.cancellationId)
+                    else finishOperation(operation.cancellationId)
+                }
             }
-            synchronized(lock) {
-                activeOperation?.takeIf { it.cancellationId == operation.cancellationId }?.task = task
-            }
-            task.start()
-            awaitClose {
-                task.cancel()
-                managerScope.launch { cancelIfActive(operation.cancellationId) }
-            }
+        }
+        synchronized(lock) {
+            activeOperation?.takeIf { it.cancellationId == operation.cancellationId }?.task = task
+        }
+        task.start()
+        awaitClose {
+            task.cancel()
+            managerScope.launch { cancelIfActive(operation.cancellationId) }
         }
     }
 
@@ -193,8 +204,8 @@ public class DeviceManager internal constructor() {
     public suspend fun disconnect() {
         val configured = configuredRuntime()
         val device = synchronized(lock) { connectedDevice } ?: return
-        stopAllStatusObservers()
         configured.authorize(BotaOperation.Connect)
+        stopAllStatusObservers()
         configured.disconnect(device.id)
         synchronized(lock) { if (connectedDevice?.id == device.id) connectedDevice = null }
         publishConnection()
@@ -205,24 +216,31 @@ public class DeviceManager internal constructor() {
             activeOperation.also { activeOperation = null }
         } ?: return
         operation.task?.cancel()
-        configuredRuntime().engine.cancel(operation.cancellationId)
+        operation.lease.runtime.engine.cancel(operation.cancellationId)
     }
 
-    public fun connectionUpdates(): Flow<ConnectedDevice?> = callbackFlow {
-        val id = UUID.randomUUID()
-        val initial = synchronized(lock) {
-            connectionObservers[id] = channel
-            connectedDevice
+    public fun connectionUpdates(): Flow<ConnectedDevice?> {
+        configuredRuntime()
+        return callbackFlow {
+            val id = UUID.randomUUID()
+            val initial = synchronized(lock) {
+                connectionObservers[id] = channel
+                connectedDevice
+            }
+            send(initial)
+            awaitClose { synchronized(lock) { connectionObservers.remove(id) } }
         }
-        send(initial)
-        awaitClose { synchronized(lock) { connectionObservers.remove(id) } }
     }
 
     public suspend fun readStatus(): DeviceStatus {
         val configured = configuredRuntime()
         val device = requireConnected()
         configured.authorize(BotaOperation.ReadStatus)
-        return configured.decodeStatus(configured.readStatus(device.id))
+        return try {
+            configured.decodeStatus(configured.readStatus(device.id))
+        } catch (error: Throwable) {
+            throw error.toStatusError()
+        }
     }
 
     public fun statusUpdates(): Flow<DeviceStatus> {
@@ -233,23 +251,27 @@ public class DeviceManager internal constructor() {
         return callbackFlow {
             val id = UUID.randomUUID()
             val task = launch(start = CoroutineStart.LAZY) {
-                var failure: Throwable? = null
                 try {
                     configured.statusUpdates(device.id).collect { send(configured.decodeStatus(it)) }
+                    close()
                 } catch (error: CancellationException) {
+                    close()
                     throw error
                 } catch (error: Throwable) {
-                    failure = error.toPublicError()
+                    close(error.toStatusError())
                 } finally {
-                    withContext(NonCancellable) { stopStatusObserver(id, cancelTask = false) }
+                    withContext(NonCancellable) {
+                        stopStatusObserver(id, cancelTask = false, closeChannel = false)
+                    }
                 }
-                failure?.let(::close) ?: close()
             }
-            synchronized(lock) { statusObservers[id] = StatusObserver(device.id, channel, task) }
+            synchronized(lock) {
+                statusObservers[id] = StatusObserver(configured, device.id, channel, task)
+            }
             task.start()
             awaitClose {
                 task.cancel()
-                managerScope.launch { stopStatusObserver(id, cancelTask = true) }
+                managerScope.launch { stopStatusObserver(id, cancelTask = true, closeChannel = true) }
             }
         }
     }
@@ -260,13 +282,13 @@ public class DeviceManager internal constructor() {
         source: DiscoveredDevice?,
         operation: BotaOperation,
     ): ConnectedDevice {
-        val configured = configuredRuntime()
-        configured.authorize(operation)
-        beginOperation(operation, command.cancellationId)
+        val lease = configuredLease()
+        lease.runtime.authorize(operation)
+        val active = beginOperation(operation, command.cancellationId, lease)
         var established: ConnectedDevice? = null
         try {
             source?.let { disconnectDifferentDevice(it.id) }
-            configured.engine.run(command, configured.capabilities).collect { notification ->
+            lease.runtime.engine.run(command, lease.runtime.capabilities).collect { notification ->
                 when (notification.kind) {
                     CoreNotificationKind.ConnectionEstablished -> {
                         val candidate = notification.connectedDevice(source)
@@ -296,7 +318,19 @@ public class DeviceManager internal constructor() {
                 "connection completed without verified identity",
             )
         }
-        synchronized(lock) { connectedDevice = connected }
+        val accepted = synchronized(lock) {
+            if (runtime !== active.lease.runtime || runtimeGeneration != active.lease.generation) {
+                false
+            } else {
+                connectedDevice = connected
+                true
+            }
+        }
+        if (!accepted) {
+            runCatching { active.lease.runtime.disconnect(connected.id) }
+            finishOperation(command.cancellationId)
+            throw cancelled(operation)
+        }
         publishConnection()
         finishOperation(command.cancellationId)
         return connected
@@ -309,18 +343,30 @@ public class DeviceManager internal constructor() {
         "BotaDeviceClient.configure() must be called first",
     )
 
-    private fun beginOperation(operation: BotaOperation, cancellationId: UUID = UUID.randomUUID()): DeviceRuntime {
-        val configured = configuredRuntime()
+    private fun configuredLease(): RuntimeLease = synchronized(lock) {
+        runtime?.let { RuntimeLease(it, runtimeGeneration) }
+    } ?: throw coreError(
+        BotaErrorCode.FeatureUnavailable,
+        BotaOperation.Validate,
+        retryable = false,
+        "BotaDeviceClient.configure() must be called first",
+    )
+
+    private fun beginOperation(
+        operation: BotaOperation,
+        cancellationId: UUID = UUID.randomUUID(),
+        lease: RuntimeLease = configuredLease(),
+    ): ActiveOperation {
         synchronized(lock) {
+            if (runtime !== lease.runtime || runtimeGeneration != lease.generation) throw cancelled(operation)
             if (activeOperation != null) throw coreError(
                 BotaErrorCode.OperationInProgress,
                 operation,
                 retryable = false,
                 "another device workflow is already active",
             )
-            activeOperation = ActiveOperation(cancellationId)
+            return ActiveOperation(cancellationId, lease).also { activeOperation = it }
         }
-        return configured
     }
 
     private fun finishOperation(cancellationId: UUID) {
@@ -330,20 +376,19 @@ public class DeviceManager internal constructor() {
     }
 
     private suspend fun cancelIfActive(cancellationId: UUID) {
-        val configured = synchronized(lock) {
+        val operation = synchronized(lock) {
             if (activeOperation?.cancellationId != cancellationId) return
-            activeOperation = null
-            runtime
+            activeOperation.also { activeOperation = null }
         } ?: return
-        runCatching { configured.engine.cancel(cancellationId) }
+        runCatching { operation.lease.runtime.engine.cancel(cancellationId) }
     }
 
     private suspend fun disconnectDifferentDevice(nextId: String) {
         val configured = configuredRuntime()
         val current = synchronized(lock) { connectedDevice } ?: return
         if (current.id == nextId) return
-        stopAllStatusObservers()
         configured.authorize(BotaOperation.Connect)
+        stopAllStatusObservers()
         configured.disconnect(current.id)
         synchronized(lock) { if (connectedDevice?.id == current.id) connectedDevice = null }
         publishConnection()
@@ -361,11 +406,16 @@ public class DeviceManager internal constructor() {
         observers.forEach { it.trySend(device) }
     }
 
-    private suspend fun stopStatusObserver(id: UUID, cancelTask: Boolean) {
-        val observer = synchronized(lock) { statusObservers.remove(id) } ?: return
+    private suspend fun stopStatusObserver(id: UUID, cancelTask: Boolean, closeChannel: Boolean) {
+        val (observer, isLast) = synchronized(lock) {
+            val removed = statusObservers.remove(id) ?: return
+            removed to statusObservers.values.none {
+                it.runtime === removed.runtime && it.peripheralId == removed.peripheralId
+            }
+        }
         if (cancelTask) observer.task.cancel()
-        observer.channel.close()
-        runCatching { runtime?.stopStatusUpdates?.invoke(observer.peripheralId) }
+        if (closeChannel) observer.channel.close()
+        if (isLast) runCatching { observer.runtime.stopStatusUpdates(observer.peripheralId) }
     }
 
     private suspend fun stopAllStatusObservers() {
@@ -373,7 +423,19 @@ public class DeviceManager internal constructor() {
         observers.forEach {
             it.task.cancel()
             it.channel.close()
-            runCatching { runtime?.stopStatusUpdates?.invoke(it.peripheralId) }
+        }
+        stopStatusTransports(observers)
+    }
+
+    private suspend fun stopStatusTransports(observers: List<StatusObserver>) {
+        val transports = mutableListOf<StatusObserver>()
+        observers.forEach { observer ->
+            if (transports.none { it.runtime === observer.runtime && it.peripheralId == observer.peripheralId }) {
+                transports += observer
+            }
+        }
+        transports.forEach {
+            runCatching { it.runtime.stopStatusUpdates(it.peripheralId) }
         }
     }
 
@@ -455,6 +517,18 @@ private fun Throwable.toPublicError(): Throwable = when (this) {
     is BotaSDKError -> this
     is NativeCoreException -> toPublicError()
     else -> this
+}
+
+private fun Throwable.toStatusError(): Throwable = when (this) {
+    is BotaSDKError -> this
+    is CancellationException -> this
+    is NativeCoreException -> toPublicError()
+    else -> coreError(
+        BotaErrorCode.Internal,
+        BotaOperation.ReadStatus,
+        retryable = true,
+        message ?: "device status transport failed",
+    )
 }
 
 private fun CoreCapabilities.publicValues(): Set<DeviceCapability> = buildSet {

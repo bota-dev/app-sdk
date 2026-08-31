@@ -54,75 +54,90 @@ internal class DeviceRuntime(
             storageDirectory: File?,
         ): DeviceRuntime {
             val root = storageDirectory ?: File(context.noBackupFilesDir, "bota-app-sdk")
-            val platform = FrameworkAndroidBluetoothPlatform(context)
-            val driver = BluetoothGattDriver(platform)
-            val permissions = BluetoothPermissionChecker(Build.VERSION.SDK_INT) { permission ->
-                context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
-            }
-            val bluetooth = BluetoothGattHost(driver, permissions)
-            val persistence = AtomicFilePersistenceHost(AtomicFileJournalStore(File(root, "state")))
-            val secureStorage = AndroidKeystoreSecureStorageHost(context, rootDirectory = File(root, "secrets"))
-            val network = OkHttpNetworkHost(networkClient)
-            val material = ApplicationMaterialHost()
-            val recordingSink = FileRecordingSinkHost()
-            val firmwareBlob = FileFirmwareBlobHost()
-            val mapper = CoreModelMapper()
-            val host = HostEffectExecutor(
-                bluetooth = bluetooth,
-                persistence = persistence,
-                secureStorage = secureStorage,
-                network = network,
-                material = material,
-                recordingSink = recordingSink,
-                firmwareBlob = firmwareBlob,
-            )
-            val engine = CoreEngineRuntime(NativeCoreBridge(), host)
-            val allCapabilities = CoreCapabilities.Bluetooth + CoreCapabilities.Timer +
-                CoreCapabilities.Persistence + CoreCapabilities.SecureStorage +
-                CoreCapabilities.NetworkTransfer + CoreCapabilities.Progress +
-                CoreCapabilities.HostMaterial + CoreCapabilities.RecordingSink +
-                CoreCapabilities.FirmwareBlob
-
-            fun authorize(operation: BotaOperation) {
-                when (operation) {
-                    BotaOperation.Discover -> permissions.requireScan(operation)
-                    else -> permissions.requireConnect(operation)
+            val closeActions = mutableListOf<() -> Unit>()
+            try {
+                val platform = FrameworkAndroidBluetoothPlatform(context)
+                closeActions += platform::close
+                val driver = BluetoothGattDriver(platform)
+                closeActions[closeActions.lastIndex] = driver::close
+                val permissions = BluetoothPermissionChecker(Build.VERSION.SDK_INT) { permission ->
+                    context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
                 }
-            }
+                val bluetooth = BluetoothGattHost(driver, permissions)
+                val persistence = AtomicFilePersistenceHost(AtomicFileJournalStore(File(root, "state")))
+                val secureStorage = AndroidKeystoreSecureStorageHost(context, rootDirectory = File(root, "secrets"))
+                val network = OkHttpNetworkHost(networkClient).also { closeActions += it::close }
+                val material = ApplicationMaterialHost().also { closeActions += it::close }
+                val recordingSink = FileRecordingSinkHost().also { closeActions += it::close }
+                val firmwareBlob = FileFirmwareBlobHost().also { closeActions += it::close }
+                val mapper = CoreModelMapper().also { closeActions += it::close }
+                val host = HostEffectExecutor(
+                    bluetooth = bluetooth,
+                    persistence = persistence,
+                    secureStorage = secureStorage,
+                    network = network,
+                    material = material,
+                    recordingSink = recordingSink,
+                    firmwareBlob = firmwareBlob,
+                )
+                val engine = CoreEngineRuntime(NativeCoreBridge(), host).also { closeActions += it::close }
+                val allCapabilities = CoreCapabilities.Bluetooth + CoreCapabilities.Timer +
+                    CoreCapabilities.Persistence + CoreCapabilities.SecureStorage +
+                    CoreCapabilities.NetworkTransfer + CoreCapabilities.Progress +
+                    CoreCapabilities.HostMaterial + CoreCapabilities.RecordingSink +
+                    CoreCapabilities.FirmwareBlob
 
-            return DeviceRuntime(
-                engine = engine,
-                capabilities = allCapabilities,
-                authorize = ::authorize,
-                disconnect = driver::disconnect,
-                readStatus = { peripheralId ->
-                    driver.read(peripheralId, BotaBluetoothUUIDs.ControlService, BotaBluetoothUUIDs.DeviceStatus)
-                },
-                statusUpdates = { peripheralId ->
-                    driver.subscribe(
-                        peripheralId,
-                        BotaBluetoothUUIDs.ControlService,
-                        BotaBluetoothUUIDs.DeviceStatus,
-                    ).map { it.value }
-                },
-                stopStatusUpdates = { peripheralId ->
-                    driver.unsubscribe(
-                        peripheralId,
-                        BotaBluetoothUUIDs.ControlService,
-                        BotaBluetoothUUIDs.DeviceStatus,
-                    )
-                },
-                decodeStatus = mapper::parseDeviceStatus,
-                closeResources = {
-                    engine.close()
-                    network.close()
-                    material.close()
-                    recordingSink.close()
-                    firmwareBlob.close()
-                    mapper.close()
-                    driver.close()
-                },
-            )
+                fun authorize(operation: BotaOperation) {
+                    when (operation) {
+                        BotaOperation.Discover -> permissions.requireScan(operation)
+                        else -> permissions.requireConnect(operation)
+                    }
+                }
+
+                return DeviceRuntime(
+                    engine = engine,
+                    capabilities = allCapabilities,
+                    authorize = ::authorize,
+                    disconnect = driver::disconnect,
+                    readStatus = { peripheralId ->
+                        driver.read(peripheralId, BotaBluetoothUUIDs.ControlService, BotaBluetoothUUIDs.DeviceStatus)
+                    },
+                    statusUpdates = { peripheralId ->
+                        driver.subscribe(
+                            peripheralId,
+                            BotaBluetoothUUIDs.ControlService,
+                            BotaBluetoothUUIDs.DeviceStatus,
+                        ).map { it.value }
+                    },
+                    stopStatusUpdates = { peripheralId ->
+                        driver.unsubscribe(
+                            peripheralId,
+                            BotaBluetoothUUIDs.ControlService,
+                            BotaBluetoothUUIDs.DeviceStatus,
+                        )
+                    },
+                    decodeStatus = mapper::parseDeviceStatus,
+                    closeResources = { closeAll(*closeActions.asReversed().toTypedArray()) },
+                )
+            } catch (failure: Throwable) {
+                runCatching { closeAll(*closeActions.asReversed().toTypedArray()) }
+                    .exceptionOrNull()
+                    ?.let(failure::addSuppressed)
+                throw failure
+            }
         }
     }
+}
+
+internal fun closeAll(vararg actions: () -> Unit) {
+    var firstFailure: Throwable? = null
+    actions.forEach { action ->
+        try {
+            action()
+        } catch (failure: Throwable) {
+            val first = firstFailure
+            if (first == null) firstFailure = failure else first.addSuppressed(failure)
+        }
+    }
+    firstFailure?.let { throw it }
 }
