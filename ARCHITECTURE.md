@@ -74,6 +74,24 @@ identity.
 Protocol parity is necessary but does not satisfy React Native compatibility
 unless the target package also matches this surface digest.
 
+The replacement package begins at `frameworks/react-native` as an independently
+locked npm package. It is deliberately private until both native adapters, the
+frozen 0.0.65 TypeScript surface, application acceptance, and publication gates
+pass. Its initial New Architecture floor is React Native 0.86.3, matching Demo
+and Bota One. The Codegen library is `BotaDeviceSDKSpec` and its native module
+is `BotaDeviceSDK`. JavaScript uses optional TurboModule lookup so importing a
+bundle before the native application is rebuilt does not throw; the first
+native operation instead returns stable `native_module_unavailable`.
+
+The initial bridge contract contains only configure, destroy, state, and
+capability calls. React Native Codegen produces a canonical schema plus iOS and
+Android artifact digests in
+`frameworks/react-native/generated/codegen-contract.json`; CI regenerates and
+compares that contract with the pinned React Native version. Recording and
+firmware payloads never cross the JavaScript bridge. Future workflow methods
+carry identifiers, progress, errors, and native file paths while native hosts
+own high-volume files and transfer buffers.
+
 Native migration inputs are pinned separately in
 `protocol/baseline/native-sdks.json`. Apple revision `cd15e545cabb8` and Android
 revision `0f06d2a22c55` provided package shape, public models, and idiomatic async

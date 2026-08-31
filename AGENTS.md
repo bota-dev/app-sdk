@@ -48,6 +48,16 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   outside `src/index.ts` are not part of that public contract.
 - React Native baseline metadata must match the contract's package, version,
   source revision, normalized path, and surface digest.
+- `frameworks/react-native` has its own lockfile, stays private until native,
+  compatibility, app, and release gates pass, and pins React Native `0.86.3`
+  for deterministic Codegen. Its package version still matches
+  `sdk-version.toml`.
+- Keep the Codegen names `BotaDeviceSDKSpec` and `BotaDeviceSDK` frozen. Import
+  uses optional TurboModule lookup; missing native code fails on invocation as
+  `native_module_unavailable`, not while the JavaScript module is imported.
+- Keep recording and firmware bytes out of React Native Codegen types. Commit
+  only the canonical schema and native artifact digests, not generated build
+  directories.
 - Recording transfer owns sequence/checkpoint decisions; native hosts own the
   durable sink and validate the final checksum before device deletion.
 - Direct-upload fallback requires a fresh inactive device status; busy,
@@ -112,6 +122,7 @@ npm run test:release
 npm run baseline:react-native:api -- --sdk-path ../react-native-sdk
 npm run sync:apple-fixtures
 npm run test:workflows -- --sdk-path ../react-native-sdk
+cd frameworks/react-native && npm ci && npm run verify
 cargo xtask protocol generate --check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
@@ -143,6 +154,8 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
 - Stable `1.0.0` is the first public Apple package release. It does not claim
   React Native, Android, Flutter, Web, or Windows facade availability. Tags use
   `vVERSION`.
+- The private React Native foundation is not a release artifact and must not be
+  added to a release manifest or published to npm before Milestone 4 exits.
 - Read `docs/releasing.md` before creating or pushing a release tag.
 - The public Apple package is the root `Package.swift`; keep the nested
   `platforms/apple/Package.swift` for local development against the generated

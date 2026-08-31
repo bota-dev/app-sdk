@@ -883,10 +883,14 @@ remove-only, and remove-and-reset acceptance.
 Prerequisite status (2026-08-31): the 0.0.65 root TypeScript API is frozen as a
 semantic contract covering 80 exports, expanded type aliases, static APIs, and
 reachable public members, and the existing baseline command enforces it
-alongside the 50 wire fixtures and 86 Jest tests. The TurboModule package,
-Apple Objective-C++ adapter, Android adapter, app acceptance, and publication
-gates remain open. High-volume recording bytes must stay native when those
-adapters are implemented.
+alongside the 50 wire fixtures and 86 Jest tests. The private
+`frameworks/react-native` package now pins React Native 0.86.3 and validates a
+first lifecycle/capability TurboModule schema plus deterministic iOS and Android
+artifact digests. Optional lookup prevents import-time failure before a native
+rebuild, while invocation fails as `native_module_unavailable`. The Apple
+Objective-C++ adapter, Android facade and adapter, complete 0.0.65 compatibility
+layer, app acceptance, and publication gates remain open. High-volume recording
+and firmware bytes stay native and are rejected from the Codegen contract.
 
 ### Milestone 5: Additional platforms
 

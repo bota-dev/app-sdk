@@ -21,14 +21,16 @@ not need access to those documents to open an issue or propose a change.
 ```bash
 npm ci
 npm run check
+cd frameworks/react-native && npm ci && npm run verify
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
 Dependencies with copyleft or source-available licenses are rejected by both
-the npm checker and `cargo-deny`. An exception must identify the exact observed
-license and document a completed review; it is not a general package bypass.
+the root and React Native npm checkers and by `cargo-deny`. An exception must
+identify the exact observed license and document a completed review; it is not
+a general package bypass.
 
 Never commit local source links as production dependencies. All released
 artifacts must match `sdk-version.toml` and the signed release manifest.
