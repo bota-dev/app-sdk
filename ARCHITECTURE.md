@@ -62,6 +62,13 @@ behavioral baseline. It remains authoritative until the monorepo implementation
 passes the relevant fixture, workflow, native, application, and physical-device
 acceptance gates.
 
+Its public TypeScript entrypoint is frozen separately in
+`protocol/baseline/react-native-public-api-0.0.65.json`. The semantic contract
+records 80 exports plus every public member declared by SDK-owned source and
+excludes private, protected, dependency-owned, and internal-only declarations.
+Protocol parity is necessary but does not satisfy React Native compatibility
+unless the target package also matches this surface digest.
+
 Native migration inputs are pinned separately in
 `protocol/baseline/native-sdks.json`. Apple revision `cd15e545cabb8` and Android
 revision `0f06d2a22c55` provided package shape, public models, and idiomatic async
@@ -76,9 +83,11 @@ checkouts before native source is imported.
 
 Language-neutral protocol fixtures live under `protocol/fixtures/`. The baseline
 record under `protocol/baseline/` pins the SDK and firmware revisions, source
-digests, fixture digest, and passing test counts. `npm run baseline:react-native`
-builds and tests an explicit SDK checkout before comparing every applicable
-fixture; it refuses dirty checkouts unless the audit flag is supplied.
+digests, fixture digest, public API digest, and passing test counts.
+`npm run baseline:react-native` builds and tests an explicit SDK checkout before
+comparing every applicable fixture and the semantic public API. It refuses
+dirty checkouts unless the audit flag is supplied. The narrower
+`baseline:react-native:api` command verifies only the public API contract.
 
 Stable wire facts such as service UUIDs, characteristic UUIDs, opcodes, packet
 types, field layouts, and size limits live in

@@ -24,6 +24,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - The Bota workspace normally checks it out at `../react-native-sdk`.
 - Capture reference behavior in language-neutral fixtures and compare bytes;
   do not silently reinterpret protocol behavior.
+- The semantic TypeScript authority is
+  `protocol/baseline/react-native-public-api-0.0.65.json`. A replacement must
+  match its exported symbols and SDK-owned public members, not only wire bytes.
 
 ## Invariants
 
@@ -35,6 +38,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - One workflow owns the core engine at a time; hosts preserve request and
   cancellation IDs when returning callbacks.
 - High-volume recording bytes stay off JavaScript and Dart bridges.
+- React Native compatibility requires the frozen public API surface digest in
+  addition to protocol fixtures and workflow traces. Internal legacy modules
+  outside `src/index.ts` are not part of that public contract.
 - Recording transfer owns sequence/checkpoint decisions; native hosts own the
   durable sink and validate the final checksum before device deletion.
 - Direct-upload fallback requires a fresh inactive device status; busy,
@@ -96,6 +102,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 npm ci
 npm run check
 npm run test:release
+npm run baseline:react-native:api -- --sdk-path ../react-native-sdk
 npm run sync:apple-fixtures
 npm run test:workflows -- --sdk-path ../react-native-sdk
 cargo xtask protocol generate --check

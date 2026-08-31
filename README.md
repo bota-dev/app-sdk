@@ -20,6 +20,9 @@ reducers, plus exclusive device-log subscription ownership and line delivery.
 Twenty-nine canonical workflow scenarios are schema validated, pinned to the
 React Native `0.0.65` baseline, and backed by 25 executable Rust tests covering
 positive, rejection, cancellation, and resume or restart-recovery behavior.
+The same pinned SDK now has a semantic TypeScript compatibility contract for
+all 80 root exports and their SDK-owned public members; future React Native
+packages must match that digest in addition to the protocol and workflow gates.
 The native-boundary spike selected a manually owned C ABI after comparing it
 with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed
@@ -116,6 +119,7 @@ Requirements:
 npm ci
 npm run check
 npm run test:release
+npm run baseline:react-native:api -- --sdk-path ../react-native-sdk
 npm run sync:apple-fixtures
 npm run test:fixtures
 npm run test:workflows -- --sdk-path ../react-native-sdk
@@ -133,7 +137,8 @@ The supervised Apple lab procedure is documented in
 [docs/testing/apple-physical-device.md](docs/testing/apple-physical-device.md).
 Normal development and CI must leave `BOTA_PHYSICAL_TESTS` unset.
 
-The full reproducible gate, including the frozen React Native comparator, is
+The full reproducible gate includes the frozen React Native wire, test-count,
+source-digest, and public-TypeScript-API comparators. Release evidence is
 recorded in `release/evidence/`.
 
 Release maintainers must follow [docs/releasing.md](docs/releasing.md). Release
