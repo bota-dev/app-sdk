@@ -6,7 +6,7 @@
 
 **Architecture:** A Swift actor serializes `configure` and `destroy` against `BotaDeviceClient.shared`, owns the React Native lifecycle state, and exposes an Objective-C-compatible completion bridge. A narrow Objective-C++ module implements the generated `NativeBotaDeviceSDKSpec` and converts React Native promises only; it does not call the Rust ABI or move recording or firmware bytes. The pod attaches the exact matching `BotaAppleSDK` product from the App SDK release tag, with a local package-path override used by source and CI verification.
 
-**Tech Stack:** Swift 6, Objective-C++20, React Native 0.86.3 Codegen, CocoaPods 1.11+, Swift Package Manager, Node.js 22, Node test runner, XCTest, Xcode 26.
+**Tech Stack:** Swift 6, Objective-C++20, React Native 0.86.3 Codegen, CocoaPods 1.13+, Swift Package Manager, Node.js 22, Node test runner, XCTest, Xcode 26.
 
 **Spec:** `docs/superpowers/plans/2026-08-28-app-sdk-implementation.md` Milestone 4, `docs/superpowers/plans/2026-08-31-react-native-package-foundation.md`, and `ARCHITECTURE.md` React Native boundary.
 
@@ -85,7 +85,7 @@
 
 **Interfaces:**
 - Consumes: the local npm package, its podspec, React Native 0.86.3 pods, and the repository root `BotaAppleSDK` package.
-- Produces: a disposable iOS 15 CocoaPods consumer whose `BotaDeviceSDK` pod target resolves the local Swift package and compiles for the iOS simulator without signing.
+- Produces: a disposable iOS 15.1 CocoaPods consumer whose `BotaDeviceSDK` pod target resolves the local Swift package and compiles for the iOS simulator without signing.
 
 - [x] **Step 1: Add a build-gate test command** and run it to confirm it fails before a consumer generator exists.
 - [x] **Step 2: Generate a minimal temporary Xcode application and Podfile** with `BOTA_APPLE_SDK_PACKAGE_PATH` pointing to the repository root, then run `pod install` and build and link the disposable application target.
@@ -108,7 +108,7 @@
 - Consumes: passing package, Swift, CocoaPods, Xcode, Codegen, tooling, license, Rust, and Apple package gates.
 - Produces: accurate public and contributor status that marks only the Apple lifecycle adapter complete and leaves Android, full 0.0.65 compatibility, app rollout, and npm publication open.
 
-- [ ] **Step 1: Search all documentation** for `BotaDeviceSDK`, `frameworks/react-native`, `BotaAppleSDK`, `TurboModule`, `CocoaPods`, and `spm_dependency`; update every relevant status statement.
+- [x] **Step 1: Search all documentation** for `BotaDeviceSDK`, `frameworks/react-native`, `BotaAppleSDK`, `TurboModule`, `CocoaPods`, and `spm_dependency`; update every relevant status statement.
 - [ ] **Step 2: Run the complete applicable local verification suite** for the nested package, root tooling and licenses, Swift adapter package, Apple package, Rust formatting/lint/tests, and git whitespace.
 - [ ] **Step 3: Request an independent code review** and resolve every actionable finding with focused tests.
 - [ ] **Step 4: Mark this plan complete, merge the focused commits to `main`, push, and wait for both CI and License Gate success.**

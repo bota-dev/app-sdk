@@ -92,6 +92,16 @@ firmware payloads never cross the JavaScript bridge. Future workflow methods
 carry identifiers, progress, errors, and native file paths while native hosts
 own high-volume files and transfer buffers.
 
+The Apple lifecycle host is now executable. A Swift actor coalesces concurrent
+configuration, orders destruction after any in-flight configuration, and calls
+the public `BotaDeviceClient` facade. Objective-C++ implements only the
+generated TurboModule spec and promise conversion. The pod uses React Native
+0.86's iOS 15.1 floor and resolves the exact matching `BotaAppleSDK` release;
+the local package-path override exists only for source and CI builds. A
+disposable CocoaPods application compiles and links the complete native chain.
+This proves lifecycle integration, not the remaining workflow surface or
+application parity.
+
 Native migration inputs are pinned separately in
 `protocol/baseline/native-sdks.json`. Apple revision `cd15e545cabb8` and Android
 revision `0f06d2a22c55` provided package shape, public models, and idiomatic async

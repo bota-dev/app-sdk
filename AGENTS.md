@@ -58,6 +58,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Keep recording and firmware bytes out of React Native Codegen types. Commit
   only the canonical schema and native artifact digests, not generated build
   directories.
+- The React Native Apple pod uses the React Native 0.86 iOS 15.1 floor and
+  requires CocoaPods 1.13 or newer. It resolves the exact matching
+  `BotaAppleSDK` release by default; `BOTA_APPLE_SDK_PACKAGE_PATH` is only for
+  local source and CI verification.
+- Keep React Native lifecycle serialization in the Swift actor. Concurrent
+  configure calls coalesce, destroy waits for an in-flight configure, and the
+  Objective-C++ layer only translates generated-spec promises.
 - Recording transfer owns sequence/checkpoint decisions; native hosts own the
   durable sink and validate the final checksum before device deletion.
 - Direct-upload fallback requires a fresh inactive device status; busy,
@@ -122,7 +129,9 @@ npm run test:release
 npm run baseline:react-native:api -- --sdk-path ../react-native-sdk
 npm run sync:apple-fixtures
 npm run test:workflows -- --sdk-path ../react-native-sdk
-cd frameworks/react-native && npm ci && npm run verify
+(cd frameworks/react-native && npm ci && npm run verify)
+(cd frameworks/react-native && npm run test:apple:lifecycle)
+(cd frameworks/react-native && npm run test:apple:integration)
 cargo xtask protocol generate --check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings

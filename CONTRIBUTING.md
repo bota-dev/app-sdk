@@ -27,10 +27,22 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+React Native Apple changes also require macOS with Xcode 26 and CocoaPods 1.13
+or newer:
+
+```bash
+cd frameworks/react-native
+npm run test:apple:lifecycle
+npm run test:apple:integration
+```
+
 Dependencies with copyleft or source-available licenses are rejected by both
 the root and React Native npm checkers and by `cargo-deny`. An exception must
 identify the exact observed license and document a completed review; it is not
 a general package bypass.
 
-Never commit local source links as production dependencies. All released
-artifacts must match `sdk-version.toml` and the signed release manifest.
+Never commit local source links as production dependencies. In particular,
+`BOTA_APPLE_SDK_PACKAGE_PATH` is only a source and CI override; the React Native
+pod must resolve the exact matching immutable App SDK tag by default. All
+released artifacts must match `sdk-version.toml` and the signed release
+manifest.

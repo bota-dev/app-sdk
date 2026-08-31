@@ -888,9 +888,13 @@ alongside the 50 wire fixtures and 86 Jest tests. The private
 first lifecycle/capability TurboModule schema plus deterministic iOS and Android
 artifact digests. Optional lookup prevents import-time failure before a native
 rebuild, while invocation fails as `native_module_unavailable`. The Apple
-Objective-C++ adapter, Android facade and adapter, complete 0.0.65 compatibility
-layer, app acceptance, and publication gates remain open. High-volume recording
-and firmware bytes stay native and are rejected from the Codegen contract.
+lifecycle adapter now serializes configure and destroy through `BotaAppleSDK`,
+and a real CocoaPods application compiles and links the generated spec,
+Objective-C++, Swift, Swift Package, and Rust XCFramework layers. The remaining
+Apple workflow bindings, Android facade and adapter, complete 0.0.65
+compatibility layer, app acceptance, and publication gates remain open.
+High-volume recording and firmware bytes stay native and are rejected from the
+Codegen contract.
 
 ### Milestone 5: Additional platforms
 
