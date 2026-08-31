@@ -95,7 +95,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `publishedFacades` only after Central reports `PUBLISHED`, every remote byte
   matches the signed inventory, and both public emulator consumers pass.
   Verification metadata must include the pinned AAPT2 artifact for both macOS
-  and Linux so local and GitHub Android builds enforce the same dependency gate.
+  and Linux, plus parent/BOM metadata resolved only by a cold Linux graph, so
+  local and GitHub Android builds enforce the same dependency gate.
 - `protocol/baseline/android-maven-license-policy.json` is the reviewed license
   authority for published Maven dependencies. Package generation must copy
   those licenses into the SPDX document, and the license workflow must reject

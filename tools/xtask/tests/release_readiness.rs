@@ -329,6 +329,17 @@ fn android_release_inputs_are_hardened_and_locked() {
     assert!(
         verification.contains("839609d6d776d6dd60a02aa577d97193ce3e650cf1deaabf062321e23bbd6bf6")
     );
+    for artifact in [
+        "guava-parent-33.3.1-jre.pom",
+        "jackson-base-2.15.3.pom",
+        "junit-bom-5.10.2.module",
+        "kotlinx-coroutines-bom-1.8.0.pom",
+    ] {
+        assert!(
+            verification.contains(artifact),
+            "Gradle verification metadata is missing {artifact}"
+        );
+    }
 }
 
 #[test]
