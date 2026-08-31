@@ -8,6 +8,11 @@ const EXPECTED_PACKAGE = '@bota.dev/react-native-sdk';
 const EXPECTED_REACT_NATIVE_FLOOR = '0.86.3';
 const EXPECTED_NATIVE_MODULE = 'BotaDeviceSDK';
 const EXPECTED_CODEGEN_LIBRARY = 'BotaDeviceSDKSpec';
+const EXPECTED_APPLE_DEPLOYMENT_TARGET = '15.0';
+const EXPECTED_APPLE_PACKAGE_URL = 'https://github.com/bota-dev/app-sdk.git';
+const EXPECTED_APPLE_PRODUCT = 'BotaAppleSDK';
+const EXPECTED_LOCAL_APPLE_PATH_ENV = 'BOTA_APPLE_SDK_PACKAGE_PATH';
+const EXPECTED_SWIFT_VERSION = '6.0';
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
@@ -86,6 +91,39 @@ export const verifyPackage = ({ workspaceRoot, packageRoot }) => {
   }
   if (packageJson.codegenConfig?.jsSrcsDir !== './src/specs') {
     throw new Error('React Native Codegen source directory must be ./src/specs');
+  }
+  if (!packageJson.files?.includes('BotaDeviceSDK.podspec')) {
+    throw new Error('React Native npm files must include BotaDeviceSDK.podspec');
+  }
+
+  const apple = packageJson.bota?.apple;
+  if (apple?.podName !== EXPECTED_NATIVE_MODULE) {
+    throw new Error(`Apple pod name must be ${EXPECTED_NATIVE_MODULE}`);
+  }
+  if (apple?.moduleName !== EXPECTED_NATIVE_MODULE) {
+    throw new Error(`Apple module name must be ${EXPECTED_NATIVE_MODULE}`);
+  }
+  if (apple?.deploymentTarget !== EXPECTED_APPLE_DEPLOYMENT_TARGET) {
+    throw new Error(
+      `Apple deployment target must be ${EXPECTED_APPLE_DEPLOYMENT_TARGET}`
+    );
+  }
+  if (apple?.swiftVersion !== EXPECTED_SWIFT_VERSION) {
+    throw new Error(`Apple Swift version must be ${EXPECTED_SWIFT_VERSION}`);
+  }
+  if (apple?.packageUrl !== EXPECTED_APPLE_PACKAGE_URL) {
+    throw new Error(`Apple package URL must be ${EXPECTED_APPLE_PACKAGE_URL}`);
+  }
+  if (apple?.packageRequirement !== 'exactVersion') {
+    throw new Error('Apple package requirement must be exactVersion');
+  }
+  if (apple?.packageProduct !== EXPECTED_APPLE_PRODUCT) {
+    throw new Error(`Apple package product must be ${EXPECTED_APPLE_PRODUCT}`);
+  }
+  if (apple?.localPackagePathEnvironment !== EXPECTED_LOCAL_APPLE_PATH_ENV) {
+    throw new Error(
+      `local Apple package path environment must be ${EXPECTED_LOCAL_APPLE_PATH_ENV}`
+    );
   }
 
   return { packageName: packageJson.name, sdkVersion };

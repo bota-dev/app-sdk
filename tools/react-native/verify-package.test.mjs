@@ -11,6 +11,14 @@ const validPackage = () => ({
   name: '@bota.dev/react-native-sdk',
   version: '1.0.2',
   private: true,
+  files: [
+    'BotaDeviceSDK.podspec',
+    'android/',
+    'generated/',
+    'ios/',
+    'lib/',
+    'src/',
+  ],
   peerDependencies: {
     react: '>=19.2.3',
     'react-native': '>=0.86.3 <1.0',
@@ -30,6 +38,16 @@ const validPackage = () => ({
   bota: {
     nativeModuleName: 'BotaDeviceSDK',
     reactNativeFloor: '0.86.3',
+    apple: {
+      podName: 'BotaDeviceSDK',
+      moduleName: 'BotaDeviceSDK',
+      deploymentTarget: '15.0',
+      swiftVersion: '6.0',
+      packageUrl: 'https://github.com/bota-dev/app-sdk.git',
+      packageRequirement: 'exactVersion',
+      packageProduct: 'BotaAppleSDK',
+      localPackagePathEnvironment: 'BOTA_APPLE_SDK_PACKAGE_PATH',
+    },
   },
 });
 
@@ -108,6 +126,66 @@ test('rejects an unexpected native module name', () => {
 
   assert.notEqual(result.status, 0);
   assert.match(outputOf(result), /native module name/);
+});
+
+test('rejects a package that omits the podspec from npm files', () => {
+  const result = runVerifier((pkg) => {
+    pkg.files = pkg.files.filter((entry) => entry !== 'BotaDeviceSDK.podspec');
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(outputOf(result), /BotaDeviceSDK\.podspec/);
+});
+
+test('rejects Apple pod identity drift', () => {
+  const result = runVerifier((pkg) => {
+    pkg.bota.apple.podName = 'BotaReactNativeSDK';
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(outputOf(result), /Apple pod name/);
+});
+
+test('rejects Apple deployment or Swift version drift', () => {
+  const deploymentResult = runVerifier((pkg) => {
+    pkg.bota.apple.deploymentTarget = '16.0';
+  });
+  const swiftResult = runVerifier((pkg) => {
+    pkg.bota.apple.swiftVersion = '5.9';
+  });
+
+  assert.notEqual(deploymentResult.status, 0);
+  assert.match(outputOf(deploymentResult), /deployment target/);
+  assert.notEqual(swiftResult.status, 0);
+  assert.match(outputOf(swiftResult), /Swift version/);
+});
+
+test('rejects an Apple package that is not pinned to the matching release', () => {
+  const urlResult = runVerifier((pkg) => {
+    pkg.bota.apple.packageUrl = 'https://github.com/bota-dev/apple-sdk.git';
+  });
+  const requirementResult = runVerifier((pkg) => {
+    pkg.bota.apple.packageRequirement = 'upToNextMajorVersion';
+  });
+  const productResult = runVerifier((pkg) => {
+    pkg.bota.apple.packageProduct = 'BotaDeviceSDK';
+  });
+
+  assert.notEqual(urlResult.status, 0);
+  assert.match(outputOf(urlResult), /Apple package URL/);
+  assert.notEqual(requirementResult.status, 0);
+  assert.match(outputOf(requirementResult), /exactVersion/);
+  assert.notEqual(productResult.status, 0);
+  assert.match(outputOf(productResult), /Apple package product/);
+});
+
+test('rejects an unexpected local Apple package override', () => {
+  const result = runVerifier((pkg) => {
+    pkg.bota.apple.localPackagePathEnvironment = 'LOCAL_BOTA_SDK';
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(outputOf(result), /local Apple package path/);
 });
 
 test('executes validation when the CLI entrypoint is relative', () => {

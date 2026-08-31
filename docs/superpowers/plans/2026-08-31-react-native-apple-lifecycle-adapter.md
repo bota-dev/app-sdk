@@ -34,11 +34,11 @@
 - Consumes: `sdk-version.toml`, package `codegenConfig`, React Native's `install_modules_dependencies` and `spm_dependency` helpers.
 - Produces: pod `BotaDeviceSDK`, module `BotaDeviceSDK`, iOS 15 floor, Swift 6 compilation, and an exact `BotaAppleSDK` dependency with `BOTA_APPLE_SDK_PACKAGE_PATH` as the local override.
 
-- [ ] **Step 1: Write failing package-verifier tests** that require the podspec in npm files, require synchronized pod metadata, reject a missing Apple dependency, reject a non-exact remote version, and reject a mismatched iOS floor or Swift version.
-- [ ] **Step 2: Run `node --test tools/react-native/verify-package.test.mjs`** and confirm the new tests fail because the podspec and Apple metadata do not exist.
-- [ ] **Step 3: Add the minimum podspec and verifier implementation** using `https://github.com/bota-dev/app-sdk.git`, `{ kind: "exactVersion", version: package["version"] }`, product `BotaAppleSDK`, iOS `15.0`, Swift `6.0`, and the local path override.
-- [ ] **Step 4: Run the focused tests and package verification** and confirm both pass.
-- [ ] **Step 5: Commit** the package contract with the required Codex co-author trailer.
+- [x] **Step 1: Write failing package-verifier tests** that require the podspec in npm files, require synchronized pod metadata, reject a missing Apple dependency, reject a non-exact remote version, and reject a mismatched iOS floor or Swift version.
+- [x] **Step 2: Run `node --test tools/react-native/verify-package.test.mjs`** and confirm the new tests fail because the podspec and Apple metadata do not exist.
+- [x] **Step 3: Add the minimum podspec and verifier implementation** using `https://github.com/bota-dev/app-sdk.git`, `{ kind: "exactVersion", version: package["version"] }`, product `BotaAppleSDK`, iOS `15.0`, Swift `6.0`, and the local path override.
+- [x] **Step 4: Run the focused tests and package verification** and confirm both pass.
+- [x] **Step 5: Commit** the package contract with the required Codex co-author trailer.
 
 ### Task 2: Serialized Swift Lifecycle Bridge
 

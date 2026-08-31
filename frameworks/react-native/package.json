@@ -9,6 +9,7 @@
   "react-native": "src/index.ts",
   "source": "src/index.ts",
   "files": [
+    "BotaDeviceSDK.podspec",
     "android/",
     "generated/",
     "ios/",
@@ -57,6 +58,16 @@
   },
   "bota": {
     "nativeModuleName": "BotaDeviceSDK",
-    "reactNativeFloor": "0.86.3"
+    "reactNativeFloor": "0.86.3",
+    "apple": {
+      "podName": "BotaDeviceSDK",
+      "moduleName": "BotaDeviceSDK",
+      "deploymentTarget": "15.0",
+      "swiftVersion": "6.0",
+      "packageUrl": "https://github.com/bota-dev/app-sdk.git",
+      "packageRequirement": "exactVersion",
+      "packageProduct": "BotaAppleSDK",
+      "localPackagePathEnvironment": "BOTA_APPLE_SDK_PACKAGE_PATH"
+    }
   }
 }
