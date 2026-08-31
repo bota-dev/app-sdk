@@ -67,6 +67,28 @@ jobs:
           cargo build -p bota-device-sdk-ffi-smoke --features uniffi-spike
           cargo run -p bota-device-sdk-uniffi-bindgen -- generate --no-format --library --language swift --language kotlin --out-dir target/ffi-smoke target/debug/libbota_device_sdk_ffi_smoke.so
 
+  react-native:
+    name: React Native package foundation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frameworks/react-native/package-lock.json
+
+      - name: Install React Native package dependencies
+        working-directory: frameworks/react-native
+        run: npm ci
+
+      - name: Verify React Native package foundation
+        working-directory: frameworks/react-native
+        run: npm run verify
+
   apple:
     name: Apple package and consumer
     runs-on: macos-15
