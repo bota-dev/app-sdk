@@ -92,6 +92,11 @@ jobs:
   react-native-apple:
     name: React Native Apple lifecycle adapter
     runs-on: macos-15
+    env:
+      BOTA_EXPECTED_RUBY_VERSION: "3.3.12"
+      BOTA_EXPECTED_XCODE_BUILD: 17C529
+      BOTA_EXPECTED_XCODE_VERSION: "26.3"
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -107,13 +112,28 @@ jobs:
         working-directory: frameworks/react-native
         run: npm ci
 
+      - name: Install and verify pinned Apple build tooling
+        working-directory: frameworks/react-native
+        run: |
+          test "$(ruby -e 'print RUBY_VERSION')" = "$BOTA_EXPECTED_RUBY_VERSION"
+          test "$(xcodebuild -version | sed -n '1s/^Xcode //p')" = "$BOTA_EXPECTED_XCODE_VERSION"
+          test "$(xcodebuild -version | sed -n '2s/^Build version //p')" = "$BOTA_EXPECTED_XCODE_BUILD"
+          gem install --no-document bundler -v 2.6.9
+          bundle _2.6.9_ config set path "$RUNNER_TEMP/bota-rn-apple-bundle"
+          bundle _2.6.9_ install
+          bundle _2.6.9_ exec ruby -e 'require "cocoapods"; require "xcodeproj"; abort unless Pod::VERSION == "1.16.2" && Xcodeproj::VERSION == "1.27.0"'
+
       - name: Test Apple lifecycle coordinator
         working-directory: frameworks/react-native
         run: npm run test:apple:lifecycle
 
       - name: Build linked iOS consumer
         working-directory: frameworks/react-native
-        run: npm run test:apple:integration
+        run: bundle _2.6.9_ exec npm run test:apple:integration
+
+      - name: Resolve tagged Apple dependency
+        working-directory: frameworks/react-native
+        run: bundle _2.6.9_ exec npm run test:apple:remote-resolution
 
   apple:
     name: Apple package and consumer

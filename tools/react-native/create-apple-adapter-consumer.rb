@@ -8,7 +8,10 @@ require "xcodeproj"
 output_dir = Pathname.new(ARGV.fetch(0)).expand_path
 workspace_root = Pathname.new(ARGV.fetch(1)).expand_path
 package_root = Pathname.new(ARGV.fetch(2)).expand_path
+source_mode = ARGV.fetch(3, "local")
 react_native_path = package_root.join("node_modules/react-native")
+
+abort "source mode must be local or remote" unless ["local", "remote"].include?(source_mode)
 
 FileUtils.mkdir_p(output_dir)
 FileUtils.mkdir_p(output_dir.join("node_modules/@bota.dev"))
@@ -85,9 +88,14 @@ target.build_configurations.each do |configuration|
 end
 project.save
 
+apple_package_override = if source_mode == "local"
+  "ENV[\"BOTA_APPLE_SDK_PACKAGE_PATH\"] = #{workspace_root.to_s.inspect}\n"
+else
+  ""
+end
+
 podfile = <<~RUBY
-  ENV["BOTA_APPLE_SDK_PACKAGE_PATH"] = #{workspace_root.to_s.inspect}
-  ENV["RCT_USE_RN_DEP"] = "1"
+  #{apple_package_override}ENV["RCT_USE_RN_DEP"] = "1"
   ENV["RCT_USE_PREBUILT_RNCORE"] = "1"
 
   require #{react_native_path.join("scripts/react_native_pods").to_s.inspect}
