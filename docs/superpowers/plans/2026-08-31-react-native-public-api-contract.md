@@ -4,7 +4,7 @@
 
 **Goal:** Freeze the production `@bota.dev/react-native-sdk` 0.0.65 TypeScript API as a semantic, machine-verifiable contract before the monorepo React Native implementation begins.
 
-**Architecture:** A TypeScript Compiler API tool loads the pinned SDK's `tsconfig.build.json`, resolves the root `src/index.ts` module, and serializes every exported symbol plus its public SDK-owned members into a canonical JSON contract. The existing baseline comparator verifies the pinned source revision against that committed contract; future `frameworks/react-native` builds must compare equal before Demo or Bota One can migrate.
+**Architecture:** A TypeScript Compiler API tool loads the pinned SDK's `tsconfig.build.json`, resolves the root `src/index.ts` module, and serializes every exported symbol plus its reachable public surface into a canonical JSON contract. The existing baseline comparator verifies the pinned source revision against that committed contract; future `frameworks/react-native` builds must compare equal before Demo or Bota One can migrate.
 
 **Tech Stack:** Node.js 22+, TypeScript 6.0.3 Compiler API, Node test runner, SHA-256, existing React Native baseline workflow.
 
@@ -14,7 +14,9 @@
 
 - `@bota.dev/react-native-sdk` at revision `44ac1221cb71eb01cafcdbfdf7a370847d3a10b4` and version `0.0.65` remains authoritative.
 - Capture only symbols reachable from `src/index.ts`; internal modules are not public merely because declarations exist.
-- Include public members declared by SDK source files and exclude private/protected members and dependency-owned inherited members.
+- Include expanded type aliases, public class static members, and inherited
+  public members reachable through exported class instances; exclude private,
+  protected, and internal-only declarations.
 - Normalize all paths to repository-relative POSIX paths and sort every symbol/member list before hashing.
 - Contract comparison ignores source revision and package version but requires an exact `surfaceDigest` match.
 - This milestone does not publish a React Native package or claim Apple/Android runtime parity.
@@ -53,6 +55,13 @@ interface ReactNativeApiSurface {
       declarationKinds: string[];
       type: string;
     }>;
+    staticMembers: Array<{
+      name: string;
+      optional: boolean;
+      readonly: boolean;
+      declarationKinds: string[];
+      type: string;
+    }>;
   }>;
 }
 ```
@@ -69,7 +78,7 @@ Expected: `package.json` and `package-lock.json` contain exactly `"typescript": 
 
 - [x] **Step 2: Write extractor tests first**
 
-Create a temporary TypeScript package with an exported class, an exported singleton whose inferred type is a non-exported class, an exported type alias, a private method, and a dependency-owned base-class member. Assert that output is sorted, includes runtime/type-only identity, includes SDK-owned public members, excludes private and dependency-owned members, and yields the same digest twice.
+Create a temporary TypeScript package with an exported class, an exported singleton whose inferred type is a non-exported class, an exported type alias, a static factory, a private method, and a dependency-owned base-class member. Assert that output is sorted, includes runtime/type-only identity, expands the alias, includes static and inherited public members, excludes private members, and yields the same digest twice.
 
 - [x] **Step 3: Run the test and verify it fails**
 
@@ -83,7 +92,7 @@ Expected: FAIL because `react-native-api-contract.mjs` does not exist.
 
 - [x] **Step 4: Implement the extractor**
 
-Use `ts.readConfigFile`, `ts.parseJsonConfigFileContent`, `ts.createProgram`, and `checker.getExportsOfModule`. Resolve aliases with `checker.getAliasedSymbol`, render types with `TypeFormatFlags.NoTruncation | TypeFormatFlags.UseAliasDefinedOutsideCurrentScope`, and identify SDK-owned declarations by checking that their normalized path is under `<sdkPath>/src/`.
+Use `ts.readConfigFile`, `ts.parseJsonConfigFileContent`, `ts.createProgram`, and `checker.getExportsOfModule`. Resolve aliases with `checker.getAliasedSymbol`; render normal types with `TypeFormatFlags.NoTruncation | TypeFormatFlags.UseAliasDefinedOutsideCurrentScope`, and add `TypeFormatFlags.InTypeAlias` for aliases. Identify SDK-owned declarations by checking that their normalized path is under `<sdkPath>/src/`, while retaining inherited public class members that are reachable from an export.
 
 - [x] **Step 5: Run the focused and tooling tests**
 
@@ -221,7 +230,8 @@ Add a `validate` mode that recomputes the contract's internal digest and schema 
 
 ```bash
 node tools/baseline/react-native-api-contract.mjs validate \
-  --contract protocol/baseline/react-native-public-api-0.0.65.json
+  --contract protocol/baseline/react-native-public-api-0.0.65.json \
+  --baseline-metadata protocol/baseline/react-native-sdk-0.0.65.json
 ```
 
 - [x] **Step 5: Run tooling and the full pinned comparison**
@@ -296,7 +306,8 @@ git commit -m "docs: define React Native compatibility gate" -m "Co-Authored-By:
 ## Completion Gate
 
 - A clean 0.0.65 checkout produces the committed semantic contract exactly.
-- Any exported symbol or SDK-owned public member addition, removal, or signature change fails with a named diff.
+- Any exported symbol or reachable public member addition, removal, or signature
+  change fails with a named diff.
 - Existing protocol fixtures, source digests, and Jest count gates still pass.
 - CI validates contract integrity without requiring the sibling React Native repository.
 - No React Native package is published and no native runtime capability is claimed by this milestone.

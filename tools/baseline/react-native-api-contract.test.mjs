@@ -15,6 +15,7 @@ import {
   buildReactNativeApiContract,
   extractReactNativeApi,
   surfaceDigest,
+  validateReactNativeApiBaseline,
   validateReactNativeApiContract,
   verifyReactNativeApiContract,
   writeReactNativeApiContract,
@@ -76,6 +77,7 @@ class ClientImpl {
 export const Client = new ClientImpl();
 
 export class Zebra extends ExternalBase {
+  static create(): Zebra { return new Zebra(); }
   readonly label?: string;
   ping(value: string): Promise<number> { return Promise.resolve(value.length); }
   protected hidden(): void {}
@@ -121,13 +123,20 @@ test('extracts the sorted public API and excludes non-public ownership', () => {
   const zebra = surface.exports.find((entry) => entry.name === 'Zebra');
   assert.deepEqual(
     zebra.members.map((member) => member.name),
-    ['label', 'ping']
+    ['external', 'label', 'ping']
+  );
+  assert.deepEqual(
+    zebra.staticMembers.map((member) => member.name),
+    ['create']
   );
   assert.equal(zebra.members.find((member) => member.name === 'label').optional, true);
   assert.equal(zebra.members.find((member) => member.name === 'label').readonly, true);
-  assert.ok(!zebra.members.some((member) => member.name === 'external'));
   assert.ok(!zebra.members.some((member) => member.name === 'hidden'));
   assert.ok(!zebra.members.some((member) => member.name === 'secret'));
+
+  const alpha = surface.exports.find((entry) => entry.name === 'Alpha');
+  assert.match(alpha.declaredType, /"a"/);
+  assert.match(alpha.declaredType, /"b"/);
 });
 
 test('surface digest is deterministic and sensitive to signatures', () => {
@@ -141,6 +150,19 @@ test('surface digest is deterministic and sensitive to signatures', () => {
   const changed = structuredClone(surface);
   changed.exports.find((entry) => entry.name === 'Client').members[0].type = '() => void';
   assert.notEqual(surfaceDigest(changed), first);
+});
+
+test('digest detects type-alias and static-member changes', () => {
+  const root = createSdkFixture();
+  const indexPath = join(root, 'src', 'index.ts');
+  const original = extractReactNativeApi(root);
+  const source = readFileSync(indexPath, 'utf8');
+
+  writeFileSync(indexPath, source.replace("'a' | 'b'", "'a' | 'c'"));
+  assert.notEqual(surfaceDigest(extractReactNativeApi(root)), surfaceDigest(original));
+
+  writeFileSync(indexPath, source.replace('static create()', 'static make()'));
+  assert.notEqual(surfaceDigest(extractReactNativeApi(root)), surfaceDigest(original));
 });
 
 test('builds a pinned contract and rejects dirty capture by default', () => {
@@ -196,6 +218,36 @@ test('writes canonical JSON and validates its semantic digest', () => {
   const corrupted = structuredClone(contract);
   corrupted.surfaceDigest = '0'.repeat(64);
   assert.throws(() => validateReactNativeApiContract(corrupted), /surfaceDigest/);
+
+  const malformed = structuredClone(contract);
+  malformed.surface.exports[0].runtime = 'yes';
+  malformed.surfaceDigest = surfaceDigest(malformed.surface);
+  assert.throws(() => validateReactNativeApiContract(malformed), /runtime/);
+
+  const metadata = {
+    packageVersion: '0.0.65',
+    publicApi: {
+      contract: 'protocol/baseline/react-native-public-api-0.0.65.json',
+      surfaceDigest: contract.surfaceDigest,
+    },
+  };
+  assert.doesNotThrow(() =>
+    validateReactNativeApiBaseline({
+      contract,
+      metadata,
+      contractPath: 'protocol/baseline/react-native-public-api-0.0.65.json',
+    })
+  );
+  metadata.publicApi.surfaceDigest = 'f'.repeat(64);
+  assert.throws(
+    () =>
+      validateReactNativeApiBaseline({
+        contract,
+        metadata,
+        contractPath: 'protocol/baseline/react-native-public-api-0.0.65.json',
+      }),
+    /baseline metadata surfaceDigest/
+  );
 });
 
 test('verifies semantic compatibility and reports changed exports', () => {
@@ -223,6 +275,6 @@ test('verifies semantic compatibility and reports changed exports', () => {
   );
   assert.throws(
     () => verifyReactNativeApiContract({ sdkPath: root, contract: contractPath }),
-    /changed exports: Client/
+    /changed members: Client\.configure/
   );
 });

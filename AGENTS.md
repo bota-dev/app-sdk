@@ -26,7 +26,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   do not silently reinterpret protocol behavior.
 - The semantic TypeScript authority is
   `protocol/baseline/react-native-public-api-0.0.65.json`. A replacement must
-  match its exported symbols and SDK-owned public members, not only wire bytes.
+  match its exported symbols and reachable public members, including inherited
+  EventEmitter and Error APIs, not only wire bytes.
 
 ## Invariants
 

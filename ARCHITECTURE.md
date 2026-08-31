@@ -64,8 +64,9 @@ acceptance gates.
 
 Its public TypeScript entrypoint is frozen separately in
 `protocol/baseline/react-native-public-api-0.0.65.json`. The semantic contract
-records 80 exports plus every public member declared by SDK-owned source and
-excludes private, protected, dependency-owned, and internal-only declarations.
+records 80 exports, expanded type aliases, class static APIs, and every reachable
+public member, including inherited EventEmitter and Error APIs. It excludes
+private, protected, and internal-only declarations.
 Protocol parity is necessary but does not satisfy React Native compatibility
 unless the target package also matches this surface digest.
 

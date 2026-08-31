@@ -14,7 +14,7 @@
   },
   "publicApi": {
     "contract": "protocol/baseline/react-native-public-api-0.0.65.json",
-    "surfaceDigest": "21261646a026da3d6f88663cce27a843d28545914c4bd87caa296dddd655d002"
+    "surfaceDigest": "a2fa1df1ed650cd4e84129e90dd79386210674f004fbe01208f6bfdee979d483"
   },
   "sourceDigests": {
     "src/ble/constants.ts": "21e6149c7b35dda2b3ed15f646df06afc8ce169cef83b251ae8f0fa479b45721",

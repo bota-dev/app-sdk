@@ -21,8 +21,9 @@ Twenty-nine canonical workflow scenarios are schema validated, pinned to the
 React Native `0.0.65` baseline, and backed by 25 executable Rust tests covering
 positive, rejection, cancellation, and resume or restart-recovery behavior.
 The same pinned SDK now has a semantic TypeScript compatibility contract for
-all 80 root exports and their SDK-owned public members; future React Native
-packages must match that digest in addition to the protocol and workflow gates.
+all 80 root exports, expanded type aliases, static factories, and reachable
+public members; future React Native packages must match that digest in addition
+to the protocol and workflow gates.
 The native-boundary spike selected a manually owned C ABI after comparing it
 with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed

@@ -4,7 +4,7 @@
   "packageVersion": "0.0.65",
   "sourceRevision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4",
   "entrypoint": "src/index.ts",
-  "surfaceDigest": "21261646a026da3d6f88663cce27a843d28545914c4bd87caa296dddd655d002",
+  "surfaceDigest": "a2fa1df1ed650cd4e84129e90dd79386210674f004fbe01208f6bfdee979d483",
   "surface": {
     "exports": [
       {
@@ -16,7 +16,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "AudioCodec"
+        "staticMembers": [],
+        "declaredType": "\"pcm_16k\" | \"pcm_8k\" | \"opus_16k\" | \"opus_8k\""
       },
       {
         "name": "BleFactoryResetResult",
@@ -37,7 +38,8 @@
             "type": "boolean"
           }
         ],
-        "declaredType": "BleFactoryResetResult"
+        "staticMembers": [],
+        "declaredType": "{ success: true; localRecordingsDeleted: number; } | { success: false; error: NonNullable<ProvisioningResult[\"error\"]>; }"
       },
       {
         "name": "BleFactoryResetResultPersister",
@@ -50,7 +52,8 @@
         ],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "BleFactoryResetResultPersister"
+        "staticMembers": [],
+        "declaredType": "(result: Extract<BleFactoryResetResult, { success: true; }>) => Promise<void>"
       },
       {
         "name": "BluetoothError",
@@ -80,6 +83,62 @@
               "Parameter"
             ],
             "type": "string"
+          },
+          {
+            "name": "message",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "stack",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          }
+        ],
+        "staticMembers": [
+          {
+            "name": "poweredOff",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => BluetoothError"
+          },
+          {
+            "name": "unauthorized",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => BluetoothError"
+          },
+          {
+            "name": "unavailable",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => BluetoothError"
           }
         ],
         "valueType": "typeof BluetoothError",
@@ -94,7 +153,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "BluetoothState"
+        "staticMembers": [],
+        "declaredType": "\"unknown\" | \"resetting\" | \"unsupported\" | \"unauthorized\" | \"poweredOff\" | \"poweredOn\""
       },
       {
         "name": "BotaClient",
@@ -105,6 +165,15 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [
+          {
+            "name": "addListener",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof BotaClientEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<BotaClientEvents>[Extract<T, keyof BotaClientEvents>]) => void, context?: any) => BotaClientImpl"
+          },
           {
             "name": "bluetoothState",
             "optional": false,
@@ -151,6 +220,24 @@
             "type": "DeviceManager"
           },
           {
+            "name": "emit",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof BotaClientEvents>(event: T, ...args: EventEmitter.ArgumentMap<BotaClientEvents>[Extract<T, keyof BotaClientEvents>]) => boolean"
+          },
+          {
+            "name": "eventNames",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => (keyof BotaClientEvents)[]"
+          },
+          {
             "name": "isBluetoothReady",
             "optional": false,
             "readonly": true,
@@ -169,6 +256,51 @@
             "type": "boolean"
           },
           {
+            "name": "listenerCount",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(event: keyof BotaClientEvents) => number"
+          },
+          {
+            "name": "listeners",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof BotaClientEvents>(event: T) => ((...args: EventEmitter.ArgumentMap<BotaClientEvents>[Extract<T, keyof BotaClientEvents>]) => void)[]"
+          },
+          {
+            "name": "off",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof BotaClientEvents>(event: T, fn?: ((...args: EventEmitter.ArgumentMap<BotaClientEvents>[Extract<T, keyof BotaClientEvents>]) => void) | undefined, context?: any, once?: boolean) => BotaClientImpl"
+          },
+          {
+            "name": "on",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof BotaClientEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<BotaClientEvents>[Extract<T, keyof BotaClientEvents>]) => void, context?: any) => BotaClientImpl"
+          },
+          {
+            "name": "once",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof BotaClientEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<BotaClientEvents>[Extract<T, keyof BotaClientEvents>]) => void, context?: any) => BotaClientImpl"
+          },
+          {
             "name": "ota",
             "optional": false,
             "readonly": true,
@@ -185,6 +317,24 @@
               "GetAccessor"
             ],
             "type": "RecordingManager"
+          },
+          {
+            "name": "removeAllListeners",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(event?: keyof BotaClientEvents | undefined) => BotaClientImpl"
+          },
+          {
+            "name": "removeListener",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof BotaClientEvents>(event: T, fn?: ((...args: EventEmitter.ArgumentMap<BotaClientEvents>[Extract<T, keyof BotaClientEvents>]) => void) | undefined, context?: any, once?: boolean) => BotaClientImpl"
           },
           {
             "name": "setLogHandler",
@@ -223,6 +373,7 @@
             "type": "(timeoutMs?: number) => Promise<void>"
           }
         ],
+        "staticMembers": [],
         "valueType": "BotaClientImpl"
       },
       {
@@ -262,6 +413,7 @@
             "type": "(state: SdkState) => void"
           }
         ],
+        "staticMembers": [],
         "declaredType": "BotaClientEvents"
       },
       {
@@ -319,6 +471,7 @@
             "type": "boolean | undefined"
           }
         ],
+        "staticMembers": [],
         "declaredType": "BotaConfig"
       },
       {
@@ -349,8 +502,36 @@
               "Parameter"
             ],
             "type": "string"
+          },
+          {
+            "name": "message",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "stack",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
           }
         ],
+        "staticMembers": [],
         "valueType": "typeof BotaError",
         "declaredType": "BotaError"
       },
@@ -382,6 +563,7 @@
             "type": "WiFiStatusInfo | undefined"
           }
         ],
+        "staticMembers": [],
         "declaredType": "CachedDeviceState"
       },
       {
@@ -475,6 +657,7 @@
             "type": "string"
           }
         ],
+        "staticMembers": [],
         "declaredType": "ConnectedDevice"
       },
       {
@@ -486,7 +669,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "ConnectionState"
+        "staticMembers": [],
+        "declaredType": "\"disconnected\" | \"connecting\" | \"bonding\" | \"discovering\" | \"connected\" | \"disconnecting\""
       },
       {
         "name": "ConnectionType",
@@ -497,7 +681,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "ConnectionType"
+        "staticMembers": [],
+        "declaredType": "\"wifi\" | \"ble\" | \"cellular\""
       },
       {
         "name": "deriveSyncStatus",
@@ -510,6 +695,7 @@
         ],
         "constructSignatures": [],
         "members": [],
+        "staticMembers": [],
         "valueType": "(inputs: SyncStatusInputs) => SyncStatus"
       },
       {
@@ -558,6 +744,7 @@
             "type": "boolean"
           }
         ],
+        "staticMembers": [],
         "declaredType": "DeviceCapabilities"
       },
       {
@@ -624,6 +811,7 @@
             "type": "ConnectionType[]"
           }
         ],
+        "staticMembers": [],
         "declaredType": "DeviceConnectionSettings"
       },
       {
@@ -663,6 +851,89 @@
               "Parameter"
             ],
             "type": "string | undefined"
+          },
+          {
+            "name": "message",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "stack",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          }
+        ],
+        "staticMembers": [
+          {
+            "name": "alreadyConnected",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string) => DeviceError"
+          },
+          {
+            "name": "bondingFailed",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string, cause?: Error) => DeviceError"
+          },
+          {
+            "name": "connectionFailed",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string, cause?: Error) => DeviceError"
+          },
+          {
+            "name": "connectionLost",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string, during?: string) => DeviceError"
+          },
+          {
+            "name": "notConnected",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string) => DeviceError"
+          },
+          {
+            "name": "notFound",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string) => DeviceError"
           }
         ],
         "valueType": "typeof DeviceError",
@@ -732,6 +1003,7 @@
             "type": "boolean"
           }
         ],
+        "staticMembers": [],
         "declaredType": "DeviceFlags"
       },
       {
@@ -764,6 +1036,7 @@
             "type": "() => void"
           }
         ],
+        "staticMembers": [],
         "valueType": "typeof DeviceLogDecoder",
         "declaredType": "DeviceLogDecoder"
       },
@@ -804,6 +1077,7 @@
             "type": "string"
           }
         ],
+        "staticMembers": [],
         "declaredType": "DeviceLogEvent"
       },
       {
@@ -817,6 +1091,15 @@
           "() => DeviceManager"
         ],
         "members": [
+          {
+            "name": "addListener",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof DeviceManagerEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<DeviceManagerEvents>[Extract<T, keyof DeviceManagerEvents>]) => void, context?: any) => DeviceManager"
+          },
           {
             "name": "bleFactoryReset",
             "optional": false,
@@ -926,6 +1209,15 @@
             "type": "(deviceId: string) => Promise<WiFiConfigResult>"
           },
           {
+            "name": "emit",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof DeviceManagerEvents>(event: T, ...args: EventEmitter.ArgumentMap<DeviceManagerEvents>[Extract<T, keyof DeviceManagerEvents>]) => boolean"
+          },
+          {
             "name": "enableAutoReconnect",
             "optional": false,
             "readonly": false,
@@ -933,6 +1225,15 @@
               "MethodDeclaration"
             ],
             "type": "(serialNumber: string) => void"
+          },
+          {
+            "name": "eventNames",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => (keyof DeviceManagerEvents)[]"
           },
           {
             "name": "factoryReset",
@@ -1043,6 +1344,42 @@
             "type": "(device: ConnectedDevice) => Promise<boolean>"
           },
           {
+            "name": "listenerCount",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(event: keyof DeviceManagerEvents) => number"
+          },
+          {
+            "name": "listeners",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof DeviceManagerEvents>(event: T) => ((...args: EventEmitter.ArgumentMap<DeviceManagerEvents>[Extract<T, keyof DeviceManagerEvents>]) => void)[]"
+          },
+          {
+            "name": "off",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof DeviceManagerEvents>(event: T, fn?: ((...args: EventEmitter.ArgumentMap<DeviceManagerEvents>[Extract<T, keyof DeviceManagerEvents>]) => void) | undefined, context?: any, once?: boolean) => DeviceManager"
+          },
+          {
+            "name": "on",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof DeviceManagerEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<DeviceManagerEvents>[Extract<T, keyof DeviceManagerEvents>]) => void, context?: any) => DeviceManager"
+          },
+          {
             "name": "onCachedDeviceStateChanged",
             "optional": false,
             "readonly": false,
@@ -1050,6 +1387,15 @@
               "MethodDeclaration"
             ],
             "type": "(listener: (serialNumber: string, patch: { wifiStatus?: Partial<WiFiStatusInfo> | null; }, state: CachedDeviceState) => void) => { remove: () => void; }"
+          },
+          {
+            "name": "once",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof DeviceManagerEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<DeviceManagerEvents>[Extract<T, keyof DeviceManagerEvents>]) => void, context?: any) => DeviceManager"
           },
           {
             "name": "provision",
@@ -1095,6 +1441,24 @@
               "MethodDeclaration"
             ],
             "type": "(serialNumber: string, options?: ReconnectOptions) => Promise<ConnectedDevice>"
+          },
+          {
+            "name": "removeAllListeners",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(event?: keyof DeviceManagerEvents | undefined) => DeviceManager"
+          },
+          {
+            "name": "removeListener",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof DeviceManagerEvents>(event: T, fn?: ((...args: EventEmitter.ArgumentMap<DeviceManagerEvents>[Extract<T, keyof DeviceManagerEvents>]) => void) | undefined, context?: any, once?: boolean) => DeviceManager"
           },
           {
             "name": "requestStartRecording",
@@ -1232,6 +1596,7 @@
             "type": "(device: ConnectedDevice, grantBlob: string) => Promise<void>"
           }
         ],
+        "staticMembers": [],
         "valueType": "typeof DeviceManager",
         "declaredType": "DeviceManager"
       },
@@ -1326,6 +1691,7 @@
             "type": "() => void"
           }
         ],
+        "staticMembers": [],
         "declaredType": "DeviceManagerEvents"
       },
       {
@@ -1392,6 +1758,7 @@
             "type": "string"
           }
         ],
+        "staticMembers": [],
         "declaredType": "DeviceRecording"
       },
       {
@@ -1403,7 +1770,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "DeviceState"
+        "staticMembers": [],
+        "declaredType": "\"error\" | \"idle\" | \"uploading\" | \"recording\" | \"syncing\" | \"charging\" | \"lowBattery\" | \"storageFull\""
       },
       {
         "name": "DeviceStateCacheEvents",
@@ -1442,6 +1810,7 @@
             "type": "(serialNumber: string, patch: DeviceStatePatch, state: CachedDeviceState) => void"
           }
         ],
+        "staticMembers": [],
         "declaredType": "DeviceStateCacheEvents"
       },
       {
@@ -1463,6 +1832,7 @@
             "type": "Partial<WiFiStatusInfo> | null | undefined"
           }
         ],
+        "staticMembers": [],
         "declaredType": "DeviceStatePatch"
       },
       {
@@ -1601,6 +1971,7 @@
             "type": "WifiStatus | undefined"
           }
         ],
+        "staticMembers": [],
         "declaredType": "DeviceStatus"
       },
       {
@@ -1612,7 +1983,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "DeviceType"
+        "staticMembers": [],
+        "declaredType": "\"bota_pin\" | \"bota_pin_4g\" | \"bota_note\""
       },
       {
         "name": "DeviceWiFiScanResult",
@@ -1642,6 +2014,7 @@
             "type": "WiFiScanNetwork[]"
           }
         ],
+        "staticMembers": [],
         "declaredType": "DeviceWiFiScanResult"
       },
       {
@@ -1735,6 +2108,7 @@
             "type": "number"
           }
         ],
+        "staticMembers": [],
         "declaredType": "DiscoveredDevice"
       },
       {
@@ -1746,7 +2120,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "Environment"
+        "staticMembers": [],
+        "declaredType": "\"development\" | \"gamma\" | \"production\""
       },
       {
         "name": "FirmwareDownloadProgressCallback",
@@ -1759,7 +2134,8 @@
         ],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "FirmwareDownloadProgressCallback"
+        "staticMembers": [],
+        "declaredType": "(bytesDownloaded: number, totalBytes: number) => void"
       },
       {
         "name": "FirmwareInfo",
@@ -1816,6 +2192,7 @@
             "type": "string"
           }
         ],
+        "staticMembers": [],
         "declaredType": "FirmwareInfo"
       },
       {
@@ -1829,6 +2206,7 @@
         ],
         "constructSignatures": [],
         "members": [],
+        "staticMembers": [],
         "valueType": "(error: unknown) => error is BotaError"
       },
       {
@@ -1842,7 +2220,8 @@
         ],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "LogHandler"
+        "staticMembers": [],
+        "declaredType": "(entry: SdkLogEntry) => void"
       },
       {
         "name": "LogLevel",
@@ -1853,7 +2232,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "LogLevel"
+        "staticMembers": [],
+        "declaredType": "\"error\" | \"debug\" | \"info\" | \"warn\" | \"none\""
       },
       {
         "name": "LteStatus",
@@ -1864,7 +2244,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "LteStatus"
+        "staticMembers": [],
+        "declaredType": "\"error\" | \"connected\" | \"off\" | \"searching\" | \"registered\" | \"denied\" | \"noSim\" | \"lowVoltage\" | \"disabled\""
       },
       {
         "name": "ModemInfo",
@@ -1984,6 +2365,7 @@
             "type": "string | undefined"
           }
         ],
+        "staticMembers": [],
         "declaredType": "ModemInfo"
       },
       {
@@ -1997,6 +2379,15 @@
           "(deviceManager: DeviceManager, firmwareCdnUrl?: string) => OTAManager"
         ],
         "members": [
+          {
+            "name": "addListener",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof OTAManagerEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<OTAManagerEvents>[Extract<T, keyof OTAManagerEvents>]) => void, context?: any) => OTAManager"
+          },
           {
             "name": "checkForUpdate",
             "optional": false,
@@ -2025,6 +2416,69 @@
             "type": "(firmware: FirmwareInfo, onProgress?: FirmwareDownloadProgressCallback) => Promise<ArrayBuffer>"
           },
           {
+            "name": "emit",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof OTAManagerEvents>(event: T, ...args: EventEmitter.ArgumentMap<OTAManagerEvents>[Extract<T, keyof OTAManagerEvents>]) => boolean"
+          },
+          {
+            "name": "eventNames",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => (keyof OTAManagerEvents)[]"
+          },
+          {
+            "name": "listenerCount",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(event: keyof OTAManagerEvents) => number"
+          },
+          {
+            "name": "listeners",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof OTAManagerEvents>(event: T) => ((...args: EventEmitter.ArgumentMap<OTAManagerEvents>[Extract<T, keyof OTAManagerEvents>]) => void)[]"
+          },
+          {
+            "name": "off",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof OTAManagerEvents>(event: T, fn?: ((...args: EventEmitter.ArgumentMap<OTAManagerEvents>[Extract<T, keyof OTAManagerEvents>]) => void) | undefined, context?: any, once?: boolean) => OTAManager"
+          },
+          {
+            "name": "on",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof OTAManagerEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<OTAManagerEvents>[Extract<T, keyof OTAManagerEvents>]) => void, context?: any) => OTAManager"
+          },
+          {
+            "name": "once",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof OTAManagerEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<OTAManagerEvents>[Extract<T, keyof OTAManagerEvents>]) => void, context?: any) => OTAManager"
+          },
+          {
             "name": "performUpdate",
             "optional": false,
             "readonly": false,
@@ -2032,8 +2486,27 @@
               "MethodDeclaration"
             ],
             "type": "(device: ConnectedDevice, firmware: FirmwareInfo, grantBlob?: string) => Promise<void>"
+          },
+          {
+            "name": "removeAllListeners",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(event?: keyof OTAManagerEvents | undefined) => OTAManager"
+          },
+          {
+            "name": "removeListener",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof OTAManagerEvents>(event: T, fn?: ((...args: EventEmitter.ArgumentMap<OTAManagerEvents>[Extract<T, keyof OTAManagerEvents>]) => void) | undefined, context?: any, once?: boolean) => OTAManager"
           }
         ],
+        "staticMembers": [],
         "valueType": "typeof OTAManager",
         "declaredType": "OTAManager"
       },
@@ -2092,6 +2565,7 @@
             "type": "number | undefined"
           }
         ],
+        "staticMembers": [],
         "declaredType": "OtaProgress"
       },
       {
@@ -2103,7 +2577,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "OtaStage"
+        "staticMembers": [],
+        "declaredType": "\"completed\" | \"failed\" | \"checking\" | \"downloading\" | \"preparing\" | \"updating\" | \"verifying\" | \"restarting\""
       },
       {
         "name": "PairingState",
@@ -2114,7 +2589,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "PairingState"
+        "staticMembers": [],
+        "declaredType": "\"error\" | \"unpaired\" | \"pairing\" | \"paired\""
       },
       {
         "name": "ProvisioningError",
@@ -2153,6 +2629,89 @@
               "Parameter"
             ],
             "type": "string | undefined"
+          },
+          {
+            "name": "message",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "stack",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          }
+        ],
+        "staticMembers": [
+          {
+            "name": "alreadyPaired",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string) => ProvisioningError"
+          },
+          {
+            "name": "alreadyProvisioned",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string) => ProvisioningError"
+          },
+          {
+            "name": "chunkError",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string) => ProvisioningError"
+          },
+          {
+            "name": "invalidToken",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string) => ProvisioningError"
+          },
+          {
+            "name": "storageError",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string) => ProvisioningError"
+          },
+          {
+            "name": "timeout",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string) => ProvisioningError"
           }
         ],
         "valueType": "typeof ProvisioningError",
@@ -2195,6 +2754,7 @@
             "type": "boolean"
           }
         ],
+        "staticMembers": [],
         "declaredType": "ProvisioningResult"
       },
       {
@@ -2216,6 +2776,7 @@
             "type": "number | undefined"
           }
         ],
+        "staticMembers": [],
         "declaredType": "ReconnectOptions"
       },
       {
@@ -2229,6 +2790,15 @@
           "() => RecordingManager"
         ],
         "members": [
+          {
+            "name": "addListener",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof RecordingManagerEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<RecordingManagerEvents>[Extract<T, keyof RecordingManagerEvents>]) => void, context?: any) => RecordingManager"
+          },
           {
             "name": "cancelUpload",
             "optional": false,
@@ -2264,6 +2834,24 @@
               "MethodDeclaration"
             ],
             "type": "() => void"
+          },
+          {
+            "name": "emit",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof RecordingManagerEvents>(event: T, ...args: EventEmitter.ArgumentMap<RecordingManagerEvents>[Extract<T, keyof RecordingManagerEvents>]) => boolean"
+          },
+          {
+            "name": "eventNames",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => (keyof RecordingManagerEvents)[]"
           },
           {
             "name": "getActiveStreamingSession",
@@ -2311,6 +2899,24 @@
             "type": "() => Promise<void>"
           },
           {
+            "name": "listenerCount",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(event: keyof RecordingManagerEvents) => number"
+          },
+          {
+            "name": "listeners",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof RecordingManagerEvents>(event: T) => ((...args: EventEmitter.ArgumentMap<RecordingManagerEvents>[Extract<T, keyof RecordingManagerEvents>]) => void)[]"
+          },
+          {
             "name": "listRecordings",
             "optional": false,
             "readonly": false,
@@ -2329,6 +2935,33 @@
             "type": "(device: ConnectedDevice, initialPendingCount: number) => AsyncGenerator<SyncProgress & { recordingIndex?: number; totalRecordings?: number; }, DeviceUploadMonitorOutcome>"
           },
           {
+            "name": "off",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof RecordingManagerEvents>(event: T, fn?: ((...args: EventEmitter.ArgumentMap<RecordingManagerEvents>[Extract<T, keyof RecordingManagerEvents>]) => void) | undefined, context?: any, once?: boolean) => RecordingManager"
+          },
+          {
+            "name": "on",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof RecordingManagerEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<RecordingManagerEvents>[Extract<T, keyof RecordingManagerEvents>]) => void, context?: any) => RecordingManager"
+          },
+          {
+            "name": "once",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof RecordingManagerEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<RecordingManagerEvents>[Extract<T, keyof RecordingManagerEvents>]) => void, context?: any) => RecordingManager"
+          },
+          {
             "name": "pauseUploads",
             "optional": false,
             "readonly": false,
@@ -2336,6 +2969,24 @@
               "MethodDeclaration"
             ],
             "type": "() => void"
+          },
+          {
+            "name": "removeAllListeners",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(event?: keyof RecordingManagerEvents | undefined) => RecordingManager"
+          },
+          {
+            "name": "removeListener",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof RecordingManagerEvents>(event: T, fn?: ((...args: EventEmitter.ArgumentMap<RecordingManagerEvents>[Extract<T, keyof RecordingManagerEvents>]) => void) | undefined, context?: any, once?: boolean) => RecordingManager"
           },
           {
             "name": "resumeUploads",
@@ -2392,6 +3043,7 @@
             "type": "(device: ConnectedDevice) => Promise<TriggerDeviceUploadResponse | null>"
           }
         ],
+        "staticMembers": [],
         "valueType": "typeof RecordingManager",
         "declaredType": "RecordingManager"
       },
@@ -2486,6 +3138,7 @@
             "type": "(taskId: string) => void"
           }
         ],
+        "staticMembers": [],
         "declaredType": "RecordingManagerEvents"
       },
       {
@@ -2543,6 +3196,7 @@
             "type": "number | undefined"
           }
         ],
+        "staticMembers": [],
         "declaredType": "ScanOptions"
       },
       {
@@ -2573,6 +3227,62 @@
               "Parameter"
             ],
             "type": "string"
+          },
+          {
+            "name": "message",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "stack",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          }
+        ],
+        "staticMembers": [
+          {
+            "name": "invalidState",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(expected: string, actual: string) => SdkError"
+          },
+          {
+            "name": "notInitialized",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => SdkError"
+          },
+          {
+            "name": "timeout",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(operation: string) => SdkError"
           }
         ],
         "valueType": "typeof SdkError",
@@ -2624,6 +3334,7 @@
             "type": "Date"
           }
         ],
+        "staticMembers": [],
         "declaredType": "SdkLogEntry"
       },
       {
@@ -2635,7 +3346,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "SdkLogLevel"
+        "staticMembers": [],
+        "declaredType": "\"error\" | \"debug\" | \"info\" | \"warn\""
       },
       {
         "name": "SdkState",
@@ -2646,7 +3358,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "SdkState"
+        "staticMembers": [],
+        "declaredType": "\"uninitialized\" | \"initializing\" | \"ready\" | \"error\""
       },
       {
         "name": "SdkStatus",
@@ -2703,6 +3416,7 @@
             "type": "SdkState"
           }
         ],
+        "staticMembers": [],
         "declaredType": "SdkStatus"
       },
       {
@@ -2751,6 +3465,7 @@
             "type": "number"
           }
         ],
+        "staticMembers": [],
         "declaredType": "StorageInfo"
       },
       {
@@ -2774,6 +3489,15 @@
             "type": "() => void"
           },
           {
+            "name": "addListener",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof StreamingSessionEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<StreamingSessionEvents>[Extract<T, keyof StreamingSessionEvents>]) => void, context?: any) => StreamingSession"
+          },
+          {
             "name": "bytesReceived",
             "optional": false,
             "readonly": true,
@@ -2792,6 +3516,24 @@
             "type": "number"
           },
           {
+            "name": "emit",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof StreamingSessionEvents>(event: T, ...args: EventEmitter.ArgumentMap<StreamingSessionEvents>[Extract<T, keyof StreamingSessionEvents>]) => boolean"
+          },
+          {
+            "name": "eventNames",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => (keyof StreamingSessionEvents)[]"
+          },
+          {
             "name": "isActive",
             "optional": false,
             "readonly": true,
@@ -2801,6 +3543,51 @@
             "type": "boolean"
           },
           {
+            "name": "listenerCount",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(event: keyof StreamingSessionEvents) => number"
+          },
+          {
+            "name": "listeners",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof StreamingSessionEvents>(event: T) => ((...args: EventEmitter.ArgumentMap<StreamingSessionEvents>[Extract<T, keyof StreamingSessionEvents>]) => void)[]"
+          },
+          {
+            "name": "off",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof StreamingSessionEvents>(event: T, fn?: ((...args: EventEmitter.ArgumentMap<StreamingSessionEvents>[Extract<T, keyof StreamingSessionEvents>]) => void) | undefined, context?: any, once?: boolean) => StreamingSession"
+          },
+          {
+            "name": "on",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof StreamingSessionEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<StreamingSessionEvents>[Extract<T, keyof StreamingSessionEvents>]) => void, context?: any) => StreamingSession"
+          },
+          {
+            "name": "once",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof StreamingSessionEvents>(event: T, fn: (...args: EventEmitter.ArgumentMap<StreamingSessionEvents>[Extract<T, keyof StreamingSessionEvents>]) => void, context?: any) => StreamingSession"
+          },
+          {
             "name": "recordingId",
             "optional": false,
             "readonly": true,
@@ -2808,6 +3595,24 @@
               "GetAccessor"
             ],
             "type": "string | undefined"
+          },
+          {
+            "name": "removeAllListeners",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(event?: keyof StreamingSessionEvents | undefined) => StreamingSession"
+          },
+          {
+            "name": "removeListener",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "<T extends keyof StreamingSessionEvents>(event: T, fn?: ((...args: EventEmitter.ArgumentMap<StreamingSessionEvents>[Extract<T, keyof StreamingSessionEvents>]) => void) | undefined, context?: any, once?: boolean) => StreamingSession"
           },
           {
             "name": "start",
@@ -2828,6 +3633,7 @@
             "type": "StreamingState"
           }
         ],
+        "staticMembers": [],
         "valueType": "typeof StreamingSession",
         "declaredType": "StreamingSession"
       },
@@ -2895,6 +3701,7 @@
             "type": "() => void"
           }
         ],
+        "staticMembers": [],
         "declaredType": "StreamingSessionEvents"
       },
       {
@@ -2906,7 +3713,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "StreamingState"
+        "staticMembers": [],
+        "declaredType": "\"disconnected\" | \"completed\" | \"failed\" | \"idle\" | \"streaming\" | \"paused\" | \"uploading\" | \"completing\""
       },
       {
         "name": "StreamingSyncOptions",
@@ -2936,6 +3744,7 @@
             "type": "number | undefined"
           }
         ],
+        "staticMembers": [],
         "declaredType": "StreamingSyncOptions"
       },
       {
@@ -2993,6 +3802,7 @@
             "type": "StreamingState"
           }
         ],
+        "staticMembers": [],
         "declaredType": "StreamingSyncProgress"
       },
       {
@@ -3004,7 +3814,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "SyncChannel"
+        "staticMembers": [],
+        "declaredType": "\"Bluetooth\" | \"WiFi\" | \"4G\""
       },
       {
         "name": "SyncKind",
@@ -3015,7 +3826,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "SyncKind"
+        "staticMembers": [],
+        "declaredType": "\"idle\" | \"streaming\" | \"ble_pull\" | \"wifi_upload\" | \"lte_upload\" | \"waiting_channel\""
       },
       {
         "name": "SyncProgress",
@@ -3099,6 +3911,7 @@
             "type": "number | undefined"
           }
         ],
+        "staticMembers": [],
         "declaredType": "SyncProgress"
       },
       {
@@ -3110,7 +3923,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "SyncStage"
+        "staticMembers": [],
+        "declaredType": "\"completed\" | \"failed\" | \"uploading\" | \"completing\" | \"preparing\" | \"transferring\" | \"device_uploading\""
       },
       {
         "name": "SyncStatus",
@@ -3176,6 +3990,7 @@
             "type": "number | undefined"
           }
         ],
+        "staticMembers": [],
         "declaredType": "SyncStatus"
       },
       {
@@ -3215,6 +4030,7 @@
             "type": "{ syncActive: boolean; isRecording: boolean; wifiConnected: boolean; lteConnected: boolean; wifiAttempting: boolean; lteAttempting: boolean; streamingEnabled: boolean; uploadPreference?: Array<\"wifi\" | \"ble\" | \"cellular\">; enabledConnections?: { wifi: boolean; cellular: boolean; }; }"
           }
         ],
+        "staticMembers": [],
         "declaredType": "SyncStatusInputs"
       },
       {
@@ -3247,6 +4063,24 @@
             "type": "string"
           },
           {
+            "name": "message",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
             "name": "recordingUuid",
             "optional": true,
             "readonly": true,
@@ -3254,6 +4088,62 @@
               "Parameter"
             ],
             "type": "string | undefined"
+          },
+          {
+            "name": "stack",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          }
+        ],
+        "staticMembers": [
+          {
+            "name": "checksumMismatch",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(uuid: string) => TransferError"
+          },
+          {
+            "name": "deviceError",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(uuid: string, errorCode: number) => TransferError"
+          },
+          {
+            "name": "interrupted",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(uuid: string, cause?: Error) => TransferError"
+          },
+          {
+            "name": "recordingNotFound",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(uuid: string) => TransferError"
+          },
+          {
+            "name": "timeout",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(uuid: string) => TransferError"
           }
         ],
         "valueType": "typeof TransferError",
@@ -3359,6 +4249,7 @@
             "type": "\"error\" | \"paused\" | \"data\" | \"eof\" | \"sha256\" | \"e2e_start\" | \"encrypted_data\" | \"encrypted_eof\""
           }
         ],
+        "staticMembers": [],
         "declaredType": "TransferPacket"
       },
       {
@@ -3391,6 +4282,33 @@
             "type": "string"
           },
           {
+            "name": "message",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "stack",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
             "name": "taskId",
             "optional": true,
             "readonly": true,
@@ -3398,6 +4316,44 @@
               "Parameter"
             ],
             "type": "string | undefined"
+          }
+        ],
+        "staticMembers": [
+          {
+            "name": "completionFailed",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(taskId: string, cause?: Error) => UploadError"
+          },
+          {
+            "name": "networkUnavailable",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => UploadError"
+          },
+          {
+            "name": "uploadFailed",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(taskId: string, cause?: Error) => UploadError"
+          },
+          {
+            "name": "urlExpired",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(taskId: string) => UploadError"
           }
         ],
         "valueType": "typeof UploadError",
@@ -3476,6 +4432,7 @@
             "type": "string"
           }
         ],
+        "staticMembers": [],
         "declaredType": "UploadInfo"
       },
       {
@@ -3489,7 +4446,8 @@
         ],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "UploadInfoProvider"
+        "staticMembers": [],
+        "declaredType": "(recording: DeviceRecording) => Promise<UploadInfo>"
       },
       {
         "name": "UploadTask",
@@ -3636,6 +4594,7 @@
             "type": "string"
           }
         ],
+        "staticMembers": [],
         "declaredType": "UploadTask"
       },
       {
@@ -3647,7 +4606,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "UploadTaskStatus"
+        "staticMembers": [],
+        "declaredType": "\"completed\" | \"failed\" | \"uploading\" | \"pending\""
       },
       {
         "name": "WiFiConfigGrant",
@@ -3677,6 +4637,7 @@
             "type": "string"
           }
         ],
+        "staticMembers": [],
         "declaredType": "WiFiConfigGrant"
       },
       {
@@ -3707,6 +4668,7 @@
             "type": "boolean"
           }
         ],
+        "staticMembers": [],
         "declaredType": "WiFiConfigResult"
       },
       {
@@ -3746,6 +4708,7 @@
             "type": "string"
           }
         ],
+        "staticMembers": [],
         "declaredType": "WiFiCredentials"
       },
       {
@@ -3794,6 +4757,7 @@
             "type": "string"
           }
         ],
+        "staticMembers": [],
         "declaredType": "WiFiScanNetwork"
       },
       {
@@ -3805,7 +4769,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "WiFiSecurityType"
+        "staticMembers": [],
+        "declaredType": "\"WPA2\" | \"WPA3\" | \"WEP\" | \"OPEN\""
       },
       {
         "name": "WifiStatus",
@@ -3816,7 +4781,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "WifiStatus"
+        "staticMembers": [],
+        "declaredType": "\"error\" | \"connecting\" | \"connected\" | \"off\" | \"disabled\" | \"scanning\" | \"connectFailed\" | \"noCredentials\""
       },
       {
         "name": "WiFiStatus",
@@ -3827,7 +4793,8 @@
         "callSignatures": [],
         "constructSignatures": [],
         "members": [],
-        "declaredType": "WiFiStatus"
+        "staticMembers": [],
+        "declaredType": "\"disconnected\" | \"connecting\" | \"connected\" | \"failed\" | \"idle\""
       },
       {
         "name": "WiFiStatusInfo",
@@ -3875,6 +4842,7 @@
             "type": "WiFiStatus"
           }
         ],
+        "staticMembers": [],
         "declaredType": "WiFiStatusInfo"
       }
     ]

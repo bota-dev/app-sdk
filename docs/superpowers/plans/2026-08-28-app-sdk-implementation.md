@@ -881,11 +881,12 @@ upload, WiFi settings, BLE fallback, firmware download progress, device logs,
 remove-only, and remove-and-reset acceptance.
 
 Prerequisite status (2026-08-31): the 0.0.65 root TypeScript API is frozen as a
-semantic contract covering 80 exports and SDK-owned public members, and the
-existing baseline command enforces it alongside the 50 wire fixtures and 86
-Jest tests. The TurboModule package, Apple Objective-C++ adapter, Android
-adapter, app acceptance, and publication gates remain open. High-volume
-recording bytes must stay native when those adapters are implemented.
+semantic contract covering 80 exports, expanded type aliases, static APIs, and
+reachable public members, and the existing baseline command enforces it
+alongside the 50 wire fixtures and 86 Jest tests. The TurboModule package,
+Apple Objective-C++ adapter, Android adapter, app acceptance, and publication
+gates remain open. High-volume recording bytes must stay native when those
+adapters are implemented.
 
 ### Milestone 5: Additional platforms
 
