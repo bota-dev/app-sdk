@@ -26,7 +26,7 @@
     "pretest": "npm run build",
     "test": "node --test test/*.test.mjs",
     "test:apple:integration": "../../tools/react-native/test-apple-adapter.sh",
-    "test:apple:lifecycle": "swift test -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors",
+    "test:apple:lifecycle": "../../tools/apple/build-xcframework.sh && swift test -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors",
     "test:apple:remote-resolution": "../../tools/react-native/test-apple-adapter.sh remote",
     "test:apple:spm-workaround": "ruby test/apple-spm-workaround.test.rb",
     "typecheck": "tsc --noEmit",

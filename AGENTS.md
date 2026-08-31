@@ -66,8 +66,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `frameworks/react-native/Gemfile.lock` for Bundler 2.6.9, CocoaPods 1.16.2,
   and xcodeproj 1.27.0. Main-branch lifecycle and linked-consumer gates use the
   nested local Apple package because the next root binary URL does not exist
-  before publication. The tag release must run the remote exact-version
-  consumer only after the GitHub Release is public.
+  before publication. `test:apple:lifecycle` builds that package's XCFramework
+  first, so it also works in a clean checkout. The tag release must run the
+  remote exact-version consumer only after the GitHub Release is public.
 - React Native 0.86.3 duplicates binary Swift-package module maps for static
   pods under Xcode 26.3. The packaged `bota_device_sdk_spm_workaround.rb`
   flattens only `BotaDeviceSDK` and rewrites its aggregate module-map flags.

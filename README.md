@@ -230,8 +230,9 @@ resolves the exact matching `BotaAppleSDK` release tag;
 `BOTA_APPLE_SDK_PACKAGE_PATH` is only a source and CI override and must not be
 used in a published application dependency. CI selects Xcode 26.3 and Ruby
 3.3.12 explicitly and uses the locked Ruby toolchain. Main CI tests the nested
-local package; the tag release resolves the default remote package URL to the
-exact synchronized version after publishing its binary archive.
+local package after building its XCFramework from source; the tag release
+resolves the default remote package URL to the exact synchronized version after
+publishing its binary archive.
 
 The pod includes a target-scoped compatibility hook for React Native 0.86.3's
 duplicate binary Swift-package module maps on Xcode 26.3; applications do not

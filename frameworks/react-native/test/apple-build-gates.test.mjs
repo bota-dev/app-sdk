@@ -33,6 +33,10 @@ test('Apple build tooling is pinned and exposes local and remote gates', () => {
     packageJson.scripts['test:apple:remote-resolution'],
     '../../tools/react-native/test-apple-adapter.sh remote'
   );
+  assert.equal(
+    packageJson.scripts['test:apple:lifecycle'],
+    '../../tools/apple/build-xcframework.sh && swift test -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors'
+  );
   assert.match(workflow, /DEVELOPER_DIR: \/Applications\/Xcode_26\.3\.app\/Contents\/Developer/);
   assert.match(workflow, /BOTA_EXPECTED_RUBY_VERSION: "3\.3\.12"/);
   assert.match(workflow, /BOTA_EXPECTED_XCODE_BUILD: 17C529/);
