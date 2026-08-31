@@ -10,8 +10,10 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
+        providers.gradleProperty("botaSdkRepository").orNull?.let { repository ->
+            maven { url = uri(repository) }
+        }
         mavenCentral()
-        maven { url = uri(file("../../../target/android-m2")) }
     }
 }
 

@@ -47,12 +47,25 @@ credentials absent:
 ```bash
 JAVA_HOME=/path/to/jdk-17 ANDROID_HOME="$HOME/Library/Android/sdk" \
   npm run test:android:foundation
+tools/android/package-release.sh --check
+tools/android/install-release-repository.sh target/android-release target/android-m2
+tools/android/test-emulator-lane.sh --api 26 --legacy-path /path/to/pinned/legacy-sdk
+tools/android/test-emulator-lane.sh --api 35 --legacy-path /path/to/pinned/legacy-sdk
 ```
+
+The stable compatibility gate uses an API 26 Google APIs `x86` image and an
+API 35 Google APIs `x86_64` image. Those exact images require an x86_64 host;
+Apple Silicon contributors may run source and package checks locally, but must
+use the Ubuntu CI result for the two release emulator claims. Never substitute
+an arm64 image and describe it as the stable release lane.
 
 Dependencies with copyleft or source-available licenses are rejected by both
 the root and React Native npm checkers and by `cargo-deny`. An exception must
 identify the exact observed license and document a completed review; it is not
 a general package bypass.
+Published Android dependencies additionally require an exact entry in
+`protocol/baseline/android-maven-license-policy.json`. Update that review and
+the generated SPDX evidence in the same change as any Maven dependency.
 
 Never commit local source links as production dependencies. In particular,
 `BOTA_APPLE_SDK_PACKAGE_PATH` is only a source and CI override; the React Native

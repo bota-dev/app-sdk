@@ -96,6 +96,7 @@ tools/android/test-publication-graphs.sh
 tools/android/package-release.sh --check
 tools/android/verify-publication.sh target/android-release
 cargo xtask release validate target/android-release/release-manifest.json
+tools/android/install-release-repository.sh target/android-release target/android-m2
 ```
 
 `package-release.sh --check` performs two clean builds and rejects any AAR or
@@ -104,6 +105,24 @@ publication, proves that no signing task or `.asc` file is present, and emits
 the AAR, POM, Gradle module metadata, sources, Dokka Javadoc, four checksum
 formats for every Maven primary, copied MIT license, SPDX 2.3 SBOM, and native
 manifest version 2.
+
+The published runtime dependency set is reviewed in
+`protocol/baseline/android-maven-license-policy.json`. The package command and
+license workflow require every Gradle module dependency to have an exact
+coordinate, version, approved license, and reviewer in that policy, and require
+the SPDX declaration to match. Unreviewed Maven dependencies fail closed.
+
+The API compatibility lanes consume the reconstructed repository rather than
+republishing from source:
+
+```bash
+tools/android/test-emulator-lane.sh --api 26 --legacy-path /path/to/pinned/legacy-sdk
+tools/android/test-emulator-lane.sh --api 35 --legacy-path /path/to/pinned/legacy-sdk
+```
+
+The exact x86/x86_64 images run on Ubuntu release CI. Apple Silicon cannot run
+the required API 26 x86 image, so a local arm64 emulator is not equivalent
+release evidence.
 
 The separate publication-graph test creates a password-protected ephemeral PGP
 key in a mode-0700 temporary keyring. It proves that protected staging cannot
@@ -178,14 +197,24 @@ install its own Node.js dependencies before running repository tooling.
 1. Verifies synchronized metadata and that the tagged commit belongs to
    `origin/main`.
 2. Runs the Rust, tooling, ABI, license, Apple package, and local-consumer gates.
-3. Rebuilds the deterministic XCFramework and rejects root-package checksum
+3. Packages Android once, runs API 26 and API 35 consumers against that exact
+   AAR, and uploads the unsigned Maven publication inputs.
+4. Rebuilds the deterministic XCFramework and rejects root-package checksum
    drift.
-4. Waits for approval in the protected `release` environment.
-5. Creates the GitHub Release and uploads every Apple release file.
-6. Creates an unrelated macOS package that resolves the public Git tag and
+5. Waits for approval in the protected `release` environment.
+6. Creates the GitHub Release and uploads every public Apple release file. The
+   Android payload remains an immutable workflow artifact downloaded inside the
+   protected job; its flat filenames intentionally are not mixed with Apple's
+   colliding `LICENSE` and manifest assets.
+7. Creates an unrelated macOS package that resolves the public Git tag and
    compiles an executable importing only `BotaAppleSDK`. The smoke deliberately
    does not launch a Bluetooth-capable process on the headless runner. It uses
    one non-batched Swift compiler job to keep memory bounded.
+
+The workflow deliberately emits `android-central-published=false`. It does not
+read Central credentials or upload the Maven bundle yet, and the public Android
+consumer matrix remains skipped until the supervised physical-device release
+gate enables protected publication.
 
 Do not move or recreate a published tag. If a released artifact or manifest is
 wrong, fix the source and publish a new patch version with a new checksum.

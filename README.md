@@ -72,6 +72,14 @@ applications resolve only `dev.bota:bota-android-sdk` and must not package the
 old AAR beside it. See [Android SDK migration](docs/migration/android.md).
 Physical-device acceptance, Maven Central publication, and the React Native
 Android adapter remain open.
+Non-publishing CI now builds one deterministic Android release payload and
+runs that exact AAR through API 26 x86 and API 35 x86_64 instrumentation,
+legacy migration, and unrelated Maven consumer lanes. The reviewed Maven
+dependency policy is checked against both Gradle module metadata and the SPDX
+SBOM. Tag releases pass the unsigned Android payload into the protected job as
+an immutable workflow artifact, while Maven Central publication and its
+public-consumer smoke remain disabled until the physical-device release gate is
+complete.
 The native-boundary spike selected a manually owned C ABI after comparing it
 with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed
@@ -202,6 +210,9 @@ tools/android/test-package.sh --api 35 \
 tools/android/inspect-aar.sh platforms/android/sdk/build/outputs/aar/sdk-release.aar
 tools/android/test-publication-graphs.sh
 tools/android/package-release.sh --check
+tools/android/install-release-repository.sh target/android-release target/android-m2
+tools/android/test-emulator-lane.sh --api 26 --legacy-path /path/to/pinned/legacy-sdk
+tools/android/test-emulator-lane.sh --api 35 --legacy-path /path/to/pinned/legacy-sdk
 ```
 
 The React Native API check expects `npm ci` to have installed the reference SDK

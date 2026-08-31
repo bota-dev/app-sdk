@@ -1412,7 +1412,7 @@ git commit -m "build(android): generate maven release evidence" \
 - Consumes: pinned Android toolchain, Gradle lock/verification data, real AAR, and unrelated consumer.
 - Produces: non-publishing CI artifacts and release jobs that cannot publish before every prerequisite succeeds.
 
-- [ ] **Step 1: Write failing workflow assertions**
+- [x] **Step 1: Write failing workflow assertions**
 
 Extend release-readiness tests to require JDK 17, Android SDK 36, NDK
 28.2.13676358, all four Rust targets, package/consumer scripts, an API-26 x86
@@ -1421,7 +1421,7 @@ AAR upload, Central secrets only inside `environment: release`, manifest v2
 validation, and post-publication Maven consumers on both APIs. Assert PR/push CI
 contains no publish task and no signing/Central credential reference.
 
-- [ ] **Step 2: Run workflow tests and verify RED**
+- [x] **Step 2: Run workflow tests and verify RED**
 
 Run:
 
@@ -1431,7 +1431,7 @@ cargo test -p xtask --test release_readiness
 
 Expected: FAIL because CI has no Android jobs.
 
-- [ ] **Step 3: Add non-publishing Android CI**
+- [x] **Step 3: Add non-publishing Android CI**
 
 On Ubuntu, install JDK 17, platform 36, build-tools 35.0.0, NDK
 28.2.13676358, CMake 3.22.1, and these exact Android Emulator CLI lanes:
@@ -1460,7 +1460,7 @@ or signing material.
 The license workflow validates dependency locks, checksums, SPDX output, and
 reviewed license policy for Maven dependencies in addition to npm/Cargo.
 
-- [ ] **Step 4: Add gated release assembly without enabling publication**
+- [x] **Step 4: Add gated release assembly without enabling publication**
 
 Add an Android packaging job for `v*.*.*` tags. It runs all Android gates and
 uploads the unsigned deterministic payload plus signed-publication inputs. Make

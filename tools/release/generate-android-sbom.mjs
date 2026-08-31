@@ -105,8 +105,8 @@ function parseArguments(argv) {
 
 async function main() {
   const options = parseArguments(process.argv.slice(2));
-  const [aarBytes, cargoMetadata, gradleModule] = await Promise.all([
-    readFile(options.aar), readJson(options['cargo-metadata']), readJson(options['gradle-module']),
+  const [aarBytes, cargoMetadata, gradleModule, mavenLicensePolicy] = await Promise.all([
+    readFile(options.aar), readJson(options['cargo-metadata']), readJson(options['gradle-module']), readJson(options['maven-license-policy']),
   ]);
   const archive = unzipSync(aarBytes);
   const aarEntries = Object.entries(archive)
@@ -116,13 +116,23 @@ async function main() {
     .filter((entry) => ['bota-device-sdk-core', 'bota-device-sdk-ffi'].includes(entry.name))
     .map((entry) => ({ name: entry.name, version: entry.version, license: entry.license }));
   const gradleDependencies = [];
+  const reviewedLicenses = new Map((mavenLicensePolicy.dependencies ?? []).map((entry) => [
+    `${entry.group}:${entry.module}:${entry.version}`,
+    entry.license,
+  ]));
   const seen = new Set();
   for (const variant of gradleModule.variants ?? []) {
     for (const entry of variant.dependencies ?? []) {
       const key = `${entry.group}:${entry.module}:${entry.version?.requires}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      gradleDependencies.push({ group: entry.group, name: entry.module, version: entry.version?.requires });
+      const version = entry.version?.requires;
+      gradleDependencies.push({
+        group: entry.group,
+        name: entry.module,
+        version,
+        license: reviewedLicenses.get(`${entry.group}:${entry.module}:${version}`),
+      });
     }
   }
   const sbom = generateAndroidSbom({ sdkVersion: options['sdk-version'], sourceRevision: options['source-revision'],

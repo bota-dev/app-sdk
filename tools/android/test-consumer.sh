@@ -8,9 +8,13 @@ readonly ANDROID_SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Library/Android/
 readonly ADB="$ANDROID_SDK/platform-tools/adb"
 
 api=""
+repository=""
+public_repository=false
 while (($#)); do
   case "$1" in
     --api) api="${2:?--api requires a value}"; shift 2 ;;
+    --repository) repository="${2:?--repository requires a value}"; shift 2 ;;
+    --public) public_repository=true; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -18,11 +22,24 @@ if [[ -z "$api" ]]; then
   echo "--api is required" >&2
   exit 2
 fi
+if [[ "$public_repository" == true && -n "$repository" ]]; then
+  echo "--public and --repository are mutually exclusive" >&2
+  exit 2
+fi
 
 version="$(awk -F'"' '/^version = / { print $2 }' "$ROOT/sdk-version.toml")"
-"$GRADLEW" -p "$ROOT/platforms/android" :sdk:publishMavenPublicationToLocalRepository >/dev/null
-"$GRADLEW" -p "$FIXTURE" --refresh-dependencies \
-  -PbotaSdkVersion="$version" \
+arguments=(-PbotaSdkVersion="$version")
+if [[ "$public_repository" == false ]]; then
+  if [[ -z "$repository" ]]; then
+    repository="$ROOT/target/android-m2"
+    "$GRADLEW" -p "$ROOT/platforms/android" :sdk:publishMavenPublicationToLocalRepository >/dev/null
+  fi
+  repository="$(cd "$repository" && pwd)"
+  test -s "$repository/dev/bota/bota-android-sdk/$version/bota-android-sdk-$version.aar"
+  arguments+=("-PbotaSdkRepository=$repository")
+fi
+
+"$GRADLEW" -p "$FIXTURE" --refresh-dependencies "${arguments[@]}" \
   :app:assembleDebug :app:assembleDebugAndroidTest >/dev/null
 
 device="$($ADB devices | awk 'NR > 1 && $2 == "device" { print $1; exit }')"
@@ -37,5 +54,5 @@ if [[ "$actual_api" != "$api" ]]; then
 fi
 
 ANDROID_SERIAL="$device" "$GRADLEW" -p "$FIXTURE" \
-  -PbotaSdkVersion="$version" \
+  "${arguments[@]}" \
   :app:connectedDebugAndroidTest

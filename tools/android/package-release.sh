@@ -97,6 +97,7 @@ AAR_CHECKSUM="$(shasum -a 256 "$OUTPUT/bota-android-sdk-$SDK_VERSION.aar" | awk 
   --aar "$OUTPUT/bota-android-sdk-$SDK_VERSION.aar" \
   --cargo-metadata "$TEMP/cargo-metadata.json" \
   --gradle-module "$OUTPUT/bota-android-sdk-$SDK_VERSION.module" \
+  --maven-license-policy "$ROOT/protocol/baseline/android-maven-license-policy.json" \
   --output "$OUTPUT/BotaAndroidSDK.spdx.json"
 "$NODE" "$ROOT/tools/release/generate-native-manifest.mjs" \
   --sdk-version "$SDK_VERSION" \
@@ -109,6 +110,10 @@ AAR_CHECKSUM="$(shasum -a 256 "$OUTPUT/bota-android-sdk-$SDK_VERSION.aar" | awk 
   --output "$OUTPUT/release-manifest.json"
 
 "$ROOT/tools/android/verify-publication.sh" "$OUTPUT"
+"$NODE" "$ROOT/tools/android/check-maven-license-policy.mjs" \
+  "$OUTPUT/bota-android-sdk-$SDK_VERSION.module" \
+  "$OUTPUT/BotaAndroidSDK.spdx.json" \
+  "$ROOT/protocol/baseline/android-maven-license-policy.json"
 if [[ -n "$(git -C "$ROOT" status --porcelain --untracked-files=normal)" ]]; then
   echo "Android release packaging changed tracked source" >&2
   exit 1

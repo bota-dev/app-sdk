@@ -27,9 +27,9 @@ function input() {
       { name: 'bota-device-sdk-ffi', version: '1.0.2', license: 'MIT', dependencies: ['bota-device-sdk-core'] },
     ],
     gradleDependencies: [
-      { group: 'org.jetbrains.kotlinx', name: 'kotlinx-coroutines-android', version: '1.11.0' },
-      { group: 'com.squareup.okhttp3', name: 'okhttp', version: '4.12.0' },
-      { group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: '2.3.20' },
+      { group: 'org.jetbrains.kotlinx', name: 'kotlinx-coroutines-android', version: '1.11.0', license: 'Apache-2.0' },
+      { group: 'com.squareup.okhttp3', name: 'okhttp', version: '4.12.0', license: 'Apache-2.0' },
+      { group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: '2.3.20', license: 'Apache-2.0' },
     ],
   };
 }
@@ -45,7 +45,7 @@ test('Android SPDX records the facade, Rust crates, Gradle runtime graph, AAR, a
   }
   assert.equal(sbom.files.find((entry) => entry.fileName.endsWith('.aar')).checksums[0].checksumValue, checksum);
   for (const path of nativePaths) assert.ok(sbom.files.some((entry) => entry.fileName === path), path);
-  assert.ok(sbom.packages.every((entry) => entry.licenseDeclared === 'MIT' || entry.licenseDeclared === 'NOASSERTION'));
+  assert.ok(sbom.packages.every((entry) => ['MIT', 'Apache-2.0'].includes(entry.licenseDeclared)));
   assert.ok(!serialized.includes('/private/'));
   assert.ok(!serialized.includes('/Users/'));
 });

@@ -10,11 +10,13 @@ readonly ADB="$ANDROID_SDK/platform-tools/adb"
 api=""
 mode=""
 legacy_path="${BOTA_LEGACY_ANDROID_PATH:-}"
+repository=""
 while (($#)); do
   case "$1" in
     --api) api="${2:?--api requires a value}"; shift 2 ;;
     --mode) mode="${2:?--mode requires a value}"; shift 2 ;;
     --legacy-path) legacy_path="${2:?--legacy-path requires a value}"; shift 2 ;;
+    --repository) repository="${2:?--repository requires a value}"; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -28,9 +30,14 @@ if [[ "$mode" == "binary" && -z "$legacy_path" ]]; then
 fi
 
 version="$(awk -F'"' '/^version = / { print $2 }' "$ROOT/sdk-version.toml")"
-"$GRADLEW" -p "$ROOT/platforms/android" :sdk:publishMavenPublicationToLocalRepository >/dev/null
+if [[ -z "$repository" ]]; then
+  repository="$ROOT/target/android-m2"
+  "$GRADLEW" -p "$ROOT/platforms/android" :sdk:publishMavenPublicationToLocalRepository >/dev/null
+fi
+repository="$(cd "$repository" && pwd)"
+test -s "$repository/dev/bota/bota-android-sdk/$version/bota-android-sdk-$version.aar"
 
-arguments=(-PbotaSdkVersion="$version" -PbotaLegacyMode="$mode")
+arguments=(-PbotaSdkVersion="$version" -PbotaLegacyMode="$mode" "-PbotaSdkRepository=$repository")
 if [[ "$mode" == "binary" ]]; then
   "$ROOT/tools/android/capture-legacy-api.sh" --legacy-path "$legacy_path" \
     --check "$ROOT/protocol/baseline/android-sdk-0f06d2a-public-api.txt" >/dev/null

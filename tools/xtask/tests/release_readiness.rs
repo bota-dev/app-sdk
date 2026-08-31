@@ -167,6 +167,115 @@ fn release_workflow_publishes_and_smokes_the_public_apple_package() {
 }
 
 #[test]
+fn android_ci_builds_once_and_verifies_both_supported_emulator_contracts() {
+    let path = root().join(".github/workflows/ci.yml");
+    let contents = fs::read_to_string(path).unwrap();
+    let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
+    let emulator = fs::read_to_string(root().join("tools/android/test-emulator-lane.sh")).unwrap();
+
+    assert!(contents.contains("Set up JDK 17"));
+    assert!(contents.contains("platforms;android-36"));
+    assert!(contents.contains("build-tools;35.0.0"));
+    assert!(contents.contains("ndk;28.2.13676358"));
+    assert!(contents.contains("cmake;3.22.1"));
+    assert!(contents.contains(
+        "aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android"
+    ));
+    assert!(contents.contains("system-images;android-26;google_apis;x86"));
+    assert!(contents.contains("system-images;android-35;google_apis;x86_64"));
+    assert!(emulator.contains("bota-api-26"));
+    assert!(emulator.contains("bota-api-35"));
+    assert!(emulator.contains("-no-window -no-audio -no-boot-anim"));
+    assert!(emulator.contains("sys.boot_completed"));
+    assert!(emulator.contains("window_animation_scale 0"));
+    assert!(contents.contains("tools/android/test-emulator-lane.sh --api 26"));
+    assert!(contents.contains("tools/android/test-emulator-lane.sh --api 35"));
+    assert!(emulator.contains("dev.bota.sdk.internal.jni.NativeCoreBridgeTest"));
+    assert!(emulator.contains("dev.bota.sdk.internal.bluetooth.BluetoothPermissionTest"));
+    assert!(emulator.contains("tools/android/test-legacy-consumer.sh"));
+    assert!(emulator.contains("tools/android/test-consumer.sh"));
+    assert!(contents.contains("tools/android/package-release.sh --check"));
+    assert!(contents.contains("target/android-release/"));
+    assert!(contents.contains("compression-level: 0"));
+    assert!(emulator.contains("delete avd --name"));
+    assert!(!contents.contains("botaProtectedSigning"));
+    assert!(!contents.contains("signingInMemoryKey"));
+    assert!(!contents.contains("CENTRAL_"));
+    assert!(!contents.contains("uploadBundle"));
+
+    let android_steps = workflow["jobs"]["android-native"]["steps"]
+        .as_sequence()
+        .unwrap();
+    let package_count = android_steps
+        .iter()
+        .filter_map(|step| step["run"].as_str())
+        .filter(|command| command.contains("tools/android/package-release.sh --check"))
+        .count();
+    assert_eq!(package_count, 1);
+}
+
+#[test]
+fn android_license_gate_checks_locked_verified_spdx_dependencies() {
+    let path = root().join(".github/workflows/license-gate.yml");
+    let contents = fs::read_to_string(path).unwrap();
+    let _: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
+
+    assert!(contents.contains("platforms/android/sdk/gradle.lockfile"));
+    assert!(contents.contains("platforms/android/settings-gradle.lockfile"));
+    assert!(contents.contains("platforms/android/gradle/verification-metadata.xml"));
+    assert!(contents.contains("tools/android/package-release.sh --check"));
+    assert!(contents.contains("tools/android/verify-publication.sh target/android-release"));
+    assert!(contents.contains("BotaAndroidSDK.spdx.json"));
+    assert!(!contents.contains("signingInMemoryKey"));
+    assert!(!contents.contains("CENTRAL_"));
+}
+
+#[test]
+fn release_workflow_packages_android_but_keeps_central_publication_disabled() {
+    let path = root().join(".github/workflows/release.yml");
+    let contents = fs::read_to_string(path).unwrap();
+    let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
+
+    let android = &workflow["jobs"]["android"];
+    assert_eq!(android["runs-on"].as_str(), Some("ubuntu-latest"));
+    let android_steps = android["steps"].as_sequence().unwrap();
+    let android_commands = android_steps
+        .iter()
+        .filter_map(|step| step["run"].as_str())
+        .collect::<Vec<_>>();
+    assert!(
+        android_commands
+            .iter()
+            .any(|command| command.contains("tools/android/test-publication-graphs.sh"))
+    );
+    assert!(
+        android_commands
+            .iter()
+            .any(|command| command.contains("tools/android/package-release.sh --check"))
+    );
+    assert!(
+        android_commands.iter().any(|command| command
+            .contains("cargo xtask release validate target/android-release/release-manifest.json"))
+    );
+    assert!(contents.contains("name: android-release-${{ github.ref_name }}"));
+    assert!(contents.contains("path: target/android-release/"));
+    assert!(contents.contains("needs: [verify, apple, android]"));
+    assert!(
+        contents.contains(
+            "android-central-published: ${{ steps.central-readiness.outputs.published }}"
+        )
+    );
+    assert!(contents.contains("echo \"published=false\""));
+    assert!(contents.contains("matrix:\n        api: [26, 35]"));
+    assert!(contents.contains("tools/android/test-public-consumer.sh --api ${{ matrix.api }}"));
+    assert!(contents.contains("needs.publish.outputs.android-central-published == 'true'"));
+    assert!(!contents.contains("CENTRAL_USERNAME"));
+    assert!(!contents.contains("CENTRAL_PASSWORD"));
+    assert!(!contents.contains("CENTRAL_TOKEN"));
+    assert!(!contents.contains("uploadBundle"));
+}
+
+#[test]
 fn android_build_authorities_are_synchronized() {
     let result = xtask::release::verify_android_build(&root());
 

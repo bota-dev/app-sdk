@@ -210,6 +210,27 @@ Normal builds can publish unsigned artifacts only to the `Local` repository at
 `VERSION_NAME` must match the root `sdk-version.toml`; Gradle rejects an
 override rather than producing a differently versioned artifact.
 
+CI creates `target/android-release` once, verifies its checksums and SPDX
+document, and reconstructs `target/android-m2` from those files. Both emulator
+lanes consume that repository and verify its AAR digest before and after the
+lane. The helper creates a fresh CLI AVD, waits for `sys.boot_completed`,
+disables animations, removes prior test packages, and always stops and deletes
+the AVD:
+
+```bash
+tools/android/install-release-repository.sh target/android-release target/android-m2
+tools/android/test-emulator-lane.sh --api 26 --legacy-path /path/to/pinned/legacy-sdk
+tools/android/test-emulator-lane.sh --api 35 --legacy-path /path/to/pinned/legacy-sdk
+```
+
+API 26 uses `system-images;android-26;google_apis;x86`; API 35 uses
+`system-images;android-35;google_apis;x86_64`. They are x86_64-host release
+lanes and cannot be replaced by Apple Silicon arm64 images. Runtime Maven
+coordinates and their approved licenses are frozen in
+`protocol/baseline/android-maven-license-policy.json`; package generation and
+the license workflow require that policy, Gradle module metadata, and the SPDX
+document to match exactly.
+
 The clean Maven consumer and legacy migration consumers resolve only from that
 repository:
 
@@ -220,6 +241,11 @@ tools/android/test-legacy-consumer.sh --api 26 --mode binary \
   --legacy-path /path/to/pinned/legacy-sdk
 tools/android/test-consumer.sh --api 26
 ```
+
+After Maven Central publication is enabled, `test-public-consumer.sh` omits the
+local repository entirely. The release workflow currently keeps that smoke
+disabled by reporting `android-central-published=false`; physical-device
+evidence and protected Central credentials must land before that value changes.
 
 See [`docs/migration/android.md`](../../docs/migration/android.md) before
 replacing the old AAR. The old and replacement AARs must never be packaged

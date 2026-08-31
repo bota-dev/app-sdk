@@ -94,6 +94,15 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   all four supported ABIs, but is not a published facade claim.
   Verification metadata must include the pinned AAPT2 artifact for both macOS
   and Linux so local and GitHub Android builds enforce the same dependency gate.
+- `protocol/baseline/android-maven-license-policy.json` is the reviewed license
+  authority for published Maven dependencies. Package generation must copy
+  those licenses into the SPDX document, and the license workflow must reject
+  an unreviewed coordinate, version, or SPDX license.
+- Android CI packages once, reconstructs `target/android-m2` from that exact
+  `target/android-release` payload, and passes the immutable repository through
+  the API 26 x86 and API 35 x86_64 emulator lanes. `test-emulator-lane.sh` owns
+  AVD creation, boot readiness, fresh installs, animation settings, shutdown,
+  and deletion. Do not cache AVD state or put signing material in ordinary CI.
 - Keep mutating Android release-readiness tests in independent temporary
   fixtures. They run in parallel, so fixture names require an atomic uniqueness
   component in addition to wall-clock time.
@@ -241,6 +250,9 @@ tools/android/inspect-aar.sh platforms/android/sdk/build/outputs/aar/sdk-release
 tools/android/test-publication-graphs.sh
 tools/android/package-release.sh --check
 tools/android/verify-publication.sh target/android-release
+tools/android/install-release-repository.sh target/android-release target/android-m2
+tools/android/test-emulator-lane.sh --api 26 --legacy-path /path/to/pinned/legacy-sdk
+tools/android/test-emulator-lane.sh --api 35 --legacy-path /path/to/pinned/legacy-sdk
 cargo xtask protocol generate --check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings

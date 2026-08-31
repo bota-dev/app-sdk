@@ -187,6 +187,18 @@ library digest, and emits checksums, SPDX 2.3 evidence, the repository license,
 and a manifest-v2 Android artifact bound to reviewed facade evidence rather
 than Rust-only compatibility claims.
 
+Non-publishing CI treats that flat release directory as the immutable Android
+input. It reconstructs an exact local Maven repository, then runs source,
+precompiled legacy, and unrelated public consumers against the same AAR on an
+API 26 Google APIs x86 emulator and an API 35 Google APIs x86_64 emulator. AVD
+state is created and deleted per lane. Runtime Maven dependencies are an exact
+set governed by `android-maven-license-policy.json`; package verification
+requires the Gradle module, reviewed policy, and SPDX licenses to agree. Tag
+workflows upload the unsigned Android inputs as an immutable workflow artifact
+and download it only inside the protected job, but report Central publication
+as false until the physical-device and protected-credential milestone enables
+the upload step.
+
 Android `ProvisioningManager` and `FactoryResetManager` use the same opaque
 material, durable reset, shared-codec, and facade-wide operation contracts as
 Apple. Provisioning tokens, endpoints, nonces, device public keys, and reset
