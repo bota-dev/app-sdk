@@ -98,7 +98,8 @@ the public `BotaDeviceClient` facade. Objective-C++ implements only the
 generated TurboModule spec and promise conversion. The pod uses React Native
 0.86's iOS 15.1 floor and resolves the exact matching `BotaAppleSDK` release;
 the local package-path override exists only for source and CI builds. A
-disposable CocoaPods application compiles and links the complete native chain.
+disposable Objective-C++ and Swift CocoaPods application compiles and links the
+complete native chain.
 The build toolchain is locked, and a separate remote-resolution gate confirms
 that the default package URL resolves the synchronized immutable release. A
 target-scoped CocoaPods hook carries React Native's upstream fix for duplicate

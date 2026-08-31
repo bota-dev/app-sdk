@@ -96,6 +96,7 @@
 - [x] **Step 5: Commit** the build gate with the required Codex co-author trailer.
 - [x] **Step 6: Lock the Ruby build toolchain, select Xcode 26.3 explicitly in CI, and resolve the default remote Apple package at the synchronized version.**
 - [x] **Step 7: Carry React Native's target-scoped module-map deduplication for the 0.86.3 floor** so the static `BotaDeviceSDK` pod builds against its binary Swift-package dependency on Xcode 26.3 without consumer Podfile changes.
+- [x] **Step 8: Compile Objective-C++ and Swift in the disposable application target** so the Xcode 26.3 link gate exercises the same C++ and Swift runtime linkage required by a real React Native application.
 
 ### Task 5: Documentation, Review, And Main Integration
 

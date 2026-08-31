@@ -47,6 +47,9 @@ test('remote consumer mode omits the local Apple package override', () => {
 
   assert.match(generator, /source_mode = ARGV\.fetch\(3, "local"\)/);
   assert.match(generator, /source_mode == "local"/);
+  assert.match(generator, /output_dir\.join\("main\.mm"\)/);
+  assert.match(generator, /output_dir\.join\("SwiftLinkageAnchor\.swift"\)/);
+  assert.match(generator, /target\.source_build_phase\.add_file_reference\(swift_ref\)/);
   assert.match(integration, /source_mode="\$\{1:-local\}"/);
   assert.match(integration, /-resolvePackageDependencies/);
   assert.match(integration, /Package\.resolved/);

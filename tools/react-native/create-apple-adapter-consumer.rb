@@ -53,7 +53,14 @@ source = <<~OBJC
     }
   }
 OBJC
-File.write(output_dir.join("main.m"), source)
+File.write(output_dir.join("main.mm"), source)
+
+swift_source = <<~SWIFT
+  import Foundation
+
+  @objc final class SwiftLinkageAnchor: NSObject {}
+SWIFT
+File.write(output_dir.join("SwiftLinkageAnchor.swift"), swift_source)
 
 plist = <<~PLIST
   <?xml version="1.0" encoding="UTF-8"?>
@@ -77,8 +84,10 @@ File.write(output_dir.join("Info.plist"), plist)
 
 project = Xcodeproj::Project.new(output_dir.join("AdapterConsumer.xcodeproj"))
 target = project.new_target(:application, "AdapterConsumer", :ios, "15.1")
-source_ref = project.main_group.new_file("main.m")
+source_ref = project.main_group.new_file("main.mm")
+swift_ref = project.main_group.new_file("SwiftLinkageAnchor.swift")
 target.source_build_phase.add_file_reference(source_ref)
+target.source_build_phase.add_file_reference(swift_ref)
 target.build_configurations.each do |configuration|
   configuration.build_settings["CODE_SIGNING_ALLOWED"] = "NO"
   configuration.build_settings["GENERATE_INFOPLIST_FILE"] = "NO"
