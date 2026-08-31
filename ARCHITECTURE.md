@@ -131,8 +131,8 @@ that the default package URL resolves the synchronized immutable release. A
 target-scoped CocoaPods hook carries React Native's upstream fix for duplicate
 binary Swift-package module maps on Xcode 26.3 while the package floor remains
 0.86.3. This proves lifecycle plus device discovery, connection, status,
-provisioning, and authenticated-reset integration, not the remaining workflow surface or application
-parity.
+provisioning, authenticated-reset, and recording-transfer integration, not the
+remaining workflow surface or application parity.
 
 The Android host is also executable. A coroutine mutex serializes
 configuration and destruction through `BotaDeviceClient.shared`, and a
@@ -145,8 +145,9 @@ the public Android facade. A checked-in React Native 0.86.3
 Gradle consumer regenerates Codegen, runs lifecycle unit tests and lint, and
 assembles the adapter against the exact AAR reconstructed from the immutable
 local Maven payload. This proves Android lifecycle plus device discovery,
-connection, status, provisioning, and authenticated-reset integration only; the remaining
-workflow bindings and application parity remain open.
+connection, status, provisioning, authenticated-reset, and recording-transfer
+integration only; the remaining workflow bindings and application parity
+remain open.
 
 The React Native reset broker exposes only the nonce, command ID, binding
 generation, and an encoded grant string. Apple and Android decode the grant into
@@ -155,6 +156,12 @@ carries the destructive payload. Both adapters return the exact command and
 generation completion. `resumePendingFactoryReset` delegates directly to the
 native receipt-only workflow, which rejects a stale generation before Rust
 starts and cannot request another grant or resend opcode `0x06`.
+
+The React Native recording broker maps native recording metadata to the frozen
+JavaScript shape and emits transfer progress as counts only. Apple and Android
+consume their public recording streams behind the TurboModule and return the
+completed native file path. Audio content, transfer packets, and sink handles
+never enter Codegen, and teardown cancels the native recording owner.
 
 The Android migration has a native package foundation in `platforms/android`.
 `sdk-version.toml` is mirrored as `VERSION_NAME`, while release-readiness tests

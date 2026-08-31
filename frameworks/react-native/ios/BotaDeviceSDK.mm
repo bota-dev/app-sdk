@@ -121,6 +121,62 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
   }];
 }
 
+- (void)listRecordings:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                resolve:(RCTPromiseResolveBlock)resolve
+                 reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      listRecordingsWithID:device.id_()
+              serialNumber:device.serialNumber()
+                deviceType:device.deviceType()
+           firmwareVersion:device.firmwareVersion()
+           hardwareRevision:device.hardwareRevision()
+             isProvisioned:device.isProvisioned()
+           connectionState:device.connectionState()
+                       mtu:device.mtu()
+                completion:^(NSArray<NSDictionary *> *_Nullable recordings,
+                             NSError *_Nullable error) {
+                  if (error != nil) {
+                    BotaRejectAppleError(error, reject);
+                    return;
+                  }
+                  resolve(recordings);
+                }];
+}
+
+- (void)syncRecording:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+             recording:(JS::NativeBotaDeviceSDK::NativeDeviceRecording &)recording
+               resolve:(RCTPromiseResolveBlock)resolve
+                reject:(RCTPromiseRejectBlock)reject
+{
+  __weak BotaDeviceSDK *weakSelf = self;
+  [[BotaDeviceSDKAppleBridge shared]
+      syncRecordingWithID:device.id_()
+              serialNumber:device.serialNumber()
+                deviceType:device.deviceType()
+           firmwareVersion:device.firmwareVersion()
+           hardwareRevision:device.hardwareRevision()
+             isProvisioned:device.isProvisioned()
+           connectionState:device.connectionState()
+                       mtu:device.mtu()
+             recordingUUID:recording.uuid()
+      startedAtMilliseconds:recording.startedAtMs()
+       durationMilliseconds:recording.durationMs()
+                  fileSize:recording.fileSize()
+                     codec:recording.codec()
+               isEncrypted:recording.isEncrypted()
+                onProgress:^(NSDictionary *progress) {
+                  [weakSelf emitOnRecordingTransferProgress:progress];
+                }
+                completion:^(NSString *_Nullable path, NSError *_Nullable error) {
+                  if (error != nil) {
+                    BotaRejectAppleError(error, reject);
+                    return;
+                  }
+                  resolve(path);
+                }];
+}
+
 - (void)readStatus:(RCTPromiseResolveBlock)resolve
              reject:(RCTPromiseRejectBlock)reject
 {

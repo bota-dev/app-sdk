@@ -21,6 +21,7 @@ internal class BotaDeviceSDKModule(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : NativeBotaDeviceSDKSpec(reactContext) {
     private val devices = BotaDeviceSDKAndroidDevices(BotaDeviceSDKSharedAndroidDeviceClient(), scope)
+    private val recordings = BotaDeviceSDKAndroidRecordings()
     private val security = BotaDeviceSDKAndroidSecurity()
 
     override fun configure(configuration: ReadableMap, promise: Promise) {
@@ -38,6 +39,7 @@ internal class BotaDeviceSDKModule(
     override fun destroy(promise: Promise) {
         launch(promise) {
             security.cancelAll()
+            recordings.cancelAll()
             devices.stopAll()
             lifecycle.destroy()
         }
@@ -75,6 +77,31 @@ internal class BotaDeviceSDKModule(
 
     override fun disconnect(promise: Promise) {
         launch(promise) { devices.disconnect() }
+    }
+
+    override fun listRecordings(device: ReadableMap, promise: Promise) {
+        launchValue(promise) {
+            Arguments.createArray().apply {
+                recordings.listRecordings(device.toConnectedDevice()).forEach {
+                    pushMap(it.toWritableMap())
+                }
+            }
+        }
+    }
+
+    override fun syncRecording(
+        device: ReadableMap,
+        recording: ReadableMap,
+        promise: Promise,
+    ) {
+        launchValue(promise) {
+            recordings.syncRecording(
+                device.toConnectedDevice(),
+                recording.toDeviceRecording(),
+            ) {
+                emitOnRecordingTransferProgress(it.toWritableMap())
+            }
+        }
     }
 
     override fun readStatus(promise: Promise) {
@@ -185,6 +212,7 @@ internal class BotaDeviceSDKModule(
         scope.launch {
             try {
                 security.cancelAll()
+                recordings.cancelAll()
                 devices.stopAll()
                 lifecycle.destroy()
             } finally {

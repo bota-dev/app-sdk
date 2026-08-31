@@ -78,6 +78,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   native code decodes the grant and owns all BLE bytes. Resume accepts the
   current binding generation and runs only native receipt recovery. Destroy and
   invalidation reject pending grants and cancel the active reset operation.
+- `BotaDeviceSDK.recordings` delegates recording list and transfer to the
+  native facades. Codegen carries metadata and progress only; completed audio
+  remains in native storage and JavaScript receives a file path. Destroy and
+  invalidation cancel the active native recording operation. Preserve the
+  frozen `opus_16k` fallback for unknown codec values.
 - Keep the Codegen names `BotaDeviceSDKSpec` and `BotaDeviceSDK` frozen. Import
   uses optional TurboModule lookup; missing native code fails on invocation as
   `native_module_unavailable`, not while the JavaScript module is imported.
@@ -116,6 +121,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `BotaDeviceSDKAndroidDevices`. It owns scan and status coroutines, contains
   asynchronous stream failures, and cancels affected work before connect,
   reconnect, disconnect, destroy, or React Native invalidation.
+- Keep React Native recording stream ownership in
+  `BotaDeviceSDKAndroidRecordings`. Collect the public facade flow natively,
+  emit only progress, and return only the completed native path.
 - Keep React Native Android provisioning and factory-reset material ownership
   in `BotaDeviceSDKAndroidSecurity`. Request IDs are one-shot, material is
   copied into the public Android facade, and destroy/invalidation cancels

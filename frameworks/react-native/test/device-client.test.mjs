@@ -59,6 +59,7 @@ function nativeFixture() {
   let statusHandler = null;
   let provisioningHandler = null;
   let factoryResetHandler = null;
+  let recordingProgressHandler = null;
   let provisioningResolve = null;
   let provisioningReject = null;
   let factoryResetResolve = null;
@@ -114,6 +115,14 @@ function nativeFixture() {
         return {
           remove() {
             factoryResetHandler = null;
+          },
+        };
+      },
+      onRecordingTransferProgress(handler) {
+        recordingProgressHandler = handler;
+        return {
+          remove() {
+            recordingProgressHandler = null;
           },
         };
       },
@@ -203,6 +212,24 @@ function nativeFixture() {
           commandId: 'reset-command-1',
           bindingGeneration,
         };
+      },
+      async listRecordings(device) {
+        calls.push(['listRecordings', device]);
+        return [
+          {
+            uuid: 'recording-1',
+            startedAtMs: 1_788_200_000_000,
+            durationMs: 12_000,
+            fileSize: 48_000,
+            codec: 'opus_16k',
+            isEncrypted: true,
+          },
+        ];
+      },
+      async syncRecording(device, recording) {
+        calls.push(['syncRecording', device, recording]);
+        recordingProgressHandler?.({ completedUnits: 24_000, totalUnits: 48_000 });
+        return '/tmp/bota-recordings/recording-1.ogg';
       },
     },
   };
@@ -428,6 +455,47 @@ test('factory reset rejects its native request when the application grant provid
       'rejectApplicationMaterial',
       'factory-reset-request',
       'factory reset grant unavailable',
+    ],
+  ]);
+});
+
+test('recording list and sync preserve metadata, progress, and native file ownership', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+  const progress = [];
+
+  const recordings = await client.recordings.listRecordings(connected);
+  const path = await client.recordings.syncRecording(
+    connected,
+    recordings[0],
+    (value) => progress.push(value)
+  );
+
+  assert.deepEqual(recordings, [
+    {
+      uuid: 'recording-1',
+      startedAt: new Date(1_788_200_000_000),
+      durationMs: 12_000,
+      fileSizeBytes: 48_000,
+      codec: 'opus_16k',
+      isEncrypted: true,
+    },
+  ]);
+  assert.equal(path, '/tmp/bota-recordings/recording-1.ogg');
+  assert.deepEqual(progress, [{ completedBytes: 24_000, totalBytes: 48_000 }]);
+  assert.deepEqual(fixture.calls, [
+    ['listRecordings', connected],
+    [
+      'syncRecording',
+      connected,
+      {
+        uuid: 'recording-1',
+        startedAtMs: 1_788_200_000_000,
+        durationMs: 12_000,
+        fileSize: 48_000,
+        codec: 'opus_16k',
+        isEncrypted: true,
+      },
     ],
   ]);
 });

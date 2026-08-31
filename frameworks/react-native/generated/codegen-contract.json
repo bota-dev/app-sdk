@@ -178,6 +178,53 @@
               }
             ]
           },
+          "NativeDeviceRecording": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "uuid",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "startedAtMs",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "durationMs",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "fileSize",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "codec",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "isEncrypted",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              }
+            ]
+          },
           "NativeDeviceStatus": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -569,6 +616,25 @@
                 }
               }
             ]
+          },
+          "NativeRecordingTransferProgress": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "completedUnits",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "totalUnits",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
           }
         },
         "enumMap": {},
@@ -615,6 +681,17 @@
                 "typeAnnotation": {
                   "type": "TypeAliasTypeAnnotation",
                   "name": "NativeFactoryResetGrantRequest"
+                }
+              }
+            },
+            {
+              "name": "onRecordingTransferProgress",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeRecordingTransferProgress"
                 }
               }
             }
@@ -783,6 +860,33 @@
                   }
                 },
                 "params": []
+              }
+            },
+            {
+              "name": "listRecordings",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "ArrayTypeAnnotation",
+                    "elementType": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeDeviceRecording"
+                    }
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
               }
             },
             {
@@ -1046,6 +1150,37 @@
                 },
                 "params": []
               }
+            },
+            {
+              "name": "syncRecording",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "StringTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "recording",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeDeviceRecording"
+                    }
+                  }
+                ]
+              }
             }
           ]
         },
@@ -1057,11 +1192,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "e77c5cfb9b493f8237082873d04b4fea8b5dab77f3197b9c3265c810ca24ccf0"
+        "sha256": "17a08ee76f8fc58f09406092f776d4a0f75b478db659d07637030e1b61634ece"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "960525ed0023956a0628065067f841e10c8a72438b118b9800f9ea3d01993f45"
+        "sha256": "42caa622f60f61ae91ecbb010959c617307c9d23de293e76e21b7b2643c8944c"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -1073,23 +1208,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "46ac9bc385c7026803df74f2a4736539699ada272668b580a02d44b7892f5dea"
+        "sha256": "a9a4e77d9b3b5e8b1f883e12386160aa7b2ea12b34ae38309c716d8ca8955100"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "c70574a9d3c4061666fd297d364f52eb3dbb65b99a69398f1140b33bf50ff341"
+        "sha256": "aa4658e11180a0962fbd58c1495099c20ed4f881c3e3a822b12cdec0de7891ba"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "a12c47ac24161e983ae0377512f22e0de713ac575f4db2f2c4335542abc3ef95"
+        "sha256": "66d9207ca8bae57c4fe16712d10fce5593d286271ee7eeb08e9c91429c5acb53"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "46ac9bc385c7026803df74f2a4736539699ada272668b580a02d44b7892f5dea"
+        "sha256": "a9a4e77d9b3b5e8b1f883e12386160aa7b2ea12b34ae38309c716d8ca8955100"
       }
     ]
   },
-  "contractDigest": "6238f23bec0db226fbc7f2d292fb3adb308bc6abaa850ce899637037d2a9eb99"
+  "contractDigest": "5c30c992e98bcf69f4b84c959dfb8b651542dc25d4414c8fd8a759a990dd37cb"
 }

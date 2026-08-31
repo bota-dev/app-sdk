@@ -3,9 +3,11 @@ import type {
   NativeConnectedDevice,
   NativeConfiguration,
   NativeDeviceStatus,
+  NativeDeviceRecording,
   NativeDiscoveredDevice,
   NativeFactoryResetCompletion,
   NativeFactoryResetGrantRequest,
+  NativeRecordingTransferProgress,
   NativeProvisioningMaterialRequest,
   Spec,
 } from './specs/NativeBotaDeviceSDK';
@@ -22,6 +24,7 @@ import type {
   LteStatus,
   WifiStatus,
 } from './models/Device';
+import type { AudioCodec, DeviceRecording } from './models/Recording';
 
 export type BotaLogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
@@ -97,6 +100,20 @@ export type BotaDeviceSDKFactoryResetClient = {
   ): Promise<BotaFactoryResetCompletion | null>;
 };
 
+export type BotaRecordingTransferProgress = {
+  completedBytes: number;
+  totalBytes: number;
+};
+
+export type BotaDeviceSDKRecordingClient = {
+  listRecordings(device: ConnectedDevice): Promise<DeviceRecording[]>;
+  syncRecording(
+    device: ConnectedDevice,
+    recording: DeviceRecording,
+    onProgress?: (progress: BotaRecordingTransferProgress) => void
+  ): Promise<string>;
+};
+
 export type BotaDeviceSDKDeviceClient = {
   startScan(
     options: ScanOptions | undefined,
@@ -130,6 +147,7 @@ export type BotaDeviceSDKClient = {
   readonly devices: BotaDeviceSDKDeviceClient;
   readonly factoryReset: BotaDeviceSDKFactoryResetClient;
   readonly provisioning: BotaDeviceSDKProvisioningClient;
+  readonly recordings: BotaDeviceSDKRecordingClient;
   configure(configuration?: BotaDeviceSDKConfiguration): Promise<void>;
   destroy(): Promise<void>;
   getCapabilities(): Promise<BotaDeviceSDKCapabilities>;
@@ -226,6 +244,31 @@ const mapDeviceStatus = (status: NativeDeviceStatus): DeviceStatus => ({
     ? {}
     : { wifiStatus: status.wifiStatus as WifiStatus }),
   ...(status.modemInfo === undefined ? {} : { modemInfo: status.modemInfo }),
+});
+
+const mapRecording = (recording: NativeDeviceRecording): DeviceRecording => ({
+  uuid: recording.uuid,
+  startedAt: new Date(recording.startedAtMs),
+  durationMs: recording.durationMs,
+  fileSizeBytes: recording.fileSize,
+  codec: recording.codec as AudioCodec,
+  isEncrypted: recording.isEncrypted,
+});
+
+const toNativeRecording = (recording: DeviceRecording): NativeDeviceRecording => ({
+  uuid: recording.uuid,
+  startedAtMs: recording.startedAt.getTime(),
+  durationMs: recording.durationMs,
+  fileSize: recording.fileSizeBytes,
+  codec: recording.codec,
+  isEncrypted: recording.isEncrypted ?? false,
+});
+
+const mapRecordingProgress = (
+  progress: NativeRecordingTransferProgress
+): BotaRecordingTransferProgress => ({
+  completedBytes: progress.completedUnits,
+  totalBytes: progress.totalUnits,
 });
 
 export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKClient => {
@@ -377,10 +420,35 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
   };
 
+  const recordings: BotaDeviceSDKRecordingClient = {
+    async listRecordings(device) {
+      const values = await requireNativeModule().listRecordings(
+        toNativeConnectedDevice(device)
+      );
+      return values.map(mapRecording);
+    },
+
+    async syncRecording(device, recording, onProgress) {
+      const module = requireNativeModule();
+      const subscription = module.onRecordingTransferProgress((progress) => {
+        onProgress?.(mapRecordingProgress(progress));
+      });
+      try {
+        return await module.syncRecording(
+          toNativeConnectedDevice(device),
+          toNativeRecording(recording)
+        );
+      } finally {
+        subscription.remove();
+      }
+    },
+  };
+
   return {
     devices,
     factoryReset,
     provisioning,
+    recordings,
 
     async configure(configuration = {}) {
       const nativeConfiguration: NativeConfiguration = {

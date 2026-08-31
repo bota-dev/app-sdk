@@ -5,7 +5,9 @@ import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableMap
 import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.model.ConnectionState
+import dev.bota.sdk.model.AudioCodec
 import dev.bota.sdk.model.DeviceFlags
+import dev.bota.sdk.model.DeviceRecording
 import dev.bota.sdk.model.DeviceState
 import dev.bota.sdk.model.DeviceStatus
 import dev.bota.sdk.model.DeviceType
@@ -14,6 +16,7 @@ import dev.bota.sdk.model.FactoryResetCompletion
 import dev.bota.sdk.model.LteStatus
 import dev.bota.sdk.model.ModemInfo
 import dev.bota.sdk.model.PairingState
+import dev.bota.sdk.model.RecordingTransferProgress
 import dev.bota.sdk.model.WifiRadioStatus
 import dev.bota.sdk.model.WireValue
 import java.time.Instant
@@ -43,6 +46,22 @@ internal fun ReadableMap.toConnectedDevice(): ConnectedDevice = ConnectedDevice(
     mtu = requiredInt("mtu"),
 )
 
+internal fun ReadableMap.toDeviceRecording(): DeviceRecording = DeviceRecording(
+    uuid = getString("uuid") ?: error("recording UUID is required"),
+    startedAt = Instant.ofEpochMilli(requiredSafeUnsigned("startedAtMs").toLong()),
+    durationMs = requiredSafeUnsigned("durationMs"),
+    fileSizeBytes = requiredSafeUnsigned("fileSize"),
+    codec = WireValue.Known(
+        when (getString("codec")) {
+            "pcm_16k" -> AudioCodec.Pcm16k
+            "pcm_8k" -> AudioCodec.Pcm8k
+            "opus_8k" -> AudioCodec.Opus8k
+            else -> AudioCodec.Opus16k
+        },
+    ),
+    isEncrypted = getBoolean("isEncrypted"),
+)
+
 internal fun DiscoveredDevice.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putString("id", id)
     name?.let { putString("name", it) }
@@ -63,6 +82,20 @@ internal fun ConnectedDevice.toWritableMap(): WritableMap = Arguments.createMap(
     putBoolean("isProvisioned", isProvisioned)
     putString("connectionState", connectionState.toBridgeValue())
     putInt("mtu", mtu)
+}
+
+internal fun DeviceRecording.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putString("uuid", uuid)
+    putDouble("startedAtMs", startedAt.toEpochMilli().toDouble())
+    putDouble("durationMs", durationMs.toDouble())
+    putDouble("fileSize", fileSizeBytes.toDouble())
+    putString("codec", codec.toAudioCodecBridgeValue())
+    putBoolean("isEncrypted", isEncrypted)
+}
+
+internal fun RecordingTransferProgress.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putDouble("completedUnits", completedBytes.toDouble())
+    putDouble("totalUnits", totalBytes.toDouble())
 }
 
 internal fun DeviceStatus.toWritableMap(): WritableMap = Arguments.createMap().apply {
@@ -137,6 +170,24 @@ private fun ReadableMap.requiredInt(key: String): Int {
         "$key must be a finite integer"
     }
     return value.toInt()
+}
+
+private fun ReadableMap.requiredSafeUnsigned(key: String): ULong {
+    val value = getDouble(key)
+    require(value.isFinite() && value >= 0 && value <= 9_007_199_254_740_991.0 && value % 1.0 == 0.0) {
+        "$key must be a finite non-negative integer"
+    }
+    return value.toLong().toULong()
+}
+
+private fun WireValue<AudioCodec>.toAudioCodecBridgeValue(): String = when (this) {
+    is WireValue.Known -> when (value) {
+        AudioCodec.Pcm16k -> "pcm_16k"
+        AudioCodec.Pcm8k -> "pcm_8k"
+        AudioCodec.Opus16k -> "opus_16k"
+        AudioCodec.Opus8k -> "opus_8k"
+    }
+    is WireValue.Unknown -> "opus_16k"
 }
 
 private fun String.toDeviceType(): DeviceType? = when (this) {

@@ -21,11 +21,13 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
 
     private let lifecycle: BotaDeviceSDKAppleLifecycle
     private let devices: BotaDeviceSDKAppleDevices
+    private let recordings: BotaDeviceSDKAppleRecordings
     private let security: BotaDeviceSDKAppleSecurity
 
     override private init() {
         lifecycle = BotaDeviceSDKAppleLifecycle()
         devices = BotaDeviceSDKAppleDevices()
+        recordings = BotaDeviceSDKAppleRecordings()
         security = BotaDeviceSDKAppleSecurity()
         super.init()
     }
@@ -53,6 +55,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
     public func destroy(completion: @escaping @Sendable () -> Void) {
         Task {
             await security.cancelAll()
+            await recordings.cancelAll()
             await devices.stopAll()
             await lifecycle.destroy()
             completion()
@@ -156,6 +159,93 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                 completion(nil)
             } catch {
                 completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(listRecordingsWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:completion:)
+    public func listRecordings(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        completion: @escaping @Sendable ([[String: Any]]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let values = try await recordings.listRecordings(Self.connectedDevice(
+                    id: id,
+                    serialNumber: serialNumber,
+                    deviceType: deviceType,
+                    firmwareVersion: firmwareVersion,
+                    hardwareRevision: hardwareRevision,
+                    isProvisioned: isProvisioned,
+                    connectionState: connectionState,
+                    mtu: mtu
+                ))
+                completion(values.map(Self.recording), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc(syncRecordingWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:recordingUUID:startedAtMilliseconds:durationMilliseconds:fileSize:codec:isEncrypted:onProgress:completion:)
+    public func syncRecording(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        recordingUUID: String,
+        startedAtMilliseconds: Double,
+        durationMilliseconds: Double,
+        fileSize: Double,
+        codec: String,
+        isEncrypted: Bool,
+        onProgress: @escaping @Sendable ([String: Any]) -> Void,
+        completion: @escaping @Sendable (String?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let path = try await recordings.syncRecording(
+                    Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    ),
+                    recording: DeviceRecording(
+                        uuid: recordingUUID,
+                        startedAt: Date(
+                            timeIntervalSince1970:
+                                Double(try Self.unsignedInteger(startedAtMilliseconds)) / 1_000
+                        ),
+                        durationMs: try Self.unsignedInteger(durationMilliseconds),
+                        fileSizeBytes: try Self.unsignedInteger(fileSize),
+                        codec: .known(Self.audioCodec(codec)),
+                        isEncrypted: isEncrypted
+                    )
+                ) { progress in
+                    onProgress([
+                        "completedUnits": progress.completedBytes,
+                        "totalUnits": progress.totalBytes,
+                    ])
+                }
+                completion(path, nil)
+            } catch {
+                completion(nil, error as NSError)
             }
         }
     }
@@ -459,6 +549,42 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         ]
         if let revision = device.hardwareRevision { value["hardwareRevision"] = revision }
         return value
+    }
+
+    private static func recording(_ recording: DeviceRecording) -> [String: Any] {
+        [
+            "uuid": recording.uuid,
+            "startedAtMs": recording.startedAt.timeIntervalSince1970 * 1_000,
+            "durationMs": recording.durationMs,
+            "fileSize": recording.fileSizeBytes,
+            "codec": audioCodec(recording.codec),
+            "isEncrypted": recording.isEncrypted,
+        ]
+    }
+
+    private static func audioCodec(_ codec: WireValue<AudioCodec>) -> String {
+        switch codec {
+        case let .known(value): audioCodec(value)
+        case .unknown: "opus_16k"
+        }
+    }
+
+    private static func audioCodec(_ value: AudioCodec) -> String {
+        switch value {
+        case .pcm16k: "pcm_16k"
+        case .pcm8k: "pcm_8k"
+        case .opus16k: "opus_16k"
+        case .opus8k: "opus_8k"
+        }
+    }
+
+    private static func audioCodec(_ value: String) -> AudioCodec {
+        switch value {
+        case "pcm_16k": .pcm16k
+        case "pcm_8k": .pcm8k
+        case "opus_8k": .opus8k
+        default: .opus16k
+        }
     }
 
     private static func factoryResetCompletion(

@@ -109,11 +109,26 @@ export type NativeFactoryResetCompletion = {
   bindingGeneration: number;
 };
 
+export type NativeDeviceRecording = {
+  uuid: string;
+  startedAtMs: number;
+  durationMs: number;
+  fileSize: number;
+  codec: string;
+  isEncrypted: boolean;
+};
+
+export type NativeRecordingTransferProgress = {
+  completedUnits: number;
+  totalUnits: number;
+};
+
 export interface Spec extends TurboModule {
   readonly onDeviceDiscovered: EventEmitter<NativeDiscoveredDevice>;
   readonly onDeviceStatusUpdated: EventEmitter<NativeDeviceStatus>;
   readonly onProvisioningMaterialRequested: EventEmitter<NativeProvisioningMaterialRequest>;
   readonly onFactoryResetGrantRequested: EventEmitter<NativeFactoryResetGrantRequest>;
+  readonly onRecordingTransferProgress: EventEmitter<NativeRecordingTransferProgress>;
   configure: (configuration: NativeConfiguration) => Promise<void>;
   connectSelected: (
     device: NativeDiscoveredDevice
@@ -128,6 +143,9 @@ export interface Spec extends TurboModule {
   ) => Promise<NativeFactoryResetCompletion>;
   getCapabilities: () => Promise<NativeCapabilities>;
   getState: () => Promise<string>;
+  listRecordings: (
+    device: NativeConnectedDevice
+  ) => Promise<ReadonlyArray<NativeDeviceRecording>>;
   reconnect: (
     serialNumber: string,
     options: NativeReconnectOptions
@@ -154,6 +172,10 @@ export interface Spec extends TurboModule {
   startStatusUpdates: () => Promise<void>;
   stopStatusUpdates: () => Promise<void>;
   stopScan: () => Promise<void>;
+  syncRecording: (
+    device: NativeConnectedDevice,
+    recording: NativeDeviceRecording
+  ) => Promise<string>;
 }
 
 export default TurboModuleRegistry.get<Spec>('BotaDeviceSDK');

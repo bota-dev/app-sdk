@@ -13,6 +13,7 @@ export type {
   BotaDeviceSDKDeviceClient,
   BotaDeviceSDKFactoryResetClient,
   BotaDeviceSDKProvisioningClient,
+  BotaDeviceSDKRecordingClient,
   BotaDeviceSDKState,
   BotaEventSubscription,
   BotaFactoryResetCompletion,
@@ -23,6 +24,7 @@ export type {
   BotaProvisioningMaterial,
   BotaProvisioningMaterialProvider,
   BotaProvisioningMaterialRequest,
+  BotaRecordingTransferProgress,
 } from './client';
 
 export const BotaDeviceSDK = createBotaDeviceSDK(NativeBotaDeviceSDK);
