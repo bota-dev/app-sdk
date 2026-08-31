@@ -5,7 +5,7 @@ fn root() -> PathBuf {
 }
 
 fn example() -> serde_json::Value {
-    let contents = fs::read_to_string(root().join("release/examples/1.0.1.json")).unwrap();
+    let contents = fs::read_to_string(root().join("release/examples/1.0.2.json")).unwrap();
     serde_json::from_str(&contents).unwrap()
 }
 
@@ -26,7 +26,7 @@ fn validate_modified(
 
 #[test]
 fn example_release_manifest_is_valid() {
-    let manifest = root().join("release/examples/1.0.1.json");
+    let manifest = root().join("release/examples/1.0.2.json");
 
     let result = xtask::release::validate_manifest(&manifest);
 

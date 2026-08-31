@@ -6,9 +6,9 @@ fn root() -> PathBuf {
 
 #[test]
 fn version_tag_and_publishable_metadata_are_synchronized() {
-    let release = xtask::release::verify_release(&root(), "v1.0.1").unwrap();
+    let release = xtask::release::verify_release(&root(), "v1.0.2").unwrap();
 
-    assert_eq!(release.version, "1.0.1");
+    assert_eq!(release.version, "1.0.2");
     assert_eq!(release.crate_name, "bota-device-sdk-core");
 }
 
@@ -35,7 +35,7 @@ fn compatibility_metadata_reports_the_public_apple_facade() {
 #[test]
 fn mismatched_or_unprefixed_tags_are_rejected() {
     let wrong_version = xtask::release::verify_release(&root(), "v1.0.0-alpha.1").unwrap_err();
-    let missing_prefix = xtask::release::verify_release(&root(), "1.0.1").unwrap_err();
+    let missing_prefix = xtask::release::verify_release(&root(), "1.0.2").unwrap_err();
 
     assert!(wrong_version.contains("does not match"));
     assert!(missing_prefix.contains("must start with v"));
@@ -43,7 +43,7 @@ fn mismatched_or_unprefixed_tags_are_rejected() {
 
 #[test]
 fn ci_workflow_validates_the_current_release_manifest() {
-    let release = xtask::release::verify_release(&root(), "v1.0.1").unwrap();
+    let release = xtask::release::verify_release(&root(), "v1.0.2").unwrap();
     let path = root().join(".github/workflows/ci.yml");
     let contents = fs::read_to_string(path).unwrap();
     let _: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();

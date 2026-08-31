@@ -41,7 +41,7 @@ jobs:
         run: npm run test:tooling
 
       - name: Validate release manifest
-        run: cargo xtask release validate release/examples/1.0.1.json
+        run: cargo xtask release validate release/examples/1.0.2.json
 
       - name: Check generated protocol constants
         run: cargo xtask protocol generate --check
