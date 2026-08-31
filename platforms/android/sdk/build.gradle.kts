@@ -108,9 +108,21 @@ val buildRustNative by tasks.registering(Exec::class) {
     outputs.dir(layout.buildDirectory.dir("generated/bota/jniLibs"))
 }
 
+val verifyProtocolFixtures by tasks.registering(Exec::class) {
+    group = "verification"
+    description = "Verifies that Android protocol fixture assets match the canonical suites."
+    val repositoryRoot = rootProject.projectDir.parentFile.parentFile
+    commandLine("node", repositoryRoot.resolve("tools/android/sync-protocol-fixtures.mjs"), "--check")
+    inputs.dir(repositoryRoot.resolve("protocol/fixtures"))
+    inputs.dir(file("src/androidTest/assets/ProtocolFixtures"))
+}
+
 tasks.configureEach {
     if (name.startsWith("configureCMake") || name.endsWith("JniLibFolders")) {
         dependsOn(buildRustNative)
+    }
+    if (name == "preDebugAndroidTestBuild") {
+        dependsOn(verifyProtocolFixtures)
     }
 }
 

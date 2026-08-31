@@ -175,6 +175,8 @@ fn android_release_inputs_are_hardened_and_locked() {
         fs::read_to_string(android.join("gradle/wrapper/gradle-wrapper.properties")).unwrap();
     let manifest = fs::read_to_string(android.join("sdk/src/main/AndroidManifest.xml")).unwrap();
     let lock = fs::read_to_string(android.join("sdk/gradle.lockfile")).unwrap();
+    let verification =
+        fs::read_to_string(android.join("gradle/verification-metadata.xml")).unwrap();
 
     assert!(build.contains("configuredSdkVersion == canonicalSdkVersion"));
     assert_eq!(sdk_build.matches("targetSdk = 36").count(), 2);
@@ -188,6 +190,10 @@ fn android_release_inputs_are_hardened_and_locked() {
     assert!(lock.contains("androidx.test:core:1.7.0"));
     assert!(lock.contains("androidx.test:runner:1.7.0"));
     assert!(lock.contains("androidx.test.ext:junit:1.3.0"));
+    assert!(verification.contains("aapt2-8.13.2-14304508-linux.jar"));
+    assert!(
+        verification.contains("839609d6d776d6dd60a02aa577d97193ce3e650cf1deaabf062321e23bbd6bf6")
+    );
 }
 
 #[test]

@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "protocolRevision": "firmware-8b175a89374c",
+  "suite": "provisioning",
+  "cases": [
+    {
+      "name": "provisioning-success-code",
+      "operation": "constantByte",
+      "constant": "PROVISIONING_SUCCESS",
+      "expectedHex": "00"
+    },
+    {
+      "name": "already-paired-code",
+      "operation": "constantByte",
+      "constant": "PROVISIONING_ALREADY_PAIRED",
+      "expectedHex": "04"
+    },
+    {
+      "name": "ble-deprovision-command",
+      "operation": "constantByte",
+      "constant": "DEVICE_CMD_BLE_DEPROVISION",
+      "expectedHex": "05"
+    },
+    {
+      "name": "authenticated-reset-command",
+      "operation": "constantByte",
+      "constant": "DEVICE_CMD_BLE_FACTORY_RESET",
+      "expectedHex": "06"
+    },
+    {
+      "name": "reset-receipt-command",
+      "operation": "constantByte",
+      "constant": "DEVICE_CMD_BLE_FACTORY_RESET_RESULT_ACK",
+      "expectedHex": "0a"
+    },
+    {
+      "name": "wifi-grant-packet",
+      "operation": "createWiFiGrantPacket",
+      "input": { "grantBlob": "grant.test" },
+      "expectedHex": "6772616e742e74657374"
+    },
+    {
+      "name": "wifi-scan-command",
+      "operation": "createWiFiScanCommand",
+      "expectedHex": "01"
+    },
+    {
+      "name": "wifi-config-expired",
+      "operation": "parseWiFiConfigResult",
+      "inputHex": "02",
+      "expected": { "success": false, "error": "grant_expired" }
+    },
+    {
+      "name": "pk-d-raw-bytes",
+      "operation": "identityBytes",
+      "inputHex": "000102030405060708090a0b0c0d0e0f",
+      "expectedHex": "000102030405060708090a0b0c0d0e0f",
+      "baselineReference": "src/managers/DeviceManager.ts"
+    }
+  ]
+}

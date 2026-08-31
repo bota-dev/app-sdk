@@ -48,6 +48,21 @@ The instrumentation test loads both packaged libraries, drives ABI v1 codecs
 and one workflow output through Rust, and checks exact-once engine, packet, and
 error frees. Those counters are compiled into debug tests only.
 
+Public Kotlin value models preserve unknown wire values and expose stable error
+codes independently of diagnostics. Protocol serialization and parsing remain
+in Rust; Android's mapper only converts typed ABI fields. The 50 canonical
+protocol cases are mirrored into Android test assets and checked byte-for-byte:
+
+```bash
+npm run sync:android-fixtures
+tools/android/test-package.sh --api 35 \
+  --instrumentation-class dev.bota.sdk.internal.core.ProtocolCodecTest
+```
+
+Do not edit `src/androidTest/assets/ProtocolFixtures` directly. Run
+`node tools/android/sync-protocol-fixtures.mjs` after changing a canonical
+fixture, then rerun the check above.
+
 Normal builds can publish unsigned artifacts only to the `Local` repository at
 `target/android-m2`. Remote publication and signing require the exact
 `botaProtectedSigning=true` Gradle property and release-environment credentials.

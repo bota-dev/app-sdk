@@ -40,6 +40,9 @@ It produces a version-synchronized, unsigned local AAR with sources, Dokka
 Javadocs, POM, and Gradle metadata. The AAR now packages the frozen Rust ABI and
 thin JNI ownership adapter for four Android ABIs; real API 35 instrumentation
 proves typed codec calls, workflow polling, and exact-once native ownership.
+Immutable public Kotlin models now map all 50 canonical protocol fixtures
+through the Rust codec, preserve unknown wire values, normalize Bota Note
+settings, and expose stable machine-readable errors.
 BluetoothGatt, public workflow facades, physical-device acceptance, Maven
 Central publication, and the React Native Android adapter remain open.
 The native-boundary spike selected a manually owned C ABI after comparing it
@@ -143,6 +146,7 @@ npm ci
 npm run check
 npm run test:release
 npm run baseline:react-native:api -- --sdk-path ../react-native-sdk
+npm run sync:android-fixtures
 npm run sync:apple-fixtures
 npm run test:fixtures
 npm run test:workflows -- --sdk-path ../react-native-sdk

@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "protocolRevision": "firmware-8b175a89374c",
+  "suite": "device-status",
+  "cases": [
+    {
+      "name": "legacy-idle-status",
+      "operation": "parseDeviceStatus",
+      "inputHex": "3200000200000000290004000163",
+      "expected": {
+        "batteryLevel": 50,
+        "storageTotalMb": 1024,
+        "storageUsedMb": 256,
+        "state": "idle",
+        "pendingRecordings": 2,
+        "lastTimeSyncAt": null,
+        "signalStrength": 0,
+        "flags": {
+          "charging": true,
+          "lowBattery": false,
+          "storageFull": false,
+          "wifiConnected": true,
+          "lteConnected": false,
+          "syncActive": true
+        },
+        "timestamp": 0,
+        "lteStatus": "off"
+      }
+    },
+    {
+      "name": "extended-uploading-status",
+      "operation": "parseDeviceStatus",
+      "inputHex": "4303030100f15365180008000214036810494d45493d3132330a524f414d3d310a",
+      "expected": {
+        "batteryLevel": 67,
+        "batteryMv": 4200,
+        "storageTotalMb": 2048,
+        "storageUsedMb": 512,
+        "state": "uploading",
+        "pendingRecordings": 1,
+        "lastTimeSyncAt": "2023-11-14T22:13:20.000Z",
+        "signalStrength": 0,
+        "flags": {
+          "charging": false,
+          "lowBattery": false,
+          "storageFull": false,
+          "wifiConnected": true,
+          "lteConnected": true,
+          "syncActive": false
+        },
+        "timestamp": 1700000000,
+        "lteStatus": "connected",
+        "lteSignalQuality": 20,
+        "wifiStatus": "connected",
+        "modemInfo": { "imei": "123", "roaming": true }
+      }
+    },
+    {
+      "name": "unknown-enums-use-legacy-fallbacks",
+      "operation": "parseDeviceStatus",
+      "inputHex": "40fffe00000000000000000000ff",
+      "expected": {
+        "batteryLevel": 64,
+        "storageTotalMb": 0,
+        "storageUsedMb": 0,
+        "state": "idle",
+        "pendingRecordings": 0,
+        "lastTimeSyncAt": null,
+        "signalStrength": 0,
+        "flags": {
+          "charging": false,
+          "lowBattery": false,
+          "storageFull": false,
+          "wifiConnected": false,
+          "lteConnected": false,
+          "syncActive": false
+        },
+        "timestamp": 0,
+        "lteStatus": "off"
+      }
+    },
+    {
+      "name": "truncated-status-is-rejected",
+      "operation": "parseDeviceStatus",
+      "inputHex": "0001",
+      "expectedError": "Invalid status data length: 2"
+    }
+  ]
+}

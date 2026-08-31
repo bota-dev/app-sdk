@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "protocolRevision": "firmware-8b175a89374c",
+  "suite": "transfer-control",
+  "cases": [
+    {
+      "name": "data-packet",
+      "operation": "parseTransferPacket",
+      "inputHex": "0134120300aabbcc",
+      "expected": { "type": "data", "sequenceNumber": 4660, "data": "aabbcc" }
+    },
+    {
+      "name": "eof-packet",
+      "operation": "parseTransferPacket",
+      "inputHex": "02341278563412",
+      "expected": { "type": "eof", "sequenceNumber": 4660, "checksum": 305419896 }
+    },
+    {
+      "name": "paused-packet",
+      "operation": "parseTransferPacket",
+      "inputHex": "03341203000000",
+      "expected": { "type": "paused", "sequenceNumber": 4660, "bytesSent": 3 }
+    },
+    {
+      "name": "sha256-packet",
+      "operation": "parseTransferPacket",
+      "inputHex": "04000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "expected": {
+        "type": "sha256",
+        "sequenceNumber": 0,
+        "sha256": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      }
+    },
+    {
+      "name": "e2e-start-packet",
+      "operation": "parseTransferPacket",
+      "inputHex": "05000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1faabbccdd",
+      "expected": {
+        "type": "e2e_start",
+        "sequenceNumber": 0,
+        "e2eEphemeralPk": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "e2eSalt": "aabbccdd"
+      }
+    },
+    {
+      "name": "encrypted-data-packet",
+      "operation": "parseTransferPacket",
+      "inputHex": "8101000300aabbcc",
+      "expected": { "type": "encrypted_data", "sequenceNumber": 1, "e2eChunk": "aabbcc" }
+    },
+    {
+      "name": "encrypted-eof-packet",
+      "operation": "parseTransferPacket",
+      "inputHex": "82010000000000",
+      "expected": { "type": "encrypted_eof", "sequenceNumber": 1 }
+    },
+    {
+      "name": "device-error-packet",
+      "operation": "parseTransferPacket",
+      "inputHex": "ff020005",
+      "expected": { "type": "error", "sequenceNumber": 2, "errorCode": 5 }
+    },
+    {
+      "name": "unknown-packet-type",
+      "operation": "parseTransferPacket",
+      "inputHex": "7f0000",
+      "expectedError": "Unknown packet type: 127"
+    },
+    {
+      "name": "ack-sequence",
+      "operation": "createAckPacket",
+      "input": { "ackType": "ack", "sequenceNumber": 4660 },
+      "expectedHex": "103412"
+    },
+    {
+      "name": "abort-sequence",
+      "operation": "createAckPacket",
+      "input": { "ackType": "abort", "sequenceNumber": 2 },
+      "expectedHex": "120200"
+    },
+    {
+      "name": "list-command",
+      "operation": "createTransferCommand",
+      "input": { "command": "list" },
+      "expectedHex": "01"
+    },
+    {
+      "name": "start-command",
+      "operation": "createTransferCommand",
+      "input": {
+        "command": "start",
+        "recordingUuid": "a1b2c3d4-0000-0000-0000-000000000000"
+      },
+      "expectedHex": "02a1b2c3d4000000000000000000000000"
+    },
+    {
+      "name": "confirm-command",
+      "operation": "createTransferCommand",
+      "input": {
+        "command": "confirm",
+        "recordingUuid": "a1b2c3d4-0000-0000-0000-000000000000"
+      },
+      "expectedHex": "07a1b2c3d4000000000000000000000000"
+    },
+    {
+      "name": "trigger-upload-accepted",
+      "operation": "parseTriggerDeviceUploadResponse",
+      "inputHex": "0300",
+      "expected": { "accepted": true }
+    },
+    {
+      "name": "trigger-upload-busy",
+      "operation": "parseTriggerDeviceUploadResponse",
+      "inputHex": "0302",
+      "expected": { "accepted": false, "errorCode": 2 }
+    }
+  ]
+}

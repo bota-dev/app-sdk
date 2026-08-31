@@ -117,8 +117,12 @@ contains the frozen Rust C ABI plus a thin Kotlin/JNI ownership adapter for all
 four supported Android ABIs. Inputs are borrowed typed fields, Rust-owned
 packets and errors are copied before exactly one free, and recording or firmware
 buffers may enter through direct `ByteBuffer` values without JSON or base64.
-The only public Kotlin API remains immutable `BotaAndroidSDK` package metadata.
-No BluetoothGatt transport, workflow facade, Maven Central artifact, physical
+The public Kotlin surface now also includes immutable device, recording,
+connection, progress, and stable error models. `CoreModelMapper` converts typed
+ABI fields but never parses or serializes a wire packet in Kotlin. API-35
+instrumentation runs all 50 language-neutral fixtures through JNI, including
+unknown values, encrypted payload metadata, settings, OTA, WiFi, and logs. No
+BluetoothGatt transport, workflow facade, Maven Central artifact, physical
 acceptance, or React Native Android runtime support is claimed by this stage.
 
 Native migration inputs are pinned separately in

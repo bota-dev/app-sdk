@@ -88,6 +88,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `sdk-version.toml`/`VERSION_NAME` equality are enforced. The unpublished AAR
   contains exactly `libbota_device_sdk_ffi.so` and `libbota_android_jni.so` for
   all four supported ABIs, but is not a published facade claim.
+  Verification metadata must include the pinned AAPT2 artifact for both macOS
+  and Linux so local and GitHub Android builds enforce the same dependency gate.
 - Keep Android JNI as an ownership adapter only. Pass primitive typed fields
   and raw byte arrays or direct buffers; copy Rust-owned packets and errors
   before exactly one matching free. Test counters belong to debug builds only.
@@ -136,8 +138,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   skip before configuring `BotaDeviceClient`; feature-changing operations need
   their individual gates, and authenticated reset additionally needs
   `BOTA_ALLOW_FACTORY_RESET=1` plus a command-bound grant.
-- Keep `ProtocolFixtures` and `WorkflowFixtures` generated. Run
-  `npm run sync:apple-fixtures` instead of editing either resource by hand.
+- Keep Apple `ProtocolFixtures` and `WorkflowFixtures` and Android
+  `ProtocolFixtures` generated. Run `npm run sync:apple-fixtures` and
+  `npm run sync:android-fixtures` instead of editing resources by hand.
 - Never infer identity from an advertised BLE name alone.
 - Do not treat deprovision or unbind as factory reset.
 - Never commit credentials, tokens, private keys, certificate bodies, or signing
@@ -153,6 +156,7 @@ npm ci
 npm run check
 npm run test:release
 npm run baseline:react-native:api -- --sdk-path ../react-native-sdk
+npm run sync:android-fixtures
 npm run sync:apple-fixtures
 npm run test:workflows -- --sdk-path ../react-native-sdk
 (cd frameworks/react-native && npm ci && npm run verify)

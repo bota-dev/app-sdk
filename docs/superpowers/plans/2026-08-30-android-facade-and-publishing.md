@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Plan Status:** Task 1 build foundation complete. JNI, facade behavior, publication, and physical verification remain open.
+**Plan Status:** Tasks 1-3 complete. Workflow facade behavior, publication, and physical verification remain open.
 
 **Goal:** Build, verify, and publish Bota SDK for Android as `dev.bota:bota-android-sdk`, backed by the frozen manual C ABI and shared Rust workflow core.
 
@@ -355,14 +355,14 @@ public sealed interface WireValue<out T> {
 }
 ```
 
-- [ ] **Step 1: Generate fixture resources and write failing tests**
+- [x] **Step 1: Generate fixture resources and write failing tests**
 
 Sync protocol JSON into Android test resources and add `--check` mode. Tests
 cover valid, malformed, unknown-enum, Bota Note normalization, recording
 encryption, transfer packet, OTA, settings, WiFi, provisioning, and device-log
 fixtures. Encoded bytes must match fixture hex exactly.
 
-- [ ] **Step 2: Verify RED through the real JNI path**
+- [x] **Step 2: Verify RED through the real JNI path**
 
 Run:
 
@@ -373,7 +373,7 @@ tools/android/test-package.sh --instrumentation-class dev.bota.sdk.internal.core
 
 Expected: FAIL because Kotlin model mapping does not exist.
 
-- [ ] **Step 3: Implement model mapping without a Kotlin parser copy**
+- [x] **Step 3: Implement model mapping without a Kotlin parser copy**
 
 Port useful data-class names and nullability from the pinned scaffold, move
 them to `dev.bota.sdk.model`, and make byte-array equality explicit where it is
@@ -382,7 +382,7 @@ publicly observable. Every protocol parse/serialize operation invokes
 layouts. Map unknown numeric states to `WireValue.Unknown` and core failures by
 stable numeric fields, never by diagnostic text.
 
-- [ ] **Step 4: Run Kotlin and Rust fixture gates**
+- [x] **Step 4: Run Kotlin and Rust fixture gates**
 
 Run:
 
@@ -394,7 +394,7 @@ cargo test -p bota-device-sdk-core --test fixture_decode --test fixture_encode -
 
 Expected: Kotlin/JNI and Rust agree on every committed fixture.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add package.json tools/android platforms/android

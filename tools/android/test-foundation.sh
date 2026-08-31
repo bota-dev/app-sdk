@@ -35,7 +35,10 @@ fi
 grep -q "does not match sdk-version.toml" "$override_log"
 
 tasks_log="$evidence_dir/publication-tasks.txt"
-"$gradlew" -p "$android_root" :sdk:tasks --all >"$tasks_log"
+if ! "$gradlew" -p "$android_root" :sdk:tasks --all >"$tasks_log" 2>&1; then
+    cat "$tasks_log" >&2
+    exit 1
+fi
 for task in \
     publishToMavenLocal \
     publishToMavenCentral \

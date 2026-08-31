@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "protocolRevision": "firmware-8b175a89374c",
+  "suite": "device-logs",
+  "cases": [
+    {
+      "name": "complete-line",
+      "operation": "decodeDeviceLogs",
+      "inputsHex": ["000000626f6f7420706173730a"],
+      "expected": [
+        [{ "level": "debug", "message": "boot pass", "isBacklog": false }]
+      ]
+    },
+    {
+      "name": "backlog-multiple-lines",
+      "operation": "decodeDeviceLogs",
+      "inputsHex": ["0000016f6e650a74776f0a"],
+      "expected": [
+        [
+          { "level": "debug", "message": "one", "isBacklog": true },
+          { "level": "debug", "message": "two", "isBacklog": true }
+        ]
+      ]
+    },
+    {
+      "name": "line-split-across-packets",
+      "operation": "decodeDeviceLogs",
+      "inputsHex": ["000000626f6f74207061", "01000073730a"],
+      "expected": [
+        [],
+        [{ "level": "debug", "message": "boot pass", "isBacklog": false }]
+      ]
+    },
+    {
+      "name": "sequence-gap-discards-partial-line",
+      "operation": "decodeDeviceLogs",
+      "inputsHex": ["0a00007061727469616c", "0c00007265636f76657265640a"],
+      "expected": [
+        [],
+        [{ "level": "debug", "message": "recovered", "isBacklog": false }]
+      ]
+    },
+    {
+      "name": "malformed-packet-keeps-sequence-state",
+      "operation": "decodeDeviceLogs",
+      "inputsHex": ["", "0001", "04000066697273740a", "0500007365636f6e640a"],
+      "expected": [
+        [],
+        [],
+        [{ "level": "debug", "message": "first", "isBacklog": false }],
+        [{ "level": "debug", "message": "second", "isBacklog": false }]
+      ]
+    }
+  ]
+}

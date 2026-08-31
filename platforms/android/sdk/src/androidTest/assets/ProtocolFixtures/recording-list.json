@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "protocolRevision": "firmware-8b175a89374c",
+  "suite": "recording-list",
+  "cases": [
+    {
+      "name": "empty-list",
+      "operation": "parseRecordingList",
+      "inputHex": "",
+      "expected": []
+    },
+    {
+      "name": "encrypted-recording",
+      "operation": "parseRecordingList",
+      "inputHex": "a1b2c3d401000000000000000000000000f153650c000400",
+      "expected": [
+        {
+          "uuid": "a1b2c3d4-0000-0000-0000-000000000000",
+          "startedAt": "2023-11-14T22:13:20.000Z",
+          "durationMs": 12000,
+          "fileSizeBytes": 4096,
+          "codec": "opus_16k",
+          "isEncrypted": true
+        }
+      ]
+    },
+    {
+      "name": "count-prefixed-recording",
+      "operation": "parseRecordingList",
+      "inputHex": "01a1b2c3d401000000000000000000000000f153650c000400",
+      "expected": [
+        {
+          "uuid": "a1b2c3d4-0000-0000-0000-000000000000",
+          "startedAt": "2023-11-14T22:13:20.000Z",
+          "durationMs": 12000,
+          "fileSizeBytes": 4096,
+          "codec": "opus_16k",
+          "isEncrypted": true
+        }
+      ]
+    },
+    {
+      "name": "trailing-partial-entry-is-ignored",
+      "operation": "parseRecordingList",
+      "inputHex": "010203",
+      "expected": []
+    }
+  ]
+}

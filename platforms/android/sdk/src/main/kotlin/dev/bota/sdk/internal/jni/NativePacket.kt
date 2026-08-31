@@ -60,20 +60,45 @@ internal class NativePacket(
         return requiredData(fieldId, FIELD_TYPE_BYTES)
     }
 
+    fun unsigneds(fieldId: Int): List<ULong> = fieldIndices(fieldId, FIELD_TYPE_UNSIGNED).map {
+        unsignedValues[it].toULong()
+    }
+
+    fun signed(fieldId: Int): Long? = fieldIndices(fieldId, FIELD_TYPE_SIGNED).firstOrNull()?.let {
+        signedValues[it]
+    }
+
+    fun booleans(fieldId: Int): List<Boolean> = fieldIndices(fieldId, FIELD_TYPE_BOOL).map {
+        unsignedValues[it] != 0L
+    }
+
+    fun texts(fieldId: Int): List<String> = fieldIndices(fieldId, FIELD_TYPE_UTF8).map {
+        dataAt(it).decodeToString(throwOnInvalidSequence = true)
+    }
+
+    fun bytes(fieldId: Int): ByteArray? = fieldIndices(fieldId, FIELD_TYPE_BYTES).firstOrNull()?.let(::dataAt)
+
     private fun requiredData(fieldId: Int, fieldType: Int): ByteArray {
         val index = fieldIndex(fieldId, fieldType)
+        return dataAt(index)
+    }
+
+    private fun dataAt(index: Int): ByteArray {
         return when (val data = dataValues[index]) {
             is ByteArray -> data.copyOf()
             is ByteBuffer -> data.duplicate().let { buffer ->
                 ByteArray(buffer.remaining()).also(buffer::get)
             }
-            else -> error("missing binary field $fieldId")
+            else -> error("missing binary data at field index $index")
         }
     }
 
     private fun fieldIndex(fieldId: Int, fieldType: Int): Int =
-        fieldIds.indices.firstOrNull { fieldIds[it] == fieldId && fieldTypes[it] == fieldType }
+        fieldIndices(fieldId, fieldType).firstOrNull()
             ?: error("missing field $fieldId with type $fieldType")
+
+    private fun fieldIndices(fieldId: Int, fieldType: Int): List<Int> =
+        fieldIds.indices.filter { fieldIds[it] == fieldId && fieldTypes[it] == fieldType }
 
     internal companion object {
         const val FIELD_TYPE_UNSIGNED: Int = 1
