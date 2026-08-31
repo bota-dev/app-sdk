@@ -78,13 +78,13 @@
 - Consumes: nested `node_modules`, `target/android-m2`, React Native's included Gradle plugin, and the exact packaged `dev.bota:bota-android-sdk` AAR.
 - Produces: a clean Gradle build that generates `NativeBotaDeviceSDKSpec`, compiles the Kotlin adapter, runs lifecycle tests, and verifies the resolved AAR checksum matches `target/android-release`.
 
-- [ ] **Step 1: Write failing build-gate assertions** requiring a checked-in consumer fixture, an explicit local repository argument, exact AAR digest comparison, and `generateCodegenArtifactsFromSchema`, unit-test, lint, and assemble tasks.
-- [ ] **Step 2: Run the contract test** and confirm the consumer script is missing.
-- [ ] **Step 3: Add the isolated Gradle fixture**. Include the React Native Gradle plugin from nested `node_modules`, include `frameworks/react-native/android` as project `:adapter`, and restrict repositories to Google, Maven Central, and the explicit local Maven directory.
-- [ ] **Step 4: Add `test-android-adapter.sh`** that validates JDK/SDK inputs, verifies the packaged and repository AAR bytes match, then runs Codegen, unit tests, lint, and release assembly with dependency refresh.
-- [ ] **Step 5: Run the script locally** against a freshly installed `target/android-m2` and resolve only build defects exposed by the real generated spec.
-- [ ] **Step 6: Add the script to the existing Android CI job** after the immutable AAR repository is installed; install nested npm dependencies first.
-- [ ] **Step 7: Run release/tooling tests and commit** with `ci(react-native): verify Android adapter consumer` and the required Codex trailer.
+- [x] **Step 1: Write failing build-gate assertions** requiring a checked-in consumer fixture, an explicit local repository argument, exact AAR digest comparison, and `generateCodegenArtifactsFromSchema`, unit-test, lint, and assemble tasks.
+- [x] **Step 2: Run the contract test** and confirm the consumer script is missing.
+- [x] **Step 3: Add the isolated Gradle fixture**. Include the React Native Gradle plugin from nested `node_modules`, include `frameworks/react-native/android` as project `:adapter`, and restrict repositories to Google, Maven Central, and the explicit local Maven directory.
+- [x] **Step 4: Add `test-android-adapter.sh`** that validates JDK/SDK inputs, verifies the packaged and repository AAR bytes match, then runs Codegen, unit tests, lint, and release assembly with dependency refresh.
+- [x] **Step 5: Run the script locally** against a freshly installed `target/android-m2` and resolve only build defects exposed by the real generated spec.
+- [x] **Step 6: Add the script to the existing Android CI job** after the immutable AAR repository is installed; install nested npm dependencies first.
+- [x] **Step 7: Run release/tooling tests and commit** with `ci(react-native): verify Android adapter consumer` and the required Codex trailer.
 
 ### Task 4: Documentation, Evidence, And Main Integration
 

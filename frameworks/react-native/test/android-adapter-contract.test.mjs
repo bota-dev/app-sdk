@@ -63,3 +63,26 @@ test('Android adapter implements the generated lifecycle module and package', ()
   assert.match(packageSource, /isTurboModule = true/);
   assert.doesNotMatch(combined, /NativeCoreBridge|System\.loadLibrary|bota_device_sdk_v1/);
 });
+
+test('Android adapter has a packaged-AAR consumer gate in CI', () => {
+  const settings = read('../../../tests/conformance/react-native-android-adapter/settings.gradle.kts');
+  const consumer = read('../../../tests/conformance/react-native-android-adapter/app/build.gradle.kts');
+  const script = read('../../../tools/react-native/test-android-adapter.sh');
+  const workflow = read('../../../.github/workflows/ci.yml');
+
+  assert.match(settings, /botaSdkRepository/);
+  assert.match(settings, /frameworks\/react-native\/node_modules\/@react-native\/gradle-plugin/);
+  assert.match(settings, /project\(":adapter"\)/);
+  assert.match(consumer, /id\("com\.facebook\.react"\)/);
+  assert.match(script, /--repository/);
+  assert.match(script, /shasum -a 256/);
+  for (const task of [
+    'generateCodegenArtifactsFromSchema',
+    'testDebugUnitTest',
+    'lintRelease',
+    'assembleRelease',
+  ]) {
+    assert.match(script, new RegExp(`:adapter:${task}`));
+  }
+  assert.match(workflow, /npm ci[\s\S]*test-android-adapter\.sh --repository target\/android-m2/);
+});
