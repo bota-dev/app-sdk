@@ -166,8 +166,19 @@ bound to its originating runtime and disables the device-wide CCCD only after
 the last collector leaves. Runtime construction rollback and destroy attempt
 every registered resource close, preserving cleanup failures without leaking
 the Bluetooth thread or native engine. The
-secure lifecycle, recording, OTA, log, Maven Central, physical acceptance, and
+recording, OTA, log, Maven Central, physical acceptance, and
 React Native Android runtime gates are not claimed by this stage.
+
+Android `ProvisioningManager` and `FactoryResetManager` use the same opaque
+material, durable reset, shared-codec, and facade-wide operation contracts as
+Apple. Provisioning tokens, endpoints, nonces, device public keys, and reset
+grants stay in application-memory host registrations. Bota Note settings are
+normalized before encoding, remove-only deprovision writes only the shared
+deprovision command, and authenticated reset persists the command-bound result
+with its binding generation before receipt. Restart recovery rejects a stale
+generation and runs only the exact receipt workflow. Registration, failure,
+cancellation, detach, and destroy paths release material and operation
+ownership without deleting a valid durable reset result.
 
 Native migration inputs are pinned separately in
 `protocol/baseline/native-sdks.json`. Apple revision `cd15e545cabb8` and Android

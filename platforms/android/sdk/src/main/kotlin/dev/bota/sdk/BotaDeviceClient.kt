@@ -1,11 +1,14 @@
 package dev.bota.sdk
 
 import dev.bota.sdk.internal.DeviceRuntime
+import dev.bota.sdk.internal.runCleanupActions
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 public class BotaDeviceClient internal constructor() {
     public val devices: DeviceManager = DeviceManager()
+    public val provisioning: ProvisioningManager = ProvisioningManager()
+    public val factoryReset: FactoryResetManager = FactoryResetManager()
 
     private val lifecycle = Mutex()
     private var runtime: DeviceRuntime? = null
@@ -16,6 +19,8 @@ public class BotaDeviceClient internal constructor() {
             val configured = configuration.runtimeFactory()
             runtime = configured
             devices.attach(configured)
+            provisioning.attach(configured)
+            factoryReset.attach(configured)
         }
     }
 
@@ -23,8 +28,12 @@ public class BotaDeviceClient internal constructor() {
         lifecycle.withLock {
             val configured = runtime ?: return
             try {
-                devices.detach()
-                configured.close()
+                runCleanupActions(
+                    { factoryReset.detach() },
+                    { provisioning.detach() },
+                    { devices.detach() },
+                    { configured.close() },
+                )
             } finally {
                 runtime = null
             }

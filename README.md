@@ -58,9 +58,13 @@ journals, non-exportable Keystore AES-GCM secrets, bounded
 ParcelFileDescriptor/FileChannel recording and firmware access, one-shot
 application material, and application-authorized OkHttp registrations. The
 concrete framework contracts pass on API 26 and API 35.
-Public workflow facades,
-physical-device acceptance, Maven Central publication, and the React Native
-Android adapter remain open.
+The public Android client now exposes serial-verified discovery, connect and
+reconnect, status observation, provisioning, normalized connection settings,
+remove-only deprovision, authenticated factory reset, and exact-generation
+reset receipt recovery. Application material stays behind opaque native
+registrations, and every manager shares one facade operation owner. Recording,
+upload ownership, OTA, logs, legacy compatibility, physical-device acceptance,
+Maven Central publication, and the React Native Android adapter remain open.
 The native-boundary spike selected a manually owned C ABI after comparing it
 with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed

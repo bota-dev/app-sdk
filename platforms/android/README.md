@@ -51,6 +51,21 @@ destroyed or replaced runtime cannot publish connection state. Multiple status
 collectors share device notification ownership, so one collector stopping does
 not disable notifications for the others.
 
+## Secure device lifecycle
+
+`ProvisioningManager` resolves tokens and endpoint bytes through an
+application callback registered under a random opaque ID. Connection settings
+use the shared Rust encoder and always remove cellular configuration for Bota
+Note. `deprovision` is remove-only and never invokes factory reset.
+
+`FactoryResetManager` requires an application-supplied command ID, current
+binding generation, and grant callback. The physical reset result is persisted
+with that exact generation before receipt. After restart,
+`resumePendingFactoryReset` rejects a different generation and sends only the
+saved command's receipt workflow. Material callbacks are memory-only, and all
+secure operations share the facade-wide operation owner with discovery and
+connection workflows.
+
 ## Verify
 
 ```bash

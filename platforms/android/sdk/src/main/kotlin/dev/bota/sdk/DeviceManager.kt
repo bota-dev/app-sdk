@@ -104,13 +104,17 @@ public class DeviceManager internal constructor() {
             value
         }
         snapshot.active?.task?.cancel()
-        snapshot.active?.let { runCatching { it.lease.runtime.engine.cancel(it.cancellationId) } }
+        snapshot.active?.let {
+            runCatching { it.lease.runtime.engine.cancel(it.cancellationId) }
+            it.lease.runtime.operations.end(it.cancellationId)
+        }
         snapshot.status.forEach { observer ->
             observer.task.cancel()
             observer.channel.close()
         }
         stopStatusTransports(snapshot.status)
         snapshot.connected?.let { device -> runCatching { snapshot.runtime?.disconnect?.invoke(device.id) } }
+        snapshot.runtime?.connection?.clear()
         snapshot.connection.forEach { it.close() }
         snapshot.callbackScope?.cancel()
     }
@@ -208,6 +212,7 @@ public class DeviceManager internal constructor() {
         stopAllStatusObservers()
         configured.disconnect(device.id)
         synchronized(lock) { if (connectedDevice?.id == device.id) connectedDevice = null }
+        configured.connection.clear()
         publishConnection()
     }
 
@@ -216,7 +221,11 @@ public class DeviceManager internal constructor() {
             activeOperation.also { activeOperation = null }
         } ?: return
         operation.task?.cancel()
-        operation.lease.runtime.engine.cancel(operation.cancellationId)
+        try {
+            operation.lease.runtime.engine.cancel(operation.cancellationId)
+        } finally {
+            operation.lease.runtime.operations.end(operation.cancellationId)
+        }
     }
 
     public fun connectionUpdates(): Flow<ConnectedDevice?> {
@@ -331,6 +340,7 @@ public class DeviceManager internal constructor() {
             finishOperation(command.cancellationId)
             throw cancelled(operation)
         }
+        active.lease.runtime.connection.set(connected)
         publishConnection()
         finishOperation(command.cancellationId)
         return connected
@@ -357,22 +367,29 @@ public class DeviceManager internal constructor() {
         cancellationId: UUID = UUID.randomUUID(),
         lease: RuntimeLease = configuredLease(),
     ): ActiveOperation {
-        synchronized(lock) {
-            if (runtime !== lease.runtime || runtimeGeneration != lease.generation) throw cancelled(operation)
-            if (activeOperation != null) throw coreError(
-                BotaErrorCode.OperationInProgress,
-                operation,
-                retryable = false,
-                "another device workflow is already active",
-            )
-            return ActiveOperation(cancellationId, lease).also { activeOperation = it }
+        lease.runtime.operations.begin(cancellationId, operation)
+        try {
+            synchronized(lock) {
+                if (runtime !== lease.runtime || runtimeGeneration != lease.generation) throw cancelled(operation)
+                if (activeOperation != null) throw coreError(
+                    BotaErrorCode.OperationInProgress,
+                    operation,
+                    retryable = false,
+                    "another device workflow is already active",
+                )
+                return ActiveOperation(cancellationId, lease).also { activeOperation = it }
+            }
+        } catch (error: Throwable) {
+            lease.runtime.operations.end(cancellationId)
+            throw error
         }
     }
 
     private fun finishOperation(cancellationId: UUID) {
-        synchronized(lock) {
-            if (activeOperation?.cancellationId == cancellationId) activeOperation = null
-        }
+        val operation = synchronized(lock) {
+            activeOperation?.takeIf { it.cancellationId == cancellationId }?.also { activeOperation = null }
+        } ?: return
+        operation.lease.runtime.operations.end(cancellationId)
     }
 
     private suspend fun cancelIfActive(cancellationId: UUID) {
@@ -380,7 +397,11 @@ public class DeviceManager internal constructor() {
             if (activeOperation?.cancellationId != cancellationId) return
             activeOperation.also { activeOperation = null }
         } ?: return
-        runCatching { operation.lease.runtime.engine.cancel(cancellationId) }
+        try {
+            runCatching { operation.lease.runtime.engine.cancel(cancellationId) }
+        } finally {
+            operation.lease.runtime.operations.end(cancellationId)
+        }
     }
 
     private suspend fun disconnectDifferentDevice(nextId: String) {
@@ -391,6 +412,7 @@ public class DeviceManager internal constructor() {
         stopAllStatusObservers()
         configured.disconnect(current.id)
         synchronized(lock) { if (connectedDevice?.id == current.id) connectedDevice = null }
+        configured.connection.clear()
         publishConnection()
     }
 

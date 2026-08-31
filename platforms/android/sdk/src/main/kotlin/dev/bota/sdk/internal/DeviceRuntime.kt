@@ -21,9 +21,15 @@ import dev.bota.sdk.internal.host.FileFirmwareBlobHost
 import dev.bota.sdk.internal.host.FileRecordingSinkHost
 import dev.bota.sdk.internal.host.HostEffectExecutor
 import dev.bota.sdk.internal.host.OkHttpNetworkHost
+import dev.bota.sdk.internal.host.PersistedFactoryResetResult
 import dev.bota.sdk.internal.jni.NativeCoreBridge
+import dev.bota.sdk.model.DeviceConnectionSettings
 import dev.bota.sdk.model.DeviceStatus
+import dev.bota.sdk.model.DeviceType
+import dev.bota.sdk.model.ProvisioningMaterial
+import dev.bota.sdk.model.ProvisioningMaterialRequest
 import java.io.File
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -39,6 +45,24 @@ internal class DeviceRuntime(
     val stopStatusUpdates: suspend (String) -> Unit,
     val decodeStatus: (ByteArray) -> DeviceStatus,
     private val closeResources: () -> Unit,
+    val connection: DeviceConnectionRegistry = DeviceConnectionRegistry(),
+    val operations: DeviceOperationCoordinator = DeviceOperationCoordinator(),
+    val directWrite: suspend (String, UUID, UUID, ByteArray) -> Unit = { _, _, _, _ ->
+        error("direct write unavailable")
+    },
+    val serializeConnectionSettings: (DeviceConnectionSettings, DeviceType) -> ByteArray = { _, _ ->
+        error("connection-settings encoder unavailable")
+    },
+    val encodeDeviceCommand: (UByte) -> ByteArray = { error("device-command encoder unavailable") },
+    val registerProvisioning: (
+        String,
+        suspend (ProvisioningMaterialRequest) -> ProvisioningMaterial,
+    ) -> Unit = { _, _ -> },
+    val registerFactoryReset: (String, suspend (String, ByteArray) -> ByteArray) -> Unit = { _, _ -> },
+    val unregisterMaterial: (String) -> Unit = {},
+    val registerFactoryResetGeneration: suspend (String, ULong) -> Unit = { _, _ -> },
+    val unregisterFactoryResetGeneration: suspend (String) -> Unit = {},
+    val loadPendingFactoryReset: suspend () -> PersistedFactoryResetResult? = { null },
 ) : AutoCloseable {
     private val closed = AtomicBoolean(false)
 
@@ -118,6 +142,34 @@ internal class DeviceRuntime(
                     },
                     decodeStatus = mapper::parseDeviceStatus,
                     closeResources = { closeAll(*closeActions.asReversed().toTypedArray()) },
+                    directWrite = { peripheralId, service, characteristic, value ->
+                        driver.write(peripheralId, service, characteristic, value, withResponse = true)
+                    },
+                    serializeConnectionSettings = mapper::serializeConnectionSettings,
+                    encodeDeviceCommand = mapper::encodeDeviceCommand,
+                    registerProvisioning = { id, provider ->
+                        material.registerProvisioning(id) { request ->
+                            val resolved = provider(
+                                ProvisioningMaterialRequest(
+                                    request.serialNumber,
+                                    request.nonce,
+                                    request.devicePublicKey,
+                                ),
+                            )
+                            dev.bota.sdk.internal.host.ProvisioningMaterial(
+                                resolved.apiEndpoint,
+                                resolved.deviceToken,
+                                resolved.mtu,
+                            )
+                        }
+                    },
+                    registerFactoryReset = { id, provider ->
+                        material.registerFactoryReset(id) { request -> provider(request.serialNumber, request.nonce) }
+                    },
+                    unregisterMaterial = material::unregister,
+                    registerFactoryResetGeneration = persistence::registerFactoryReset,
+                    unregisterFactoryResetGeneration = persistence::unregisterFactoryReset,
+                    loadPendingFactoryReset = persistence::loadFactoryResetResult,
                 )
             } catch (failure: Throwable) {
                 runCatching { closeAll(*closeActions.asReversed().toTypedArray()) }

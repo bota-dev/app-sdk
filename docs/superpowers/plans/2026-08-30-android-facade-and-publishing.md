@@ -821,7 +821,7 @@ git commit -m "feat(android): expose connection workflows" \
 - Consumes: application material providers, durable reset journal, shared codecs, provisioning/reset reducers, and current binding generation.
 - Produces: `provision`, `writeConnectionSettings`, `deprovision`, `factoryReset`, and `resumePendingFactoryReset` suspend APIs.
 
-- [ ] **Step 1: Write failing secure-lifecycle tests**
+- [x] **Step 1: Write failing secure-lifecycle tests**
 
 Tests prove nonce/device key reads precede material resolution; subscribe
 precedes grant write; oversize material fails before mutation; Bota Note strips
@@ -830,7 +830,7 @@ exact three-byte success before receipt; restart sends receipt only; stale
 binding generation is rejected before Rust starts; and cancellation removes
 material registrations without deleting a valid durable result.
 
-- [ ] **Step 2: Run security tests and verify RED**
+- [x] **Step 2: Run security tests and verify RED**
 
 Run:
 
@@ -840,7 +840,7 @@ platforms/android/gradlew -p platforms/android :sdk:testDebugUnitTest --tests '*
 
 Expected: FAIL because secure-lifecycle managers do not exist.
 
-- [ ] **Step 3: Implement opaque material and receipt flows**
+- [x] **Step 3: Implement opaque material and receipt flows**
 
 Register each application callback under a random material/grant ID. Keep
 tokens, endpoint bytes, nonces, public keys, command grants, and receipt URLs in
@@ -849,7 +849,7 @@ methods. On restart, compare the journal's command ID and binding generation
 with the application-supplied current generation before running only the resume
 receipt command.
 
-- [ ] **Step 4: Run Kotlin and Rust security gates**
+- [x] **Step 4: Run Kotlin and Rust security gates**
 
 Run:
 
@@ -860,7 +860,7 @@ cargo test -p bota-device-sdk-core --test provisioning_workflow --test factory_r
 
 Expected: ordering, cancellation, and restart behavior match the shared core.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ARCHITECTURE.md platforms/android

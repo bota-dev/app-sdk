@@ -130,6 +130,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Keep Android checkpoints, reconnect identity, and factory-reset receipts in
   non-secret AtomicFile journals. Reset deletion must match the exact command;
   bind saved results to the registered binding generation.
+- Android provisioning and reset callbacks use random opaque material IDs and
+  share one facade operation coordinator with connection and direct-write
+  workflows. Registration failure, cancellation, detach, and destroy must
+  release every registration and owner; cleanup failure must not hide the
+  original operation failure. Deprovision is a separate remove-only write.
 - Store secrets only as AES-GCM ciphertext authenticated by the opaque key;
   Android Keystore owns the non-exportable key. Rust must never receive a path,
   URI, URL, header, token, grant, or Keystore material.
