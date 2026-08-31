@@ -185,6 +185,18 @@ public class DeviceManager internal constructor() {
         )
     }
 
+    public suspend fun connect(device: DiscoveredDevice): ConnectedDevice = runConnection(
+        command = CoreCommand.connectSelected(
+            peripheralId = device.id,
+            name = device.name,
+            advertisedAddress = device.macAddress,
+            rssi = device.rssi,
+        ),
+        expectedSerial = null,
+        source = device,
+        operation = BotaOperation.Connect,
+    )
+
     public suspend fun reconnect(
         serialNumber: String,
         hint: DeviceReconnectHint = DeviceReconnectHint(),
@@ -287,7 +299,7 @@ public class DeviceManager internal constructor() {
 
     private suspend fun runConnection(
         command: CoreCommand,
-        expectedSerial: String,
+        expectedSerial: String?,
         source: DiscoveredDevice?,
         operation: BotaOperation,
     ): ConnectedDevice {
@@ -301,7 +313,7 @@ public class DeviceManager internal constructor() {
                 when (notification.kind) {
                     CoreNotificationKind.ConnectionEstablished -> {
                         val candidate = notification.connectedDevice(source)
-                        if (candidate.serialNumber != expectedSerial) {
+                        if (expectedSerial != null && candidate.serialNumber != expectedSerial) {
                             throw identityMismatch(expectedSerial, operation)
                         }
                         established = candidate

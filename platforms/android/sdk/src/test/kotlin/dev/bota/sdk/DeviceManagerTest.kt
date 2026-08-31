@@ -171,6 +171,22 @@ class DeviceManagerTest {
     }
 
     @Test
+    fun selectedDeviceConnectLearnsIdentityFromTheCore() = runTest {
+        val runner = FakeWorkflowRunner(connectionResponses())
+        val manager = DeviceManager()
+        manager.attach(RuntimeFixture(runner = runner).runtime)
+        val selected = DiscoveredDevice(id = "selected", name = "Bota Pin", rssi = -20)
+
+        val connected = manager.connect(selected)
+        val command = runner.commands.single()
+
+        assertEquals(null, command.text(3))
+        assertEquals("selected", command.text(4))
+        assertEquals("SERIAL-1", connected.serialNumber)
+        manager.detach()
+    }
+
+    @Test
     fun reconnectForwardsSavedIdentityHintsToRust() = runTest {
         val runner = FakeWorkflowRunner(connectionResponses(peripheralId = "stored-id"))
         val manager = DeviceManager()

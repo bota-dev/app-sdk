@@ -82,6 +82,12 @@ pub(crate) unsafe fn command_from_packet(
             .required_text(field_id::SERIAL_NUMBER)
             .and_then(DeviceSerialNumber::new)
     };
+    let optional_serial = || {
+        fields
+            .optional_text(field_id::SERIAL_NUMBER)?
+            .map(DeviceSerialNumber::new)
+            .transpose()
+    };
 
     match packet.kind {
         packet_kind::COMMAND_DISCOVER_DEVICES => {
@@ -101,14 +107,15 @@ pub(crate) unsafe fn command_from_packet(
             ])?;
             let rssi = i16::try_from(fields.required_i64(field_id::RSSI)?)
                 .map_err(|_| invalid("RSSI does not fit in a signed 16-bit value"))?;
-            Ok(Command::Connect {
-                device: serial()?,
-                candidate: DeviceCandidate {
-                    peripheral_id: fields.required_text(field_id::PERIPHERAL_ID)?,
-                    name: fields.optional_text(field_id::NAME)?,
-                    advertised_address: fields.optional_text(field_id::ADVERTISED_ADDRESS)?,
-                    rssi,
-                },
+            let candidate = DeviceCandidate {
+                peripheral_id: fields.required_text(field_id::PERIPHERAL_ID)?,
+                name: fields.optional_text(field_id::NAME)?,
+                advertised_address: fields.optional_text(field_id::ADVERTISED_ADDRESS)?,
+                rssi,
+            };
+            Ok(match optional_serial()? {
+                Some(device) => Command::Connect { device, candidate },
+                None => Command::ConnectSelected { candidate },
             })
         }
         packet_kind::COMMAND_RECONNECT => {

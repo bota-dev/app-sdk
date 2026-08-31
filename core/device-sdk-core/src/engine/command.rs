@@ -19,6 +19,9 @@ pub enum Command {
         device: DeviceSerialNumber,
         candidate: DeviceCandidate,
     },
+    ConnectSelected {
+        candidate: DeviceCandidate,
+    },
     Reconnect {
         device: DeviceSerialNumber,
         hint: ReconnectHint,
@@ -89,7 +92,7 @@ impl Command {
     pub const fn operation(&self) -> Operation {
         match self {
             Self::DiscoverDevices { .. } => Operation::Discover,
-            Self::Connect { .. } => Operation::Connect,
+            Self::Connect { .. } | Self::ConnectSelected { .. } => Operation::Connect,
             Self::Reconnect { .. } => Operation::Reconnect,
             Self::Provision { .. } => Operation::Provision,
             Self::TransferRecording { .. } => Operation::TransferRecording,
@@ -104,7 +107,7 @@ impl Command {
     const fn required_capabilities(&self) -> &'static [Capability] {
         match self {
             Self::DiscoverDevices { .. } => &[Capability::Ble, Capability::Timer],
-            Self::Connect { .. } | Self::Reconnect { .. } => {
+            Self::Connect { .. } | Self::ConnectSelected { .. } | Self::Reconnect { .. } => {
                 &[Capability::Ble, Capability::Timer, Capability::Persistence]
             }
             Self::ReadDeviceLogs { .. } => &[Capability::Ble],

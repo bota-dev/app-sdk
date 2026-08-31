@@ -150,8 +150,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   original operation, request ID, and both cancellation-ID halves.
 - Android `BotaDeviceClient.configure()` is idempotent until `destroy()` and
   retains only the application context. Check Bluetooth authorization before
-  starting Rust, require exact serial verification for manual connect, forward
-  reconnect hints without name-based selection, decode status through the
+  starting Rust, learn identity from GATT for a user-selected peripheral,
+  preserve exact serial verification when one is supplied, forward reconnect
+  hints without name-based selection, decode status through the
   shared mapper, and finish every connection/status observer on destroy.
 - Android scan flows acquire workflow ownership only when collected; each
   collection owns a fresh cancellation ID. Bind active work and status cleanup
@@ -219,8 +220,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - `BotaDeviceClient.configure()` is idempotent until `destroy()`. Public device
   observation must finish on destroy, and status bytes must use the shared ABI
   decoder rather than a Swift parser.
-- Keep manual connect and reconnect policy in the Rust workflows. The Apple
-  facade forwards exact identity hints and never chooses a peripheral by name.
+- Keep manual connect and reconnect policy in the Rust workflows. A
+  user-selected peripheral learns its identity from the fresh GATT serial read;
+  an explicitly supplied serial and every reconnect remain exact-match checks.
+  The Apple facade never chooses a peripheral by name.
 - Apple provisioning and reset callbacks are registered by opaque material ID;
   do not place callback results in checkpoints, logs, or public notifications.
 - Persist the reset command ID and binding generation with the exact device

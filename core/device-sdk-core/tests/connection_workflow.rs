@@ -163,6 +163,61 @@ fn manual_connect_reads_serial_fresh_before_persisting_identity() {
 }
 
 #[test]
+fn selected_device_connect_learns_serial_before_persisting_identity() {
+    let mut engine = WorkflowEngine::default();
+    let selected = candidate("ios-peripheral-id", None, -50);
+    let started = engine
+        .start(
+            Command::ConnectSelected {
+                candidate: selected.clone(),
+            },
+            &capabilities(),
+            MANUAL_CANCELLATION,
+        )
+        .unwrap();
+
+    assert!(!started.iter().any(|request| matches!(
+        request.effect,
+        Effect::Persistence(PersistenceEffect::SaveCheckpoint { .. })
+    )));
+
+    let read_request = reach_serial_read(&mut engine, &started, &selected.peripheral_id);
+    let persisting = engine
+        .dispatch(host(
+            read_request,
+            HostEventKind::Ble(BleEvent::ReadCompleted {
+                value: b"LEARNED123".to_vec(),
+            }),
+        ))
+        .unwrap();
+    assert!(persisting.iter().any(|request| matches!(
+        &request.effect,
+        Effect::Persistence(PersistenceEffect::SaveConnectionIdentity {
+            device,
+            candidate,
+        }) if device.as_str() == "LEARNED123" && candidate == &selected
+    )));
+
+    let save_request = request_id(&persisting, |effect| {
+        matches!(
+            effect,
+            Effect::Persistence(PersistenceEffect::SaveConnectionIdentity { .. })
+        )
+    });
+    let completed = engine
+        .dispatch(host(save_request, HostEventKind::ConnectionIdentitySaved))
+        .unwrap();
+    assert!(completed.iter().any(|request| matches!(
+        &request.effect,
+        Effect::Notify(WorkflowNotification::ConnectionEstablished {
+            device,
+            mode: ConnectionMode::Manual,
+            ..
+        }) if device.as_str() == "LEARNED123"
+    )));
+}
+
+#[test]
 fn manual_connect_rejects_a_serial_mismatch_after_releasing_the_candidate() {
     let mut engine = WorkflowEngine::default();
     let selected = candidate("ios-peripheral-id", None, -50);

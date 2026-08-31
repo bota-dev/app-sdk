@@ -102,6 +102,9 @@ impl WorkflowEngine {
             Command::Connect { device, candidate } => ActiveWorkflow::Connection(Box::new(
                 ConnectionWorkflow::manual(device, candidate, cancellation_id),
             )),
+            Command::ConnectSelected { candidate } => ActiveWorkflow::Connection(Box::new(
+                ConnectionWorkflow::selected(candidate, cancellation_id),
+            )),
             Command::Reconnect { device, hint } => ActiveWorkflow::Connection(Box::new(
                 ConnectionWorkflow::reconnect(device, hint, cancellation_id),
             )),

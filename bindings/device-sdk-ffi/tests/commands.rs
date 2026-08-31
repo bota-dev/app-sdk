@@ -87,6 +87,20 @@ fn every_workflow_command_starts_through_the_native_entry_point() {
 }
 
 #[test]
+fn selected_device_connect_does_not_require_an_expected_serial() {
+    let command = BotaDeviceSdkPacketV1::new(packet_kind::COMMAND_CONNECT)
+        .with_cancellation_id(0x0102, 0x0304)
+        .with_text(field_id::PERIPHERAL_ID, "peripheral-1")
+        .with_text(field_id::NAME, "Bota Pin")
+        .with_i64(field_id::RSSI, -62);
+
+    assert_eq!(
+        start(&command, all_capabilities()),
+        BotaDeviceSdkStatusV1::Ok
+    );
+}
+
+#[test]
 fn invalid_command_inputs_fail_without_bypassing_core_validation() {
     let invalid_serial = BotaDeviceSdkPacketV1::new(packet_kind::COMMAND_READ_DEVICE_LOGS)
         .with_text(field_id::SERIAL_NUMBER, "not valid");

@@ -275,6 +275,26 @@ public actor DeviceManager {
         )
     }
 
+    public func connect(device: DiscoveredDevice) async throws -> ConnectedDevice {
+        if let connectedDevice, connectedDevice.id != device.id {
+            let runtime = try configuredRuntime()
+            await stopAllStatusObservers()
+            try await runtime.disconnect(connectedDevice.id)
+            await runtime.connection.clear()
+            self.connectedDevice = nil
+            publishConnection()
+        }
+        return try await runConnection(
+            .connectSelected(
+                peripheralID: device.id,
+                name: device.name,
+                advertisedAddress: device.macAddress,
+                rssi: Int16(clamping: device.rssi)
+            ),
+            source: device
+        )
+    }
+
     public func reconnect(
         serialNumber: String,
         hint: DeviceReconnectHint = .init()

@@ -62,11 +62,8 @@ public class DeviceManager(private val ble: BluetoothTransport) {
     }
 
     public suspend fun connect(device: DiscoveredDevice): ConnectedDevice {
-        val serial = device.name.takeIf(::looksLikeSerial) ?: throw BotaSdkException.UnsupportedOperation(
-            "Legacy connect requires the advertised device name to contain its serial number; migrate to DeviceManager.connect(serialNumber, device)",
-        )
         return try {
-            client().devices.connect(serial, device.toNative()).toLegacy().also { connected = it }
+            client().devices.connect(device.toNative()).toLegacy().also { connected = it }
         } catch (error: Throwable) {
             throw error.toLegacyError()
         }
@@ -241,8 +238,6 @@ public class OtaManager(private val ble: BluetoothTransport) {
         runtime = null
     }
 }
-
-private fun looksLikeSerial(value: String): Boolean = value.length in 8..32 && value.all { it.isLetterOrDigit() }
 
 private fun ratio(completed: ULong, total: ULong): Double =
     if (total == 0uL) 0.0 else (completed.toDouble() / total.toDouble()).coerceIn(0.0, 1.0)

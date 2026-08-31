@@ -35,15 +35,17 @@ val bota = BotaDeviceClient.shared
 bota.configure(BotaConfiguration(applicationContext))
 
 val scan = bota.devices.startScan()
-val connected = bota.devices.connect(serialNumber, selectedDevice)
+val connected = bota.devices.connect(selectedDevice)
 
 bota.destroy()
 ```
 
 Discovery, manual connection, and reconnect are Rust-owned workflows. A manual
-connection requires the selected peripheral plus the expected serial number;
-reconnect accepts saved peripheral and advertised-address hints. Display names
-are never identity. Connection and device-status observations are Kotlin
+connection reads the selected peripheral's serial over GATT; callers that
+already know the serial may use `connect(serialNumber, selectedDevice)` to
+require an exact match. Reconnect always requires the serial and accepts saved
+peripheral and advertised-address hints. Display names are never identity.
+Connection and device-status observations are Kotlin
 `Flow`s, and status payloads use the shared Rust decoder. Destroy cancels the
 active workflow, ends status subscriptions, disconnects the verified device,
 closes observers, and releases the native engine and Android Bluetooth thread.

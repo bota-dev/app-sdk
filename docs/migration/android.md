@@ -32,7 +32,7 @@ material. Call `bota.destroy()` when the owning application scope ends.
 | `BotaClient` state and configuration properties | Preserved JVM accessors backed by the replacement lifecycle. |
 | `configure` and `waitForBluetooth` | Suspend until native configuration or Bluetooth readiness completes, with the legacy defaults. |
 | Scan, stop, disconnect, status read, and status subscription | Delegate to the native BluetoothGatt facade and convert models explicitly. |
-| `connect(device)` | Delegates only when the advertised name is a serial number. Generic-name devices must migrate to `connect(serialNumber, device)`. Display names are never otherwise accepted as identity. |
+| `connect(device)` | Connects the selected OS peripheral and learns its identity from the fresh Device Information serial read. Generic advertised names such as `Bota Pin` remain display metadata, never identity. |
 | `provision` | Registers token and environment bytes as one-use in-memory material. Native workflow cleanup removes them on every terminal path. |
 | `writeConnectionSettings` | Converts the complete model and applies Bota Note cellular normalization. |
 | Recording list, transfer, and confirmation | Delegate to the Rust-owned recording workflow. Migrate upload ownership to the new application-authorized API. |

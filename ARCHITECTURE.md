@@ -171,10 +171,12 @@ Android now exposes the first public workflow facade through
 `BotaDeviceClient` and `DeviceManager`. Configuration is idempotent until
 destroy and retains only the application context. Permission checks occur
 before Rust starts a workflow. Scan cancellation preserves the original
-128-bit cancellation ID, manual connection requires a selected peripheral and
-exact serial, and reconnect only forwards saved peripheral/address/name hints
-to the canonical reducer. A device is published only after Rust reports the
-verified serial. Connection observers complete on destroy, while direct status
+128-bit cancellation ID. Manual connection accepts a selected peripheral and
+learns its identity from a fresh GATT serial read; callers that already know the
+serial can require an exact match. Reconnect always requires the known serial
+and only forwards saved peripheral/address/name hints to the canonical reducer.
+A device is published only after Rust reports the verified serial. Connection
+observers complete on destroy, while direct status
 reads and streams use the shared ABI decoder and serialized GATT driver. The
 scan flow acquires workflow ownership at collection time, with a fresh command
 and cancellation identity for every collection. Runtime generations reject

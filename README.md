@@ -116,7 +116,8 @@ non-secret workflow journals, isolate secrets in Keychain, keep recording and
 firmware bytes in bounded files, resolve application material by opaque ID, and
 stream URLSession progress without exposing paths or credentials to Rust. The
 public `BotaDeviceClient` now configures those hosts once and exposes
-serial-verified discovery, manual connection, canonical reconnect, explicit
+serial-verified discovery, selected-device connection with identity learned
+from GATT, strict known-serial connection, canonical reconnect, explicit
 disconnect, connection observation, and decoded device-status streams. Client
 destruction cancels active work, stops status subscriptions, disconnects the
 verified peripheral, and closes observers. Public secure-lifecycle managers now

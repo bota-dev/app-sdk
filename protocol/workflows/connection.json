@@ -11,7 +11,7 @@
       "name": "connection-manual-success",
       "classification": "positive",
       "sourceTest": "__tests__/DeviceManager.test.ts#refreshes identity for user-initiated connects",
-      "rustTest": "connection_workflow::manual_connect_reads_serial_fresh_before_persisting_identity",
+      "rustTest": "connection_workflow::selected_device_connect_learns_serial_before_persisting_identity",
       "command": "connect",
       "capabilities": ["ble", "timer", "persistence"],
       "inputs": ["connected", "services_discovered", "serial_read", "identity_saved"],

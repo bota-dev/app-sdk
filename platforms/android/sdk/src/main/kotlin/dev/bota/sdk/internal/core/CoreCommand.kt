@@ -93,6 +93,23 @@ internal data class CoreCommand(
             },
         )
 
+        fun connectSelected(
+            peripheralId: String,
+            name: String?,
+            advertisedAddress: String?,
+            rssi: Int,
+            cancellationId: UUID = UUID.randomUUID(),
+        ) = CoreCommand(
+            0x0102,
+            cancellationId,
+            buildList {
+                add(CoreField.Text(4, peripheralId))
+                add(CoreField.Signed(7, rssi.toLong()))
+                name?.let { add(CoreField.Text(5, it)) }
+                advertisedAddress?.let { add(CoreField.Text(6, it)) }
+            },
+        )
+
         fun reconnect(
             serialNumber: String,
             storedPeripheralId: String? = null,

@@ -112,6 +112,24 @@ final class DeviceManagerTests: XCTestCase {
         XCTAssertEqual(disconnected, ["first"])
     }
 
+    func testSelectedDeviceConnectionLearnsIdentityFromTheCore() async throws {
+        let runner = FakeWorkflowRunner(responses: connectionResponse)
+        let manager = DeviceManager()
+        await manager.attach(runtime(runner: runner))
+        let selected = DiscoveredDevice(id: "selected", name: "Bota Pin", rssi: -20)
+
+        let connected = try await manager.connect(device: selected)
+
+        let commands = await runner.commands
+        let command = try XCTUnwrap(commands.first)
+        XCTAssertNil(command.packet.fields.text(UInt32(BOTA_DEVICE_SDK_V1_FIELD_SERIAL_NUMBER)))
+        XCTAssertEqual(
+            command.packet.fields.text(UInt32(BOTA_DEVICE_SDK_V1_FIELD_PERIPHERAL_ID)),
+            "selected"
+        )
+        XCTAssertEqual(connected.serialNumber, "SERIAL-1")
+    }
+
     func testReconnectForwardsExactIdentityHints() async throws {
         let runner = FakeWorkflowRunner(responses: connectionResponse)
         let manager = DeviceManager()

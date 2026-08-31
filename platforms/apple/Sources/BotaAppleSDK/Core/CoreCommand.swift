@@ -108,6 +108,24 @@ struct CoreCommand: Equatable, Sendable {
         return Self(kind: UInt32(BOTA_DEVICE_SDK_V1_COMMAND_CONNECT), cancellationID: cancellationID, fields: fields)
     }
 
+    static func connectSelected(
+        peripheralID: String,
+        name: String?,
+        advertisedAddress: String?,
+        rssi: Int16,
+        cancellationID: UUID = UUID()
+    ) -> Self {
+        var fields: [CoreField] = [
+            .text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_PERIPHERAL_ID), value: peripheralID),
+            .signed(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_RSSI), value: Int64(rssi)),
+        ]
+        if let name { fields.append(.text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_NAME), value: name)) }
+        if let advertisedAddress {
+            fields.append(.text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_ADVERTISED_ADDRESS), value: advertisedAddress))
+        }
+        return Self(kind: UInt32(BOTA_DEVICE_SDK_V1_COMMAND_CONNECT), cancellationID: cancellationID, fields: fields)
+    }
+
     static func reconnect(
         serialNumber: String,
         storedPeripheralID: String? = nil,

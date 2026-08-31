@@ -34,7 +34,7 @@ enum DisconnectOutcome {
 }
 
 pub(crate) struct ConnectionWorkflow {
-    device: DeviceSerialNumber,
+    device: Option<DeviceSerialNumber>,
     mode: ConnectionMode,
     cancellation_id: CancellationId,
     hint: ReconnectHint,
@@ -70,7 +70,19 @@ impl ConnectionWorkflow {
         cancellation_id: CancellationId,
     ) -> Self {
         let mut workflow = Self::base(
-            device,
+            Some(device),
+            ConnectionMode::Manual,
+            cancellation_id,
+            ReconnectHint::default(),
+        );
+        workflow.active_candidate = Some(candidate);
+        workflow.verify_serial = true;
+        workflow
+    }
+
+    pub(crate) fn selected(candidate: DeviceCandidate, cancellation_id: CancellationId) -> Self {
+        let mut workflow = Self::base(
+            None,
             ConnectionMode::Manual,
             cancellation_id,
             ReconnectHint::default(),
@@ -85,11 +97,16 @@ impl ConnectionWorkflow {
         hint: ReconnectHint,
         cancellation_id: CancellationId,
     ) -> Self {
-        Self::base(device, ConnectionMode::Reconnect, cancellation_id, hint)
+        Self::base(
+            Some(device),
+            ConnectionMode::Reconnect,
+            cancellation_id,
+            hint,
+        )
     }
 
     fn base(
-        device: DeviceSerialNumber,
+        device: Option<DeviceSerialNumber>,
         mode: ConnectionMode,
         cancellation_id: CancellationId,
         hint: ReconnectHint,
@@ -141,11 +158,9 @@ impl ConnectionWorkflow {
         self.scan_request_id = Some(scan.request_id);
         self.scan_timer_request_id = Some(timer.request_id);
         self.scan_timer_id = Some(timer_id);
-        vec![
-            scan,
-            timer,
-            self.checkpoint(CheckpointPhase::Reconnecting, context),
-        ]
+        let mut effects = vec![scan, timer];
+        self.push_checkpoint(&mut effects, CheckpointPhase::Reconnecting, context);
+        effects
     }
 
     fn stop_scan(&mut self, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
@@ -164,7 +179,7 @@ impl ConnectionWorkflow {
         self.scan_timer_id = None;
         self.stop_scan_request_id = Some(stop.request_id);
         effects.push(stop);
-        effects.push(self.checkpoint(CheckpointPhase::Reconnecting, context));
+        self.push_checkpoint(&mut effects, CheckpointPhase::Reconnecting, context);
         effects
     }
 
@@ -194,11 +209,9 @@ impl ConnectionWorkflow {
         self.connect_request_id = Some(connect.request_id);
         self.attempt_timer_request_id = Some(timer.request_id);
         self.attempt_timer_id = Some(timer_id);
-        vec![
-            connect,
-            timer,
-            self.checkpoint(CheckpointPhase::Connecting, context),
-        ]
+        let mut effects = vec![connect, timer];
+        self.push_checkpoint(&mut effects, CheckpointPhase::Connecting, context);
+        effects
     }
 
     fn begin_persist(&mut self, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
@@ -209,14 +222,17 @@ impl ConnectionWorkflow {
             .expect("connection phases always have an active candidate");
         let persist = context.request(Effect::Persistence(
             PersistenceEffect::SaveConnectionIdentity {
-                device: self.device.clone(),
+                device: self
+                    .device
+                    .clone()
+                    .expect("connection identity is verified before persistence"),
                 candidate,
             },
         ));
         self.persist_request_id = Some(persist.request_id);
         let mut effects = self.cancel_attempt_timer(context);
         effects.push(persist);
-        effects.push(self.checkpoint(CheckpointPhase::Verifying, context));
+        self.push_checkpoint(&mut effects, CheckpointPhase::Verifying, context);
         effects
     }
 
@@ -237,7 +253,7 @@ impl ConnectionWorkflow {
         self.disconnect_request_id = Some(disconnect.request_id);
         let mut effects = self.cancel_attempt_timer(context);
         effects.push(disconnect);
-        effects.push(self.checkpoint(CheckpointPhase::Reconnecting, context));
+        self.push_checkpoint(&mut effects, CheckpointPhase::Reconnecting, context);
         effects
     }
 
@@ -245,7 +261,12 @@ impl ConnectionWorkflow {
         let Some(candidate) = self.probe_candidates.get(self.candidate_index).cloned() else {
             return self.fail(
                 DeviceSdkError::new(ErrorCode::DeviceNotFound, Operation::Reconnect, true)
-                    .with_detail(format!("device {} was not found", self.device)),
+                    .with_detail(format!(
+                        "device {} was not found",
+                        self.device
+                            .as_ref()
+                            .expect("reconnect always has an expected identity")
+                    )),
                 context,
             );
         };
@@ -354,16 +375,20 @@ impl ConnectionWorkflow {
         vec![context.request(Effect::Timer(TimerEffect::Cancel { timer_id }))]
     }
 
-    fn checkpoint(
+    fn push_checkpoint(
         &mut self,
+        effects: &mut Vec<EffectRequest>,
         phase: CheckpointPhase,
         context: &mut WorkflowContext<'_>,
-    ) -> EffectRequest {
+    ) {
+        let Some(device) = self.device.clone() else {
+            return;
+        };
         let request = context.request(Effect::Persistence(PersistenceEffect::SaveCheckpoint {
             checkpoint: WorkflowCheckpoint {
                 workflow: WorkflowKind::Connection,
                 operation: self.operation(),
-                device: self.device.clone(),
+                device,
                 recording: None,
                 phase,
                 completed_units: self.candidate_index as u64,
@@ -373,7 +398,7 @@ impl ConnectionWorkflow {
             },
         }));
         self.checkpoint_request_ids.insert(request.request_id);
-        request
+        effects.push(request);
     }
 
     fn parse_serial(value: Vec<u8>) -> Result<DeviceSerialNumber, DeviceSdkError> {
@@ -463,10 +488,9 @@ impl WorkflowReducer for ConnectionWorkflow {
                 let discover =
                     context.request(Effect::Ble(BleEffect::DiscoverServices { peripheral_id }));
                 self.discover_request_id = Some(discover.request_id);
-                Ok(vec![
-                    discover,
-                    self.checkpoint(CheckpointPhase::Verifying, context),
-                ])
+                let mut effects = vec![discover];
+                self.push_checkpoint(&mut effects, CheckpointPhase::Verifying, context);
+                Ok(effects)
             }
             (
                 Phase::Discovering,
@@ -495,7 +519,13 @@ impl WorkflowReducer for ConnectionWorkflow {
             {
                 self.read_request_id = None;
                 match Self::parse_serial(value) {
-                    Ok(read_serial) if read_serial == self.device => {
+                    Ok(read_serial)
+                        if self
+                            .device
+                            .as_ref()
+                            .is_none_or(|device| device == &read_serial) =>
+                    {
+                        self.device = Some(read_serial);
                         Ok(self.begin_persist(context))
                     }
                     Ok(read_serial) => {
@@ -509,6 +539,8 @@ impl WorkflowReducer for ConnectionWorkflow {
                                 .with_detail(format!(
                                     "selected device serial is {read_serial}, expected {}",
                                     self.device
+                                        .as_ref()
+                                        .expect("serial mismatch requires an expected identity")
                                 )),
                             ),
                             ConnectionMode::Reconnect => DisconnectOutcome::ProbeNext,
@@ -543,7 +575,10 @@ impl WorkflowReducer for ConnectionWorkflow {
                     context.request(Effect::Persistence(PersistenceEffect::DeleteCheckpoint)),
                     context.request(Effect::Notify(
                         WorkflowNotification::ConnectionEstablished {
-                            device: self.device.clone(),
+                            device: self
+                                .device
+                                .clone()
+                                .expect("completed connection has a verified identity"),
                             candidate,
                             mode: self.mode,
                         },
