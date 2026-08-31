@@ -127,6 +127,13 @@ remove-only deprovision to native managers. During provisioning, native code
 emits only a request ID, serial, nonce, and public device key; JavaScript
 returns the endpoint, token, and MTU or rejects the request. Pending requests
 are cancelled on destroy so no continuation outlives its native workflow.
+Its `writeConnectionSettings` operation accepts the frozen JavaScript settings
+shape, expands omitted defaults at the compatibility boundary, and passes a
+complete typed value through Codegen. Apple and Android apply their public
+facades' device-model normalization and own serialization plus the BLE write;
+raw encoded settings bytes never enter JavaScript. Heartbeat channel selection
+remains distinct from upload preference through the complete path, and an
+omitted heartbeat setting retains the frozen both-channels-enabled default.
 
 The Apple host is now executable. A Swift actor coalesces concurrent
 configuration, orders destruction after any in-flight configuration, and calls
@@ -143,9 +150,9 @@ that the default package URL resolves the synchronized immutable release. A
 target-scoped CocoaPods hook carries React Native's upstream fix for duplicate
 binary Swift-package module maps on Xcode 26.3 while the package floor remains
 0.86.3. This proves lifecycle plus device discovery, connection, status,
-provisioning, authenticated-reset, recording-transfer, upload-ownership, OTA,
-and device-log integration, not the remaining workflow surface or
-application parity.
+provisioning, connection-settings writes, authenticated-reset,
+recording-transfer, upload-ownership, OTA, and device-log integration, not the
+remaining workflow surface or application parity.
 
 The Android host is also executable. A coroutine mutex serializes
 configuration and destruction through `BotaDeviceClient.shared`, and a
@@ -158,9 +165,10 @@ the public Android facade. A checked-in React Native 0.86.3
 Gradle consumer regenerates Codegen, runs lifecycle unit tests and lint, and
 assembles the adapter against the exact AAR reconstructed from the immutable
 local Maven payload. This proves Android lifecycle plus device discovery,
-connection, status, provisioning, authenticated-reset, recording-transfer,
-upload-ownership, OTA, and device-log integration only; the remaining
-workflow bindings and application parity remain open.
+connection, status, provisioning, connection-settings writes,
+authenticated-reset, recording-transfer, upload-ownership, OTA, and device-log
+integration only; the remaining workflow bindings and application parity
+remain open.
 
 The React Native reset broker exposes only the nonce, command ID, binding
 generation, and an encoded grant string. Apple and Android decode the grant into

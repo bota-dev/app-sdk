@@ -894,9 +894,14 @@ serial-strict reconnect, disconnect, current-status reads, and typed status
 subscriptions while native actors own scan and status teardown. Provisioning
 and remove-only deprovision now delegate through the native facades; one-shot
 request IDs keep asynchronous JavaScript material lookup inside the active
-nonce-bound workflow. Authenticated factory reset now uses the same one-shot
-request ownership while binding every grant and completion to the backend
-command ID and binding generation. Apple and Android decode the
+nonce-bound workflow. Connection-settings writes now expand the frozen
+JavaScript defaults before Codegen, then delegate device-model normalization,
+serialization, and BLE ownership to Apple and Android while preserving
+heartbeat channel selection independently from upload preference.
+The omitted heartbeat value retains the frozen both-channels-enabled default.
+Authenticated factory reset now uses the same one-shot request ownership while
+binding every grant and completion to the backend command ID and binding
+generation. Apple and Android decode the
 application-provided grant natively, and React Native resume delegates only to
 exact-generation receipt recovery. Recording list, transfer, and upload
 ownership now delegate to the native facades as well: metadata, progress,
@@ -912,9 +917,9 @@ JavaScript owns idempotent subscription teardown.
 A real CocoaPods application compiles and links the generated typed event spec,
 Objective-C++, Swift, Swift Package, and Rust XCFramework layers. The Android
 adapters provide the same lifecycle, connection, status, provisioning,
-authenticated-reset, recording-transfer, upload-ownership, and OTA slices
-plus device logs through the public Android facade, and a checked-in React
-Native Gradle
+connection-settings, authenticated-reset, recording-transfer,
+upload-ownership, and OTA slices plus device logs through the public Android
+facade, and a checked-in React Native Gradle
 consumer runs Codegen, Kotlin tests,
 lint, and release assembly against the exact packaged AAR. The
 package now matches all 75 frozen non-workflow exports, including every public

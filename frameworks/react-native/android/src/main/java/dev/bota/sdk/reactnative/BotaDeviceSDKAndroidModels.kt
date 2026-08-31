@@ -9,6 +9,7 @@ import dev.bota.sdk.model.ConnectionState
 import dev.bota.sdk.model.AudioCodec
 import dev.bota.sdk.model.DeviceFlags
 import dev.bota.sdk.model.DeviceLogLine
+import dev.bota.sdk.model.DeviceConnectionSettings
 import dev.bota.sdk.model.DeviceRecording
 import dev.bota.sdk.model.DeviceState
 import dev.bota.sdk.model.DeviceStatus
@@ -65,6 +66,39 @@ internal fun ReadableMap.toDeviceRecording(): DeviceRecording = DeviceRecording(
     ),
     isEncrypted = getBoolean("isEncrypted"),
 )
+
+internal fun ReadableMap.toDeviceConnectionSettings(): DeviceConnectionSettings {
+    val enabled = getMap("enabledConnections") ?: error("enabled connections are required")
+    val heartbeat = getMap("heartbeatEnabledConnections")
+        ?: error("heartbeat enabled connections are required")
+    val preference = getArray("uploadNetworkPreference")
+        ?: error("upload network preference is required")
+    val power = getMap("powerManagement") ?: error("power management is required")
+    return DeviceConnectionSettings(
+        enabledConnections = DeviceConnectionSettings.EnabledConnections(
+            wifi = enabled.getBoolean("wifi"),
+            cellular = enabled.getBoolean("cellular"),
+        ),
+        heartbeatEnabledConnections = DeviceConnectionSettings.EnabledConnections(
+            wifi = heartbeat.getBoolean("wifi"),
+            cellular = heartbeat.getBoolean("cellular"),
+        ),
+        uploadNetworkPreference = (0 until preference.size()).map { index ->
+            when (preference.getString(index)) {
+                "wifi" -> DeviceConnectionSettings.ConnectionType.Wifi
+                "ble" -> DeviceConnectionSettings.ConnectionType.Ble
+                "cellular" -> DeviceConnectionSettings.ConnectionType.Cellular
+                else -> error("upload network preference contains an unsupported value")
+            }
+        },
+        powerManagement = DeviceConnectionSettings.PowerManagement(
+            wifiIdleTimeoutSeconds = power.requiredInt("wifiIdleTimeoutSeconds"),
+            cellularIdleTimeoutSeconds = power.requiredInt("cellularIdleTimeoutSeconds"),
+        ),
+        streamingEnabled = getBoolean("streamingEnabled"),
+        streamingFlushIntervalSeconds = requiredInt("streamingFlushIntervalSeconds"),
+    )
+}
 
 internal fun DiscoveredDevice.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putString("id", id)

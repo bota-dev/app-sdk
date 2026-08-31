@@ -96,6 +96,25 @@ export type NativeProvisioningMaterial = {
   mtu: number;
 };
 
+export type NativeEnabledConnections = {
+  wifi: boolean;
+  cellular: boolean;
+};
+
+export type NativePowerManagement = {
+  wifiIdleTimeoutSeconds: number;
+  cellularIdleTimeoutSeconds: number;
+};
+
+export type NativeDeviceConnectionSettings = {
+  enabledConnections: NativeEnabledConnections;
+  heartbeatEnabledConnections: NativeEnabledConnections;
+  uploadNetworkPreference: ReadonlyArray<string>;
+  powerManagement: NativePowerManagement;
+  streamingEnabled: boolean;
+  streamingFlushIntervalSeconds: number;
+};
+
 export type NativeFactoryResetGrantRequest = {
   requestId: string;
   serialNumber: string;
@@ -219,6 +238,10 @@ export interface Spec extends TurboModule {
   updateFirmware: (
     device: NativeConnectedDevice,
     image: NativeFirmwareImage
+  ) => Promise<void>;
+  writeConnectionSettings: (
+    device: NativeConnectedDevice,
+    settings: NativeDeviceConnectionSettings
   ) => Promise<void>;
 }
 

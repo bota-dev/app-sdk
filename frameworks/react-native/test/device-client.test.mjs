@@ -210,6 +210,9 @@ function nativeFixture() {
       async deprovision(device) {
         calls.push(['deprovision', device]);
       },
+      async writeConnectionSettings(device, settings) {
+        calls.push(['writeConnectionSettings', device, settings]);
+      },
       async factoryReset(device, commandId, bindingGeneration) {
         calls.push(['factoryReset', device, commandId, bindingGeneration]);
         queueMicrotask(() => {
@@ -456,6 +459,34 @@ test('provisioning rejects native material requests when the application provide
       'rejectApplicationMaterial',
       'material-request',
       'backend material unavailable',
+    ],
+  ]);
+});
+
+test('connection settings expand frozen defaults before native normalization', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+
+  await client.provisioning.writeConnectionSettings(connected, {
+    enabled_connections: { wifi: true, cellular: false },
+    upload_network_preference: ['wifi', 'ble', 'cellular'],
+  });
+
+  assert.deepEqual(fixture.calls, [
+    [
+      'writeConnectionSettings',
+      connected,
+      {
+        enabledConnections: { wifi: true, cellular: false },
+        heartbeatEnabledConnections: { wifi: true, cellular: true },
+        uploadNetworkPreference: ['wifi', 'ble', 'cellular'],
+        powerManagement: {
+          wifiIdleTimeoutSeconds: 180,
+          cellularIdleTimeoutSeconds: 180,
+        },
+        streamingEnabled: true,
+        streamingFlushIntervalSeconds: 60,
+      },
     ],
   ]);
 });

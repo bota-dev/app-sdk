@@ -96,6 +96,36 @@ final class BotaDeviceSDKAppleSecurityTests: XCTestCase {
         XCTAssertEqual(snapshot.resumedBindingGenerations, [9])
     }
 
+    func testConnectionSettingsDelegateToAppleFacade() async throws {
+        let connected = ConnectedDevice(
+            id: "selected",
+            serialNumber: "EVFXXW67KP",
+            deviceType: .botaNote,
+            firmwareVersion: "1.0.11",
+            isProvisioned: true,
+            connectionState: .connected,
+            mtu: 247
+        )
+        let client = TestAppleSecurityClient()
+        let security = BotaDeviceSDKAppleSecurity(client: client)
+        let settings = DeviceConnectionSettings(
+            enabledConnections: .init(wifi: true, cellular: true),
+            heartbeatEnabledConnections: .init(wifi: true, cellular: true),
+            uploadNetworkPreference: [.wifi, .ble, .cellular],
+            powerManagement: .init(
+                wifiIdleTimeoutSeconds: 0,
+                cellularIdleTimeoutSeconds: -1
+            ),
+            streamingEnabled: false,
+            streamingFlushIntervalSeconds: 30
+        )
+
+        try await security.writeConnectionSettings(settings, to: connected)
+
+        let snapshot = await client.snapshot()
+        XCTAssertEqual(snapshot.connectionSettings, settings)
+    }
+
     func testFactoryResetRejectsMalformedGrantAndCancelsPendingRequestsOnDestroy() async {
         let connected = ConnectedDevice(
             id: "selected",
@@ -203,6 +233,7 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
         let factoryResetGrant: Data?
         let factoryResetCancelled: Bool
         let resumedBindingGenerations: [UInt64]
+        let connectionSettings: DeviceConnectionSettings?
     }
 
     private var material: ProvisioningMaterial?
@@ -210,6 +241,7 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
     private var factoryResetGrant: Data?
     private var factoryResetCancelled = false
     private var resumedBindingGenerations: [UInt64] = []
+    private var connectionSettings: DeviceConnectionSettings?
 
     func provision(
         _ device: ConnectedDevice,
@@ -224,6 +256,13 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
 
     func deprovision(_ device: ConnectedDevice) async throws {
         deprovisionedSerials.append(device.serialNumber)
+    }
+
+    func writeConnectionSettings(
+        _ settings: DeviceConnectionSettings,
+        to device: ConnectedDevice
+    ) async throws {
+        connectionSettings = settings
     }
 
     func cancelCurrentOperation() async throws {}
@@ -264,7 +303,8 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
             deprovisionedSerials: deprovisionedSerials,
             factoryResetGrant: factoryResetGrant,
             factoryResetCancelled: factoryResetCancelled,
-            resumedBindingGenerations: resumedBindingGenerations
+            resumedBindingGenerations: resumedBindingGenerations,
+            connectionSettings: connectionSettings
         )
     }
 }

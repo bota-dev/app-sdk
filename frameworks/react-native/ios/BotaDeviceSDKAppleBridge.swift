@@ -3,12 +3,14 @@ import Foundation
 
 private enum BotaDeviceSDKAppleBridgeInputError: LocalizedError {
     case invalidConnectedDevice
+    case invalidConnectionSettings
     case invalidTimeout
     case invalidUnsignedInteger
 
     var errorDescription: String? {
         switch self {
         case .invalidConnectedDevice: "connected device contains an unsupported value"
+        case .invalidConnectionSettings: "connection settings contain an unsupported value"
         case .invalidTimeout: "timeout must be a finite non-negative number"
         case .invalidUnsignedInteger: "value must be a finite non-negative integer"
         }
@@ -510,6 +512,78 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
+    @objc(writeConnectionSettingsWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:enabledWifi:enabledCellular:heartbeatWifi:heartbeatCellular:uploadNetworkPreference:wifiIdleTimeoutSeconds:cellularIdleTimeoutSeconds:streamingEnabled:streamingFlushIntervalSeconds:completion:)
+    public func writeConnectionSettings(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        enabledWifi: Bool,
+        enabledCellular: Bool,
+        heartbeatWifi: Bool,
+        heartbeatCellular: Bool,
+        uploadNetworkPreference: [String],
+        wifiIdleTimeoutSeconds: Double,
+        cellularIdleTimeoutSeconds: Double,
+        streamingEnabled: Bool,
+        streamingFlushIntervalSeconds: Double,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let preference = try uploadNetworkPreference.map {
+                    guard let value = Self.connectionType($0) else {
+                        throw BotaDeviceSDKAppleBridgeInputError.invalidConnectionSettings
+                    }
+                    return value
+                }
+                let settings = DeviceConnectionSettings(
+                    enabledConnections: .init(
+                        wifi: enabledWifi,
+                        cellular: enabledCellular
+                    ),
+                    heartbeatEnabledConnections: .init(
+                        wifi: heartbeatWifi,
+                        cellular: heartbeatCellular
+                    ),
+                    uploadNetworkPreference: preference,
+                    powerManagement: .init(
+                        wifiIdleTimeoutSeconds: try Self.signedInteger(
+                            wifiIdleTimeoutSeconds
+                        ),
+                        cellularIdleTimeoutSeconds: try Self.signedInteger(
+                            cellularIdleTimeoutSeconds
+                        )
+                    ),
+                    streamingEnabled: streamingEnabled,
+                    streamingFlushIntervalSeconds: try Self.signedInteger(
+                        streamingFlushIntervalSeconds
+                    )
+                )
+                try await security.writeConnectionSettings(
+                    settings,
+                    to: Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    )
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
     @objc(factoryResetWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:commandID:bindingGeneration:onGrantRequest:completion:)
     public func factoryReset(
         id: String,
@@ -767,6 +841,15 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
+    private static func connectionType(_ value: String) -> ConnectionType? {
+        switch value {
+        case "wifi": .wifi
+        case "ble": .ble
+        case "cellular": .cellular
+        default: nil
+        }
+    }
+
     private static func factoryResetCompletion(
         _ completion: FactoryResetCompletion
     ) -> [String: Any] {
@@ -804,6 +887,16 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
             connectionState: state,
             mtu: mtuValue
         )
+    }
+
+    private static func signedInteger(_ value: Double) throws -> Int {
+        guard value.isFinite,
+              value.rounded(.towardZero) == value,
+              let result = Int(exactly: value)
+        else {
+            throw BotaDeviceSDKAppleBridgeInputError.invalidConnectionSettings
+        }
+        return result
     }
 
     private static func deviceStatus(_ status: DeviceStatus) -> [String: Any] {

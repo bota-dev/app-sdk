@@ -2,6 +2,7 @@ package dev.bota.sdk.reactnative
 
 import dev.bota.sdk.BotaDeviceClient
 import dev.bota.sdk.model.ConnectedDevice
+import dev.bota.sdk.model.DeviceConnectionSettings
 import dev.bota.sdk.model.FactoryResetCompletion
 import dev.bota.sdk.model.FactoryResetGrantRequest
 import dev.bota.sdk.model.ProvisioningMaterial
@@ -33,6 +34,11 @@ internal interface BotaDeviceSDKAndroidSecurityClient {
 
     suspend fun deprovision(device: ConnectedDevice)
 
+    suspend fun writeConnectionSettings(
+        settings: DeviceConnectionSettings,
+        device: ConnectedDevice,
+    )
+
     suspend fun factoryReset(
         device: ConnectedDevice,
         commandId: String,
@@ -62,6 +68,13 @@ internal class BotaDeviceSDKSharedAndroidSecurityClient(
 
     override suspend fun deprovision(device: ConnectedDevice) {
         client.provisioning.deprovision(device)
+    }
+
+    override suspend fun writeConnectionSettings(
+        settings: DeviceConnectionSettings,
+        device: ConnectedDevice,
+    ) {
+        client.provisioning.writeConnectionSettings(settings, device)
     }
 
     override suspend fun factoryReset(
@@ -111,6 +124,13 @@ internal class BotaDeviceSDKAndroidSecurity(
 
     suspend fun deprovision(device: ConnectedDevice) {
         client.deprovision(device)
+    }
+
+    suspend fun writeConnectionSettings(
+        settings: DeviceConnectionSettings,
+        device: ConnectedDevice,
+    ) {
+        client.writeConnectionSettings(settings, device)
     }
 
     suspend fun factoryReset(

@@ -131,6 +131,59 @@
               }
             ]
           },
+          "NativeDeviceConnectionSettings": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "enabledConnections",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeEnabledConnections"
+                }
+              },
+              {
+                "name": "heartbeatEnabledConnections",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeEnabledConnections"
+                }
+              },
+              {
+                "name": "uploadNetworkPreference",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "ArrayTypeAnnotation",
+                  "elementType": {
+                    "type": "StringTypeAnnotation"
+                  }
+                }
+              },
+              {
+                "name": "powerManagement",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativePowerManagement"
+                }
+              },
+              {
+                "name": "streamingEnabled",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "streamingFlushIntervalSeconds",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
           "NativeDeviceFlags": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -410,6 +463,25 @@
               }
             ]
           },
+          "NativeEnabledConnections": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "wifi",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "cellular",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              }
+            ]
+          },
           "NativeFactoryResetCompletion": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -613,6 +685,25 @@
                 "optional": true,
                 "typeAnnotation": {
                   "type": "BooleanTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativePowerManagement": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "wifiIdleTimeoutSeconds",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "cellularIdleTimeoutSeconds",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
                 }
               }
             ]
@@ -1451,6 +1542,37 @@
                   }
                 ]
               }
+            },
+            {
+              "name": "writeConnectionSettings",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "settings",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeDeviceConnectionSettings"
+                    }
+                  }
+                ]
+              }
             }
           ]
         },
@@ -1462,11 +1584,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "e2f61db0236c618622b24fb414cabe147b36fe159f742baf3cb4fa38612ff2ff"
+        "sha256": "5b6f787bcf02d87e844b1a24c0b82bb01af5d272a2f36f925ea20528b83543a3"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "79abf7001ebf8375fe3cc28b7bd2596d46f3c717b4a0ecb7734f51c1c252b224"
+        "sha256": "1adc73b3a9f069de25d7b469667dd8006e1a3d2c874b019277053eaea2c4c4fd"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -1478,23 +1600,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "e854f474093da8c3f1905d22c92071b61b34d7af42fb299823197d7e272af631"
+        "sha256": "faf1882ab0ba4a077f3d8eea0e2b23c5df4642d7fc23b8aba263898db47ebfab"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "58e7039b607882b80c97754f1a4e03d1e41ee17bbc512b71207088d8aca08640"
+        "sha256": "65f5bd94f752ec1b148382292b696322c13171282fc99318c18a01c7cb6b7d8a"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "ad419f1215e9b79446b9c8e61e77af2b21a6b0dbff2c2997c767896653725817"
+        "sha256": "d78962e5348d5b58c5ae1b51874778884c5de794d92a387cd6ad4dc923036029"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "e854f474093da8c3f1905d22c92071b61b34d7af42fb299823197d7e272af631"
+        "sha256": "faf1882ab0ba4a077f3d8eea0e2b23c5df4642d7fc23b8aba263898db47ebfab"
       }
     ]
   },
-  "contractDigest": "8b853caf0328929687725414f9e7cb2d56d95c3988addbcadb91759eb5cf2a1e"
+  "contractDigest": "6eb3b950e4000d22a1e152cfd8fd939a6bf7f1ece1cbd7e8a3147b69777283d5"
 }

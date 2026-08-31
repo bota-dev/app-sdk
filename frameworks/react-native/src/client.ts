@@ -16,6 +16,7 @@ import type {
 import type {
   ConnectedDevice,
   ConnectionState,
+  DeviceConnectionSettings,
   DeviceState,
   DeviceStatus,
   DeviceType,
@@ -73,6 +74,10 @@ export type BotaDeviceSDKProvisioningClient = {
     provider: BotaProvisioningMaterialProvider
   ): Promise<void>;
   deprovision(device: ConnectedDevice): Promise<void>;
+  writeConnectionSettings(
+    device: ConnectedDevice,
+    settings: DeviceConnectionSettings
+  ): Promise<void>;
 };
 
 export type BotaFactoryResetGrantRequest = Omit<
@@ -268,6 +273,22 @@ const toNativeConnectedDevice = (
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
+
+const toNativeConnectionSettings = (settings: DeviceConnectionSettings) => ({
+  enabledConnections: settings.enabled_connections,
+  heartbeatEnabledConnections:
+    settings.heartbeat_enabled_connections ?? { wifi: true, cellular: true },
+  uploadNetworkPreference: settings.upload_network_preference,
+  powerManagement: {
+    wifiIdleTimeoutSeconds:
+      settings.power_management?.wifi_idle_timeout_seconds ?? 180,
+    cellularIdleTimeoutSeconds:
+      settings.power_management?.cellular_idle_timeout_seconds ?? 180,
+  },
+  streamingEnabled: settings.streaming_enabled ?? true,
+  streamingFlushIntervalSeconds:
+    settings.streaming_flush_interval_seconds ?? 60,
+});
 
 const matchesScanOptions = (
   device: DiscoveredDevice,
@@ -487,6 +508,13 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
 
     async deprovision(device) {
       await requireNativeModule().deprovision(toNativeConnectedDevice(device));
+    },
+
+    async writeConnectionSettings(device, settings) {
+      await requireNativeModule().writeConnectionSettings(
+        toNativeConnectedDevice(device),
+        toNativeConnectionSettings(settings)
+      );
     },
   };
 

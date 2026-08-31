@@ -72,6 +72,15 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   sequence. Deprovision is remove-only and must remain separate from factory
   reset. Destroy and invalidation must reject pending material requests and
   cancel the native provisioning operation.
+- `BotaDeviceSDK.provisioning.writeConnectionSettings` accepts the frozen
+  `DeviceConnectionSettings` shape. JavaScript expands omitted heartbeat,
+  power-management, streaming, and flush-interval defaults before Codegen;
+  the frozen heartbeat default enables both WiFi and cellular independently of
+  `enabled_connections`.
+  Apple and Android then normalize the complete settings for the device model
+  and own serialization plus the BLE write. Keep encoded settings bytes out of
+  Codegen, and preserve heartbeat channel selection independently from upload
+  preference.
 - `BotaDeviceSDK.factoryReset` delegates the authenticated reset reducer to the
   native facades. JavaScript resolves a one-shot request containing the fresh
   nonce, command ID, and binding generation with the backend's encoded grant;

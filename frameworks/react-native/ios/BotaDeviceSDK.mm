@@ -360,6 +360,47 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
                }];
 }
 
+- (void)writeConnectionSettings:
+            (JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                         settings:
+            (JS::NativeBotaDeviceSDK::NativeDeviceConnectionSettings &)settings
+                          resolve:(RCTPromiseResolveBlock)resolve
+                           reject:(RCTPromiseRejectBlock)reject
+{
+  auto enabled = settings.enabledConnections();
+  auto heartbeat = settings.heartbeatEnabledConnections();
+  auto power = settings.powerManagement();
+  NSMutableArray<NSString *> *preference = [NSMutableArray array];
+  for (NSString *value : settings.uploadNetworkPreference()) {
+    [preference addObject:value];
+  }
+  [[BotaDeviceSDKAppleBridge shared]
+      writeConnectionSettingsWithID:device.id_()
+                       serialNumber:device.serialNumber()
+                         deviceType:device.deviceType()
+                    firmwareVersion:device.firmwareVersion()
+                    hardwareRevision:device.hardwareRevision()
+                      isProvisioned:device.isProvisioned()
+                    connectionState:device.connectionState()
+                                mtu:device.mtu()
+                        enabledWifi:enabled.wifi()
+                    enabledCellular:enabled.cellular()
+                      heartbeatWifi:heartbeat.wifi()
+                  heartbeatCellular:heartbeat.cellular()
+            uploadNetworkPreference:preference
+             wifiIdleTimeoutSeconds:power.wifiIdleTimeoutSeconds()
+         cellularIdleTimeoutSeconds:power.cellularIdleTimeoutSeconds()
+                   streamingEnabled:settings.streamingEnabled()
+       streamingFlushIntervalSeconds:settings.streamingFlushIntervalSeconds()
+                         completion:^(NSError *_Nullable error) {
+                           if (error != nil) {
+                             BotaRejectAppleError(error, reject);
+                             return;
+                           }
+                           resolve(nil);
+                         }];
+}
+
 - (void)factoryReset:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
            commandId:(NSString *)commandId
    bindingGeneration:(double)bindingGeneration

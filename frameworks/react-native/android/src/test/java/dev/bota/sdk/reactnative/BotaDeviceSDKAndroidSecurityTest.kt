@@ -3,6 +3,7 @@ package dev.bota.sdk.reactnative
 import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.model.ConnectionState
 import dev.bota.sdk.model.DeviceType
+import dev.bota.sdk.model.DeviceConnectionSettings
 import dev.bota.sdk.model.FactoryResetCompletion
 import dev.bota.sdk.model.FactoryResetGrantRequest
 import dev.bota.sdk.model.ProvisioningMaterial
@@ -97,6 +98,37 @@ class BotaDeviceSDKAndroidSecurityTest {
     }
 
     @Test
+    fun connectionSettingsDelegateToAndroidFacade() = runTest {
+        val connected = ConnectedDevice(
+            id = "selected",
+            serialNumber = "EVFXXW67KP",
+            deviceType = DeviceType.BotaNote,
+            firmwareVersion = "1.0.11",
+            isProvisioned = true,
+            connectionState = ConnectionState.Connected,
+            mtu = 247,
+        )
+        val client = TestAndroidSecurityClient()
+        val security = BotaDeviceSDKAndroidSecurity(client)
+        val settings = DeviceConnectionSettings(
+            enabledConnections = DeviceConnectionSettings.EnabledConnections(true, true),
+            heartbeatEnabledConnections = DeviceConnectionSettings.EnabledConnections(true, true),
+            uploadNetworkPreference = listOf(
+                DeviceConnectionSettings.ConnectionType.Wifi,
+                DeviceConnectionSettings.ConnectionType.Ble,
+                DeviceConnectionSettings.ConnectionType.Cellular,
+            ),
+            powerManagement = DeviceConnectionSettings.PowerManagement(0, -1),
+            streamingEnabled = false,
+            streamingFlushIntervalSeconds = 30,
+        )
+
+        security.writeConnectionSettings(settings, connected)
+
+        assertEquals(settings, client.connectionSettings)
+    }
+
+    @Test
     fun factoryResetRejectsMalformedGrantAndCancelsPendingRequestsOnDestroy() = runTest {
         val connected = ConnectedDevice(
             id = "selected",
@@ -150,6 +182,7 @@ class BotaDeviceSDKAndroidSecurityTest {
         var factoryResetGrant: ByteArray? = null
         var factoryResetCancelled = false
         val resumedBindingGenerations = mutableListOf<ULong>()
+        var connectionSettings: DeviceConnectionSettings? = null
 
         override suspend fun provision(
             device: ConnectedDevice,
@@ -166,6 +199,13 @@ class BotaDeviceSDKAndroidSecurityTest {
 
         override suspend fun deprovision(device: ConnectedDevice) {
             deprovisionedSerials += device.serialNumber
+        }
+
+        override suspend fun writeConnectionSettings(
+            settings: DeviceConnectionSettings,
+            device: ConnectedDevice,
+        ) {
+            connectionSettings = settings
         }
 
         override suspend fun cancelCurrentOperation() = Unit

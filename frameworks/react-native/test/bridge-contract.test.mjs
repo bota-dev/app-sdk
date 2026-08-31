@@ -28,6 +28,7 @@ test('Codegen contract freezes the lifecycle module identity and methods', () =>
   assert.match(source, /deprovision:\s*\(/);
   assert.match(source, /provision:\s*\(/);
   assert.match(source, /resolveProvisioningMaterial:\s*\(/);
+  assert.match(source, /writeConnectionSettings:\s*\(/);
   assert.match(source, /factoryReset:\s*\(/);
   assert.match(source, /resumePendingFactoryReset:\s*\(/);
   assert.match(source, /resolveFactoryResetGrant:\s*\(/);

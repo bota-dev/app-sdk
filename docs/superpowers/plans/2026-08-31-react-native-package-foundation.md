@@ -114,22 +114,28 @@
 ## Follow-On Status
 
 As of 2026-08-31, both lifecycle adapters and the discovery, connection,
-device-status, provisioning, authenticated-reset, recording-list/transfer, and
-upload-ownership plus OTA and device-log workflow slices are complete. Apple
+device-status, provisioning, connection-settings, authenticated-reset,
+recording-list/transfer, upload-ownership, OTA, and device-log workflow slices
+are complete. Apple
 configure, destroy, state, capabilities, discovery, selected-device connect,
 serial-strict reconnect, disconnect, status reads, status subscriptions,
-provision, remove-only deprovision, factory reset, exact-generation reset
-receipt recovery, recording list, recording transfer, upload ownership, OTA,
-and device logs call `BotaAppleSDK` through serialized Swift actors and pass a
-full CocoaPods application compile-and-link gate. Android delegates the same
-surface to
+provision, connection-settings writes, remove-only deprovision, factory reset,
+exact-generation reset receipt recovery, recording list, recording transfer,
+upload ownership, OTA, and device logs call `BotaAppleSDK` through serialized
+Swift actors and pass a full CocoaPods application compile-and-link gate.
+Android delegates the same surface to
 `BotaDeviceClient.shared`, contains asynchronous scan/status failures, and
 passes a
 checked-in Codegen, Kotlin-test, lint, and release-assembly consumer against the
 packaged AAR. JavaScript preserves the frozen scan filters, status shape, and
 date mapping, and resolves nonce-bound provisioning and reset material through
 one-shot native request IDs. Reset grants become bytes only in native code;
-resume cannot request a grant or resend destructive opcode `0x06`. Recording
+resume cannot request a grant or resend destructive opcode `0x06`. JavaScript
+expands frozen connection-settings defaults before Codegen; native facades
+normalize the complete value for the device model and own serialization plus
+the BLE write. Heartbeat channel selection remains independent from upload
+preference, and omission retains the frozen both-channels-enabled default.
+Recording
 metadata and progress cross Codegen, while completed audio remains a native
 file and JavaScript receives only its path. Upload handoff crosses Codegen as
 opaque identifiers, progress, and the reducer-authorized ownership result;
