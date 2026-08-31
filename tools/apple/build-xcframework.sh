@@ -52,6 +52,9 @@ rustup target add \
 
 CARGO_TARGET_DIR="$BUILD_ROOT/cargo"
 export CARGO_TARGET_DIR
+CARGO_HOME=${CARGO_HOME:-$HOME/.cargo}
+RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=$ROOT=/bota-app-sdk --remap-path-prefix=$CARGO_HOME=/bota-cargo"
+export RUSTFLAGS
 
 IPHONEOS_DEPLOYMENT_TARGET=15.0 cargo build \
     --manifest-path "$ROOT/Cargo.toml" \
@@ -114,5 +117,7 @@ if [ -e "$OUTPUT" ]; then
 fi
 mv "$TEMP_OUTPUT" "$OUTPUT"
 rm -rf "$BACKUP_OUTPUT"
+
+"$ROOT/tools/apple/verify-reproducible-paths.sh"
 
 printf 'Built BotaDeviceSDKCore.xcframework for SDK %s\n' "$SDK_VERSION"

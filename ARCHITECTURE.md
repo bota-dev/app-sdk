@@ -293,9 +293,11 @@ The external package under `tests/conformance/apple-consumer` depends on the
 local Apple package only through its public product and deliberately cannot
 import the internal C target. It runs on macOS and type-checks the complete
 facade; CI separately compiles the package for generic iOS device and simulator
-destinations with code signing disabled. Release CI archives the generated
-XCFramework with deterministic timestamps and entry order, verifies the root
-package checksum, and publishes the archive, SHA-256 and SwiftPM checksums, SPDX
+destinations with code signing disabled. Release builds remap checkout and
+Cargo registry paths before compiling Rust, then reject binaries that retain
+either machine-specific prefix. CI archives the generated XCFramework with
+deterministic timestamps and entry order, verifies the root package checksum,
+and publishes the archive, SHA-256 and SwiftPM checksums, SPDX
 2.3 SBOM, repository license, and schema-validated artifact manifest. After
 publication, a fresh macOS package resolves the release through the public Git
 URL and imports only `BotaAppleSDK`. The protected release environment is the
