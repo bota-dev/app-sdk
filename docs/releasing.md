@@ -137,8 +137,8 @@ install its own Node.js dependencies before running repository tooling.
 4. Waits for approval in the protected `release` environment.
 5. Creates the GitHub Release and uploads every Apple release file.
 6. Creates an unrelated macOS package that resolves the public Git tag and runs
-   while importing only `BotaAppleSDK`. The smoke limits Swift compilation to
-   two jobs so it fits on the hosted macOS runner.
+   while importing only `BotaAppleSDK`. The smoke uses one non-batched Swift
+   compiler job so it fits on the hosted macOS runner.
 
 Do not move or recreate a published tag. If a released artifact or manifest is
 wrong, fix the source and publish a new patch version with a new checksum.

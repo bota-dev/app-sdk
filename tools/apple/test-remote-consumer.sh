@@ -57,5 +57,6 @@ EOF
 swift run \
     --package-path "$CONSUMER" \
     --scratch-path "$ROOT/target/apple-remote-consumer-build" \
-    --jobs 2 \
+    --jobs 1 \
+    -Xswiftc -disable-batch-mode \
     AppleRemoteConsumer

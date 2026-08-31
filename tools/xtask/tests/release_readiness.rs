@@ -98,5 +98,7 @@ fn release_workflow_publishes_and_smokes_the_public_apple_package() {
     assert!(install < release_tests);
 
     let smoke = fs::read_to_string(root().join("tools/apple/test-remote-consumer.sh")).unwrap();
-    assert!(smoke.contains("--jobs 2"));
+    assert!(smoke.contains("--jobs 1"));
+    assert!(smoke.contains("-Xswiftc -disable-batch-mode"));
+    assert!(!smoke.contains("--jobs 2"));
 }
