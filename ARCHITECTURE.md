@@ -198,7 +198,9 @@ Portal tree, and archived from a separate complete inventory with fixed ZIP
 metadata. The check-only package builds twice, compares the AAR and every native
 library digest, and emits checksums, SPDX 2.3 evidence, the repository license,
 and a manifest-v2 Android artifact bound to reviewed facade evidence rather
-than Rust-only compatibility claims.
+than Rust-only compatibility claims. Rust and CMake native link steps set a
+16 KiB page size explicitly, and release inspection verifies every 64-bit ELF
+load segment is aligned to at least `0x4000` before an AAR can proceed.
 
 Non-publishing CI treats that flat release directory as the immutable Android
 input. It reconstructs an exact local Maven repository, then runs source,

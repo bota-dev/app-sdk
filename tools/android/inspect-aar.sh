@@ -40,6 +40,20 @@ for library in $(cat "$actual"); do
   elf_header="$("$TOOLCHAIN/bin/llvm-readelf" --file-header "$path")"
   grep -q 'OS/ABI:.*UNIX - System V' <<< "$elf_header"
   grep -q "Machine:.*$expected_machine" <<< "$elf_header"
+  if [[ "$abi" == "arm64-v8a" || "$abi" == "x86_64" ]]; then
+    load_alignments="$("$TOOLCHAIN/bin/llvm-readelf" --program-headers "$path" \
+      | awk '$1 == "LOAD" { print $NF }')"
+    if [[ -z "$load_alignments" ]]; then
+      echo "$library has no ELF load segments" >&2
+      exit 1
+    fi
+    for alignment in $load_alignments; do
+      if (( alignment < 0x4000 )); then
+        echo "$library has a load segment aligned below 16 KiB: $alignment" >&2
+        exit 1
+      fi
+    done
+  fi
   elf_notes="$("$TOOLCHAIN/bin/llvm-readobj" --notes "$path")"
   grep -q '0000: 1A000000' <<< "$elf_notes"
   elf_dynamic="$("$TOOLCHAIN/bin/llvm-readelf" --dynamic-table "$path")"

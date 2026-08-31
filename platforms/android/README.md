@@ -94,7 +94,9 @@ npm --prefix ../.. run test:android:foundation
 
 The foundation gate cross-compiles `libbota_device_sdk_ffi.so` and compiles
 `libbota_android_jni.so` for `arm64-v8a`, `armeabi-v7a`, `x86_64`, and `x86`.
-Release inspection requires exactly those two libraries under every AAR ABI:
+Both native link steps set the 16 KiB maximum and common page size explicitly.
+Release inspection requires exactly those two libraries under every AAR ABI
+and rejects 64-bit ELF load segments aligned below `0x4000`:
 
 ```bash
 tools/android/build-native.sh

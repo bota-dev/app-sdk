@@ -8,6 +8,12 @@ endif()
 add_library(bota_android_jni SHARED bota_android_jni.cpp)
 target_compile_features(bota_android_jni PRIVATE cxx_std_17)
 target_compile_options(bota_android_jni PRIVATE -Wall -Wextra -Werror)
+target_link_options(
+    bota_android_jni
+    PRIVATE
+    "-Wl,-z,max-page-size=16384"
+    "-Wl,-z,common-page-size=16384"
+)
 target_include_directories(
     bota_android_jni
     PRIVATE "${BOTA_REPO_ROOT}/bindings/device-sdk-ffi/include"

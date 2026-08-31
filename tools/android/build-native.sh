@@ -69,7 +69,7 @@ for row in "${rows[@]}"; do
   target_env="$(printf '%s' "$target" | tr '[:lower:]-' '[:upper:]_')"
   env \
     "CARGO_TARGET_${target_env}_LINKER=$linker_path" \
-    RUSTFLAGS="--remap-path-prefix=$ROOT=/usr/src/bota-app-sdk --remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}/registry=/usr/src/cargo/registry" \
+    RUSTFLAGS="--remap-path-prefix=$ROOT=/usr/src/bota-app-sdk --remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}/registry=/usr/src/cargo/registry -Clink-arg=-Wl,-z,max-page-size=16384 -Clink-arg=-Wl,-z,common-page-size=16384" \
     cargo build \
       --manifest-path "$ROOT/Cargo.toml" \
       --locked \

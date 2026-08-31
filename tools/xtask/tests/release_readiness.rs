@@ -302,6 +302,23 @@ fn android_build_authorities_are_synchronized() {
 }
 
 #[test]
+fn android_native_artifacts_require_16_kib_page_alignment() {
+    let build_native = fs::read_to_string(root().join("tools/android/build-native.sh")).unwrap();
+    let inspect_aar = fs::read_to_string(root().join("tools/android/inspect-aar.sh")).unwrap();
+    let cmake = fs::read_to_string(
+        root().join("platforms/android/sdk/src/main/cpp/CMakeLists.txt"),
+    )
+    .unwrap();
+
+    assert!(build_native.contains("-Wl,-z,max-page-size=16384"));
+    assert!(build_native.contains("-Wl,-z,common-page-size=16384"));
+    assert!(cmake.contains("-Wl,-z,max-page-size=16384"));
+    assert!(cmake.contains("-Wl,-z,common-page-size=16384"));
+    assert!(inspect_aar.contains("--program-headers"));
+    assert!(inspect_aar.contains("0x4000"));
+}
+
+#[test]
 fn android_release_inputs_are_hardened_and_locked() {
     let android = root().join("platforms/android");
     let build = fs::read_to_string(android.join("build.gradle.kts")).unwrap();
