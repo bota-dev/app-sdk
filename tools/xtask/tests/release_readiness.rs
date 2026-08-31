@@ -49,4 +49,7 @@ fn release_workflow_publishes_and_smokes_the_public_apple_package() {
     assert!(contents.contains("target/apple-release/"));
     assert!(!contents.contains("secrets.CRATES_IO_TOKEN"));
     assert!(!contents.contains("cargo publish"));
+
+    let smoke = fs::read_to_string(root().join("tools/apple/test-remote-consumer.sh")).unwrap();
+    assert!(smoke.contains("--jobs 2"));
 }

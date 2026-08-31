@@ -300,9 +300,10 @@ deterministic timestamps and entry order, verifies the root package checksum,
 and publishes the archive, SHA-256 and SwiftPM checksums, SPDX
 2.3 SBOM, repository license, and schema-validated artifact manifest. After
 publication, a fresh macOS package resolves the release through the public Git
-URL and imports only `BotaAppleSDK`. The protected release environment is the
-manual approval boundary for hardware acceptance; automated CI does not claim
-physical-device results.
+URL and imports only `BotaAppleSDK`, using bounded compiler parallelism on the
+hosted runner. The protected release environment is the manual approval
+boundary for hardware acceptance; automated CI does not claim physical-device
+results.
 
 The opt-in physical target requires `BOTA_PHYSICAL_TESTS=1`, an exact serial,
 and an explicit device model. It returns `XCTSkip` before client configuration
