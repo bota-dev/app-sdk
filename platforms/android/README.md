@@ -3,8 +3,10 @@
 This directory is the unpublished Android facade for the Bota App SDK family.
 It produces `dev.bota:bota-android-sdk` from the synchronized version in the
 repository root. The AAR packages the frozen Rust ABI and a thin internal JNI
-ownership adapter; the legacy Android repository remains a migration input
-until the public facade, physical-device, compatibility, and release gates pass.
+ownership adapter. The public facade and one-major `com.bota.sdk` compatibility
+contract now pass JVM descriptor, source-consumer, precompiled-binary, API 26,
+and API 35 gates. Maven Central publication and supervised physical-device
+acceptance remain release gates.
 
 ## Toolchain
 
@@ -207,3 +209,18 @@ Normal builds can publish unsigned artifacts only to the `Local` repository at
 `botaProtectedSigning=true` Gradle property and release-environment credentials.
 `VERSION_NAME` must match the root `sdk-version.toml`; Gradle rejects an
 override rather than producing a differently versioned artifact.
+
+The clean Maven consumer and legacy migration consumers resolve only from that
+repository:
+
+```bash
+tools/android/verify-legacy-api.sh --legacy-path /path/to/pinned/legacy-sdk
+tools/android/test-legacy-consumer.sh --api 26 --mode source
+tools/android/test-legacy-consumer.sh --api 26 --mode binary \
+  --legacy-path /path/to/pinned/legacy-sdk
+tools/android/test-consumer.sh --api 26
+```
+
+See [`docs/migration/android.md`](../../docs/migration/android.md) before
+replacing the old AAR. The old and replacement AARs must never be packaged
+together because both define `com.bota.sdk`.

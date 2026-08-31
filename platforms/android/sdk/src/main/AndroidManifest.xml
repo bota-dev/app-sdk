@@ -19,4 +19,12 @@
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="s" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <application>
+        <provider
+            android:name="com.bota.sdk.CompatibilityContextProvider"
+            android:authorities="${applicationId}.bota-sdk-init"
+            android:exported="false"
+            android:initOrder="100" />
+    </application>
 </manifest>

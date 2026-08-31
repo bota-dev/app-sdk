@@ -1,0 +1,1596 @@
+# Bota legacy Android SDK public JVM API
+# Revision: 0f06d2a22c55e4976778520cce42230d23ca4226
+# Command: javap -public -s -constants
+
+===== com.bota.sdk.AudioCodec =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.AudioCodec extends java.lang.Enum<com.bota.sdk.AudioCodec> {
+  public static final com.bota.sdk.AudioCodec PCM_16K;
+    descriptor: Lcom/bota/sdk/AudioCodec;
+  public static final com.bota.sdk.AudioCodec PCM_8K;
+    descriptor: Lcom/bota/sdk/AudioCodec;
+  public static final com.bota.sdk.AudioCodec OPUS_16K;
+    descriptor: Lcom/bota/sdk/AudioCodec;
+  public static final com.bota.sdk.AudioCodec OPUS_8K;
+    descriptor: Lcom/bota/sdk/AudioCodec;
+  public static com.bota.sdk.AudioCodec[] values();
+    descriptor: ()[Lcom/bota/sdk/AudioCodec;
+
+  public static com.bota.sdk.AudioCodec valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/AudioCodec;
+
+  public static kotlin.enums.EnumEntries<com.bota.sdk.AudioCodec> getEntries();
+    descriptor: ()Lkotlin/enums/EnumEntries;
+}
+
+===== com.bota.sdk.BluetoothState =====
+Compiled from "BluetoothTransport.kt"
+public final class com.bota.sdk.BluetoothState extends java.lang.Enum<com.bota.sdk.BluetoothState> {
+  public static final com.bota.sdk.BluetoothState UNKNOWN;
+    descriptor: Lcom/bota/sdk/BluetoothState;
+  public static final com.bota.sdk.BluetoothState RESETTING;
+    descriptor: Lcom/bota/sdk/BluetoothState;
+  public static final com.bota.sdk.BluetoothState UNSUPPORTED;
+    descriptor: Lcom/bota/sdk/BluetoothState;
+  public static final com.bota.sdk.BluetoothState UNAUTHORIZED;
+    descriptor: Lcom/bota/sdk/BluetoothState;
+  public static final com.bota.sdk.BluetoothState POWERED_OFF;
+    descriptor: Lcom/bota/sdk/BluetoothState;
+  public static final com.bota.sdk.BluetoothState POWERED_ON;
+    descriptor: Lcom/bota/sdk/BluetoothState;
+  public static com.bota.sdk.BluetoothState[] values();
+    descriptor: ()[Lcom/bota/sdk/BluetoothState;
+
+  public static com.bota.sdk.BluetoothState valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/BluetoothState;
+
+  public static kotlin.enums.EnumEntries<com.bota.sdk.BluetoothState> getEntries();
+    descriptor: ()Lkotlin/enums/EnumEntries;
+}
+
+===== com.bota.sdk.BluetoothTransport$DefaultImpls =====
+Compiled from "BluetoothTransport.kt"
+public final class com.bota.sdk.BluetoothTransport$DefaultImpls {
+  public static kotlinx.coroutines.flow.Flow scan$default(com.bota.sdk.BluetoothTransport, com.bota.sdk.ScanOptions, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/BluetoothTransport;Lcom/bota/sdk/ScanOptions;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+
+  public static java.lang.Object write$default(com.bota.sdk.BluetoothTransport, java.lang.String, java.lang.String, java.lang.String, byte[], boolean, kotlin.coroutines.Continuation, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/BluetoothTransport;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[BZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+===== com.bota.sdk.BluetoothTransport =====
+Compiled from "BluetoothTransport.kt"
+public interface com.bota.sdk.BluetoothTransport {
+  public abstract java.lang.Object bluetoothState(kotlin.coroutines.Continuation<? super com.bota.sdk.BluetoothState>);
+    descriptor: (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public abstract kotlinx.coroutines.flow.Flow<com.bota.sdk.DiscoveredDevice> scan(com.bota.sdk.ScanOptions);
+    descriptor: (Lcom/bota/sdk/ScanOptions;)Lkotlinx/coroutines/flow/Flow;
+
+  public abstract void stopScan();
+    descriptor: ()V
+
+  public abstract java.lang.Object connect(com.bota.sdk.DiscoveredDevice, kotlin.coroutines.Continuation<? super com.bota.sdk.ConnectedDevice>);
+    descriptor: (Lcom/bota/sdk/DiscoveredDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public abstract java.lang.Object disconnect(com.bota.sdk.ConnectedDevice, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lcom/bota/sdk/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public abstract boolean isConnected(java.lang.String);
+    descriptor: (Ljava/lang/String;)Z
+
+  public abstract java.lang.Object read(java.lang.String, java.lang.String, java.lang.String, kotlin.coroutines.Continuation<? super byte[]>);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public abstract java.lang.Object write(java.lang.String, java.lang.String, java.lang.String, byte[], boolean, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[BZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public abstract kotlinx.coroutines.flow.Flow<byte[]> notifications(java.lang.String, java.lang.String, java.lang.String);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lkotlinx/coroutines/flow/Flow;
+}
+
+===== com.bota.sdk.BotaClient$Companion =====
+Compiled from "BotaClient.kt"
+public final class com.bota.sdk.BotaClient$Companion {
+  public final com.bota.sdk.BotaClient getShared();
+    descriptor: ()Lcom/bota/sdk/BotaClient;
+
+  public com.bota.sdk.BotaClient$Companion(kotlin.jvm.internal.DefaultConstructorMarker);
+    descriptor: (Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+===== com.bota.sdk.BotaClient =====
+Compiled from "BotaClient.kt"
+public final class com.bota.sdk.BotaClient {
+  public static final com.bota.sdk.BotaClient$Companion Companion;
+    descriptor: Lcom/bota/sdk/BotaClient$Companion;
+  public com.bota.sdk.BotaClient(com.bota.sdk.BluetoothTransport);
+    descriptor: (Lcom/bota/sdk/BluetoothTransport;)V
+
+  public com.bota.sdk.BotaClient(com.bota.sdk.BluetoothTransport, int, kotlin.jvm.internal.DefaultConstructorMarker);
+    descriptor: (Lcom/bota/sdk/BluetoothTransport;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+
+  public final com.bota.sdk.SdkState getState();
+    descriptor: ()Lcom/bota/sdk/SdkState;
+
+  public final com.bota.sdk.BluetoothState getBluetoothState();
+    descriptor: ()Lcom/bota/sdk/BluetoothState;
+
+  public final com.bota.sdk.BotaConfig getConfig();
+    descriptor: ()Lcom/bota/sdk/BotaConfig;
+
+  public final com.bota.sdk.DeviceManager getDevices();
+    descriptor: ()Lcom/bota/sdk/DeviceManager;
+
+  public final com.bota.sdk.RecordingManager getRecordings();
+    descriptor: ()Lcom/bota/sdk/RecordingManager;
+
+  public final com.bota.sdk.OtaManager getOta();
+    descriptor: ()Lcom/bota/sdk/OtaManager;
+
+  public final boolean isBluetoothReady();
+    descriptor: ()Z
+
+  public final boolean isInitialized();
+    descriptor: ()Z
+
+  public final java.lang.Object configure(com.bota.sdk.BotaConfig, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lcom/bota/sdk/BotaConfig;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public static java.lang.Object configure$default(com.bota.sdk.BotaClient, com.bota.sdk.BotaConfig, kotlin.coroutines.Continuation, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/BotaClient;Lcom/bota/sdk/BotaConfig;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+
+  public final java.lang.Object waitForBluetooth(long, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public static java.lang.Object waitForBluetooth$default(com.bota.sdk.BotaClient, long, kotlin.coroutines.Continuation, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/BotaClient;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+
+  public final void destroy();
+    descriptor: ()V
+
+  public com.bota.sdk.BotaClient();
+    descriptor: ()V
+
+  public static final com.bota.sdk.BotaClient access$getShared$cp();
+    descriptor: ()Lcom/bota/sdk/BotaClient;
+}
+
+===== com.bota.sdk.BotaConfig =====
+Compiled from "BotaClient.kt"
+public final class com.bota.sdk.BotaConfig {
+  public com.bota.sdk.BotaConfig(java.lang.String, boolean, boolean, com.bota.sdk.LogLevel, boolean);
+    descriptor: (Ljava/lang/String;ZZLcom/bota/sdk/LogLevel;Z)V
+
+  public com.bota.sdk.BotaConfig(java.lang.String, boolean, boolean, com.bota.sdk.LogLevel, boolean, int, kotlin.jvm.internal.DefaultConstructorMarker);
+    descriptor: (Ljava/lang/String;ZZLcom/bota/sdk/LogLevel;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+
+  public final java.lang.String getEnvironment();
+    descriptor: ()Ljava/lang/String;
+
+  public final boolean getBackgroundSyncEnabled();
+    descriptor: ()Z
+
+  public final boolean getWifiOnlyUpload();
+    descriptor: ()Z
+
+  public final com.bota.sdk.LogLevel getLogLevel();
+    descriptor: ()Lcom/bota/sdk/LogLevel;
+
+  public final boolean getDebug();
+    descriptor: ()Z
+
+  public final java.lang.String component1();
+    descriptor: ()Ljava/lang/String;
+
+  public final boolean component2();
+    descriptor: ()Z
+
+  public final boolean component3();
+    descriptor: ()Z
+
+  public final com.bota.sdk.LogLevel component4();
+    descriptor: ()Lcom/bota/sdk/LogLevel;
+
+  public final boolean component5();
+    descriptor: ()Z
+
+  public final com.bota.sdk.BotaConfig copy(java.lang.String, boolean, boolean, com.bota.sdk.LogLevel, boolean);
+    descriptor: (Ljava/lang/String;ZZLcom/bota/sdk/LogLevel;Z)Lcom/bota/sdk/BotaConfig;
+
+  public static com.bota.sdk.BotaConfig copy$default(com.bota.sdk.BotaConfig, java.lang.String, boolean, boolean, com.bota.sdk.LogLevel, boolean, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/BotaConfig;Ljava/lang/String;ZZLcom/bota/sdk/LogLevel;ZILjava/lang/Object;)Lcom/bota/sdk/BotaConfig;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public com.bota.sdk.BotaConfig();
+    descriptor: ()V
+}
+
+===== com.bota.sdk.BotaProtocol =====
+Compiled from "BotaProtocol.kt"
+public final class com.bota.sdk.BotaProtocol {
+  public static final com.bota.sdk.BotaProtocol INSTANCE;
+    descriptor: Lcom/bota/sdk/BotaProtocol;
+  public static final java.lang.String serviceBotaControl = "B07A0002-0000-1000-8000-00805F9B34FB";
+    descriptor: Ljava/lang/String;
+  public static final java.lang.String serviceBotaProvisioning = "B07A0003-0000-1000-8000-00805F9B34FB";
+    descriptor: Ljava/lang/String;
+  public static final java.lang.String serviceBotaStorage = "B07A0004-0000-1000-8000-00805F9B34FB";
+    descriptor: Ljava/lang/String;
+  public static final java.lang.String serviceBotaAuth = "B07A0005-0000-1000-8000-00805F9B34FB";
+    descriptor: Ljava/lang/String;
+  public static final java.lang.String serviceBotaWifiConfig = "B07A0006-0000-1000-8000-00805F9B34FB";
+    descriptor: Ljava/lang/String;
+  public static final java.lang.String charDeviceStatus = "B07A0002-0001-1000-8000-00805F9B34FB";
+    descriptor: Ljava/lang/String;
+  public static final java.lang.String charTransferControl = "B07A0004-0004-1000-8000-00805F9B34FB";
+    descriptor: Ljava/lang/String;
+  public final com.bota.sdk.DeviceStatus parseDeviceStatus(byte[]);
+    descriptor: ([B)Lcom/bota/sdk/DeviceStatus;
+
+  public final com.bota.sdk.DeviceRecording parseRecordingEntry(byte[]);
+    descriptor: ([B)Lcom/bota/sdk/DeviceRecording;
+
+  public final com.bota.sdk.TransferPacket parseTransferPacket(byte[]);
+    descriptor: ([B)Lcom/bota/sdk/TransferPacket;
+
+  public final byte[] serializeConnectionSettings(com.bota.sdk.DeviceConnectionSettings);
+    descriptor: (Lcom/bota/sdk/DeviceConnectionSettings;)[B
+}
+
+===== com.bota.sdk.BotaSdkException$BluetoothUnavailable =====
+Compiled from "BotaClient.kt"
+public final class com.bota.sdk.BotaSdkException$BluetoothUnavailable extends com.bota.sdk.BotaSdkException {
+  public static final com.bota.sdk.BotaSdkException$BluetoothUnavailable INSTANCE;
+    descriptor: Lcom/bota/sdk/BotaSdkException$BluetoothUnavailable;
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.BotaSdkException$NotConnected =====
+Compiled from "BotaClient.kt"
+public final class com.bota.sdk.BotaSdkException$NotConnected extends com.bota.sdk.BotaSdkException {
+  public com.bota.sdk.BotaSdkException$NotConnected(java.lang.String);
+    descriptor: (Ljava/lang/String;)V
+
+  public final java.lang.String getDeviceId();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component1();
+    descriptor: ()Ljava/lang/String;
+
+  public final com.bota.sdk.BotaSdkException$NotConnected copy(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/BotaSdkException$NotConnected;
+
+  public static com.bota.sdk.BotaSdkException$NotConnected copy$default(com.bota.sdk.BotaSdkException$NotConnected, java.lang.String, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/BotaSdkException$NotConnected;Ljava/lang/String;ILjava/lang/Object;)Lcom/bota/sdk/BotaSdkException$NotConnected;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.BotaSdkException$NotInitialized =====
+Compiled from "BotaClient.kt"
+public final class com.bota.sdk.BotaSdkException$NotInitialized extends com.bota.sdk.BotaSdkException {
+  public static final com.bota.sdk.BotaSdkException$NotInitialized INSTANCE;
+    descriptor: Lcom/bota/sdk/BotaSdkException$NotInitialized;
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.BotaSdkException$UnsupportedOperation =====
+Compiled from "BotaClient.kt"
+public final class com.bota.sdk.BotaSdkException$UnsupportedOperation extends com.bota.sdk.BotaSdkException {
+  public com.bota.sdk.BotaSdkException$UnsupportedOperation(java.lang.String);
+    descriptor: (Ljava/lang/String;)V
+
+  public final java.lang.String getDetail();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component1();
+    descriptor: ()Ljava/lang/String;
+
+  public final com.bota.sdk.BotaSdkException$UnsupportedOperation copy(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/BotaSdkException$UnsupportedOperation;
+
+  public static com.bota.sdk.BotaSdkException$UnsupportedOperation copy$default(com.bota.sdk.BotaSdkException$UnsupportedOperation, java.lang.String, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/BotaSdkException$UnsupportedOperation;Ljava/lang/String;ILjava/lang/Object;)Lcom/bota/sdk/BotaSdkException$UnsupportedOperation;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.BotaSdkException =====
+Compiled from "BotaClient.kt"
+public abstract class com.bota.sdk.BotaSdkException extends java.lang.Exception {
+  public com.bota.sdk.BotaSdkException(java.lang.String, kotlin.jvm.internal.DefaultConstructorMarker);
+    descriptor: (Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+===== com.bota.sdk.BotaSdkVersion =====
+Compiled from "BotaSdk.kt"
+public final class com.bota.sdk.BotaSdkVersion {
+  public static final com.bota.sdk.BotaSdkVersion INSTANCE;
+    descriptor: Lcom/bota/sdk/BotaSdkVersion;
+  public static final java.lang.String current = "0.1.0";
+    descriptor: Ljava/lang/String;
+}
+
+===== com.bota.sdk.ConnectedDevice =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.ConnectedDevice {
+  public com.bota.sdk.ConnectedDevice(java.lang.String, java.lang.String, com.bota.sdk.DeviceType, java.lang.String, java.lang.String, boolean, com.bota.sdk.ConnectionState, int);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;ZLcom/bota/sdk/ConnectionState;I)V
+
+  public com.bota.sdk.ConnectedDevice(java.lang.String, java.lang.String, com.bota.sdk.DeviceType, java.lang.String, java.lang.String, boolean, com.bota.sdk.ConnectionState, int, int, kotlin.jvm.internal.DefaultConstructorMarker);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;ZLcom/bota/sdk/ConnectionState;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+
+  public final java.lang.String getId();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getSerialNumber();
+    descriptor: ()Ljava/lang/String;
+
+  public final com.bota.sdk.DeviceType getDeviceType();
+    descriptor: ()Lcom/bota/sdk/DeviceType;
+
+  public final java.lang.String getFirmwareVersion();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getHardwareRevision();
+    descriptor: ()Ljava/lang/String;
+
+  public final boolean isProvisioned();
+    descriptor: ()Z
+
+  public final com.bota.sdk.ConnectionState getConnectionState();
+    descriptor: ()Lcom/bota/sdk/ConnectionState;
+
+  public final int getMtu();
+    descriptor: ()I
+
+  public final java.lang.String component1();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component2();
+    descriptor: ()Ljava/lang/String;
+
+  public final com.bota.sdk.DeviceType component3();
+    descriptor: ()Lcom/bota/sdk/DeviceType;
+
+  public final java.lang.String component4();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component5();
+    descriptor: ()Ljava/lang/String;
+
+  public final boolean component6();
+    descriptor: ()Z
+
+  public final com.bota.sdk.ConnectionState component7();
+    descriptor: ()Lcom/bota/sdk/ConnectionState;
+
+  public final int component8();
+    descriptor: ()I
+
+  public final com.bota.sdk.ConnectedDevice copy(java.lang.String, java.lang.String, com.bota.sdk.DeviceType, java.lang.String, java.lang.String, boolean, com.bota.sdk.ConnectionState, int);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;ZLcom/bota/sdk/ConnectionState;I)Lcom/bota/sdk/ConnectedDevice;
+
+  public static com.bota.sdk.ConnectedDevice copy$default(com.bota.sdk.ConnectedDevice, java.lang.String, java.lang.String, com.bota.sdk.DeviceType, java.lang.String, java.lang.String, boolean, com.bota.sdk.ConnectionState, int, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;ZLcom/bota/sdk/ConnectionState;IILjava/lang/Object;)Lcom/bota/sdk/ConnectedDevice;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.ConnectionState =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.ConnectionState extends java.lang.Enum<com.bota.sdk.ConnectionState> {
+  public static final com.bota.sdk.ConnectionState DISCONNECTED;
+    descriptor: Lcom/bota/sdk/ConnectionState;
+  public static final com.bota.sdk.ConnectionState CONNECTING;
+    descriptor: Lcom/bota/sdk/ConnectionState;
+  public static final com.bota.sdk.ConnectionState BONDING;
+    descriptor: Lcom/bota/sdk/ConnectionState;
+  public static final com.bota.sdk.ConnectionState DISCOVERING;
+    descriptor: Lcom/bota/sdk/ConnectionState;
+  public static final com.bota.sdk.ConnectionState CONNECTED;
+    descriptor: Lcom/bota/sdk/ConnectionState;
+  public static final com.bota.sdk.ConnectionState DISCONNECTING;
+    descriptor: Lcom/bota/sdk/ConnectionState;
+  public static com.bota.sdk.ConnectionState[] values();
+    descriptor: ()[Lcom/bota/sdk/ConnectionState;
+
+  public static com.bota.sdk.ConnectionState valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/ConnectionState;
+
+  public static kotlin.enums.EnumEntries<com.bota.sdk.ConnectionState> getEntries();
+    descriptor: ()Lkotlin/enums/EnumEntries;
+}
+
+===== com.bota.sdk.ConnectionType =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.ConnectionType extends java.lang.Enum<com.bota.sdk.ConnectionType> {
+  public static final com.bota.sdk.ConnectionType WIFI;
+    descriptor: Lcom/bota/sdk/ConnectionType;
+  public static final com.bota.sdk.ConnectionType BLE;
+    descriptor: Lcom/bota/sdk/ConnectionType;
+  public static final com.bota.sdk.ConnectionType CELLULAR;
+    descriptor: Lcom/bota/sdk/ConnectionType;
+  public static com.bota.sdk.ConnectionType[] values();
+    descriptor: ()[Lcom/bota/sdk/ConnectionType;
+
+  public static com.bota.sdk.ConnectionType valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/ConnectionType;
+
+  public static kotlin.enums.EnumEntries<com.bota.sdk.ConnectionType> getEntries();
+    descriptor: ()Lkotlin/enums/EnumEntries;
+}
+
+===== com.bota.sdk.DeviceConnectionSettings =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.DeviceConnectionSettings {
+  public com.bota.sdk.DeviceConnectionSettings(com.bota.sdk.EnabledConnections, java.util.List<? extends com.bota.sdk.ConnectionType>, com.bota.sdk.PowerManagement, java.lang.Boolean, java.lang.Integer);
+    descriptor: (Lcom/bota/sdk/EnabledConnections;Ljava/util/List;Lcom/bota/sdk/PowerManagement;Ljava/lang/Boolean;Ljava/lang/Integer;)V
+
+  public com.bota.sdk.DeviceConnectionSettings(com.bota.sdk.EnabledConnections, java.util.List, com.bota.sdk.PowerManagement, java.lang.Boolean, java.lang.Integer, int, kotlin.jvm.internal.DefaultConstructorMarker);
+    descriptor: (Lcom/bota/sdk/EnabledConnections;Ljava/util/List;Lcom/bota/sdk/PowerManagement;Ljava/lang/Boolean;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+
+  public final com.bota.sdk.EnabledConnections getEnabledConnections();
+    descriptor: ()Lcom/bota/sdk/EnabledConnections;
+
+  public final java.util.List<com.bota.sdk.ConnectionType> getUploadNetworkPreference();
+    descriptor: ()Ljava/util/List;
+
+  public final com.bota.sdk.PowerManagement getPowerManagement();
+    descriptor: ()Lcom/bota/sdk/PowerManagement;
+
+  public final java.lang.Boolean getStreamingEnabled();
+    descriptor: ()Ljava/lang/Boolean;
+
+  public final java.lang.Integer getStreamingFlushIntervalSeconds();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final com.bota.sdk.EnabledConnections component1();
+    descriptor: ()Lcom/bota/sdk/EnabledConnections;
+
+  public final java.util.List<com.bota.sdk.ConnectionType> component2();
+    descriptor: ()Ljava/util/List;
+
+  public final com.bota.sdk.PowerManagement component3();
+    descriptor: ()Lcom/bota/sdk/PowerManagement;
+
+  public final java.lang.Boolean component4();
+    descriptor: ()Ljava/lang/Boolean;
+
+  public final java.lang.Integer component5();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final com.bota.sdk.DeviceConnectionSettings copy(com.bota.sdk.EnabledConnections, java.util.List<? extends com.bota.sdk.ConnectionType>, com.bota.sdk.PowerManagement, java.lang.Boolean, java.lang.Integer);
+    descriptor: (Lcom/bota/sdk/EnabledConnections;Ljava/util/List;Lcom/bota/sdk/PowerManagement;Ljava/lang/Boolean;Ljava/lang/Integer;)Lcom/bota/sdk/DeviceConnectionSettings;
+
+  public static com.bota.sdk.DeviceConnectionSettings copy$default(com.bota.sdk.DeviceConnectionSettings, com.bota.sdk.EnabledConnections, java.util.List, com.bota.sdk.PowerManagement, java.lang.Boolean, java.lang.Integer, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/DeviceConnectionSettings;Lcom/bota/sdk/EnabledConnections;Ljava/util/List;Lcom/bota/sdk/PowerManagement;Ljava/lang/Boolean;Ljava/lang/Integer;ILjava/lang/Object;)Lcom/bota/sdk/DeviceConnectionSettings;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.DeviceFlags =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.DeviceFlags {
+  public com.bota.sdk.DeviceFlags(boolean, boolean, boolean, boolean, boolean, boolean);
+    descriptor: (ZZZZZZ)V
+
+  public final boolean getCharging();
+    descriptor: ()Z
+
+  public final boolean getLowBattery();
+    descriptor: ()Z
+
+  public final boolean getStorageFull();
+    descriptor: ()Z
+
+  public final boolean getWifiConnected();
+    descriptor: ()Z
+
+  public final boolean getLteConnected();
+    descriptor: ()Z
+
+  public final boolean getSyncActive();
+    descriptor: ()Z
+
+  public final boolean component1();
+    descriptor: ()Z
+
+  public final boolean component2();
+    descriptor: ()Z
+
+  public final boolean component3();
+    descriptor: ()Z
+
+  public final boolean component4();
+    descriptor: ()Z
+
+  public final boolean component5();
+    descriptor: ()Z
+
+  public final boolean component6();
+    descriptor: ()Z
+
+  public final com.bota.sdk.DeviceFlags copy(boolean, boolean, boolean, boolean, boolean, boolean);
+    descriptor: (ZZZZZZ)Lcom/bota/sdk/DeviceFlags;
+
+  public static com.bota.sdk.DeviceFlags copy$default(com.bota.sdk.DeviceFlags, boolean, boolean, boolean, boolean, boolean, boolean, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/DeviceFlags;ZZZZZZILjava/lang/Object;)Lcom/bota/sdk/DeviceFlags;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.DeviceManager =====
+Compiled from "Managers.kt"
+public final class com.bota.sdk.DeviceManager {
+  public com.bota.sdk.DeviceManager(com.bota.sdk.BluetoothTransport);
+    descriptor: (Lcom/bota/sdk/BluetoothTransport;)V
+
+  public final java.lang.Object currentBluetoothState(kotlin.coroutines.Continuation<? super com.bota.sdk.BluetoothState>);
+    descriptor: (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public final kotlinx.coroutines.flow.Flow<com.bota.sdk.DiscoveredDevice> startScan(com.bota.sdk.ScanOptions);
+    descriptor: (Lcom/bota/sdk/ScanOptions;)Lkotlinx/coroutines/flow/Flow;
+
+  public static kotlinx.coroutines.flow.Flow startScan$default(com.bota.sdk.DeviceManager, com.bota.sdk.ScanOptions, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/DeviceManager;Lcom/bota/sdk/ScanOptions;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+
+  public final void stopScan();
+    descriptor: ()V
+
+  public final java.lang.Object connect(com.bota.sdk.DiscoveredDevice, kotlin.coroutines.Continuation<? super com.bota.sdk.ConnectedDevice>);
+    descriptor: (Lcom/bota/sdk/DiscoveredDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public final java.lang.Object disconnect(com.bota.sdk.ConnectedDevice, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lcom/bota/sdk/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public final boolean isConnected(java.lang.String);
+    descriptor: (Ljava/lang/String;)Z
+
+  public final java.lang.Object getStatus(com.bota.sdk.ConnectedDevice, kotlin.coroutines.Continuation<? super com.bota.sdk.DeviceStatus>);
+    descriptor: (Lcom/bota/sdk/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public final kotlinx.coroutines.flow.Flow<com.bota.sdk.DeviceStatus> subscribeToStatus(com.bota.sdk.ConnectedDevice);
+    descriptor: (Lcom/bota/sdk/ConnectedDevice;)Lkotlinx/coroutines/flow/Flow;
+
+  public final java.lang.Object provision(com.bota.sdk.ConnectedDevice, java.lang.String, java.lang.String, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lcom/bota/sdk/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public static java.lang.Object provision$default(com.bota.sdk.DeviceManager, com.bota.sdk.ConnectedDevice, java.lang.String, java.lang.String, kotlin.coroutines.Continuation, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/DeviceManager;Lcom/bota/sdk/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+
+  public final java.lang.Object writeConnectionSettings(com.bota.sdk.ConnectedDevice, com.bota.sdk.DeviceConnectionSettings, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lcom/bota/sdk/ConnectedDevice;Lcom/bota/sdk/DeviceConnectionSettings;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public final void destroy();
+    descriptor: ()V
+}
+
+===== com.bota.sdk.DeviceRecording =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.DeviceRecording {
+  public com.bota.sdk.DeviceRecording(java.lang.String, java.time.Instant, int, int, com.bota.sdk.AudioCodec, java.lang.Boolean);
+    descriptor: (Ljava/lang/String;Ljava/time/Instant;IILcom/bota/sdk/AudioCodec;Ljava/lang/Boolean;)V
+
+  public com.bota.sdk.DeviceRecording(java.lang.String, java.time.Instant, int, int, com.bota.sdk.AudioCodec, java.lang.Boolean, int, kotlin.jvm.internal.DefaultConstructorMarker);
+    descriptor: (Ljava/lang/String;Ljava/time/Instant;IILcom/bota/sdk/AudioCodec;Ljava/lang/Boolean;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+
+  public final java.lang.String getUuid();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.time.Instant getStartedAt();
+    descriptor: ()Ljava/time/Instant;
+
+  public final int getDurationMs();
+    descriptor: ()I
+
+  public final int getFileSizeBytes();
+    descriptor: ()I
+
+  public final com.bota.sdk.AudioCodec getCodec();
+    descriptor: ()Lcom/bota/sdk/AudioCodec;
+
+  public final java.lang.Boolean isEncrypted();
+    descriptor: ()Ljava/lang/Boolean;
+
+  public final java.lang.String component1();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.time.Instant component2();
+    descriptor: ()Ljava/time/Instant;
+
+  public final int component3();
+    descriptor: ()I
+
+  public final int component4();
+    descriptor: ()I
+
+  public final com.bota.sdk.AudioCodec component5();
+    descriptor: ()Lcom/bota/sdk/AudioCodec;
+
+  public final java.lang.Boolean component6();
+    descriptor: ()Ljava/lang/Boolean;
+
+  public final com.bota.sdk.DeviceRecording copy(java.lang.String, java.time.Instant, int, int, com.bota.sdk.AudioCodec, java.lang.Boolean);
+    descriptor: (Ljava/lang/String;Ljava/time/Instant;IILcom/bota/sdk/AudioCodec;Ljava/lang/Boolean;)Lcom/bota/sdk/DeviceRecording;
+
+  public static com.bota.sdk.DeviceRecording copy$default(com.bota.sdk.DeviceRecording, java.lang.String, java.time.Instant, int, int, com.bota.sdk.AudioCodec, java.lang.Boolean, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/DeviceRecording;Ljava/lang/String;Ljava/time/Instant;IILcom/bota/sdk/AudioCodec;Ljava/lang/Boolean;ILjava/lang/Object;)Lcom/bota/sdk/DeviceRecording;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.DeviceState =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.DeviceState extends java.lang.Enum<com.bota.sdk.DeviceState> {
+  public static final com.bota.sdk.DeviceState IDLE;
+    descriptor: Lcom/bota/sdk/DeviceState;
+  public static final com.bota.sdk.DeviceState RECORDING;
+    descriptor: Lcom/bota/sdk/DeviceState;
+  public static final com.bota.sdk.DeviceState SYNCING;
+    descriptor: Lcom/bota/sdk/DeviceState;
+  public static final com.bota.sdk.DeviceState UPLOADING;
+    descriptor: Lcom/bota/sdk/DeviceState;
+  public static final com.bota.sdk.DeviceState CHARGING;
+    descriptor: Lcom/bota/sdk/DeviceState;
+  public static final com.bota.sdk.DeviceState LOW_BATTERY;
+    descriptor: Lcom/bota/sdk/DeviceState;
+  public static final com.bota.sdk.DeviceState STORAGE_FULL;
+    descriptor: Lcom/bota/sdk/DeviceState;
+  public static final com.bota.sdk.DeviceState ERROR;
+    descriptor: Lcom/bota/sdk/DeviceState;
+  public static com.bota.sdk.DeviceState[] values();
+    descriptor: ()[Lcom/bota/sdk/DeviceState;
+
+  public static com.bota.sdk.DeviceState valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/DeviceState;
+
+  public static kotlin.enums.EnumEntries<com.bota.sdk.DeviceState> getEntries();
+    descriptor: ()Lkotlin/enums/EnumEntries;
+}
+
+===== com.bota.sdk.DeviceStatus =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.DeviceStatus {
+  public com.bota.sdk.DeviceStatus(int, java.lang.Integer, int, int, com.bota.sdk.DeviceState, int, java.time.Instant, com.bota.sdk.DeviceFlags, long, com.bota.sdk.LteStatus, java.lang.Integer, com.bota.sdk.WifiRadioStatus, com.bota.sdk.ModemInfo);
+    descriptor: (ILjava/lang/Integer;IILcom/bota/sdk/DeviceState;ILjava/time/Instant;Lcom/bota/sdk/DeviceFlags;JLcom/bota/sdk/LteStatus;Ljava/lang/Integer;Lcom/bota/sdk/WifiRadioStatus;Lcom/bota/sdk/ModemInfo;)V
+
+  public final int getBatteryLevel();
+    descriptor: ()I
+
+  public final java.lang.Integer getBatteryMv();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final int getStorageTotalMb();
+    descriptor: ()I
+
+  public final int getStorageUsedMb();
+    descriptor: ()I
+
+  public final com.bota.sdk.DeviceState getState();
+    descriptor: ()Lcom/bota/sdk/DeviceState;
+
+  public final int getPendingRecordings();
+    descriptor: ()I
+
+  public final java.time.Instant getLastTimeSyncAt();
+    descriptor: ()Ljava/time/Instant;
+
+  public final com.bota.sdk.DeviceFlags getFlags();
+    descriptor: ()Lcom/bota/sdk/DeviceFlags;
+
+  public final long getTimestamp();
+    descriptor: ()J
+
+  public final com.bota.sdk.LteStatus getLteStatus();
+    descriptor: ()Lcom/bota/sdk/LteStatus;
+
+  public final java.lang.Integer getLteSignalQuality();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final com.bota.sdk.WifiRadioStatus getWifiStatus();
+    descriptor: ()Lcom/bota/sdk/WifiRadioStatus;
+
+  public final com.bota.sdk.ModemInfo getModemInfo();
+    descriptor: ()Lcom/bota/sdk/ModemInfo;
+
+  public final int component1();
+    descriptor: ()I
+
+  public final java.lang.Integer component2();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final int component3();
+    descriptor: ()I
+
+  public final int component4();
+    descriptor: ()I
+
+  public final com.bota.sdk.DeviceState component5();
+    descriptor: ()Lcom/bota/sdk/DeviceState;
+
+  public final int component6();
+    descriptor: ()I
+
+  public final java.time.Instant component7();
+    descriptor: ()Ljava/time/Instant;
+
+  public final com.bota.sdk.DeviceFlags component8();
+    descriptor: ()Lcom/bota/sdk/DeviceFlags;
+
+  public final long component9();
+    descriptor: ()J
+
+  public final com.bota.sdk.LteStatus component10();
+    descriptor: ()Lcom/bota/sdk/LteStatus;
+
+  public final java.lang.Integer component11();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final com.bota.sdk.WifiRadioStatus component12();
+    descriptor: ()Lcom/bota/sdk/WifiRadioStatus;
+
+  public final com.bota.sdk.ModemInfo component13();
+    descriptor: ()Lcom/bota/sdk/ModemInfo;
+
+  public final com.bota.sdk.DeviceStatus copy(int, java.lang.Integer, int, int, com.bota.sdk.DeviceState, int, java.time.Instant, com.bota.sdk.DeviceFlags, long, com.bota.sdk.LteStatus, java.lang.Integer, com.bota.sdk.WifiRadioStatus, com.bota.sdk.ModemInfo);
+    descriptor: (ILjava/lang/Integer;IILcom/bota/sdk/DeviceState;ILjava/time/Instant;Lcom/bota/sdk/DeviceFlags;JLcom/bota/sdk/LteStatus;Ljava/lang/Integer;Lcom/bota/sdk/WifiRadioStatus;Lcom/bota/sdk/ModemInfo;)Lcom/bota/sdk/DeviceStatus;
+
+  public static com.bota.sdk.DeviceStatus copy$default(com.bota.sdk.DeviceStatus, int, java.lang.Integer, int, int, com.bota.sdk.DeviceState, int, java.time.Instant, com.bota.sdk.DeviceFlags, long, com.bota.sdk.LteStatus, java.lang.Integer, com.bota.sdk.WifiRadioStatus, com.bota.sdk.ModemInfo, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/DeviceStatus;ILjava/lang/Integer;IILcom/bota/sdk/DeviceState;ILjava/time/Instant;Lcom/bota/sdk/DeviceFlags;JLcom/bota/sdk/LteStatus;Ljava/lang/Integer;Lcom/bota/sdk/WifiRadioStatus;Lcom/bota/sdk/ModemInfo;ILjava/lang/Object;)Lcom/bota/sdk/DeviceStatus;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.DeviceType =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.DeviceType extends java.lang.Enum<com.bota.sdk.DeviceType> {
+  public static final com.bota.sdk.DeviceType BOTA_PIN;
+    descriptor: Lcom/bota/sdk/DeviceType;
+  public static final com.bota.sdk.DeviceType BOTA_PIN_4G;
+    descriptor: Lcom/bota/sdk/DeviceType;
+  public static final com.bota.sdk.DeviceType BOTA_NOTE;
+    descriptor: Lcom/bota/sdk/DeviceType;
+  public static com.bota.sdk.DeviceType[] values();
+    descriptor: ()[Lcom/bota/sdk/DeviceType;
+
+  public static com.bota.sdk.DeviceType valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/DeviceType;
+
+  public static kotlin.enums.EnumEntries<com.bota.sdk.DeviceType> getEntries();
+    descriptor: ()Lkotlin/enums/EnumEntries;
+}
+
+===== com.bota.sdk.DiscoveredDevice =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.DiscoveredDevice {
+  public com.bota.sdk.DiscoveredDevice(java.lang.String, java.lang.String, com.bota.sdk.DeviceType, java.lang.String, java.lang.String, com.bota.sdk.PairingState, int, byte[], java.time.Instant);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/PairingState;I[BLjava/time/Instant;)V
+
+  public com.bota.sdk.DiscoveredDevice(java.lang.String, java.lang.String, com.bota.sdk.DeviceType, java.lang.String, java.lang.String, com.bota.sdk.PairingState, int, byte[], java.time.Instant, int, kotlin.jvm.internal.DefaultConstructorMarker);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/PairingState;I[BLjava/time/Instant;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+
+  public final java.lang.String getId();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getName();
+    descriptor: ()Ljava/lang/String;
+
+  public final com.bota.sdk.DeviceType getDeviceType();
+    descriptor: ()Lcom/bota/sdk/DeviceType;
+
+  public final java.lang.String getFirmwareVersion();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getMacAddress();
+    descriptor: ()Ljava/lang/String;
+
+  public final com.bota.sdk.PairingState getPairingState();
+    descriptor: ()Lcom/bota/sdk/PairingState;
+
+  public final int getRssi();
+    descriptor: ()I
+
+  public final byte[] getManufacturerData();
+    descriptor: ()[B
+
+  public final java.time.Instant getDiscoveredAt();
+    descriptor: ()Ljava/time/Instant;
+
+  public final java.lang.String component1();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component2();
+    descriptor: ()Ljava/lang/String;
+
+  public final com.bota.sdk.DeviceType component3();
+    descriptor: ()Lcom/bota/sdk/DeviceType;
+
+  public final java.lang.String component4();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component5();
+    descriptor: ()Ljava/lang/String;
+
+  public final com.bota.sdk.PairingState component6();
+    descriptor: ()Lcom/bota/sdk/PairingState;
+
+  public final int component7();
+    descriptor: ()I
+
+  public final byte[] component8();
+    descriptor: ()[B
+
+  public final java.time.Instant component9();
+    descriptor: ()Ljava/time/Instant;
+
+  public final com.bota.sdk.DiscoveredDevice copy(java.lang.String, java.lang.String, com.bota.sdk.DeviceType, java.lang.String, java.lang.String, com.bota.sdk.PairingState, int, byte[], java.time.Instant);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/PairingState;I[BLjava/time/Instant;)Lcom/bota/sdk/DiscoveredDevice;
+
+  public static com.bota.sdk.DiscoveredDevice copy$default(com.bota.sdk.DiscoveredDevice, java.lang.String, java.lang.String, com.bota.sdk.DeviceType, java.lang.String, java.lang.String, com.bota.sdk.PairingState, int, byte[], java.time.Instant, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/DiscoveredDevice;Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/PairingState;I[BLjava/time/Instant;ILjava/lang/Object;)Lcom/bota/sdk/DiscoveredDevice;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.EnabledConnections =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.EnabledConnections {
+  public com.bota.sdk.EnabledConnections(boolean, boolean);
+    descriptor: (ZZ)V
+
+  public final boolean getWifi();
+    descriptor: ()Z
+
+  public final boolean getCellular();
+    descriptor: ()Z
+
+  public final boolean component1();
+    descriptor: ()Z
+
+  public final boolean component2();
+    descriptor: ()Z
+
+  public final com.bota.sdk.EnabledConnections copy(boolean, boolean);
+    descriptor: (ZZ)Lcom/bota/sdk/EnabledConnections;
+
+  public static com.bota.sdk.EnabledConnections copy$default(com.bota.sdk.EnabledConnections, boolean, boolean, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/EnabledConnections;ZZILjava/lang/Object;)Lcom/bota/sdk/EnabledConnections;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.LogLevel =====
+Compiled from "BotaClient.kt"
+public final class com.bota.sdk.LogLevel extends java.lang.Enum<com.bota.sdk.LogLevel> {
+  public static final com.bota.sdk.LogLevel DEBUG;
+    descriptor: Lcom/bota/sdk/LogLevel;
+  public static final com.bota.sdk.LogLevel INFO;
+    descriptor: Lcom/bota/sdk/LogLevel;
+  public static final com.bota.sdk.LogLevel WARN;
+    descriptor: Lcom/bota/sdk/LogLevel;
+  public static final com.bota.sdk.LogLevel ERROR;
+    descriptor: Lcom/bota/sdk/LogLevel;
+  public static final com.bota.sdk.LogLevel NONE;
+    descriptor: Lcom/bota/sdk/LogLevel;
+  public static com.bota.sdk.LogLevel[] values();
+    descriptor: ()[Lcom/bota/sdk/LogLevel;
+
+  public static com.bota.sdk.LogLevel valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/LogLevel;
+
+  public static kotlin.enums.EnumEntries<com.bota.sdk.LogLevel> getEntries();
+    descriptor: ()Lkotlin/enums/EnumEntries;
+}
+
+===== com.bota.sdk.LteStatus =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.LteStatus extends java.lang.Enum<com.bota.sdk.LteStatus> {
+  public static final com.bota.sdk.LteStatus OFF;
+    descriptor: Lcom/bota/sdk/LteStatus;
+  public static final com.bota.sdk.LteStatus SEARCHING;
+    descriptor: Lcom/bota/sdk/LteStatus;
+  public static final com.bota.sdk.LteStatus REGISTERED;
+    descriptor: Lcom/bota/sdk/LteStatus;
+  public static final com.bota.sdk.LteStatus CONNECTED;
+    descriptor: Lcom/bota/sdk/LteStatus;
+  public static final com.bota.sdk.LteStatus DENIED;
+    descriptor: Lcom/bota/sdk/LteStatus;
+  public static final com.bota.sdk.LteStatus NO_SIM;
+    descriptor: Lcom/bota/sdk/LteStatus;
+  public static final com.bota.sdk.LteStatus ERROR;
+    descriptor: Lcom/bota/sdk/LteStatus;
+  public static final com.bota.sdk.LteStatus LOW_VOLTAGE;
+    descriptor: Lcom/bota/sdk/LteStatus;
+  public static final com.bota.sdk.LteStatus DISABLED;
+    descriptor: Lcom/bota/sdk/LteStatus;
+  public static com.bota.sdk.LteStatus[] values();
+    descriptor: ()[Lcom/bota/sdk/LteStatus;
+
+  public static com.bota.sdk.LteStatus valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/LteStatus;
+
+  public static kotlin.enums.EnumEntries<com.bota.sdk.LteStatus> getEntries();
+    descriptor: ()Lkotlin/enums/EnumEntries;
+}
+
+===== com.bota.sdk.ModemInfo =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.ModemInfo {
+  public com.bota.sdk.ModemInfo(java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.Integer, java.lang.String, java.lang.Integer, java.lang.String, java.lang.Boolean);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Boolean;)V
+
+  public com.bota.sdk.ModemInfo(java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.Integer, java.lang.String, java.lang.Integer, java.lang.String, java.lang.Boolean, int, kotlin.jvm.internal.DefaultConstructorMarker);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Boolean;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+
+  public final java.lang.String getImei();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getIccid();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getOperator();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getRat();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getBand();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getApn();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getSimStatus();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.Integer getCsq();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final java.lang.String getIpAddress();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.Integer getModemVoltage();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final java.lang.String getModemFirmware();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.Boolean getRoaming();
+    descriptor: ()Ljava/lang/Boolean;
+
+  public final java.lang.String component1();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component2();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component3();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component4();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component5();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component6();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component7();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.Integer component8();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final java.lang.String component9();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.Integer component10();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final java.lang.String component11();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.Boolean component12();
+    descriptor: ()Ljava/lang/Boolean;
+
+  public final com.bota.sdk.ModemInfo copy(java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.Integer, java.lang.String, java.lang.Integer, java.lang.String, java.lang.Boolean);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Boolean;)Lcom/bota/sdk/ModemInfo;
+
+  public static com.bota.sdk.ModemInfo copy$default(com.bota.sdk.ModemInfo, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.Integer, java.lang.String, java.lang.Integer, java.lang.String, java.lang.Boolean, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/ModemInfo;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Boolean;ILjava/lang/Object;)Lcom/bota/sdk/ModemInfo;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public com.bota.sdk.ModemInfo();
+    descriptor: ()V
+}
+
+===== com.bota.sdk.OtaManager =====
+Compiled from "Managers.kt"
+public final class com.bota.sdk.OtaManager {
+  public com.bota.sdk.OtaManager(com.bota.sdk.BluetoothTransport);
+    descriptor: (Lcom/bota/sdk/BluetoothTransport;)V
+
+  public final void destroy();
+    descriptor: ()V
+}
+
+===== com.bota.sdk.PairingState =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.PairingState extends java.lang.Enum<com.bota.sdk.PairingState> {
+  public static final com.bota.sdk.PairingState UNPAIRED;
+    descriptor: Lcom/bota/sdk/PairingState;
+  public static final com.bota.sdk.PairingState PAIRING;
+    descriptor: Lcom/bota/sdk/PairingState;
+  public static final com.bota.sdk.PairingState PAIRED;
+    descriptor: Lcom/bota/sdk/PairingState;
+  public static final com.bota.sdk.PairingState ERROR;
+    descriptor: Lcom/bota/sdk/PairingState;
+  public static com.bota.sdk.PairingState[] values();
+    descriptor: ()[Lcom/bota/sdk/PairingState;
+
+  public static com.bota.sdk.PairingState valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/PairingState;
+
+  public static kotlin.enums.EnumEntries<com.bota.sdk.PairingState> getEntries();
+    descriptor: ()Lkotlin/enums/EnumEntries;
+}
+
+===== com.bota.sdk.PowerManagement =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.PowerManagement {
+  public com.bota.sdk.PowerManagement(int, int);
+    descriptor: (II)V
+
+  public final int getWifiIdleTimeoutSeconds();
+    descriptor: ()I
+
+  public final int getCellularIdleTimeoutSeconds();
+    descriptor: ()I
+
+  public final int component1();
+    descriptor: ()I
+
+  public final int component2();
+    descriptor: ()I
+
+  public final com.bota.sdk.PowerManagement copy(int, int);
+    descriptor: (II)Lcom/bota/sdk/PowerManagement;
+
+  public static com.bota.sdk.PowerManagement copy$default(com.bota.sdk.PowerManagement, int, int, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/PowerManagement;IIILjava/lang/Object;)Lcom/bota/sdk/PowerManagement;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.RecordingManager =====
+Compiled from "Managers.kt"
+public final class com.bota.sdk.RecordingManager {
+  public com.bota.sdk.RecordingManager(com.bota.sdk.BluetoothTransport);
+    descriptor: (Lcom/bota/sdk/BluetoothTransport;)V
+
+  public final java.lang.Object listRecordings(com.bota.sdk.ConnectedDevice, kotlin.coroutines.Continuation<? super java.util.List<com.bota.sdk.DeviceRecording>>);
+    descriptor: (Lcom/bota/sdk/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public final kotlinx.coroutines.flow.Flow<com.bota.sdk.SyncProgress> syncRecording(com.bota.sdk.ConnectedDevice, com.bota.sdk.DeviceRecording, com.bota.sdk.UploadInfo);
+    descriptor: (Lcom/bota/sdk/ConnectedDevice;Lcom/bota/sdk/DeviceRecording;Lcom/bota/sdk/UploadInfo;)Lkotlinx/coroutines/flow/Flow;
+
+  public final java.lang.Object confirmSync(com.bota.sdk.ConnectedDevice, byte[], kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lcom/bota/sdk/ConnectedDevice;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public final void destroy();
+    descriptor: ()V
+}
+
+===== com.bota.sdk.ScanOptions =====
+Compiled from "BluetoothTransport.kt"
+public final class com.bota.sdk.ScanOptions {
+  public com.bota.sdk.ScanOptions(long, java.util.List<? extends com.bota.sdk.DeviceType>, com.bota.sdk.PairingState, java.lang.Integer, boolean);
+    descriptor: (JLjava/util/List;Lcom/bota/sdk/PairingState;Ljava/lang/Integer;Z)V
+
+  public com.bota.sdk.ScanOptions(long, java.util.List, com.bota.sdk.PairingState, java.lang.Integer, boolean, int, kotlin.jvm.internal.DefaultConstructorMarker);
+    descriptor: (JLjava/util/List;Lcom/bota/sdk/PairingState;Ljava/lang/Integer;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+
+  public final long getTimeoutMs();
+    descriptor: ()J
+
+  public final java.util.List<com.bota.sdk.DeviceType> getDeviceTypes();
+    descriptor: ()Ljava/util/List;
+
+  public final com.bota.sdk.PairingState getPairingState();
+    descriptor: ()Lcom/bota/sdk/PairingState;
+
+  public final java.lang.Integer getMinRssi();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final boolean getAllowDuplicates();
+    descriptor: ()Z
+
+  public final long component1();
+    descriptor: ()J
+
+  public final java.util.List<com.bota.sdk.DeviceType> component2();
+    descriptor: ()Ljava/util/List;
+
+  public final com.bota.sdk.PairingState component3();
+    descriptor: ()Lcom/bota/sdk/PairingState;
+
+  public final java.lang.Integer component4();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final boolean component5();
+    descriptor: ()Z
+
+  public final com.bota.sdk.ScanOptions copy(long, java.util.List<? extends com.bota.sdk.DeviceType>, com.bota.sdk.PairingState, java.lang.Integer, boolean);
+    descriptor: (JLjava/util/List;Lcom/bota/sdk/PairingState;Ljava/lang/Integer;Z)Lcom/bota/sdk/ScanOptions;
+
+  public static com.bota.sdk.ScanOptions copy$default(com.bota.sdk.ScanOptions, long, java.util.List, com.bota.sdk.PairingState, java.lang.Integer, boolean, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/ScanOptions;JLjava/util/List;Lcom/bota/sdk/PairingState;Ljava/lang/Integer;ZILjava/lang/Object;)Lcom/bota/sdk/ScanOptions;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+
+  public com.bota.sdk.ScanOptions();
+    descriptor: ()V
+}
+
+===== com.bota.sdk.SdkState =====
+Compiled from "BotaClient.kt"
+public final class com.bota.sdk.SdkState extends java.lang.Enum<com.bota.sdk.SdkState> {
+  public static final com.bota.sdk.SdkState UNINITIALIZED;
+    descriptor: Lcom/bota/sdk/SdkState;
+  public static final com.bota.sdk.SdkState INITIALIZING;
+    descriptor: Lcom/bota/sdk/SdkState;
+  public static final com.bota.sdk.SdkState READY;
+    descriptor: Lcom/bota/sdk/SdkState;
+  public static final com.bota.sdk.SdkState ERROR;
+    descriptor: Lcom/bota/sdk/SdkState;
+  public static com.bota.sdk.SdkState[] values();
+    descriptor: ()[Lcom/bota/sdk/SdkState;
+
+  public static com.bota.sdk.SdkState valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/SdkState;
+
+  public static kotlin.enums.EnumEntries<com.bota.sdk.SdkState> getEntries();
+    descriptor: ()Lkotlin/enums/EnumEntries;
+}
+
+===== com.bota.sdk.SyncProgress =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.SyncProgress {
+  public com.bota.sdk.SyncProgress(com.bota.sdk.SyncStage, double, java.lang.Integer, java.lang.Integer, java.lang.Integer, java.lang.String, java.lang.String, java.lang.String);
+    descriptor: (Lcom/bota/sdk/SyncStage;DLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+
+  public com.bota.sdk.SyncProgress(com.bota.sdk.SyncStage, double, java.lang.Integer, java.lang.Integer, java.lang.Integer, java.lang.String, java.lang.String, java.lang.String, int, kotlin.jvm.internal.DefaultConstructorMarker);
+    descriptor: (Lcom/bota/sdk/SyncStage;DLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+
+  public final com.bota.sdk.SyncStage getStage();
+    descriptor: ()Lcom/bota/sdk/SyncStage;
+
+  public final double getProgress();
+    descriptor: ()D
+
+  public final java.lang.Integer getBytesTransferred();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final java.lang.Integer getTotalBytes();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final java.lang.Integer getBytesUploaded();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final java.lang.String getRecordingId();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getError();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getContentSha256();
+    descriptor: ()Ljava/lang/String;
+
+  public final com.bota.sdk.SyncStage component1();
+    descriptor: ()Lcom/bota/sdk/SyncStage;
+
+  public final double component2();
+    descriptor: ()D
+
+  public final java.lang.Integer component3();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final java.lang.Integer component4();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final java.lang.Integer component5();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final java.lang.String component6();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component7();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component8();
+    descriptor: ()Ljava/lang/String;
+
+  public final com.bota.sdk.SyncProgress copy(com.bota.sdk.SyncStage, double, java.lang.Integer, java.lang.Integer, java.lang.Integer, java.lang.String, java.lang.String, java.lang.String);
+    descriptor: (Lcom/bota/sdk/SyncStage;DLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/bota/sdk/SyncProgress;
+
+  public static com.bota.sdk.SyncProgress copy$default(com.bota.sdk.SyncProgress, com.bota.sdk.SyncStage, double, java.lang.Integer, java.lang.Integer, java.lang.Integer, java.lang.String, java.lang.String, java.lang.String, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/SyncProgress;Lcom/bota/sdk/SyncStage;DLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/bota/sdk/SyncProgress;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.SyncStage =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.SyncStage extends java.lang.Enum<com.bota.sdk.SyncStage> {
+  public static final com.bota.sdk.SyncStage PREPARING;
+    descriptor: Lcom/bota/sdk/SyncStage;
+  public static final com.bota.sdk.SyncStage TRANSFERRING;
+    descriptor: Lcom/bota/sdk/SyncStage;
+  public static final com.bota.sdk.SyncStage UPLOADING;
+    descriptor: Lcom/bota/sdk/SyncStage;
+  public static final com.bota.sdk.SyncStage DEVICE_UPLOADING;
+    descriptor: Lcom/bota/sdk/SyncStage;
+  public static final com.bota.sdk.SyncStage COMPLETING;
+    descriptor: Lcom/bota/sdk/SyncStage;
+  public static final com.bota.sdk.SyncStage COMPLETED;
+    descriptor: Lcom/bota/sdk/SyncStage;
+  public static final com.bota.sdk.SyncStage FAILED;
+    descriptor: Lcom/bota/sdk/SyncStage;
+  public static com.bota.sdk.SyncStage[] values();
+    descriptor: ()[Lcom/bota/sdk/SyncStage;
+
+  public static com.bota.sdk.SyncStage valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/SyncStage;
+
+  public static kotlin.enums.EnumEntries<com.bota.sdk.SyncStage> getEntries();
+    descriptor: ()Lkotlin/enums/EnumEntries;
+}
+
+===== com.bota.sdk.TransferPacket =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.TransferPacket {
+  public com.bota.sdk.TransferPacket(com.bota.sdk.TransferPacketType, int, byte[], java.lang.Integer, java.lang.Integer, java.lang.Integer, byte[], byte[], byte[], byte[]);
+    descriptor: (Lcom/bota/sdk/TransferPacketType;I[BLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;[B[B[B[B)V
+
+  public com.bota.sdk.TransferPacket(com.bota.sdk.TransferPacketType, int, byte[], java.lang.Integer, java.lang.Integer, java.lang.Integer, byte[], byte[], byte[], byte[], int, kotlin.jvm.internal.DefaultConstructorMarker);
+    descriptor: (Lcom/bota/sdk/TransferPacketType;I[BLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;[B[B[B[BILkotlin/jvm/internal/DefaultConstructorMarker;)V
+
+  public final com.bota.sdk.TransferPacketType getType();
+    descriptor: ()Lcom/bota/sdk/TransferPacketType;
+
+  public final int getSequenceNumber();
+    descriptor: ()I
+
+  public final byte[] getData();
+    descriptor: ()[B
+
+  public final java.lang.Integer getChecksum();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final java.lang.Integer getBytesSent();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final java.lang.Integer getErrorCode();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final byte[] getE2eEphemeralPublicKey();
+    descriptor: ()[B
+
+  public final byte[] getE2eSalt();
+    descriptor: ()[B
+
+  public final byte[] getE2eChunk();
+    descriptor: ()[B
+
+  public final byte[] getSha256();
+    descriptor: ()[B
+
+  public final com.bota.sdk.TransferPacketType component1();
+    descriptor: ()Lcom/bota/sdk/TransferPacketType;
+
+  public final int component2();
+    descriptor: ()I
+
+  public final byte[] component3();
+    descriptor: ()[B
+
+  public final java.lang.Integer component4();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final java.lang.Integer component5();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final java.lang.Integer component6();
+    descriptor: ()Ljava/lang/Integer;
+
+  public final byte[] component7();
+    descriptor: ()[B
+
+  public final byte[] component8();
+    descriptor: ()[B
+
+  public final byte[] component9();
+    descriptor: ()[B
+
+  public final byte[] component10();
+    descriptor: ()[B
+
+  public final com.bota.sdk.TransferPacket copy(com.bota.sdk.TransferPacketType, int, byte[], java.lang.Integer, java.lang.Integer, java.lang.Integer, byte[], byte[], byte[], byte[]);
+    descriptor: (Lcom/bota/sdk/TransferPacketType;I[BLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;[B[B[B[B)Lcom/bota/sdk/TransferPacket;
+
+  public static com.bota.sdk.TransferPacket copy$default(com.bota.sdk.TransferPacket, com.bota.sdk.TransferPacketType, int, byte[], java.lang.Integer, java.lang.Integer, java.lang.Integer, byte[], byte[], byte[], byte[], int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/TransferPacket;Lcom/bota/sdk/TransferPacketType;I[BLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;[B[B[B[BILjava/lang/Object;)Lcom/bota/sdk/TransferPacket;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.TransferPacketType =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.TransferPacketType extends java.lang.Enum<com.bota.sdk.TransferPacketType> {
+  public static final com.bota.sdk.TransferPacketType DATA;
+    descriptor: Lcom/bota/sdk/TransferPacketType;
+  public static final com.bota.sdk.TransferPacketType EOF;
+    descriptor: Lcom/bota/sdk/TransferPacketType;
+  public static final com.bota.sdk.TransferPacketType PAUSED;
+    descriptor: Lcom/bota/sdk/TransferPacketType;
+  public static final com.bota.sdk.TransferPacketType SHA256;
+    descriptor: Lcom/bota/sdk/TransferPacketType;
+  public static final com.bota.sdk.TransferPacketType E2E_START;
+    descriptor: Lcom/bota/sdk/TransferPacketType;
+  public static final com.bota.sdk.TransferPacketType ENCRYPTED_DATA;
+    descriptor: Lcom/bota/sdk/TransferPacketType;
+  public static final com.bota.sdk.TransferPacketType ENCRYPTED_EOF;
+    descriptor: Lcom/bota/sdk/TransferPacketType;
+  public static final com.bota.sdk.TransferPacketType ERROR;
+    descriptor: Lcom/bota/sdk/TransferPacketType;
+  public static com.bota.sdk.TransferPacketType[] values();
+    descriptor: ()[Lcom/bota/sdk/TransferPacketType;
+
+  public static com.bota.sdk.TransferPacketType valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/TransferPacketType;
+
+  public static kotlin.enums.EnumEntries<com.bota.sdk.TransferPacketType> getEntries();
+    descriptor: ()Lkotlin/enums/EnumEntries;
+}
+
+===== com.bota.sdk.UnimplementedBluetoothTransport =====
+Compiled from "BluetoothTransport.kt"
+public final class com.bota.sdk.UnimplementedBluetoothTransport implements com.bota.sdk.BluetoothTransport {
+  public com.bota.sdk.UnimplementedBluetoothTransport();
+    descriptor: ()V
+
+  public java.lang.Object bluetoothState(kotlin.coroutines.Continuation<? super com.bota.sdk.BluetoothState>);
+    descriptor: (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public kotlinx.coroutines.flow.Flow<com.bota.sdk.DiscoveredDevice> scan(com.bota.sdk.ScanOptions);
+    descriptor: (Lcom/bota/sdk/ScanOptions;)Lkotlinx/coroutines/flow/Flow;
+
+  public void stopScan();
+    descriptor: ()V
+
+  public java.lang.Object connect(com.bota.sdk.DiscoveredDevice, kotlin.coroutines.Continuation<? super com.bota.sdk.ConnectedDevice>);
+    descriptor: (Lcom/bota/sdk/DiscoveredDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public java.lang.Object disconnect(com.bota.sdk.ConnectedDevice, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Lcom/bota/sdk/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public boolean isConnected(java.lang.String);
+    descriptor: (Ljava/lang/String;)Z
+
+  public java.lang.Object read(java.lang.String, java.lang.String, java.lang.String, kotlin.coroutines.Continuation<? super byte[]>);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public java.lang.Object write(java.lang.String, java.lang.String, java.lang.String, byte[], boolean, kotlin.coroutines.Continuation<? super kotlin.Unit>);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[BZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+
+  public kotlinx.coroutines.flow.Flow<byte[]> notifications(java.lang.String, java.lang.String, java.lang.String);
+    descriptor: (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lkotlinx/coroutines/flow/Flow;
+}
+
+===== com.bota.sdk.UploadInfo =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.UploadInfo {
+  public com.bota.sdk.UploadInfo(java.net.URL, java.lang.String, java.lang.String, java.net.URL, java.lang.String);
+    descriptor: (Ljava/net/URL;Ljava/lang/String;Ljava/lang/String;Ljava/net/URL;Ljava/lang/String;)V
+
+  public com.bota.sdk.UploadInfo(java.net.URL, java.lang.String, java.lang.String, java.net.URL, java.lang.String, int, kotlin.jvm.internal.DefaultConstructorMarker);
+    descriptor: (Ljava/net/URL;Ljava/lang/String;Ljava/lang/String;Ljava/net/URL;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+
+  public final java.net.URL getUploadUrl();
+    descriptor: ()Ljava/net/URL;
+
+  public final java.lang.String getRecordingId();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String getUploadToken();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.net.URL getCompleteUrl();
+    descriptor: ()Ljava/net/URL;
+
+  public final java.lang.String getContentType();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.net.URL component1();
+    descriptor: ()Ljava/net/URL;
+
+  public final java.lang.String component2();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.lang.String component3();
+    descriptor: ()Ljava/lang/String;
+
+  public final java.net.URL component4();
+    descriptor: ()Ljava/net/URL;
+
+  public final java.lang.String component5();
+    descriptor: ()Ljava/lang/String;
+
+  public final com.bota.sdk.UploadInfo copy(java.net.URL, java.lang.String, java.lang.String, java.net.URL, java.lang.String);
+    descriptor: (Ljava/net/URL;Ljava/lang/String;Ljava/lang/String;Ljava/net/URL;Ljava/lang/String;)Lcom/bota/sdk/UploadInfo;
+
+  public static com.bota.sdk.UploadInfo copy$default(com.bota.sdk.UploadInfo, java.net.URL, java.lang.String, java.lang.String, java.net.URL, java.lang.String, int, java.lang.Object);
+    descriptor: (Lcom/bota/sdk/UploadInfo;Ljava/net/URL;Ljava/lang/String;Ljava/lang/String;Ljava/net/URL;Ljava/lang/String;ILjava/lang/Object;)Lcom/bota/sdk/UploadInfo;
+
+  public java.lang.String toString();
+    descriptor: ()Ljava/lang/String;
+
+  public int hashCode();
+    descriptor: ()I
+
+  public boolean equals(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)Z
+}
+
+===== com.bota.sdk.WifiRadioStatus =====
+Compiled from "Models.kt"
+public final class com.bota.sdk.WifiRadioStatus extends java.lang.Enum<com.bota.sdk.WifiRadioStatus> {
+  public static final com.bota.sdk.WifiRadioStatus OFF;
+    descriptor: Lcom/bota/sdk/WifiRadioStatus;
+  public static final com.bota.sdk.WifiRadioStatus SCANNING;
+    descriptor: Lcom/bota/sdk/WifiRadioStatus;
+  public static final com.bota.sdk.WifiRadioStatus CONNECTING;
+    descriptor: Lcom/bota/sdk/WifiRadioStatus;
+  public static final com.bota.sdk.WifiRadioStatus CONNECTED;
+    descriptor: Lcom/bota/sdk/WifiRadioStatus;
+  public static final com.bota.sdk.WifiRadioStatus CONNECT_FAILED;
+    descriptor: Lcom/bota/sdk/WifiRadioStatus;
+  public static final com.bota.sdk.WifiRadioStatus NO_CREDENTIALS;
+    descriptor: Lcom/bota/sdk/WifiRadioStatus;
+  public static final com.bota.sdk.WifiRadioStatus DISABLED;
+    descriptor: Lcom/bota/sdk/WifiRadioStatus;
+  public static final com.bota.sdk.WifiRadioStatus ERROR;
+    descriptor: Lcom/bota/sdk/WifiRadioStatus;
+  public static com.bota.sdk.WifiRadioStatus[] values();
+    descriptor: ()[Lcom/bota/sdk/WifiRadioStatus;
+
+  public static com.bota.sdk.WifiRadioStatus valueOf(java.lang.String);
+    descriptor: (Ljava/lang/String;)Lcom/bota/sdk/WifiRadioStatus;
+
+  public static kotlin.enums.EnumEntries<com.bota.sdk.WifiRadioStatus> getEntries();
+    descriptor: ()Lkotlin/enums/EnumEntries;
+}

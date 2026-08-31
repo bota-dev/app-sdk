@@ -1,0 +1,1858 @@
+public final class com/bota/sdk/AudioCodec : java/lang/Enum {
+	public static final field OPUS_16K Lcom/bota/sdk/AudioCodec;
+	public static final field OPUS_8K Lcom/bota/sdk/AudioCodec;
+	public static final field PCM_16K Lcom/bota/sdk/AudioCodec;
+	public static final field PCM_8K Lcom/bota/sdk/AudioCodec;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/AudioCodec;
+	public static fun values ()[Lcom/bota/sdk/AudioCodec;
+}
+
+public final class com/bota/sdk/BluetoothState : java/lang/Enum {
+	public static final field POWERED_OFF Lcom/bota/sdk/BluetoothState;
+	public static final field POWERED_ON Lcom/bota/sdk/BluetoothState;
+	public static final field RESETTING Lcom/bota/sdk/BluetoothState;
+	public static final field UNAUTHORIZED Lcom/bota/sdk/BluetoothState;
+	public static final field UNKNOWN Lcom/bota/sdk/BluetoothState;
+	public static final field UNSUPPORTED Lcom/bota/sdk/BluetoothState;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/BluetoothState;
+	public static fun values ()[Lcom/bota/sdk/BluetoothState;
+}
+
+public abstract interface class com/bota/sdk/BluetoothTransport {
+	public abstract fun bluetoothState (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun connect (Lcom/bota/sdk/DiscoveredDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun disconnect (Lcom/bota/sdk/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun isConnected (Ljava/lang/String;)Z
+	public abstract fun notifications (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lkotlinx/coroutines/flow/Flow;
+	public abstract fun read (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun scan (Lcom/bota/sdk/ScanOptions;)Lkotlinx/coroutines/flow/Flow;
+	public static synthetic fun scan$default (Lcom/bota/sdk/BluetoothTransport;Lcom/bota/sdk/ScanOptions;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+	public abstract fun stopScan ()V
+	public abstract fun write (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[BZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun write$default (Lcom/bota/sdk/BluetoothTransport;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[BZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class com/bota/sdk/BluetoothTransport$DefaultImpls {
+	public static synthetic fun scan$default (Lcom/bota/sdk/BluetoothTransport;Lcom/bota/sdk/ScanOptions;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+	public static synthetic fun write$default (Lcom/bota/sdk/BluetoothTransport;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[BZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class com/bota/sdk/BotaClient {
+	public static final field Companion Lcom/bota/sdk/BotaClient$Companion;
+	public fun <init> ()V
+	public fun <init> (Lcom/bota/sdk/BluetoothTransport;)V
+	public synthetic fun <init> (Lcom/bota/sdk/BluetoothTransport;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun configure (Lcom/bota/sdk/BotaConfig;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun configure$default (Lcom/bota/sdk/BotaClient;Lcom/bota/sdk/BotaConfig;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun destroy ()V
+	public final fun getBluetoothState ()Lcom/bota/sdk/BluetoothState;
+	public final fun getConfig ()Lcom/bota/sdk/BotaConfig;
+	public final fun getDevices ()Lcom/bota/sdk/DeviceManager;
+	public final fun getOta ()Lcom/bota/sdk/OtaManager;
+	public final fun getRecordings ()Lcom/bota/sdk/RecordingManager;
+	public final fun getState ()Lcom/bota/sdk/SdkState;
+	public final fun isBluetoothReady ()Z
+	public final fun isInitialized ()Z
+	public final fun waitForBluetooth (JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun waitForBluetooth$default (Lcom/bota/sdk/BotaClient;JLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class com/bota/sdk/BotaClient$Companion {
+	public final fun getShared ()Lcom/bota/sdk/BotaClient;
+}
+
+public final class com/bota/sdk/BotaConfig {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;ZZLcom/bota/sdk/LogLevel;Z)V
+	public synthetic fun <init> (Ljava/lang/String;ZZLcom/bota/sdk/LogLevel;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun component4 ()Lcom/bota/sdk/LogLevel;
+	public final fun component5 ()Z
+	public final fun copy (Ljava/lang/String;ZZLcom/bota/sdk/LogLevel;Z)Lcom/bota/sdk/BotaConfig;
+	public static synthetic fun copy$default (Lcom/bota/sdk/BotaConfig;Ljava/lang/String;ZZLcom/bota/sdk/LogLevel;ZILjava/lang/Object;)Lcom/bota/sdk/BotaConfig;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBackgroundSyncEnabled ()Z
+	public final fun getDebug ()Z
+	public final fun getEnvironment ()Ljava/lang/String;
+	public final fun getLogLevel ()Lcom/bota/sdk/LogLevel;
+	public final fun getWifiOnlyUpload ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/BotaProtocol {
+	public static final field INSTANCE Lcom/bota/sdk/BotaProtocol;
+	public static final field charDeviceStatus Ljava/lang/String;
+	public static final field charTransferControl Ljava/lang/String;
+	public static final field serviceBotaAuth Ljava/lang/String;
+	public static final field serviceBotaControl Ljava/lang/String;
+	public static final field serviceBotaProvisioning Ljava/lang/String;
+	public static final field serviceBotaStorage Ljava/lang/String;
+	public static final field serviceBotaWifiConfig Ljava/lang/String;
+	public final fun parseDeviceStatus ([B)Lcom/bota/sdk/DeviceStatus;
+	public final fun parseRecordingEntry ([B)Lcom/bota/sdk/DeviceRecording;
+	public final fun parseTransferPacket ([B)Lcom/bota/sdk/TransferPacket;
+	public final fun serializeConnectionSettings (Lcom/bota/sdk/DeviceConnectionSettings;)[B
+}
+
+public abstract class com/bota/sdk/BotaSdkException : java/lang/Exception {
+	public synthetic fun <init> (Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class com/bota/sdk/BotaSdkException$BluetoothUnavailable : com/bota/sdk/BotaSdkException {
+	public static final field INSTANCE Lcom/bota/sdk/BotaSdkException$BluetoothUnavailable;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/BotaSdkException$NotConnected : com/bota/sdk/BotaSdkException {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/bota/sdk/BotaSdkException$NotConnected;
+	public static synthetic fun copy$default (Lcom/bota/sdk/BotaSdkException$NotConnected;Ljava/lang/String;ILjava/lang/Object;)Lcom/bota/sdk/BotaSdkException$NotConnected;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeviceId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/BotaSdkException$NotInitialized : com/bota/sdk/BotaSdkException {
+	public static final field INSTANCE Lcom/bota/sdk/BotaSdkException$NotInitialized;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/BotaSdkException$UnsupportedOperation : com/bota/sdk/BotaSdkException {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Lcom/bota/sdk/BotaSdkException$UnsupportedOperation;
+	public static synthetic fun copy$default (Lcom/bota/sdk/BotaSdkException$UnsupportedOperation;Ljava/lang/String;ILjava/lang/Object;)Lcom/bota/sdk/BotaSdkException$UnsupportedOperation;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDetail ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/BotaSdkVersion {
+	public static final field INSTANCE Lcom/bota/sdk/BotaSdkVersion;
+	public static final field current Ljava/lang/String;
+}
+
+public final class com/bota/sdk/ConnectedDevice {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;ZLcom/bota/sdk/ConnectionState;I)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;ZLcom/bota/sdk/ConnectionState;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lcom/bota/sdk/DeviceType;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Z
+	public final fun component7 ()Lcom/bota/sdk/ConnectionState;
+	public final fun component8 ()I
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;ZLcom/bota/sdk/ConnectionState;I)Lcom/bota/sdk/ConnectedDevice;
+	public static synthetic fun copy$default (Lcom/bota/sdk/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;ZLcom/bota/sdk/ConnectionState;IILjava/lang/Object;)Lcom/bota/sdk/ConnectedDevice;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConnectionState ()Lcom/bota/sdk/ConnectionState;
+	public final fun getDeviceType ()Lcom/bota/sdk/DeviceType;
+	public final fun getFirmwareVersion ()Ljava/lang/String;
+	public final fun getHardwareRevision ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMtu ()I
+	public final fun getSerialNumber ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isProvisioned ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/ConnectionState : java/lang/Enum {
+	public static final field BONDING Lcom/bota/sdk/ConnectionState;
+	public static final field CONNECTED Lcom/bota/sdk/ConnectionState;
+	public static final field CONNECTING Lcom/bota/sdk/ConnectionState;
+	public static final field DISCONNECTED Lcom/bota/sdk/ConnectionState;
+	public static final field DISCONNECTING Lcom/bota/sdk/ConnectionState;
+	public static final field DISCOVERING Lcom/bota/sdk/ConnectionState;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/ConnectionState;
+	public static fun values ()[Lcom/bota/sdk/ConnectionState;
+}
+
+public final class com/bota/sdk/ConnectionType : java/lang/Enum {
+	public static final field BLE Lcom/bota/sdk/ConnectionType;
+	public static final field CELLULAR Lcom/bota/sdk/ConnectionType;
+	public static final field WIFI Lcom/bota/sdk/ConnectionType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/ConnectionType;
+	public static fun values ()[Lcom/bota/sdk/ConnectionType;
+}
+
+public final class com/bota/sdk/DeviceConnectionSettings {
+	public fun <init> (Lcom/bota/sdk/EnabledConnections;Ljava/util/List;Lcom/bota/sdk/PowerManagement;Ljava/lang/Boolean;Ljava/lang/Integer;)V
+	public synthetic fun <init> (Lcom/bota/sdk/EnabledConnections;Ljava/util/List;Lcom/bota/sdk/PowerManagement;Ljava/lang/Boolean;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lcom/bota/sdk/EnabledConnections;
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Lcom/bota/sdk/PowerManagement;
+	public final fun component4 ()Ljava/lang/Boolean;
+	public final fun component5 ()Ljava/lang/Integer;
+	public final fun copy (Lcom/bota/sdk/EnabledConnections;Ljava/util/List;Lcom/bota/sdk/PowerManagement;Ljava/lang/Boolean;Ljava/lang/Integer;)Lcom/bota/sdk/DeviceConnectionSettings;
+	public static synthetic fun copy$default (Lcom/bota/sdk/DeviceConnectionSettings;Lcom/bota/sdk/EnabledConnections;Ljava/util/List;Lcom/bota/sdk/PowerManagement;Ljava/lang/Boolean;Ljava/lang/Integer;ILjava/lang/Object;)Lcom/bota/sdk/DeviceConnectionSettings;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnabledConnections ()Lcom/bota/sdk/EnabledConnections;
+	public final fun getPowerManagement ()Lcom/bota/sdk/PowerManagement;
+	public final fun getStreamingEnabled ()Ljava/lang/Boolean;
+	public final fun getStreamingFlushIntervalSeconds ()Ljava/lang/Integer;
+	public final fun getUploadNetworkPreference ()Ljava/util/List;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/DeviceFlags {
+	public fun <init> (ZZZZZZ)V
+	public final fun component1 ()Z
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun component5 ()Z
+	public final fun component6 ()Z
+	public final fun copy (ZZZZZZ)Lcom/bota/sdk/DeviceFlags;
+	public static synthetic fun copy$default (Lcom/bota/sdk/DeviceFlags;ZZZZZZILjava/lang/Object;)Lcom/bota/sdk/DeviceFlags;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCharging ()Z
+	public final fun getLowBattery ()Z
+	public final fun getLteConnected ()Z
+	public final fun getStorageFull ()Z
+	public final fun getSyncActive ()Z
+	public final fun getWifiConnected ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/DeviceManager {
+	public fun <init> (Lcom/bota/sdk/BluetoothTransport;)V
+	public final fun connect (Lcom/bota/sdk/DiscoveredDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun currentBluetoothState (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun destroy ()V
+	public final fun disconnect (Lcom/bota/sdk/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getStatus (Lcom/bota/sdk/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun isConnected (Ljava/lang/String;)Z
+	public final fun provision (Lcom/bota/sdk/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun provision$default (Lcom/bota/sdk/DeviceManager;Lcom/bota/sdk/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun startScan (Lcom/bota/sdk/ScanOptions;)Lkotlinx/coroutines/flow/Flow;
+	public static synthetic fun startScan$default (Lcom/bota/sdk/DeviceManager;Lcom/bota/sdk/ScanOptions;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+	public final fun stopScan ()V
+	public final fun subscribeToStatus (Lcom/bota/sdk/ConnectedDevice;)Lkotlinx/coroutines/flow/Flow;
+	public final fun writeConnectionSettings (Lcom/bota/sdk/ConnectedDevice;Lcom/bota/sdk/DeviceConnectionSettings;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/bota/sdk/DeviceRecording {
+	public fun <init> (Ljava/lang/String;Ljava/time/Instant;IILcom/bota/sdk/AudioCodec;Ljava/lang/Boolean;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/time/Instant;IILcom/bota/sdk/AudioCodec;Ljava/lang/Boolean;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/time/Instant;
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun component5 ()Lcom/bota/sdk/AudioCodec;
+	public final fun component6 ()Ljava/lang/Boolean;
+	public final fun copy (Ljava/lang/String;Ljava/time/Instant;IILcom/bota/sdk/AudioCodec;Ljava/lang/Boolean;)Lcom/bota/sdk/DeviceRecording;
+	public static synthetic fun copy$default (Lcom/bota/sdk/DeviceRecording;Ljava/lang/String;Ljava/time/Instant;IILcom/bota/sdk/AudioCodec;Ljava/lang/Boolean;ILjava/lang/Object;)Lcom/bota/sdk/DeviceRecording;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCodec ()Lcom/bota/sdk/AudioCodec;
+	public final fun getDurationMs ()I
+	public final fun getFileSizeBytes ()I
+	public final fun getStartedAt ()Ljava/time/Instant;
+	public final fun getUuid ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isEncrypted ()Ljava/lang/Boolean;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/DeviceState : java/lang/Enum {
+	public static final field CHARGING Lcom/bota/sdk/DeviceState;
+	public static final field ERROR Lcom/bota/sdk/DeviceState;
+	public static final field IDLE Lcom/bota/sdk/DeviceState;
+	public static final field LOW_BATTERY Lcom/bota/sdk/DeviceState;
+	public static final field RECORDING Lcom/bota/sdk/DeviceState;
+	public static final field STORAGE_FULL Lcom/bota/sdk/DeviceState;
+	public static final field SYNCING Lcom/bota/sdk/DeviceState;
+	public static final field UPLOADING Lcom/bota/sdk/DeviceState;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/DeviceState;
+	public static fun values ()[Lcom/bota/sdk/DeviceState;
+}
+
+public final class com/bota/sdk/DeviceStatus {
+	public fun <init> (ILjava/lang/Integer;IILcom/bota/sdk/DeviceState;ILjava/time/Instant;Lcom/bota/sdk/DeviceFlags;JLcom/bota/sdk/LteStatus;Ljava/lang/Integer;Lcom/bota/sdk/WifiRadioStatus;Lcom/bota/sdk/ModemInfo;)V
+	public final fun component1 ()I
+	public final fun component10 ()Lcom/bota/sdk/LteStatus;
+	public final fun component11 ()Ljava/lang/Integer;
+	public final fun component12 ()Lcom/bota/sdk/WifiRadioStatus;
+	public final fun component13 ()Lcom/bota/sdk/ModemInfo;
+	public final fun component2 ()Ljava/lang/Integer;
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun component5 ()Lcom/bota/sdk/DeviceState;
+	public final fun component6 ()I
+	public final fun component7 ()Ljava/time/Instant;
+	public final fun component8 ()Lcom/bota/sdk/DeviceFlags;
+	public final fun component9 ()J
+	public final fun copy (ILjava/lang/Integer;IILcom/bota/sdk/DeviceState;ILjava/time/Instant;Lcom/bota/sdk/DeviceFlags;JLcom/bota/sdk/LteStatus;Ljava/lang/Integer;Lcom/bota/sdk/WifiRadioStatus;Lcom/bota/sdk/ModemInfo;)Lcom/bota/sdk/DeviceStatus;
+	public static synthetic fun copy$default (Lcom/bota/sdk/DeviceStatus;ILjava/lang/Integer;IILcom/bota/sdk/DeviceState;ILjava/time/Instant;Lcom/bota/sdk/DeviceFlags;JLcom/bota/sdk/LteStatus;Ljava/lang/Integer;Lcom/bota/sdk/WifiRadioStatus;Lcom/bota/sdk/ModemInfo;ILjava/lang/Object;)Lcom/bota/sdk/DeviceStatus;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBatteryLevel ()I
+	public final fun getBatteryMv ()Ljava/lang/Integer;
+	public final fun getFlags ()Lcom/bota/sdk/DeviceFlags;
+	public final fun getLastTimeSyncAt ()Ljava/time/Instant;
+	public final fun getLteSignalQuality ()Ljava/lang/Integer;
+	public final fun getLteStatus ()Lcom/bota/sdk/LteStatus;
+	public final fun getModemInfo ()Lcom/bota/sdk/ModemInfo;
+	public final fun getPendingRecordings ()I
+	public final fun getState ()Lcom/bota/sdk/DeviceState;
+	public final fun getStorageTotalMb ()I
+	public final fun getStorageUsedMb ()I
+	public final fun getTimestamp ()J
+	public final fun getWifiStatus ()Lcom/bota/sdk/WifiRadioStatus;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/DeviceType : java/lang/Enum {
+	public static final field BOTA_NOTE Lcom/bota/sdk/DeviceType;
+	public static final field BOTA_PIN Lcom/bota/sdk/DeviceType;
+	public static final field BOTA_PIN_4G Lcom/bota/sdk/DeviceType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/DeviceType;
+	public static fun values ()[Lcom/bota/sdk/DeviceType;
+}
+
+public final class com/bota/sdk/DiscoveredDevice {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/PairingState;I[BLjava/time/Instant;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/PairingState;I[BLjava/time/Instant;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Lcom/bota/sdk/DeviceType;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Lcom/bota/sdk/PairingState;
+	public final fun component7 ()I
+	public final fun component8 ()[B
+	public final fun component9 ()Ljava/time/Instant;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/PairingState;I[BLjava/time/Instant;)Lcom/bota/sdk/DiscoveredDevice;
+	public static synthetic fun copy$default (Lcom/bota/sdk/DiscoveredDevice;Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/DeviceType;Ljava/lang/String;Ljava/lang/String;Lcom/bota/sdk/PairingState;I[BLjava/time/Instant;ILjava/lang/Object;)Lcom/bota/sdk/DiscoveredDevice;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeviceType ()Lcom/bota/sdk/DeviceType;
+	public final fun getDiscoveredAt ()Ljava/time/Instant;
+	public final fun getFirmwareVersion ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMacAddress ()Ljava/lang/String;
+	public final fun getManufacturerData ()[B
+	public final fun getName ()Ljava/lang/String;
+	public final fun getPairingState ()Lcom/bota/sdk/PairingState;
+	public final fun getRssi ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/EnabledConnections {
+	public fun <init> (ZZ)V
+	public final fun component1 ()Z
+	public final fun component2 ()Z
+	public final fun copy (ZZ)Lcom/bota/sdk/EnabledConnections;
+	public static synthetic fun copy$default (Lcom/bota/sdk/EnabledConnections;ZZILjava/lang/Object;)Lcom/bota/sdk/EnabledConnections;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCellular ()Z
+	public final fun getWifi ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/LogLevel : java/lang/Enum {
+	public static final field DEBUG Lcom/bota/sdk/LogLevel;
+	public static final field ERROR Lcom/bota/sdk/LogLevel;
+	public static final field INFO Lcom/bota/sdk/LogLevel;
+	public static final field NONE Lcom/bota/sdk/LogLevel;
+	public static final field WARN Lcom/bota/sdk/LogLevel;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/LogLevel;
+	public static fun values ()[Lcom/bota/sdk/LogLevel;
+}
+
+public final class com/bota/sdk/LteStatus : java/lang/Enum {
+	public static final field CONNECTED Lcom/bota/sdk/LteStatus;
+	public static final field DENIED Lcom/bota/sdk/LteStatus;
+	public static final field DISABLED Lcom/bota/sdk/LteStatus;
+	public static final field ERROR Lcom/bota/sdk/LteStatus;
+	public static final field LOW_VOLTAGE Lcom/bota/sdk/LteStatus;
+	public static final field NO_SIM Lcom/bota/sdk/LteStatus;
+	public static final field OFF Lcom/bota/sdk/LteStatus;
+	public static final field REGISTERED Lcom/bota/sdk/LteStatus;
+	public static final field SEARCHING Lcom/bota/sdk/LteStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/LteStatus;
+	public static fun values ()[Lcom/bota/sdk/LteStatus;
+}
+
+public final class com/bota/sdk/ModemInfo {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Boolean;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Boolean;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Ljava/lang/Integer;
+	public final fun component11 ()Ljava/lang/String;
+	public final fun component12 ()Ljava/lang/Boolean;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Ljava/lang/Integer;
+	public final fun component9 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Boolean;)Lcom/bota/sdk/ModemInfo;
+	public static synthetic fun copy$default (Lcom/bota/sdk/ModemInfo;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Boolean;ILjava/lang/Object;)Lcom/bota/sdk/ModemInfo;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getApn ()Ljava/lang/String;
+	public final fun getBand ()Ljava/lang/String;
+	public final fun getCsq ()Ljava/lang/Integer;
+	public final fun getIccid ()Ljava/lang/String;
+	public final fun getImei ()Ljava/lang/String;
+	public final fun getIpAddress ()Ljava/lang/String;
+	public final fun getModemFirmware ()Ljava/lang/String;
+	public final fun getModemVoltage ()Ljava/lang/Integer;
+	public final fun getOperator ()Ljava/lang/String;
+	public final fun getRat ()Ljava/lang/String;
+	public final fun getRoaming ()Ljava/lang/Boolean;
+	public final fun getSimStatus ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/OtaManager {
+	public fun <init> (Lcom/bota/sdk/BluetoothTransport;)V
+	public final fun destroy ()V
+}
+
+public final class com/bota/sdk/PairingState : java/lang/Enum {
+	public static final field ERROR Lcom/bota/sdk/PairingState;
+	public static final field PAIRED Lcom/bota/sdk/PairingState;
+	public static final field PAIRING Lcom/bota/sdk/PairingState;
+	public static final field UNPAIRED Lcom/bota/sdk/PairingState;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/PairingState;
+	public static fun values ()[Lcom/bota/sdk/PairingState;
+}
+
+public final class com/bota/sdk/PowerManagement {
+	public fun <init> (II)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun copy (II)Lcom/bota/sdk/PowerManagement;
+	public static synthetic fun copy$default (Lcom/bota/sdk/PowerManagement;IIILjava/lang/Object;)Lcom/bota/sdk/PowerManagement;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCellularIdleTimeoutSeconds ()I
+	public final fun getWifiIdleTimeoutSeconds ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/RecordingManager {
+	public fun <init> (Lcom/bota/sdk/BluetoothTransport;)V
+	public final fun confirmSync (Lcom/bota/sdk/ConnectedDevice;[BLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun destroy ()V
+	public final fun listRecordings (Lcom/bota/sdk/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun syncRecording (Lcom/bota/sdk/ConnectedDevice;Lcom/bota/sdk/DeviceRecording;Lcom/bota/sdk/UploadInfo;)Lkotlinx/coroutines/flow/Flow;
+}
+
+public final class com/bota/sdk/ScanOptions {
+	public fun <init> ()V
+	public fun <init> (JLjava/util/List;Lcom/bota/sdk/PairingState;Ljava/lang/Integer;Z)V
+	public synthetic fun <init> (JLjava/util/List;Lcom/bota/sdk/PairingState;Ljava/lang/Integer;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()J
+	public final fun component2 ()Ljava/util/List;
+	public final fun component3 ()Lcom/bota/sdk/PairingState;
+	public final fun component4 ()Ljava/lang/Integer;
+	public final fun component5 ()Z
+	public final fun copy (JLjava/util/List;Lcom/bota/sdk/PairingState;Ljava/lang/Integer;Z)Lcom/bota/sdk/ScanOptions;
+	public static synthetic fun copy$default (Lcom/bota/sdk/ScanOptions;JLjava/util/List;Lcom/bota/sdk/PairingState;Ljava/lang/Integer;ZILjava/lang/Object;)Lcom/bota/sdk/ScanOptions;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAllowDuplicates ()Z
+	public final fun getDeviceTypes ()Ljava/util/List;
+	public final fun getMinRssi ()Ljava/lang/Integer;
+	public final fun getPairingState ()Lcom/bota/sdk/PairingState;
+	public final fun getTimeoutMs ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/SdkState : java/lang/Enum {
+	public static final field ERROR Lcom/bota/sdk/SdkState;
+	public static final field INITIALIZING Lcom/bota/sdk/SdkState;
+	public static final field READY Lcom/bota/sdk/SdkState;
+	public static final field UNINITIALIZED Lcom/bota/sdk/SdkState;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/SdkState;
+	public static fun values ()[Lcom/bota/sdk/SdkState;
+}
+
+public final class com/bota/sdk/SyncProgress {
+	public fun <init> (Lcom/bota/sdk/SyncStage;DLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Lcom/bota/sdk/SyncStage;DLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lcom/bota/sdk/SyncStage;
+	public final fun component2 ()D
+	public final fun component3 ()Ljava/lang/Integer;
+	public final fun component4 ()Ljava/lang/Integer;
+	public final fun component5 ()Ljava/lang/Integer;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Ljava/lang/String;
+	public final fun copy (Lcom/bota/sdk/SyncStage;DLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lcom/bota/sdk/SyncProgress;
+	public static synthetic fun copy$default (Lcom/bota/sdk/SyncProgress;Lcom/bota/sdk/SyncStage;DLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lcom/bota/sdk/SyncProgress;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBytesTransferred ()Ljava/lang/Integer;
+	public final fun getBytesUploaded ()Ljava/lang/Integer;
+	public final fun getContentSha256 ()Ljava/lang/String;
+	public final fun getError ()Ljava/lang/String;
+	public final fun getProgress ()D
+	public final fun getRecordingId ()Ljava/lang/String;
+	public final fun getStage ()Lcom/bota/sdk/SyncStage;
+	public final fun getTotalBytes ()Ljava/lang/Integer;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/SyncStage : java/lang/Enum {
+	public static final field COMPLETED Lcom/bota/sdk/SyncStage;
+	public static final field COMPLETING Lcom/bota/sdk/SyncStage;
+	public static final field DEVICE_UPLOADING Lcom/bota/sdk/SyncStage;
+	public static final field FAILED Lcom/bota/sdk/SyncStage;
+	public static final field PREPARING Lcom/bota/sdk/SyncStage;
+	public static final field TRANSFERRING Lcom/bota/sdk/SyncStage;
+	public static final field UPLOADING Lcom/bota/sdk/SyncStage;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/SyncStage;
+	public static fun values ()[Lcom/bota/sdk/SyncStage;
+}
+
+public final class com/bota/sdk/TransferPacket {
+	public fun <init> (Lcom/bota/sdk/TransferPacketType;I[BLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;[B[B[B[B)V
+	public synthetic fun <init> (Lcom/bota/sdk/TransferPacketType;I[BLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;[B[B[B[BILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Lcom/bota/sdk/TransferPacketType;
+	public final fun component10 ()[B
+	public final fun component2 ()I
+	public final fun component3 ()[B
+	public final fun component4 ()Ljava/lang/Integer;
+	public final fun component5 ()Ljava/lang/Integer;
+	public final fun component6 ()Ljava/lang/Integer;
+	public final fun component7 ()[B
+	public final fun component8 ()[B
+	public final fun component9 ()[B
+	public final fun copy (Lcom/bota/sdk/TransferPacketType;I[BLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;[B[B[B[B)Lcom/bota/sdk/TransferPacket;
+	public static synthetic fun copy$default (Lcom/bota/sdk/TransferPacket;Lcom/bota/sdk/TransferPacketType;I[BLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;[B[B[B[BILjava/lang/Object;)Lcom/bota/sdk/TransferPacket;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBytesSent ()Ljava/lang/Integer;
+	public final fun getChecksum ()Ljava/lang/Integer;
+	public final fun getData ()[B
+	public final fun getE2eChunk ()[B
+	public final fun getE2eEphemeralPublicKey ()[B
+	public final fun getE2eSalt ()[B
+	public final fun getErrorCode ()Ljava/lang/Integer;
+	public final fun getSequenceNumber ()I
+	public final fun getSha256 ()[B
+	public final fun getType ()Lcom/bota/sdk/TransferPacketType;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/TransferPacketType : java/lang/Enum {
+	public static final field DATA Lcom/bota/sdk/TransferPacketType;
+	public static final field E2E_START Lcom/bota/sdk/TransferPacketType;
+	public static final field ENCRYPTED_DATA Lcom/bota/sdk/TransferPacketType;
+	public static final field ENCRYPTED_EOF Lcom/bota/sdk/TransferPacketType;
+	public static final field EOF Lcom/bota/sdk/TransferPacketType;
+	public static final field ERROR Lcom/bota/sdk/TransferPacketType;
+	public static final field PAUSED Lcom/bota/sdk/TransferPacketType;
+	public static final field SHA256 Lcom/bota/sdk/TransferPacketType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/TransferPacketType;
+	public static fun values ()[Lcom/bota/sdk/TransferPacketType;
+}
+
+public final class com/bota/sdk/UnimplementedBluetoothTransport : com/bota/sdk/BluetoothTransport {
+	public fun <init> ()V
+	public fun bluetoothState (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun connect (Lcom/bota/sdk/DiscoveredDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun disconnect (Lcom/bota/sdk/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun isConnected (Ljava/lang/String;)Z
+	public fun notifications (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lkotlinx/coroutines/flow/Flow;
+	public fun read (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun scan (Lcom/bota/sdk/ScanOptions;)Lkotlinx/coroutines/flow/Flow;
+	public fun stopScan ()V
+	public fun write (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[BZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class com/bota/sdk/UploadInfo {
+	public fun <init> (Ljava/net/URL;Ljava/lang/String;Ljava/lang/String;Ljava/net/URL;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/net/URL;Ljava/lang/String;Ljava/lang/String;Ljava/net/URL;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/net/URL;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/net/URL;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun copy (Ljava/net/URL;Ljava/lang/String;Ljava/lang/String;Ljava/net/URL;Ljava/lang/String;)Lcom/bota/sdk/UploadInfo;
+	public static synthetic fun copy$default (Lcom/bota/sdk/UploadInfo;Ljava/net/URL;Ljava/lang/String;Ljava/lang/String;Ljava/net/URL;Ljava/lang/String;ILjava/lang/Object;)Lcom/bota/sdk/UploadInfo;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCompleteUrl ()Ljava/net/URL;
+	public final fun getContentType ()Ljava/lang/String;
+	public final fun getRecordingId ()Ljava/lang/String;
+	public final fun getUploadToken ()Ljava/lang/String;
+	public final fun getUploadUrl ()Ljava/net/URL;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class com/bota/sdk/WifiRadioStatus : java/lang/Enum {
+	public static final field CONNECTED Lcom/bota/sdk/WifiRadioStatus;
+	public static final field CONNECTING Lcom/bota/sdk/WifiRadioStatus;
+	public static final field CONNECT_FAILED Lcom/bota/sdk/WifiRadioStatus;
+	public static final field DISABLED Lcom/bota/sdk/WifiRadioStatus;
+	public static final field ERROR Lcom/bota/sdk/WifiRadioStatus;
+	public static final field NO_CREDENTIALS Lcom/bota/sdk/WifiRadioStatus;
+	public static final field OFF Lcom/bota/sdk/WifiRadioStatus;
+	public static final field SCANNING Lcom/bota/sdk/WifiRadioStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/WifiRadioStatus;
+	public static fun values ()[Lcom/bota/sdk/WifiRadioStatus;
+}
+
+public final class dev/bota/sdk/BotaAndroidSDK {
+	public static final field INSTANCE Ldev/bota/sdk/BotaAndroidSDK;
+	public static final field mavenArtifact Ljava/lang/String;
+	public static final field mavenGroup Ljava/lang/String;
+	public final fun getVersion ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaConfiguration {
+	public fun <init> (Landroid/content/Context;Lokhttp3/OkHttpClient;Ljava/io/File;)V
+	public synthetic fun <init> (Landroid/content/Context;Lokhttp3/OkHttpClient;Ljava/io/File;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+}
+
+public final class dev/bota/sdk/BotaDeviceClient {
+	public static final field Companion Ldev/bota/sdk/BotaDeviceClient$Companion;
+	public static final field shared Ldev/bota/sdk/BotaDeviceClient;
+	public final fun configure (Ldev/bota/sdk/BotaConfiguration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun destroy (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getDevices ()Ldev/bota/sdk/DeviceManager;
+	public final fun getFactoryReset ()Ldev/bota/sdk/FactoryResetManager;
+	public final fun getLogs ()Ldev/bota/sdk/DeviceLogManager;
+	public final fun getOta ()Ldev/bota/sdk/OTAManager;
+	public final fun getProvisioning ()Ldev/bota/sdk/ProvisioningManager;
+	public final fun getRecordings ()Ldev/bota/sdk/RecordingManager;
+}
+
+public final class dev/bota/sdk/BotaDeviceClient$Companion {
+}
+
+public abstract interface class dev/bota/sdk/BotaErrorCode {
+}
+
+public final class dev/bota/sdk/BotaErrorCode$Cancelled : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$Cancelled;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$ConnectionFailed : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$ConnectionFailed;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$DeviceNotFound : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$DeviceNotFound;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$DownloadFailed : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$DownloadFailed;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$FeatureUnavailable : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$FeatureUnavailable;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$IdentityMismatch : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$IdentityMismatch;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$IntegrityFailed : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$IntegrityFailed;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$Internal : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$Internal;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$InvalidInput : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$InvalidInput;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$NotConnected : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$NotConnected;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$OperationInProgress : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$OperationInProgress;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$PayloadTooLarge : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$PayloadTooLarge;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$PersistenceFailed : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$PersistenceFailed;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$ProtocolRejected : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$ProtocolRejected;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$Timeout : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$Timeout;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$TruncatedPacket : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$TruncatedPacket;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$UnexpectedEvent : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$UnexpectedEvent;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$Unknown : dev/bota/sdk/BotaErrorCode {
+	public synthetic fun <init> (ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-pVg5ArA ()I
+	public final fun copy-WZ4Q5Ns (I)Ldev/bota/sdk/BotaErrorCode$Unknown;
+	public static synthetic fun copy-WZ4Q5Ns$default (Ldev/bota/sdk/BotaErrorCode$Unknown;IILjava/lang/Object;)Ldev/bota/sdk/BotaErrorCode$Unknown;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRawValue-pVg5ArA ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$UnknownPacket : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$UnknownPacket;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$UnsupportedCapability : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$UnsupportedCapability;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$UnsupportedOperation : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$UnsupportedOperation;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaErrorCode$UploadOwnershipUnknown : dev/bota/sdk/BotaErrorCode {
+	public static final field INSTANCE Ldev/bota/sdk/BotaErrorCode$UploadOwnershipUnknown;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/bota/sdk/BotaOperation {
+}
+
+public final class dev/bota/sdk/BotaOperation$Connect : dev/bota/sdk/BotaOperation {
+	public static final field INSTANCE Ldev/bota/sdk/BotaOperation$Connect;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaOperation$Decode : dev/bota/sdk/BotaOperation {
+	public static final field INSTANCE Ldev/bota/sdk/BotaOperation$Decode;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaOperation$Discover : dev/bota/sdk/BotaOperation {
+	public static final field INSTANCE Ldev/bota/sdk/BotaOperation$Discover;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaOperation$Encode : dev/bota/sdk/BotaOperation {
+	public static final field INSTANCE Ldev/bota/sdk/BotaOperation$Encode;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaOperation$FactoryReset : dev/bota/sdk/BotaOperation {
+	public static final field INSTANCE Ldev/bota/sdk/BotaOperation$FactoryReset;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaOperation$Provision : dev/bota/sdk/BotaOperation {
+	public static final field INSTANCE Ldev/bota/sdk/BotaOperation$Provision;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaOperation$ReadDeviceLogs : dev/bota/sdk/BotaOperation {
+	public static final field INSTANCE Ldev/bota/sdk/BotaOperation$ReadDeviceLogs;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaOperation$ReadStatus : dev/bota/sdk/BotaOperation {
+	public static final field INSTANCE Ldev/bota/sdk/BotaOperation$ReadStatus;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaOperation$Reconnect : dev/bota/sdk/BotaOperation {
+	public static final field INSTANCE Ldev/bota/sdk/BotaOperation$Reconnect;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaOperation$TransferRecording : dev/bota/sdk/BotaOperation {
+	public static final field INSTANCE Ldev/bota/sdk/BotaOperation$TransferRecording;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaOperation$Unknown : dev/bota/sdk/BotaOperation {
+	public synthetic fun <init> (ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-pVg5ArA ()I
+	public final fun copy-WZ4Q5Ns (I)Ldev/bota/sdk/BotaOperation$Unknown;
+	public static synthetic fun copy-WZ4Q5Ns$default (Ldev/bota/sdk/BotaOperation$Unknown;IILjava/lang/Object;)Ldev/bota/sdk/BotaOperation$Unknown;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRawValue-pVg5ArA ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaOperation$UpdateFirmware : dev/bota/sdk/BotaOperation {
+	public static final field INSTANCE Ldev/bota/sdk/BotaOperation$UpdateFirmware;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaOperation$Upload : dev/bota/sdk/BotaOperation {
+	public static final field INSTANCE Ldev/bota/sdk/BotaOperation$Upload;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaOperation$Validate : dev/bota/sdk/BotaOperation {
+	public static final field INSTANCE Ldev/bota/sdk/BotaOperation$Validate;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract class dev/bota/sdk/BotaSDKError : java/lang/Exception {
+	public synthetic fun <init> (Ldev/bota/sdk/BotaOperation;ZLjava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun getOperation ()Ldev/bota/sdk/BotaOperation;
+	public fun getRetryable ()Z
+}
+
+public final class dev/bota/sdk/BotaSDKError$AuthorizationRequired : dev/bota/sdk/BotaSDKError {
+	public fun <init> (Ljava/util/Set;Ldev/bota/sdk/BotaOperation;)V
+	public final fun component1 ()Ljava/util/Set;
+	public final fun component2 ()Ldev/bota/sdk/BotaOperation;
+	public final fun copy (Ljava/util/Set;Ldev/bota/sdk/BotaOperation;)Ldev/bota/sdk/BotaSDKError$AuthorizationRequired;
+	public static synthetic fun copy$default (Ldev/bota/sdk/BotaSDKError$AuthorizationRequired;Ljava/util/Set;Ldev/bota/sdk/BotaOperation;ILjava/lang/Object;)Ldev/bota/sdk/BotaSDKError$AuthorizationRequired;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getOperation ()Ldev/bota/sdk/BotaOperation;
+	public final fun getPermissions ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BotaSDKError$Core : dev/bota/sdk/BotaSDKError {
+	public synthetic fun <init> (Ldev/bota/sdk/BotaErrorCode;Ldev/bota/sdk/BotaOperation;ZLkotlin/UShort;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ldev/bota/sdk/BotaErrorCode;
+	public final fun component2 ()Ldev/bota/sdk/BotaOperation;
+	public final fun component3 ()Z
+	public final fun component4-XRpZGF0 ()Lkotlin/UShort;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun copy-cshn0Z8 (Ldev/bota/sdk/BotaErrorCode;Ldev/bota/sdk/BotaOperation;ZLkotlin/UShort;Ljava/lang/String;)Ldev/bota/sdk/BotaSDKError$Core;
+	public static synthetic fun copy-cshn0Z8$default (Ldev/bota/sdk/BotaSDKError$Core;Ldev/bota/sdk/BotaErrorCode;Ldev/bota/sdk/BotaOperation;ZLkotlin/UShort;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/BotaSDKError$Core;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCode ()Ldev/bota/sdk/BotaErrorCode;
+	public final fun getDetail ()Ljava/lang/String;
+	public fun getOperation ()Ldev/bota/sdk/BotaOperation;
+	public final fun getProtocolStatus-XRpZGF0 ()Lkotlin/UShort;
+	public fun getRetryable ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/BuildConfig {
+	public static final field BOTA_SDK_VERSION Ljava/lang/String;
+	public static final field BUILD_TYPE Ljava/lang/String;
+	public static final field DEBUG Z
+	public static final field LIBRARY_PACKAGE_NAME Ljava/lang/String;
+	public fun <init> ()V
+}
+
+public final class dev/bota/sdk/DeviceCapabilities {
+	public final fun asSet ()Ljava/util/Set;
+	public final fun contains (Ldev/bota/sdk/DeviceCapability;)Z
+}
+
+public final class dev/bota/sdk/DeviceCapability : java/lang/Enum {
+	public static final field Bluetooth Ldev/bota/sdk/DeviceCapability;
+	public static final field FirmwareBlob Ldev/bota/sdk/DeviceCapability;
+	public static final field NetworkTransfer Ldev/bota/sdk/DeviceCapability;
+	public static final field Persistence Ldev/bota/sdk/DeviceCapability;
+	public static final field RecordingSink Ldev/bota/sdk/DeviceCapability;
+	public static final field SecureStorage Ldev/bota/sdk/DeviceCapability;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/DeviceCapability;
+	public static fun values ()[Ldev/bota/sdk/DeviceCapability;
+}
+
+public final class dev/bota/sdk/DeviceLogManager {
+	public final fun stop (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun streamLogs (Ldev/bota/sdk/model/ConnectedDevice;)Lkotlinx/coroutines/flow/Flow;
+}
+
+public final class dev/bota/sdk/DeviceManager {
+	public final fun cancelCurrentOperation (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun capabilities ()Ldev/bota/sdk/DeviceCapabilities;
+	public final fun connect (Ljava/lang/String;Ldev/bota/sdk/model/DiscoveredDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun connectionUpdates ()Lkotlinx/coroutines/flow/Flow;
+	public final fun disconnect (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun readStatus (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun reconnect (Ljava/lang/String;Ldev/bota/sdk/DeviceReconnectHint;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun reconnect$default (Ldev/bota/sdk/DeviceManager;Ljava/lang/String;Ldev/bota/sdk/DeviceReconnectHint;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun startScan-E0BElUM (JZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun startScan-E0BElUM$default (Ldev/bota/sdk/DeviceManager;JZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun statusUpdates ()Lkotlinx/coroutines/flow/Flow;
+}
+
+public final class dev/bota/sdk/DeviceReconnectHint {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4-s-VKNKU ()J
+	public final fun component5-s-VKNKU ()J
+	public final fun copy-bubZ-Dc (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JJ)Ldev/bota/sdk/DeviceReconnectHint;
+	public static synthetic fun copy-bubZ-Dc$default (Ldev/bota/sdk/DeviceReconnectHint;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;JJILjava/lang/Object;)Ldev/bota/sdk/DeviceReconnectHint;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAdvertisedAddress ()Ljava/lang/String;
+	public final fun getConnectionTimeoutMilliseconds-s-VKNKU ()J
+	public final fun getScanTimeoutMilliseconds-s-VKNKU ()J
+	public final fun getStoredName ()Ljava/lang/String;
+	public final fun getStoredPeripheralId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/FactoryResetManager {
+	public final fun cancelCurrentOperation (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun factoryReset-bdvP6-E (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;JLkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun resumePendingFactoryReset-z13BHRw (Ldev/bota/sdk/model/ConnectedDevice;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/FirmwareImage {
+	public synthetic fun <init> (Ljava/lang/String;IIJLokhttp3/Request;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2-pVg5ArA ()I
+	public final fun component3-pVg5ArA ()I
+	public final fun component4-s-VKNKU ()J
+	public final fun component5 ()Lokhttp3/Request;
+	public final fun copy-ckl3X9M (Ljava/lang/String;IIJLokhttp3/Request;)Ldev/bota/sdk/FirmwareImage;
+	public static synthetic fun copy-ckl3X9M$default (Ldev/bota/sdk/FirmwareImage;Ljava/lang/String;IIJLokhttp3/Request;ILjava/lang/Object;)Ldev/bota/sdk/FirmwareImage;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCrc32-pVg5ArA ()I
+	public final fun getDownloadId-s-VKNKU ()J
+	public final fun getRequest ()Lokhttp3/Request;
+	public final fun getSizeBytes-pVg5ArA ()I
+	public final fun getVersion ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/OTAManager {
+	public final fun cancelCurrentOperation (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun updateFirmware (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/FirmwareImage;)Lkotlinx/coroutines/flow/Flow;
+}
+
+public final class dev/bota/sdk/ProvisioningManager {
+	public static final field DeprovisionCommand B
+	public final fun cancelCurrentOperation (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun deprovision (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun provision (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun writeConnectionSettings (Ldev/bota/sdk/model/DeviceConnectionSettings;Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/RecordingManager {
+	public final fun cancelCurrentOperation (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun listRecordings (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun observeUploadOwnership (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lkotlinx/coroutines/flow/Flow;
+	public final fun syncRecording (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/model/DeviceRecording;Ljava/lang/String;)Lkotlinx/coroutines/flow/Flow;
+	public static synthetic fun syncRecording$default (Ldev/bota/sdk/RecordingManager;Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/model/DeviceRecording;Ljava/lang/String;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+}
+
+public abstract interface class dev/bota/sdk/RecordingSyncEvent {
+}
+
+public final class dev/bota/sdk/RecordingSyncEvent$Completed : dev/bota/sdk/RecordingSyncEvent {
+	public fun <init> (Ljava/nio/file/Path;)V
+	public final fun component1 ()Ljava/nio/file/Path;
+	public final fun copy (Ljava/nio/file/Path;)Ldev/bota/sdk/RecordingSyncEvent$Completed;
+	public static synthetic fun copy$default (Ldev/bota/sdk/RecordingSyncEvent$Completed;Ljava/nio/file/Path;ILjava/lang/Object;)Ldev/bota/sdk/RecordingSyncEvent$Completed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPath ()Ljava/nio/file/Path;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/RecordingSyncEvent$Progress : dev/bota/sdk/RecordingSyncEvent {
+	public fun <init> (Ldev/bota/sdk/model/RecordingTransferProgress;)V
+	public final fun component1 ()Ldev/bota/sdk/model/RecordingTransferProgress;
+	public final fun copy (Ldev/bota/sdk/model/RecordingTransferProgress;)Ldev/bota/sdk/RecordingSyncEvent$Progress;
+	public static synthetic fun copy$default (Ldev/bota/sdk/RecordingSyncEvent$Progress;Ldev/bota/sdk/model/RecordingTransferProgress;ILjava/lang/Object;)Ldev/bota/sdk/RecordingSyncEvent$Progress;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getProgress ()Ldev/bota/sdk/model/RecordingTransferProgress;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/bota/sdk/UploadOwnershipEvent {
+}
+
+public final class dev/bota/sdk/UploadOwnershipEvent$Progress : dev/bota/sdk/UploadOwnershipEvent {
+	public fun <init> (Ldev/bota/sdk/model/RecordingTransferProgress;)V
+	public final fun component1 ()Ldev/bota/sdk/model/RecordingTransferProgress;
+	public final fun copy (Ldev/bota/sdk/model/RecordingTransferProgress;)Ldev/bota/sdk/UploadOwnershipEvent$Progress;
+	public static synthetic fun copy$default (Ldev/bota/sdk/UploadOwnershipEvent$Progress;Ldev/bota/sdk/model/RecordingTransferProgress;ILjava/lang/Object;)Ldev/bota/sdk/UploadOwnershipEvent$Progress;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getProgress ()Ldev/bota/sdk/model/RecordingTransferProgress;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/UploadOwnershipEvent$Result : dev/bota/sdk/UploadOwnershipEvent {
+	public fun <init> (Ldev/bota/sdk/UploadOwnershipResult;)V
+	public final fun component1 ()Ldev/bota/sdk/UploadOwnershipResult;
+	public final fun copy (Ldev/bota/sdk/UploadOwnershipResult;)Ldev/bota/sdk/UploadOwnershipEvent$Result;
+	public static synthetic fun copy$default (Ldev/bota/sdk/UploadOwnershipEvent$Result;Ldev/bota/sdk/UploadOwnershipResult;ILjava/lang/Object;)Ldev/bota/sdk/UploadOwnershipEvent$Result;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getResult ()Ldev/bota/sdk/UploadOwnershipResult;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/bota/sdk/UploadOwnershipResult {
+}
+
+public final class dev/bota/sdk/UploadOwnershipResult$BluetoothFallback : dev/bota/sdk/UploadOwnershipResult {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ldev/bota/sdk/UploadOwnershipResult$BluetoothFallback;
+	public static synthetic fun copy$default (Ldev/bota/sdk/UploadOwnershipResult$BluetoothFallback;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/UploadOwnershipResult$BluetoothFallback;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDestinationId ()Ljava/lang/String;
+	public final fun getRecordingUuid ()Ljava/lang/String;
+	public final fun getUploadId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/UploadOwnershipResult$DeviceUploadCompleted : dev/bota/sdk/UploadOwnershipResult {
+	public static final field INSTANCE Ldev/bota/sdk/UploadOwnershipResult$DeviceUploadCompleted;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/UploadOwnershipResult$DeviceUploadPreserved : dev/bota/sdk/UploadOwnershipResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Ldev/bota/sdk/UploadOwnershipResult$DeviceUploadPreserved;
+	public static synthetic fun copy$default (Ldev/bota/sdk/UploadOwnershipResult$DeviceUploadPreserved;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/UploadOwnershipResult$DeviceUploadPreserved;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getUploadId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/AckType : java/lang/Enum {
+	public static final field Abort Ldev/bota/sdk/model/AckType;
+	public static final field Ack Ldev/bota/sdk/model/AckType;
+	public static final field Companion Ldev/bota/sdk/model/AckType$Companion;
+	public static final field Nack Ldev/bota/sdk/model/AckType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/model/AckType;
+	public static fun values ()[Ldev/bota/sdk/model/AckType;
+}
+
+public final class dev/bota/sdk/model/AckType$Companion {
+}
+
+public final class dev/bota/sdk/model/AudioCodec : java/lang/Enum {
+	public static final field Opus16k Ldev/bota/sdk/model/AudioCodec;
+	public static final field Opus8k Ldev/bota/sdk/model/AudioCodec;
+	public static final field Pcm16k Ldev/bota/sdk/model/AudioCodec;
+	public static final field Pcm8k Ldev/bota/sdk/model/AudioCodec;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/model/AudioCodec;
+	public static fun values ()[Ldev/bota/sdk/model/AudioCodec;
+}
+
+public final class dev/bota/sdk/model/ConnectedDevice {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ldev/bota/sdk/model/DeviceType;Ljava/lang/String;Ljava/lang/String;ZLdev/bota/sdk/model/ConnectionState;I)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ldev/bota/sdk/model/DeviceType;Ljava/lang/String;Ljava/lang/String;ZLdev/bota/sdk/model/ConnectionState;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ldev/bota/sdk/model/DeviceType;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Z
+	public final fun component7 ()Ldev/bota/sdk/model/ConnectionState;
+	public final fun component8 ()I
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ldev/bota/sdk/model/DeviceType;Ljava/lang/String;Ljava/lang/String;ZLdev/bota/sdk/model/ConnectionState;I)Ldev/bota/sdk/model/ConnectedDevice;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;Ldev/bota/sdk/model/DeviceType;Ljava/lang/String;Ljava/lang/String;ZLdev/bota/sdk/model/ConnectionState;IILjava/lang/Object;)Ldev/bota/sdk/model/ConnectedDevice;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getConnectionState ()Ldev/bota/sdk/model/ConnectionState;
+	public final fun getDeviceType ()Ldev/bota/sdk/model/DeviceType;
+	public final fun getFirmwareVersion ()Ljava/lang/String;
+	public final fun getHardwareRevision ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMtu ()I
+	public final fun getSerialNumber ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isProvisioned ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/ConnectionState : java/lang/Enum {
+	public static final field Bonding Ldev/bota/sdk/model/ConnectionState;
+	public static final field Connected Ldev/bota/sdk/model/ConnectionState;
+	public static final field Connecting Ldev/bota/sdk/model/ConnectionState;
+	public static final field Disconnected Ldev/bota/sdk/model/ConnectionState;
+	public static final field Disconnecting Ldev/bota/sdk/model/ConnectionState;
+	public static final field Discovering Ldev/bota/sdk/model/ConnectionState;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/model/ConnectionState;
+	public static fun values ()[Ldev/bota/sdk/model/ConnectionState;
+}
+
+public final class dev/bota/sdk/model/DeviceConnectionSettings {
+	public synthetic fun <init> (Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;BLjava/util/List;Ldev/bota/sdk/model/DeviceConnectionSettings$PowerManagement;ZIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;BLjava/util/List;Ldev/bota/sdk/model/DeviceConnectionSettings$PowerManagement;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;
+	public final fun component2 ()Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;
+	public final fun component3-w2LRezQ ()B
+	public final fun component4 ()Ljava/util/List;
+	public final fun component5 ()Ldev/bota/sdk/model/DeviceConnectionSettings$PowerManagement;
+	public final fun component6 ()Z
+	public final fun component7 ()I
+	public final fun copy-P1LVLzk (Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;BLjava/util/List;Ldev/bota/sdk/model/DeviceConnectionSettings$PowerManagement;ZI)Ldev/bota/sdk/model/DeviceConnectionSettings;
+	public static synthetic fun copy-P1LVLzk$default (Ldev/bota/sdk/model/DeviceConnectionSettings;Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;BLjava/util/List;Ldev/bota/sdk/model/DeviceConnectionSettings$PowerManagement;ZIILjava/lang/Object;)Ldev/bota/sdk/model/DeviceConnectionSettings;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getEnabledConnections ()Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;
+	public final fun getHeartbeatEnabledConnections ()Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;
+	public final fun getHeartbeatUnknownMask-w2LRezQ ()B
+	public final fun getPowerManagement ()Ldev/bota/sdk/model/DeviceConnectionSettings$PowerManagement;
+	public final fun getStreamingEnabled ()Z
+	public final fun getStreamingFlushIntervalSeconds ()I
+	public final fun getUploadNetworkPreference ()Ljava/util/List;
+	public fun hashCode ()I
+	public final fun normalized (Ldev/bota/sdk/model/DeviceType;)Ldev/bota/sdk/model/DeviceConnectionSettings;
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/bota/sdk/model/DeviceConnectionSettings$ConnectionType {
+	public static final field Companion Ldev/bota/sdk/model/DeviceConnectionSettings$ConnectionType$Companion;
+}
+
+public final class dev/bota/sdk/model/DeviceConnectionSettings$ConnectionType$Ble : dev/bota/sdk/model/DeviceConnectionSettings$ConnectionType {
+	public static final field INSTANCE Ldev/bota/sdk/model/DeviceConnectionSettings$ConnectionType$Ble;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceConnectionSettings$ConnectionType$Cellular : dev/bota/sdk/model/DeviceConnectionSettings$ConnectionType {
+	public static final field INSTANCE Ldev/bota/sdk/model/DeviceConnectionSettings$ConnectionType$Cellular;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceConnectionSettings$ConnectionType$Companion {
+}
+
+public final class dev/bota/sdk/model/DeviceConnectionSettings$ConnectionType$Unknown : dev/bota/sdk/model/DeviceConnectionSettings$ConnectionType {
+	public synthetic fun <init> (BLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-w2LRezQ ()B
+	public final fun copy-7apg3OU (B)Ldev/bota/sdk/model/DeviceConnectionSettings$ConnectionType$Unknown;
+	public static synthetic fun copy-7apg3OU$default (Ldev/bota/sdk/model/DeviceConnectionSettings$ConnectionType$Unknown;BILjava/lang/Object;)Ldev/bota/sdk/model/DeviceConnectionSettings$ConnectionType$Unknown;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRawValue-w2LRezQ ()B
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceConnectionSettings$ConnectionType$Wifi : dev/bota/sdk/model/DeviceConnectionSettings$ConnectionType {
+	public static final field INSTANCE Ldev/bota/sdk/model/DeviceConnectionSettings$ConnectionType$Wifi;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections {
+	public fun <init> (ZZ)V
+	public final fun component1 ()Z
+	public final fun component2 ()Z
+	public final fun copy (ZZ)Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;ZZILjava/lang/Object;)Ldev/bota/sdk/model/DeviceConnectionSettings$EnabledConnections;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCellular ()Z
+	public final fun getWifi ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceConnectionSettings$PowerManagement {
+	public fun <init> ()V
+	public fun <init> (II)V
+	public synthetic fun <init> (IIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component2 ()I
+	public final fun copy (II)Ldev/bota/sdk/model/DeviceConnectionSettings$PowerManagement;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/DeviceConnectionSettings$PowerManagement;IIILjava/lang/Object;)Ldev/bota/sdk/model/DeviceConnectionSettings$PowerManagement;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCellularIdleTimeoutSeconds ()I
+	public final fun getWifiIdleTimeoutSeconds ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceFlags {
+	public fun <init> (ZZZZZZ)V
+	public final fun component1 ()Z
+	public final fun component2 ()Z
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun component5 ()Z
+	public final fun component6 ()Z
+	public final fun copy (ZZZZZZ)Ldev/bota/sdk/model/DeviceFlags;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/DeviceFlags;ZZZZZZILjava/lang/Object;)Ldev/bota/sdk/model/DeviceFlags;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCharging ()Z
+	public final fun getLowBattery ()Z
+	public final fun getLteConnected ()Z
+	public final fun getStorageFull ()Z
+	public final fun getSyncActive ()Z
+	public final fun getWifiConnected ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceLogLine {
+	public fun <init> (Ljava/lang/String;Z)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Z
+	public final fun copy (Ljava/lang/String;Z)Ldev/bota/sdk/model/DeviceLogLine;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/DeviceLogLine;Ljava/lang/String;ZILjava/lang/Object;)Ldev/bota/sdk/model/DeviceLogLine;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isBacklog ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceRecording {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/time/Instant;JJLdev/bota/sdk/model/WireValue;ZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/time/Instant;
+	public final fun component3-s-VKNKU ()J
+	public final fun component4-s-VKNKU ()J
+	public final fun component5 ()Ldev/bota/sdk/model/WireValue;
+	public final fun component6 ()Z
+	public final fun copy-QDrHzho (Ljava/lang/String;Ljava/time/Instant;JJLdev/bota/sdk/model/WireValue;Z)Ldev/bota/sdk/model/DeviceRecording;
+	public static synthetic fun copy-QDrHzho$default (Ldev/bota/sdk/model/DeviceRecording;Ljava/lang/String;Ljava/time/Instant;JJLdev/bota/sdk/model/WireValue;ZILjava/lang/Object;)Ldev/bota/sdk/model/DeviceRecording;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCodec ()Ldev/bota/sdk/model/WireValue;
+	public final fun getDurationMs-s-VKNKU ()J
+	public final fun getFileSizeBytes-s-VKNKU ()J
+	public final fun getStartedAt ()Ljava/time/Instant;
+	public final fun getUuid ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isEncrypted ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceState : java/lang/Enum {
+	public static final field Charging Ldev/bota/sdk/model/DeviceState;
+	public static final field Error Ldev/bota/sdk/model/DeviceState;
+	public static final field Idle Ldev/bota/sdk/model/DeviceState;
+	public static final field LowBattery Ldev/bota/sdk/model/DeviceState;
+	public static final field Recording Ldev/bota/sdk/model/DeviceState;
+	public static final field StorageFull Ldev/bota/sdk/model/DeviceState;
+	public static final field Syncing Ldev/bota/sdk/model/DeviceState;
+	public static final field Uploading Ldev/bota/sdk/model/DeviceState;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/model/DeviceState;
+	public static fun values ()[Ldev/bota/sdk/model/DeviceState;
+}
+
+public final class dev/bota/sdk/model/DeviceStatus {
+	public synthetic fun <init> (ILjava/lang/Integer;IILdev/bota/sdk/model/WireValue;ILjava/time/Instant;ILdev/bota/sdk/model/DeviceFlags;ILdev/bota/sdk/model/WireValue;Ljava/lang/Integer;Ldev/bota/sdk/model/WireValue;Ldev/bota/sdk/model/ModemInfo;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (ILjava/lang/Integer;IILdev/bota/sdk/model/WireValue;ILjava/time/Instant;ILdev/bota/sdk/model/DeviceFlags;ILdev/bota/sdk/model/WireValue;Ljava/lang/Integer;Ldev/bota/sdk/model/WireValue;Ldev/bota/sdk/model/ModemInfo;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()I
+	public final fun component10-pVg5ArA ()I
+	public final fun component11 ()Ldev/bota/sdk/model/WireValue;
+	public final fun component12 ()Ljava/lang/Integer;
+	public final fun component13 ()Ldev/bota/sdk/model/WireValue;
+	public final fun component14 ()Ldev/bota/sdk/model/ModemInfo;
+	public final fun component2 ()Ljava/lang/Integer;
+	public final fun component3 ()I
+	public final fun component4 ()I
+	public final fun component5 ()Ldev/bota/sdk/model/WireValue;
+	public final fun component6 ()I
+	public final fun component7 ()Ljava/time/Instant;
+	public final fun component8 ()I
+	public final fun component9 ()Ldev/bota/sdk/model/DeviceFlags;
+	public final fun copy-CFeXLw4 (ILjava/lang/Integer;IILdev/bota/sdk/model/WireValue;ILjava/time/Instant;ILdev/bota/sdk/model/DeviceFlags;ILdev/bota/sdk/model/WireValue;Ljava/lang/Integer;Ldev/bota/sdk/model/WireValue;Ldev/bota/sdk/model/ModemInfo;)Ldev/bota/sdk/model/DeviceStatus;
+	public static synthetic fun copy-CFeXLw4$default (Ldev/bota/sdk/model/DeviceStatus;ILjava/lang/Integer;IILdev/bota/sdk/model/WireValue;ILjava/time/Instant;ILdev/bota/sdk/model/DeviceFlags;ILdev/bota/sdk/model/WireValue;Ljava/lang/Integer;Ldev/bota/sdk/model/WireValue;Ldev/bota/sdk/model/ModemInfo;ILjava/lang/Object;)Ldev/bota/sdk/model/DeviceStatus;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBatteryLevel ()I
+	public final fun getBatteryMv ()Ljava/lang/Integer;
+	public final fun getFlags ()Ldev/bota/sdk/model/DeviceFlags;
+	public final fun getLastTimeSyncAt ()Ljava/time/Instant;
+	public final fun getLteSignalQuality ()Ljava/lang/Integer;
+	public final fun getLteStatus ()Ldev/bota/sdk/model/WireValue;
+	public final fun getModemInfo ()Ldev/bota/sdk/model/ModemInfo;
+	public final fun getPendingRecordings ()I
+	public final fun getSignalStrength ()I
+	public final fun getState ()Ldev/bota/sdk/model/WireValue;
+	public final fun getStorageTotalMb ()I
+	public final fun getStorageUsedMb ()I
+	public final fun getTimestamp-pVg5ArA ()I
+	public final fun getWifiStatus ()Ldev/bota/sdk/model/WireValue;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/bota/sdk/model/DeviceType {
+}
+
+public final class dev/bota/sdk/model/DeviceType$BotaNote : dev/bota/sdk/model/DeviceType {
+	public static final field INSTANCE Ldev/bota/sdk/model/DeviceType$BotaNote;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceType$BotaPin : dev/bota/sdk/model/DeviceType {
+	public static final field INSTANCE Ldev/bota/sdk/model/DeviceType$BotaPin;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceType$BotaPin4G : dev/bota/sdk/model/DeviceType {
+	public static final field INSTANCE Ldev/bota/sdk/model/DeviceType$BotaPin4G;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceType$Unknown : dev/bota/sdk/model/DeviceType {
+	public synthetic fun <init> (BLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-w2LRezQ ()B
+	public final fun copy-7apg3OU (B)Ldev/bota/sdk/model/DeviceType$Unknown;
+	public static synthetic fun copy-7apg3OU$default (Ldev/bota/sdk/model/DeviceType$Unknown;BILjava/lang/Object;)Ldev/bota/sdk/model/DeviceType$Unknown;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRawValue-w2LRezQ ()B
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DiscoveredDevice {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ldev/bota/sdk/model/DeviceType;Ljava/lang/String;Ljava/lang/String;Ldev/bota/sdk/model/PairingState;I[BLjava/time/Instant;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ldev/bota/sdk/model/DeviceType;Ljava/lang/String;Ljava/lang/String;Ldev/bota/sdk/model/PairingState;I[BLjava/time/Instant;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeviceType ()Ldev/bota/sdk/model/DeviceType;
+	public final fun getDiscoveredAt ()Ljava/time/Instant;
+	public final fun getFirmwareVersion ()Ljava/lang/String;
+	public final fun getId ()Ljava/lang/String;
+	public final fun getMacAddress ()Ljava/lang/String;
+	public final fun getManufacturerData ()[B
+	public final fun getName ()Ljava/lang/String;
+	public final fun getPairingState ()Ldev/bota/sdk/model/PairingState;
+	public final fun getRssi ()I
+	public fun hashCode ()I
+}
+
+public final class dev/bota/sdk/model/FactoryResetCompletion {
+	public synthetic fun <init> (Ljava/lang/String;JLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2-s-VKNKU ()J
+	public final fun copy-2TYgG_w (Ljava/lang/String;J)Ldev/bota/sdk/model/FactoryResetCompletion;
+	public static synthetic fun copy-2TYgG_w$default (Ldev/bota/sdk/model/FactoryResetCompletion;Ljava/lang/String;JILjava/lang/Object;)Ldev/bota/sdk/model/FactoryResetCompletion;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBindingGeneration-s-VKNKU ()J
+	public final fun getCommandId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/FactoryResetGrantRequest {
+	public synthetic fun <init> (Ljava/lang/String;[BLjava/lang/String;JLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getBindingGeneration-s-VKNKU ()J
+	public final fun getCommandId ()Ljava/lang/String;
+	public final fun getNonce ()[B
+	public final fun getSerialNumber ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/FactoryResetResult {
+	public synthetic fun <init> (BSLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-w2LRezQ ()B
+	public final fun component2-Mh2AYeg ()S
+	public final fun copy-Dt2v30s (BS)Ldev/bota/sdk/model/FactoryResetResult;
+	public static synthetic fun copy-Dt2v30s$default (Ldev/bota/sdk/model/FactoryResetResult;BSILjava/lang/Object;)Ldev/bota/sdk/model/FactoryResetResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDeletedRecordingCount-Mh2AYeg ()S
+	public final fun getResultCode-w2LRezQ ()B
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/FirmwareStatus {
+	public synthetic fun <init> (BBLkotlin/UShort;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (BBLkotlin/UShort;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-w2LRezQ ()B
+	public final fun component2-w2LRezQ ()B
+	public final fun component3-XRpZGF0 ()Lkotlin/UShort;
+	public final fun copy-ZyvmvnY (BBLkotlin/UShort;)Ldev/bota/sdk/model/FirmwareStatus;
+	public static synthetic fun copy-ZyvmvnY$default (Ldev/bota/sdk/model/FirmwareStatus;BBLkotlin/UShort;ILjava/lang/Object;)Ldev/bota/sdk/model/FirmwareStatus;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCommand-w2LRezQ ()B
+	public final fun getResult-w2LRezQ ()B
+	public final fun getSequenceNumber-XRpZGF0 ()Lkotlin/UShort;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/FirmwareUpdatePhase : java/lang/Enum {
+	public static final field AwaitingDevice Ldev/bota/sdk/model/FirmwareUpdatePhase;
+	public static final field Complete Ldev/bota/sdk/model/FirmwareUpdatePhase;
+	public static final field Downloading Ldev/bota/sdk/model/FirmwareUpdatePhase;
+	public static final field Rebooting Ldev/bota/sdk/model/FirmwareUpdatePhase;
+	public static final field Reconnecting Ldev/bota/sdk/model/FirmwareUpdatePhase;
+	public static final field Transferring Ldev/bota/sdk/model/FirmwareUpdatePhase;
+	public static final field Verifying Ldev/bota/sdk/model/FirmwareUpdatePhase;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/model/FirmwareUpdatePhase;
+	public static fun values ()[Ldev/bota/sdk/model/FirmwareUpdatePhase;
+}
+
+public final class dev/bota/sdk/model/FirmwareUpdateProgress {
+	public synthetic fun <init> (Ldev/bota/sdk/model/FirmwareUpdatePhase;JJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ldev/bota/sdk/model/FirmwareUpdatePhase;
+	public final fun component2-s-VKNKU ()J
+	public final fun component3-s-VKNKU ()J
+	public final fun copy-ZFynlJw (Ldev/bota/sdk/model/FirmwareUpdatePhase;JJ)Ldev/bota/sdk/model/FirmwareUpdateProgress;
+	public static synthetic fun copy-ZFynlJw$default (Ldev/bota/sdk/model/FirmwareUpdateProgress;Ldev/bota/sdk/model/FirmwareUpdatePhase;JJILjava/lang/Object;)Ldev/bota/sdk/model/FirmwareUpdateProgress;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCompletedBytes-s-VKNKU ()J
+	public final fun getPhase ()Ldev/bota/sdk/model/FirmwareUpdatePhase;
+	public final fun getTotalBytes-s-VKNKU ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/LteStatus : java/lang/Enum {
+	public static final field Connected Ldev/bota/sdk/model/LteStatus;
+	public static final field Denied Ldev/bota/sdk/model/LteStatus;
+	public static final field Disabled Ldev/bota/sdk/model/LteStatus;
+	public static final field Error Ldev/bota/sdk/model/LteStatus;
+	public static final field LowVoltage Ldev/bota/sdk/model/LteStatus;
+	public static final field NoSim Ldev/bota/sdk/model/LteStatus;
+	public static final field Off Ldev/bota/sdk/model/LteStatus;
+	public static final field Registered Ldev/bota/sdk/model/LteStatus;
+	public static final field Searching Ldev/bota/sdk/model/LteStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/model/LteStatus;
+	public static fun values ()[Ldev/bota/sdk/model/LteStatus;
+}
+
+public final class dev/bota/sdk/model/ModemInfo {
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Boolean;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Boolean;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component10 ()Ljava/lang/Integer;
+	public final fun component11 ()Ljava/lang/String;
+	public final fun component12 ()Ljava/lang/Boolean;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun component6 ()Ljava/lang/String;
+	public final fun component7 ()Ljava/lang/String;
+	public final fun component8 ()Ljava/lang/Integer;
+	public final fun component9 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Boolean;)Ldev/bota/sdk/model/ModemInfo;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/ModemInfo;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Integer;Ljava/lang/String;Ljava/lang/Boolean;ILjava/lang/Object;)Ldev/bota/sdk/model/ModemInfo;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getApn ()Ljava/lang/String;
+	public final fun getBand ()Ljava/lang/String;
+	public final fun getCsq ()Ljava/lang/Integer;
+	public final fun getIccid ()Ljava/lang/String;
+	public final fun getImei ()Ljava/lang/String;
+	public final fun getIpAddress ()Ljava/lang/String;
+	public final fun getModemFirmware ()Ljava/lang/String;
+	public final fun getModemVoltage ()Ljava/lang/Integer;
+	public final fun getOperator ()Ljava/lang/String;
+	public final fun getRat ()Ljava/lang/String;
+	public final fun getRoaming ()Ljava/lang/Boolean;
+	public final fun getSimStatus ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/bota/sdk/model/PairingState {
+}
+
+public final class dev/bota/sdk/model/PairingState$Error : dev/bota/sdk/model/PairingState {
+	public static final field INSTANCE Ldev/bota/sdk/model/PairingState$Error;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/PairingState$Paired : dev/bota/sdk/model/PairingState {
+	public static final field INSTANCE Ldev/bota/sdk/model/PairingState$Paired;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/PairingState$Pairing : dev/bota/sdk/model/PairingState {
+	public static final field INSTANCE Ldev/bota/sdk/model/PairingState$Pairing;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/PairingState$Unknown : dev/bota/sdk/model/PairingState {
+	public synthetic fun <init> (BLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-w2LRezQ ()B
+	public final fun copy-7apg3OU (B)Ldev/bota/sdk/model/PairingState$Unknown;
+	public static synthetic fun copy-7apg3OU$default (Ldev/bota/sdk/model/PairingState$Unknown;BILjava/lang/Object;)Ldev/bota/sdk/model/PairingState$Unknown;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRawValue-w2LRezQ ()B
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/PairingState$Unpaired : dev/bota/sdk/model/PairingState {
+	public static final field INSTANCE Ldev/bota/sdk/model/PairingState$Unpaired;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/ParsedConnectionSettings {
+	public fun <init> (Ldev/bota/sdk/model/DeviceConnectionSettings;Z)V
+	public final fun component1 ()Ldev/bota/sdk/model/DeviceConnectionSettings;
+	public final fun component2 ()Z
+	public final fun copy (Ldev/bota/sdk/model/DeviceConnectionSettings;Z)Ldev/bota/sdk/model/ParsedConnectionSettings;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/ParsedConnectionSettings;Ldev/bota/sdk/model/DeviceConnectionSettings;ZILjava/lang/Object;)Ldev/bota/sdk/model/ParsedConnectionSettings;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getSettings ()Ldev/bota/sdk/model/DeviceConnectionSettings;
+	public final fun getSupportedVersion ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/ProvisioningMaterial {
+	public synthetic fun <init> ([B[BJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getApiEndpoint ()[B
+	public final fun getDeviceToken ()[B
+	public final fun getMtu-s-VKNKU ()J
+}
+
+public final class dev/bota/sdk/model/ProvisioningMaterialRequest {
+	public fun <init> (Ljava/lang/String;[B[B)V
+	public final fun getDevicePublicKey ()[B
+	public final fun getNonce ()[B
+	public final fun getSerialNumber ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/RecordingTransferProgress {
+	public synthetic fun <init> (JJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-s-VKNKU ()J
+	public final fun component2-s-VKNKU ()J
+	public final fun copy-PWzV0Is (JJ)Ldev/bota/sdk/model/RecordingTransferProgress;
+	public static synthetic fun copy-PWzV0Is$default (Ldev/bota/sdk/model/RecordingTransferProgress;JJILjava/lang/Object;)Ldev/bota/sdk/model/RecordingTransferProgress;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCompletedBytes-s-VKNKU ()J
+	public final fun getTotalBytes-s-VKNKU ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/bota/sdk/model/TransferCommand {
+	public static final field Companion Ldev/bota/sdk/model/TransferCommand$Companion;
+}
+
+public final class dev/bota/sdk/model/TransferCommand$Companion {
+}
+
+public final class dev/bota/sdk/model/TransferCommand$Confirm : dev/bota/sdk/model/TransferCommand {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Ldev/bota/sdk/model/TransferCommand$Confirm;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/TransferCommand$Confirm;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/model/TransferCommand$Confirm;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRecordingUuid ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/TransferCommand$List : dev/bota/sdk/model/TransferCommand {
+	public static final field INSTANCE Ldev/bota/sdk/model/TransferCommand$List;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/TransferCommand$Start : dev/bota/sdk/model/TransferCommand {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Ldev/bota/sdk/model/TransferCommand$Start;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/TransferCommand$Start;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/model/TransferCommand$Start;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRecordingUuid ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/TransferCommand$TriggerDeviceUpload : dev/bota/sdk/model/TransferCommand {
+	public static final field INSTANCE Ldev/bota/sdk/model/TransferCommand$TriggerDeviceUpload;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/TransferPacket {
+	public synthetic fun <init> (Ldev/bota/sdk/model/TransferPacketType;S[BLkotlin/UInt;Lkotlin/UInt;Lkotlin/UByte;[B[B[B[BILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ldev/bota/sdk/model/TransferPacketType;S[BLkotlin/UInt;Lkotlin/UInt;Lkotlin/UByte;[B[B[B[BLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBytesSent-0hXNFcg ()Lkotlin/UInt;
+	public final fun getChecksum-0hXNFcg ()Lkotlin/UInt;
+	public final fun getData ()[B
+	public final fun getE2eChunk ()[B
+	public final fun getE2eEphemeralPublicKey ()[B
+	public final fun getE2eSalt ()[B
+	public final fun getErrorCode-7PGSa80 ()Lkotlin/UByte;
+	public final fun getSequenceNumber-Mh2AYeg ()S
+	public final fun getSha256 ()[B
+	public final fun getType ()Ldev/bota/sdk/model/TransferPacketType;
+	public fun hashCode ()I
+}
+
+public final class dev/bota/sdk/model/TransferPacketType : java/lang/Enum {
+	public static final field Data Ldev/bota/sdk/model/TransferPacketType;
+	public static final field E2eStart Ldev/bota/sdk/model/TransferPacketType;
+	public static final field EncryptedData Ldev/bota/sdk/model/TransferPacketType;
+	public static final field EncryptedEof Ldev/bota/sdk/model/TransferPacketType;
+	public static final field Eof Ldev/bota/sdk/model/TransferPacketType;
+	public static final field Error Ldev/bota/sdk/model/TransferPacketType;
+	public static final field Paused Ldev/bota/sdk/model/TransferPacketType;
+	public static final field Sha256 Ldev/bota/sdk/model/TransferPacketType;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/model/TransferPacketType;
+	public static fun values ()[Ldev/bota/sdk/model/TransferPacketType;
+}
+
+public final class dev/bota/sdk/model/TriggerDeviceUploadResponse {
+	public synthetic fun <init> (ZLkotlin/UByte;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (ZLkotlin/UByte;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2-7PGSa80 ()Lkotlin/UByte;
+	public final fun copy-tA8902A (ZLkotlin/UByte;)Ldev/bota/sdk/model/TriggerDeviceUploadResponse;
+	public static synthetic fun copy-tA8902A$default (Ldev/bota/sdk/model/TriggerDeviceUploadResponse;ZLkotlin/UByte;ILjava/lang/Object;)Ldev/bota/sdk/model/TriggerDeviceUploadResponse;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAccepted ()Z
+	public final fun getErrorCode-7PGSa80 ()Lkotlin/UByte;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/bota/sdk/model/WiFiConfigResult {
+}
+
+public final class dev/bota/sdk/model/WiFiConfigResult$DecryptionError : dev/bota/sdk/model/WiFiConfigResult {
+	public static final field INSTANCE Ldev/bota/sdk/model/WiFiConfigResult$DecryptionError;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/WiFiConfigResult$GrantExpired : dev/bota/sdk/model/WiFiConfigResult {
+	public static final field INSTANCE Ldev/bota/sdk/model/WiFiConfigResult$GrantExpired;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/WiFiConfigResult$InvalidGrant : dev/bota/sdk/model/WiFiConfigResult {
+	public static final field INSTANCE Ldev/bota/sdk/model/WiFiConfigResult$InvalidGrant;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/WiFiConfigResult$StorageError : dev/bota/sdk/model/WiFiConfigResult {
+	public static final field INSTANCE Ldev/bota/sdk/model/WiFiConfigResult$StorageError;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/WiFiConfigResult$Success : dev/bota/sdk/model/WiFiConfigResult {
+	public static final field INSTANCE Ldev/bota/sdk/model/WiFiConfigResult$Success;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/WiFiConfigResult$Unknown : dev/bota/sdk/model/WiFiConfigResult {
+	public synthetic fun <init> (BLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-w2LRezQ ()B
+	public final fun copy-7apg3OU (B)Ldev/bota/sdk/model/WiFiConfigResult$Unknown;
+	public static synthetic fun copy-7apg3OU$default (Ldev/bota/sdk/model/WiFiConfigResult$Unknown;BILjava/lang/Object;)Ldev/bota/sdk/model/WiFiConfigResult$Unknown;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRawValue-w2LRezQ ()B
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/WifiRadioStatus : java/lang/Enum {
+	public static final field ConnectFailed Ldev/bota/sdk/model/WifiRadioStatus;
+	public static final field Connected Ldev/bota/sdk/model/WifiRadioStatus;
+	public static final field Connecting Ldev/bota/sdk/model/WifiRadioStatus;
+	public static final field Disabled Ldev/bota/sdk/model/WifiRadioStatus;
+	public static final field Error Ldev/bota/sdk/model/WifiRadioStatus;
+	public static final field NoCredentials Ldev/bota/sdk/model/WifiRadioStatus;
+	public static final field Off Ldev/bota/sdk/model/WifiRadioStatus;
+	public static final field Scanning Ldev/bota/sdk/model/WifiRadioStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/model/WifiRadioStatus;
+	public static fun values ()[Ldev/bota/sdk/model/WifiRadioStatus;
+}
+
+public abstract interface class dev/bota/sdk/model/WireValue {
+	public abstract fun getUnknownRawValue-6VbMDqA ()Lkotlin/ULong;
+}
+
+public final class dev/bota/sdk/model/WireValue$Known : dev/bota/sdk/model/WireValue {
+	public fun <init> (Ljava/lang/Object;)V
+	public final fun component1 ()Ljava/lang/Object;
+	public final fun copy (Ljava/lang/Object;)Ldev/bota/sdk/model/WireValue$Known;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/WireValue$Known;Ljava/lang/Object;ILjava/lang/Object;)Ldev/bota/sdk/model/WireValue$Known;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun getUnknownRawValue-6VbMDqA ()Lkotlin/ULong;
+	public final fun getValue ()Ljava/lang/Object;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/WireValue$Unknown : dev/bota/sdk/model/WireValue {
+	public synthetic fun <init> (JLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-s-VKNKU ()J
+	public final fun copy-VKZWuLQ (J)Ldev/bota/sdk/model/WireValue$Unknown;
+	public static synthetic fun copy-VKZWuLQ$default (Ldev/bota/sdk/model/WireValue$Unknown;JILjava/lang/Object;)Ldev/bota/sdk/model/WireValue$Unknown;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRawValue-s-VKNKU ()J
+	public synthetic fun getUnknownRawValue-6VbMDqA ()Lkotlin/ULong;
+	public fun getUnknownRawValue-s-VKNKU ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}

@@ -246,6 +246,17 @@ public class RecordingManager internal constructor() {
         }
     }
 
+    internal suspend fun confirmRecording(device: ConnectedDevice, recordingUuid: String) {
+        val runtime = state.configuredRuntime()
+        runtime.connection.require(device)
+        runtime.directWrite(
+            device.id,
+            RecordingUUIDs.StorageService,
+            RecordingUUIDs.TransferControl,
+            runtime.createTransferCommand(TransferCommand.Confirm(recordingUuid)),
+        )
+    }
+
     public suspend fun cancelCurrentOperation(): Unit = state.cancelCurrentOperation()
 }
 

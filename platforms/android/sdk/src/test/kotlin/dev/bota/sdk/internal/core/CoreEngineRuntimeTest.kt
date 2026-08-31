@@ -5,6 +5,7 @@ import dev.bota.sdk.internal.jni.NativeCoreException
 import dev.bota.sdk.internal.jni.NativePacket
 import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.awaitClose
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -89,7 +91,9 @@ class CoreEngineRuntimeTest {
         core.started.await()
 
         collector.cancelAndJoin()
-        withTimeout(2_000) { core.cancelled.await() }
+        withContext(Dispatchers.Default) {
+            withTimeout(2_000) { core.cancelled.await() }
+        }
         runtime.close()
 
         assertEquals(0x0011223344556677uL, core.cancelledHigh)

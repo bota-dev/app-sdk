@@ -65,9 +65,13 @@ reset receipt recovery. Application material stays behind opaque native
 registrations, and every manager shares one facade operation owner. Recording
 sync now returns native file paths, upload handoff exposes only ownership
 outcomes, OTA keeps request and firmware bytes in native hosts, and logs expose
-only complete core-sanitized lines. Legacy compatibility, physical-device
-acceptance, Maven Central publication, and the React Native Android adapter
-remain open.
+only complete core-sanitized lines. The AAR also carries a one-major deprecated
+`com.bota.sdk` adapter frozen from Android revision `0f06d2a…`; JVM descriptor,
+source, already-compiled bytecode, API 26, and API 35 consumer gates pass. New
+applications resolve only `dev.bota:bota-android-sdk` and must not package the
+old AAR beside it. See [Android SDK migration](docs/migration/android.md).
+Physical-device acceptance, Maven Central publication, and the React Native
+Android adapter remain open.
 The native-boundary spike selected a manually owned C ABI after comparing it
 with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed

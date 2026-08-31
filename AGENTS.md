@@ -156,6 +156,16 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   offset zero; current firmware does not support partial Bluetooth OTA resume.
 - Device logs subscribe before start, have one workflow owner, and use the
   shared bounded decoder; disconnect cleanup must not attempt a BLE stop write.
+- Keep the one-major `com.bota.sdk` adapter descriptor-compatible with pinned
+  Android revision `0f06d2a22c55e4976778520cce42230d23ca4226`. Run the frozen
+  `javap`, Kotlin API, source-consumer, and precompiled-binary gates after every
+  compatibility edit. Never publish or package a second legacy coordinate.
+- Public Android signatures expose `Flow` and OkHttp `Request`, so coroutines
+  and OkHttp remain Maven API dependencies. The clean consumer must compile
+  without declaring either dependency itself.
+- The compatibility context provider is non-exported and captures only the
+  application context. It must never initiate Bluetooth, storage, or network
+  work during process startup.
 - Native facades use the manually owned opaque C ABI selected in ADR 0001;
   UniFFI `0.32.0` exists only in the non-published comparison spike.
 - ABI v1 numeric meanings and ownership rules are frozen by

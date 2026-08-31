@@ -970,7 +970,7 @@ git commit -m "feat(android): expose transfer ota and logs" \
   `com.bota.sdk` compatibility layer, a frozen legacy consumer, and a clean new
   consumer that resolves only `dev.bota:bota-android-sdk`.
 
-- [ ] **Step 1: Generate and freeze the legacy API inventory**
+- [x] **Step 1: Generate and freeze the legacy API inventory**
 
 `capture-legacy-api.sh --legacy-path "$BOTA_LEGACY_ANDROID_PATH"` first requires
 the checkout to be clean and exactly at
@@ -1006,7 +1006,7 @@ both `com.bota.sdk` and `dev.bota.sdk`. `verify-legacy-api.sh` separately compar
 only the `com.bota.sdk` JVM descriptors in the new AAR with the generated legacy
 inventory, so a broad new-surface dump cannot hide a legacy binary break.
 
-- [ ] **Step 2: Freeze source and binary consumer failures**
+- [x] **Step 2: Freeze source and binary consumer failures**
 
 `FrozenLegacyConsumer.kt` is copied from executable calls generated from the
 inventory, not maintained as a hand-selected sample. It constructs every public
@@ -1029,7 +1029,7 @@ The unrelated `android-consumer` compiles only the new `dev.bota.sdk` API from
 the local Maven repository and must not import JNI/internal packages or depend
 on the project source tree.
 
-- [ ] **Step 3: Run compatibility gates and verify RED**
+- [x] **Step 3: Run compatibility gates and verify RED**
 
 Run:
 
@@ -1046,7 +1046,7 @@ tools/android/test-consumer.sh --api 26
 Expected: baseline capture succeeds, then API comparison and both consumers fail
 because compatibility wrappers and the Maven consumers are absent.
 
-- [ ] **Step 4: Implement the exact adapter and unsupported map**
+- [x] **Step 4: Implement the exact adapter and unsupported map**
 
 Ship deprecated wrappers in package `com.bota.sdk` inside the new AAR so a
 Kotlin app can replace its dependency before changing imports. Delegate to
@@ -1098,7 +1098,7 @@ configures a test context, loads JNI on API 26 and API 35 emulators, checks
 `VERSION_NAME`, and type-checks scan, reconnect, provisioning, reset, recording,
 upload ownership, OTA, logs, cancellation, and suspending destroy.
 
-- [ ] **Step 5: Run binary, source, migration, and consumer gates**
+- [x] **Step 5: Run binary, source, migration, and consumer gates**
 
 Run:
 
@@ -1121,7 +1121,7 @@ pass; both consumers load JNI from the replacement AAR and report ABI v1 on API
 26 and API 35; every unsupported legacy path returns the documented stable
 exception.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add README.md docs/migration/android.md platforms/android protocol/baseline \

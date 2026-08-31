@@ -85,6 +85,28 @@ android {
 
 }
 
+val generatedCompatibilitySource = layout.buildDirectory.dir("generated/source/botaCompatibility/kotlin")
+val compatibilitySdkVersion = project.version.toString()
+val generateCompatibilityVersion by tasks.registering {
+    group = "build"
+    description = "Generates the legacy BotaSdkVersion const from sdk-version.toml."
+    inputs.property("sdkVersion", compatibilitySdkVersion)
+    outputs.dir(generatedCompatibilitySource)
+    doLast {
+        val output = generatedCompatibilitySource.get().file("com/bota/sdk/BotaSdkVersion.kt").asFile
+        output.parentFile.mkdirs()
+        output.writeText(
+            """package com.bota.sdk
+
+@Deprecated("Use dev.bota.sdk.BotaAndroidSDK.version", ReplaceWith("BotaAndroidSDK.version", "dev.bota.sdk.BotaAndroidSDK"))
+public object BotaSdkVersion {
+    public const val current: String = "$compatibilitySdkVersion"
+}
+""",
+        )
+    }
+}
+
 val buildRustNative by tasks.registering(Exec::class) {
     group = "build"
     description = "Cross-compiles the frozen Rust ABI for all supported Android ABIs."
@@ -138,14 +160,24 @@ tasks.configureEach {
 
 kotlin {
     explicitApi()
+    sourceSets.named("main") {
+        kotlin.srcDir(generatedCompatibilitySource)
+    }
     compilerOptions {
         allWarningsAsErrors.set(true)
         jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
+tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }.configureEach {
+    dependsOn(generateCompatibilityVersion)
+}
+tasks.matching { it.name == "sourceReleaseJar" }.configureEach {
+    dependsOn(generateCompatibilityVersion)
+}
+
 dependencies {
-    implementation(libs.kotlinx.coroutines.android)
+    api(libs.kotlinx.coroutines.android)
     api(libs.okhttp)
 
     testImplementation(libs.junit)

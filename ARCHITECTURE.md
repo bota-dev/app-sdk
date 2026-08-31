@@ -165,9 +165,16 @@ late workflow completion after destroy or reconfiguration. Status teardown is
 bound to its originating runtime and disables the device-wide CCCD only after
 the last collector leaves. Runtime construction rollback and destroy attempt
 every registered resource close, preserving cleanup failures without leaking
-the Bluetooth thread or native engine. The
-Maven Central, physical acceptance, and
-React Native Android runtime gates are not claimed by this stage.
+the Bluetooth thread or native engine.
+
+The one-major Android migration adapter preserves the public `com.bota.sdk`
+JVM descriptors from pinned revision `0f06d2a…` while delegating supported
+behavior to this facade. Kotlin API dumps, source recompilation, and
+already-compiled bytecode run against the replacement AAR on API 26 and API 35.
+The clean consumer resolves only `dev.bota:bota-android-sdk`; coroutine and
+OkHttp types exposed by the public API are Maven API dependencies. Maven
+Central, physical acceptance, and React Native Android runtime gates are not
+claimed by this stage.
 
 Android `ProvisioningManager` and `FactoryResetManager` use the same opaque
 material, durable reset, shared-codec, and facade-wide operation contracts as
