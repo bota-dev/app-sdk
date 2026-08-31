@@ -79,6 +79,13 @@ Do not edit `src/androidTest/assets/WorkflowFixtures` directly. Regenerate it
 with `node tools/android/sync-workflow-fixtures.mjs` after changing a canonical
 workflow suite.
 
+`HostEffectExecutor` routes every effect through typed Bluetooth, persistence,
+secure-storage, network, application-material, recording-sink, or
+firmware-blob ports. It owns timers, bounds returned bytes, allows multi-event
+streams only for scan, subscribe, download, and upload, and converts platform
+failures to correlated ABI events. Additions to ABI effect or event kinds must
+extend its exhaustive tests before a host implementation changes.
+
 Normal builds can publish unsigned artifacts only to the `Local` repository at
 `target/android-m2`. Remote publication and signing require the exact
 `botaProtectedSigning=true` Gradle property and release-environment credentials.

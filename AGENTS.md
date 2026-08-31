@@ -100,6 +100,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Keep Android `WorkflowFixtures` generated from all seven canonical workflow
   suites. `preDebugAndroidTestBuild` must reject stale protocol or workflow
   resources before packaged instrumentation runs.
+- Keep Android host effects exhaustive. Each effect routes to one typed native
+  port, only declared callback kinds may return, and every callback preserves
+  the effect's operation, request ID, and cancellation identity. Bound host
+  bytes before dispatch and map platform failures to the effect category.
 - Recording transfer owns sequence/checkpoint decisions; native hosts own the
   durable sink and validate the final checksum before device deletion.
 - Direct-upload fallback requires a fresh inactive device status; busy,

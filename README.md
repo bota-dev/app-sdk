@@ -46,8 +46,11 @@ settings, and expose stable machine-readable errors. A single-thread coroutine
 runtime now owns every Android JNI call, preserves 128-bit cancellation and
 host callback correlation, and maps all 10 commands, 30 effects, 34 events,
 and 12 notifications. API 35 instrumentation validates the generated resource
-covering all 29 canonical workflow scenarios.
-BluetoothGatt, exhaustive native host execution, public workflow facades,
+covering all 29 canonical workflow scenarios. Its exhaustive host executor
+routes every effect through a narrow typed native port, validates callback
+kinds and payload bounds, and preserves correlation while mapping platform
+failures to stable ABI events.
+BluetoothGatt, concrete durable host services, public workflow facades,
 physical-device acceptance, Maven Central publication, and the React Native
 Android adapter remain open.
 The native-boundary spike selected a manually owned C ABI after comparing it

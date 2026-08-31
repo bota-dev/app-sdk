@@ -495,14 +495,14 @@ git commit -m "feat(android): drive workflows through native core" \
 - Consumes: the sealed 30-case `CoreEffect` model.
 - Produces: one or more exactly correlated `CoreHostEvent` values and no untyped fallback route.
 
-- [ ] **Step 1: Write one failing routing case per effect**
+- [x] **Step 1: Write one failing routing case per effect**
 
 Use scripted fake ports to assert the target port, operation, request ID,
 cancellation ID, bounded bytes, streaming termination, thrown-error mapping,
 timer cancellation, late completion identity, and permitted multi-event BLE
 scan/notification streams for all 30 effects.
 
-- [ ] **Step 2: Run the executor tests and verify RED**
+- [x] **Step 2: Run the executor tests and verify RED**
 
 Run:
 
@@ -512,7 +512,7 @@ platforms/android/gradlew -p platforms/android :sdk:testDebugUnitTest --tests '*
 
 Expected: FAIL because host ports and routing are absent.
 
-- [ ] **Step 3: Implement exhaustive sealed routing**
+- [x] **Step 3: Implement exhaustive sealed routing**
 
 Use a Kotlin `when` expression over sealed `CoreEffect` without `else`. Key
 timers and jobs by request/cancellation identity. Convert platform exceptions
@@ -520,7 +520,7 @@ to the ABI event category required for that effect while preserving every
 correlation field. Reject an oversized field or an event kind outside the
 effect's allowed set before dispatching it to Rust.
 
-- [ ] **Step 4: Run Kotlin and ABI effect coverage**
+- [x] **Step 4: Run Kotlin and ABI effect coverage**
 
 Run:
 
@@ -531,7 +531,7 @@ cargo test -p bota-device-sdk-ffi --test events --test outputs
 
 Expected: every effect and callback variant is covered on both sides.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add platforms/android

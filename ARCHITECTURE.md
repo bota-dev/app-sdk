@@ -126,8 +126,13 @@ Kotlin workflow state machine exists: one closeable single-thread coroutine
 runtime submits all 10 commands to Rust, drains all 30 effect and 12
 notification kinds, and returns all 34 correlated host-event kinds with the
 original request and 128-bit cancellation IDs. API-35 instrumentation verifies
-the Android resource generated from all 29 canonical workflow scenarios.
-BluetoothGatt transport, exhaustive host-effect execution, public workflow
+the Android resource generated from all 29 canonical workflow scenarios. An
+exhaustive `HostEffectExecutor` routes all 30 effects through separate BLE,
+persistence, secure-storage, network, material, recording-sink, and
+firmware-blob ports. It owns timers, bounds returned bytes, permits multi-event
+streams only where the ABI does, and rejects mismatched callbacks before Rust
+sees them.
+BluetoothGatt transport, concrete durable host services, public workflow
 facade, Maven Central artifact, physical acceptance, and React Native Android
 runtime support are not claimed by this stage.
 
