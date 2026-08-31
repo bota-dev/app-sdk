@@ -44,7 +44,7 @@ jobs:
         run: node tools/baseline/react-native-api-contract.mjs validate --contract protocol/baseline/react-native-public-api-0.0.65.json --baseline-metadata protocol/baseline/react-native-sdk-0.0.65.json
 
       - name: Validate release manifest
-        run: cargo xtask release validate release/examples/1.0.2.json
+        run: cargo xtask release validate release/examples/1.1.0.json
 
       - name: Check generated protocol constants
         run: cargo xtask protocol generate --check

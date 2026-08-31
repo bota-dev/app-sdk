@@ -12,7 +12,7 @@ const publishedV1 = readJson(
   new URL('../../release/examples/published-1.0.0-v1.json', import.meta.url),
 );
 const v2Example = readJson(
-  new URL('../../release/examples/1.0.2.json', import.meta.url),
+  new URL('../../release/examples/1.1.0.json', import.meta.url),
 );
 const packagePairs = [
   ['apple', 'BotaAppleSDK'],

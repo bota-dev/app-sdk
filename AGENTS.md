@@ -89,9 +89,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   Keep raw Gradle staging, normalized Central Portal files, and release outputs
   in separate `target/` roots; the signed Portal ZIP must contain exactly the
   inventory's 30 files. The wrapper distribution checksum and the canonical
-  `sdk-version.toml`/`VERSION_NAME` equality are enforced. The unpublished AAR
-  contains exactly `libbota_device_sdk_ffi.so` and `libbota_android_jni.so` for
-  all four supported ABIs, but is not a published facade claim.
+  `sdk-version.toml`/`VERSION_NAME` equality are enforced. The release-candidate
+  AAR contains exactly `libbota_device_sdk_ffi.so` and
+  `libbota_android_jni.so` for all four supported ABIs. Add Android to
+  `publishedFacades` only after Central reports `PUBLISHED`, every remote byte
+  matches the signed inventory, and both public emulator consumers pass.
   Verification metadata must include the pinned AAPT2 artifact for both macOS
   and Linux so local and GitHub Android builds enforce the same dependency gate.
 - `protocol/baseline/android-maven-license-policy.json` is the reviewed license
@@ -107,6 +109,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   the API 26 x86 and API 35 x86_64 emulator lanes. `test-emulator-lane.sh` owns
   AVD creation, boot readiness, fresh installs, animation settings, shutdown,
   and deletion. Do not cache AVD state or put signing material in ordinary CI.
+- The protected `v1.1.0` publication uses only
+  `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
+  `SIGNING_IN_MEMORY_KEY`, and `SIGNING_IN_MEMORY_KEY_PASSWORD`. Persist the
+  deterministic bundle, inventory, and `central-portal-state.json` on the draft
+  GitHub Release before upload. A missing public POM is never an idempotency
+  signal: resume by the recorded deployment UUID and state, and use the
+  protected recovery dispatch after any uncertain initial upload.
 - Keep mutating Android release-readiness tests in independent temporary
   fixtures. They run in parallel, so fixture names require an atomic uniqueness
   component in addition to wall-clock time.

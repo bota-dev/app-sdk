@@ -1,6 +1,6 @@
 {
   "name": "@bota.dev/react-native-sdk",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "private": true,
   "description": "React Native facade for the Bota App SDK",
   "main": "lib/commonjs/index.js",

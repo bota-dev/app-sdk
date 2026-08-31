@@ -175,9 +175,10 @@ The checked-in binary fixture contains only that consumer bytecode and binds
 the pinned legacy revision plus frozen API digest; CI does not require access
 to the private legacy repository.
 The clean consumer resolves only `dev.bota:bota-android-sdk`; coroutine and
-OkHttp types exposed by the public API are Maven API dependencies. Maven
-Central, physical acceptance, and React Native Android runtime gates are not
-claimed by this stage.
+OkHttp types exposed by the public API are Maven API dependencies. The release
+coordinator accepted the native physical matrix for the synchronized `1.1.0`
+candidate. Maven Central and React Native Android runtime gates remain open
+until protected publication and remote-consumer evidence are recorded.
 
 Android release packaging has separate unsigned and protected graphs. Normal
 builds can publish only to `target/android-m2` and do not register a signing
@@ -197,10 +198,14 @@ API 26 Google APIs x86 emulator and an API 35 Google APIs x86_64 emulator. AVD
 state is created and deleted per lane. Runtime Maven dependencies are an exact
 set governed by `android-maven-license-policy.json`; package verification
 requires the Gradle module, reviewed policy, and SPDX licenses to agree. Tag
-workflows upload the unsigned Android inputs as an immutable workflow artifact
-and download it only inside the protected job, but report Central publication
-as false until the physical-device and protected-credential milestone enables
-the upload step.
+workflows bind the independently rebuilt Apple and Android payloads to an
+annotated-tag candidate-inventory digest. The protected job signs Android only
+in memory, uploads a deterministic 30-file Central bundle, and durably records
+the deployment UUID before polling. `PENDING`, `VALIDATING`, `VALIDATED`, and
+`PUBLISHING` resume from that record; an uncertain initial upload stops until
+an explicit protected recovery supplies the matching Portal UUID. Publication
+is claimed only after the complete public Maven directory matches the signed
+inventory and unrelated API 26 and API 35 consumers run it.
 
 Android `ProvisioningManager` and `FactoryResetManager` use the same opaque
 material, durable reset, shared-codec, and facade-wide operation contracts as
@@ -229,8 +234,9 @@ Native migration inputs are pinned separately in
 `protocol/baseline/native-sdks.json`. Apple revision `cd15e545cabb8` and Android
 revision `0f06d2a22c55` provided package shape, public models, and idiomatic async
 conventions as incomplete transport scaffolds. The monorepo Apple migration
-target now passes automated facade and packaging gates, but its supervised
-physical-device matrix is not run. The pinned Apple repository therefore
+target now passes automated facade and packaging gates, and the release
+coordinator accepted its supervised physical-device matrix for `1.1.0`. The
+pinned Apple repository therefore
 remains a migration input rather than being replaced as accepted authority.
 Neither native input supersedes the React Native behavioral baseline or the
 Rust workflow conformance matrix.

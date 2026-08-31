@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sdkVersion": "1.0.2",
+  "sdkVersion": "1.1.0",
   "firmwareBaseline": {
     "version": "1.0.17",
     "revision": "8b175a89374c9833bdaa67fe73ada6672618e5f7"
@@ -23,12 +23,22 @@
   "platformFacades": {
     "apple": {
       "implementationStatus": "automated_verified",
-      "physicalDeviceStatus": "not_run",
+      "physicalDeviceStatus": "physical_device_verified",
       "publicationStatus": "published",
       "evidence": "release/evidence/1.0.0-alpha.1-apple-facade.md",
       "models": {
-        "bota_pin": "not_run",
-        "bota_note": "not_run"
+        "bota_pin": "physical_device_verified",
+        "bota_note": "physical_device_verified"
+      }
+    },
+    "android": {
+      "implementationStatus": "automated_verified",
+      "physicalDeviceStatus": "physical_device_verified",
+      "publicationStatus": "release_candidate",
+      "evidence": "release/evidence/1.1.0-android-facade.md",
+      "models": {
+        "bota_pin": "physical_device_verified",
+        "bota_note": "physical_device_verified"
       }
     }
   },
@@ -197,6 +207,6 @@
     "Supported means at least one positive and one malformed, rejected, or recovery fixture exists.",
     "Workflow support covers deterministic core behavior only, not native transports or physical-device acceptance.",
     "The native ABI foundation alone does not publish Apple or Android facade capability.",
-    "Apple publication does not imply supervised physical-device verification."
+    "Physical-device verification for the 1.1.0 candidate was accepted by the release coordinator; public status still requires remote artifact verification."
   ]
 }

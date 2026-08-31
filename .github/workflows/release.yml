@@ -4,6 +4,16 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      releaseRef:
+        description: Exact annotated release tag ref, for example refs/tags/v1.1.0
+        required: true
+        type: string
+      centralDeploymentId:
+        description: Existing Central Portal deployment UUID
+        required: true
+        type: string
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -12,12 +22,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: central-dev.bota-bota-android-sdk-1.1.0
   cancel-in-progress: false
 
 jobs:
   verify:
     name: Verify ${{ github.ref_name }}
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Check out tagged source
@@ -75,6 +86,7 @@ jobs:
 
   apple:
     name: Package Apple SDK
+    if: github.event_name == 'push'
     runs-on: macos-15
     steps:
       - name: Check out tagged source
@@ -150,6 +162,7 @@ jobs:
 
   android:
     name: Package and verify Android SDK
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: Check out tagged source
@@ -237,6 +250,7 @@ jobs:
 
   publish:
     name: Publish ${{ github.ref_name }}
+    if: github.event_name == 'push'
     needs: [verify, apple, android]
     runs-on: ubuntu-latest
     environment: release
@@ -250,6 +264,38 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Rust Android targets
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.98.0
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+
+      - name: Install pinned Android build tools
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          "$SDKMANAGER" \
+            "platforms;android-36" \
+            "build-tools;35.0.0" \
+            "ndk;28.2.13676358" \
+            "cmake;3.22.1"
+
+      - name: Install repository tooling
+        run: npm ci
+
       - name: Download Apple release payload
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -262,27 +308,230 @@ jobs:
           name: android-release-${{ github.ref_name }}
           path: target/android-release/
 
-      - name: Keep Maven Central publication disabled pending physical evidence
-        id: central-readiness
-        run: echo "published=false" >> "$GITHUB_OUTPUT"
+      - name: Verify annotated tag and candidate inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_REVISION="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          test "$SOURCE_REVISION" = "$(git rev-parse HEAD)"
+          test "$(git cat-file -t "$GITHUB_REF_NAME")" = tag
+          tools/release/write-candidate-inventory.sh \
+            --source-revision "$SOURCE_REVISION" \
+            --output target/release-candidate-files.json \
+            target/apple-release target/android-release
+          INVENTORY_SHA256="$(sha256sum target/release-candidate-files.json | awk '{print $1}')"
+          TAG_MESSAGE="$(git for-each-ref --format='%(contents)' "refs/tags/$GITHUB_REF_NAME")"
+          grep -Fx "Source-Revision: $SOURCE_REVISION" <<<"$TAG_MESSAGE"
+          grep -Fx "Candidate-Inventory-SHA256: $INVENTORY_SHA256" <<<"$TAG_MESSAGE"
 
-      - name: Create or update GitHub release
+      - name: Stage signed Maven Central repository
+        env:
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
+        run: |
+          test -n "$ORG_GRADLE_PROJECT_signingInMemoryKey"
+          test -n "$ORG_GRADLE_PROJECT_signingInMemoryKeyPassword"
+          platforms/android/gradlew -p platforms/android \
+            -PbotaProtectedSigning=true \
+            :sdk:stageSignedCentralRawRepository \
+            --no-daemon --no-parallel --no-configuration-cache
+
+      - name: Build and verify exact Central bundle
+        run: |
+          node tools/android/normalize-central-repository.mjs \
+            --raw-repository target/android-central-raw \
+            --portal-repository target/android-central-portal \
+            --coordinate dev.bota:bota-android-sdk \
+            --version 1.1.0
+          cmp \
+            target/android-central-portal/dev/bota/bota-android-sdk/1.1.0/bota-android-sdk-1.1.0.aar \
+            target/android-release/bota-android-sdk-1.1.0.aar
+          node tools/android/build-central-bundle.mjs build \
+            --repository target/android-central-portal \
+            --coordinate dev.bota:bota-android-sdk \
+            --version 1.1.0 \
+            --source-revision "$(git rev-parse HEAD)" \
+            --inventory target/android-release/central-bundle-files.json \
+            --output target/android-release/central-bundle.zip
+          node tools/android/build-central-bundle.mjs verify \
+            --repository target/android-central-portal \
+            --inventory target/android-release/central-bundle-files.json \
+            --zip target/android-release/central-bundle.zip
+          node tools/android/central-portal.mjs prepare \
+            --repository target/android-central-portal \
+            --bundle target/android-release/central-bundle.zip \
+            --inventory target/android-release/central-bundle-files.json \
+            --state target/central-portal-state.json \
+            --source-revision "$(git rev-parse HEAD)"
+
+      - name: Create draft release and preserve immutable publication inputs
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" target/apple-release/* --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" target/apple-release/* \
-              --verify-tag \
-              --generate-notes \
-              --title "Bota App SDK ${GITHUB_REF_NAME#v}"
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
+              --generate-notes --title "Bota App SDK ${GITHUB_REF_NAME#v}"
+          fi
+          mkdir -p target/existing-release-assets
+          for path in \
+            target/android-release/central-bundle.zip \
+            target/android-release/central-bundle-files.json \
+            target/release-candidate-files.json
+          do
+            name="$(basename "$path")"
+            if gh release download "$GITHUB_REF_NAME" --pattern "$name" \
+              --dir target/existing-release-assets >/dev/null 2>&1
+            then
+              cmp "$path" "target/existing-release-assets/$name"
+            else
+              gh release upload "$GITHUB_REF_NAME" "$path"
+            fi
+          done
+          gh release upload "$GITHUB_REF_NAME" target/central-portal-state.json --clobber
+
+      - name: Upload or resume Central deployment
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+        run: |
+          test -n "$MAVEN_CENTRAL_USERNAME"
+          test -n "$MAVEN_CENTRAL_PASSWORD"
+          node tools/android/central-portal.mjs upload-or-resume \
+            --repository target/android-central-portal \
+            --bundle target/android-release/central-bundle.zip \
+            --inventory target/android-release/central-bundle-files.json \
+            --state target/central-portal-state.json \
+            --source-revision "$(git rev-parse HEAD)"
+
+      - name: Verify complete public Maven inventory
+        run: |
+          node tools/android/central-portal.mjs verify-published \
+            --state target/central-portal-state.json \
+            --inventory target/android-release/central-bundle-files.json
+
+      - name: Mark Central publication ready
+        id: central-readiness
+        run: echo "published=true" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve latest Central deployment state
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: central-deployment-${{ github.ref_name }}
+          path: target/central-portal-state.json
+          if-no-files-found: warn
+
+      - name: Update draft release deployment state
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ -f target/central-portal-state.json ]]; then
+            gh release upload "$GITHUB_REF_NAME" target/central-portal-state.json --clobber
+          fi
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$GITHUB_REF_NAME" target/apple-release/* --clobber
+          gh release edit "$GITHUB_REF_NAME" --draft=false
+
+  recover-central:
+    name: Recover Central deployment
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Validate recovery inputs
+        run: |
+          test "${{ inputs.releaseRef }}" = "refs/tags/v1.1.0"
+          [[ "${{ inputs.centralDeploymentId }}" =~ ^[0-9a-fA-F-]{36}$ ]]
+
+      - name: Check out exact release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.releaseRef }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.98.0
+
+      - name: Install repository tooling
+        run: npm ci
+
+      - name: Verify immutable tag identity
+        run: |
+          test "$(git cat-file -t v1.1.0)" = tag
+          test "$(git rev-list -n 1 v1.1.0)" = "$(git rev-parse HEAD)"
+          cargo xtask release verify-tag v1.1.0
+
+      - name: Download preserved deployment inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p target/android-release
+          gh release download v1.1.0 --pattern central-bundle.zip \
+            --dir target/android-release
+          gh release download v1.1.0 --pattern central-bundle-files.json \
+            --dir target/android-release
+          gh release download v1.1.0 --pattern central-portal-state.json \
+            --dir target
+
+      - name: Verify preserved source identity
+        run: |
+          test "$(jq -r .sourceRevision target/central-portal-state.json)" = "$(git rev-parse HEAD)"
+          test "$(jq -r .sourceRevision target/android-release/central-bundle-files.json)" = "$(git rev-parse HEAD)"
+
+      - name: Recover and resume exact deployment
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+        run: |
+          node tools/android/central-portal.mjs recover-and-resume \
+            --release-ref "${{ inputs.releaseRef }}" \
+            --deployment-id "${{ inputs.centralDeploymentId }}" \
+            --bundle target/android-release/central-bundle.zip \
+            --inventory target/android-release/central-bundle-files.json \
+            --state target/central-portal-state.json
+          node tools/android/central-portal.mjs verify-published \
+            --state target/central-portal-state.json \
+            --inventory target/android-release/central-bundle-files.json
+
+      - name: Preserve recovered deployment state
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: central-deployment-v1.1.0-recovery
+          path: target/central-portal-state.json
+          if-no-files-found: warn
+
+      - name: Update release deployment state
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [[ -f target/central-portal-state.json ]]; then
+            gh release upload v1.1.0 target/central-portal-state.json --clobber
           fi
 
   smoke-public-package:
     name: Smoke public Apple package
+    if: github.event_name == 'push'
     needs: publish
     runs-on: macos-15
     steps:
@@ -294,7 +543,7 @@ jobs:
 
   smoke-public-android:
     name: Smoke public Android package on API ${{ matrix.api }}
-    if: needs.publish.outputs.android-central-published == 'true'
+    if: github.event_name == 'push' && needs.publish.outputs.android-central-published == 'true'
     needs: publish
     runs-on: ubuntu-latest
     strategy:

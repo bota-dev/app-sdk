@@ -11,7 +11,7 @@ physical-device parity gates.
 
 ## Current Status
 
-The App SDK is versioned at `1.0.2`: the repository has a generated
+The App SDK is preparing synchronized native release `1.1.0`: the repository has a generated
 protocol manifest, 50 language-neutral compatibility fixtures, bounded Rust
 decoders, byte-exact serializers, stable models/errors, and deterministic
 discovery, connection-recovery, provisioning, authenticated-reset, resumable
@@ -70,16 +70,18 @@ only complete core-sanitized lines. The AAR also carries a one-major deprecated
 source, already-compiled bytecode, API 26, and API 35 consumer gates pass. New
 applications resolve only `dev.bota:bota-android-sdk` and must not package the
 old AAR beside it. See [Android SDK migration](docs/migration/android.md).
-Physical-device acceptance, Maven Central publication, and the React Native
-Android adapter remain open.
-Non-publishing CI now builds one deterministic Android release payload and
+The release coordinator has accepted the Apple and Android physical-device
+matrix for the `1.1.0` candidate. Maven Central publication, remote Android
+consumer verification, and the React Native Android adapter remain open until
+the protected release workflow records them.
+Ordinary CI builds one deterministic Android release payload and
 runs that exact AAR through API 26 x86 and API 35 x86_64 instrumentation,
 legacy migration, and unrelated Maven consumer lanes. The reviewed Maven
 dependency policy is checked against both Gradle module metadata and the SPDX
-SBOM. Tag releases pass the unsigned Android payload into the protected job as
-an immutable workflow artifact, while Maven Central publication and its
-public-consumer smoke remain disabled until the physical-device release gate is
-complete.
+SBOM. The protected `v1.1.0` release job signs only in memory, persists the
+Central deployment UUID and state before polling, supports explicit recovery
+without rebuilding or re-uploading, and byte-verifies the complete public
+Maven directory before enabling API 26 and API 35 consumer smoke tests.
 The native-boundary spike selected a manually owned C ABI after comparing it
 with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed
@@ -143,12 +145,12 @@ In Xcode, choose **File > Add Package Dependencies** and enter:
 https://github.com/bota-dev/app-sdk.git
 ```
 
-Select version `1.0.2` or **Up to Next Major Version**, then add the
+Select version `1.1.0` or **Up to Next Major Version**, then add the
 `BotaAppleSDK` product to an iOS 15+ or macOS 13+ target. Swift packages can
 declare the dependency directly:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", from: "1.0.2")
+.package(url: "https://github.com/bota-dev/app-sdk.git", from: "1.1.0")
 ```
 
 Import and configure the client from application code:
@@ -174,7 +176,7 @@ Requirements:
 - Xcode 26 and CocoaPods 1.13 or newer for React Native Apple consumers; source
   verification locks CocoaPods 1.16.2, xcodeproj 1.27.0, and Bundler 2.6.9
 - JDK 17, Android SDK 36, build-tools 35.0.0, NDK 28.2.13676358, and CMake
-  3.22.1 for the unpublished Android facade
+  3.22.1 for the Android facade
 
 ```bash
 npm ci

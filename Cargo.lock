@@ -99,7 +99,7 @@ dependencies = [
 
 [[package]]
 name = "bota-device-sdk-core"
-version = "1.0.2"
+version = "1.1.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -108,14 +108,14 @@ dependencies = [
 
 [[package]]
 name = "bota-device-sdk-ffi"
-version = "1.0.2"
+version = "1.1.0"
 dependencies = [
  "bota-device-sdk-core",
 ]
 
 [[package]]
 name = "bota-device-sdk-ffi-smoke"
-version = "1.0.2"
+version = "1.1.0"
 dependencies = [
  "bota-device-sdk-core",
  "serde_json",
@@ -125,7 +125,7 @@ dependencies = [
 
 [[package]]
 name = "bota-device-sdk-uniffi-bindgen"
-version = "1.0.2"
+version = "1.1.0"
 dependencies = [
  "uniffi",
 ]
@@ -909,7 +909,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "1.0.2"
+version = "1.1.0"
 dependencies = [
  "semver",
  "serde",

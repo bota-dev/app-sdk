@@ -67,14 +67,14 @@ fn android_build_fixture() -> PathBuf {
 
 #[test]
 fn version_tag_and_publishable_metadata_are_synchronized() {
-    let release = xtask::release::verify_release(&root(), "v1.0.2").unwrap();
+    let release = xtask::release::verify_release(&root(), "v1.1.0").unwrap();
 
-    assert_eq!(release.version, "1.0.2");
+    assert_eq!(release.version, "1.1.0");
     assert_eq!(release.crate_name, "bota-device-sdk-core");
 }
 
 #[test]
-fn compatibility_metadata_reports_the_public_apple_facade() {
+fn compatibility_metadata_reports_apple_and_the_android_release_candidate() {
     let path = root().join("protocol/compatibility/firmware-compatibility.json");
     let contents = fs::read_to_string(path).unwrap();
     let compatibility: serde_json::Value = serde_json::from_str(&contents).unwrap();
@@ -89,14 +89,22 @@ fn compatibility_metadata_reports_the_public_apple_facade() {
     );
     assert_eq!(
         compatibility["platformFacades"]["apple"]["physicalDeviceStatus"],
-        "not_run"
+        "physical_device_verified"
+    );
+    assert_eq!(
+        compatibility["platformFacades"]["android"]["publicationStatus"],
+        "release_candidate"
+    );
+    assert_eq!(
+        compatibility["platformFacades"]["android"]["physicalDeviceStatus"],
+        "physical_device_verified"
     );
 }
 
 #[test]
 fn mismatched_or_unprefixed_tags_are_rejected() {
     let wrong_version = xtask::release::verify_release(&root(), "v1.0.0-alpha.1").unwrap_err();
-    let missing_prefix = xtask::release::verify_release(&root(), "1.0.2").unwrap_err();
+    let missing_prefix = xtask::release::verify_release(&root(), "1.1.0").unwrap_err();
 
     assert!(wrong_version.contains("does not match"));
     assert!(missing_prefix.contains("must start with v"));
@@ -104,7 +112,7 @@ fn mismatched_or_unprefixed_tags_are_rejected() {
 
 #[test]
 fn ci_workflow_validates_the_current_release_manifest() {
-    let release = xtask::release::verify_release(&root(), "v1.0.2").unwrap();
+    let release = xtask::release::verify_release(&root(), "v1.1.0").unwrap();
     let path = root().join(".github/workflows/ci.yml");
     let contents = fs::read_to_string(path).unwrap();
     let _: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
@@ -121,7 +129,7 @@ fn release_workflow_publishes_and_smokes_the_public_apple_package() {
     let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
 
     assert!(contents.contains("tags:"));
-    assert!(!contents.contains("workflow_dispatch"));
+    assert!(contents.contains("workflow_dispatch"));
     assert!(contents.contains("contents: write"));
     assert!(contents.contains("environment: release"));
     assert!(contents.contains("fetch-depth: 0"));
@@ -235,7 +243,7 @@ fn android_license_gate_checks_locked_verified_spdx_dependencies() {
 }
 
 #[test]
-fn release_workflow_packages_android_but_keeps_central_publication_disabled() {
+fn release_workflow_publishes_android_through_a_recoverable_central_deployment() {
     let path = root().join(".github/workflows/release.yml");
     let contents = fs::read_to_string(path).unwrap();
     let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
@@ -263,20 +271,27 @@ fn release_workflow_packages_android_but_keeps_central_publication_disabled() {
     );
     assert!(contents.contains("name: android-release-${{ github.ref_name }}"));
     assert!(contents.contains("path: target/android-release/"));
+    assert!(contents.contains("workflow_dispatch:"));
+    assert!(contents.contains("releaseRef:"));
+    assert!(contents.contains("centralDeploymentId:"));
+    assert!(contents.contains("environment: release"));
+    assert!(contents.contains("MAVEN_CENTRAL_USERNAME"));
+    assert!(contents.contains("MAVEN_CENTRAL_PASSWORD"));
+    assert!(contents.contains("SIGNING_IN_MEMORY_KEY"));
+    assert!(contents.contains("SIGNING_IN_MEMORY_KEY_PASSWORD"));
+    assert!(contents.contains("central-dev.bota-bota-android-sdk-1.1.0"));
+    assert!(contents.contains("stageSignedCentralRawRepository"));
+    assert!(contents.contains("central-portal.mjs prepare"));
+    assert!(contents.contains("central-portal.mjs upload-or-resume"));
+    assert!(contents.contains("central-portal.mjs recover-and-resume"));
+    assert!(contents.contains("central-portal.mjs verify-published"));
+    assert!(contents.contains("central-portal-state.json"));
+    assert!(contents.contains("central-bundle-files.json"));
+    assert!(contents.contains("central-bundle.zip"));
     assert!(contents.contains("needs: [verify, apple, android]"));
-    assert!(
-        contents.contains(
-            "android-central-published: ${{ steps.central-readiness.outputs.published }}"
-        )
-    );
-    assert!(contents.contains("echo \"published=false\""));
     assert!(contents.contains("matrix:\n        api: [26, 35]"));
     assert!(contents.contains("tools/android/test-public-consumer.sh --api ${{ matrix.api }}"));
-    assert!(contents.contains("needs.publish.outputs.android-central-published == 'true'"));
-    assert!(!contents.contains("CENTRAL_USERNAME"));
-    assert!(!contents.contains("CENTRAL_PASSWORD"));
-    assert!(!contents.contains("CENTRAL_TOKEN"));
-    assert!(!contents.contains("uploadBundle"));
+    assert!(!contents.contains("echo \"published=false\""));
 }
 
 #[test]

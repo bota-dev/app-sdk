@@ -10,10 +10,9 @@ The nested `platforms/apple/Package.swift` remains the local-development
 package. It points at the generated XCFramework on disk so facade tests do not
 depend on a published release.
 
-The Android package uses Maven coordinate `dev.bota:bota-android-sdk`. Its
-release packaging is implemented, while Central publication remains protected
-until the coordinated Android release advances the shared version and release
-workflow.
+The Android package uses Maven coordinate `dev.bota:bota-android-sdk`. The
+synchronized `1.1.0` release publishes it through the protected Central Portal
+workflow after deterministic packaging and native acceptance gates pass.
 
 All artifacts use the exact version in `sdk-version.toml`. Release tags use
 `vVERSION`; the tag, package metadata, public Swift version, compatibility
@@ -27,8 +26,9 @@ Create a GitHub environment named `release` for `bota-dev/app-sdk`:
 
 1. Require a reviewer before deployment.
 2. Restrict deployment branches and tags to protected release tags.
-3. Do not add a crates.io token; Apple publication uses the repository's
-   short-lived `GITHUB_TOKEN` with job-scoped `contents: write` permission.
+3. Add only `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
+   `SIGNING_IN_MEMORY_KEY`, and `SIGNING_IN_MEMORY_KEY_PASSWORD` as environment
+   secrets. Do not add a crates.io token.
 
 The environment approval is the human boundary for release authorization and
 external hardware acceptance. Automated tests never claim a physical-device
@@ -211,10 +211,21 @@ install its own Node.js dependencies before running repository tooling.
    does not launch a Bluetooth-capable process on the headless runner. It uses
    one non-batched Swift compiler job to keep memory bounded.
 
-The workflow deliberately emits `android-central-published=false`. It does not
-read Central credentials or upload the Maven bundle yet, and the public Android
-consumer matrix remains skipped until the supervised physical-device release
-gate enables protected publication.
+The protected workflow stages the signed raw Maven repository with in-memory
+PGP material, normalizes it to the exact 30-file Portal tree, and persists the
+bundle, inventory, and `central-portal-state.json` on a draft GitHub Release
+before upload. The initial HTTP 201 deployment UUID is fsynced before polling.
+An uncertain upload outcome stops automatic retries; use the protected
+`workflow_dispatch` recovery with exact `refs/tags/v1.1.0` and the Portal UUID.
+Recovery downloads the preserved bytes and never rebuilds, re-signs, or
+re-uploads them.
+
+Central states resume as follows: `PENDING` and `VALIDATING` poll,
+`VALIDATED` publishes once, `PUBLISHING` polls, `PUBLISHED` verifies the public
+repository, and `FAILED` stops with sanitized errors. A missing public POM is
+not evidence that another upload is safe. After `PUBLISHED`, every public
+Maven file must match the signed inventory before the API 26 and API 35 public
+consumer lanes run.
 
 Do not move or recreate a published tag. If a released artifact or manifest is
 wrong, fix the source and publish a new patch version with a new checksum.

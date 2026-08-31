@@ -1,0 +1,32 @@
+{
+  "manifestVersion": 2,
+  "sdkFamily": "bota-app-sdk",
+  "sdkVersion": "1.1.0",
+  "sourceRevision": "69a8bbcc623765121a5d6b9a162b922870fadcde",
+  "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
+  "firmwareCompatibility": {
+    "minimum": "1.0.0",
+    "maximum": "1.0.17",
+    "baselineRevision": "8b175a89374c9833bdaa67fe73ada6672618e5f7"
+  },
+  "artifacts": [
+    {
+      "platform": "apple",
+      "packageIdentifier": "BotaAppleSDK",
+      "name": "BotaDeviceSDKCore.xcframework.zip",
+      "ecosystem": "swiftpm",
+      "version": "1.1.0",
+      "checksumSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "capabilities": ["apple_device_sdk"]
+    },
+    {
+      "platform": "android",
+      "packageIdentifier": "dev.bota:bota-android-sdk",
+      "name": "bota-android-sdk-1.1.0.aar",
+      "ecosystem": "maven",
+      "version": "1.1.0",
+      "checksumSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "capabilities": ["android_device_sdk"]
+    }
+  ]
+}

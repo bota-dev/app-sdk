@@ -3,7 +3,7 @@
 The Bota SDK for Android is published as one artifact:
 
 ```kotlin
-implementation("dev.bota:bota-android-sdk:1.0.2")
+implementation("dev.bota:bota-android-sdk:1.1.0")
 ```
 
 Remove the legacy AAR or project dependency before adding this artifact. Both
