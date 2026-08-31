@@ -1,0 +1,3882 @@
+{
+  "schemaVersion": 1,
+  "package": "@bota.dev/react-native-sdk",
+  "packageVersion": "0.0.65",
+  "sourceRevision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4",
+  "entrypoint": "src/index.ts",
+  "surfaceDigest": "21261646a026da3d6f88663cce27a843d28545914c4bd87caa296dddd655d002",
+  "surface": {
+    "exports": [
+      {
+        "name": "AudioCodec",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "AudioCodec"
+      },
+      {
+        "name": "BleFactoryResetResult",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "success",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          }
+        ],
+        "declaredType": "BleFactoryResetResult"
+      },
+      {
+        "name": "BleFactoryResetResultPersister",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [
+          "(result: Extract<BleFactoryResetResult, { success: true; }>) => Promise<void>"
+        ],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "BleFactoryResetResultPersister"
+      },
+      {
+        "name": "BluetoothError",
+        "runtime": true,
+        "declarationKinds": [
+          "ClassDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [
+          "(message: string, code: string, cause?: Error) => BluetoothError"
+        ],
+        "members": [
+          {
+            "name": "cause",
+            "optional": true,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "Error | undefined"
+          },
+          {
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "string"
+          }
+        ],
+        "valueType": "typeof BluetoothError",
+        "declaredType": "BluetoothError"
+      },
+      {
+        "name": "BluetoothState",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "BluetoothState"
+      },
+      {
+        "name": "BotaClient",
+        "runtime": true,
+        "declarationKinds": [
+          "VariableDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "bluetoothState",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "GetAccessor"
+            ],
+            "type": "BluetoothState"
+          },
+          {
+            "name": "config",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "GetAccessor"
+            ],
+            "type": "BotaConfig | null"
+          },
+          {
+            "name": "configure",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(config?: BotaConfig) => Promise<void>"
+          },
+          {
+            "name": "destroy",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => Promise<void>"
+          },
+          {
+            "name": "devices",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "GetAccessor"
+            ],
+            "type": "DeviceManager"
+          },
+          {
+            "name": "isBluetoothReady",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "GetAccessor"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "isInitialized",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "GetAccessor"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "ota",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "GetAccessor"
+            ],
+            "type": "OTAManager"
+          },
+          {
+            "name": "recordings",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "GetAccessor"
+            ],
+            "type": "RecordingManager"
+          },
+          {
+            "name": "setLogHandler",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(handler: LogHandler | null) => void"
+          },
+          {
+            "name": "setLogLevel",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(level: LogLevel) => void"
+          },
+          {
+            "name": "state",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "GetAccessor"
+            ],
+            "type": "SdkState"
+          },
+          {
+            "name": "waitForBluetooth",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(timeoutMs?: number) => Promise<void>"
+          }
+        ],
+        "valueType": "BotaClientImpl"
+      },
+      {
+        "name": "BotaClientEvents",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "bluetoothStateChanged",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(state: BluetoothState) => void"
+          },
+          {
+            "name": "error",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(error: Error) => void"
+          },
+          {
+            "name": "stateChanged",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(state: SdkState) => void"
+          }
+        ],
+        "declaredType": "BotaClientEvents"
+      },
+      {
+        "name": "BotaConfig",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "backgroundSyncEnabled",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean | undefined"
+          },
+          {
+            "name": "debug",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean | undefined"
+          },
+          {
+            "name": "environment",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "\"development\" | \"gamma\" | \"production\" | undefined"
+          },
+          {
+            "name": "logLevel",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "LogLevel | undefined"
+          },
+          {
+            "name": "wifiOnlyUpload",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean | undefined"
+          }
+        ],
+        "declaredType": "BotaConfig"
+      },
+      {
+        "name": "BotaError",
+        "runtime": true,
+        "declarationKinds": [
+          "ClassDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [
+          "(message: string, code: string, cause?: Error | undefined) => BotaError"
+        ],
+        "members": [
+          {
+            "name": "cause",
+            "optional": true,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "Error | undefined"
+          },
+          {
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "string"
+          }
+        ],
+        "valueType": "typeof BotaError",
+        "declaredType": "BotaError"
+      },
+      {
+        "name": "CachedDeviceState",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "updatedAt",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "wifiStatus",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "WiFiStatusInfo | undefined"
+          }
+        ],
+        "declaredType": "CachedDeviceState"
+      },
+      {
+        "name": "ConnectedDevice",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "capabilities",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "DeviceCapabilities | undefined"
+          },
+          {
+            "name": "connectionState",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "ConnectionState"
+          },
+          {
+            "name": "deviceType",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "DeviceType"
+          },
+          {
+            "name": "firmwareVersion",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "hardwareRevision",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "id",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "isProvisioned",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "mtu",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "serialNumber",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          }
+        ],
+        "declaredType": "ConnectedDevice"
+      },
+      {
+        "name": "ConnectionState",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "ConnectionState"
+      },
+      {
+        "name": "ConnectionType",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "ConnectionType"
+      },
+      {
+        "name": "deriveSyncStatus",
+        "runtime": true,
+        "declarationKinds": [
+          "FunctionDeclaration"
+        ],
+        "callSignatures": [
+          "(inputs: SyncStatusInputs) => SyncStatus"
+        ],
+        "constructSignatures": [],
+        "members": [],
+        "valueType": "(inputs: SyncStatusInputs) => SyncStatus"
+      },
+      {
+        "name": "DeviceCapabilities",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "bleSync",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "lteUpload",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "remoteRecord",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "wifiUpload",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          }
+        ],
+        "declaredType": "DeviceCapabilities"
+      },
+      {
+        "name": "DeviceConnectionSettings",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "enabled_connections",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "{ wifi: boolean; cellular: boolean; }"
+          },
+          {
+            "name": "heartbeat_enabled_connections",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "{ wifi: boolean; cellular: boolean; } | undefined"
+          },
+          {
+            "name": "power_management",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "{ wifi_idle_timeout_seconds?: number | null; cellular_idle_timeout_seconds?: number | null; } | undefined"
+          },
+          {
+            "name": "streaming_enabled",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean | undefined"
+          },
+          {
+            "name": "streaming_flush_interval_seconds",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "upload_network_preference",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "ConnectionType[]"
+          }
+        ],
+        "declaredType": "DeviceConnectionSettings"
+      },
+      {
+        "name": "DeviceError",
+        "runtime": true,
+        "declarationKinds": [
+          "ClassDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [
+          "(message: string, code: string, deviceId?: string | undefined, cause?: Error) => DeviceError"
+        ],
+        "members": [
+          {
+            "name": "cause",
+            "optional": true,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "Error | undefined"
+          },
+          {
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "deviceId",
+            "optional": true,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "string | undefined"
+          }
+        ],
+        "valueType": "typeof DeviceError",
+        "declaredType": "DeviceError"
+      },
+      {
+        "name": "DeviceFlags",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "charging",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "lowBattery",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "lteConnected",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "storageFull",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "syncActive",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "wifiConnected",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          }
+        ],
+        "declaredType": "DeviceFlags"
+      },
+      {
+        "name": "DeviceLogDecoder",
+        "runtime": true,
+        "declarationKinds": [
+          "ClassDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [
+          "() => DeviceLogDecoder"
+        ],
+        "members": [
+          {
+            "name": "push",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(packet: Buffer) => DeviceLogEvent[]"
+          },
+          {
+            "name": "reset",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => void"
+          }
+        ],
+        "valueType": "typeof DeviceLogDecoder",
+        "declaredType": "DeviceLogDecoder"
+      },
+      {
+        "name": "DeviceLogEvent",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "isBacklog",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "level",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "\"debug\" | \"warn\""
+          },
+          {
+            "name": "message",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          }
+        ],
+        "declaredType": "DeviceLogEvent"
+      },
+      {
+        "name": "DeviceManager",
+        "runtime": true,
+        "declarationKinds": [
+          "ClassDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [
+          "() => DeviceManager"
+        ],
+        "members": [
+          {
+            "name": "bleFactoryReset",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, grantBlob: string, persistResult: BleFactoryResetResultPersister) => Promise<BleFactoryResetResult>"
+          },
+          {
+            "name": "clearAllCachedDeviceStates",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => void"
+          },
+          {
+            "name": "clearCachedDeviceState",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(serialNumber: string) => void"
+          },
+          {
+            "name": "configureWiFi",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string, credentials: WiFiCredentials, grant: WiFiConfigGrant) => Promise<WiFiConfigResult>"
+          },
+          {
+            "name": "connect",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: DiscoveredDevice, priority?: RadioPriority) => Promise<ConnectedDevice>"
+          },
+          {
+            "name": "deliverBackendPubkey",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, pubkey: Uint8Array) => Promise<void>"
+          },
+          {
+            "name": "deliverCert",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, certPem: string, privkeyPem: string) => Promise<void>"
+          },
+          {
+            "name": "deprovision",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, grantBlob: string) => Promise<{ success: boolean; error?: string; }>"
+          },
+          {
+            "name": "destroy",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => void"
+          },
+          {
+            "name": "disableAutoReconnect",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => void"
+          },
+          {
+            "name": "disconnect",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice) => Promise<void>"
+          },
+          {
+            "name": "disconnectWiFi",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string) => Promise<WiFiConfigResult>"
+          },
+          {
+            "name": "enableAutoReconnect",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(serialNumber: string) => void"
+          },
+          {
+            "name": "factoryReset",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice) => Promise<void>"
+          },
+          {
+            "name": "getCachedDeviceState",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(serialNumber: string) => CachedDeviceState | null"
+          },
+          {
+            "name": "getCachedWiFiStatus",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(serialNumber: string) => WiFiStatusInfo | null"
+          },
+          {
+            "name": "getConnectedDevices",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => ConnectedDevice[]"
+          },
+          {
+            "name": "getDiscoveredDevices",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => DiscoveredDevice[]"
+          },
+          {
+            "name": "getKnownBleIds",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => Record<string, string>"
+          },
+          {
+            "name": "getRecordingState",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice) => Promise<RecordingState>"
+          },
+          {
+            "name": "getStatus",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice) => Promise<DeviceStatus>"
+          },
+          {
+            "name": "getWiFiStatus",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string) => Promise<WiFiStatusInfo>"
+          },
+          {
+            "name": "initialize",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => Promise<void>"
+          },
+          {
+            "name": "isConnected",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string) => boolean"
+          },
+          {
+            "name": "isProvisioned",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice) => Promise<boolean>"
+          },
+          {
+            "name": "onCachedDeviceStateChanged",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(listener: (serialNumber: string, patch: { wifiStatus?: Partial<WiFiStatusInfo> | null; }, state: CachedDeviceState) => void) => { remove: () => void; }"
+          },
+          {
+            "name": "provision",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, deviceToken: string, environment?: Environment, options?: ProvisionOptions) => Promise<void>"
+          },
+          {
+            "name": "readAuthNonce",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice) => Promise<string | null>"
+          },
+          {
+            "name": "readConnectionSettings",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice) => Promise<DeviceConnectionSettings>"
+          },
+          {
+            "name": "readPublicKey",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice) => Promise<string | null>"
+          },
+          {
+            "name": "reconnect",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(serialNumber: string, options?: ReconnectOptions) => Promise<ConnectedDevice>"
+          },
+          {
+            "name": "requestStartRecording",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, grantOrFetcher: string | RecordingGrantFetcher, _options?: StartRecordingOptions) => Promise<{ success: boolean; error?: string; }>"
+          },
+          {
+            "name": "requestStopRecording",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, grantOrFetcher: string | RecordingGrantFetcher, _options?: StopRecordingOptions) => Promise<{ success: boolean; error?: string; }>"
+          },
+          {
+            "name": "resumeBleFactoryReset",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, persistResult: BleFactoryResetResultPersister) => Promise<BleFactoryResetResult>"
+          },
+          {
+            "name": "scanWiFiNetworks",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice) => Promise<DeviceWiFiScanResult>"
+          },
+          {
+            "name": "setApiEndpoint",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, environment: Environment) => Promise<void>"
+          },
+          {
+            "name": "startScan",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(options?: ScanOptions) => Promise<void>"
+          },
+          {
+            "name": "stopScan",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => void"
+          },
+          {
+            "name": "subscribeToDeviceLogs",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, callback: (event: DeviceLogEvent) => void) => Promise<() => void>"
+          },
+          {
+            "name": "subscribeToRecordingState",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, callback: (state: RecordingState) => void) => () => void"
+          },
+          {
+            "name": "subscribeToStatus",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, callback: (status: DeviceStatus) => void) => () => void"
+          },
+          {
+            "name": "subscribeToWiFiStatus",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string, callback: (status: WiFiStatusInfo) => void) => Subscription"
+          },
+          {
+            "name": "syncTime",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(deviceId: string) => Promise<void>"
+          },
+          {
+            "name": "updateCachedDeviceState",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(serialNumber: string, patch: { wifiStatus?: Partial<WiFiStatusInfo> | null; }) => void"
+          },
+          {
+            "name": "writeConnectionSettings",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, settings: DeviceConnectionSettings) => Promise<void>"
+          },
+          {
+            "name": "writeGrant",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, grantBlob: string) => Promise<void>"
+          }
+        ],
+        "valueType": "typeof DeviceManager",
+        "declaredType": "DeviceManager"
+      },
+      {
+        "name": "DeviceManagerEvents",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "bluetoothReady",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "() => void"
+          },
+          {
+            "name": "connectionStateChanged",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(deviceId: string, state: import(\"./Device\").ConnectionState) => void"
+          },
+          {
+            "name": "deviceConnected",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(device: import(\"./Device\").ConnectedDevice) => void"
+          },
+          {
+            "name": "deviceDisconnected",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(deviceId: string, error?: Error) => void"
+          },
+          {
+            "name": "deviceDiscovered",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(device: import(\"./Device\").DiscoveredDevice) => void"
+          },
+          {
+            "name": "deviceStatusUpdated",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(deviceId: string, status: import(\"./Device\").DeviceStatus) => void"
+          },
+          {
+            "name": "scanError",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(error: Error) => void"
+          },
+          {
+            "name": "scanStarted",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "() => void"
+          },
+          {
+            "name": "scanStopped",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "() => void"
+          }
+        ],
+        "declaredType": "DeviceManagerEvents"
+      },
+      {
+        "name": "DeviceRecording",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "codec",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "AudioCodec"
+          },
+          {
+            "name": "durationMs",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "fileSizeBytes",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "isEncrypted",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean | undefined"
+          },
+          {
+            "name": "startedAt",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Date"
+          },
+          {
+            "name": "uuid",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          }
+        ],
+        "declaredType": "DeviceRecording"
+      },
+      {
+        "name": "DeviceState",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "DeviceState"
+      },
+      {
+        "name": "DeviceStateCacheEvents",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "cleared",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(serialNumber: string) => void"
+          },
+          {
+            "name": "clearedAll",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "() => void"
+          },
+          {
+            "name": "stateChanged",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(serialNumber: string, patch: DeviceStatePatch, state: CachedDeviceState) => void"
+          }
+        ],
+        "declaredType": "DeviceStateCacheEvents"
+      },
+      {
+        "name": "DeviceStatePatch",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "wifiStatus",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Partial<WiFiStatusInfo> | null | undefined"
+          }
+        ],
+        "declaredType": "DeviceStatePatch"
+      },
+      {
+        "name": "DeviceStatus",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "batteryLevel",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "batteryMv",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "flags",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "DeviceFlags"
+          },
+          {
+            "name": "lastTimeSyncAt",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Date | null"
+          },
+          {
+            "name": "lteSignalQuality",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "lteStatus",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "LteStatus | undefined"
+          },
+          {
+            "name": "modemInfo",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "ModemInfo | undefined"
+          },
+          {
+            "name": "pendingRecordings",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "signalStrength",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "state",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "DeviceState"
+          },
+          {
+            "name": "storageTotalMb",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "storageUsedMb",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "timestamp",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "wifiStatus",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "WifiStatus | undefined"
+          }
+        ],
+        "declaredType": "DeviceStatus"
+      },
+      {
+        "name": "DeviceType",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "DeviceType"
+      },
+      {
+        "name": "DeviceWiFiScanResult",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "currentSsid",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | null"
+          },
+          {
+            "name": "networks",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "WiFiScanNetwork[]"
+          }
+        ],
+        "declaredType": "DeviceWiFiScanResult"
+      },
+      {
+        "name": "DiscoveredDevice",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "deviceType",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "DeviceType"
+          },
+          {
+            "name": "discoveredAt",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Date"
+          },
+          {
+            "name": "firmwareVersion",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "id",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "macAddress",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | null"
+          },
+          {
+            "name": "manufacturerData",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Uint8Array<ArrayBufferLike> | undefined"
+          },
+          {
+            "name": "name",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "pairingState",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "PairingState"
+          },
+          {
+            "name": "rssi",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          }
+        ],
+        "declaredType": "DiscoveredDevice"
+      },
+      {
+        "name": "Environment",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "Environment"
+      },
+      {
+        "name": "FirmwareDownloadProgressCallback",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [
+          "(bytesDownloaded: number, totalBytes: number) => void"
+        ],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "FirmwareDownloadProgressCallback"
+      },
+      {
+        "name": "FirmwareInfo",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "checksum",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "releaseNotes",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "size",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "url",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "version",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          }
+        ],
+        "declaredType": "FirmwareInfo"
+      },
+      {
+        "name": "isBotaError",
+        "runtime": true,
+        "declarationKinds": [
+          "FunctionDeclaration"
+        ],
+        "callSignatures": [
+          "(error: unknown) => error is BotaError"
+        ],
+        "constructSignatures": [],
+        "members": [],
+        "valueType": "(error: unknown) => error is BotaError"
+      },
+      {
+        "name": "LogHandler",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [
+          "(entry: SdkLogEntry) => void"
+        ],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "LogHandler"
+      },
+      {
+        "name": "LogLevel",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "LogLevel"
+      },
+      {
+        "name": "LteStatus",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "LteStatus"
+      },
+      {
+        "name": "ModemInfo",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "apn",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "band",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "csq",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "iccid",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "imei",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "ipAddress",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "modemFirmware",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "modemVoltage",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "operator",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "rat",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "roaming",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean | undefined"
+          },
+          {
+            "name": "simStatus",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          }
+        ],
+        "declaredType": "ModemInfo"
+      },
+      {
+        "name": "OTAManager",
+        "runtime": true,
+        "declarationKinds": [
+          "ClassDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [
+          "(deviceManager: DeviceManager, firmwareCdnUrl?: string) => OTAManager"
+        ],
+        "members": [
+          {
+            "name": "checkForUpdate",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice) => Promise<FirmwareInfo | null>"
+          },
+          {
+            "name": "destroy",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => void"
+          },
+          {
+            "name": "downloadFirmware",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(firmware: FirmwareInfo, onProgress?: FirmwareDownloadProgressCallback) => Promise<ArrayBuffer>"
+          },
+          {
+            "name": "performUpdate",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, firmware: FirmwareInfo, grantBlob?: string) => Promise<void>"
+          }
+        ],
+        "valueType": "typeof OTAManager",
+        "declaredType": "OTAManager"
+      },
+      {
+        "name": "OtaProgress",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "bytesTransferred",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "error",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "progress",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "stage",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "OtaStage"
+          },
+          {
+            "name": "totalBytes",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          }
+        ],
+        "declaredType": "OtaProgress"
+      },
+      {
+        "name": "OtaStage",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "OtaStage"
+      },
+      {
+        "name": "PairingState",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "PairingState"
+      },
+      {
+        "name": "ProvisioningError",
+        "runtime": true,
+        "declarationKinds": [
+          "ClassDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [
+          "(message: string, code: string, deviceId?: string | undefined, cause?: Error) => ProvisioningError"
+        ],
+        "members": [
+          {
+            "name": "cause",
+            "optional": true,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "Error | undefined"
+          },
+          {
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "deviceId",
+            "optional": true,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "string | undefined"
+          }
+        ],
+        "valueType": "typeof ProvisioningError",
+        "declaredType": "ProvisioningError"
+      },
+      {
+        "name": "ProvisioningResult",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "error",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "\"unknown\" | \"invalid_token\" | \"storage_error\" | \"chunk_error\" | \"already_paired\" | undefined"
+          },
+          {
+            "name": "localRecordingsDeleted",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "success",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          }
+        ],
+        "declaredType": "ProvisioningResult"
+      },
+      {
+        "name": "ReconnectOptions",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "scanTimeout",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          }
+        ],
+        "declaredType": "ReconnectOptions"
+      },
+      {
+        "name": "RecordingManager",
+        "runtime": true,
+        "declarationKinds": [
+          "ClassDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [
+          "() => RecordingManager"
+        ],
+        "members": [
+          {
+            "name": "cancelUpload",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(taskId: string) => Promise<void>"
+          },
+          {
+            "name": "clearAllUploads",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => Promise<void>"
+          },
+          {
+            "name": "clearCompletedUploads",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => Promise<void>"
+          },
+          {
+            "name": "destroy",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => void"
+          },
+          {
+            "name": "getActiveStreamingSession",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => StreamingSession | null"
+          },
+          {
+            "name": "getAllUploads",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => UploadTask[]"
+          },
+          {
+            "name": "getPendingUploads",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => UploadTask[]"
+          },
+          {
+            "name": "getStorageInfo",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice) => Promise<StorageInfo>"
+          },
+          {
+            "name": "initialize",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => Promise<void>"
+          },
+          {
+            "name": "listRecordings",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice) => Promise<DeviceRecording[]>"
+          },
+          {
+            "name": "monitorDeviceUpload",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, initialPendingCount: number) => AsyncGenerator<SyncProgress & { recordingIndex?: number; totalRecordings?: number; }, DeviceUploadMonitorOutcome>"
+          },
+          {
+            "name": "pauseUploads",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => void"
+          },
+          {
+            "name": "resumeUploads",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => void"
+          },
+          {
+            "name": "retryFailedUploads",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => Promise<void>"
+          },
+          {
+            "name": "startStreamingSync",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, recordingUuid: string, uploadInfoProvider: StreamingUploadProvider, options?: StreamingSyncOptions) => StreamingSession"
+          },
+          {
+            "name": "syncAllRecordings",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, uploadInfoProvider: UploadInfoProvider) => AsyncGenerator<SyncProgress & { recordingIndex?: number; totalRecordings?: number; }>"
+          },
+          {
+            "name": "syncRecording",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice, recording: DeviceRecording, uploadInfo: UploadInfo) => AsyncGenerator<SyncProgress>"
+          },
+          {
+            "name": "triggerDeviceUpload",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(device: ConnectedDevice) => Promise<TriggerDeviceUploadResponse | null>"
+          }
+        ],
+        "valueType": "typeof RecordingManager",
+        "declaredType": "RecordingManager"
+      },
+      {
+        "name": "RecordingManagerEvents",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "queueUpdated",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(tasks: UploadTask[]) => void"
+          },
+          {
+            "name": "syncCompleted",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(deviceRecordingUuid: string, recordingId: string) => void"
+          },
+          {
+            "name": "syncFailed",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(deviceRecordingUuid: string, error: Error) => void"
+          },
+          {
+            "name": "syncProgress",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(deviceRecordingUuid: string, progress: SyncProgress) => void"
+          },
+          {
+            "name": "syncStarted",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(deviceRecordingUuid: string) => void"
+          },
+          {
+            "name": "uploadCompleted",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(taskId: string, recordingId: string) => void"
+          },
+          {
+            "name": "uploadFailed",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(taskId: string, error: Error) => void"
+          },
+          {
+            "name": "uploadProgress",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(taskId: string, progress: number) => void"
+          },
+          {
+            "name": "uploadStarted",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(taskId: string) => void"
+          }
+        ],
+        "declaredType": "RecordingManagerEvents"
+      },
+      {
+        "name": "ScanOptions",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "allowDuplicates",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean | undefined"
+          },
+          {
+            "name": "deviceTypes",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "DeviceType[] | undefined"
+          },
+          {
+            "name": "minRssi",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "pairingState",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "PairingState | undefined"
+          },
+          {
+            "name": "timeout",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          }
+        ],
+        "declaredType": "ScanOptions"
+      },
+      {
+        "name": "SdkError",
+        "runtime": true,
+        "declarationKinds": [
+          "ClassDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [
+          "(message: string, code: string, cause?: Error) => SdkError"
+        ],
+        "members": [
+          {
+            "name": "cause",
+            "optional": true,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "Error | undefined"
+          },
+          {
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "string"
+          }
+        ],
+        "valueType": "typeof SdkError",
+        "declaredType": "SdkError"
+      },
+      {
+        "name": "SdkLogEntry",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "context",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Record<string, unknown> | undefined"
+          },
+          {
+            "name": "level",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "SdkLogLevel"
+          },
+          {
+            "name": "message",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "timestamp",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Date"
+          }
+        ],
+        "declaredType": "SdkLogEntry"
+      },
+      {
+        "name": "SdkLogLevel",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "SdkLogLevel"
+      },
+      {
+        "name": "SdkState",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "SdkState"
+      },
+      {
+        "name": "SdkStatus",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "bluetoothState",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "BluetoothState"
+          },
+          {
+            "name": "connectedDevicesCount",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "isBluetoothReady",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "pendingUploadsCount",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "state",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "SdkState"
+          }
+        ],
+        "declaredType": "SdkStatus"
+      },
+      {
+        "name": "StorageInfo",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "pendingSyncCount",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "totalKb",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "totalRecordings",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "usedKb",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          }
+        ],
+        "declaredType": "StorageInfo"
+      },
+      {
+        "name": "StreamingSession",
+        "runtime": true,
+        "declarationKinds": [
+          "ClassDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [
+          "(protocolHandler: ProtocolHandler, _storageManager: StorageManager, device: ConnectedDevice, recordingUuid: string, uploadProvider: StreamingUploadProvider, chunkSizeKb?: number, flushIntervalMs?: number) => StreamingSession"
+        ],
+        "members": [
+          {
+            "name": "abort",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => void"
+          },
+          {
+            "name": "bytesReceived",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "GetAccessor"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "chunksUploaded",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "GetAccessor"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "isActive",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "GetAccessor"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "recordingId",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "GetAccessor"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "start",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => Promise<void>"
+          },
+          {
+            "name": "state",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "GetAccessor"
+            ],
+            "type": "StreamingState"
+          }
+        ],
+        "valueType": "typeof StreamingSession",
+        "declaredType": "StreamingSession"
+      },
+      {
+        "name": "StreamingSessionEvents",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "chunk",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(progress: StreamingSyncProgress) => void"
+          },
+          {
+            "name": "completed",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(result: { recordingId: string; totalBytes: number; }) => void"
+          },
+          {
+            "name": "disconnected",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "() => void"
+          },
+          {
+            "name": "error",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "(err: Error) => void"
+          },
+          {
+            "name": "paused",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "() => void"
+          },
+          {
+            "name": "resumed",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "() => void"
+          }
+        ],
+        "declaredType": "StreamingSessionEvents"
+      },
+      {
+        "name": "StreamingState",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "StreamingState"
+      },
+      {
+        "name": "StreamingSyncOptions",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "chunkSizeKb",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "flushIntervalMs",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          }
+        ],
+        "declaredType": "StreamingSyncOptions"
+      },
+      {
+        "name": "StreamingSyncProgress",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "bytesReceived",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "chunksUploaded",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "error",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "recordingId",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "state",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "StreamingState"
+          }
+        ],
+        "declaredType": "StreamingSyncProgress"
+      },
+      {
+        "name": "SyncChannel",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "SyncChannel"
+      },
+      {
+        "name": "SyncKind",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "SyncKind"
+      },
+      {
+        "name": "SyncProgress",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "bytesTransferred",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "bytesUploaded",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "contentSha256",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "error",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "progress",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "recordingId",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "stage",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "SyncStage"
+          },
+          {
+            "name": "totalBytes",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          }
+        ],
+        "declaredType": "SyncProgress"
+      },
+      {
+        "name": "SyncStage",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "SyncStage"
+      },
+      {
+        "name": "SyncStatus",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "channel",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "SyncChannel | undefined"
+          },
+          {
+            "name": "currentIndex",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "kind",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "SyncKind"
+          },
+          {
+            "name": "label",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "shortLabel",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "total",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          }
+        ],
+        "declaredType": "SyncStatus"
+      },
+      {
+        "name": "SyncStatusInputs",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "appDriving",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "{ active: boolean; currentIndex?: number; total?: number; }"
+          },
+          {
+            "name": "bleConnected",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "device",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "{ syncActive: boolean; isRecording: boolean; wifiConnected: boolean; lteConnected: boolean; wifiAttempting: boolean; lteAttempting: boolean; streamingEnabled: boolean; uploadPreference?: Array<\"wifi\" | \"ble\" | \"cellular\">; enabledConnections?: { wifi: boolean; cellular: boolean; }; }"
+          }
+        ],
+        "declaredType": "SyncStatusInputs"
+      },
+      {
+        "name": "TransferError",
+        "runtime": true,
+        "declarationKinds": [
+          "ClassDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [
+          "(message: string, code: string, recordingUuid?: string | undefined, cause?: Error) => TransferError"
+        ],
+        "members": [
+          {
+            "name": "cause",
+            "optional": true,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "Error | undefined"
+          },
+          {
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "recordingUuid",
+            "optional": true,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "string | undefined"
+          }
+        ],
+        "valueType": "typeof TransferError",
+        "declaredType": "TransferError"
+      },
+      {
+        "name": "TransferPacket",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "bytesSent",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "checksum",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "data",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Uint8Array<ArrayBufferLike> | undefined"
+          },
+          {
+            "name": "e2eChunk",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Uint8Array<ArrayBufferLike> | undefined"
+          },
+          {
+            "name": "e2eEphemeralPk",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Uint8Array<ArrayBufferLike> | undefined"
+          },
+          {
+            "name": "e2eSalt",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Uint8Array<ArrayBufferLike> | undefined"
+          },
+          {
+            "name": "errorCode",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "sequenceNumber",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "sha256",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Uint8Array<ArrayBufferLike> | undefined"
+          },
+          {
+            "name": "type",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "\"error\" | \"paused\" | \"data\" | \"eof\" | \"sha256\" | \"e2e_start\" | \"encrypted_data\" | \"encrypted_eof\""
+          }
+        ],
+        "declaredType": "TransferPacket"
+      },
+      {
+        "name": "UploadError",
+        "runtime": true,
+        "declarationKinds": [
+          "ClassDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [
+          "(message: string, code: string, taskId?: string | undefined, cause?: Error) => UploadError"
+        ],
+        "members": [
+          {
+            "name": "cause",
+            "optional": true,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "Error | undefined"
+          },
+          {
+            "name": "code",
+            "optional": false,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "taskId",
+            "optional": true,
+            "readonly": true,
+            "declarationKinds": [
+              "Parameter"
+            ],
+            "type": "string | undefined"
+          }
+        ],
+        "valueType": "typeof UploadError",
+        "declaredType": "UploadError"
+      },
+      {
+        "name": "UploadInfo",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "completeUrl",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "contentType",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "expiresAt",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Date | undefined"
+          },
+          {
+            "name": "recordingId",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "relay",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "{ url: string; bearerToken: string; } | undefined"
+          },
+          {
+            "name": "uploadToken",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "uploadUrl",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          }
+        ],
+        "declaredType": "UploadInfo"
+      },
+      {
+        "name": "UploadInfoProvider",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [
+          "(recording: DeviceRecording) => Promise<UploadInfo>"
+        ],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "UploadInfoProvider"
+      },
+      {
+        "name": "UploadTask",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "completeUrl",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "contentSha256",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "contentType",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "createdAt",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Date"
+          },
+          {
+            "name": "deviceId",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "errorMessage",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "id",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "localPath",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "recordingId",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "relay",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "{ url: string; bearerToken: string; } | undefined"
+          },
+          {
+            "name": "retryCount",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "status",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "UploadTaskStatus"
+          },
+          {
+            "name": "updatedAt",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Date"
+          },
+          {
+            "name": "uploadToken",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "uploadUrl",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          }
+        ],
+        "declaredType": "UploadTask"
+      },
+      {
+        "name": "UploadTaskStatus",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "UploadTaskStatus"
+      },
+      {
+        "name": "WiFiConfigGrant",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "expiresAt",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "Date"
+          },
+          {
+            "name": "grantBlob",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          }
+        ],
+        "declaredType": "WiFiConfigGrant"
+      },
+      {
+        "name": "WiFiConfigResult",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "error",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "\"unknown\" | \"storage_error\" | \"invalid_grant\" | \"grant_expired\" | \"decryption_error\" | undefined"
+          },
+          {
+            "name": "success",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          }
+        ],
+        "declaredType": "WiFiConfigResult"
+      },
+      {
+        "name": "WiFiCredentials",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "password",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "securityType",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "WiFiSecurityType | undefined"
+          },
+          {
+            "name": "ssid",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          }
+        ],
+        "declaredType": "WiFiCredentials"
+      },
+      {
+        "name": "WiFiScanNetwork",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "isCurrent",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "isOpen",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean | undefined"
+          },
+          {
+            "name": "quality",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "ssid",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          }
+        ],
+        "declaredType": "WiFiScanNetwork"
+      },
+      {
+        "name": "WiFiSecurityType",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "WiFiSecurityType"
+      },
+      {
+        "name": "WifiStatus",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "WifiStatus"
+      },
+      {
+        "name": "WiFiStatus",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "declaredType": "WiFiStatus"
+      },
+      {
+        "name": "WiFiStatusInfo",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "lastError",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "signalStrength",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "ssid",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "status",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "WiFiStatus"
+          }
+        ],
+        "declaredType": "WiFiStatusInfo"
+      }
+    ]
+  }
+}

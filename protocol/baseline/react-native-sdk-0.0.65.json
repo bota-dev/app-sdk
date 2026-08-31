@@ -12,6 +12,10 @@
     "suites": 8,
     "tests": 86
   },
+  "publicApi": {
+    "contract": "protocol/baseline/react-native-public-api-0.0.65.json",
+    "surfaceDigest": "21261646a026da3d6f88663cce27a843d28545914c4bd87caa296dddd655d002"
+  },
   "sourceDigests": {
     "src/ble/constants.ts": "21e6149c7b35dda2b3ed15f646df06afc8ce169cef83b251ae8f0fa479b45721",
     "src/ble/parsers.ts": "f9fe44efa582b0e1431ef362c748fcc1b311917694050ff37861bb5a7191bcdf",
