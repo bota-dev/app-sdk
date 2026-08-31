@@ -7,6 +7,7 @@ import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { validateFixtureDirectory } from './fixture-contract.mjs';
+import { verifyReactNativeApiContract } from './react-native-api-contract.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -183,6 +184,7 @@ function parseArguments(args) {
     expectedCommit: null,
     expectedVersion: '0.0.65',
     fixtures: 'protocol/fixtures',
+    apiContract: 'protocol/baseline/react-native-public-api-0.0.65.json',
     allowDirty: false,
   };
   for (let index = 0; index < args.length; index += 1) {
@@ -198,6 +200,9 @@ function parseArguments(args) {
         break;
       case '--fixtures':
         options.fixtures = args[++index];
+        break;
+      case '--api-contract':
+        options.apiContract = args[++index];
         break;
       case '--allow-dirty':
         options.allowDirty = true;
@@ -244,6 +249,13 @@ export function compareReactNative(options) {
       `SDK version ${packageJson.version} does not match ${options.expectedVersion}`
     );
   }
+
+  const apiContractVerifier =
+    options.apiContractVerifier ?? verifyReactNativeApiContract;
+  const publicApi = apiContractVerifier({
+    sdkPath,
+    contract: options.apiContract,
+  });
 
   const fixtureErrors = validateFixtureDirectory(fixturePath);
   if (fixtureErrors.length) {
@@ -297,6 +309,7 @@ export function compareReactNative(options) {
     fixtureDigest: fixtureDigest(fixturePath),
     fixtureCases: cases,
     jest,
+    publicApi,
     sourceDigests: Object.fromEntries(
       sourceFiles.map((file) => [file, sourceDigest(join(sdkPath, file))])
     ),

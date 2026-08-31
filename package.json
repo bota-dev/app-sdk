@@ -8,6 +8,7 @@
   "scripts": {
     "baseline:native": "node tools/baseline/verify-native-baselines.mjs",
     "baseline:react-native": "node tools/baseline/compare-react-native.mjs",
+    "baseline:react-native:api": "node tools/baseline/react-native-api-contract.mjs verify --contract protocol/baseline/react-native-public-api-0.0.65.json",
     "check": "npm run check:licenses",
     "check:licenses": "node scripts/check-licenses.mjs",
     "license-check": "npm run check:licenses",
