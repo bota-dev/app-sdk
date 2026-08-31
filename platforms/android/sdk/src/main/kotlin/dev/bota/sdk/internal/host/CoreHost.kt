@@ -10,7 +10,7 @@ internal data class CoreHostEventPayload(
     val fields: List<CoreField> = emptyList(),
 )
 
-internal class NativeHostException(
+internal open class NativeHostException(
     val platformCode: Int,
     message: String,
     val httpStatus: Int? = null,

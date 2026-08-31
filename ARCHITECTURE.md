@@ -132,7 +132,16 @@ persistence, secure-storage, network, material, recording-sink, and
 firmware-blob ports. It owns timers, bounds returned bytes, permits multi-event
 streams only where the ABI does, and rejects mismatched callbacks before Rust
 sees them.
-BluetoothGatt transport, concrete durable host services, public workflow
+The Android Bluetooth transport confines `BluetoothLeScanner`,
+`BluetoothGatt`, callbacks, and mutable framework state to one named
+HandlerThread. A per-device queue serializes MTU, discovery, read, write, and
+CCCD operations while allowing independent devices to progress. Monotonic GATT
+generations reject callbacks from replaced connections, disconnect cancels
+blocked work, and manual selection preempts background reconnect ownership.
+Scan identity uses peripheral IDs plus advertised manufacturer data; names are
+display metadata only. The host checks location permission through API 30 and
+scan/connect permissions on API 31+ before an effect reaches the platform.
+Concrete durable host services, public workflow
 facade, Maven Central artifact, physical acceptance, and React Native Android
 runtime support are not claimed by this stage.
 

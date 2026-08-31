@@ -49,8 +49,12 @@ and 12 notifications. API 35 instrumentation validates the generated resource
 covering all 29 canonical workflow scenarios. Its exhaustive host executor
 routes every effect through a narrow typed native port, validates callback
 kinds and payload bounds, and preserves correlation while mapping platform
-failures to stable ABI events.
-BluetoothGatt, concrete durable host services, public workflow facades,
+failures to stable ABI events. The Android BluetoothGatt host now keeps
+framework objects on one HandlerThread, serializes operations per connection,
+rejects stale callback generations, and enforces the API 26 and API 31+
+permission contracts without prompting. API 26 and API 35 instrumentation
+verify the merged permission manifest.
+Concrete durable host services, public workflow facades,
 physical-device acceptance, Maven Central publication, and the React Native
 Android adapter remain open.
 The native-boundary spike selected a manually owned C ABI after comparing it

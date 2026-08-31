@@ -86,6 +86,28 @@ streams only for scan, subscribe, download, and upload, and converts platform
 failures to correlated ABI events. Additions to ABI effect or event kinds must
 extend its exhaustive tests before a host implementation changes.
 
+`BluetoothGattHost` implements the Bluetooth port with one HandlerThread-owned
+Android platform adapter. GATT operations are serialized per peripheral, not
+globally; disconnect bypasses queued work, and a monotonic generation prevents
+callbacks from a replaced GATT from satisfying current operations. Connect
+negotiates MTU 517, while the following Rust-requested discovery effect verifies
+that a Bota service exists. API 33+ uses value-bearing write APIs and older
+versions use the legacy characteristic and descriptor fields. CCCD writes occur
+only after local notification state changes.
+
+The SDK filters scans by Bota service UUID or manufacturer ID and never uses an
+advertised name as identity. It merges system-connected peripherals with live
+scan results and honors the workflow's duplicate-delivery flag. Permission
+checks return `BotaSDKError.AuthorizationRequired`; applications remain
+responsible for prompts. Verify both permission contracts with:
+
+```bash
+tools/android/test-package.sh --api 26 \
+  --instrumentation-class dev.bota.sdk.internal.bluetooth.BluetoothPermissionTest
+tools/android/test-package.sh --api 35 \
+  --instrumentation-class dev.bota.sdk.internal.bluetooth.BluetoothPermissionTest
+```
+
 Normal builds can publish unsigned artifacts only to the `Local` repository at
 `target/android-m2`. Remote publication and signing require the exact
 `botaProtectedSigning=true` Gradle property and release-environment credentials.

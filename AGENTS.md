@@ -93,6 +93,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Keep Android JNI as an ownership adapter only. Pass primitive typed fields
   and raw byte arrays or direct buffers; copy Rust-owned packets and errors
   before exactly one matching free. Test counters belong to debug builds only.
+- Keep Android Bluetooth framework objects and mutable callback state on the
+  `bota-bluetooth` HandlerThread. Serialize GATT work per peripheral, preserve
+  generation checks, and let disconnect cancel queued work. Advertised names
+  are display metadata, never reconnect identity.
+- Bluetooth permission behavior must remain device-tested on API 26 and API 35:
+  location through API 30, then `BLUETOOTH_SCAN` plus `BLUETOOTH_CONNECT` on
+  API 31+. The SDK reports missing permissions but never prompts.
 - Android workflow calls pass through one closeable `CoreEngineRuntime` and one
   dedicated coroutine dispatcher. Every JNI call stays on that dispatcher;
   Rust owns concurrent-command rejection, and host callbacks preserve the

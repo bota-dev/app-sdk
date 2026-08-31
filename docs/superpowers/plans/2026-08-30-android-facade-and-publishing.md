@@ -558,7 +558,7 @@ git commit -m "feat(android): execute correlated host effects" \
 - Consumes: scan, connect, discover, disconnect, read, write, subscribe, and unsubscribe effects.
 - Produces: correlated BLE host events; Android framework objects never escape the Bluetooth package.
 
-- [ ] **Step 1: Write scripted callback-order tests**
+- [x] **Step 1: Write scripted callback-order tests**
 
 Tests cover scan deduplication, optional duplicate delivery, API-31 permission
 preflight, API-26 location preflight, manual-work priority, independent
@@ -567,7 +567,7 @@ API-33 and legacy write APIs, CCCD enable/disable order, notification delivery,
 timeouts, nonzero GATT statuses, disconnect bypass, and stale callbacks from an
 older `BluetoothGatt` generation.
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run:
 
@@ -577,7 +577,7 @@ platforms/android/gradlew -p platforms/android :sdk:testDebugUnitTest --tests '*
 
 Expected: FAIL because the transport is absent.
 
-- [ ] **Step 3: Implement HandlerThread-owned Android callbacks**
+- [x] **Step 3: Implement HandlerThread-owned Android callbacks**
 
 Create `BluetoothLeScanner`, `BluetoothGatt`, `ScanCallback`, and
 `BluetoothGattCallback` only on one named `HandlerThread`. Forward value-only
@@ -593,7 +593,7 @@ Permission checks return `BotaSDKError.AuthorizationRequired` before a scan,
 connect, or any workflow command reaches Rust. The SDK exposes required
 permission names but never starts a permission prompt.
 
-- [ ] **Step 4: Run transport, lint, and Android permission tests**
+- [x] **Step 4: Run transport, lint, and Android permission tests**
 
 Run:
 
@@ -609,7 +609,7 @@ platforms/android/gradlew -p platforms/android :sdk:lintRelease
 Expected: operation order and permission behavior pass on API 26 and API 35
 test devices, with no name-based identity path.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ARCHITECTURE.md platforms/android
