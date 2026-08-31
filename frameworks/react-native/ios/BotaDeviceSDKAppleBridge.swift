@@ -27,6 +27,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
     private let ota: BotaDeviceSDKAppleOTA
     private let recordings: BotaDeviceSDKAppleRecordings
     private let security: BotaDeviceSDKAppleSecurity
+    private let wifi: BotaDeviceSDKAppleWiFi
 
     override private init() {
         lifecycle = BotaDeviceSDKAppleLifecycle()
@@ -35,6 +36,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         ota = BotaDeviceSDKAppleOTA()
         recordings = BotaDeviceSDKAppleRecordings()
         security = BotaDeviceSDKAppleSecurity()
+        wifi = BotaDeviceSDKAppleWiFi()
         super.init()
     }
 
@@ -61,6 +63,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
     public func destroy(completion: @escaping @Sendable () -> Void) {
         Task {
             await security.cancelAll()
+            await wifi.cancelAll()
             await logs.stop()
             await ota.cancelAll()
             await recordings.cancelAll()
@@ -167,6 +170,183 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                 completion(nil)
             } catch {
                 completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(configureWiFiWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:ssid:password:grantBlob:completion:)
+    public func configureWiFi(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        ssid: String,
+        password: String,
+        grantBlob: String,
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let result = try await wifi.configure(
+                    Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    ),
+                    ssid: ssid,
+                    password: password,
+                    grantBlob: grantBlob
+                )
+                completion(Self.wifiConfigResult(result), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc(disconnectWiFiWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:completion:)
+    public func disconnectWiFi(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let result = try await wifi.disconnect(Self.connectedDevice(
+                    id: id,
+                    serialNumber: serialNumber,
+                    deviceType: deviceType,
+                    firmwareVersion: firmwareVersion,
+                    hardwareRevision: hardwareRevision,
+                    isProvisioned: isProvisioned,
+                    connectionState: connectionState,
+                    mtu: mtu
+                ))
+                completion(Self.wifiConfigResult(result), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc(readWiFiStatusWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:completion:)
+    public func readWiFiStatus(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let status = try await wifi.readStatus(Self.connectedDevice(
+                    id: id,
+                    serialNumber: serialNumber,
+                    deviceType: deviceType,
+                    firmwareVersion: firmwareVersion,
+                    hardwareRevision: hardwareRevision,
+                    isProvisioned: isProvisioned,
+                    connectionState: connectionState,
+                    mtu: mtu
+                ))
+                completion(Self.wifiStatusInfo(status), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc(startWiFiStatusUpdatesWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:onStatus:onError:completion:)
+    public func startWiFiStatusUpdates(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        onStatus: @escaping @Sendable ([String: Any]) -> Void,
+        onError: @escaping @Sendable (NSError) -> Void,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await wifi.startStatusUpdates(
+                    Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    ),
+                    onStatus: { onStatus(Self.wifiStatusInfo($0)) },
+                    onError: { onError($0 as NSError) }
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(stopWiFiStatusUpdatesWithCompletion:)
+    public func stopWiFiStatusUpdates(completion: @escaping @Sendable () -> Void) {
+        Task {
+            await wifi.stopStatusUpdates()
+            completion()
+        }
+    }
+
+    @objc(scanWiFiNetworksWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:completion:)
+    public func scanWiFiNetworks(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let result = try await wifi.scanNetworks(Self.connectedDevice(
+                    id: id,
+                    serialNumber: serialNumber,
+                    deviceType: deviceType,
+                    firmwareVersion: firmwareVersion,
+                    hardwareRevision: hardwareRevision,
+                    isProvisioned: isProvisioned,
+                    connectionState: connectionState,
+                    mtu: mtu
+                ))
+                completion(Self.wifiScanResult(result), nil)
+            } catch {
+                completion(nil, error as NSError)
             }
         }
     }
@@ -910,6 +1090,57 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
             "streamingEnabled": settings.streamingEnabled,
             "streamingFlushIntervalSeconds": settings.streamingFlushIntervalSeconds,
         ]
+    }
+
+    private static func wifiConfigResult(_ result: WiFiConfigResult) -> [String: Any] {
+        switch result {
+        case .success:
+            ["success": true]
+        case .invalidGrant:
+            ["success": false, "error": "invalid_grant"]
+        case .grantExpired:
+            ["success": false, "error": "grant_expired"]
+        case .decryptionError:
+            ["success": false, "error": "decryption_error"]
+        case .storageError:
+            ["success": false, "error": "storage_error"]
+        case .unknown:
+            ["success": false, "error": "unknown"]
+        }
+    }
+
+    private static func wifiStatusInfo(_ status: WiFiStatusInfo) -> [String: Any] {
+        var value: [String: Any] = ["status": wifiConnectionStatus(status.status)]
+        if let strength = status.signalStrength { value["signalStrength"] = strength }
+        if let ssid = status.ssid { value["ssid"] = ssid }
+        if let error = status.lastError { value["lastError"] = error }
+        return value
+    }
+
+    private static func wifiConnectionStatus(_ status: WiFiConnectionStatus) -> String {
+        switch status {
+        case .idle: "idle"
+        case .connecting: "connecting"
+        case .connected: "connected"
+        case .failed: "failed"
+        case .disconnected: "disconnected"
+        case .unknown: "idle"
+        }
+    }
+
+    private static func wifiScanResult(_ result: DeviceWiFiScanResult) -> [String: Any] {
+        var value: [String: Any] = [
+            "networks": result.networks.map { network in
+                [
+                    "ssid": network.ssid,
+                    "quality": network.quality,
+                    "isCurrent": network.isCurrent,
+                    "isOpen": network.isOpen,
+                ] as [String: Any]
+            },
+        ]
+        if let currentSSID = result.currentSSID { value["currentSsid"] = currentSSID }
+        return value
     }
 
     private static func factoryResetCompletion(

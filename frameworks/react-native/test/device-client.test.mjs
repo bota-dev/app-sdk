@@ -63,6 +63,7 @@ function nativeFixture() {
   let uploadOwnershipProgressHandler = null;
   let firmwareUpdateProgressHandler = null;
   let deviceLogHandler = null;
+  let wifiStatusHandler = null;
   let provisioningResolve = null;
   let provisioningReject = null;
   let factoryResetResolve = null;
@@ -78,6 +79,9 @@ function nativeFixture() {
     },
     emitStatus(value) {
       statusHandler?.(value);
+    },
+    emitWiFiStatus(value) {
+      wifiStatusHandler?.(value);
     },
     module: {
       async configure() {},
@@ -150,6 +154,14 @@ function nativeFixture() {
         return {
           remove() {
             deviceLogHandler = null;
+          },
+        };
+      },
+      onWiFiStatusUpdated(handler) {
+        wifiStatusHandler = handler;
+        return {
+          remove() {
+            wifiStatusHandler = null;
           },
         };
       },
@@ -307,6 +319,34 @@ function nativeFixture() {
       },
       async stopDeviceLogs() {
         calls.push(['stopDeviceLogs']);
+      },
+      async configureWiFi(device, ssid, password, grantBlob) {
+        calls.push(['configureWiFi', device, ssid, password, grantBlob]);
+        return { success: true };
+      },
+      async disconnectWiFi(device) {
+        calls.push(['disconnectWiFi', device]);
+        return { success: false, error: 'storage_error' };
+      },
+      async readWiFiStatus(device) {
+        calls.push(['readWiFiStatus', device]);
+        return { status: 'future_status', signalStrength: 87, ssid: 'Bota' };
+      },
+      async startWiFiStatusUpdates(device) {
+        calls.push(['startWiFiStatusUpdates', device]);
+      },
+      async stopWiFiStatusUpdates() {
+        calls.push(['stopWiFiStatusUpdates']);
+      },
+      async scanWiFiNetworks(device) {
+        calls.push(['scanWiFiNetworks', device]);
+        return {
+          networks: [
+            { ssid: 'Bota', quality: 100, isCurrent: true, isOpen: false },
+            { ssid: 'Guest', quality: 50, isCurrent: false, isOpen: true },
+          ],
+          currentSsid: 'Bota',
+        };
       },
     },
   };
@@ -712,5 +752,56 @@ test('device log subscription receives only complete native lines and owns teard
   assert.deepEqual(fixture.calls, [
     ['startDeviceLogs', connected],
     ['stopDeviceLogs'],
+  ]);
+});
+
+test('WiFi configuration keeps encoding native and preserves frozen result values', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+
+  const configured = await client.wifi.configure(
+    connected,
+    { ssid: 'Bota', password: 'secret', securityType: 'WPA2' },
+    { grantBlob: 'grant.test', expiresAt: new Date(1_788_200_000_000) }
+  );
+  const disconnected = await client.wifi.disconnect(connected);
+
+  assert.deepEqual(configured, { success: true });
+  assert.deepEqual(disconnected, { success: false, error: 'storage_error' });
+  assert.deepEqual(fixture.calls, [
+    ['configureWiFi', connected, 'Bota', 'secret', 'grant.test'],
+    ['disconnectWiFi', connected],
+  ]);
+});
+
+test('WiFi status and scan preserve unknown fallback and own status teardown', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+  const updates = [];
+
+  const status = await client.wifi.readStatus(connected);
+  const subscription = await client.wifi.subscribeToStatus(
+    connected,
+    (value) => updates.push(value)
+  );
+  fixture.emitWiFiStatus({ status: 'connected', signalStrength: 75, ssid: 'Bota' });
+  const scan = await client.wifi.scanNetworks(connected);
+  await subscription.remove();
+  await subscription.remove();
+
+  assert.deepEqual(status, { status: 'idle', signalStrength: 87, ssid: 'Bota' });
+  assert.deepEqual(updates, [{ status: 'connected', signalStrength: 75, ssid: 'Bota' }]);
+  assert.deepEqual(scan, {
+    networks: [
+      { ssid: 'Bota', quality: 100, isCurrent: true, isOpen: false },
+      { ssid: 'Guest', quality: 50, isCurrent: false, isOpen: true },
+    ],
+    currentSsid: 'Bota',
+  });
+  assert.deepEqual(fixture.calls, [
+    ['readWiFiStatus', connected],
+    ['startWiFiStatusUpdates', connected],
+    ['scanWiFiNetworks', connected],
+    ['stopWiFiStatusUpdates'],
   ]);
 });

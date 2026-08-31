@@ -883,7 +883,7 @@ remove-only, and remove-and-reset acceptance.
 Prerequisite status (2026-08-31): the 0.0.65 root TypeScript API is frozen as a
 semantic contract covering 80 exports, expanded type aliases, static APIs, and
 reachable public members, and the existing baseline command enforces it
-alongside the 50 wire fixtures and 86 Jest tests. The private
+alongside the 55 wire fixtures and 86 Jest tests. The private
 `frameworks/react-native` package now pins React Native 0.86.3 and validates a
 first lifecycle/capability TurboModule schema plus deterministic iOS and Android
 artifact digests. Optional lookup prevents import-time failure before a native
@@ -917,6 +917,11 @@ Device-log subscriptions now delegate to the public Apple and Android facades:
 native code owns BLE framing, sequence recovery, UTF-8 assembly, and the single
 active collector, while Codegen emits only complete sanitized lines and
 JavaScript owns idempotent subscription teardown.
+WiFi configuration now follows the same boundary. JavaScript passes typed
+credentials and an encoded application grant; Apple and Android own grant and
+credential packet writes, subscribe-before-write result ordering, shared Rust
+status and scan decoding, and exactly-once notification teardown. Codegen emits
+only typed configuration results, status values, and scan metadata.
 A real CocoaPods application compiles and links the generated typed event spec,
 Objective-C++, Swift, Swift Package, and Rust XCFramework layers. The Android
 adapters provide the same lifecycle, connection, status, provisioning,

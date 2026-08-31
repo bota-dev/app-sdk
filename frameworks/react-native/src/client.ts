@@ -12,6 +12,9 @@ import type {
   NativeRecordingTransferProgress,
   NativeProvisioningMaterialRequest,
   NativeUploadOwnershipResult,
+  NativeWiFiConfigResult,
+  NativeWiFiStatusInfo,
+  NativeDeviceWiFiScanResult,
   Spec,
 } from './specs/NativeBotaDeviceSDK';
 import type {
@@ -28,6 +31,12 @@ import type {
   ReconnectOptions,
   ScanOptions,
   LteStatus,
+  WiFiConfigGrant,
+  WiFiConfigResult,
+  WiFiCredentials,
+  WiFiStatus,
+  WiFiStatusInfo,
+  DeviceWiFiScanResult,
   WifiStatus,
 } from './models/Device';
 import type { AudioCodec, DeviceRecording } from './models/Recording';
@@ -169,6 +178,21 @@ export type BotaDeviceSDKLogClient = {
   ): Promise<BotaAsyncEventSubscription>;
 };
 
+export type BotaDeviceSDKWiFiClient = {
+  configure(
+    device: ConnectedDevice,
+    credentials: WiFiCredentials,
+    grant: WiFiConfigGrant
+  ): Promise<WiFiConfigResult>;
+  disconnect(device: ConnectedDevice): Promise<WiFiConfigResult>;
+  readStatus(device: ConnectedDevice): Promise<WiFiStatusInfo>;
+  subscribeToStatus(
+    device: ConnectedDevice,
+    onStatus: (status: WiFiStatusInfo) => void
+  ): Promise<BotaAsyncEventSubscription>;
+  scanNetworks(device: ConnectedDevice): Promise<DeviceWiFiScanResult>;
+};
+
 export type BotaDeviceSDKRecordingClient = {
   listRecordings(device: ConnectedDevice): Promise<DeviceRecording[]>;
   syncRecording(
@@ -219,6 +243,7 @@ export type BotaDeviceSDKClient = {
   readonly ota: BotaDeviceSDKOTAClient;
   readonly provisioning: BotaDeviceSDKProvisioningClient;
   readonly recordings: BotaDeviceSDKRecordingClient;
+  readonly wifi: BotaDeviceSDKWiFiClient;
   configure(configuration?: BotaDeviceSDKConfiguration): Promise<void>;
   destroy(): Promise<void>;
   getCapabilities(): Promise<BotaDeviceSDKCapabilities>;
@@ -382,6 +407,44 @@ const mapFirmwareProgress = (
   phase: progress.phase as BotaFirmwareUpdatePhase,
   completedBytes: progress.completedUnits,
   totalBytes: progress.totalUnits,
+});
+
+const isWiFiStatus = (value: string): value is WiFiStatus =>
+  value === 'idle' ||
+  value === 'connecting' ||
+  value === 'connected' ||
+  value === 'failed' ||
+  value === 'disconnected';
+
+const mapWiFiStatus = (status: NativeWiFiStatusInfo): WiFiStatusInfo => ({
+  status: isWiFiStatus(status.status) ? status.status : 'idle',
+  ...(status.signalStrength === undefined
+    ? {}
+    : { signalStrength: status.signalStrength }),
+  ...(status.ssid === undefined ? {} : { ssid: status.ssid }),
+  ...(status.lastError === undefined ? {} : { lastError: status.lastError }),
+});
+
+const mapWiFiConfigResult = (
+  result: NativeWiFiConfigResult
+): WiFiConfigResult => {
+  if (result.success) return { success: true };
+  switch (result.error) {
+    case 'invalid_grant':
+    case 'grant_expired':
+    case 'decryption_error':
+    case 'storage_error':
+      return { success: false, error: result.error };
+    default:
+      return { success: false, error: 'unknown' };
+  }
+};
+
+const mapWiFiScanResult = (
+  result: NativeDeviceWiFiScanResult
+): DeviceWiFiScanResult => ({
+  networks: result.networks.map((network) => ({ ...network })),
+  currentSsid: result.currentSsid ?? null,
 });
 
 const requiredUploadOwnershipField = (
@@ -675,6 +738,65 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
   };
 
+  const wifi: BotaDeviceSDKWiFiClient = {
+    async configure(device, credentials, grant) {
+      return mapWiFiConfigResult(
+        await requireNativeModule().configureWiFi(
+          toNativeConnectedDevice(device),
+          credentials.ssid,
+          credentials.password,
+          grant.grantBlob
+        )
+      );
+    },
+
+    async disconnect(device) {
+      return mapWiFiConfigResult(
+        await requireNativeModule().disconnectWiFi(
+          toNativeConnectedDevice(device)
+        )
+      );
+    },
+
+    async readStatus(device) {
+      return mapWiFiStatus(
+        await requireNativeModule().readWiFiStatus(
+          toNativeConnectedDevice(device)
+        )
+      );
+    },
+
+    async subscribeToStatus(device, onStatus) {
+      const module = requireNativeModule();
+      const eventSubscription = module.onWiFiStatusUpdated((status) => {
+        onStatus(mapWiFiStatus(status));
+      });
+      try {
+        await module.startWiFiStatusUpdates(toNativeConnectedDevice(device));
+      } catch (error) {
+        eventSubscription.remove();
+        throw error;
+      }
+      let removed = false;
+      return {
+        async remove() {
+          if (removed) return;
+          removed = true;
+          eventSubscription.remove();
+          await module.stopWiFiStatusUpdates();
+        },
+      };
+    },
+
+    async scanNetworks(device) {
+      return mapWiFiScanResult(
+        await requireNativeModule().scanWiFiNetworks(
+          toNativeConnectedDevice(device)
+        )
+      );
+    },
+  };
+
   return {
     devices,
     factoryReset,
@@ -682,6 +804,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     ota,
     provisioning,
     recordings,
+    wifi,
 
     async configure(configuration = {}) {
       const nativeConfiguration: NativeConfiguration = {

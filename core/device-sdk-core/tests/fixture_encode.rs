@@ -10,7 +10,8 @@ use bota_device_sdk_core::{
         AckType, FirmwareStatus, TransferCommand, encode_ack, encode_bounded_payload,
         encode_connection_settings, encode_firmware_data, encode_firmware_upload_start,
         encode_firmware_upload_verify, encode_firmware_window_ack, encode_ota_status,
-        encode_transfer_command, encode_wifi_grant, encode_wifi_scan_command,
+        encode_transfer_command, encode_wifi_credentials, encode_wifi_grant,
+        encode_wifi_scan_command,
     },
 };
 use serde_json::Value;
@@ -45,7 +46,7 @@ fn encode_fixtures_match_react_native_bytes() {
             }
         }
     }
-    assert_eq!(matched, 22);
+    assert_eq!(matched, 24);
 }
 
 fn encode_fixture(fixture_case: &Value) -> Option<Result<Vec<u8>, String>> {
@@ -84,6 +85,10 @@ fn encode_fixture(fixture_case: &Value) -> Option<Result<Vec<u8>, String>> {
             encode_wifi_grant(input["grantBlob"].as_str().unwrap(), usize::MAX)
         }
         "createWiFiScanCommand" => encode_wifi_scan_command(),
+        "createWiFiCredentialPacket" => encode_wifi_credentials(
+            input["ssid"].as_str().unwrap(),
+            input["password"].as_str().unwrap(),
+        ),
         "identityBytes" => encode_bounded_payload(
             &hex_decode(fixture_case["inputHex"].as_str().unwrap()),
             usize::MAX,

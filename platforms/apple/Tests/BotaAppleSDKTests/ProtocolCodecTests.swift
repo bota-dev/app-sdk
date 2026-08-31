@@ -22,7 +22,7 @@ final class ProtocolCodecTests: XCTestCase {
                 XCTAssertTrue(expectsError, "\(fixtureCase["name"] ?? operation): \(error)")
             }
         }
-        XCTAssertEqual(matched, 22)
+        XCTAssertEqual(matched, 24)
     }
 
     func testEveryDecodeFixtureUsesSharedCodec() throws {
@@ -40,7 +40,7 @@ final class ProtocolCodecTests: XCTestCase {
                 XCTAssertTrue(expectsError, "\(fixtureCase["name"] ?? operation): \(error)")
             }
         }
-        XCTAssertEqual(matched, 28)
+        XCTAssertEqual(matched, 33)
     }
 
     func testEncryptedRecordingAndTransferMetadataRemainOpaque() throws {
@@ -101,6 +101,11 @@ final class ProtocolCodecTests: XCTestCase {
             return try mapper.createWiFiGrantPacket(input["grantBlob"] as! String)
         case "createWiFiScanCommand":
             return try mapper.createWiFiScanCommand()
+        case "createWiFiCredentialPacket":
+            return try mapper.createWiFiCredentialPacket(
+                ssid: input["ssid"] as! String,
+                password: input["password"] as! String
+            )
         case "identityBytes":
             return try mapper.encodeBoundedPayload(Self.data(fixtureCase["inputHex"] as! String))
         case "createAckPacket":
@@ -132,6 +137,10 @@ final class ProtocolCodecTests: XCTestCase {
             _ = try mapper.parseConnectionSettings(Self.data(fixtureCase["inputHex"] as! String))
         case "parseWiFiConfigResult":
             _ = try mapper.parseWiFiConfigResult(Self.data(fixtureCase["inputHex"] as! String))
+        case "parseWiFiStatusInfo":
+            _ = try mapper.parseWiFiStatusInfo(Self.data(fixtureCase["inputHex"] as! String))
+        case "parseWiFiScanResult":
+            _ = try mapper.parseWiFiScanResult(Self.data(fixtureCase["inputHex"] as! String))
         case "decodeDeviceLogs":
             for value in fixtureCase["inputsHex"] as! [String] {
                 _ = try mapper.decodeDeviceLogs(Self.data(value))
@@ -148,6 +157,8 @@ final class ProtocolCodecTests: XCTestCase {
         "parseTriggerDeviceUploadResponse",
         "parseConnectionSettings",
         "parseWiFiConfigResult",
+        "parseWiFiStatusInfo",
+        "parseWiFiScanResult",
         "decodeDeviceLogs",
     ]
 
@@ -161,6 +172,7 @@ final class ProtocolCodecTests: XCTestCase {
         "constantByte",
         "createWiFiGrantPacket",
         "createWiFiScanCommand",
+        "createWiFiCredentialPacket",
         "identityBytes",
         "createAckPacket",
         "createTransferCommand",

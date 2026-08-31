@@ -326,7 +326,7 @@ git commit -m "feat(android): bridge the frozen native abi" \
 - Modify: `platforms/android/README.md`
 
 **Interfaces:**
-- Consumes: ABI protocol decode/encode functions, 50 language-neutral fixtures, and useful model shape from the pinned Android scaffold.
+- Consumes: ABI protocol decode/encode functions, 55 language-neutral fixtures, and useful model shape from the pinned Android scaffold.
 - Produces: immutable public Kotlin models, forward-compatible wire values, and sealed stable `BotaSDKError` values.
 
 ```kotlin

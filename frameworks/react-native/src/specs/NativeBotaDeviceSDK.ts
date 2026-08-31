@@ -173,6 +173,30 @@ export type NativeDeviceLogLine = {
   isBacklog: boolean;
 };
 
+export type NativeWiFiConfigResult = {
+  success: boolean;
+  error?: string;
+};
+
+export type NativeWiFiStatusInfo = {
+  status: string;
+  signalStrength?: number;
+  ssid?: string;
+  lastError?: string;
+};
+
+export type NativeWiFiScanNetwork = {
+  ssid: string;
+  quality: number;
+  isCurrent: boolean;
+  isOpen: boolean;
+};
+
+export type NativeDeviceWiFiScanResult = {
+  networks: ReadonlyArray<NativeWiFiScanNetwork>;
+  currentSsid?: string;
+};
+
 export interface Spec extends TurboModule {
   readonly onDeviceDiscovered: EventEmitter<NativeDiscoveredDevice>;
   readonly onDeviceStatusUpdated: EventEmitter<NativeDeviceStatus>;
@@ -182,6 +206,7 @@ export interface Spec extends TurboModule {
   readonly onUploadOwnershipProgress: EventEmitter<NativeRecordingTransferProgress>;
   readonly onFirmwareUpdateProgress: EventEmitter<NativeFirmwareUpdateProgress>;
   readonly onDeviceLog: EventEmitter<NativeDeviceLogLine>;
+  readonly onWiFiStatusUpdated: EventEmitter<NativeWiFiStatusInfo>;
   configure: (configuration: NativeConfiguration) => Promise<void>;
   connectSelected: (
     device: NativeDiscoveredDevice
@@ -189,6 +214,15 @@ export interface Spec extends TurboModule {
   destroy: () => Promise<void>;
   deprovision: (device: NativeConnectedDevice) => Promise<void>;
   disconnect: () => Promise<void>;
+  configureWiFi: (
+    device: NativeConnectedDevice,
+    ssid: string,
+    password: string,
+    grantBlob: string
+  ) => Promise<NativeWiFiConfigResult>;
+  disconnectWiFi: (
+    device: NativeConnectedDevice
+  ) => Promise<NativeWiFiConfigResult>;
   factoryReset: (
     device: NativeConnectedDevice,
     commandId: string,
@@ -229,10 +263,18 @@ export interface Spec extends TurboModule {
   ) => Promise<NativeDeviceConnectionSettings>;
   startScan: (timeoutMs: number, allowDuplicates: boolean) => Promise<void>;
   readStatus: () => Promise<NativeDeviceStatus>;
+  readWiFiStatus: (
+    device: NativeConnectedDevice
+  ) => Promise<NativeWiFiStatusInfo>;
+  scanWiFiNetworks: (
+    device: NativeConnectedDevice
+  ) => Promise<NativeDeviceWiFiScanResult>;
   startStatusUpdates: () => Promise<void>;
+  startWiFiStatusUpdates: (device: NativeConnectedDevice) => Promise<void>;
   startDeviceLogs: (device: NativeConnectedDevice) => Promise<void>;
   stopDeviceLogs: () => Promise<void>;
   stopStatusUpdates: () => Promise<void>;
+  stopWiFiStatusUpdates: () => Promise<void>;
   stopScan: () => Promise<void>;
   syncRecording: (
     device: NativeConnectedDevice,

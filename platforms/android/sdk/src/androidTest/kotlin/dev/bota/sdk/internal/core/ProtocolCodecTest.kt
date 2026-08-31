@@ -41,7 +41,7 @@ class ProtocolCodecTest {
                 assertTrue("${fixture.getString("name")}: $error", expectsError)
             }
         }
-        assertEquals(22, matched)
+        assertEquals(24, matched)
     }
 
     @Test
@@ -59,7 +59,7 @@ class ProtocolCodecTest {
                 assertTrue("${fixture.getString("name")}: $error", expectsError)
             }
         }
-        assertEquals(28, matched)
+        assertEquals(33, matched)
     }
 
     @Test
@@ -120,6 +120,10 @@ class ProtocolCodecTest {
                 "constantByte" -> byteArrayOf(BotaProtocolConstants.byteNamed(fixture.getString("constant")))
                 "createWiFiGrantPacket" -> mapper.createWiFiGrantPacket(input.getString("grantBlob"))
                 "createWiFiScanCommand" -> mapper.createWiFiScanCommand()
+                "createWiFiCredentialPacket" -> mapper.createWiFiCredentialPacket(
+                    input.getString("ssid"),
+                    input.getString("password"),
+                )
                 "identityBytes" -> mapper.encodeBoundedPayload(fixture.getString("inputHex").hexBytes())
                 "createAckPacket" -> mapper.createAckPacket(
                     AckType.fromFixture(input.getString("ackType")),
@@ -146,6 +150,8 @@ class ProtocolCodecTest {
                     mapper.parseTriggerDeviceUploadResponse(fixture.getString("inputHex").hexBytes())
                 "parseConnectionSettings" -> mapper.parseConnectionSettings(fixture.getString("inputHex").hexBytes())
                 "parseWiFiConfigResult" -> mapper.parseWiFiConfigResult(fixture.getString("inputHex").hexBytes())
+                "parseWiFiStatusInfo" -> mapper.parseWiFiStatusInfo(fixture.getString("inputHex").hexBytes())
+                "parseWiFiScanResult" -> mapper.parseWiFiScanResult(fixture.getString("inputHex").hexBytes())
                 "decodeDeviceLogs" -> fixture.getJSONArray("inputsHex").strings().forEach {
                     mapper.decodeDeviceLogs(it.hexBytes())
                 }
@@ -201,6 +207,8 @@ class ProtocolCodecTest {
             "parseTriggerDeviceUploadResponse",
             "parseConnectionSettings",
             "parseWiFiConfigResult",
+            "parseWiFiStatusInfo",
+            "parseWiFiScanResult",
             "decodeDeviceLogs",
         )
         val encodeOperations = setOf(
@@ -213,6 +221,7 @@ class ProtocolCodecTest {
             "constantByte",
             "createWiFiGrantPacket",
             "createWiFiScanCommand",
+            "createWiFiCredentialPacket",
             "identityBytes",
             "createAckPacket",
             "createTransferCommand",

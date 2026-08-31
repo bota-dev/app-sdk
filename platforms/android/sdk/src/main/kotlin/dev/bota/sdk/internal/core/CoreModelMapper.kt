@@ -26,6 +26,11 @@ import dev.bota.sdk.model.TransferPacket
 import dev.bota.sdk.model.TransferPacketType
 import dev.bota.sdk.model.TriggerDeviceUploadResponse
 import dev.bota.sdk.model.WiFiConfigResult
+import dev.bota.sdk.model.WiFiConnectionStatus
+import dev.bota.sdk.model.WiFiScanNetwork
+import dev.bota.sdk.model.WiFiScanUpdate
+import dev.bota.sdk.model.WiFiStatusInfo
+import dev.bota.sdk.model.DeviceWiFiScanResult
 import dev.bota.sdk.model.WifiRadioStatus
 import dev.bota.sdk.model.WireValue
 import java.time.Instant
@@ -186,6 +191,40 @@ internal class CoreModelMapper(
         }
     }
 
+    fun parseWiFiStatusInfo(data: ByteArray): WiFiStatusInfo {
+        val fields = decode(Protocol.Kind.DecodeWifiStatus, data)
+        return WiFiStatusInfo(
+            status = wifiConnectionStatus(fields.requiredUByte(Protocol.Field.StatusCode)),
+            signalStrength = fields.optionalUByte(Protocol.Field.WifiSignalStrength),
+            ssid = fields.text(Protocol.Field.WifiSsid),
+            lastError = fields.text(Protocol.Field.ErrorDetail),
+        )
+    }
+
+    fun parseWiFiScanResult(data: ByteArray): WiFiScanUpdate {
+        val fields = decode(Protocol.Kind.DecodeWifiScan, data)
+        val status = fields.requiredUByte(Protocol.Field.StatusCode)
+        if (status != 2.toUByte()) return WiFiScanUpdate.Pending(status)
+        val ssids = fields.texts(Protocol.Field.WifiSsid)
+        val qualities = fields.unsigneds(Protocol.Field.WifiQuality)
+        val current = fields.booleans(Protocol.Field.WifiIsCurrent)
+        val open = fields.booleans(Protocol.Field.WifiIsOpen)
+        if (listOf(qualities.size, current.size, open.size).any { it != ssids.size }) {
+            throw invalid("WiFi scan fields have inconsistent counts")
+        }
+        val networks = ssids.indices.map { index ->
+            WiFiScanNetwork(
+                ssid = ssids[index],
+                quality = qualities[index].toUByteExact("WiFi quality"),
+                isCurrent = current[index],
+                isOpen = open[index],
+            )
+        }
+        return WiFiScanUpdate.Done(
+            DeviceWiFiScanResult(networks, networks.firstOrNull { it.isCurrent }?.ssid),
+        )
+    }
+
     fun parseFactoryResetResult(data: ByteArray): FactoryResetResult {
         val fields = decode(Protocol.Kind.DecodeFactoryResetResult, data)
         return FactoryResetResult(
@@ -340,6 +379,14 @@ internal class CoreModelMapper(
 
     fun createWiFiScanCommand(): ByteArray = encode(Protocol.Kind.EncodeWifiScan, emptyList())
 
+    fun createWiFiCredentialPacket(ssid: String, password: String): ByteArray = encode(
+        Protocol.Kind.EncodeWifiCredentials,
+        listOf(
+            Field.text(Protocol.Field.WifiSsid, ssid),
+            Field.text(Protocol.Field.WifiPassword, password),
+        ),
+    )
+
     override fun close() {
         core.close()
     }
@@ -479,6 +526,15 @@ private fun wifiStatus(raw: UByte): WireValue<WifiRadioStatus> = when (raw.toInt
     else -> WireValue.Unknown(raw.toULong())
 }
 
+private fun wifiConnectionStatus(raw: UByte): WiFiConnectionStatus = when (raw.toInt()) {
+    0 -> WiFiConnectionStatus.Idle
+    1 -> WiFiConnectionStatus.Connecting
+    2 -> WiFiConnectionStatus.Connected
+    3 -> WiFiConnectionStatus.Failed
+    4 -> WiFiConnectionStatus.Disconnected
+    else -> WiFiConnectionStatus.Unknown(raw)
+}
+
 private fun audioCodec(raw: UByte): WireValue<AudioCodec> = when (raw.toInt()) {
     0x00 -> WireValue.Known(AudioCodec.Pcm16k)
     0x01 -> WireValue.Known(AudioCodec.Pcm8k)
@@ -607,6 +663,8 @@ private object Protocol {
         const val DecodeFactoryResetResult = 0x0508
         const val DecodeConnectionSettings = 0x0509
         const val DecodeDeviceLogs = 0x050a
+        const val DecodeWifiStatus = 0x050b
+        const val DecodeWifiScan = 0x050c
         const val EncodeAck = 0x0510
         const val EncodeTransferCommand = 0x0511
         const val EncodeDeviceCommand = 0x0512
@@ -619,6 +677,7 @@ private object Protocol {
         const val EncodeBoundedPayload = 0x0519
         const val EncodeWifiGrant = 0x051a
         const val EncodeWifiScan = 0x051b
+        const val EncodeWifiCredentials = 0x051d
     }
 
     object Field {
@@ -686,5 +745,13 @@ private object Protocol {
         const val ErrorCode = 47
         const val LogMessage = 46
         const val IsBacklog = 51
+        const val ErrorDetail = 50
+        const val StatusCode = 60
+        const val WifiSsid = 114
+        const val WifiSignalStrength = 115
+        const val WifiQuality = 116
+        const val WifiIsCurrent = 117
+        const val WifiIsOpen = 118
+        const val WifiPassword = 119
     }
 }

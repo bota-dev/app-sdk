@@ -14,6 +14,10 @@ enum BotaBluetoothUUIDs {
     static let deviceSettings = "B07A0003-0006-1000-8000-00805F9B34FB"
     static let recordingList = "B07A0004-0002-1000-8000-00805F9B34FB"
     static let transferControl = "B07A0004-0004-1000-8000-00805F9B34FB"
+    static let wifiGrant = "B07A0006-0001-1000-8000-00805F9B34FB"
+    static let wifiCredential = "B07A0006-0002-1000-8000-00805F9B34FB"
+    static let wifiStatus = "B07A0006-0003-1000-8000-00805F9B34FB"
+    static let wifiScan = "B07A0006-0004-1000-8000-00805F9B34FB"
 
     static let botaServices = [
         audioService,

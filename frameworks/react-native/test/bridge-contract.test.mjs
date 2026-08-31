@@ -20,6 +20,7 @@ test('Codegen contract freezes the lifecycle module identity and methods', () =>
   assert.match(source, /readonly onUploadOwnershipProgress:\s*EventEmitter/);
   assert.match(source, /readonly onFirmwareUpdateProgress:\s*EventEmitter/);
   assert.match(source, /readonly onDeviceLog:\s*EventEmitter/);
+  assert.match(source, /readonly onWiFiStatusUpdated:\s*EventEmitter/);
   assert.match(source, /startScan:\s*\(/);
   assert.match(source, /stopScan:\s*\(/);
   assert.match(source, /connectSelected:\s*\(/);
@@ -43,6 +44,12 @@ test('Codegen contract freezes the lifecycle module identity and methods', () =>
   assert.match(source, /readStatus:\s*\(/);
   assert.match(source, /startStatusUpdates:\s*\(/);
   assert.match(source, /stopStatusUpdates:\s*\(/);
+  assert.match(source, /configureWiFi:\s*\(/);
+  assert.match(source, /disconnectWiFi:\s*\(/);
+  assert.match(source, /readWiFiStatus:\s*\(/);
+  assert.match(source, /startWiFiStatusUpdates:\s*\(/);
+  assert.match(source, /stopWiFiStatusUpdates:\s*\(/);
+  assert.match(source, /scanWiFiNetworks:\s*\(/);
   assert.match(source, /destroy:\s*\(/);
   assert.match(source, /getCapabilities:\s*\(/);
   assert.match(source, /getState:\s*\(/);
@@ -63,6 +70,7 @@ test('package root exports the React Native device facade types', () => {
   assert.match(source, /BotaUploadOwnershipResult/);
   assert.match(source, /BotaDeviceSDKOTAClient/);
   assert.match(source, /BotaDeviceSDKLogClient/);
+  assert.match(source, /BotaDeviceSDKWiFiClient/);
   assert.match(source, /BotaEventSubscription/);
   assert.match(source, /BotaAsyncEventSubscription/);
   assert.match(source, /BotaProvisioningMaterialProvider/);

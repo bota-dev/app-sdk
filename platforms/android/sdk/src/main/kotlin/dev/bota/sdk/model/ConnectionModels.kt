@@ -51,3 +51,36 @@ public sealed interface WiFiConfigResult {
     public data object StorageError : WiFiConfigResult
     public data class Unknown(public val rawValue: UByte) : WiFiConfigResult
 }
+
+public sealed interface WiFiConnectionStatus {
+    public data object Idle : WiFiConnectionStatus
+    public data object Connecting : WiFiConnectionStatus
+    public data object Connected : WiFiConnectionStatus
+    public data object Failed : WiFiConnectionStatus
+    public data object Disconnected : WiFiConnectionStatus
+    public data class Unknown(public val rawValue: UByte) : WiFiConnectionStatus
+}
+
+public data class WiFiStatusInfo(
+    public val status: WiFiConnectionStatus,
+    public val signalStrength: UByte? = null,
+    public val ssid: String? = null,
+    public val lastError: String? = null,
+)
+
+public data class WiFiScanNetwork(
+    public val ssid: String,
+    public val quality: UByte,
+    public val isCurrent: Boolean,
+    public val isOpen: Boolean,
+)
+
+public data class DeviceWiFiScanResult(
+    public val networks: List<WiFiScanNetwork>,
+    public val currentSsid: String?,
+)
+
+internal sealed interface WiFiScanUpdate {
+    data class Pending(val rawStatus: UByte) : WiFiScanUpdate
+    data class Done(val result: DeviceWiFiScanResult) : WiFiScanUpdate
+}

@@ -83,3 +83,60 @@ public enum WiFiConfigResult: Equatable, Sendable {
     case storageError
     case unknown(UInt8)
 }
+
+public enum WiFiConnectionStatus: Equatable, Sendable {
+    case idle
+    case connecting
+    case connected
+    case failed
+    case disconnected
+    case unknown(UInt8)
+}
+
+public struct WiFiStatusInfo: Equatable, Sendable {
+    public var status: WiFiConnectionStatus
+    public var signalStrength: UInt8?
+    public var ssid: String?
+    public var lastError: String?
+
+    public init(
+        status: WiFiConnectionStatus,
+        signalStrength: UInt8? = nil,
+        ssid: String? = nil,
+        lastError: String? = nil
+    ) {
+        self.status = status
+        self.signalStrength = signalStrength
+        self.ssid = ssid
+        self.lastError = lastError
+    }
+}
+
+public struct WiFiScanNetwork: Equatable, Sendable {
+    public var ssid: String
+    public var quality: UInt8
+    public var isCurrent: Bool
+    public var isOpen: Bool
+
+    public init(ssid: String, quality: UInt8, isCurrent: Bool, isOpen: Bool) {
+        self.ssid = ssid
+        self.quality = quality
+        self.isCurrent = isCurrent
+        self.isOpen = isOpen
+    }
+}
+
+public struct DeviceWiFiScanResult: Equatable, Sendable {
+    public var networks: [WiFiScanNetwork]
+    public var currentSSID: String?
+
+    public init(networks: [WiFiScanNetwork], currentSSID: String?) {
+        self.networks = networks
+        self.currentSSID = currentSSID
+    }
+}
+
+enum WiFiScanUpdate: Equatable, Sendable {
+    case pending(UInt8)
+    case done(DeviceWiFiScanResult)
+}

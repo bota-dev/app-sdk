@@ -109,12 +109,23 @@
     {
       "feature": "wifi_configuration",
       "earliestKnownFirmware": "1.0.17",
-      "validFixtures": ["wifi-grant-packet", "wifi-scan-command", "wifi-config-expired"],
+      "validFixtures": [
+        "wifi-grant-packet",
+        "wifi-credential-packet",
+        "wifi-disconnect-packet",
+        "wifi-scan-command",
+        "wifi-config-expired",
+        "wifi-status-connected",
+        "wifi-status-short-failed",
+        "wifi-scan-scanning",
+        "wifi-scan-done",
+        "wifi-scan-error"
+      ],
       "invalidFixtures": [],
       "rust": { "decode": true, "encode": true },
       "reactNativeBaseline": true,
       "status": "partial",
-      "gap": "No malformed WiFi result or oversize grant fixture yet."
+      "gap": "No explicit oversize WiFi grant fixture yet."
     },
     {
       "feature": "provisioning_and_device_commands",

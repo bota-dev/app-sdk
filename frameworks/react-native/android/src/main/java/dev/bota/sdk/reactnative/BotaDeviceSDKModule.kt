@@ -25,6 +25,7 @@ internal class BotaDeviceSDKModule(
     private val ota = BotaDeviceSDKAndroidOTA()
     private val recordings = BotaDeviceSDKAndroidRecordings()
     private val security = BotaDeviceSDKAndroidSecurity()
+    private val wifi = BotaDeviceSDKAndroidWiFi(BotaDeviceSDKSharedAndroidWiFiClient(), scope)
 
     override fun configure(configuration: ReadableMap, promise: Promise) {
         val storageDirectory =
@@ -41,6 +42,7 @@ internal class BotaDeviceSDKModule(
     override fun destroy(promise: Promise) {
         launch(promise) {
             security.cancelAll()
+            wifi.cancelAll()
             logs.cancelAll()
             ota.cancelAll()
             recordings.cancelAll()
@@ -81,6 +83,42 @@ internal class BotaDeviceSDKModule(
 
     override fun disconnect(promise: Promise) {
         launch(promise) { devices.disconnect() }
+    }
+
+    override fun configureWiFi(
+        device: ReadableMap,
+        ssid: String,
+        password: String,
+        grantBlob: String,
+        promise: Promise,
+    ) {
+        launchValue(promise) {
+            wifi.configure(device.toConnectedDevice(), ssid, password, grantBlob).toWritableMap()
+        }
+    }
+
+    override fun disconnectWiFi(device: ReadableMap, promise: Promise) {
+        launchValue(promise) { wifi.disconnect(device.toConnectedDevice()).toWritableMap() }
+    }
+
+    override fun readWiFiStatus(device: ReadableMap, promise: Promise) {
+        launchValue(promise) { wifi.readStatus(device.toConnectedDevice()).toWritableMap() }
+    }
+
+    override fun startWiFiStatusUpdates(device: ReadableMap, promise: Promise) {
+        launch(promise) {
+            wifi.startStatusUpdates(device.toConnectedDevice()) {
+                emitOnWiFiStatusUpdated(it.toWritableMap())
+            }
+        }
+    }
+
+    override fun stopWiFiStatusUpdates(promise: Promise) {
+        launch(promise) { wifi.stopStatusUpdates() }
+    }
+
+    override fun scanWiFiNetworks(device: ReadableMap, promise: Promise) {
+        launchValue(promise) { wifi.scanNetworks(device.toConnectedDevice()).toWritableMap() }
     }
 
     override fun listRecordings(device: ReadableMap, promise: Promise) {
@@ -284,6 +322,7 @@ internal class BotaDeviceSDKModule(
         scope.launch {
             try {
                 security.cancelAll()
+                wifi.cancelAll()
                 logs.cancelAll()
                 ota.cancelAll()
                 recordings.cancelAll()

@@ -23,6 +23,10 @@ import dev.bota.sdk.model.ModemInfo
 import dev.bota.sdk.model.PairingState
 import dev.bota.sdk.model.RecordingTransferProgress
 import dev.bota.sdk.model.WifiRadioStatus
+import dev.bota.sdk.model.DeviceWiFiScanResult
+import dev.bota.sdk.model.WiFiConfigResult
+import dev.bota.sdk.model.WiFiConnectionStatus
+import dev.bota.sdk.model.WiFiStatusInfo
 import dev.bota.sdk.model.WireValue
 import java.time.Instant
 
@@ -190,6 +194,53 @@ internal fun FirmwareUpdateProgress.toWritableMap(): WritableMap = Arguments.cre
 internal fun DeviceLogLine.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putString("message", message)
     putBoolean("isBacklog", isBacklog)
+}
+
+internal fun WiFiConfigResult.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    when (this@toWritableMap) {
+        WiFiConfigResult.Success -> putBoolean("success", true)
+        WiFiConfigResult.InvalidGrant -> {
+            putBoolean("success", false)
+            putString("error", "invalid_grant")
+        }
+        WiFiConfigResult.GrantExpired -> {
+            putBoolean("success", false)
+            putString("error", "grant_expired")
+        }
+        WiFiConfigResult.DecryptionError -> {
+            putBoolean("success", false)
+            putString("error", "decryption_error")
+        }
+        WiFiConfigResult.StorageError -> {
+            putBoolean("success", false)
+            putString("error", "storage_error")
+        }
+        is WiFiConfigResult.Unknown -> {
+            putBoolean("success", false)
+            putString("error", "unknown")
+        }
+    }
+}
+
+internal fun WiFiStatusInfo.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putString("status", status.toBridgeValue())
+    signalStrength?.let { putInt("signalStrength", it.toInt()) }
+    ssid?.let { putString("ssid", it) }
+    lastError?.let { putString("lastError", it) }
+}
+
+internal fun DeviceWiFiScanResult.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putArray("networks", Arguments.createArray().apply {
+        networks.forEach { network ->
+            pushMap(Arguments.createMap().apply {
+                putString("ssid", network.ssid)
+                putInt("quality", network.quality.toInt())
+                putBoolean("isCurrent", network.isCurrent)
+                putBoolean("isOpen", network.isOpen)
+            })
+        }
+    })
+    currentSsid?.let { putString("currentSsid", it) }
 }
 
 internal fun DeviceStatus.toWritableMap(): WritableMap = Arguments.createMap().apply {
@@ -384,4 +435,13 @@ private fun WireValue<WifiRadioStatus>.toWifiStatusBridgeValue(): String = when 
         WifiRadioStatus.Error -> "error"
     }
     is WireValue.Unknown -> "off"
+}
+
+private fun WiFiConnectionStatus.toBridgeValue(): String = when (this) {
+    WiFiConnectionStatus.Idle -> "idle"
+    WiFiConnectionStatus.Connecting -> "connecting"
+    WiFiConnectionStatus.Connected -> "connected"
+    WiFiConnectionStatus.Failed -> "failed"
+    WiFiConnectionStatus.Disconnected -> "disconnected"
+    is WiFiConnectionStatus.Unknown -> "idle"
 }

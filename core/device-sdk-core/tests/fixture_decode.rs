@@ -2,8 +2,10 @@ use bota_device_sdk_core::{
     model::{ConnectionType, DeviceState},
     protocol::{
         DeviceLogDecoder, ParsedConnectionSettings, TransferPacket, WiFiConfigResult,
-        parse_connection_settings, parse_device_status, parse_ota_status, parse_recording_list,
-        parse_transfer_packet, parse_trigger_upload_response, parse_wifi_config_result,
+        WiFiScanUpdate, WiFiStatus, parse_connection_settings, parse_device_status,
+        parse_ota_status, parse_recording_list, parse_transfer_packet,
+        parse_trigger_upload_response, parse_wifi_config_result, parse_wifi_scan_result,
+        parse_wifi_status_info,
     },
 };
 use serde_json::{Map, Value, json};
@@ -36,7 +38,7 @@ fn decode_fixtures_match_react_native_compatibility_values() {
             }
         }
     }
-    assert_eq!(matched, 28);
+    assert_eq!(matched, 33);
 }
 
 #[test]
@@ -49,6 +51,8 @@ fn parsers_never_panic_for_short_or_oversized_deterministic_input() {
         let _ = parse_trigger_upload_response(&bytes);
         let _ = parse_connection_settings(&bytes);
         let _ = parse_wifi_config_result(&bytes);
+        let _ = parse_wifi_status_info(&bytes);
+        let _ = parse_wifi_scan_result(&bytes);
         let _ = parse_ota_status(&bytes);
         let mut decoder = DeviceLogDecoder::default();
         let _ = decoder.push(&bytes);
@@ -78,6 +82,8 @@ fn decode_fixture(fixture_case: &Value) -> Option<Result<Value, String>> {
         }
         "parseConnectionSettings" => parse_connection_settings(&bytes).map(settings_json),
         "parseWiFiConfigResult" => parse_wifi_config_result(&bytes).map(wifi_config_json),
+        "parseWiFiStatusInfo" => parse_wifi_status_info(&bytes).map(wifi_status_json),
+        "parseWiFiScanResult" => parse_wifi_scan_result(&bytes).map(wifi_scan_json),
         "decodeDeviceLogs" => {
             let mut decoder = DeviceLogDecoder::default();
             Ok(Value::Array(
@@ -106,6 +112,46 @@ fn decode_fixture(fixture_case: &Value) -> Option<Result<Value, String>> {
         _ => return None,
     };
     Some(result.map_err(|error| error.to_string()))
+}
+
+fn wifi_status_json(info: bota_device_sdk_core::protocol::WiFiStatusInfo) -> Value {
+    let mut value = Map::new();
+    value.insert(
+        "status".into(),
+        match info.status {
+            WiFiStatus::Idle | WiFiStatus::Unknown(_) => "idle",
+            WiFiStatus::Connecting => "connecting",
+            WiFiStatus::Connected => "connected",
+            WiFiStatus::Failed => "failed",
+            WiFiStatus::Disconnected => "disconnected",
+        }
+        .into(),
+    );
+    if let Some(signal_strength) = info.signal_strength {
+        value.insert("signalStrength".into(), signal_strength.into());
+    }
+    if let Some(ssid) = info.ssid {
+        value.insert("ssid".into(), ssid.into());
+    }
+    if let Some(last_error) = info.last_error {
+        value.insert("lastError".into(), last_error.into());
+    }
+    Value::Object(value)
+}
+
+fn wifi_scan_json(update: WiFiScanUpdate) -> Value {
+    match update {
+        WiFiScanUpdate::Pending(_) => Value::Null,
+        WiFiScanUpdate::Done(result) => json!({
+            "networks": result.networks.into_iter().map(|network| json!({
+                "ssid": network.ssid,
+                "quality": network.quality,
+                "isCurrent": network.is_current,
+                "isOpen": network.is_open,
+            })).collect::<Vec<_>>(),
+            "currentSsid": result.current_ssid,
+        }),
+    }
 }
 
 fn status_json(status: bota_device_sdk_core::model::DeviceStatus) -> Value {

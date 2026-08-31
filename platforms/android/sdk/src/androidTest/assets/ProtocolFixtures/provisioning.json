@@ -51,6 +51,54 @@
       "expected": { "success": false, "error": "grant_expired" }
     },
     {
+      "name": "wifi-credential-packet",
+      "operation": "createWiFiCredentialPacket",
+      "input": { "ssid": "Bota", "password": "secret" },
+      "expectedHex": "04426f746106736563726574"
+    },
+    {
+      "name": "wifi-disconnect-packet",
+      "operation": "createWiFiCredentialPacket",
+      "input": { "ssid": "", "password": "" },
+      "expectedHex": "00"
+    },
+    {
+      "name": "wifi-status-connected",
+      "operation": "parseWiFiStatusInfo",
+      "inputHex": "025704426f7461",
+      "expected": { "status": "connected", "signalStrength": 87, "ssid": "Bota" }
+    },
+    {
+      "name": "wifi-status-short-failed",
+      "operation": "parseWiFiStatusInfo",
+      "inputHex": "03",
+      "expected": { "status": "failed" }
+    },
+    {
+      "name": "wifi-scan-scanning",
+      "operation": "parseWiFiScanResult",
+      "inputHex": "01",
+      "expected": null
+    },
+    {
+      "name": "wifi-scan-done",
+      "operation": "parseWiFiScanResult",
+      "inputHex": "020204426f746164030547756573743202",
+      "expected": {
+        "networks": [
+          { "ssid": "Bota", "quality": 100, "isCurrent": true, "isOpen": true },
+          { "ssid": "Guest", "quality": 50, "isCurrent": false, "isOpen": true }
+        ],
+        "currentSsid": "Bota"
+      }
+    },
+    {
+      "name": "wifi-scan-error",
+      "operation": "parseWiFiScanResult",
+      "inputHex": "0300",
+      "expectedError": "protocol_rejected"
+    },
+    {
       "name": "pk-d-raw-bytes",
       "operation": "identityBytes",
       "inputHex": "000102030405060708090a0b0c0d0e0f",

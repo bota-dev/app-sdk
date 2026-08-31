@@ -109,6 +109,12 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `isBacklog` values, which JavaScript maps to the frozen `DeviceLogEvent`
   shape. Subscribe before starting native logs, and stop native ownership
   exactly once when the asynchronous subscription is removed.
+- `BotaDeviceSDK.wifi` delegates configuration, disconnect, status reads,
+  status subscriptions, and device-side scans to the native facades. JavaScript
+  carries typed credentials and the encoded application grant but never BLE
+  packet bytes. Apple and Android subscribe before result-producing writes,
+  share the Rust status and scan decoders, preserve unknown status as frozen
+  `idle`, and stop each owned notification stream exactly once.
 - Keep the Codegen names `BotaDeviceSDKSpec` and `BotaDeviceSDK` frozen. Import
   uses optional TurboModule lookup; missing native code fails on invocation as
   `native_module_unavailable`, not while the JavaScript module is imported.

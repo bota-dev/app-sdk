@@ -12,7 +12,7 @@ physical-device parity gates.
 ## Current Status
 
 The App SDK is preparing synchronized native release `1.1.0`: the repository has a generated
-protocol manifest, 50 language-neutral compatibility fixtures, bounded Rust
+protocol manifest, 55 language-neutral compatibility fixtures, bounded Rust
 decoders, byte-exact serializers, stable models/errors, and deterministic
 discovery, connection-recovery, provisioning, authenticated-reset, resumable
 recording-transfer, guarded upload-handoff, and resumable firmware-update
@@ -29,8 +29,9 @@ validates a low-volume lifecycle, device-connection, device-status,
 nonce-bound provisioning, native-decoded connection-settings reads and
 normalized writes,
 authenticated-reset, native-file recording transfer, guarded upload ownership,
-native-download OTA, and sanitized device-log TurboModule contract for iOS and
-Android, and
+native-download OTA, sanitized device-log, and native-owned WiFi configuration,
+disconnect, status, status-subscription, and scan TurboModule contracts for iOS
+and Android, and
 rejects Codegen drift or bridge fields that could carry recording bytes,
 firmware bytes, or raw log packets. Its Apple lifecycle adapter now serializes
 configuration and destruction through `BotaAppleSDK`; its device adapter owns
@@ -50,7 +51,7 @@ typed event emitter,
 Objective-C++, Swift, Swift Package, and Rust XCFramework layers compile and
 link together. Its Android adapters provide the same lifecycle, connection,
 status, provisioning, connection-settings reads and writes, authenticated-reset,
-recording-transfer, upload ownership, OTA, and device-log slices through
+recording-transfer, upload ownership, OTA, device-log, and WiFi slices through
 `BotaDeviceClient.shared`; a checked-in React Native Gradle consumer runs
 Codegen, Kotlin tests, lint, and release assembly against the exact locally
 packaged AAR. The package now
@@ -65,7 +66,7 @@ It produces a version-synchronized, unsigned local AAR with sources, Dokka
 Javadocs, POM, and Gradle metadata. The AAR now packages the frozen Rust ABI and
 thin JNI ownership adapter for four Android ABIs; real API 35 instrumentation
 proves typed codec calls, workflow polling, and exact-once native ownership.
-Immutable public Kotlin models now map all 50 canonical protocol fixtures
+Immutable public Kotlin models now map all 55 canonical protocol fixtures
 through the Rust codec, preserve unknown wire values, normalize Bota Note
 settings, and expose stable machine-readable errors. A single-thread coroutine
 runtime now owns every Android JNI call, preserves 128-bit cancellation and

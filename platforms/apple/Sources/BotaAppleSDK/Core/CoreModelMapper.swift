@@ -142,6 +142,45 @@ final class CoreModelMapper: @unchecked Sendable {
         }
     }
 
+    func parseWiFiStatusInfo(_ data: Data) throws -> WiFiStatusInfo {
+        let fields = try decode(BotaPrivateProtocol.decodeWiFiStatus, data)
+        return WiFiStatusInfo(
+            status: Self.wifiConnectionStatus(
+                try fields.requiredUInt8(UInt32(BOTA_DEVICE_SDK_V1_FIELD_STATUS_CODE))
+            ),
+            signalStrength: try fields.optionalUInt8(
+                BotaPrivateProtocol.wifiSignalStrength
+            ),
+            ssid: fields.text(BotaPrivateProtocol.wifiSSID),
+            lastError: fields.text(UInt32(BOTA_DEVICE_SDK_V1_FIELD_ERROR_DETAIL))
+        )
+    }
+
+    func parseWiFiScanResult(_ data: Data) throws -> WiFiScanUpdate {
+        let fields = try decode(BotaPrivateProtocol.decodeWiFiScan, data)
+        let status = try fields.requiredUInt8(UInt32(BOTA_DEVICE_SDK_V1_FIELD_STATUS_CODE))
+        guard status == 2 else { return .pending(status) }
+        let ssids = fields.texts(BotaPrivateProtocol.wifiSSID)
+        let qualities = fields.unsigneds(BotaPrivateProtocol.wifiQuality)
+        let current = fields.bools(BotaPrivateProtocol.wifiIsCurrent)
+        let open = fields.bools(BotaPrivateProtocol.wifiIsOpen)
+        guard [qualities.count, current.count, open.count].allSatisfy({ $0 == ssids.count }) else {
+            throw Self.invalid("WiFi scan fields have inconsistent counts")
+        }
+        let networks = try ssids.indices.map { index in
+            WiFiScanNetwork(
+                ssid: ssids[index],
+                quality: try Self.uint8(qualities[index], "WiFi quality"),
+                isCurrent: current[index],
+                isOpen: open[index]
+            )
+        }
+        return .done(DeviceWiFiScanResult(
+            networks: networks,
+            currentSSID: networks.first(where: \.isCurrent)?.ssid
+        ))
+    }
+
     func parseFactoryResetResult(_ data: Data) throws -> FactoryResetResult {
         let fields = try decode(UInt32(BOTA_DEVICE_SDK_V1_PROTOCOL_DECODE_FACTORY_RESET_RESULT), data)
         return FactoryResetResult(
@@ -315,6 +354,16 @@ final class CoreModelMapper: @unchecked Sendable {
         try encode(UInt32(BOTA_DEVICE_SDK_V1_PROTOCOL_ENCODE_WIFI_SCAN), fields: [])
     }
 
+    func createWiFiCredentialPacket(ssid: String, password: String) throws -> Data {
+        try encode(
+            BotaPrivateProtocol.encodeWiFiCredentials,
+            fields: [
+                .text(id: BotaPrivateProtocol.wifiSSID, value: ssid),
+                .text(id: BotaPrivateProtocol.wifiPassword, value: password),
+            ]
+        )
+    }
+
     private func decode(_ kind: UInt32, _ data: Data) throws -> PacketFields {
         do {
             let packet = try client.protocolDecode(Self.protocolPacket(kind: kind, fields: [
@@ -389,6 +438,17 @@ final class CoreModelMapper: @unchecked Sendable {
         }
     }
 
+    private static func wifiConnectionStatus(_ raw: UInt8) -> WiFiConnectionStatus {
+        switch raw {
+        case 0: .idle
+        case 1: .connecting
+        case 2: .connected
+        case 3: .failed
+        case 4: .disconnected
+        default: .unknown(raw)
+        }
+    }
+
     private static func audioCodec(_ raw: UInt8) -> WireValue<AudioCodec> {
         switch raw {
         case 0x00: return .known(.pcm16k)
@@ -447,6 +507,18 @@ final class CoreModelMapper: @unchecked Sendable {
     fileprivate static func invalid(_ detail: String) -> BotaSDKError {
         BotaSDKError(code: .invalidInput, operation: .decode, retryable: false, detail: detail)
     }
+}
+
+private enum BotaPrivateProtocol {
+    static let decodeWiFiStatus: UInt32 = 0x050B
+    static let decodeWiFiScan: UInt32 = 0x050C
+    static let encodeWiFiCredentials: UInt32 = 0x051D
+    static let wifiSSID: UInt32 = 114
+    static let wifiSignalStrength: UInt32 = 115
+    static let wifiQuality: UInt32 = 116
+    static let wifiIsCurrent: UInt32 = 117
+    static let wifiIsOpen: UInt32 = 118
+    static let wifiPassword: UInt32 = 119
 }
 
 enum BotaProtocolConstants {

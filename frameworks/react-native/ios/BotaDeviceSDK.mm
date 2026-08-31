@@ -121,6 +121,135 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
   }];
 }
 
+- (void)configureWiFi:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                  ssid:(NSString *)ssid
+              password:(NSString *)password
+             grantBlob:(NSString *)grantBlob
+               resolve:(RCTPromiseResolveBlock)resolve
+                reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      configureWiFiWithID:device.id_()
+              serialNumber:device.serialNumber()
+                deviceType:device.deviceType()
+           firmwareVersion:device.firmwareVersion()
+           hardwareRevision:device.hardwareRevision()
+             isProvisioned:device.isProvisioned()
+           connectionState:device.connectionState()
+                       mtu:device.mtu()
+                      ssid:ssid
+                  password:password
+                 grantBlob:grantBlob
+                completion:^(NSDictionary *_Nullable result, NSError *_Nullable error) {
+                  if (error != nil) {
+                    BotaRejectAppleError(error, reject);
+                    return;
+                  }
+                  resolve(result);
+                }];
+}
+
+- (void)disconnectWiFi:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                resolve:(RCTPromiseResolveBlock)resolve
+                 reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      disconnectWiFiWithID:device.id_()
+              serialNumber:device.serialNumber()
+                deviceType:device.deviceType()
+           firmwareVersion:device.firmwareVersion()
+           hardwareRevision:device.hardwareRevision()
+             isProvisioned:device.isProvisioned()
+           connectionState:device.connectionState()
+                       mtu:device.mtu()
+                completion:^(NSDictionary *_Nullable result, NSError *_Nullable error) {
+                  if (error != nil) {
+                    BotaRejectAppleError(error, reject);
+                    return;
+                  }
+                  resolve(result);
+                }];
+}
+
+- (void)readWiFiStatus:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                resolve:(RCTPromiseResolveBlock)resolve
+                 reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      readWiFiStatusWithID:device.id_()
+              serialNumber:device.serialNumber()
+                deviceType:device.deviceType()
+           firmwareVersion:device.firmwareVersion()
+           hardwareRevision:device.hardwareRevision()
+             isProvisioned:device.isProvisioned()
+           connectionState:device.connectionState()
+                       mtu:device.mtu()
+                completion:^(NSDictionary *_Nullable status, NSError *_Nullable error) {
+                  if (error != nil) {
+                    BotaRejectAppleError(error, reject);
+                    return;
+                  }
+                  resolve(status);
+                }];
+}
+
+- (void)startWiFiStatusUpdates:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                        resolve:(RCTPromiseResolveBlock)resolve
+                         reject:(RCTPromiseRejectBlock)reject
+{
+  __weak BotaDeviceSDK *weakSelf = self;
+  [[BotaDeviceSDKAppleBridge shared]
+      startWiFiStatusUpdatesWithID:device.id_()
+                       serialNumber:device.serialNumber()
+                         deviceType:device.deviceType()
+                    firmwareVersion:device.firmwareVersion()
+                    hardwareRevision:device.hardwareRevision()
+                      isProvisioned:device.isProvisioned()
+                    connectionState:device.connectionState()
+                                mtu:device.mtu()
+                           onStatus:^(NSDictionary *status) {
+                             [weakSelf emitOnWiFiStatusUpdated:status];
+                           }
+                            onError:^(__unused NSError *error) {}
+                         completion:^(NSError *_Nullable error) {
+                           if (error != nil) {
+                             BotaRejectAppleError(error, reject);
+                             return;
+                           }
+                           resolve(nil);
+                         }];
+}
+
+- (void)stopWiFiStatusUpdates:(RCTPromiseResolveBlock)resolve
+                        reject:(__unused RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared] stopWiFiStatusUpdatesWithCompletion:^{
+    resolve(nil);
+  }];
+}
+
+- (void)scanWiFiNetworks:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                  resolve:(RCTPromiseResolveBlock)resolve
+                   reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      scanWiFiNetworksWithID:device.id_()
+              serialNumber:device.serialNumber()
+                deviceType:device.deviceType()
+           firmwareVersion:device.firmwareVersion()
+           hardwareRevision:device.hardwareRevision()
+             isProvisioned:device.isProvisioned()
+           connectionState:device.connectionState()
+                       mtu:device.mtu()
+                completion:^(NSDictionary *_Nullable result, NSError *_Nullable error) {
+                  if (error != nil) {
+                    BotaRejectAppleError(error, reject);
+                    return;
+                  }
+                  resolve(result);
+                }];
+}
+
 - (void)listRecordings:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
                 resolve:(RCTPromiseResolveBlock)resolve
                  reject:(RCTPromiseRejectBlock)reject

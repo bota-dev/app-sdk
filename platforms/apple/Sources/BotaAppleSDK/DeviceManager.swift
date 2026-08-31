@@ -70,6 +70,12 @@ struct DeviceRuntime: Sendable {
     let directWrite: @Sendable (String, String, String, Data) async throws -> Void
     let directSubscribe: @Sendable (String, String, String) async throws -> AsyncThrowingStream<Data, Error>
     let directUnsubscribe: @Sendable (String, String, String) async throws -> Void
+    let parseWiFiConfigResult: @Sendable (Data) throws -> WiFiConfigResult
+    let parseWiFiStatusInfo: @Sendable (Data) throws -> WiFiStatusInfo
+    let parseWiFiScanResult: @Sendable (Data) throws -> WiFiScanUpdate
+    let createWiFiGrantPacket: @Sendable (String) throws -> Data
+    let createWiFiCredentialPacket: @Sendable (String, String) throws -> Data
+    let createWiFiScanCommand: @Sendable () throws -> Data
     let parseConnectionSettings: @Sendable (Data) throws -> ParsedConnectionSettings
     let serializeConnectionSettings: @Sendable (DeviceConnectionSettings, DeviceType) throws -> Data
     let encodeDeviceCommand: @Sendable (UInt8) throws -> Data
@@ -109,6 +115,24 @@ struct DeviceRuntime: Sendable {
             throw NativeHostError.missingResource("direct device subscription")
         },
         directUnsubscribe: @escaping @Sendable (String, String, String) async throws -> Void = { _, _, _ in },
+        parseWiFiConfigResult: @escaping @Sendable (Data) throws -> WiFiConfigResult = { _ in
+            throw NativeHostError.missingResource("WiFi config-result decoder")
+        },
+        parseWiFiStatusInfo: @escaping @Sendable (Data) throws -> WiFiStatusInfo = { _ in
+            throw NativeHostError.missingResource("WiFi status decoder")
+        },
+        parseWiFiScanResult: @escaping @Sendable (Data) throws -> WiFiScanUpdate = { _ in
+            throw NativeHostError.missingResource("WiFi scan decoder")
+        },
+        createWiFiGrantPacket: @escaping @Sendable (String) throws -> Data = { _ in
+            throw NativeHostError.missingResource("WiFi grant encoder")
+        },
+        createWiFiCredentialPacket: @escaping @Sendable (String, String) throws -> Data = { _, _ in
+            throw NativeHostError.missingResource("WiFi credential encoder")
+        },
+        createWiFiScanCommand: @escaping @Sendable () throws -> Data = {
+            throw NativeHostError.missingResource("WiFi scan-command encoder")
+        },
         parseConnectionSettings: @escaping @Sendable (Data) throws -> ParsedConnectionSettings = { _ in
             throw NativeHostError.missingResource("connection-settings decoder")
         },
@@ -153,6 +177,12 @@ struct DeviceRuntime: Sendable {
         self.directWrite = directWrite
         self.directSubscribe = directSubscribe
         self.directUnsubscribe = directUnsubscribe
+        self.parseWiFiConfigResult = parseWiFiConfigResult
+        self.parseWiFiStatusInfo = parseWiFiStatusInfo
+        self.parseWiFiScanResult = parseWiFiScanResult
+        self.createWiFiGrantPacket = createWiFiGrantPacket
+        self.createWiFiCredentialPacket = createWiFiCredentialPacket
+        self.createWiFiScanCommand = createWiFiScanCommand
         self.parseConnectionSettings = parseConnectionSettings
         self.serializeConnectionSettings = serializeConnectionSettings
         self.encodeDeviceCommand = encodeDeviceCommand

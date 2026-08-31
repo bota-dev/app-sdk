@@ -92,8 +92,18 @@ constantGroups:
     WIFI_CONFIG_GRANT_EXPIRED: 2
     WIFI_CONFIG_DECRYPTION_ERROR: 3
     WIFI_CONFIG_STORAGE_ERROR: 4
+  wifi_connection_status:
+    WIFI_STATUS_IDLE: 0
+    WIFI_STATUS_CONNECTING: 1
+    WIFI_STATUS_CONNECTED: 2
+    WIFI_STATUS_FAILED: 3
+    WIFI_STATUS_DISCONNECTED: 4
   wifi_scan_commands:
     WIFI_SCAN_CMD_START: 1
+  wifi_scan_status:
+    WIFI_SCAN_STATUS_SCANNING: 1
+    WIFI_SCAN_STATUS_DONE: 2
+    WIFI_SCAN_STATUS_ERROR: 3
   transfer_commands:
     TRANSFER_CMD_LIST: 1
     TRANSFER_CMD_START: 2
@@ -260,6 +270,19 @@ layouts:
       - { name: streaming_enabled, offset: 7, width: 1, encoding: bool_u8 }
       - { name: flush_interval_seconds, offset: 8, width: 1, encoding: u8, optional: true }
       - { name: heartbeat_mask, offset: 9, width: 1, encoding: bitmask_u8, optional: true }
+  WIFI_STATUS:
+    minimumLength: 1
+    fields:
+      - { name: status, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: signal_quality, offset: 1, width: 1, encoding: u8, optional: true }
+      - { name: ssid_length, offset: 2, width: 1, encoding: u8, optional: true }
+      - { name: ssid, offset: 3, width: 0, encoding: utf8_variable, optional: true }
+  WIFI_SCAN_RESULT:
+    minimumLength: 1
+    fields:
+      - { name: status, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: network_count, offset: 1, width: 1, encoding: u8, optional: true }
+      - { name: networks, offset: 2, width: 0, encoding: wifi_scan_entries, optional: true }
   DEVICE_LOG_PACKET:
     minimumLength: 3
     fields:
@@ -295,3 +318,6 @@ limits:
   E2E_EPHEMERAL_PUBLIC_KEY_LENGTH: 32
   E2E_SALT_LENGTH: 4
   E2E_TAG_LENGTH: 16
+  WIFI_SSID_MAX_LENGTH: 32
+  WIFI_PASSWORD_MAX_LENGTH: 64
+  WIFI_SCAN_MAX_NETWORKS: 25

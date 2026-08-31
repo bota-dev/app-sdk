@@ -402,6 +402,29 @@
               }
             ]
           },
+          "NativeDeviceWiFiScanResult": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "networks",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "ArrayTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeWiFiScanNetwork"
+                  }
+                }
+              },
+              {
+                "name": "currentSsid",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
           "NativeDiscoveredDevice": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -863,6 +886,91 @@
                 }
               }
             ]
+          },
+          "NativeWiFiConfigResult": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "success",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "error",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeWiFiScanNetwork": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "ssid",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "quality",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "isCurrent",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "isOpen",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeWiFiStatusInfo": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "status",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "signalStrength",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "ssid",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "lastError",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
           }
         },
         "enumMap": {},
@@ -953,6 +1061,17 @@
                 "typeAnnotation": {
                   "type": "TypeAliasTypeAnnotation",
                   "name": "NativeDeviceLogLine"
+                }
+              }
+            },
+            {
+              "name": "onWiFiStatusUpdated",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeWiFiStatusInfo"
                 }
               }
             }
@@ -1054,6 +1173,75 @@
                   }
                 },
                 "params": []
+              }
+            },
+            {
+              "name": "configureWiFi",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeWiFiConfigResult"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "ssid",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "password",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "grantBlob",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "disconnectWiFi",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeWiFiConfigResult"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
               }
             },
             {
@@ -1427,6 +1615,54 @@
               }
             },
             {
+              "name": "readWiFiStatus",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeWiFiStatusInfo"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "scanWiFiNetworks",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeDeviceWiFiScanResult"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
+              }
+            },
+            {
               "name": "startStatusUpdates",
               "optional": false,
               "typeAnnotation": {
@@ -1438,6 +1674,29 @@
                   }
                 },
                 "params": []
+              }
+            },
+            {
+              "name": "startWiFiStatusUpdates",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
               }
             },
             {
@@ -1479,6 +1738,20 @@
             },
             {
               "name": "stopStatusUpdates",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": []
+              }
+            },
+            {
+              "name": "stopWiFiStatusUpdates",
               "optional": false,
               "typeAnnotation": {
                 "type": "FunctionTypeAnnotation",
@@ -1608,11 +1881,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "f645bcacf0463da6fce3351d8c3b1a6a8f97388e336c15effa2c39b1d9394ca5"
+        "sha256": "8c6cb8a0cff03e21ddba555e9266cd77f2e44c07dfa50940137bb438285d21b0"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "fe8fb71ddebaed8cb190d672c4bd92107ed35a5432c5c7feb5b8bc8edda72b5f"
+        "sha256": "786dca79f162d1f9960c4b665891b65316bd5c9b7ceab411b7f32186345632cd"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -1624,23 +1897,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "e428381382445d87fb431f9d78acfd6b394a8c14fe348c59e50b5bbb7505df8a"
+        "sha256": "375fc16eddc9f34d695682bd619f3e6eb8aa4e11f1af29b76bbe784465c84741"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "f506710b15b0447e733a77746f23753a673bea98bc94423087afafb8cb89619a"
+        "sha256": "ce3f57d91a30ecad881d216ac4e9c88a3232c7dfa31828818b9de860078ec605"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "36292f2d9cfcdee45521795fd9147ce94bda88d2c9ba011a90d3670fe20472c7"
+        "sha256": "20cf910d5f8a597e7613279404ffc42e0655587ae43bf72c5e0558a695d9a3c8"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "e428381382445d87fb431f9d78acfd6b394a8c14fe348c59e50b5bbb7505df8a"
+        "sha256": "375fc16eddc9f34d695682bd619f3e6eb8aa4e11f1af29b76bbe784465c84741"
       }
     ]
   },
-  "contractDigest": "6c1111df961764572ef6e9f1c534a6c4b150639b7373abeec3271c9245bfbf85"
+  "contractDigest": "3562ea0e08db53a669296d973c10957b9e267629b5dcee50d1f83e02b37a210f"
 }

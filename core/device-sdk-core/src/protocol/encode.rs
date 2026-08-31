@@ -16,6 +16,43 @@ pub fn encode_wifi_scan_command() -> Result<Vec<u8>, DeviceSdkError> {
     Ok(vec![protocol::WIFI_SCAN_CMD_START])
 }
 
+pub fn encode_wifi_credentials(ssid: &str, password: &str) -> Result<Vec<u8>, DeviceSdkError> {
+    let ssid = ssid.as_bytes();
+    let password = password.as_bytes();
+    if ssid.is_empty() {
+        if !password.is_empty() {
+            return Err(invalid_wifi_credentials(
+                "disconnect credentials must not include a password",
+            ));
+        }
+        return Ok(vec![0]);
+    }
+    if ssid.contains(&0) || password.contains(&0) {
+        return Err(invalid_wifi_credentials(
+            "WiFi credentials must not contain NUL bytes",
+        ));
+    }
+    if ssid.len() > protocol::WIFI_SSID_MAX_LENGTH {
+        return Err(payload_too_large(
+            ssid.len(),
+            protocol::WIFI_SSID_MAX_LENGTH,
+        ));
+    }
+    if password.len() > protocol::WIFI_PASSWORD_MAX_LENGTH {
+        return Err(payload_too_large(
+            password.len(),
+            protocol::WIFI_PASSWORD_MAX_LENGTH,
+        ));
+    }
+
+    let mut packet = Vec::with_capacity(2 + ssid.len() + password.len());
+    packet.push(ssid.len() as u8);
+    packet.extend_from_slice(ssid);
+    packet.push(password.len() as u8);
+    packet.extend_from_slice(password);
+    Ok(packet)
+}
+
 pub fn encode_provisioning_chunks(
     payload: &[u8],
     mtu: usize,
@@ -61,4 +98,8 @@ fn payload_too_large(length: usize, capacity: usize) -> DeviceSdkError {
     DeviceSdkError::new(ErrorCode::PayloadTooLarge, Operation::Encode, false).with_detail(format!(
         "payload has {length} bytes but capacity is {capacity}"
     ))
+}
+
+fn invalid_wifi_credentials(detail: &'static str) -> DeviceSdkError {
+    DeviceSdkError::new(ErrorCode::InvalidInput, Operation::Encode, false).with_detail(detail)
 }

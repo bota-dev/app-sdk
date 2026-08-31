@@ -87,8 +87,11 @@ The bridge contract contains configure, destroy, state, capabilities, device
 discovery, selected-device connect, serial-strict reconnect, disconnect, a
 device-status read, a typed device-status event subscription, nonce-bound
 provision/deprovision operations, native-file recording transfer, and guarded
-upload ownership, plus native-download firmware update and sanitized device-log
-subscription. Provisioning uses a
+upload ownership, plus native-download firmware update, sanitized device-log
+subscription, and WiFi configure, disconnect, status, status-subscription, and
+device-side scan operations. WiFi credentials and grant values cross Codegen as
+application inputs, while native facades own packet encoding, characteristic
+writes, notification ordering, parsing, and cancellation. Provisioning uses a
 one-shot application material event and response rather than separating
 nonce/public-key reads from the native workflow. Upload ownership passes opaque
 recording, upload, and destination identifiers into native code; JavaScript
@@ -156,7 +159,7 @@ target-scoped CocoaPods hook carries React Native's upstream fix for duplicate
 binary Swift-package module maps on Xcode 26.3 while the package floor remains
 0.86.3. This proves lifecycle plus device discovery, connection, status,
 provisioning, connection-settings reads and writes, authenticated-reset,
-recording-transfer, upload-ownership, OTA, and device-log integration, not the
+recording-transfer, upload-ownership, OTA, device-log, and WiFi integration, not the
 remaining workflow surface or application parity.
 
 The Android host is also executable. A coroutine mutex serializes
@@ -171,8 +174,8 @@ Gradle consumer regenerates Codegen, runs lifecycle unit tests and lint, and
 assembles the adapter against the exact AAR reconstructed from the immutable
 local Maven payload. This proves Android lifecycle plus device discovery,
 connection, status, provisioning, connection-settings reads and writes,
-authenticated-reset, recording-transfer, upload-ownership, OTA, and device-log
-integration only; the remaining workflow bindings and application parity
+authenticated-reset, recording-transfer, upload-ownership, OTA, device-log, and
+WiFi integration only; the remaining workflow bindings and application parity
 remain open.
 
 The React Native reset broker exposes only the nonce, command ID, binding
@@ -208,7 +211,7 @@ buffers may enter through direct `ByteBuffer` values without JSON or base64.
 The public Kotlin surface now also includes immutable device, recording,
 connection, progress, and stable error models. `CoreModelMapper` converts typed
 ABI fields but never parses or serializes a wire packet in Kotlin. API-35
-instrumentation runs all 50 language-neutral fixtures through JNI, including
+instrumentation runs all 55 language-neutral fixtures through JNI, including
 unknown values, encrypted payload metadata, settings, OTA, WiFi, and logs. No
 Kotlin workflow state machine exists: one closeable single-thread coroutine
 runtime submits all 10 commands to Rust, drains all 30 effect and 12

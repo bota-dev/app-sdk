@@ -649,6 +649,7 @@ public final class dev/bota/sdk/BotaDeviceClient {
 	public final fun getOta ()Ldev/bota/sdk/OTAManager;
 	public final fun getProvisioning ()Ldev/bota/sdk/ProvisioningManager;
 	public final fun getRecordings ()Ldev/bota/sdk/RecordingManager;
+	public final fun getWifi ()Ldev/bota/sdk/WiFiManager;
 }
 
 public final class dev/bota/sdk/BotaDeviceClient$Companion {
@@ -1156,6 +1157,15 @@ public final class dev/bota/sdk/UploadOwnershipResult$DeviceUploadPreserved : de
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class dev/bota/sdk/WiFiManager {
+	public final fun cancelCurrentOperation (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun configure (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun disconnect (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun readStatus (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun scanNetworks (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun statusUpdates (Ldev/bota/sdk/model/ConnectedDevice;)Lkotlinx/coroutines/flow/Flow;
+}
+
 public final class dev/bota/sdk/model/AckType : java/lang/Enum {
 	public static final field Abort Ldev/bota/sdk/model/AckType;
 	public static final field Ack Ldev/bota/sdk/model/AckType;
@@ -1447,6 +1457,19 @@ public final class dev/bota/sdk/model/DeviceType$Unknown : dev/bota/sdk/model/De
 	public static synthetic fun copy-7apg3OU$default (Ldev/bota/sdk/model/DeviceType$Unknown;BILjava/lang/Object;)Ldev/bota/sdk/model/DeviceType$Unknown;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getRawValue-w2LRezQ ()B
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/DeviceWiFiScanResult {
+	public fun <init> (Ljava/util/List;Ljava/lang/String;)V
+	public final fun component1 ()Ljava/util/List;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ljava/util/List;Ljava/lang/String;)Ldev/bota/sdk/model/DeviceWiFiScanResult;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/DeviceWiFiScanResult;Ljava/util/List;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/model/DeviceWiFiScanResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCurrentSsid ()Ljava/lang/String;
+	public final fun getNetworks ()Ljava/util/List;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
@@ -1810,6 +1833,90 @@ public final class dev/bota/sdk/model/WiFiConfigResult$Unknown : dev/bota/sdk/mo
 	public static synthetic fun copy-7apg3OU$default (Ldev/bota/sdk/model/WiFiConfigResult$Unknown;BILjava/lang/Object;)Ldev/bota/sdk/model/WiFiConfigResult$Unknown;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getRawValue-w2LRezQ ()B
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/bota/sdk/model/WiFiConnectionStatus {
+}
+
+public final class dev/bota/sdk/model/WiFiConnectionStatus$Connected : dev/bota/sdk/model/WiFiConnectionStatus {
+	public static final field INSTANCE Ldev/bota/sdk/model/WiFiConnectionStatus$Connected;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/WiFiConnectionStatus$Connecting : dev/bota/sdk/model/WiFiConnectionStatus {
+	public static final field INSTANCE Ldev/bota/sdk/model/WiFiConnectionStatus$Connecting;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/WiFiConnectionStatus$Disconnected : dev/bota/sdk/model/WiFiConnectionStatus {
+	public static final field INSTANCE Ldev/bota/sdk/model/WiFiConnectionStatus$Disconnected;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/WiFiConnectionStatus$Failed : dev/bota/sdk/model/WiFiConnectionStatus {
+	public static final field INSTANCE Ldev/bota/sdk/model/WiFiConnectionStatus$Failed;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/WiFiConnectionStatus$Idle : dev/bota/sdk/model/WiFiConnectionStatus {
+	public static final field INSTANCE Ldev/bota/sdk/model/WiFiConnectionStatus$Idle;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/WiFiConnectionStatus$Unknown : dev/bota/sdk/model/WiFiConnectionStatus {
+	public synthetic fun <init> (BLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-w2LRezQ ()B
+	public final fun copy-7apg3OU (B)Ldev/bota/sdk/model/WiFiConnectionStatus$Unknown;
+	public static synthetic fun copy-7apg3OU$default (Ldev/bota/sdk/model/WiFiConnectionStatus$Unknown;BILjava/lang/Object;)Ldev/bota/sdk/model/WiFiConnectionStatus$Unknown;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getRawValue-w2LRezQ ()B
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/WiFiScanNetwork {
+	public synthetic fun <init> (Ljava/lang/String;BZZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2-w2LRezQ ()B
+	public final fun component3 ()Z
+	public final fun component4 ()Z
+	public final fun copy-srPc2dE (Ljava/lang/String;BZZ)Ldev/bota/sdk/model/WiFiScanNetwork;
+	public static synthetic fun copy-srPc2dE$default (Ldev/bota/sdk/model/WiFiScanNetwork;Ljava/lang/String;BZZILjava/lang/Object;)Ldev/bota/sdk/model/WiFiScanNetwork;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getQuality-w2LRezQ ()B
+	public final fun getSsid ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isCurrent ()Z
+	public final fun isOpen ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/WiFiStatusInfo {
+	public synthetic fun <init> (Ldev/bota/sdk/model/WiFiConnectionStatus;Lkotlin/UByte;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ldev/bota/sdk/model/WiFiConnectionStatus;Lkotlin/UByte;Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ldev/bota/sdk/model/WiFiConnectionStatus;
+	public final fun component2-7PGSa80 ()Lkotlin/UByte;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy-0ZUANhg (Ldev/bota/sdk/model/WiFiConnectionStatus;Lkotlin/UByte;Ljava/lang/String;Ljava/lang/String;)Ldev/bota/sdk/model/WiFiStatusInfo;
+	public static synthetic fun copy-0ZUANhg$default (Ldev/bota/sdk/model/WiFiStatusInfo;Ldev/bota/sdk/model/WiFiConnectionStatus;Lkotlin/UByte;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/model/WiFiStatusInfo;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLastError ()Ljava/lang/String;
+	public final fun getSignalStrength-7PGSa80 ()Lkotlin/UByte;
+	public final fun getSsid ()Ljava/lang/String;
+	public final fun getStatus ()Ldev/bota/sdk/model/WiFiConnectionStatus;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }

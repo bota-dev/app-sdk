@@ -24,7 +24,7 @@ implementations:
 | --- | --- | --- |
 | Apple | `cd15e545cabb8d6186dea93208b512a4f46cb5fd` | Swift package builds; 4 parser tests pass |
 | Android | `0f06d2a22c55e4976778520cce42230d23ca4226` | Android library builds; unit tests pass |
-| React Native behavior | `44ac1221cb71eb01cafcdbfdf7a370847d3a10b4` | 86 tests and 50 protocol fixtures |
+| React Native behavior | `44ac1221cb71eb01cafcdbfdf7a370847d3a10b4` | 86 tests and 55 protocol fixtures |
 
 The Apple and Android sources provide useful public models, async conventions,
 and package scaffolding. Their Bluetooth transports, recording transfer, OTA,

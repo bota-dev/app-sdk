@@ -30,6 +30,9 @@ import dev.bota.sdk.model.ProvisioningMaterial
 import dev.bota.sdk.model.ProvisioningMaterialRequest
 import dev.bota.sdk.model.DeviceRecording
 import dev.bota.sdk.model.TransferCommand
+import dev.bota.sdk.model.WiFiConfigResult
+import dev.bota.sdk.model.WiFiScanUpdate
+import dev.bota.sdk.model.WiFiStatusInfo
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -62,6 +65,24 @@ internal class DeviceRuntime(
         error("direct subscription unavailable")
     },
     val directUnsubscribe: suspend (String, UUID, UUID) -> Unit = { _, _, _ -> },
+    val parseWiFiConfigResult: (ByteArray) -> WiFiConfigResult = {
+        error("WiFi config-result decoder unavailable")
+    },
+    val parseWiFiStatusInfo: (ByteArray) -> WiFiStatusInfo = {
+        error("WiFi status decoder unavailable")
+    },
+    val parseWiFiScanResult: (ByteArray) -> WiFiScanUpdate = {
+        error("WiFi scan decoder unavailable")
+    },
+    val createWiFiGrantPacket: (String) -> ByteArray = {
+        error("WiFi grant encoder unavailable")
+    },
+    val createWiFiCredentialPacket: (String, String) -> ByteArray = { _, _ ->
+        error("WiFi credential encoder unavailable")
+    },
+    val createWiFiScanCommand: () -> ByteArray = {
+        error("WiFi scan-command encoder unavailable")
+    },
     val parseConnectionSettings: (ByteArray) -> DeviceConnectionSettings = {
         error("connection-settings decoder unavailable")
     },
@@ -173,6 +194,12 @@ internal class DeviceRuntime(
                     directUnsubscribe = { peripheralId, service, characteristic ->
                         driver.unsubscribe(peripheralId, service, characteristic)
                     },
+                    parseWiFiConfigResult = mapper::parseWiFiConfigResult,
+                    parseWiFiStatusInfo = mapper::parseWiFiStatusInfo,
+                    parseWiFiScanResult = mapper::parseWiFiScanResult,
+                    createWiFiGrantPacket = mapper::createWiFiGrantPacket,
+                    createWiFiCredentialPacket = mapper::createWiFiCredentialPacket,
+                    createWiFiScanCommand = mapper::createWiFiScanCommand,
                     parseConnectionSettings = { mapper.parseConnectionSettings(it).settings },
                     serializeConnectionSettings = mapper::serializeConnectionSettings,
                     encodeDeviceCommand = mapper::encodeDeviceCommand,

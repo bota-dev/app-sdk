@@ -15,6 +15,10 @@ internal object BotaBluetoothUUIDs {
     val StorageService: UUID = botaUuid(0x0004, 0x0000)
     val AuthService: UUID = botaUuid(0x0005, 0x0000)
     val WifiService: UUID = botaUuid(0x0006, 0x0000)
+    val WifiGrant: UUID = botaUuid(0x0006, 0x0001)
+    val WifiCredential: UUID = botaUuid(0x0006, 0x0002)
+    val WifiStatus: UUID = botaUuid(0x0006, 0x0003)
+    val WifiScan: UUID = botaUuid(0x0006, 0x0004)
     val DiagnosticsService: UUID = botaUuid(0x0007, 0x0000)
 
     val BotaServices: Set<UUID> = setOf(

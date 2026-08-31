@@ -103,6 +103,14 @@ public struct BotaConfiguration: @unchecked Sendable {
                         characteristicUUID: characteristicUUID
                     )
                 },
+                parseWiFiConfigResult: { try mapper.parseWiFiConfigResult($0) },
+                parseWiFiStatusInfo: { try mapper.parseWiFiStatusInfo($0) },
+                parseWiFiScanResult: { try mapper.parseWiFiScanResult($0) },
+                createWiFiGrantPacket: { try mapper.createWiFiGrantPacket($0) },
+                createWiFiCredentialPacket: { ssid, password in
+                    try mapper.createWiFiCredentialPacket(ssid: ssid, password: password)
+                },
+                createWiFiScanCommand: { try mapper.createWiFiScanCommand() },
                 parseConnectionSettings: { data in try mapper.parseConnectionSettings(data) },
                 serializeConnectionSettings: { settings, model in
                     try mapper.serializeConnectionSettings(settings, model: model)

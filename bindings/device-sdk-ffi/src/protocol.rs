@@ -10,13 +10,14 @@ use bota_device_sdk_core::{
     },
     protocol::{
         AckType, DeviceCommand, DeviceLogDecoder, FirmwareStatus, TransferCommand, TransferPacket,
-        encode_ack, encode_bounded_payload, encode_connection_settings, encode_device_command,
-        encode_firmware_data, encode_firmware_upload_start, encode_firmware_upload_verify,
-        encode_firmware_window_ack, encode_ota_status, encode_provisioning_chunks,
-        encode_transfer_command, encode_wifi_grant, encode_wifi_scan_command, parse_ack,
-        parse_connection_settings, parse_device_status, parse_factory_reset_result,
-        parse_ota_status, parse_recording_list, parse_transfer_packet,
-        parse_trigger_upload_response, parse_wifi_config_result,
+        WiFiScanUpdate, encode_ack, encode_bounded_payload, encode_connection_settings,
+        encode_device_command, encode_firmware_data, encode_firmware_upload_start,
+        encode_firmware_upload_verify, encode_firmware_window_ack, encode_ota_status,
+        encode_provisioning_chunks, encode_transfer_command, encode_wifi_credentials,
+        encode_wifi_grant, encode_wifi_scan_command, parse_ack, parse_connection_settings,
+        parse_device_status, parse_factory_reset_result, parse_ota_status, parse_recording_list,
+        parse_transfer_packet, parse_trigger_upload_response, parse_wifi_config_result,
+        parse_wifi_scan_result, parse_wifi_status_info,
     },
 };
 
@@ -225,6 +226,38 @@ pub(crate) unsafe fn decode(
             }
             Ok(output)
         }
+        packet_kind::PROTOCOL_DECODE_WIFI_STATUS => {
+            let status = parse_wifi_status_info(&value)?;
+            let mut output =
+                output.with_u64(field_id::STATUS_CODE, u64::from(status.status.to_wire()));
+            output = optional_u64(
+                output,
+                field_id::WIFI_SIGNAL_STRENGTH,
+                status.signal_strength.map(u64::from),
+            );
+            output = optional_text(output, field_id::WIFI_SSID, status.ssid);
+            output = optional_text(output, field_id::ERROR_DETAIL, status.last_error);
+            Ok(output)
+        }
+        packet_kind::PROTOCOL_DECODE_WIFI_SCAN => match parse_wifi_scan_result(&value)? {
+            WiFiScanUpdate::Pending(status) => {
+                Ok(output.with_u64(field_id::STATUS_CODE, u64::from(status)))
+            }
+            WiFiScanUpdate::Done(result) => {
+                let mut output = output.with_u64(
+                    field_id::STATUS_CODE,
+                    u64::from(bota_device_sdk_core::generated::protocol::WIFI_SCAN_STATUS_DONE),
+                );
+                for network in result.networks {
+                    output = output
+                        .with_text(field_id::WIFI_SSID, network.ssid)
+                        .with_u64(field_id::WIFI_QUALITY, u64::from(network.quality))
+                        .with_bool(field_id::WIFI_IS_CURRENT, network.is_current)
+                        .with_bool(field_id::WIFI_IS_OPEN, network.is_open);
+                }
+                Ok(output)
+            }
+        },
         _ => Err(unknown_packet(packet.kind)),
     }
 }
@@ -369,6 +402,13 @@ pub(crate) unsafe fn encode(
                 output = output.with_bytes(field_id::CHUNK, chunk);
             }
             return Ok(output);
+        }
+        packet_kind::PROTOCOL_ENCODE_WIFI_CREDENTIALS => {
+            fields.validate_allowed(&[field_id::WIFI_SSID, field_id::WIFI_PASSWORD])?;
+            encode_wifi_credentials(
+                &fields.required_text(field_id::WIFI_SSID)?,
+                &fields.required_text(field_id::WIFI_PASSWORD)?,
+            )?
         }
         _ => return Err(unknown_packet(packet.kind)),
     };
@@ -545,6 +585,10 @@ mod tests {
                 .with_bytes(field_id::VALUE, hex("0203010203ff00003c810000")),
             packet(packet_kind::PROTOCOL_DECODE_DEVICE_LOGS)
                 .with_bytes(field_id::VALUE, hex("0000006c696e650a")),
+            packet(packet_kind::PROTOCOL_DECODE_WIFI_STATUS)
+                .with_bytes(field_id::VALUE, hex("025704426f7461")),
+            packet(packet_kind::PROTOCOL_DECODE_WIFI_SCAN)
+                .with_bytes(field_id::VALUE, hex("020104426f74616403")),
         ];
         let mut logs = DeviceLogDecoder::default();
         for (index, input) in decode_cases.iter().enumerate() {
@@ -592,6 +636,9 @@ mod tests {
             packet(packet_kind::PROTOCOL_ENCODE_PROVISIONING_CHUNKS)
                 .with_bytes(field_id::PAYLOAD, vec![1, 2, 3])
                 .with_u64(field_id::MTU, 20),
+            packet(packet_kind::PROTOCOL_ENCODE_WIFI_CREDENTIALS)
+                .with_text(field_id::WIFI_SSID, "Bota")
+                .with_text(field_id::WIFI_PASSWORD, "secret"),
         ];
         for (index, input) in encode_cases.iter().enumerate() {
             let output = unsafe { encode(&input.view()) };
