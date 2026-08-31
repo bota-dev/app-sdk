@@ -87,3 +87,13 @@ test('rejects a required lockfile package that is absent on disk', () => {
   assert.notEqual(result.status, 0);
   assert.match(`${result.stdout}${result.stderr}`, /cannot inspect/);
 });
+
+test('normal repository scan reports the pinned Android release tooling dependencies', () => {
+  const result = spawnSync(process.execPath, [checker], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.match(result.stdout, /release tooling: fast-xml-parser@5\.11\.1, fflate@0\.8\.3/);
+});

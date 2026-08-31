@@ -200,6 +200,8 @@ npm run test:android:foundation
 tools/android/test-package.sh --api 35 \
   --instrumentation-class dev.bota.sdk.internal.jni.NativeCoreBridgeTest
 tools/android/inspect-aar.sh platforms/android/sdk/build/outputs/aar/sdk-release.aar
+tools/android/test-publication-graphs.sh
+tools/android/package-release.sh --check
 ```
 
 The React Native API check expects `npm ci` to have installed the reference SDK

@@ -10,6 +10,11 @@ The nested `platforms/apple/Package.swift` remains the local-development
 package. It points at the generated XCFramework on disk so facade tests do not
 depend on a published release.
 
+The Android package uses Maven coordinate `dev.bota:bota-android-sdk`. Its
+release packaging is implemented, while Central publication remains protected
+until the coordinated Android release advances the shared version and release
+workflow.
+
 All artifacts use the exact version in `sdk-version.toml`. Release tags use
 `vVERSION`; the tag, package metadata, public Swift version, compatibility
 matrix, release example, GitHub Release URL, and XCFramework checksum must
@@ -79,6 +84,47 @@ tools/apple/test-consumer.sh
 tools/apple/package-release.sh
 cargo deny check
 ```
+
+## Android Package Gate
+
+Android release checks require JDK 17, Android SDK 36, NDK 28.2.13676358,
+Node.js 22+, OpenSSL, and GnuPG. The check-only package command requires a clean
+HEAD and writes only below `target/`:
+
+```bash
+tools/android/test-publication-graphs.sh
+tools/android/package-release.sh --check
+tools/android/verify-publication.sh target/android-release
+cargo xtask release validate target/android-release/release-manifest.json
+```
+
+`package-release.sh --check` performs two clean builds and rejects any AAR or
+per-ABI native-library digest drift. It invokes only the unsigned local Maven
+publication, proves that no signing task or `.asc` file is present, and emits
+the AAR, POM, Gradle module metadata, sources, Dokka Javadoc, four checksum
+formats for every Maven primary, copied MIT license, SPDX 2.3 SBOM, and native
+manifest version 2.
+
+The separate publication-graph test creates a password-protected ephemeral PGP
+key in a mode-0700 temporary keyring. It proves that protected staging cannot
+start without both in-memory key properties, then verifies all five detached
+signatures. Gradle's exact 55-file raw repository is normalized to the 30-file
+Central Portal tree. The generated ZIP contains only the path-sorted Portal
+inventory, with mode 0644 and the fixed 1980 DOS timestamp; the inventory stays
+beside the ZIP rather than inside it.
+
+Protected automation sets only these environment-backed Gradle properties:
+
+```text
+ORG_GRADLE_PROJECT_signingInMemoryKey
+ORG_GRADLE_PROJECT_signingInMemoryKeyPassword
+ORG_GRADLE_PROJECT_signingInMemoryKeyId  # optional
+```
+
+The protected command must include the exact opt-in
+`-PbotaProtectedSigning=true`. Any other value fails configuration. Never put
+the key, password, or key ID in command arguments, tracked files, build scans,
+logs, or uploaded artifacts.
 
 `tools/apple/package-release.sh` writes the release payload to
 `target/apple-release/`:

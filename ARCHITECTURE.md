@@ -176,6 +176,17 @@ OkHttp types exposed by the public API are Maven API dependencies. Maven
 Central, physical acceptance, and React Native Android runtime gates are not
 claimed by this stage.
 
+Android release packaging has separate unsigned and protected graphs. Normal
+builds can publish only to `target/android-m2` and do not register a signing
+task. The exact protected opt-in validates both in-memory signing secrets before
+it declares the separately rooted raw repository. Gradle's signed 55-file
+output is checked byte-for-byte, reduced to the canonical 30-file Central
+Portal tree, and archived from a separate complete inventory with fixed ZIP
+metadata. The check-only package builds twice, compares the AAR and every native
+library digest, and emits checksums, SPDX 2.3 evidence, the repository license,
+and a manifest-v2 Android artifact bound to reviewed facade evidence rather
+than Rust-only compatibility claims.
+
 Android `ProvisioningManager` and `FactoryResetManager` use the same opaque
 material, durable reset, shared-codec, and facade-wide operation contracts as
 Apple. Provisioning tokens, endpoints, nonces, device public keys, and reset

@@ -84,7 +84,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Android dependencies are locked and SHA-256 verified. Normal builds may
   publish unsigned artifacts only to `target/android-m2`; signing must remain
   absent unless `botaProtectedSigning=true` is supplied by a protected release
-  environment. The wrapper distribution checksum and the canonical
+  environment. The opt-in accepts only the exact string `true` and requires
+  password-protected in-memory key material before the raw repository exists.
+  Keep raw Gradle staging, normalized Central Portal files, and release outputs
+  in separate `target/` roots; the signed Portal ZIP must contain exactly the
+  inventory's 30 files. The wrapper distribution checksum and the canonical
   `sdk-version.toml`/`VERSION_NAME` equality are enforced. The unpublished AAR
   contains exactly `libbota_device_sdk_ffi.so` and `libbota_android_jni.so` for
   all four supported ABIs, but is not a published facade claim.
@@ -234,6 +238,9 @@ JAVA_HOME=/path/to/jdk-17 ANDROID_HOME="$HOME/Library/Android/sdk" \
 tools/android/test-package.sh --api 35 \
   --instrumentation-class dev.bota.sdk.internal.jni.NativeCoreBridgeTest
 tools/android/inspect-aar.sh platforms/android/sdk/build/outputs/aar/sdk-release.aar
+tools/android/test-publication-graphs.sh
+tools/android/package-release.sh --check
+tools/android/verify-publication.sh target/android-release
 cargo xtask protocol generate --check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings

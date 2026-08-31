@@ -1,5 +1,6 @@
 import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
 import org.gradle.api.artifacts.dsl.LockMode
+import org.gradle.api.tasks.Delete
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.api.tasks.Exec
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -217,8 +218,6 @@ mavenPublishing {
         artifactId = "bota-android-sdk",
         version = project.version.toString(),
     )
-    publishToMavenCentral()
-
     pom {
         name.set("Bota SDK for Android")
         description.set("Android facade for connecting applications to Bota devices.")
@@ -245,9 +244,6 @@ mavenPublishing {
         }
     }
 
-    if (providers.gradleProperty("botaProtectedSigning").orNull == "true") {
-        signAllPublications()
-    }
 }
 
 publishing {
@@ -259,12 +255,54 @@ publishing {
     }
 }
 
-tasks.register("stageSignedCentralRawRepository") {
-    group = "publishing"
-    description = "Guard for the protected signed Central raw-repository graph."
-    doFirst {
-        check(providers.gradleProperty("botaProtectedSigning").orNull == "true") {
-            "stageSignedCentralRawRepository requires -PbotaProtectedSigning=true"
+val protectedSigning = when (val value = providers.gradleProperty("botaProtectedSigning").orNull) {
+    null -> false
+    "true" -> true
+    else -> throw GradleException("botaProtectedSigning must be exactly true")
+}
+
+if (protectedSigning) {
+    val signingKey = providers.gradleProperty("signingInMemoryKey").orNull
+    val signingPassword = providers.gradleProperty("signingInMemoryKeyPassword").orNull
+    if (signingKey.isNullOrBlank() || signingPassword.isNullOrBlank()) {
+        throw GradleException("protected Android staging requires in-memory signing key and password")
+    }
+
+    mavenPublishing {
+        signAllPublications()
+    }
+    publishing {
+        repositories {
+            maven {
+                name = "CentralRaw"
+                url = rootProject.layout.projectDirectory
+                    .dir("../../target/android-central-raw").asFile.toURI()
+            }
+        }
+    }
+
+    val cleanCentralRawRepository = tasks.register<Delete>("cleanCentralRawRepository") {
+        delete(rootProject.layout.projectDirectory.dir("../../target/android-central-raw"))
+    }
+    tasks.matching {
+        it.name == "signMavenPublication" || it.name == "publishMavenPublicationToCentralRawRepository"
+    }.configureEach {
+        mustRunAfter(cleanCentralRawRepository)
+        if (name == "publishMavenPublicationToCentralRawRepository") {
+            dependsOn("signMavenPublication")
+        }
+    }
+    tasks.register("stageSignedCentralRawRepository") {
+        group = "publishing"
+        description = "Stages the signed Maven publication in the isolated Central raw repository."
+        dependsOn(cleanCentralRawRepository, "publishMavenPublicationToCentralRawRepository")
+    }
+} else {
+    tasks.register("stageSignedCentralRawRepository") {
+        group = "publishing"
+        description = "Rejects protected staging when its exact opt-in property is absent."
+        doFirst {
+            throw GradleException("use -PbotaProtectedSigning=true in the protected release job")
         }
     }
 }

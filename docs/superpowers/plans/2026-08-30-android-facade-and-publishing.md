@@ -1159,7 +1159,7 @@ git commit -m "feat(android): add consumer and migration contract" \
 - Consumes: tested AAR, sources/Dokka JARs, POM/module metadata, Rust/Gradle dependency metadata, protocol fixture digest, compatibility matrix, and root `LICENSE`.
 - Produces: deterministic Android release directory, SPDX 2.3 SBOM, checksums, complete Maven Central metadata, and a schema-valid version 2 native manifest.
 
-- [ ] **Step 1: Write failing release-metadata tests**
+- [x] **Step 1: Write failing release-metadata tests**
 
 Require Android artifact metadata:
 
@@ -1182,7 +1182,7 @@ Publication-graph tests require the unsigned local, protected-without-key, and
 protected-with-ephemeral-key cases. Normalization tests distinguish Gradle's raw
 repository files from the canonical 30-file Portal tree.
 
-- [ ] **Step 2: Run release tests and verify RED**
+- [x] **Step 2: Run release tests and verify RED**
 
 Run:
 
@@ -1196,7 +1196,7 @@ tools/android/test-publication-graphs.sh
 
 Expected: FAIL because Android release generators do not exist.
 
-- [ ] **Step 3: Configure deterministic Maven publication**
+- [x] **Step 3: Configure deterministic Maven publication**
 
 Use Vanniktech Maven Publish 0.35.0 to create one publication named `maven` for
 `dev.bota:bota-android-sdk`. Configure `androidSingleVariant("release")` with
@@ -1349,7 +1349,7 @@ node tools/android/build-central-bundle.mjs verify \
   --zip target/android-release/central-bundle.zip
 ```
 
-- [ ] **Step 4: Generate one version 2 native release manifest**
+- [x] **Step 4: Generate one version 2 native release manifest**
 
 Refactor the Apple-specific manifest assembly behind
 `generateNativeManifest({ sdkVersion, sourceRevision, artifacts, baseline,
@@ -1369,7 +1369,7 @@ tracked release metadata. Reject dirty source, local paths, zero checksums,
 version drift, missing ABI entries, an unreviewed Android capability, or a
 manifest `sourceRevision` different from `git rev-parse HEAD`.
 
-- [ ] **Step 5: Validate the complete unpublished package**
+- [x] **Step 5: Validate the complete unpublished package**
 
 Run:
 
@@ -1389,7 +1389,7 @@ publication succeeds without a key; protected staging fails without both key
 and password and succeeds with its ephemeral key; and real Gradle raw output
 normalizes to the exact deterministic 30-entry signed ZIP.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add ARCHITECTURE.md docs/releasing.md platforms/android scripts tools/android tools/release release/evidence

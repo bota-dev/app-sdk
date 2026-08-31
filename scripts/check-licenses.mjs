@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,6 +19,7 @@ const FORBIDDEN = [
   'EPL',
   'MPL',
 ];
+const ANDROID_RELEASE_TOOLING = ['fast-xml-parser', 'fflate'];
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
@@ -120,6 +121,19 @@ try {
     }
     console.error(`Blocked families: ${FORBIDDEN.join(', ')}`);
     process.exit(1);
+  }
+
+  if (reportIndex < 0 && existsSync('package.json')) {
+    const root = readJson('package.json');
+    const releaseTools = ANDROID_RELEASE_TOOLING.map((name) => {
+      const expected = root.devDependencies?.[name];
+      const installed = packages.find((pkg) => pkg.name === name);
+      if (!expected || expected !== installed?.version || licenseOf(installed) !== 'MIT') {
+        throw new Error(`license-gate: Android release tool ${name} must be pinned and MIT licensed`);
+      }
+      return `${name}@${installed.version}`;
+    });
+    console.log(`release tooling: ${releaseTools.join(', ')}`);
   }
 
   console.log(

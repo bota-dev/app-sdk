@@ -41,16 +41,18 @@ if ! "$gradlew" -p "$android_root" :sdk:tasks --all >"$tasks_log" 2>&1; then
 fi
 for task in \
     publishToMavenLocal \
-    publishToMavenCentral \
-    publishAndReleaseToMavenCentral \
-    publishAllPublicationsToMavenCentralRepository \
     publishMavenPublicationToLocalRepository \
     stageSignedCentralRawRepository
 do
     grep -Eq "^${task} - " "$tasks_log"
 done
 
-for task in signMavenPublication publishMavenPublicationToCentralRawRepository
+for task in \
+    signMavenPublication \
+    publishMavenPublicationToCentralRawRepository \
+    publishToMavenCentral \
+    publishAndReleaseToMavenCentral \
+    publishAllPublicationsToMavenCentralRepository
 do
     if grep -Eq "^${task} - " "$tasks_log"; then
         echo "Protected task ${task} is present without protected signing" >&2

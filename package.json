@@ -18,13 +18,15 @@
     "sync:apple-fixtures": "node tools/apple/sync-protocol-fixtures.mjs --check && node tools/apple/sync-workflow-fixtures.mjs --check",
     "test:android:foundation": "tools/android/test-foundation.sh",
     "test:fixtures": "node --test tools/baseline/*.test.mjs",
-    "test:release": "node --test tools/release/*.test.mjs",
+    "test:release": "node --test tools/release/*.test.mjs tools/android/*.test.mjs",
     "test:react-native": "node --test tools/react-native/*.test.mjs",
     "test:tooling": "node --test scripts/*.test.mjs tools/baseline/*.test.mjs tools/react-native/*.test.mjs",
     "test:workflows": "node tools/baseline/compare-workflows.mjs"
   },
   "devDependencies": {
     "ajv": "8.20.0",
+    "fast-xml-parser": "5.11.1",
+    "fflate": "0.8.3",
     "typescript": "6.0.3"
   }
 }
