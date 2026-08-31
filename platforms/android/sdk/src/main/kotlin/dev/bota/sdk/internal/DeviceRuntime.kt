@@ -28,12 +28,17 @@ import dev.bota.sdk.model.DeviceStatus
 import dev.bota.sdk.model.DeviceType
 import dev.bota.sdk.model.ProvisioningMaterial
 import dev.bota.sdk.model.ProvisioningMaterialRequest
+import dev.bota.sdk.model.DeviceRecording
+import dev.bota.sdk.model.TransferCommand
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import okhttp3.OkHttpClient
+import okhttp3.Request
 
 internal class DeviceRuntime(
     val engine: CoreWorkflowRunner,
@@ -50,6 +55,10 @@ internal class DeviceRuntime(
     val directWrite: suspend (String, UUID, UUID, ByteArray) -> Unit = { _, _, _, _ ->
         error("direct write unavailable")
     },
+    val directSubscribe: suspend (String, UUID, UUID) -> Flow<ByteArray> = { _, _, _ ->
+        error("direct subscription unavailable")
+    },
+    val directUnsubscribe: suspend (String, UUID, UUID) -> Unit = { _, _, _ -> },
     val serializeConnectionSettings: (DeviceConnectionSettings, DeviceType) -> ByteArray = { _, _ ->
         error("connection-settings encoder unavailable")
     },
@@ -63,6 +72,12 @@ internal class DeviceRuntime(
     val registerFactoryResetGeneration: suspend (String, ULong) -> Unit = { _, _ -> },
     val unregisterFactoryResetGeneration: suspend (String) -> Unit = {},
     val loadPendingFactoryReset: suspend () -> PersistedFactoryResetResult? = { null },
+    val parseRecordingList: (ByteArray) -> List<DeviceRecording> = { error("recording-list decoder unavailable") },
+    val createTransferCommand: (TransferCommand) -> ByteArray = { error("transfer-command encoder unavailable") },
+    val registerRecordingSink: (String) -> Path = { error("recording sink unavailable") },
+    val unregisterRecordingSink: (String) -> Unit = {},
+    val registerFirmwareDownload: (ULong, Request) -> Path = { _, _ -> error("firmware download unavailable") },
+    val unregisterFirmwareDownload: (ULong) -> Unit = {},
 ) : AutoCloseable {
     private val closed = AtomicBoolean(false)
 
@@ -145,6 +160,12 @@ internal class DeviceRuntime(
                     directWrite = { peripheralId, service, characteristic, value ->
                         driver.write(peripheralId, service, characteristic, value, withResponse = true)
                     },
+                    directSubscribe = { peripheralId, service, characteristic ->
+                        driver.subscribe(peripheralId, service, characteristic).map { it.value }
+                    },
+                    directUnsubscribe = { peripheralId, service, characteristic ->
+                        driver.unsubscribe(peripheralId, service, characteristic)
+                    },
                     serializeConnectionSettings = mapper::serializeConnectionSettings,
                     encodeDeviceCommand = mapper::encodeDeviceCommand,
                     registerProvisioning = { id, provider ->
@@ -170,6 +191,30 @@ internal class DeviceRuntime(
                     registerFactoryResetGeneration = persistence::registerFactoryReset,
                     unregisterFactoryResetGeneration = persistence::unregisterFactoryReset,
                     loadPendingFactoryReset = persistence::loadFactoryResetResult,
+                    parseRecordingList = mapper::parseRecordingList,
+                    createTransferCommand = mapper::createTransferCommand,
+                    registerRecordingSink = { sinkId ->
+                        val path = File(root, "recordings/$sinkId.recording").toPath()
+                        recordingSink.registerPath(sinkId, path)
+                        path
+                    },
+                    unregisterRecordingSink = recordingSink::unregister,
+                    registerFirmwareDownload = { downloadId, request ->
+                        val path = File(root, "firmware/$downloadId.firmware").toPath()
+                        path.parent?.let(Files::createDirectories)
+                        network.registerDownload(downloadId, request, path)
+                        try {
+                            firmwareBlob.registerPath(downloadId, path)
+                        } catch (error: Throwable) {
+                            network.unregister(downloadId)
+                            throw error
+                        }
+                        path
+                    },
+                    unregisterFirmwareDownload = { downloadId ->
+                        network.unregister(downloadId)
+                        firmwareBlob.unregister(downloadId)
+                    },
                 )
             } catch (failure: Throwable) {
                 runCatching { closeAll(*closeActions.asReversed().toTypedArray()) }

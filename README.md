@@ -62,9 +62,12 @@ The public Android client now exposes serial-verified discovery, connect and
 reconnect, status observation, provisioning, normalized connection settings,
 remove-only deprovision, authenticated factory reset, and exact-generation
 reset receipt recovery. Application material stays behind opaque native
-registrations, and every manager shares one facade operation owner. Recording,
-upload ownership, OTA, logs, legacy compatibility, physical-device acceptance,
-Maven Central publication, and the React Native Android adapter remain open.
+registrations, and every manager shares one facade operation owner. Recording
+sync now returns native file paths, upload handoff exposes only ownership
+outcomes, OTA keeps request and firmware bytes in native hosts, and logs expose
+only complete core-sanitized lines. Legacy compatibility, physical-device
+acceptance, Maven Central publication, and the React Native Android adapter
+remain open.
 The native-boundary spike selected a manually owned C ABI after comparing it
 with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed

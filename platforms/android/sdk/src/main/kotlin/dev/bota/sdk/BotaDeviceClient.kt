@@ -9,6 +9,9 @@ public class BotaDeviceClient internal constructor() {
     public val devices: DeviceManager = DeviceManager()
     public val provisioning: ProvisioningManager = ProvisioningManager()
     public val factoryReset: FactoryResetManager = FactoryResetManager()
+    public val recordings: RecordingManager = RecordingManager()
+    public val ota: OTAManager = OTAManager()
+    public val logs: DeviceLogManager = DeviceLogManager()
 
     private val lifecycle = Mutex()
     private var runtime: DeviceRuntime? = null
@@ -21,6 +24,9 @@ public class BotaDeviceClient internal constructor() {
             devices.attach(configured)
             provisioning.attach(configured)
             factoryReset.attach(configured)
+            recordings.attach(configured)
+            ota.attach(configured)
+            logs.attach(configured)
         }
     }
 
@@ -29,6 +35,9 @@ public class BotaDeviceClient internal constructor() {
             val configured = runtime ?: return
             try {
                 runCleanupActions(
+                    { logs.detach() },
+                    { ota.detach() },
+                    { recordings.detach() },
                     { factoryReset.detach() },
                     { provisioning.detach() },
                     { devices.detach() },

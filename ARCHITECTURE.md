@@ -166,7 +166,7 @@ bound to its originating runtime and disables the device-wide CCCD only after
 the last collector leaves. Runtime construction rollback and destroy attempt
 every registered resource close, preserving cleanup failures without leaking
 the Bluetooth thread or native engine. The
-recording, OTA, log, Maven Central, physical acceptance, and
+Maven Central, physical acceptance, and
 React Native Android runtime gates are not claimed by this stage.
 
 Android `ProvisioningManager` and `FactoryResetManager` use the same opaque
@@ -179,6 +179,18 @@ with its binding generation before receipt. Restart recovery rejects a stale
 generation and runs only the exact receipt workflow. Registration, failure,
 cancellation, detach, and destroy paths release material and operation
 ownership without deleting a valid durable reset result.
+
+Android `RecordingManager`, `OTAManager`, and `DeviceLogManager` expose cold
+typed flows backed by the same reducer notifications as Apple. Recording sink
+and firmware bytes stay in application no-backup files registered by opaque ID;
+completed recording events return only the native `Path`. OTA registers one
+OkHttp request and one firmware-blob view over the same native file, preserving
+the blob across reducer retry while removing registrations on every terminal
+facade path. Upload handoff emits only device-completed, device-preserved, or
+BLE-fallback ownership values. Log flows emit only complete sanitized lines
+from the shared decoder. Collector termination, explicit cancellation,
+destroy, failure, and success release the original cancellation ID, native
+registration, and facade-wide operation owner.
 
 Native migration inputs are pinned separately in
 `protocol/baseline/native-sdks.json`. Apple revision `cd15e545cabb8` and Android

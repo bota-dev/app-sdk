@@ -143,6 +143,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   every response/descriptor path, and cancel only SDK-owned OkHttp calls.
 - Recording transfer owns sequence/checkpoint decisions; native hosts own the
   durable sink and validate the final checksum before device deletion.
+- Android recording, upload-ownership, OTA, and log APIs are cold `Flow`s.
+  Keep recording and firmware bytes in native files, return only paths and
+  typed progress/ownership/line values, and release the original cancellation
+  ID, registration, and shared operation owner on every terminal path.
+- Pair each Android OTA download registration with one firmware-blob
+  registration over the same native path. The public `FirmwareImage` may carry
+  an OkHttp `Request`; URLs and headers must never enter core packets.
 - Direct-upload fallback requires a fresh inactive device status; busy,
   detached, and unreadable ownership never authorize Bluetooth fallback.
 - Firmware retries reuse the host blob but restart BLE delivery at sequence and

@@ -884,7 +884,7 @@ git commit -m "feat(android): expose secure device lifecycle" \
 - Consumes: recording transfer, upload handoff, firmware update, and device-log reducers plus Android file/network hosts.
 - Produces: typed `Flow` progress/events and Android-native completed recording/firmware resources.
 
-- [ ] **Step 1: Write failing workflow facade tests**
+- [x] **Step 1: Write failing workflow facade tests**
 
 Recording cases cover durable append before ACK, replay deduplication, CRC32
 failure without delete, final ACK before confirm, opaque encrypted bytes, sink
@@ -894,7 +894,7 @@ blob, reboot/reconnect, target-version readback, and registration cleanup. Logs
 cover subscribe-before-start, fragmented UTF-8, sequence gaps, one owner,
 stop-before-unsubscribe, and disconnect cleanup without a BLE stop write.
 
-- [ ] **Step 2: Run manager tests and verify RED**
+- [x] **Step 2: Run manager tests and verify RED**
 
 Run:
 
@@ -904,7 +904,7 @@ platforms/android/gradlew -p platforms/android :sdk:testDebugUnitTest --tests '*
 
 Expected: FAIL because the managers do not exist.
 
-- [ ] **Step 3: Implement typed manager flows**
+- [x] **Step 3: Implement typed manager flows**
 
 Map core progress directly into sealed Kotlin events. Completed recording
 events expose the application-registered destination as a `Uri` or file handle,
@@ -914,7 +914,7 @@ in one native blob across retries. Logs expose only complete sanitized lines.
 All managers share one facade operation coordinator and release ownership on
 completion, failure, cancellation, collector termination, and destroy.
 
-- [ ] **Step 4: Run facade and reducer workflow gates**
+- [x] **Step 4: Run facade and reducer workflow gates**
 
 Run:
 
@@ -925,7 +925,7 @@ cargo test -p bota-device-sdk-core --test recording_transfer_workflow --test upl
 
 Expected: all four facade families match their canonical reducers.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ARCHITECTURE.md platforms/android

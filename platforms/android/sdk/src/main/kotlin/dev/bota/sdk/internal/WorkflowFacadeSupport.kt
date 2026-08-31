@@ -4,8 +4,10 @@ import dev.bota.sdk.BotaErrorCode
 import dev.bota.sdk.BotaOperation
 import dev.bota.sdk.BotaSDKError
 import dev.bota.sdk.internal.core.CoreCommand
+import dev.bota.sdk.internal.core.CoreNotification
 import dev.bota.sdk.internal.core.CoreNotificationKind
 import dev.bota.sdk.internal.jni.NativeCoreException
+import kotlinx.coroutines.CancellationException
 
 internal suspend fun awaitWorkflowCompletion(command: CoreCommand, runtime: DeviceRuntime) {
     var completed = false
@@ -59,6 +61,44 @@ internal suspend fun runCleanupAfter(primaryFailure: Throwable?, vararg actions:
         primaryFailure.addSuppressed(cleanupFailure)
     }
 }
+
+internal fun CoreNotification.requiredText(id: Int, operation: BotaOperation): String =
+    packet.texts(id).firstOrNull() ?: throw malformedNotification(id, operation)
+
+internal fun CoreNotification.requiredUnsigned(id: Int, operation: BotaOperation): ULong =
+    packet.unsigneds(id).firstOrNull() ?: throw malformedNotification(id, operation)
+
+internal fun CoreNotification.requiredBoolean(id: Int, operation: BotaOperation): Boolean =
+    packet.booleans(id).firstOrNull() ?: throw malformedNotification(id, operation)
+
+internal fun Throwable.facadePublicError(operation: BotaOperation): Throwable = when (this) {
+    is BotaSDKError -> this
+    is CancellationException -> this
+    is NativeCoreException -> toPublicError()
+    else -> BotaSDKError.Core(
+        BotaErrorCode.Internal,
+        operation,
+        retryable = true,
+        protocolStatus = null,
+        detail = message ?: "native workflow facade failed",
+    )
+}
+
+internal fun cancelled(operation: BotaOperation): BotaSDKError.Core = BotaSDKError.Core(
+    BotaErrorCode.Cancelled,
+    operation,
+    retryable = true,
+    protocolStatus = null,
+    detail = "device workflow was cancelled",
+)
+
+private fun malformedNotification(id: Int, operation: BotaOperation): BotaSDKError.Core = BotaSDKError.Core(
+    BotaErrorCode.UnexpectedEvent,
+    operation,
+    retryable = false,
+    protocolStatus = null,
+    detail = "workflow notification is missing field $id",
+)
 
 private fun operation(commandKind: Int): BotaOperation = when (commandKind) {
     0x0104 -> BotaOperation.Provision

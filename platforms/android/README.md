@@ -66,6 +66,22 @@ saved command's receipt workflow. Material callbacks are memory-only, and all
 secure operations share the facade-wide operation owner with discovery and
 connection workflows.
 
+## Recording, OTA, and logs
+
+`RecordingManager` lists recordings through subscribe-before-write BLE access,
+syncs encrypted or plaintext recording bytes into a native no-backup file, and
+returns its `Path` only after the reducer completes durable finalization.
+Upload ownership emits only device-completed, device-preserved, or authorized
+Bluetooth-fallback identifiers; applications still own backend destination
+resolution.
+
+`OTAManager` accepts a `FirmwareImage` containing an OkHttp `Request`. The URL,
+headers, downloaded image, and blob path remain in Android hosts; Rust receives
+only the opaque download ID and bounded bytes. `DeviceLogManager` emits complete
+sanitized `DeviceLogLine` values. These APIs are cold Kotlin `Flow`s, and
+collector termination, explicit cancellation, failure, success, and client
+destroy all release their native registrations and shared operation owner.
+
 ## Verify
 
 ```bash
