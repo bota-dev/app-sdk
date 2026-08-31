@@ -433,6 +433,65 @@
               }
             ]
           },
+          "NativeProvisioningMaterial": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "apiEndpoint",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "deviceToken",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "mtu",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeProvisioningMaterialRequest": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "requestId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "serialNumber",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "nonce",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "devicePublicKey",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
           "NativeReconnectOptions": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -475,6 +534,17 @@
                 "typeAnnotation": {
                   "type": "TypeAliasTypeAnnotation",
                   "name": "NativeDeviceStatus"
+                }
+              }
+            },
+            {
+              "name": "onProvisioningMaterialRequested",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeProvisioningMaterialRequest"
                 }
               }
             }
@@ -539,6 +609,29 @@
                   }
                 },
                 "params": []
+              }
+            },
+            {
+              "name": "deprovision",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
               }
             },
             {
@@ -610,6 +703,88 @@
                     "typeAnnotation": {
                       "type": "TypeAliasTypeAnnotation",
                       "name": "NativeReconnectOptions"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "provision",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "rejectApplicationMaterial",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "message",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "resolveProvisioningMaterial",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "material",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeProvisioningMaterial"
                     }
                   }
                 ]
@@ -711,11 +886,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "00be61f77ef93adadc31923ecc1b6ae51801bc98715acff74a8ecf6d5bc2ffa8"
+        "sha256": "d98699377ef8ccb260c5bf7394f78661a2e733a2a2865cd666d6df7cd1b61117"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "5c45166ebcb1d4f900aab24b70f237272142386ec192a3bfe5d6c58a4e952179"
+        "sha256": "5d836b31fd87dea4ddc380eb54251a958e390696dd48cc580d19a33e87f0e3b6"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -727,23 +902,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "9a8351ad22dca7e51b38ed4b0ed09bf2979770950332c7d67e3447fb131cd24d"
+        "sha256": "31e4368fb0cfc74483e24530fd751d445c28d065e2868f30f0440ac2238fff38"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "b8e376182670b6983f41a7c906d5070230685aabadc0c71ae06e7168717e23bb"
+        "sha256": "a70b38762d4a7e1d3a770b91baf41b8ff8e17f1df76e82b7cf708ea2818adccd"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "829024a25ebd563cad5794de786609e24e439d0e3fe64334952fbd3be0501864"
+        "sha256": "11195430c3c05713fab64c82ac08447876f8d3a46682fbd1348157032b651cd5"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "9a8351ad22dca7e51b38ed4b0ed09bf2979770950332c7d67e3447fb131cd24d"
+        "sha256": "31e4368fb0cfc74483e24530fd751d445c28d065e2868f30f0440ac2238fff38"
       }
     ]
   },
-  "contractDigest": "5c517e43736b46b6ce4bafa7b77082870f3b3df905a66c91f420873f7008b7da"
+  "contractDigest": "0d3bef82a612a60afe3bad0da130373f91326acae10fc14406c46a54f01209a1"
 }

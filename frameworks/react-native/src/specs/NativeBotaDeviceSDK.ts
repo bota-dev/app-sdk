@@ -83,14 +83,29 @@ export type NativeDeviceStatus = {
   modemInfo?: NativeModemInfo;
 };
 
+export type NativeProvisioningMaterialRequest = {
+  requestId: string;
+  serialNumber: string;
+  nonce: string;
+  devicePublicKey: string;
+};
+
+export type NativeProvisioningMaterial = {
+  apiEndpoint: string;
+  deviceToken: string;
+  mtu: number;
+};
+
 export interface Spec extends TurboModule {
   readonly onDeviceDiscovered: EventEmitter<NativeDiscoveredDevice>;
   readonly onDeviceStatusUpdated: EventEmitter<NativeDeviceStatus>;
+  readonly onProvisioningMaterialRequested: EventEmitter<NativeProvisioningMaterialRequest>;
   configure: (configuration: NativeConfiguration) => Promise<void>;
   connectSelected: (
     device: NativeDiscoveredDevice
   ) => Promise<NativeConnectedDevice>;
   destroy: () => Promise<void>;
+  deprovision: (device: NativeConnectedDevice) => Promise<void>;
   disconnect: () => Promise<void>;
   getCapabilities: () => Promise<NativeCapabilities>;
   getState: () => Promise<string>;
@@ -98,6 +113,15 @@ export interface Spec extends TurboModule {
     serialNumber: string,
     options: NativeReconnectOptions
   ) => Promise<NativeConnectedDevice>;
+  provision: (device: NativeConnectedDevice) => Promise<void>;
+  rejectApplicationMaterial: (
+    requestId: string,
+    message: string
+  ) => Promise<void>;
+  resolveProvisioningMaterial: (
+    requestId: string,
+    material: NativeProvisioningMaterial
+  ) => Promise<void>;
   startScan: (timeoutMs: number, allowDuplicates: boolean) => Promise<void>;
   readStatus: () => Promise<NativeDeviceStatus>;
   startStatusUpdates: () => Promise<void>;

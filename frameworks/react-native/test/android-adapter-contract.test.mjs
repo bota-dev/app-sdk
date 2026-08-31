@@ -58,9 +58,13 @@ test('Android adapter implements the generated lifecycle module and package', ()
   for (const method of [
     'configure',
     'destroy',
+    'deprovision',
     'getCapabilities',
     'getState',
+    'provision',
+    'rejectApplicationMaterial',
     'readStatus',
+    'resolveProvisioningMaterial',
     'startStatusUpdates',
     'stopStatusUpdates',
   ]) {

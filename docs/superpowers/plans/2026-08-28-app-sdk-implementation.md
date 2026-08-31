@@ -891,11 +891,15 @@ rebuild, while invocation fails as `native_module_unavailable`. The Apple
 lifecycle adapter now serializes configure and destroy through `BotaAppleSDK`.
 The first device slices also support discovery, selected-device connect,
 serial-strict reconnect, disconnect, current-status reads, and typed status
-subscriptions while native actors own scan and status teardown;
+subscriptions while native actors own scan and status teardown. Provisioning
+and remove-only deprovision now delegate through the native facades; one-shot
+request IDs keep asynchronous JavaScript material lookup inside the active
+nonce-bound workflow.
 a real CocoaPods application compiles and links the generated typed event spec,
 Objective-C++, Swift, Swift Package, and Rust XCFramework layers. The Android
-adapters provide the same lifecycle, connection, and status slices through the public Android
-facade, and a checked-in React Native Gradle consumer runs Codegen, Kotlin tests,
+adapters provide the same lifecycle, connection, status, and provisioning
+slices through the public Android facade, and a checked-in React Native Gradle
+consumer runs Codegen, Kotlin tests,
 lint, and release assembly against the exact packaged AAR. The
 package now matches all 75 frozen non-workflow exports, including every public
 type and the pure error, sync-status, and device-log runtime helpers. The five

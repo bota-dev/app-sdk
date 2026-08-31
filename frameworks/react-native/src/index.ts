@@ -11,9 +11,13 @@ export type {
   BotaDeviceSDKClient,
   BotaDeviceSDKConfiguration,
   BotaDeviceSDKDeviceClient,
+  BotaDeviceSDKProvisioningClient,
   BotaDeviceSDKState,
   BotaEventSubscription,
   BotaLogLevel,
+  BotaProvisioningMaterial,
+  BotaProvisioningMaterialProvider,
+  BotaProvisioningMaterialRequest,
 } from './client';
 
 export const BotaDeviceSDK = createBotaDeviceSDK(NativeBotaDeviceSDK);

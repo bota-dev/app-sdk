@@ -21,6 +21,7 @@ internal class BotaDeviceSDKModule(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : NativeBotaDeviceSDKSpec(reactContext) {
     private val devices = BotaDeviceSDKAndroidDevices(BotaDeviceSDKSharedAndroidDeviceClient(), scope)
+    private val security = BotaDeviceSDKAndroidSecurity()
 
     override fun configure(configuration: ReadableMap, promise: Promise) {
         val storageDirectory =
@@ -36,6 +37,7 @@ internal class BotaDeviceSDKModule(
 
     override fun destroy(promise: Promise) {
         launch(promise) {
+            security.cancelAll()
             devices.stopAll()
             lifecycle.destroy()
         }
@@ -91,6 +93,39 @@ internal class BotaDeviceSDKModule(
         launch(promise) { devices.stopStatusUpdates() }
     }
 
+    override fun provision(device: ReadableMap, promise: Promise) {
+        launch(promise) {
+            security.provision(device.toConnectedDevice()) {
+                emitOnProvisioningMaterialRequested(it.toWritableMap())
+            }
+        }
+    }
+
+    override fun deprovision(device: ReadableMap, promise: Promise) {
+        launch(promise) { security.deprovision(device.toConnectedDevice()) }
+    }
+
+    override fun resolveProvisioningMaterial(
+        requestId: String,
+        material: ReadableMap,
+        promise: Promise,
+    ) {
+        launch(promise) {
+            security.resolveProvisioningMaterial(
+                requestId = requestId,
+                apiEndpoint = material.getString("apiEndpoint")
+                    ?: error("provisioning API endpoint is required"),
+                deviceToken = material.getString("deviceToken")
+                    ?: error("provisioning device token is required"),
+                mtu = material.getDouble("mtu").toUnsignedInteger(),
+            )
+        }
+    }
+
+    override fun rejectApplicationMaterial(requestId: String, message: String, promise: Promise) {
+        launch(promise) { security.rejectApplicationMaterial(requestId, message) }
+    }
+
     override fun getCapabilities(promise: Promise) {
         val capabilities = lifecycle.capabilities()
         promise.resolve(
@@ -111,6 +146,7 @@ internal class BotaDeviceSDKModule(
     override fun invalidate() {
         scope.launch {
             try {
+                security.cancelAll()
                 devices.stopAll()
                 lifecycle.destroy()
             } finally {
@@ -150,6 +186,13 @@ internal class BotaDeviceSDKModule(
 private fun Double.toTimeoutMilliseconds(): ULong {
     require(isFinite() && this >= 0 && this <= Long.MAX_VALUE.toDouble()) {
         "timeout must be a finite non-negative number"
+    }
+    return toLong().toULong()
+}
+
+private fun Double.toUnsignedInteger(): ULong {
+    require(isFinite() && this >= 0 && this <= 9_007_199_254_740_991.0 && this % 1.0 == 0.0) {
+        "value must be a finite non-negative integer"
     }
     return toLong().toULong()
 }

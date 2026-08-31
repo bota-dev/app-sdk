@@ -85,7 +85,10 @@ native operation instead returns stable `native_module_unavailable`.
 
 The bridge contract contains configure, destroy, state, capabilities, device
 discovery, selected-device connect, serial-strict reconnect, disconnect, a
-device-status read, and a typed device-status event subscription.
+device-status read, a typed device-status event subscription, and nonce-bound
+provision/deprovision operations. Provisioning uses a one-shot application
+material event and response rather than separating nonce/public-key reads from
+the native workflow.
 React Native Codegen produces a canonical schema plus iOS and Android artifact
 digests in
 `frameworks/react-native/generated/codegen-contract.json`; CI regenerates and
@@ -107,13 +110,18 @@ the frozen JavaScript scan filters, connects a selected peripheral while the
 native facade learns its serial identity, reconnects only by an expected serial,
 disconnects, reads current status, and owns a typed status subscription. It is
 an incremental workflow surface, not class parity.
+The sibling `BotaDeviceSDK.provisioning` facade delegates provisioning and
+remove-only deprovision to native managers. During provisioning, native code
+emits only a request ID, serial, nonce, and public device key; JavaScript
+returns the endpoint, token, and MTU or rejects the request. Pending requests
+are cancelled on destroy so no continuation outlives its native workflow.
 
 The Apple host is now executable. A Swift actor coalesces concurrent
 configuration, orders destruction after any in-flight configuration, and calls
 the public `BotaDeviceClient` facade. A separate actor owns scan and status
 collection and cancels status before a connection transition or destruction.
 Objective-C++ implements only the generated TurboModule spec, typed discovery
-and status event emission, and promise conversion. The pod uses React Native
+status/provisioning event emission, and promise conversion. The pod uses React Native
 0.86's iOS 15.1 floor and resolves the exact matching `BotaAppleSDK` release;
 the local package-path override exists only for source and CI builds. A
 disposable Objective-C++ and Swift CocoaPods application compiles and links the
@@ -122,20 +130,22 @@ The build toolchain is locked, and a separate remote-resolution gate confirms
 that the default package URL resolves the synchronized immutable release. A
 target-scoped CocoaPods hook carries React Native's upstream fix for duplicate
 binary Swift-package module maps on Xcode 26.3 while the package floor remains
-0.86.3. This proves lifecycle plus device discovery/connection/status integration, not
-the remaining workflow surface or application parity.
+0.86.3. This proves lifecycle plus device discovery, connection, status, and
+provisioning integration, not the remaining workflow surface or application
+parity.
 
 The Android host is also executable. A coroutine mutex serializes
 configuration and destruction through `BotaDeviceClient.shared`, and a
 `BaseReactPackage` registers the generated TurboModule with stable state,
 capability, and `android_sdk_error` behavior. A separate owner contains scan and
 status failures and cancels owned streams before connection transitions or
-destroy. A checked-in React Native 0.86.3
+destroy. A one-shot material broker delegates provisioning and remove-only
+deprovision through the public Android facade. A checked-in React Native 0.86.3
 Gradle consumer regenerates Codegen, runs lifecycle unit tests and lint, and
 assembles the adapter against the exact AAR reconstructed from the immutable
 local Maven payload. This proves Android lifecycle plus device
-discovery/connection/status integration only; the remaining workflow bindings and
-application parity remain open.
+discovery, connection, status, and provisioning integration only; the remaining
+workflow bindings and application parity remain open.
 
 The Android migration has a native package foundation in `platforms/android`.
 `sdk-version.toml` is mirrored as `VERSION_NAME`, while release-readiness tests

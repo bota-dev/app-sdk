@@ -28,6 +28,20 @@ internal fun ReadableMap.toDiscoveredDevice(): DiscoveredDevice = DiscoveredDevi
     discoveredAt = Instant.ofEpochMilli(getDouble("discoveredAtMs").toLong()),
 )
 
+internal fun ReadableMap.toConnectedDevice(): ConnectedDevice = ConnectedDevice(
+    id = getString("id") ?: error("connected device id is required"),
+    serialNumber = getString("serialNumber") ?: error("connected device serial number is required"),
+    deviceType = getString("deviceType")?.toDeviceType()
+        ?: error("connected device type is required"),
+    firmwareVersion = getString("firmwareVersion")
+        ?: error("connected device firmware version is required"),
+    hardwareRevision = optionalString("hardwareRevision"),
+    isProvisioned = getBoolean("isProvisioned"),
+    connectionState = getString("connectionState")?.toConnectionState()
+        ?: error("connected device connection state is required"),
+    mtu = requiredInt("mtu"),
+)
+
 internal fun DiscoveredDevice.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putString("id", id)
     name?.let { putString("name", it) }
@@ -67,6 +81,14 @@ internal fun DeviceStatus.toWritableMap(): WritableMap = Arguments.createMap().a
     modemInfo?.let { putMap("modemInfo", it.toWritableMap()) }
 }
 
+internal fun BotaDeviceSDKAndroidProvisioningRequest.toWritableMap(): WritableMap =
+    Arguments.createMap().apply {
+        putString("requestId", requestId)
+        putString("serialNumber", serialNumber)
+        putString("nonce", nonce)
+        putString("devicePublicKey", devicePublicKey)
+    }
+
 private fun DeviceFlags.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putBoolean("charging", charging)
     putBoolean("lowBattery", lowBattery)
@@ -93,6 +115,14 @@ private fun ModemInfo.toWritableMap(): WritableMap = Arguments.createMap().apply
 
 private fun ReadableMap.optionalString(key: String): String? =
     if (hasKey(key) && !isNull(key)) getString(key) else null
+
+private fun ReadableMap.requiredInt(key: String): Int {
+    val value = getDouble(key)
+    require(value.isFinite() && value % 1.0 == 0.0 && value in Int.MIN_VALUE.toDouble()..Int.MAX_VALUE.toDouble()) {
+        "$key must be a finite integer"
+    }
+    return value.toInt()
+}
 
 private fun String.toDeviceType(): DeviceType? = when (this) {
     "bota_pin" -> DeviceType.BotaPin
@@ -131,6 +161,16 @@ private fun ConnectionState.toBridgeValue(): String = when (this) {
     ConnectionState.Discovering -> "discovering"
     ConnectionState.Connected -> "connected"
     ConnectionState.Disconnecting -> "disconnecting"
+}
+
+private fun String.toConnectionState(): ConnectionState? = when (this) {
+    "disconnected" -> ConnectionState.Disconnected
+    "connecting" -> ConnectionState.Connecting
+    "bonding" -> ConnectionState.Bonding
+    "discovering" -> ConnectionState.Discovering
+    "connected" -> ConnectionState.Connected
+    "disconnecting" -> ConnectionState.Disconnecting
+    else -> null
 }
 
 private fun WireValue<DeviceState>.toDeviceStateBridgeValue(): String = when (this) {

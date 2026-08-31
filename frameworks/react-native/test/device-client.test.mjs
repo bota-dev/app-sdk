@@ -57,6 +57,9 @@ function nativeFixture() {
   const calls = [];
   let discoveryHandler = null;
   let statusHandler = null;
+  let provisioningHandler = null;
+  let provisioningResolve = null;
+  let provisioningReject = null;
   let removed = false;
   return {
     calls,
@@ -95,6 +98,14 @@ function nativeFixture() {
           },
         };
       },
+      onProvisioningMaterialRequested(handler) {
+        provisioningHandler = handler;
+        return {
+          remove() {
+            provisioningHandler = null;
+          },
+        };
+      },
       async startScan(timeoutMs, allowDuplicates) {
         calls.push(['startScan', timeoutMs, allowDuplicates]);
       },
@@ -121,6 +132,32 @@ function nativeFixture() {
       },
       async stopStatusUpdates() {
         calls.push(['stopStatusUpdates']);
+      },
+      async provision(device) {
+        calls.push(['provision', device]);
+        queueMicrotask(() => {
+          provisioningHandler?.({
+            requestId: 'material-request',
+            serialNumber: device.serialNumber,
+            nonce: '00112233',
+            devicePublicKey: 'aabbccdd',
+          });
+        });
+        return new Promise((resolve, reject) => {
+          provisioningResolve = resolve;
+          provisioningReject = reject;
+        });
+      },
+      async resolveProvisioningMaterial(requestId, material) {
+        calls.push(['resolveProvisioningMaterial', requestId, material]);
+        provisioningResolve?.();
+      },
+      async rejectApplicationMaterial(requestId, message) {
+        calls.push(['rejectApplicationMaterial', requestId, message]);
+        provisioningReject?.(new Error(message));
+      },
+      async deprovision(device) {
+        calls.push(['deprovision', device]);
       },
     },
   };
@@ -234,5 +271,59 @@ test('device status reads and subscriptions map dates and own native teardown', 
     ['readStatus'],
     ['startStatusUpdates'],
     ['stopStatusUpdates'],
+  ]);
+});
+
+test('provisioning resolves nonce-bound native material and supports remove-only deprovision', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+
+  await client.provisioning.provision(connected, async (request) => {
+    assert.deepEqual(request, {
+      serialNumber: 'EVFXXW67KP',
+      nonce: '00112233',
+      devicePublicKey: 'aabbccdd',
+    });
+    return {
+      apiEndpoint: 'https://api.bota.dev',
+      deviceToken: 'dtok_example',
+      mtu: 247,
+    };
+  });
+  await client.provisioning.deprovision(connected);
+
+  assert.deepEqual(fixture.calls, [
+    ['provision', connected],
+    [
+      'resolveProvisioningMaterial',
+      'material-request',
+      {
+        apiEndpoint: 'https://api.bota.dev',
+        deviceToken: 'dtok_example',
+        mtu: 247,
+      },
+    ],
+    ['deprovision', connected],
+  ]);
+});
+
+test('provisioning rejects native material requests when the application provider fails', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+
+  await assert.rejects(
+    client.provisioning.provision(connected, async () => {
+      throw new Error('backend material unavailable');
+    }),
+    /backend material unavailable/
+  );
+
+  assert.deepEqual(fixture.calls, [
+    ['provision', connected],
+    [
+      'rejectApplicationMaterial',
+      'material-request',
+      'backend material unavailable',
+    ],
   ]);
 });

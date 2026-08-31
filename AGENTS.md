@@ -64,6 +64,14 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   fallbacks at both bridge boundaries: pairing state is `unpaired`, device
   state is `idle`, and LTE/WiFi status is `off`. This does not make the frozen
   `DeviceManager` class complete or eligible for export.
+- `BotaDeviceSDK.provisioning` is the native-backed provisioning slice.
+  Provisioning material stays nonce-bound: native emits a one-shot request ID,
+  serial, nonce, and public device key while the workflow is active; JavaScript
+  resolves that request with the API endpoint, device token, and MTU or rejects
+  it with an application error. Never split this into a read-then-provision
+  sequence. Deprovision is remove-only and must remain separate from factory
+  reset. Destroy and invalidation must reject pending material requests and
+  cancel the native provisioning operation.
 - Keep the Codegen names `BotaDeviceSDKSpec` and `BotaDeviceSDK` frozen. Import
   uses optional TurboModule lookup; missing native code fails on invocation as
   `native_module_unavailable`, not while the JavaScript module is imported.
@@ -90,8 +98,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Keep React Native lifecycle serialization in the Swift actor. Concurrent
   configure calls coalesce, destroy waits for an in-flight configure, and the
   device actor owns its scan and status tasks and waits for those collectors to
-  finish during teardown. Objective-C++ translates generated-spec promises and
-  must subclass `NativeBotaDeviceSDKSpecBase` before emitting Codegen events.
+  finish during teardown. `BotaDeviceSDKAppleSecurity` owns one-shot
+  provisioning continuations and cancels them during teardown. Objective-C++
+  translates generated-spec promises and must subclass
+  `NativeBotaDeviceSDKSpecBase` before emitting Codegen events.
 - Keep React Native Android lifecycle serialization in
   `BotaDeviceSDKAndroidLifecycle`. Its mutex orders configure and destroy,
   retries a failed configure, and delegates only to `BotaDeviceClient.shared`;
@@ -100,6 +110,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `BotaDeviceSDKAndroidDevices`. It owns scan and status coroutines, contains
   asynchronous stream failures, and cancels affected work before connect,
   reconnect, disconnect, destroy, or React Native invalidation.
+- Keep React Native Android provisioning material ownership in
+  `BotaDeviceSDKAndroidSecurity`. Request IDs are one-shot, material is copied
+  into the public Android facade, and destroy/invalidation cancels both pending
+  deferred values and the active provisioning workflow.
 - The Android build foundation uses JDK 17, Gradle 8.13, AGP 8.13.2, Kotlin
   2.1.20, API 26 minimum with API 36 compile/lint/test targets, NDK
   28.2.13676358, CMake 3.22.1, and Maven Publish Plugin 0.35.0.

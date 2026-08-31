@@ -2,10 +2,16 @@ import BotaAppleSDK
 import Foundation
 
 private enum BotaDeviceSDKAppleBridgeInputError: LocalizedError {
+    case invalidConnectedDevice
     case invalidTimeout
+    case invalidUnsignedInteger
 
     var errorDescription: String? {
-        "timeout must be a finite non-negative number"
+        switch self {
+        case .invalidConnectedDevice: "connected device contains an unsupported value"
+        case .invalidTimeout: "timeout must be a finite non-negative number"
+        case .invalidUnsignedInteger: "value must be a finite non-negative integer"
+        }
     }
 }
 
@@ -15,10 +21,12 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
 
     private let lifecycle: BotaDeviceSDKAppleLifecycle
     private let devices: BotaDeviceSDKAppleDevices
+    private let security: BotaDeviceSDKAppleSecurity
 
     override private init() {
         lifecycle = BotaDeviceSDKAppleLifecycle()
         devices = BotaDeviceSDKAppleDevices()
+        security = BotaDeviceSDKAppleSecurity()
         super.init()
     }
 
@@ -44,6 +52,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
     @objc(destroyWithCompletion:)
     public func destroy(completion: @escaping @Sendable () -> Void) {
         Task {
+            await security.cancelAll()
             await devices.stopAll()
             await lifecycle.destroy()
             completion()
@@ -191,6 +200,119 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
+    @objc(provisionWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:onMaterialRequest:completion:)
+    public func provision(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        onMaterialRequest: @escaping @Sendable ([String: Any]) -> Void,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let device = try Self.connectedDevice(
+                    id: id,
+                    serialNumber: serialNumber,
+                    deviceType: deviceType,
+                    firmwareVersion: firmwareVersion,
+                    hardwareRevision: hardwareRevision,
+                    isProvisioned: isProvisioned,
+                    connectionState: connectionState,
+                    mtu: mtu
+                )
+                try await security.provision(device) { request in
+                    onMaterialRequest([
+                        "requestId": request.requestID,
+                        "serialNumber": request.serialNumber,
+                        "nonce": request.nonce,
+                        "devicePublicKey": request.devicePublicKey,
+                    ])
+                }
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(deprovisionWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:completion:)
+    public func deprovision(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await security.deprovision(Self.connectedDevice(
+                    id: id,
+                    serialNumber: serialNumber,
+                    deviceType: deviceType,
+                    firmwareVersion: firmwareVersion,
+                    hardwareRevision: hardwareRevision,
+                    isProvisioned: isProvisioned,
+                    connectionState: connectionState,
+                    mtu: mtu
+                ))
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(resolveProvisioningMaterialWithRequestID:apiEndpoint:deviceToken:mtu:completion:)
+    public func resolveProvisioningMaterial(
+        requestID: String,
+        apiEndpoint: String,
+        deviceToken: String,
+        mtu: Double,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await security.resolveProvisioningMaterial(
+                    requestID: requestID,
+                    apiEndpoint: apiEndpoint,
+                    deviceToken: deviceToken,
+                    mtu: try Self.unsignedInteger(mtu)
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(rejectApplicationMaterialWithRequestID:message:completion:)
+    public func rejectApplicationMaterial(
+        requestID: String,
+        message: String,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await security.rejectApplicationMaterial(
+                    requestID: requestID,
+                    message: message
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
     @objc(stateWithCompletion:)
     public func state(completion: @escaping @Sendable (String) -> Void) {
         Task {
@@ -235,6 +357,36 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         ]
         if let revision = device.hardwareRevision { value["hardwareRevision"] = revision }
         return value
+    }
+
+    private static func connectedDevice(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double
+    ) throws -> ConnectedDevice {
+        guard let type = self.deviceType(deviceType),
+              let state = self.connectionState(connectionState),
+              mtu.isFinite,
+              mtu.rounded(.towardZero) == mtu,
+              let mtuValue = Int(exactly: mtu)
+        else {
+            throw BotaDeviceSDKAppleBridgeInputError.invalidConnectedDevice
+        }
+        return ConnectedDevice(
+            id: id,
+            serialNumber: serialNumber,
+            deviceType: type,
+            firmwareVersion: firmwareVersion,
+            hardwareRevision: hardwareRevision,
+            isProvisioned: isProvisioned,
+            connectionState: state,
+            mtu: mtuValue
+        )
     }
 
     private static func deviceStatus(_ status: DeviceStatus) -> [String: Any] {
@@ -336,6 +488,18 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
+    private static func connectionState(_ value: String) -> ConnectionState? {
+        switch value {
+        case "disconnected": .disconnected
+        case "connecting": .connecting
+        case "bonding": .bonding
+        case "discovering": .discovering
+        case "connected": .connected
+        case "disconnecting": .disconnecting
+        default: nil
+        }
+    }
+
     private static func deviceState(_ value: WireValue<DeviceState>) -> String {
         guard case let .known(state) = value else { return "idle" }
         return switch state {
@@ -382,6 +546,17 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
     static func timeoutMilliseconds(_ value: Double) throws -> UInt64 {
         guard value.isFinite, value >= 0, value <= Double(Int64.max) else {
             throw BotaDeviceSDKAppleBridgeInputError.invalidTimeout
+        }
+        return UInt64(value)
+    }
+
+    private static func unsignedInteger(_ value: Double) throws -> UInt64 {
+        guard value.isFinite,
+              value >= 0,
+              value <= 9_007_199_254_740_991,
+              value.rounded(.towardZero) == value
+        else {
+            throw BotaDeviceSDKAppleBridgeInputError.invalidUnsignedInteger
         }
         return UInt64(value)
     }

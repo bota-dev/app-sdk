@@ -4,6 +4,7 @@ import type {
   NativeConfiguration,
   NativeDeviceStatus,
   NativeDiscoveredDevice,
+  NativeProvisioningMaterialRequest,
   Spec,
 } from './specs/NativeBotaDeviceSDK';
 import type {
@@ -43,6 +44,29 @@ export type BotaAsyncEventSubscription = {
   remove(): Promise<void>;
 };
 
+export type BotaProvisioningMaterialRequest = Omit<
+  NativeProvisioningMaterialRequest,
+  'requestId'
+>;
+
+export type BotaProvisioningMaterial = {
+  apiEndpoint: string;
+  deviceToken: string;
+  mtu: number;
+};
+
+export type BotaProvisioningMaterialProvider = (
+  request: BotaProvisioningMaterialRequest
+) => Promise<BotaProvisioningMaterial>;
+
+export type BotaDeviceSDKProvisioningClient = {
+  provision(
+    device: ConnectedDevice,
+    provider: BotaProvisioningMaterialProvider
+  ): Promise<void>;
+  deprovision(device: ConnectedDevice): Promise<void>;
+};
+
 export type BotaDeviceSDKDeviceClient = {
   startScan(
     options: ScanOptions | undefined,
@@ -74,6 +98,7 @@ export class BotaNativeModuleError extends Error {
 
 export type BotaDeviceSDKClient = {
   readonly devices: BotaDeviceSDKDeviceClient;
+  readonly provisioning: BotaDeviceSDKProvisioningClient;
   configure(configuration?: BotaDeviceSDKConfiguration): Promise<void>;
   destroy(): Promise<void>;
   getCapabilities(): Promise<BotaDeviceSDKCapabilities>;
@@ -113,6 +138,24 @@ const mapConnectedDevice = (
   deviceType: device.deviceType as DeviceType,
   connectionState: device.connectionState as ConnectionState,
 });
+
+const toNativeConnectedDevice = (
+  device: ConnectedDevice
+): NativeConnectedDevice => ({
+  id: device.id,
+  serialNumber: device.serialNumber,
+  deviceType: device.deviceType,
+  firmwareVersion: device.firmwareVersion,
+  ...(device.hardwareRevision === undefined
+    ? {}
+    : { hardwareRevision: device.hardwareRevision }),
+  isProvisioned: device.isProvisioned,
+  connectionState: device.connectionState,
+  mtu: device.mtu,
+});
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 const matchesScanOptions = (
   device: DiscoveredDevice,
@@ -231,8 +274,41 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
   };
 
+  const provisioning: BotaDeviceSDKProvisioningClient = {
+    async provision(device, provider) {
+      const module = requireNativeModule();
+      const subscription = module.onProvisioningMaterialRequested((request) => {
+        void (async () => {
+          try {
+            const material = await provider({
+              serialNumber: request.serialNumber,
+              nonce: request.nonce,
+              devicePublicKey: request.devicePublicKey,
+            });
+            await module.resolveProvisioningMaterial(request.requestId, material);
+          } catch (error) {
+            await module.rejectApplicationMaterial(
+              request.requestId,
+              errorMessage(error)
+            );
+          }
+        })().catch(() => {});
+      });
+      try {
+        await module.provision(toNativeConnectedDevice(device));
+      } finally {
+        subscription.remove();
+      }
+    },
+
+    async deprovision(device) {
+      await requireNativeModule().deprovision(toNativeConnectedDevice(device));
+    },
+  };
+
   return {
     devices,
+    provisioning,
 
     async configure(configuration = {}) {
       const nativeConfiguration: NativeConfiguration = {
