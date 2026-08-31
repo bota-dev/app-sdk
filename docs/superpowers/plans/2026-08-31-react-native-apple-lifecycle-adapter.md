@@ -116,5 +116,5 @@
 - [x] **Step 1: Search all documentation** for `BotaDeviceSDK`, `frameworks/react-native`, `BotaAppleSDK`, `TurboModule`, `CocoaPods`, and `spm_dependency`; update every relevant status statement.
 - [x] **Step 2: Run the complete applicable local verification suite** for the nested package, root tooling and licenses, Swift adapter package, Apple package, Rust formatting/lint/tests, and git whitespace.
 - [x] **Step 3: Request an independent code review** and resolve every actionable finding with focused tests.
-- [ ] **Step 4: Mark this plan complete, merge the focused commits to `main`, push, and wait for both CI and License Gate success.**
-- [ ] **Step 5: Remove the completed feature worktree** only after remote verification succeeds.
+- [x] **Step 4: Mark this plan complete, merge the focused commits to `main`, push, and wait for both CI and License Gate success.**
+- [x] **Step 5: Remove the completed feature worktree** only after remote verification succeeds.
