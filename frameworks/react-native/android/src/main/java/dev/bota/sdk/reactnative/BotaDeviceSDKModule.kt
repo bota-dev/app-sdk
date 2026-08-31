@@ -105,6 +105,36 @@ internal class BotaDeviceSDKModule(
         launch(promise) { security.deprovision(device.toConnectedDevice()) }
     }
 
+    override fun factoryReset(
+        device: ReadableMap,
+        commandId: String,
+        bindingGeneration: Double,
+        promise: Promise,
+    ) {
+        launchValue(promise) {
+            security.factoryReset(
+                device = device.toConnectedDevice(),
+                commandId = commandId,
+                bindingGeneration = bindingGeneration.toUnsignedInteger(),
+            ) {
+                emitOnFactoryResetGrantRequested(it.toWritableMap())
+            }.toWritableMap()
+        }
+    }
+
+    override fun resumePendingFactoryReset(
+        device: ReadableMap,
+        currentBindingGeneration: Double,
+        promise: Promise,
+    ) {
+        launchValue(promise) {
+            security.resumePendingFactoryReset(
+                device.toConnectedDevice(),
+                currentBindingGeneration.toUnsignedInteger(),
+            )?.toWritableMap()
+        }
+    }
+
     override fun resolveProvisioningMaterial(
         requestId: String,
         material: ReadableMap,
@@ -120,6 +150,14 @@ internal class BotaDeviceSDKModule(
                 mtu = material.getDouble("mtu").toUnsignedInteger(),
             )
         }
+    }
+
+    override fun resolveFactoryResetGrant(
+        requestId: String,
+        grantBlob: String,
+        promise: Promise,
+    ) {
+        launch(promise) { security.resolveFactoryResetGrant(requestId, grantBlob) }
     }
 
     override fun rejectApplicationMaterial(requestId: String, message: String, promise: Promise) {
@@ -167,7 +205,7 @@ internal class BotaDeviceSDKModule(
         }
     }
 
-    private fun launchValue(promise: Promise, operation: suspend () -> Any) {
+    private fun launchValue(promise: Promise, operation: suspend () -> Any?) {
         scope.launch {
             try {
                 promise.resolve(operation())

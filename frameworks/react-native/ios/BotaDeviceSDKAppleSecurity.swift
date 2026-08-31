@@ -8,20 +8,41 @@ struct BotaDeviceSDKAppleProvisioningRequest: Equatable, Sendable {
     let devicePublicKey: String
 }
 
+struct BotaDeviceSDKAppleFactoryResetRequest: Equatable, Sendable {
+    let requestID: String
+    let serialNumber: String
+    let nonce: String
+    let commandID: String
+    let bindingGeneration: UInt64
+}
+
 protocol BotaDeviceSDKAppleSecurityClient: Sendable {
     func provision(
         _ device: ConnectedDevice,
         using provider: @escaping ProvisioningMaterialProvider
     ) async throws
     func deprovision(_ device: ConnectedDevice) async throws
+    func factoryReset(
+        _ device: ConnectedDevice,
+        commandID: String,
+        bindingGeneration: UInt64,
+        using provider: @escaping FactoryResetGrantProvider
+    ) async throws -> FactoryResetCompletion
+    func resumePendingFactoryReset(
+        _ device: ConnectedDevice,
+        currentBindingGeneration: UInt64
+    ) async throws -> FactoryResetCompletion?
     func cancelCurrentOperation() async throws
+    func cancelFactoryReset() async throws
 }
 
 struct BotaDeviceSDKSharedAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
     private let provisioning: ProvisioningManager
+    private let factoryResetManager: FactoryResetManager
 
     init(client: BotaDeviceClient = .shared) {
         provisioning = client.provisioning
+        factoryResetManager = client.factoryReset
     }
 
     func provision(
@@ -39,20 +60,51 @@ struct BotaDeviceSDKSharedAppleSecurityClient: BotaDeviceSDKAppleSecurityClient 
         try await provisioning.deprovision(device)
     }
 
+    func factoryReset(
+        _ device: ConnectedDevice,
+        commandID: String,
+        bindingGeneration: UInt64,
+        using provider: @escaping FactoryResetGrantProvider
+    ) async throws -> FactoryResetCompletion {
+        try await factoryResetManager.factoryReset(
+            device,
+            commandID: commandID,
+            grantID: UUID().uuidString,
+            bindingGeneration: bindingGeneration,
+            using: provider
+        )
+    }
+
+    func resumePendingFactoryReset(
+        _ device: ConnectedDevice,
+        currentBindingGeneration: UInt64
+    ) async throws -> FactoryResetCompletion? {
+        try await factoryResetManager.resumePendingFactoryReset(
+            device,
+            currentBindingGeneration: currentBindingGeneration
+        )
+    }
+
     func cancelCurrentOperation() async throws {
         try await provisioning.cancelCurrentOperation()
+    }
+
+    func cancelFactoryReset() async throws {
+        try await factoryResetManager.cancelCurrentOperation()
     }
 }
 
 actor BotaDeviceSDKAppleSecurity {
     private enum MaterialError: LocalizedError {
         case cancelled
+        case invalidFactoryResetGrant
         case rejected(String)
         case unknownRequest
 
         var errorDescription: String? {
             switch self {
             case .cancelled: "application material request was cancelled"
+            case .invalidFactoryResetGrant: "factory reset grant is not valid encoded data"
             case let .rejected(message): message
             case .unknownRequest: "application material request is no longer pending"
             }
@@ -63,6 +115,7 @@ actor BotaDeviceSDKAppleSecurity {
     private var provisioningRequests: [
         String: CheckedContinuation<ProvisioningMaterial, Error>
     ] = [:]
+    private var factoryResetRequests: [String: CheckedContinuation<Data, Error>] = [:]
 
     init(client: any BotaDeviceSDKAppleSecurityClient = BotaDeviceSDKSharedAppleSecurityClient()) {
         self.client = client
@@ -79,6 +132,31 @@ actor BotaDeviceSDKAppleSecurity {
 
     func deprovision(_ device: ConnectedDevice) async throws {
         try await client.deprovision(device)
+    }
+
+    func factoryReset(
+        _ device: ConnectedDevice,
+        commandID: String,
+        bindingGeneration: UInt64,
+        onGrantRequest: @escaping @Sendable (BotaDeviceSDKAppleFactoryResetRequest) -> Void
+    ) async throws -> FactoryResetCompletion {
+        try await client.factoryReset(
+            device,
+            commandID: commandID,
+            bindingGeneration: bindingGeneration
+        ) { request in
+            try await self.requestFactoryResetGrant(request, onRequest: onGrantRequest)
+        }
+    }
+
+    func resumePendingFactoryReset(
+        _ device: ConnectedDevice,
+        currentBindingGeneration: UInt64
+    ) async throws -> FactoryResetCompletion? {
+        try await client.resumePendingFactoryReset(
+            device,
+            currentBindingGeneration: currentBindingGeneration
+        )
     }
 
     func resolveProvisioningMaterial(
@@ -98,17 +176,37 @@ actor BotaDeviceSDKAppleSecurity {
     }
 
     func rejectApplicationMaterial(requestID: String, message: String) throws {
-        guard let continuation = provisioningRequests.removeValue(forKey: requestID) else {
+        if let continuation = provisioningRequests.removeValue(forKey: requestID) {
+            continuation.resume(throwing: MaterialError.rejected(message))
+            return
+        }
+        if let continuation = factoryResetRequests.removeValue(forKey: requestID) {
+            continuation.resume(throwing: MaterialError.rejected(message))
+            return
+        }
+        throw MaterialError.unknownRequest
+    }
+
+    func resolveFactoryResetGrant(requestID: String, grantBlob: String) throws {
+        guard let continuation = factoryResetRequests.removeValue(forKey: requestID) else {
             throw MaterialError.unknownRequest
         }
-        continuation.resume(throwing: MaterialError.rejected(message))
+        guard let grant = Data(base64Encoded: grantBlob), !grant.isEmpty else {
+            continuation.resume(throwing: MaterialError.invalidFactoryResetGrant)
+            return
+        }
+        continuation.resume(returning: grant)
     }
 
     func cancelAll() async {
         let pending = provisioningRequests.values
         provisioningRequests.removeAll()
         pending.forEach { $0.resume(throwing: MaterialError.cancelled) }
+        let pendingResets = factoryResetRequests.values
+        factoryResetRequests.removeAll()
+        pendingResets.forEach { $0.resume(throwing: MaterialError.cancelled) }
         try? await client.cancelCurrentOperation()
+        try? await client.cancelFactoryReset()
     }
 
     private func requestProvisioningMaterial(
@@ -132,9 +230,33 @@ actor BotaDeviceSDKAppleSecurity {
     }
 
     private func cancel(requestID: String) {
-        provisioningRequests.removeValue(forKey: requestID)?.resume(
-            throwing: MaterialError.cancelled
-        )
+        if let continuation = provisioningRequests.removeValue(forKey: requestID) {
+            continuation.resume(throwing: MaterialError.cancelled)
+        }
+        if let continuation = factoryResetRequests.removeValue(forKey: requestID) {
+            continuation.resume(throwing: MaterialError.cancelled)
+        }
+    }
+
+    private func requestFactoryResetGrant(
+        _ request: FactoryResetGrantRequest,
+        onRequest: @escaping @Sendable (BotaDeviceSDKAppleFactoryResetRequest) -> Void
+    ) async throws -> Data {
+        let requestID = UUID().uuidString
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                factoryResetRequests[requestID] = continuation
+                onRequest(.init(
+                    requestID: requestID,
+                    serialNumber: request.serialNumber,
+                    nonce: request.nonce.hexString,
+                    commandID: request.commandID,
+                    bindingGeneration: request.bindingGeneration
+                ))
+            }
+        } onCancel: {
+            Task { await self.cancel(requestID: requestID) }
+        }
     }
 }
 

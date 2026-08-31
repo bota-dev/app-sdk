@@ -10,6 +10,7 @@ import dev.bota.sdk.model.DeviceState
 import dev.bota.sdk.model.DeviceStatus
 import dev.bota.sdk.model.DeviceType
 import dev.bota.sdk.model.DiscoveredDevice
+import dev.bota.sdk.model.FactoryResetCompletion
 import dev.bota.sdk.model.LteStatus
 import dev.bota.sdk.model.ModemInfo
 import dev.bota.sdk.model.PairingState
@@ -88,6 +89,20 @@ internal fun BotaDeviceSDKAndroidProvisioningRequest.toWritableMap(): WritableMa
         putString("nonce", nonce)
         putString("devicePublicKey", devicePublicKey)
     }
+
+internal fun BotaDeviceSDKAndroidFactoryResetRequest.toWritableMap(): WritableMap =
+    Arguments.createMap().apply {
+        putString("requestId", requestId)
+        putString("serialNumber", serialNumber)
+        putString("nonce", nonce)
+        putString("commandId", commandId)
+        putDouble("bindingGeneration", bindingGeneration.toDouble())
+    }
+
+internal fun FactoryResetCompletion.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putString("commandId", commandId)
+    putDouble("bindingGeneration", bindingGeneration.toDouble())
+}
 
 private fun DeviceFlags.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putBoolean("charging", charging)

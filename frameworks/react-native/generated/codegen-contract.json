@@ -344,6 +344,65 @@
               }
             ]
           },
+          "NativeFactoryResetCompletion": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "commandId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "bindingGeneration",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeFactoryResetGrantRequest": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "requestId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "serialNumber",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "nonce",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "commandId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "bindingGeneration",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
           "NativeModemInfo": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -547,6 +606,17 @@
                   "name": "NativeProvisioningMaterialRequest"
                 }
               }
+            },
+            {
+              "name": "onFactoryResetGrantRequested",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeFactoryResetGrantRequest"
+                }
+              }
             }
           ],
           "methods": [
@@ -646,6 +716,44 @@
                   }
                 },
                 "params": []
+              }
+            },
+            {
+              "name": "factoryReset",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeFactoryResetCompletion"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "commandId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "bindingGeneration",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "NumberTypeAnnotation"
+                    }
+                  }
+                ]
               }
             },
             {
@@ -791,6 +899,69 @@
               }
             },
             {
+              "name": "resolveFactoryResetGrant",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "grantBlob",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "resumePendingFactoryReset",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "NullableTypeAnnotation",
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeFactoryResetCompletion"
+                    }
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "currentBindingGeneration",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "NumberTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
               "name": "startScan",
               "optional": false,
               "typeAnnotation": {
@@ -886,11 +1057,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "d98699377ef8ccb260c5bf7394f78661a2e733a2a2865cd666d6df7cd1b61117"
+        "sha256": "e77c5cfb9b493f8237082873d04b4fea8b5dab77f3197b9c3265c810ca24ccf0"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "5d836b31fd87dea4ddc380eb54251a958e390696dd48cc580d19a33e87f0e3b6"
+        "sha256": "960525ed0023956a0628065067f841e10c8a72438b118b9800f9ea3d01993f45"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -902,23 +1073,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "31e4368fb0cfc74483e24530fd751d445c28d065e2868f30f0440ac2238fff38"
+        "sha256": "46ac9bc385c7026803df74f2a4736539699ada272668b580a02d44b7892f5dea"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "a70b38762d4a7e1d3a770b91baf41b8ff8e17f1df76e82b7cf708ea2818adccd"
+        "sha256": "c70574a9d3c4061666fd297d364f52eb3dbb65b99a69398f1140b33bf50ff341"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "11195430c3c05713fab64c82ac08447876f8d3a46682fbd1348157032b651cd5"
+        "sha256": "a12c47ac24161e983ae0377512f22e0de713ac575f4db2f2c4335542abc3ef95"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "31e4368fb0cfc74483e24530fd751d445c28d065e2868f30f0440ac2238fff38"
+        "sha256": "46ac9bc385c7026803df74f2a4736539699ada272668b580a02d44b7892f5dea"
       }
     ]
   },
-  "contractDigest": "0d3bef82a612a60afe3bad0da130373f91326acae10fc14406c46a54f01209a1"
+  "contractDigest": "6238f23bec0db226fbc7f2d292fb3adb308bc6abaa850ce899637037d2a9eb99"
 }

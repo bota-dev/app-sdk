@@ -96,10 +96,24 @@ export type NativeProvisioningMaterial = {
   mtu: number;
 };
 
+export type NativeFactoryResetGrantRequest = {
+  requestId: string;
+  serialNumber: string;
+  nonce: string;
+  commandId: string;
+  bindingGeneration: number;
+};
+
+export type NativeFactoryResetCompletion = {
+  commandId: string;
+  bindingGeneration: number;
+};
+
 export interface Spec extends TurboModule {
   readonly onDeviceDiscovered: EventEmitter<NativeDiscoveredDevice>;
   readonly onDeviceStatusUpdated: EventEmitter<NativeDeviceStatus>;
   readonly onProvisioningMaterialRequested: EventEmitter<NativeProvisioningMaterialRequest>;
+  readonly onFactoryResetGrantRequested: EventEmitter<NativeFactoryResetGrantRequest>;
   configure: (configuration: NativeConfiguration) => Promise<void>;
   connectSelected: (
     device: NativeDiscoveredDevice
@@ -107,6 +121,11 @@ export interface Spec extends TurboModule {
   destroy: () => Promise<void>;
   deprovision: (device: NativeConnectedDevice) => Promise<void>;
   disconnect: () => Promise<void>;
+  factoryReset: (
+    device: NativeConnectedDevice,
+    commandId: string,
+    bindingGeneration: number
+  ) => Promise<NativeFactoryResetCompletion>;
   getCapabilities: () => Promise<NativeCapabilities>;
   getState: () => Promise<string>;
   reconnect: (
@@ -122,6 +141,14 @@ export interface Spec extends TurboModule {
     requestId: string,
     material: NativeProvisioningMaterial
   ) => Promise<void>;
+  resolveFactoryResetGrant: (
+    requestId: string,
+    grantBlob: string
+  ) => Promise<void>;
+  resumePendingFactoryReset: (
+    device: NativeConnectedDevice,
+    currentBindingGeneration: number
+  ) => Promise<NativeFactoryResetCompletion | null>;
   startScan: (timeoutMs: number, allowDuplicates: boolean) => Promise<void>;
   readStatus: () => Promise<NativeDeviceStatus>;
   startStatusUpdates: () => Promise<void>;

@@ -120,8 +120,8 @@ The Apple host is now executable. A Swift actor coalesces concurrent
 configuration, orders destruction after any in-flight configuration, and calls
 the public `BotaDeviceClient` facade. A separate actor owns scan and status
 collection and cancels status before a connection transition or destruction.
-Objective-C++ implements only the generated TurboModule spec, typed discovery
-status/provisioning event emission, and promise conversion. The pod uses React Native
+Objective-C++ implements only the generated TurboModule spec, typed discovery,
+status, provisioning, and reset-grant event emission, and promise conversion. The pod uses React Native
 0.86's iOS 15.1 floor and resolves the exact matching `BotaAppleSDK` release;
 the local package-path override exists only for source and CI builds. A
 disposable Objective-C++ and Swift CocoaPods application compiles and links the
@@ -130,8 +130,8 @@ The build toolchain is locked, and a separate remote-resolution gate confirms
 that the default package URL resolves the synchronized immutable release. A
 target-scoped CocoaPods hook carries React Native's upstream fix for duplicate
 binary Swift-package module maps on Xcode 26.3 while the package floor remains
-0.86.3. This proves lifecycle plus device discovery, connection, status, and
-provisioning integration, not the remaining workflow surface or application
+0.86.3. This proves lifecycle plus device discovery, connection, status,
+provisioning, and authenticated-reset integration, not the remaining workflow surface or application
 parity.
 
 The Android host is also executable. A coroutine mutex serializes
@@ -139,13 +139,22 @@ configuration and destruction through `BotaDeviceClient.shared`, and a
 `BaseReactPackage` registers the generated TurboModule with stable state,
 capability, and `android_sdk_error` behavior. A separate owner contains scan and
 status failures and cancels owned streams before connection transitions or
-destroy. A one-shot material broker delegates provisioning and remove-only
-deprovision through the public Android facade. A checked-in React Native 0.86.3
+destroy. A one-shot material broker delegates provisioning, remove-only
+deprovision, authenticated reset, and exact-generation receipt recovery through
+the public Android facade. A checked-in React Native 0.86.3
 Gradle consumer regenerates Codegen, runs lifecycle unit tests and lint, and
 assembles the adapter against the exact AAR reconstructed from the immutable
-local Maven payload. This proves Android lifecycle plus device
-discovery, connection, status, and provisioning integration only; the remaining
+local Maven payload. This proves Android lifecycle plus device discovery,
+connection, status, provisioning, and authenticated-reset integration only; the remaining
 workflow bindings and application parity remain open.
+
+The React Native reset broker exposes only the nonce, command ID, binding
+generation, and an encoded grant string. Apple and Android decode the grant into
+native bytes before calling their public `FactoryResetManager`; Codegen never
+carries the destructive payload. Both adapters return the exact command and
+generation completion. `resumePendingFactoryReset` delegates directly to the
+native receipt-only workflow, which rejects a stale generation before Rust
+starts and cannot request another grant or resend opcode `0x06`.
 
 The Android migration has a native package foundation in `platforms/android`.
 `sdk-version.toml` is mirrored as `VERSION_NAME`, while release-readiness tests

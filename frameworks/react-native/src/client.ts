@@ -4,6 +4,8 @@ import type {
   NativeConfiguration,
   NativeDeviceStatus,
   NativeDiscoveredDevice,
+  NativeFactoryResetCompletion,
+  NativeFactoryResetGrantRequest,
   NativeProvisioningMaterialRequest,
   Spec,
 } from './specs/NativeBotaDeviceSDK';
@@ -67,6 +69,34 @@ export type BotaDeviceSDKProvisioningClient = {
   deprovision(device: ConnectedDevice): Promise<void>;
 };
 
+export type BotaFactoryResetGrantRequest = Omit<
+  NativeFactoryResetGrantRequest,
+  'requestId'
+>;
+
+export type BotaFactoryResetGrantProvider = (
+  request: BotaFactoryResetGrantRequest
+) => Promise<string>;
+
+export type BotaFactoryResetOptions = {
+  commandId: string;
+  bindingGeneration: number;
+};
+
+export type BotaFactoryResetCompletion = NativeFactoryResetCompletion;
+
+export type BotaDeviceSDKFactoryResetClient = {
+  factoryReset(
+    device: ConnectedDevice,
+    options: BotaFactoryResetOptions,
+    provider: BotaFactoryResetGrantProvider
+  ): Promise<BotaFactoryResetCompletion>;
+  resumePendingFactoryReset(
+    device: ConnectedDevice,
+    currentBindingGeneration: number
+  ): Promise<BotaFactoryResetCompletion | null>;
+};
+
 export type BotaDeviceSDKDeviceClient = {
   startScan(
     options: ScanOptions | undefined,
@@ -98,6 +128,7 @@ export class BotaNativeModuleError extends Error {
 
 export type BotaDeviceSDKClient = {
   readonly devices: BotaDeviceSDKDeviceClient;
+  readonly factoryReset: BotaDeviceSDKFactoryResetClient;
   readonly provisioning: BotaDeviceSDKProvisioningClient;
   configure(configuration?: BotaDeviceSDKConfiguration): Promise<void>;
   destroy(): Promise<void>;
@@ -306,8 +337,49 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
   };
 
+  const factoryReset: BotaDeviceSDKFactoryResetClient = {
+    async factoryReset(device, options, provider) {
+      const module = requireNativeModule();
+      const subscription = module.onFactoryResetGrantRequested((request) => {
+        void (async () => {
+          try {
+            const grantBlob = await provider({
+              serialNumber: request.serialNumber,
+              nonce: request.nonce,
+              commandId: request.commandId,
+              bindingGeneration: request.bindingGeneration,
+            });
+            await module.resolveFactoryResetGrant(request.requestId, grantBlob);
+          } catch (error) {
+            await module.rejectApplicationMaterial(
+              request.requestId,
+              errorMessage(error)
+            );
+          }
+        })().catch(() => {});
+      });
+      try {
+        return await module.factoryReset(
+          toNativeConnectedDevice(device),
+          options.commandId,
+          options.bindingGeneration
+        );
+      } finally {
+        subscription.remove();
+      }
+    },
+
+    async resumePendingFactoryReset(device, currentBindingGeneration) {
+      return requireNativeModule().resumePendingFactoryReset(
+        toNativeConnectedDevice(device),
+        currentBindingGeneration
+      );
+    },
+  };
+
   return {
     devices,
+    factoryReset,
     provisioning,
 
     async configure(configuration = {}) {

@@ -43,6 +43,119 @@ final class BotaDeviceSDKAppleSecurityTests: XCTestCase {
         XCTAssertEqual(snapshot.material?.mtu, 247)
         XCTAssertEqual(snapshot.deprovisionedSerials, [connected.serialNumber])
     }
+
+    func testFactoryResetGrantRoundTripAndExactGenerationResumeDelegateToAppleFacade() async throws {
+        let connected = ConnectedDevice(
+            id: "selected",
+            serialNumber: "EVFXXW67KP",
+            deviceType: .botaPin,
+            firmwareVersion: "1.0.11",
+            isProvisioned: true,
+            connectionState: .connected,
+            mtu: 247
+        )
+        let client = TestAppleSecurityClient()
+        let security = BotaDeviceSDKAppleSecurity(client: client)
+        let requests = FactoryResetRequestCapture()
+
+        let operation = Task {
+            try await security.factoryReset(
+                connected,
+                commandID: "reset-command-1",
+                bindingGeneration: 9
+            ) { request in
+                Task { await requests.append(request) }
+            }
+        }
+        let request = await requests.next()
+        XCTAssertEqual(request.serialNumber, connected.serialNumber)
+        XCTAssertEqual(request.nonce, "44556677")
+        XCTAssertEqual(request.commandID, "reset-command-1")
+        XCTAssertEqual(request.bindingGeneration, 9)
+
+        try await security.resolveFactoryResetGrant(
+            requestID: request.requestID,
+            grantBlob: "Z3JhbnQ="
+        )
+        let completion = try await operation.value
+        XCTAssertEqual(
+            completion,
+            .init(commandID: "reset-command-1", bindingGeneration: 9)
+        )
+        let resumed = try await security.resumePendingFactoryReset(
+            connected,
+            currentBindingGeneration: 9
+        )
+        XCTAssertEqual(
+            resumed,
+            .init(commandID: "reset-command-1", bindingGeneration: 9)
+        )
+
+        let snapshot = await client.snapshot()
+        XCTAssertEqual(snapshot.factoryResetGrant, Data("grant".utf8))
+        XCTAssertEqual(snapshot.resumedBindingGenerations, [9])
+    }
+
+    func testFactoryResetRejectsMalformedGrantAndCancelsPendingRequestsOnDestroy() async {
+        let connected = ConnectedDevice(
+            id: "selected",
+            serialNumber: "EVFXXW67KP",
+            deviceType: .botaPin,
+            firmwareVersion: "1.0.11",
+            isProvisioned: true,
+            connectionState: .connected,
+            mtu: 247
+        )
+        let malformedClient = TestAppleSecurityClient()
+        let malformedSecurity = BotaDeviceSDKAppleSecurity(client: malformedClient)
+        let malformedRequests = FactoryResetRequestCapture()
+        let malformedOperation = Task {
+            try await malformedSecurity.factoryReset(
+                connected,
+                commandID: "reset-command-1",
+                bindingGeneration: 9
+            ) { request in
+                Task { await malformedRequests.append(request) }
+            }
+        }
+        let malformedRequest = await malformedRequests.next()
+
+        try? await malformedSecurity.resolveFactoryResetGrant(
+            requestID: malformedRequest.requestID,
+            grantBlob: "not-encoded"
+        )
+        do {
+            _ = try await malformedOperation.value
+            XCTFail("malformed factory reset grant should fail")
+        } catch {
+            XCTAssertEqual(
+                error.localizedDescription,
+                "factory reset grant is not valid encoded data"
+            )
+        }
+
+        let cancelledClient = TestAppleSecurityClient()
+        let cancelledSecurity = BotaDeviceSDKAppleSecurity(client: cancelledClient)
+        let cancelledRequests = FactoryResetRequestCapture()
+        let cancelledOperation = Task {
+            try await cancelledSecurity.factoryReset(
+                connected,
+                commandID: "reset-command-2",
+                bindingGeneration: 10
+            ) { request in
+                Task { await cancelledRequests.append(request) }
+            }
+        }
+        _ = await cancelledRequests.next()
+        await cancelledSecurity.cancelAll()
+        do {
+            _ = try await cancelledOperation.value
+            XCTFail("cancelled factory reset grant should fail")
+        } catch {}
+
+        let cancelledSnapshot = await cancelledClient.snapshot()
+        XCTAssertTrue(cancelledSnapshot.factoryResetCancelled)
+    }
 }
 
 private actor ProvisioningRequestCapture {
@@ -64,14 +177,39 @@ private actor ProvisioningRequestCapture {
     }
 }
 
+private actor FactoryResetRequestCapture {
+    private var requests: [BotaDeviceSDKAppleFactoryResetRequest] = []
+    private var waiter: CheckedContinuation<BotaDeviceSDKAppleFactoryResetRequest, Never>?
+
+    func append(_ request: BotaDeviceSDKAppleFactoryResetRequest) {
+        if let waiter {
+            self.waiter = nil
+            waiter.resume(returning: request)
+        } else {
+            requests.append(request)
+        }
+    }
+
+    func next() async -> BotaDeviceSDKAppleFactoryResetRequest {
+        if !requests.isEmpty { return requests.removeFirst() }
+        return await withCheckedContinuation { waiter = $0 }
+    }
+}
+
 private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
     struct Snapshot: Sendable {
         let material: ProvisioningMaterial?
         let deprovisionedSerials: [String]
+        let factoryResetGrant: Data?
+        let factoryResetCancelled: Bool
+        let resumedBindingGenerations: [UInt64]
     }
 
     private var material: ProvisioningMaterial?
     private var deprovisionedSerials: [String] = []
+    private var factoryResetGrant: Data?
+    private var factoryResetCancelled = false
+    private var resumedBindingGenerations: [UInt64] = []
 
     func provision(
         _ device: ConnectedDevice,
@@ -90,7 +228,43 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
 
     func cancelCurrentOperation() async throws {}
 
+    func factoryReset(
+        _ device: ConnectedDevice,
+        commandID: String,
+        bindingGeneration: UInt64,
+        using provider: @escaping FactoryResetGrantProvider
+    ) async throws -> FactoryResetCompletion {
+        factoryResetGrant = try await provider(.init(
+            serialNumber: device.serialNumber,
+            nonce: Data([0x44, 0x55, 0x66, 0x77]),
+            commandID: commandID,
+            bindingGeneration: bindingGeneration
+        ))
+        return .init(commandID: commandID, bindingGeneration: bindingGeneration)
+    }
+
+    func resumePendingFactoryReset(
+        _ device: ConnectedDevice,
+        currentBindingGeneration: UInt64
+    ) async throws -> FactoryResetCompletion? {
+        resumedBindingGenerations.append(currentBindingGeneration)
+        return .init(
+            commandID: "reset-command-1",
+            bindingGeneration: currentBindingGeneration
+        )
+    }
+
+    func cancelFactoryReset() async throws {
+        factoryResetCancelled = true
+    }
+
     func snapshot() -> Snapshot {
-        Snapshot(material: material, deprovisionedSerials: deprovisionedSerials)
+        Snapshot(
+            material: material,
+            deprovisionedSerials: deprovisionedSerials,
+            factoryResetGrant: factoryResetGrant,
+            factoryResetCancelled: factoryResetCancelled,
+            resumedBindingGenerations: resumedBindingGenerations
+        )
     }
 }

@@ -271,6 +271,89 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
+    @objc(factoryResetWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:commandID:bindingGeneration:onGrantRequest:completion:)
+    public func factoryReset(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        commandID: String,
+        bindingGeneration: Double,
+        onGrantRequest: @escaping @Sendable ([String: Any]) -> Void,
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let result = try await security.factoryReset(
+                    Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    ),
+                    commandID: commandID,
+                    bindingGeneration: try Self.unsignedInteger(bindingGeneration)
+                ) { request in
+                    onGrantRequest([
+                        "requestId": request.requestID,
+                        "serialNumber": request.serialNumber,
+                        "nonce": request.nonce,
+                        "commandId": request.commandID,
+                        "bindingGeneration": request.bindingGeneration,
+                    ])
+                }
+                completion(Self.factoryResetCompletion(result), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc(resumePendingFactoryResetWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:currentBindingGeneration:completion:)
+    public func resumePendingFactoryReset(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        currentBindingGeneration: Double,
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let result = try await security.resumePendingFactoryReset(
+                    Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    ),
+                    currentBindingGeneration: try Self.unsignedInteger(
+                        currentBindingGeneration
+                    )
+                )
+                completion(result.map(Self.factoryResetCompletion), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
     @objc(resolveProvisioningMaterialWithRequestID:apiEndpoint:deviceToken:mtu:completion:)
     public func resolveProvisioningMaterial(
         requestID: String,
@@ -286,6 +369,25 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                     apiEndpoint: apiEndpoint,
                     deviceToken: deviceToken,
                     mtu: try Self.unsignedInteger(mtu)
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(resolveFactoryResetGrantWithRequestID:grantBlob:completion:)
+    public func resolveFactoryResetGrant(
+        requestID: String,
+        grantBlob: String,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await security.resolveFactoryResetGrant(
+                    requestID: requestID,
+                    grantBlob: grantBlob
                 )
                 completion(nil)
             } catch {
@@ -357,6 +459,15 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         ]
         if let revision = device.hardwareRevision { value["hardwareRevision"] = revision }
         return value
+    }
+
+    private static func factoryResetCompletion(
+        _ completion: FactoryResetCompletion
+    ) -> [String: Any] {
+        [
+            "commandId": completion.commandID,
+            "bindingGeneration": completion.bindingGeneration,
+        ]
     }
 
     private static func connectedDevice(

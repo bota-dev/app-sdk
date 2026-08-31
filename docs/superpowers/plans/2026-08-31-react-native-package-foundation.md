@@ -114,18 +114,20 @@
 ## Follow-On Status
 
 As of 2026-08-31, both lifecycle adapters and the discovery, connection,
-device-status, and provisioning workflow slices are complete. Apple configure,
+device-status, provisioning, and authenticated-reset workflow slices are complete. Apple configure,
 destroy, state, capabilities, discovery, selected-device connect,
 serial-strict reconnect, disconnect, status reads, status subscriptions,
-provision, and remove-only deprovision call
+provision, remove-only deprovision, factory reset, and exact-generation reset
+receipt recovery call
 `BotaAppleSDK` through serialized Swift actors and pass a full CocoaPods
 application compile-and-link gate. Android delegates the same surface to
 `BotaDeviceClient.shared`, contains asynchronous scan/status failures, and
 passes a
 checked-in Codegen, Kotlin-test, lint, and release-assembly consumer against the
 packaged AAR. JavaScript preserves the frozen scan filters, status shape, and
-date mapping, and resolves nonce-bound material through one-shot native request
-IDs. The package also matches the 75 frozen
+date mapping, and resolves nonce-bound provisioning and reset material through
+one-shot native request IDs. Reset grants become bytes only in native code;
+resume cannot request a grant or resend destructive opcode `0x06`. The package also matches the 75 frozen
 `0.0.65` exports that do not own native workflows, with runtime coverage for
 errors, sync-status derivation, and device-log decoding. `BotaClient`,
 `DeviceManager`, `RecordingManager`, `StreamingSession`, `OTAManager`, app

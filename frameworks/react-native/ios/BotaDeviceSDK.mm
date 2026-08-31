@@ -208,6 +208,61 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
                }];
 }
 
+- (void)factoryReset:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+           commandId:(NSString *)commandId
+   bindingGeneration:(double)bindingGeneration
+             resolve:(RCTPromiseResolveBlock)resolve
+              reject:(RCTPromiseRejectBlock)reject
+{
+  __weak BotaDeviceSDK *weakSelf = self;
+  [[BotaDeviceSDKAppleBridge shared]
+      factoryResetWithID:device.id_()
+             serialNumber:device.serialNumber()
+               deviceType:device.deviceType()
+          firmwareVersion:device.firmwareVersion()
+          hardwareRevision:device.hardwareRevision()
+            isProvisioned:device.isProvisioned()
+          connectionState:device.connectionState()
+                      mtu:device.mtu()
+                commandID:commandId
+        bindingGeneration:bindingGeneration
+           onGrantRequest:^(NSDictionary *request) {
+             [weakSelf emitOnFactoryResetGrantRequested:request];
+           }
+               completion:^(NSDictionary *_Nullable result, NSError *_Nullable error) {
+                 if (error != nil) {
+                   BotaRejectAppleError(error, reject);
+                   return;
+                 }
+                 resolve(result);
+               }];
+}
+
+- (void)resumePendingFactoryReset:
+            (JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                  currentBindingGeneration:(double)currentBindingGeneration
+                                    resolve:(RCTPromiseResolveBlock)resolve
+                                     reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      resumePendingFactoryResetWithID:device.id_()
+                       serialNumber:device.serialNumber()
+                         deviceType:device.deviceType()
+                    firmwareVersion:device.firmwareVersion()
+                    hardwareRevision:device.hardwareRevision()
+                      isProvisioned:device.isProvisioned()
+                    connectionState:device.connectionState()
+                                mtu:device.mtu()
+           currentBindingGeneration:currentBindingGeneration
+                         completion:^(NSDictionary *_Nullable result, NSError *_Nullable error) {
+                           if (error != nil) {
+                             BotaRejectAppleError(error, reject);
+                             return;
+                           }
+                           resolve(result);
+                         }];
+}
+
 - (void)resolveProvisioningMaterial:(NSString *)requestId
                            material:(JS::NativeBotaDeviceSDK::NativeProvisioningMaterial &)material
                             resolve:(RCTPromiseResolveBlock)resolve
@@ -225,6 +280,23 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
                                        }
                                        resolve(nil);
                                      }];
+}
+
+- (void)resolveFactoryResetGrant:(NSString *)requestId
+                       grantBlob:(NSString *)grantBlob
+                         resolve:(RCTPromiseResolveBlock)resolve
+                          reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      resolveFactoryResetGrantWithRequestID:requestId
+                                  grantBlob:grantBlob
+                                 completion:^(NSError *_Nullable error) {
+                                   if (error != nil) {
+                                     BotaRejectAppleError(error, reject);
+                                     return;
+                                   }
+                                   resolve(nil);
+                                 }];
 }
 
 - (void)rejectApplicationMaterial:(NSString *)requestId

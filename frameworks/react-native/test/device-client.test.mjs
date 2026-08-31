@@ -58,8 +58,11 @@ function nativeFixture() {
   let discoveryHandler = null;
   let statusHandler = null;
   let provisioningHandler = null;
+  let factoryResetHandler = null;
   let provisioningResolve = null;
   let provisioningReject = null;
+  let factoryResetResolve = null;
+  let factoryResetReject = null;
   let removed = false;
   return {
     calls,
@@ -103,6 +106,14 @@ function nativeFixture() {
         return {
           remove() {
             provisioningHandler = null;
+          },
+        };
+      },
+      onFactoryResetGrantRequested(handler) {
+        factoryResetHandler = handler;
+        return {
+          remove() {
+            factoryResetHandler = null;
           },
         };
       },
@@ -154,10 +165,44 @@ function nativeFixture() {
       },
       async rejectApplicationMaterial(requestId, message) {
         calls.push(['rejectApplicationMaterial', requestId, message]);
-        provisioningReject?.(new Error(message));
+        if (requestId === 'factory-reset-request') {
+          factoryResetReject?.(new Error(message));
+        } else {
+          provisioningReject?.(new Error(message));
+        }
       },
       async deprovision(device) {
         calls.push(['deprovision', device]);
+      },
+      async factoryReset(device, commandId, bindingGeneration) {
+        calls.push(['factoryReset', device, commandId, bindingGeneration]);
+        queueMicrotask(() => {
+          factoryResetHandler?.({
+            requestId: 'factory-reset-request',
+            serialNumber: device.serialNumber,
+            nonce: '44556677',
+            commandId,
+            bindingGeneration,
+          });
+        });
+        return new Promise((resolve, reject) => {
+          factoryResetResolve = resolve;
+          factoryResetReject = reject;
+        });
+      },
+      async resolveFactoryResetGrant(requestId, grantBlob) {
+        calls.push(['resolveFactoryResetGrant', requestId, grantBlob]);
+        factoryResetResolve?.({
+          commandId: 'reset-command-1',
+          bindingGeneration: 9,
+        });
+      },
+      async resumePendingFactoryReset(device, bindingGeneration) {
+        calls.push(['resumePendingFactoryReset', device, bindingGeneration]);
+        return {
+          commandId: 'reset-command-1',
+          bindingGeneration,
+        };
       },
     },
   };
@@ -324,6 +369,65 @@ test('provisioning rejects native material requests when the application provide
       'rejectApplicationMaterial',
       'material-request',
       'backend material unavailable',
+    ],
+  ]);
+});
+
+test('factory reset resolves a nonce-bound grant and resumes only the exact generation', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+
+  const completion = await client.factoryReset.factoryReset(
+    connected,
+    { commandId: 'reset-command-1', bindingGeneration: 9 },
+    async (request) => {
+      assert.deepEqual(request, {
+        serialNumber: 'EVFXXW67KP',
+        nonce: '44556677',
+        commandId: 'reset-command-1',
+        bindingGeneration: 9,
+      });
+      return 'Z3JhbnQ=';
+    }
+  );
+  const resumed = await client.factoryReset.resumePendingFactoryReset(
+    connected,
+    9
+  );
+
+  assert.deepEqual(completion, {
+    commandId: 'reset-command-1',
+    bindingGeneration: 9,
+  });
+  assert.deepEqual(resumed, completion);
+  assert.deepEqual(fixture.calls, [
+    ['factoryReset', connected, 'reset-command-1', 9],
+    ['resolveFactoryResetGrant', 'factory-reset-request', 'Z3JhbnQ='],
+    ['resumePendingFactoryReset', connected, 9],
+  ]);
+});
+
+test('factory reset rejects its native request when the application grant provider fails', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+
+  await assert.rejects(
+    client.factoryReset.factoryReset(
+      connected,
+      { commandId: 'reset-command-1', bindingGeneration: 9 },
+      async () => {
+        throw new Error('factory reset grant unavailable');
+      }
+    ),
+    /factory reset grant unavailable/
+  );
+
+  assert.deepEqual(fixture.calls, [
+    ['factoryReset', connected, 'reset-command-1', 9],
+    [
+      'rejectApplicationMaterial',
+      'factory-reset-request',
+      'factory reset grant unavailable',
     ],
   ]);
 });

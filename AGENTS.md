@@ -72,6 +72,12 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   sequence. Deprovision is remove-only and must remain separate from factory
   reset. Destroy and invalidation must reject pending material requests and
   cancel the native provisioning operation.
+- `BotaDeviceSDK.factoryReset` delegates the authenticated reset reducer to the
+  native facades. JavaScript resolves a one-shot request containing the fresh
+  nonce, command ID, and binding generation with the backend's encoded grant;
+  native code decodes the grant and owns all BLE bytes. Resume accepts the
+  current binding generation and runs only native receipt recovery. Destroy and
+  invalidation reject pending grants and cancel the active reset operation.
 - Keep the Codegen names `BotaDeviceSDKSpec` and `BotaDeviceSDK` frozen. Import
   uses optional TurboModule lookup; missing native code fails on invocation as
   `native_module_unavailable`, not while the JavaScript module is imported.
@@ -110,10 +116,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `BotaDeviceSDKAndroidDevices`. It owns scan and status coroutines, contains
   asynchronous stream failures, and cancels affected work before connect,
   reconnect, disconnect, destroy, or React Native invalidation.
-- Keep React Native Android provisioning material ownership in
-  `BotaDeviceSDKAndroidSecurity`. Request IDs are one-shot, material is copied
-  into the public Android facade, and destroy/invalidation cancels both pending
-  deferred values and the active provisioning workflow.
+- Keep React Native Android provisioning and factory-reset material ownership
+  in `BotaDeviceSDKAndroidSecurity`. Request IDs are one-shot, material is
+  copied into the public Android facade, and destroy/invalidation cancels
+  pending deferred values plus both active native workflows.
 - The Android build foundation uses JDK 17, Gradle 8.13, AGP 8.13.2, Kotlin
   2.1.20, API 26 minimum with API 36 compile/lint/test targets, NDK
   28.2.13676358, CMake 3.22.1, and Maven Publish Plugin 0.35.0.

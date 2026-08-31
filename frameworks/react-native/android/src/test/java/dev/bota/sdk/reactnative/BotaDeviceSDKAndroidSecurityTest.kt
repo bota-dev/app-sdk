@@ -3,13 +3,17 @@ package dev.bota.sdk.reactnative
 import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.model.ConnectionState
 import dev.bota.sdk.model.DeviceType
+import dev.bota.sdk.model.FactoryResetCompletion
+import dev.bota.sdk.model.FactoryResetGrantRequest
 import dev.bota.sdk.model.ProvisioningMaterial
 import dev.bota.sdk.model.ProvisioningMaterialRequest
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BotaDeviceSDKAndroidSecurityTest {
@@ -51,9 +55,101 @@ class BotaDeviceSDKAndroidSecurityTest {
         assertEquals(listOf(connected.serialNumber), client.deprovisionedSerials)
     }
 
+    @Test
+    fun factoryResetGrantRoundTripAndExactGenerationResumeDelegateToAndroidFacade() = runTest {
+        val connected = ConnectedDevice(
+            id = "selected",
+            serialNumber = "EVFXXW67KP",
+            deviceType = DeviceType.BotaPin,
+            firmwareVersion = "1.0.11",
+            isProvisioned = true,
+            connectionState = ConnectionState.Connected,
+            mtu = 247,
+        )
+        val client = TestAndroidSecurityClient()
+        val security = BotaDeviceSDKAndroidSecurity(client)
+        val requests = CompletableDeferred<BotaDeviceSDKAndroidFactoryResetRequest>()
+
+        val operation = async {
+            security.factoryReset(
+                connected,
+                commandId = "reset-command-1",
+                bindingGeneration = 9u,
+            ) { requests.complete(it) }
+        }
+        val request = requests.await()
+        assertEquals(connected.serialNumber, request.serialNumber)
+        assertEquals("44556677", request.nonce)
+        assertEquals("reset-command-1", request.commandId)
+        assertEquals(9uL, request.bindingGeneration)
+
+        security.resolveFactoryResetGrant(request.requestId, "Z3JhbnQ=")
+        assertEquals(
+            FactoryResetCompletion("reset-command-1", 9u),
+            operation.await(),
+        )
+        assertEquals(
+            FactoryResetCompletion("reset-command-1", 9u),
+            security.resumePendingFactoryReset(connected, 9u),
+        )
+        assertArrayEquals("grant".encodeToByteArray(), client.factoryResetGrant)
+        assertEquals(listOf(9uL), client.resumedBindingGenerations)
+    }
+
+    @Test
+    fun factoryResetRejectsMalformedGrantAndCancelsPendingRequestsOnDestroy() = runTest {
+        val connected = ConnectedDevice(
+            id = "selected",
+            serialNumber = "EVFXXW67KP",
+            deviceType = DeviceType.BotaPin,
+            firmwareVersion = "1.0.11",
+            isProvisioned = true,
+            connectionState = ConnectionState.Connected,
+            mtu = 247,
+        )
+        supervisorScope {
+            val malformedClient = TestAndroidSecurityClient()
+            val malformedSecurity = BotaDeviceSDKAndroidSecurity(malformedClient)
+            val malformedRequests = CompletableDeferred<BotaDeviceSDKAndroidFactoryResetRequest>()
+            val malformedOperation = async {
+                malformedSecurity.factoryReset(
+                    connected,
+                    commandId = "reset-command-1",
+                    bindingGeneration = 9u,
+                ) { malformedRequests.complete(it) }
+            }
+            val malformedRequest = malformedRequests.await()
+
+            malformedSecurity.resolveFactoryResetGrant(malformedRequest.requestId, "not-encoded")
+            assertEquals(
+                "factory reset grant is not valid encoded data",
+                runCatching { malformedOperation.await() }.exceptionOrNull()?.message,
+            )
+
+            val cancelledClient = TestAndroidSecurityClient()
+            val cancelledSecurity = BotaDeviceSDKAndroidSecurity(cancelledClient)
+            val cancelledRequests = CompletableDeferred<BotaDeviceSDKAndroidFactoryResetRequest>()
+            val cancelledOperation = async {
+                cancelledSecurity.factoryReset(
+                    connected,
+                    commandId = "reset-command-2",
+                    bindingGeneration = 10u,
+                ) { cancelledRequests.complete(it) }
+            }
+            cancelledRequests.await()
+            cancelledSecurity.cancelAll()
+
+            assertTrue(runCatching { cancelledOperation.await() }.isFailure)
+            assertTrue(cancelledClient.factoryResetCancelled)
+        }
+    }
+
     private class TestAndroidSecurityClient : BotaDeviceSDKAndroidSecurityClient {
         var material: ProvisioningMaterial? = null
         val deprovisionedSerials = mutableListOf<String>()
+        var factoryResetGrant: ByteArray? = null
+        var factoryResetCancelled = false
+        val resumedBindingGenerations = mutableListOf<ULong>()
 
         override suspend fun provision(
             device: ConnectedDevice,
@@ -73,5 +169,34 @@ class BotaDeviceSDKAndroidSecurityTest {
         }
 
         override suspend fun cancelCurrentOperation() = Unit
+
+        override suspend fun factoryReset(
+            device: ConnectedDevice,
+            commandId: String,
+            bindingGeneration: ULong,
+            provider: suspend (FactoryResetGrantRequest) -> ByteArray,
+        ): FactoryResetCompletion {
+            factoryResetGrant = provider(
+                FactoryResetGrantRequest(
+                    serialNumber = device.serialNumber,
+                    nonce = byteArrayOf(0x44, 0x55, 0x66, 0x77),
+                    commandId = commandId,
+                    bindingGeneration = bindingGeneration,
+                ),
+            )
+            return FactoryResetCompletion(commandId, bindingGeneration)
+        }
+
+        override suspend fun resumePendingFactoryReset(
+            device: ConnectedDevice,
+            currentBindingGeneration: ULong,
+        ): FactoryResetCompletion? {
+            resumedBindingGenerations += currentBindingGeneration
+            return FactoryResetCompletion("reset-command-1", currentBindingGeneration)
+        }
+
+        override suspend fun cancelFactoryReset() {
+            factoryResetCancelled = true
+        }
     }
 }

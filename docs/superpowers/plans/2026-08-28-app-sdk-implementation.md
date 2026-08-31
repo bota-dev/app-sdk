@@ -894,11 +894,15 @@ serial-strict reconnect, disconnect, current-status reads, and typed status
 subscriptions while native actors own scan and status teardown. Provisioning
 and remove-only deprovision now delegate through the native facades; one-shot
 request IDs keep asynchronous JavaScript material lookup inside the active
-nonce-bound workflow.
-a real CocoaPods application compiles and links the generated typed event spec,
+nonce-bound workflow. Authenticated factory reset now uses the same one-shot
+request ownership while binding every grant and completion to the backend
+command ID and binding generation. Apple and Android decode the
+application-provided grant natively, and React Native resume delegates only to
+exact-generation receipt recovery. A real CocoaPods application compiles and
+links the generated typed event spec,
 Objective-C++, Swift, Swift Package, and Rust XCFramework layers. The Android
-adapters provide the same lifecycle, connection, status, and provisioning
-slices through the public Android facade, and a checked-in React Native Gradle
+adapters provide the same lifecycle, connection, status, provisioning, and
+authenticated-reset slices through the public Android facade, and a checked-in React Native Gradle
 consumer runs Codegen, Kotlin tests,
 lint, and release assembly against the exact packaged AAR. The
 package now matches all 75 frozen non-workflow exports, including every public
