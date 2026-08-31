@@ -90,6 +90,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   all four supported ABIs, but is not a published facade claim.
   Verification metadata must include the pinned AAPT2 artifact for both macOS
   and Linux so local and GitHub Android builds enforce the same dependency gate.
+- Keep mutating Android release-readiness tests in independent temporary
+  fixtures. They run in parallel, so fixture names require an atomic uniqueness
+  component in addition to wall-clock time.
 - Keep Android JNI as an ownership adapter only. Pass primitive typed fields
   and raw byte arrays or direct buffers; copy Rust-owned packets and errors
   before exactly one matching free. Test counters belong to debug builds only.

@@ -1,4 +1,10 @@
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::PathBuf,
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+static NEXT_ANDROID_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -6,12 +12,13 @@ fn root() -> PathBuf {
 
 fn android_build_fixture() -> PathBuf {
     let temp_root = std::env::temp_dir().join(format!(
-        "bota-android-build-test-{}-{}",
+        "bota-android-build-test-{}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_nanos()
+            .as_nanos(),
+        NEXT_ANDROID_FIXTURE_ID.fetch_add(1, Ordering::Relaxed),
     ));
     let android = temp_root.join("platforms/android");
     fs::create_dir_all(android.join("gradle/wrapper")).unwrap();
