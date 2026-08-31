@@ -99,6 +99,39 @@ final class BotaDeviceSDKAppleLifecycleTests: XCTestCase {
         XCTAssertEqual(state, "uninitialized")
     }
 
+    func testConfigureQueuedAfterDestroyStartsFreshAfterDestruction() async throws {
+        let client = TestAppleClient(blockConfigure: true, blockDestroy: true)
+        let lifecycle = BotaDeviceSDKAppleLifecycle(client: client)
+        let firstConfigure = Task {
+            try await lifecycle.configure(applicationSupportDirectory: nil)
+        }
+
+        await client.waitForConfigureCount(1)
+        let destroy = Task {
+            await lifecycle.destroy()
+        }
+        await Task.yield()
+        let secondConfigure = Task {
+            try await lifecycle.configure(applicationSupportDirectory: nil)
+        }
+        await Task.yield()
+
+        await client.releaseConfigure()
+        try await firstConfigure.value
+        await client.waitForDestroyCount(1)
+        await client.releaseDestroy()
+        await destroy.value
+        await client.waitForConfigureCount(2)
+        await client.releaseConfigure()
+        try await secondConfigure.value
+
+        let snapshot = await client.snapshot()
+        let state = await lifecycle.state()
+        XCTAssertEqual(snapshot.configureDirectories.count, 2)
+        XCTAssertEqual(snapshot.destroyCount, 1)
+        XCTAssertEqual(state, "ready")
+    }
+
     func testDestroyIsIdempotent() async throws {
         let client = TestAppleClient()
         let lifecycle = BotaDeviceSDKAppleLifecycle(client: client)
@@ -126,14 +159,22 @@ private actor TestAppleClient: BotaDeviceSDKAppleClient {
     }
 
     private let blockConfigure: Bool
+    private let blockDestroy: Bool
     private var configureFailures: Int
     private var configureDirectories: [URL?] = []
     private var destroyCount = 0
     private var configureWaiters: [(Int, CheckedContinuation<Void, Never>)] = []
     private var configureBlockers: [CheckedContinuation<Void, Never>] = []
+    private var destroyWaiters: [(Int, CheckedContinuation<Void, Never>)] = []
+    private var destroyBlockers: [CheckedContinuation<Void, Never>] = []
 
-    init(blockConfigure: Bool = false, configureFailures: Int = 0) {
+    init(
+        blockConfigure: Bool = false,
+        blockDestroy: Bool = false,
+        configureFailures: Int = 0
+    ) {
         self.blockConfigure = blockConfigure
+        self.blockDestroy = blockDestroy
         self.configureFailures = configureFailures
     }
 
@@ -153,6 +194,12 @@ private actor TestAppleClient: BotaDeviceSDKAppleClient {
 
     func destroy() async {
         destroyCount += 1
+        resumeDestroyWaiters()
+        if blockDestroy {
+            await withCheckedContinuation { continuation in
+                destroyBlockers.append(continuation)
+            }
+        }
     }
 
     func waitForConfigureCount(_ expected: Int) async {
@@ -165,6 +212,19 @@ private actor TestAppleClient: BotaDeviceSDKAppleClient {
     func releaseConfigure() {
         let blockers = configureBlockers
         configureBlockers.removeAll()
+        blockers.forEach { $0.resume() }
+    }
+
+    func waitForDestroyCount(_ expected: Int) async {
+        if destroyCount >= expected { return }
+        await withCheckedContinuation { continuation in
+            destroyWaiters.append((expected, continuation))
+        }
+    }
+
+    func releaseDestroy() {
+        let blockers = destroyBlockers
+        destroyBlockers.removeAll()
         blockers.forEach { $0.resume() }
     }
 
@@ -185,5 +245,17 @@ private actor TestAppleClient: BotaDeviceSDKAppleClient {
             }
         }
         configureWaiters = pending
+    }
+
+    private func resumeDestroyWaiters() {
+        var pending: [(Int, CheckedContinuation<Void, Never>)] = []
+        for (expected, continuation) in destroyWaiters {
+            if destroyCount >= expected {
+                continuation.resume()
+            } else {
+                pending.append((expected, continuation))
+            }
+        }
+        destroyWaiters = pending
     }
 }

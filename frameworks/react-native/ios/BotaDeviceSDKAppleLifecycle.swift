@@ -86,12 +86,16 @@ actor BotaDeviceSDKAppleLifecycle {
             switch phase {
             case .uninitialized:
                 return
-            case let .configuring(id, task):
-                do {
-                    try await finishConfigure(id: id, task: task)
-                } catch {
-                    // A failed configuration still passes through the Apple destroy path.
+            case let .configuring(_, configureTask):
+                let id = UUID()
+                let task = Task {
+                    _ = try? await configureTask.value
+                    await client.destroy()
                 }
+                phase = .destroying(id, task)
+                await task.value
+                finishDestroy(id: id)
+                return
             case let .destroying(id, task):
                 await task.value
                 finishDestroy(id: id)
