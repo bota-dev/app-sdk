@@ -119,6 +119,12 @@ test compares each declaration with the frozen contract, and behavior tests
 cover stable errors, transport precedence, and split log packets. The five
 manager/client classes remain withheld until equivalent native-backed workflow
 methods exist, so type parity cannot be mistaken for operational parity.
+An internal `DeviceManager` compatibility owner now preserves the already
+native-backed scan, selected connection, status, settings, logs, WiFi, and
+last-known WiFi cache behavior, including idempotent legacy removal functions.
+It is deliberately not a root export: nonce/key reads, direct provisioning
+writes, recording control, time sync, and reset compatibility still need typed
+native methods before the frozen class can pass its exact surface gate.
 The package's new `BotaDeviceSDK.devices` facade is intentionally smaller than
 the withheld `DeviceManager`: it owns a typed discovery subscription, preserves
 the frozen JavaScript scan filters, connects a selected peripheral while the

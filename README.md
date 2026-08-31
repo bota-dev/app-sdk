@@ -60,6 +60,10 @@ pure errors, sync-status derivation, and device-log decoder. It is not an
 installable replacement yet: the five native workflow classes (`BotaClient`,
 `DeviceManager`, `RecordingManager`, `StreamingSession`, and `OTAManager`), app
 acceptance, and npm publication remain open.
+The internal `DeviceManager` compatibility owner already delegates scan,
+selected connection, status, settings, logs, and WiFi/cache behavior, but it is
+not exported until the remaining direct device commands are native-backed and
+the complete frozen class contract passes.
 The Android package foundation now pins JDK 17, Gradle 8.13, Android Gradle
 Plugin 8.13.2, Kotlin 2.1.20, API 26/36, NDK 28.2.13676358, and CMake 3.22.1.
 It produces a version-synchronized, unsigned local AAR with sources, Dokka

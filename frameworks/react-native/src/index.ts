@@ -1,5 +1,6 @@
 import NativeBotaDeviceSDK from './specs/NativeBotaDeviceSDK';
 import { createBotaDeviceSDK } from './client';
+import { setDefaultCompatibilityClient } from './compatibility/runtime';
 
 export {
   BotaNativeModuleError,
@@ -36,6 +37,7 @@ export type {
 } from './client';
 
 export const BotaDeviceSDK = createBotaDeviceSDK(NativeBotaDeviceSDK);
+setDefaultCompatibilityClient(BotaDeviceSDK);
 
 export type {
   BleFactoryResetResult,
