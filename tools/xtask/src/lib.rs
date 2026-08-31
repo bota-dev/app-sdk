@@ -145,16 +145,32 @@ pub mod release {
     }
 
     pub fn validate_manifest(path: &Path) -> Result<(), String> {
-        let contents = fs::read_to_string(path)
-            .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-        let manifest: ReleaseManifest = serde_json::from_str(&contents)
-            .map_err(|error| format!("invalid release manifest JSON: {error}"))?;
+        let manifest = read_release_manifest(path)?;
         let root = repository_root(path)?;
         let sdk_version_file = fs::read_to_string(root.join("sdk-version.toml"))
             .map_err(|error| format!("cannot read sdk-version.toml: {error}"))?;
         let expected: SdkVersion = toml::from_str(&sdk_version_file)
             .map_err(|error| format!("invalid sdk-version.toml: {error}"))?;
 
+        validate_release_manifest(&manifest, Some(&expected.version))
+    }
+
+    pub fn validate_manifest_format_and_semantics(path: &Path) -> Result<(), String> {
+        let manifest = read_release_manifest(path)?;
+        validate_release_manifest(&manifest, None)
+    }
+
+    fn read_release_manifest(path: &Path) -> Result<ReleaseManifest, String> {
+        let contents = fs::read_to_string(path)
+            .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+        serde_json::from_str(&contents)
+            .map_err(|error| format!("invalid release manifest JSON: {error}"))
+    }
+
+    fn validate_release_manifest(
+        manifest: &ReleaseManifest,
+        expected_sdk_version: Option<&str>,
+    ) -> Result<(), String> {
         match manifest.manifest_version {
             1 => {}
             2 => {
@@ -165,10 +181,12 @@ pub mod release {
             _ => return Err("manifestVersion must be 1 or 2".to_owned()),
         }
         parse_version("sdkVersion", &manifest.sdk_version)?;
-        if manifest.sdk_version != expected.version {
+        if let Some(expected_sdk_version) = expected_sdk_version
+            && manifest.sdk_version != expected_sdk_version
+        {
             return Err(format!(
-                "sdkVersion {} does not match sdk-version.toml {}",
-                manifest.sdk_version, expected.version
+                "sdkVersion {} does not match sdk-version.toml {expected_sdk_version}",
+                manifest.sdk_version
             ));
         }
         require_lower_hex("sourceRevision", &manifest.source_revision, 40)?;

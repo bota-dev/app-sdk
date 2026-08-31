@@ -34,10 +34,34 @@ fn example_release_manifest_is_valid() {
 }
 
 #[test]
-fn published_v1_manifest_remains_valid() {
-    let manifest = root().join("release/examples/published-1.0.0-v1.json");
-    let result = xtask::release::validate_manifest(&manifest);
-    assert!(result.is_ok(), "{result:?}");
+fn published_v1_manifest_remains_valid_independent_of_later_checkout_version() {
+    let temp_root = std::env::temp_dir().join(format!(
+        "bota-release-manifest-test-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&temp_root).unwrap();
+    fs::write(temp_root.join("sdk-version.toml"), "version = \"1.1.0\"\n").unwrap();
+    let manifest = temp_root.join("published-1.0.0-v1.json");
+    fs::copy(
+        root().join("release/examples/published-1.0.0-v1.json"),
+        &manifest,
+    )
+    .unwrap();
+
+    let historical_result = xtask::release::validate_manifest_format_and_semantics(&manifest);
+    let current_release_result = xtask::release::validate_manifest(&manifest);
+    fs::remove_dir_all(temp_root).unwrap();
+
+    assert!(historical_result.is_ok(), "{historical_result:?}");
+    assert!(
+        current_release_result
+            .unwrap_err()
+            .contains("sdkVersion 1.0.0 does not match sdk-version.toml 1.1.0")
+    );
 }
 
 #[test]

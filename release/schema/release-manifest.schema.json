@@ -26,8 +26,7 @@
           "artifacts": {
             "type": "array",
             "items": {
-              "type": "object",
-              "required": ["platform", "packageIdentifier"]
+              "$ref": "#/$defs/platformPackagePair"
             }
           }
         }
@@ -82,6 +81,60 @@
     }
   },
   "$defs": {
+    "platformPackagePair": {
+      "type": "object",
+      "oneOf": [
+        {
+          "required": ["platform", "packageIdentifier"],
+          "properties": {
+            "platform": { "const": "apple" },
+            "packageIdentifier": { "const": "BotaAppleSDK" }
+          }
+        },
+        {
+          "required": ["platform", "packageIdentifier"],
+          "properties": {
+            "platform": { "const": "android" },
+            "packageIdentifier": { "const": "dev.bota:bota-android-sdk" }
+          }
+        },
+        {
+          "required": ["platform", "packageIdentifier"],
+          "properties": {
+            "platform": { "const": "react-native" },
+            "packageIdentifier": { "const": "@bota.dev/react-native-sdk" }
+          }
+        },
+        {
+          "required": ["platform", "packageIdentifier"],
+          "properties": {
+            "platform": { "const": "flutter" },
+            "packageIdentifier": { "const": "bota_flutter_sdk" }
+          }
+        },
+        {
+          "required": ["platform", "packageIdentifier"],
+          "properties": {
+            "platform": { "const": "web" },
+            "packageIdentifier": { "const": "@bota.dev/web-sdk" }
+          }
+        },
+        {
+          "required": ["platform", "packageIdentifier"],
+          "properties": {
+            "platform": { "const": "windows" },
+            "packageIdentifier": { "const": "Bota.WindowsSdk" }
+          }
+        },
+        {
+          "required": ["platform", "packageIdentifier"],
+          "properties": {
+            "platform": { "const": "electron" },
+            "packageIdentifier": { "const": "@bota.dev/electron-sdk" }
+          }
+        }
+      ]
+    },
     "semanticVersion": {
       "type": "string",
       "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$"

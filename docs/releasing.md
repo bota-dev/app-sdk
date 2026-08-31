@@ -93,8 +93,18 @@ cargo deny check
 
 Future Apple packaging emits release manifest version 2 with
 `sdkFamily: "bota-app-sdk"` and artifact fields `platform: "apple"` and
-`packageIdentifier: "BotaAppleSDK"`. The public `v1.0.0` manifest is an
-immutable version 1 document that the release validator continues to accept.
+`packageIdentifier: "BotaAppleSDK"`. The public JSON Schema and Rust validator
+require every version 2 platform/package identifier to be one exact pair from
+the public package matrix; independently valid platform and package values
+cannot be mixed.
+
+The public `v1.0.0` manifest is an immutable version 1 document. Historical
+evidence uses `validate_manifest_format_and_semantics`, which validates its own
+SDK/artifact version consistency, checksums, firmware range, capabilities, and
+v1/v2 rules without consulting the current checkout version. Normal
+`validate_manifest` calls and `cargo xtask release validate` additionally
+require `sdkVersion` to equal the current `sdk-version.toml`; release candidate
+validation must always use that strict path.
 
 The packaging log includes SHA-256 digests for every normalized XCFramework
 input and for the final archive. Use those values to identify toolchain-specific
