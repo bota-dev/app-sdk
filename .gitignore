@@ -21,6 +21,10 @@
 # Platform build outputs
 /.build/
 /platforms/apple/Artifacts/
+/platforms/android/.gradle/
+/platforms/android/local.properties
+/platforms/android/**/build/
+/target/android-m2/
 /.dart_tool/
 /build/
 /DerivedData/

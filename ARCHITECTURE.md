@@ -107,6 +107,16 @@ binary Swift-package module maps on Xcode 26.3 while the package floor remains
 0.86.3. This proves lifecycle integration, not the remaining workflow surface
 or application parity.
 
+The Android migration has a build-only foundation in `platforms/android`.
+`sdk-version.toml` is mirrored as `VERSION_NAME`, while release-readiness tests
+pin Gradle 8.13, Android Gradle Plugin 8.13.2, and Maven Publish Plugin 0.35.0.
+The API-26 library declares optional BLE hardware and permissions without
+requesting them, locks and verifies dependencies, and produces deterministic
+unsigned local AAR, sources, Dokka Javadoc, POM, and module metadata. Its only
+Kotlin API is immutable `BotaAndroidSDK` package metadata. No JNI library,
+BluetoothGatt transport, workflow facade, Maven Central artifact, physical
+acceptance, or React Native Android runtime support is claimed by this stage.
+
 Native migration inputs are pinned separately in
 `protocol/baseline/native-sdks.json`. Apple revision `cd15e545cabb8` and Android
 revision `0f06d2a22c55` provided package shape, public models, and idiomatic async
@@ -242,8 +252,8 @@ values, field meanings, ownership rules, and status/error values are additive
 only. The exact tested revision and header digest live in
 `release/evidence/1.0.0-alpha.1-native-abi.md`. This freeze is an interface
 milestone, not an Android support claim. Apple now has an automated facade
-acceptance record, while its supervised physical-device gate and Android's AAR,
-transport, and device gates remain open.
+acceptance record, while its supervised physical-device gate and Android's
+native-library AAR, transport, and device gates remain open.
 
 Apple facade development uses `platforms/apple/Package.swift` with a local
 binary target assembled by `tools/apple/build-xcframework.sh` from arm64 iOS,

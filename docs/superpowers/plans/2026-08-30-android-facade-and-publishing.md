@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Plan Status:** Approved architecture translated into an execution plan. The Android facade is not implemented, published, or physically verified by this document.
+**Plan Status:** Task 1 build foundation complete. JNI, facade behavior, publication, and physical verification remain open.
 
 **Goal:** Build, verify, and publish Bota SDK for Android as `dev.bota:bota-android-sdk`, backed by the frozen manual C ABI and shared Rust workflow core.
 
 **Architecture:** A Kotlin facade owns Android lifecycle, permissions, BluetoothGatt, persistence, Keystore, files, and OkHttp while a single coroutine-confined runtime drives the existing opaque Rust engine through a thin JNI adapter. Release CI cross-compiles the Rust `cdylib` for each supported Android ABI, packages those libraries and the Kotlin facade in one AAR, validates the AAR through an unrelated emulator consumer, and publishes signed Maven Central artifacts only after release-manifest v2, conformance, migration, and physical-device gates pass.
 
-**Tech Stack:** Rust 1.98.0, manual C ABI v1, Android API 26+, compile/target SDK 36, Android Gradle Plugin 8.13.2, Gradle 8.13, JDK 17, NDK 28.2.13676358, CMake 3.22.1, Kotlin 2.3.20, kotlinx.coroutines 1.11.0, OkHttp 4.12.0, Dokka 2.2.0, Vanniktech Maven Publish 0.35.0, Kotlin Binary Compatibility Validator 0.18.1, Maven Central Publisher Portal, JUnit 4.13.2, AndroidX Test 1.7.0/JUnit 1.3.0
+**Tech Stack:** Rust 1.98.0, manual C ABI v1, Android API 26+, compile/lint/test target SDK 36, Android Gradle Plugin 8.13.2, Gradle 8.13, JDK 17, NDK 28.2.13676358, CMake 3.22.1, Kotlin 2.3.20, kotlinx.coroutines 1.11.0, OkHttp 4.12.0, Dokka 2.2.0, Vanniktech Maven Publish 0.35.0, Kotlin Binary Compatibility Validator 0.18.1, Maven Central Publisher Portal, JUnit 4.13.2, AndroidX Test 1.7.0/JUnit 1.3.0
 
 **Spec:** `docs/superpowers/specs/2026-08-30-native-facades-design.md`
 
@@ -16,7 +16,7 @@
 
 - Public family: **Bota App SDK**; documentation name: **Bota SDK for Android**.
 - Public Maven coordinate: `dev.bota:bota-android-sdk`; Kotlin namespace: `dev.bota.sdk`; public entry point: `BotaDeviceClient`.
-- Minimum Android version is API 26. Compile and target SDK are 36; builds use JDK 17, AGP 8.13.2, Gradle 8.13, NDK 28.2.13676358, CMake 3.22.1, and `com.vanniktech.maven.publish` 0.35.0. Do not upgrade the publishing plugin to 0.36.0 or newer without moving the wrapper to Gradle 9 and revalidating AGP, Kotlin, Dokka, and every publication task.
+- Minimum Android version is API 26. Compile, lint, and test target SDK are 36; builds use JDK 17, AGP 8.13.2, Gradle 8.13, NDK 28.2.13676358, CMake 3.22.1, and `com.vanniktech.maven.publish` 0.35.0. Do not upgrade the publishing plugin to 0.36.0 or newer without moving the wrapper to Gradle 9 and revalidating AGP, Kotlin, Dokka, and every publication task. AGP deprecates an advisory target SDK in an Android library manifest, so the facade uses `lint.targetSdk` and `testOptions.targetSdk` instead of `defaultConfig.targetSdk`.
 - `sdk-version.toml` is the version authority. Gradle, the AAR, POM, module metadata, SBOM, release manifest, release tag, and consumer tests must use its exact value.
 - Stable Android publication starts at the next synchronized family release, `1.1.0`. The immutable Apple `v1.0.0` tag and assets are never changed or reused for later Android source.
 - Consume the manual ABI in `bindings/device-sdk-ffi/include/bota_device_sdk.h` and the evidence in `release/evidence/1.0.0-alpha.1-native-abi.md`. Do not generate or ship UniFFI bindings.
@@ -74,6 +74,7 @@ release/examples/1.1.0.json                    Synchronized multi-artifact manif
 - Create: `platforms/android/build.gradle.kts`
 - Create: `platforms/android/gradle.properties`
 - Create: `platforms/android/gradle/libs.versions.toml`
+- Create: `platforms/android/gradle/verification-metadata.xml`
 - Create: `platforms/android/gradle/wrapper/gradle-wrapper.jar`
 - Create: `platforms/android/gradle/wrapper/gradle-wrapper.properties`
 - Create: `platforms/android/gradlew`
@@ -83,6 +84,8 @@ release/examples/1.1.0.json                    Synchronized multi-artifact manif
 - Create: `platforms/android/sdk/src/main/AndroidManifest.xml`
 - Create: `platforms/android/sdk/src/main/kotlin/dev/bota/sdk/BotaAndroidSDK.kt`
 - Create: `platforms/android/sdk/src/test/kotlin/dev/bota/sdk/PackageSmokeTest.kt`
+- Create: `platforms/android/sdk/gradle.lockfile`
+- Create: `platforms/android/settings-gradle.lockfile`
 - Create: `platforms/android/README.md`
 - Modify: `tools/xtask/src/lib.rs`
 - Modify: `tools/xtask/tests/release_readiness.rs`
@@ -92,7 +95,7 @@ release/examples/1.1.0.json                    Synchronized multi-artifact manif
 - Consumes: `sdk-version.toml` and repository-pinned Node/Rust toolchains.
 - Produces: Android library project `:sdk`, namespace `dev.bota.sdk`, Maven identity `dev.bota:bota-android-sdk`, and `BotaAndroidSDK.version`.
 
-- [ ] **Step 1: Write the failing synchronized-version tests**
+- [x] **Step 1: Write the failing synchronized-version tests**
 
 Add release-readiness assertions that `platforms/android/gradle.properties`
 contains the same `VERSION_NAME` as `sdk-version.toml`, the wrapper is exactly
@@ -110,7 +113,7 @@ class PackageSmokeTest {
 }
 ```
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
 Run:
 
@@ -120,13 +123,14 @@ cargo test -p xtask --test release_readiness
 
 Expected: FAIL because the Android version authority and project do not exist.
 
-- [ ] **Step 3: Add the pinned Gradle project**
+- [x] **Step 3: Add the pinned Gradle project**
 
 Use exact version-catalog entries for AGP 8.13.2, Kotlin 2.3.20, coroutines
 1.11.0, OkHttp/MockWebServer 4.12.0, Dokka 2.2.0, Vanniktech Maven Publish
 0.35.0, JUnit 4.13.2, AndroidX Test runner/core/rules 1.7.0, and AndroidX Test
 JUnit 1.3.0. Configure `:sdk`
-with `minSdk = 26`, `compileSdk = 36`, `targetSdk = 36`, Java/Kotlin target 17,
+with `minSdk = 26`, `compileSdk = 36`, API 36 lint and test targets,
+Java/Kotlin target 17,
 `ndkVersion = "28.2.13676358"`, `cmake.version = "3.22.1"`, and the four ABI
 filters from the global constraints. Set `group = "dev.bota"` and read
 `version` from `VERSION_NAME`; `xtask` rejects any mismatch with
@@ -158,10 +162,11 @@ credential-checked signing graph. The first Gradle gate proves plugin applicatio
 and unsigned local publication-task discovery without credentials or upload.
 Declare Bluetooth permissions
 without requesting them: legacy `BLUETOOTH`/`BLUETOOTH_ADMIN` capped at API 30,
-and `BLUETOOTH_SCAN`/`BLUETOOTH_CONNECT` for API 31+. Keep the hardware feature
+`ACCESS_FINE_LOCATION` capped at API 30 for legacy BLE scans, and
+`BLUETOOTH_SCAN`/`BLUETOOTH_CONNECT` for API 31+. Keep the hardware feature
 optional so installation is possible before capability discovery.
 
-- [ ] **Step 4: Run the package shell gate**
+- [x] **Step 4: Run the package shell gate**
 
 Run:
 
@@ -189,8 +194,10 @@ and `CentralRaw` publication tasks are absent without the protected property;
 the JVM package test passes; lint is clean; and the unsigned release AAR is built
 with version matching `sdk-version.toml`. A missing expected task, an unexpected
 signing task, or any Gradle/plugin compatibility error stops Task 1.
+`npm run test:android:foundation` commits this gate as one repeatable command and
+also proves that a `VERSION_NAME` command-line override is rejected.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .gitignore platforms/android tools/xtask

@@ -40,6 +40,15 @@ bundle _2.6.9_ exec npm run test:apple:integration
 bundle _2.6.9_ exec npm run test:apple:remote-resolution
 ```
 
+Android changes require JDK 17, Android SDK 36, build-tools 35.0.0, NDK
+28.2.13676358, and CMake 3.22.1. Run the unpublished package gate with signing
+credentials absent:
+
+```bash
+JAVA_HOME=/path/to/jdk-17 ANDROID_HOME="$HOME/Library/Android/sdk" \
+  npm run test:android:foundation
+```
+
 Dependencies with copyleft or source-available licenses are rejected by both
 the root and React Native npm checkers and by `cargo-deny`. An exception must
 identify the exact observed license and document a completed review; it is not

@@ -1,0 +1,1 @@
+-keep class dev.bota.sdk.BotaAndroidSDK { public *; }

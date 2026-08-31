@@ -74,6 +74,17 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Keep React Native lifecycle serialization in the Swift actor. Concurrent
   configure calls coalesce, destroy waits for an in-flight configure, and the
   Objective-C++ layer only translates generated-spec promises.
+- The Android build foundation uses JDK 17, Gradle 8.13, AGP 8.13.2, Kotlin
+  2.3.20, API 26 minimum with API 36 compile/lint/test targets, NDK
+  28.2.13676358, CMake 3.22.1, and Maven Publish Plugin 0.35.0.
+  `platforms/android/gradle.properties` must mirror
+  `sdk-version.toml`; release-readiness tests reject version or plugin drift.
+- Android dependencies are locked and SHA-256 verified. Normal builds may
+  publish unsigned artifacts only to `target/android-m2`; signing must remain
+  absent unless `botaProtectedSigning=true` is supplied by a protected release
+  environment. The wrapper distribution checksum and the canonical
+  `sdk-version.toml`/`VERSION_NAME` equality are enforced. The current
+  metadata-only AAR is not a published facade claim.
 - Recording transfer owns sequence/checkpoint decisions; native hosts own the
   durable sink and validate the final checksum before device deletion.
 - Direct-upload fallback requires a fresh inactive device status; busy,
@@ -143,6 +154,8 @@ npm run test:workflows -- --sdk-path ../react-native-sdk
 (cd frameworks/react-native && bundle _2.6.9_ install)
 (cd frameworks/react-native && bundle _2.6.9_ exec npm run test:apple:integration)
 (cd frameworks/react-native && bundle _2.6.9_ exec npm run test:apple:remote-resolution)
+JAVA_HOME=/path/to/jdk-17 ANDROID_HOME="$HOME/Library/Android/sdk" \
+  npm run test:android:foundation
 cargo xtask protocol generate --check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings

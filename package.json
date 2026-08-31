@@ -14,6 +14,7 @@
     "license-check": "npm run check:licenses",
     "react-native:verify": "node tools/react-native/verify-package.mjs",
     "sync:apple-fixtures": "node tools/apple/sync-protocol-fixtures.mjs --check && node tools/apple/sync-workflow-fixtures.mjs --check",
+    "test:android:foundation": "tools/android/test-foundation.sh",
     "test:fixtures": "node --test tools/baseline/*.test.mjs",
     "test:release": "node --test tools/release/*.test.mjs",
     "test:react-native": "node --test tools/react-native/*.test.mjs",

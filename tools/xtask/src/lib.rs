@@ -5,6 +5,7 @@ pub mod protocol;
 pub mod release {
     use semver::Version;
     use serde::Deserialize;
+    use sha2::{Digest, Sha256};
     use std::{collections::HashSet, fs, path::Path};
 
     const APP_SDK_PACKAGES: &[(&str, &str)] = &[
@@ -16,6 +17,12 @@ pub mod release {
         ("windows", "Bota.WindowsSdk"),
         ("electron", "@bota.dev/electron-sdk"),
     ];
+    const ANDROID_GRADLE_DISTRIBUTION_URL: &str =
+        "https\\://services.gradle.org/distributions/gradle-8.13-bin.zip";
+    const ANDROID_GRADLE_DISTRIBUTION_SHA256: &str =
+        "20f1b1176237254a6fc204d8434196fa11a4cfb387567519c61556e8710aed78";
+    const ANDROID_GRADLE_WRAPPER_SHA256: &str =
+        "81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f";
 
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub struct ReleaseInfo {
@@ -58,6 +65,18 @@ pub mod release {
     #[derive(Deserialize)]
     struct SdkVersion {
         version: String,
+    }
+
+    #[derive(Deserialize)]
+    struct AndroidVersionCatalog {
+        versions: AndroidVersions,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct AndroidVersions {
+        agp: String,
+        maven_publish: String,
     }
 
     #[derive(Deserialize)]
@@ -142,6 +161,159 @@ pub mod release {
             version: expected.version,
             crate_name: core.package.name,
         })
+    }
+
+    pub fn verify_android_build(root: &Path) -> Result<(), String> {
+        let expected: SdkVersion = parse_toml_file(&root.join("sdk-version.toml"))?;
+        let gradle_properties =
+            fs::read_to_string(root.join("platforms/android/gradle.properties"))
+                .map_err(|error| format!("cannot read Android gradle.properties: {error}"))?;
+        let android_version = gradle_properties
+            .lines()
+            .find_map(|line| line.strip_prefix("VERSION_NAME="))
+            .ok_or_else(|| "Android gradle.properties is missing VERSION_NAME".to_owned())?;
+        require_version("Android Gradle project", android_version, &expected.version)?;
+
+        let wrapper = fs::read_to_string(
+            root.join("platforms/android/gradle/wrapper/gradle-wrapper.properties"),
+        )
+        .map_err(|error| format!("cannot read Android Gradle wrapper properties: {error}"))?;
+        let distribution_url = unique_gradle_property(&wrapper, "distributionUrl")?;
+        if distribution_url != ANDROID_GRADLE_DISTRIBUTION_URL {
+            return Err("Android Gradle wrapper must use the official Gradle 8.13 URL".to_owned());
+        }
+        let distribution_sha256 = unique_gradle_property(&wrapper, "distributionSha256Sum")?;
+        if distribution_sha256 != ANDROID_GRADLE_DISTRIBUTION_SHA256 {
+            return Err("Android Gradle wrapper checksum must match Gradle 8.13".to_owned());
+        }
+        let wrapper_jar =
+            fs::read(root.join("platforms/android/gradle/wrapper/gradle-wrapper.jar"))
+                .map_err(|error| format!("cannot read Android Gradle wrapper JAR: {error}"))?;
+        let wrapper_jar_sha256 = Sha256::digest(wrapper_jar)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        if wrapper_jar_sha256 != ANDROID_GRADLE_WRAPPER_SHA256 {
+            return Err("Android Gradle wrapper JAR checksum must match Gradle 8.13".to_owned());
+        }
+
+        let catalog: AndroidVersionCatalog =
+            parse_toml_file(&root.join("platforms/android/gradle/libs.versions.toml"))?;
+        if catalog.versions.agp != "8.13.2" {
+            return Err(format!(
+                "Android Gradle Plugin must be 8.13.2, found {}",
+                catalog.versions.agp
+            ));
+        }
+        if catalog.versions.maven_publish != "0.35.0" {
+            return Err(format!(
+                "Gradle Maven Publish Plugin must remain 0.35.0 with Gradle 8, found {}",
+                catalog.versions.maven_publish
+            ));
+        }
+
+        let android_build = fs::read_to_string(root.join("platforms/android/build.gradle.kts"))
+            .map_err(|error| format!("cannot read Android root build: {error}"))?;
+        if !android_build.contains("check(configuredSdkVersion == canonicalSdkVersion)") {
+            return Err("Android build must reject VERSION_NAME overrides".to_owned());
+        }
+
+        let sdk_build = fs::read_to_string(root.join("platforms/android/sdk/build.gradle.kts"))
+            .map_err(|error| format!("cannot read Android SDK build: {error}"))?;
+        if sdk_build.matches("targetSdk = 36").count() != 2
+            || !sdk_build.contains("lockMode.set(LockMode.STRICT)")
+        {
+            return Err(
+                "Android SDK must use API 36 for lint/tests and strict dependency locks".to_owned(),
+            );
+        }
+
+        let manifest =
+            fs::read_to_string(root.join("platforms/android/sdk/src/main/AndroidManifest.xml"))
+                .map_err(|error| format!("cannot read Android SDK manifest: {error}"))?;
+        if !manifest.contains(
+            "android:name=\"android.permission.ACCESS_FINE_LOCATION\"\n        android:maxSdkVersion=\"30\"",
+        ) {
+            return Err(
+                "Android SDK must declare location for BLE scans through API 30".to_owned(),
+            );
+        }
+
+        let lock = fs::read_to_string(root.join("platforms/android/sdk/gradle.lockfile"))
+            .map_err(|error| format!("cannot read Android SDK dependency lock: {error}"))?;
+        for dependency in [
+            "androidx.test:core:1.7.0",
+            "androidx.test:runner:1.7.0",
+            "androidx.test.ext:junit:1.3.0",
+        ] {
+            if !lock.contains(dependency) {
+                return Err(format!(
+                    "Android SDK dependency lock is missing {dependency}"
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn unique_gradle_property<'a>(contents: &'a str, key: &str) -> Result<&'a str, String> {
+        let prefix = format!("{key}=");
+        let mut values = Vec::new();
+        for line in contents.lines() {
+            let trimmed = line.trim_start();
+            if trimmed.is_empty() || trimmed.starts_with(['#', '!']) {
+                continue;
+            }
+            if has_java_properties_continuation(trimmed) {
+                return Err(
+                    "Android Gradle wrapper properties must not use continuations".to_owned(),
+                );
+            }
+            if java_properties_key(trimmed) != key {
+                continue;
+            }
+            let value = line.strip_prefix(&prefix).ok_or_else(|| {
+                format!("Android Gradle wrapper property {key} must use canonical key=value syntax")
+            })?;
+            values.push(value);
+        }
+        let mut values = values.into_iter();
+        let value = values
+            .next()
+            .ok_or_else(|| format!("Android Gradle wrapper is missing {key}"))?;
+        if values.next().is_some() {
+            return Err(format!(
+                "Android Gradle wrapper property {key} must not be repeated"
+            ));
+        }
+        Ok(value)
+    }
+
+    fn java_properties_key(line: &str) -> String {
+        let mut key = String::new();
+        let mut escaped = false;
+        for character in line.chars() {
+            if escaped {
+                key.push(character);
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '=' || character == ':' || character.is_whitespace() {
+                break;
+            } else {
+                key.push(character);
+            }
+        }
+        key
+    }
+
+    fn has_java_properties_continuation(line: &str) -> bool {
+        line.chars()
+            .rev()
+            .take_while(|character| *character == '\\')
+            .count()
+            % 2
+            == 1
     }
 
     pub fn validate_manifest(path: &Path) -> Result<(), String> {

@@ -34,6 +34,12 @@ XCFramework layers compile and link together. It is not an installable
 replacement yet: the remaining Apple workflow bindings, Android facade and
 adapter, complete 0.0.65 compatibility surface, app acceptance, and npm
 publication remain open.
+The Android package foundation now pins JDK 17, Gradle 8.13, Android Gradle
+Plugin 8.13.2, Kotlin 2.3.20, API 26/36, NDK 28.2.13676358, and CMake 3.22.1.
+It produces a version-synchronized, unsigned local AAR with sources, Dokka
+Javadocs, POM, and Gradle metadata. That AAR currently contains package metadata
+only: JNI, BluetoothGatt, workflow facades, physical-device acceptance, Maven
+Central publication, and the React Native Android adapter remain open.
 The native-boundary spike selected a manually owned C ABI after comparing it
 with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed
@@ -127,6 +133,8 @@ Requirements:
 - Rust 1.98.0 with rustfmt and Clippy
 - Xcode 26 and CocoaPods 1.13 or newer for React Native Apple consumers; source
   verification locks CocoaPods 1.16.2, xcodeproj 1.27.0, and Bundler 2.6.9
+- JDK 17, Android SDK 36, build-tools 35.0.0, NDK 28.2.13676358, and CMake
+  3.22.1 for the unpublished Android facade
 
 ```bash
 npm ci
@@ -152,6 +160,10 @@ npm run test:apple:lifecycle
 npm run test:apple:spm-workaround
 bundle _2.6.9_ exec npm run test:apple:integration
 bundle _2.6.9_ exec npm run test:apple:remote-resolution
+cd ../../platforms/android
+./gradlew :sdk:testDebugUnitTest :sdk:lintRelease :sdk:assembleRelease
+cd ../..
+npm run test:android:foundation
 ```
 
 The React Native API check expects `npm ci` to have installed the reference SDK
