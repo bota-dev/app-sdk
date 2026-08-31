@@ -2,8 +2,9 @@
 
 This directory is the unpublished Android facade for the Bota App SDK family.
 It produces `dev.bota:bota-android-sdk` from the synchronized version in the
-repository root. The legacy Android repository remains a migration input until
-the facade, physical-device, compatibility, and release gates pass.
+repository root. The AAR packages the frozen Rust ABI and a thin internal JNI
+ownership adapter; the legacy Android repository remains a migration input
+until the public facade, physical-device, compatibility, and release gates pass.
 
 ## Toolchain
 
@@ -26,6 +27,26 @@ JAVA_HOME=/path/to/jdk-17 \
 ANDROID_HOME="$HOME/Library/Android/sdk" \
 npm --prefix ../.. run test:android:foundation
 ```
+
+The foundation gate cross-compiles `libbota_device_sdk_ffi.so` and compiles
+`libbota_android_jni.so` for `arm64-v8a`, `armeabi-v7a`, `x86_64`, and `x86`.
+Release inspection requires exactly those two libraries under every AAR ABI:
+
+```bash
+tools/android/build-native.sh
+tools/android/inspect-aar.sh platforms/android/sdk/build/outputs/aar/sdk-release.aar
+```
+
+JNI ownership tests require one running Android target. On an API 35 emulator:
+
+```bash
+tools/android/test-package.sh --api 35 \
+  --instrumentation-class dev.bota.sdk.internal.jni.NativeCoreBridgeTest
+```
+
+The instrumentation test loads both packaged libraries, drives ABI v1 codecs
+and one workflow output through Rust, and checks exact-once engine, packet, and
+error frees. Those counters are compiled into debug tests only.
 
 Normal builds can publish unsigned artifacts only to the `Local` repository at
 `target/android-m2`. Remote publication and signing require the exact

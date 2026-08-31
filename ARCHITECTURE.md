@@ -107,14 +107,18 @@ binary Swift-package module maps on Xcode 26.3 while the package floor remains
 0.86.3. This proves lifecycle integration, not the remaining workflow surface
 or application parity.
 
-The Android migration has a build-only foundation in `platforms/android`.
+The Android migration has a native package foundation in `platforms/android`.
 `sdk-version.toml` is mirrored as `VERSION_NAME`, while release-readiness tests
 pin Gradle 8.13, Android Gradle Plugin 8.13.2, and Maven Publish Plugin 0.35.0.
 The API-26 library declares optional BLE hardware and permissions without
 requesting them, locks and verifies dependencies, and produces deterministic
-unsigned local AAR, sources, Dokka Javadoc, POM, and module metadata. Its only
-Kotlin API is immutable `BotaAndroidSDK` package metadata. No JNI library,
-BluetoothGatt transport, workflow facade, Maven Central artifact, physical
+unsigned local AAR, sources, Dokka Javadoc, POM, and module metadata. The AAR
+contains the frozen Rust C ABI plus a thin Kotlin/JNI ownership adapter for all
+four supported Android ABIs. Inputs are borrowed typed fields, Rust-owned
+packets and errors are copied before exactly one free, and recording or firmware
+buffers may enter through direct `ByteBuffer` values without JSON or base64.
+The only public Kotlin API remains immutable `BotaAndroidSDK` package metadata.
+No BluetoothGatt transport, workflow facade, Maven Central artifact, physical
 acceptance, or React Native Android runtime support is claimed by this stage.
 
 Native migration inputs are pinned separately in

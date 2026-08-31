@@ -37,8 +37,10 @@ publication remain open.
 The Android package foundation now pins JDK 17, Gradle 8.13, Android Gradle
 Plugin 8.13.2, Kotlin 2.3.20, API 26/36, NDK 28.2.13676358, and CMake 3.22.1.
 It produces a version-synchronized, unsigned local AAR with sources, Dokka
-Javadocs, POM, and Gradle metadata. That AAR currently contains package metadata
-only: JNI, BluetoothGatt, workflow facades, physical-device acceptance, Maven
+Javadocs, POM, and Gradle metadata. The AAR now packages the frozen Rust ABI and
+thin JNI ownership adapter for four Android ABIs; real API 35 instrumentation
+proves typed codec calls, workflow polling, and exact-once native ownership.
+BluetoothGatt, public workflow facades, physical-device acceptance, Maven
 Central publication, and the React Native Android adapter remain open.
 The native-boundary spike selected a manually owned C ABI after comparing it
 with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
@@ -164,6 +166,9 @@ cd ../../platforms/android
 ./gradlew :sdk:testDebugUnitTest :sdk:lintRelease :sdk:assembleRelease
 cd ../..
 npm run test:android:foundation
+tools/android/test-package.sh --api 35 \
+  --instrumentation-class dev.bota.sdk.internal.jni.NativeCoreBridgeTest
+tools/android/inspect-aar.sh platforms/android/sdk/build/outputs/aar/sdk-release.aar
 ```
 
 The React Native API check expects `npm ci` to have installed the reference SDK

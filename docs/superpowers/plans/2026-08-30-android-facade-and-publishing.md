@@ -236,7 +236,7 @@ internal interface NativeCore : AutoCloseable {
 }
 ```
 
-- [ ] **Step 1: Write failing real-library ownership tests**
+- [x] **Step 1: Write failing real-library ownership tests**
 
 Instrumented tests load the packaged libraries, assert ABI version 1, create
 and close one engine, round-trip all five field types including embedded zero
@@ -244,7 +244,7 @@ bytes, copy an error before freeing it, poll one owned packet, and verify that
 close, packet free, and error free each happen exactly once through JNI test
 counters compiled only into the debug test variant.
 
-- [ ] **Step 2: Run the JNI test and verify RED**
+- [x] **Step 2: Run the JNI test and verify RED**
 
 Run:
 
@@ -255,7 +255,7 @@ tools/android/test-package.sh --instrumentation-class dev.bota.sdk.internal.jni.
 Expected: FAIL because Android native libraries and JNI entry points do not
 exist.
 
-- [ ] **Step 3: Cross-compile the Rust library reproducibly**
+- [x] **Step 3: Cross-compile the Rust library reproducibly**
 
 `build-native.sh` verifies the header SHA-256 recorded in native ABI evidence,
 installs only these Rust targets, and invokes the matching API-26 NDK clang
@@ -274,7 +274,7 @@ remap the checkout and Cargo registry paths, copy each
 paths, undefined ABI symbols, or unexpected exported `bota_device_sdk_*`
 symbols.
 
-- [ ] **Step 4: Implement the JNI ownership adapter**
+- [x] **Step 4: Implement the JNI ownership adapter**
 
 JNI converts primitive metadata arrays plus `ByteArray` or direct `ByteBuffer`
 payloads into borrowed `BotaDeviceSdkFieldViewV1` values for the duration of
@@ -287,7 +287,7 @@ Do not introduce JSON, base64, a second packet schema, or JNI-owned workflow
 state. Large recording and firmware chunks use direct buffers; scalar and
 small metadata use primitive arrays.
 
-- [ ] **Step 5: Inspect all AAR native entries and run JNI tests**
+- [x] **Step 5: Inspect all AAR native entries and run JNI tests**
 
 Run:
 
@@ -301,7 +301,7 @@ Expected: the instrumentation test uses the real Rust ABI, and inspection
 finds exactly two expected `.so` files under each of the four ABI directories,
 with API-26-compatible ELF metadata and no absolute build paths.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add .github/workflows/ci.yml platforms/android tools/android

@@ -83,8 +83,12 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   publish unsigned artifacts only to `target/android-m2`; signing must remain
   absent unless `botaProtectedSigning=true` is supplied by a protected release
   environment. The wrapper distribution checksum and the canonical
-  `sdk-version.toml`/`VERSION_NAME` equality are enforced. The current
-  metadata-only AAR is not a published facade claim.
+  `sdk-version.toml`/`VERSION_NAME` equality are enforced. The unpublished AAR
+  contains exactly `libbota_device_sdk_ffi.so` and `libbota_android_jni.so` for
+  all four supported ABIs, but is not a published facade claim.
+- Keep Android JNI as an ownership adapter only. Pass primitive typed fields
+  and raw byte arrays or direct buffers; copy Rust-owned packets and errors
+  before exactly one matching free. Test counters belong to debug builds only.
 - Recording transfer owns sequence/checkpoint decisions; native hosts own the
   durable sink and validate the final checksum before device deletion.
 - Direct-upload fallback requires a fresh inactive device status; busy,
@@ -156,6 +160,9 @@ npm run test:workflows -- --sdk-path ../react-native-sdk
 (cd frameworks/react-native && bundle _2.6.9_ exec npm run test:apple:remote-resolution)
 JAVA_HOME=/path/to/jdk-17 ANDROID_HOME="$HOME/Library/Android/sdk" \
   npm run test:android:foundation
+tools/android/test-package.sh --api 35 \
+  --instrumentation-class dev.bota.sdk.internal.jni.NativeCoreBridgeTest
+tools/android/inspect-aar.sh platforms/android/sdk/build/outputs/aar/sdk-release.aar
 cargo xtask protocol generate --check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings

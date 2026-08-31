@@ -22,6 +22,7 @@
 /.build/
 /platforms/apple/Artifacts/
 /platforms/android/.gradle/
+/platforms/android/**/.cxx/
 /platforms/android/local.properties
 /platforms/android/**/build/
 /target/android-m2/

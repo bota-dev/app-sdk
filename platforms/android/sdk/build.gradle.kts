@@ -1,6 +1,7 @@
 import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
 import org.gradle.api.artifacts.dsl.LockMode
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
+import org.gradle.api.tasks.Exec
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -28,8 +29,37 @@ android {
 
     externalNativeBuild {
         cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
         }
+    }
+
+    sourceSets {
+        getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("generated/bota/jniLibs"))
+    }
+
+    buildTypes {
+        getByName("debug") {
+            externalNativeBuild {
+                cmake {
+                    arguments += "-DBOTA_ANDROID_JNI_TESTING=ON"
+                }
+            }
+        }
+        getByName("release") {
+            externalNativeBuild {
+                cmake {
+                    arguments += "-DBOTA_ANDROID_JNI_TESTING=OFF"
+                }
+            }
+        }
+    }
+
+    defaultConfig.externalNativeBuild.cmake {
+        arguments += listOf(
+            "-DBOTA_REPO_ROOT=${rootProject.projectDir.parentFile.parentFile.absolutePath}",
+            "-DBOTA_RUST_LIB_DIR=${layout.buildDirectory.dir("generated/bota/jniLibs").get().asFile.absolutePath}",
+        )
     }
 
     buildFeatures {
@@ -53,6 +83,35 @@ android {
         targetSdk = 36
     }
 
+}
+
+val buildRustNative by tasks.registering(Exec::class) {
+    group = "build"
+    description = "Cross-compiles the frozen Rust ABI for all supported Android ABIs."
+    val repositoryRoot = rootProject.projectDir.parentFile.parentFile
+    commandLine(repositoryRoot.resolve("tools/android/build-native.sh"))
+    inputs.files(
+        fileTree(repositoryRoot) {
+            include("Cargo.lock")
+            include("Cargo.toml")
+            include("rust-toolchain.toml")
+            include("sdk-version.toml")
+            include("core/device-sdk-core/Cargo.toml")
+            include("core/device-sdk-core/src/**")
+            include("bindings/device-sdk-ffi/Cargo.toml")
+            include("bindings/device-sdk-ffi/include/bota_device_sdk.h")
+            include("bindings/device-sdk-ffi/src/**")
+            include("release/evidence/1.0.0-alpha.1-native-abi.md")
+            include("tools/android/build-native.sh")
+        },
+    )
+    outputs.dir(layout.buildDirectory.dir("generated/bota/jniLibs"))
+}
+
+tasks.configureEach {
+    if (name.startsWith("configureCMake") || name.endsWith("JniLibFolders")) {
+        dependsOn(buildRustNative)
+    }
 }
 
 kotlin {
