@@ -13,7 +13,7 @@ acceptance remain release gates.
 - JDK 17
 - Gradle 8.13
 - Android Gradle Plugin 8.13.2
-- Kotlin 2.3.20
+- Kotlin 2.1.20
 - Android API 26 minimum and API 36 compile, lint, and test target
 - Android NDK 28.2.13676358
 - CMake 3.22.1

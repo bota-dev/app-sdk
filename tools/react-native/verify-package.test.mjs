@@ -41,8 +41,8 @@ const validPackage = () => ({
     reactNativeFloor: '0.86.3',
     android: {
       compileSdkVersion: 36,
-      coroutinesVersion: '1.11.0',
-      kotlinVersion: '2.3.20',
+      coroutinesVersion: '1.10.2',
+      kotlinVersion: '2.1.20',
       mavenCoordinate: 'dev.bota:bota-android-sdk',
       minSdkVersion: 26,
       namespace: 'dev.bota.sdk.reactnative',
@@ -163,7 +163,7 @@ test('rejects Android facade coordinate and toolchain drift', () => {
     pkg.bota.android.kotlinVersion = '2.2.0';
   });
   const coroutinesResult = runVerifier((pkg) => {
-    pkg.bota.android.coroutinesVersion = '1.10.2';
+    pkg.bota.android.coroutinesVersion = '1.9.0';
   });
 
   assert.notEqual(coordinateResult.status, 0);

@@ -8,7 +8,7 @@
 
 **Architecture:** A Kotlin facade owns Android lifecycle, permissions, BluetoothGatt, persistence, Keystore, files, and OkHttp while a single coroutine-confined runtime drives the existing opaque Rust engine through a thin JNI adapter. Release CI cross-compiles the Rust `cdylib` for each supported Android ABI, packages those libraries and the Kotlin facade in one AAR, validates the AAR through an unrelated emulator consumer, and publishes signed Maven Central artifacts only after release-manifest v2, conformance, migration, and physical-device gates pass.
 
-**Tech Stack:** Rust 1.98.0, manual C ABI v1, Android API 26+, compile/lint/test target SDK 36, Android Gradle Plugin 8.13.2, Gradle 8.13, JDK 17, NDK 28.2.13676358, CMake 3.22.1, Kotlin 2.3.20, kotlinx.coroutines 1.11.0, OkHttp 4.12.0, Dokka 2.2.0, Vanniktech Maven Publish 0.35.0, Kotlin Binary Compatibility Validator 0.18.1, Maven Central Publisher Portal, JUnit 4.13.2, AndroidX Test 1.7.0/JUnit 1.3.0
+**Tech Stack:** Rust 1.98.0, manual C ABI v1, Android API 26+, compile/lint/test target SDK 36, Android Gradle Plugin 8.13.2, Gradle 8.13, JDK 17, NDK 28.2.13676358, CMake 3.22.1, Kotlin 2.1.20, kotlinx.coroutines 1.10.2, OkHttp 4.12.0, Dokka 2.2.0, Vanniktech Maven Publish 0.35.0, Kotlin Binary Compatibility Validator 0.18.1, Maven Central Publisher Portal, JUnit 4.13.2, AndroidX Test 1.7.0/JUnit 1.3.0
 
 **Spec:** `docs/superpowers/specs/2026-08-30-native-facades-design.md`
 
@@ -125,8 +125,8 @@ Expected: FAIL because the Android version authority and project do not exist.
 
 - [x] **Step 3: Add the pinned Gradle project**
 
-Use exact version-catalog entries for AGP 8.13.2, Kotlin 2.3.20, coroutines
-1.11.0, OkHttp/MockWebServer 4.12.0, Dokka 2.2.0, Vanniktech Maven Publish
+Use exact version-catalog entries for AGP 8.13.2, Kotlin 2.1.20, coroutines
+1.10.2, OkHttp/MockWebServer 4.12.0, Dokka 2.2.0, Vanniktech Maven Publish
 0.35.0, JUnit 4.13.2, AndroidX Test runner/core/rules 1.7.0, and AndroidX Test
 JUnit 1.3.0. Configure `:sdk`
 with `minSdk = 26`, `compileSdk = 36`, API 36 lint and test targets,

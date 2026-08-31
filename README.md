@@ -35,7 +35,7 @@ replacement yet: the remaining Apple workflow bindings, Android facade and
 adapter, complete 0.0.65 compatibility surface, app acceptance, and npm
 publication remain open.
 The Android package foundation now pins JDK 17, Gradle 8.13, Android Gradle
-Plugin 8.13.2, Kotlin 2.3.20, API 26/36, NDK 28.2.13676358, and CMake 3.22.1.
+Plugin 8.13.2, Kotlin 2.1.20, API 26/36, NDK 28.2.13676358, and CMake 3.22.1.
 It produces a version-synchronized, unsigned local AAR with sources, Dokka
 Javadocs, POM, and Gradle metadata. The AAR now packages the frozen Rust ABI and
 thin JNI ownership adapter for four Android ABIs; real API 35 instrumentation

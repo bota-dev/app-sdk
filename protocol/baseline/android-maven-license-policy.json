@@ -11,14 +11,14 @@
     {
       "group": "org.jetbrains.kotlin",
       "module": "kotlin-stdlib",
-      "version": "2.3.20",
+      "version": "2.1.20",
       "license": "Apache-2.0",
       "reviewedBy": "Bota maintainers"
     },
     {
       "group": "org.jetbrains.kotlinx",
       "module": "kotlinx-coroutines-android",
-      "version": "1.11.0",
+      "version": "1.10.2",
       "license": "Apache-2.0",
       "reviewedBy": "Bota maintainers"
     }

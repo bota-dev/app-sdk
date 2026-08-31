@@ -75,7 +75,7 @@ android {
     lint {
         abortOnError = true
         checkReleaseBuilds = true
-        disable += setOf("AndroidGradlePluginVersion", "NewerVersionAvailable")
+        disable += setOf("AndroidGradlePluginVersion", "GradleDependency", "NewerVersionAvailable")
         targetSdk = 36
         warningsAsErrors = true
     }

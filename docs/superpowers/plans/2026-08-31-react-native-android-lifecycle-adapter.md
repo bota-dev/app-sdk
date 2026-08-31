@@ -6,7 +6,7 @@
 
 **Architecture:** A small Kotlin lifecycle object serializes `configure` and `destroy` with a coroutine mutex and delegates to `BotaDeviceClient.shared`. A generated-spec module translates `ReadableMap` and `Promise` values only, while a `BaseReactPackage` registers the TurboModule. The package depends on the exact App SDK version from its own `package.json`; local tests resolve the same AAR from `target/android-m2`, while applications resolve it from Maven Central.
 
-**Tech Stack:** Kotlin 2.3.20, coroutines 1.11.0, Android Gradle Plugin 8.13.2, JDK 17, Android API 26/36, React Native 0.86.3 Codegen, Gradle 8.13, Node.js 22, JUnit 4.
+**Tech Stack:** Kotlin 2.1.20, coroutines 1.10.2, Android Gradle Plugin 8.13.2, JDK 17, Android API 26/36, React Native 0.86.3 Codegen, Gradle 8.13, Node.js 22, JUnit 4. The Android facade and coroutines API are compiled at or below React Native's Kotlin level so a stock consumer can read their metadata without a project-wide Kotlin override.
 
 **Spec:** `ARCHITECTURE.md` React Native boundary and `docs/superpowers/plans/2026-08-28-app-sdk-implementation.md` Milestone 4.
 

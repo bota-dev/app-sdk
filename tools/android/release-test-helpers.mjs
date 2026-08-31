@@ -68,7 +68,7 @@ export function mavenPom() {
   <developers><developer><id>bota-dev</id><name>Bota</name><url>https://bota.dev</url></developer></developers>
   <scm><url>https://github.com/bota-dev/app-sdk</url><connection>scm:git:git://github.com/bota-dev/app-sdk.git</connection><developerConnection>scm:git:ssh://git@github.com/bota-dev/app-sdk.git</developerConnection></scm>
   <dependencies>
-    <dependency><groupId>org.jetbrains.kotlinx</groupId><artifactId>kotlinx-coroutines-android</artifactId><version>1.11.0</version><scope>compile</scope></dependency>
+    <dependency><groupId>org.jetbrains.kotlinx</groupId><artifactId>kotlinx-coroutines-android</artifactId><version>1.10.2</version><scope>compile</scope></dependency>
     <dependency><groupId>com.squareup.okhttp3</groupId><artifactId>okhttp</artifactId><version>4.12.0</version><scope>compile</scope></dependency>
   </dependencies>
 </project>

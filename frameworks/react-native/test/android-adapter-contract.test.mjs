@@ -31,8 +31,8 @@ test('Android adapter package does not bypass the public facade', () => {
 
   assert.deepEqual(packageJson.bota.android, {
     compileSdkVersion: 36,
-    coroutinesVersion: '1.11.0',
-    kotlinVersion: '2.3.20',
+    coroutinesVersion: '1.10.2',
+    kotlinVersion: '2.1.20',
     mavenCoordinate: 'dev.bota:bota-android-sdk',
     minSdkVersion: 26,
     namespace: 'dev.bota.sdk.reactnative',

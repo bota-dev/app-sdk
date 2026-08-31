@@ -28,10 +28,8 @@ public abstract interface class com/bota/sdk/BluetoothTransport {
 	public abstract fun notifications (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lkotlinx/coroutines/flow/Flow;
 	public abstract fun read (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun scan (Lcom/bota/sdk/ScanOptions;)Lkotlinx/coroutines/flow/Flow;
-	public static synthetic fun scan$default (Lcom/bota/sdk/BluetoothTransport;Lcom/bota/sdk/ScanOptions;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
 	public abstract fun stopScan ()V
 	public abstract fun write (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[BZLkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public static synthetic fun write$default (Lcom/bota/sdk/BluetoothTransport;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;[BZLkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 }
 
 public final class com/bota/sdk/BluetoothTransport$DefaultImpls {

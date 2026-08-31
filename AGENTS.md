@@ -78,8 +78,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   configure calls coalesce, destroy waits for an in-flight configure, and the
   Objective-C++ layer only translates generated-spec promises.
 - The Android build foundation uses JDK 17, Gradle 8.13, AGP 8.13.2, Kotlin
-  2.3.20, API 26 minimum with API 36 compile/lint/test targets, NDK
+  2.1.20, API 26 minimum with API 36 compile/lint/test targets, NDK
   28.2.13676358, CMake 3.22.1, and Maven Publish Plugin 0.35.0.
+  Kotlin and coroutines are compatibility pins for the React Native 0.86.3
+  floor, so Android lint intentionally disables only dependency-update advice.
   Linux CI invokes `sdkmanager` from Android command-line tools under
   `$ANDROID_HOME` because GitHub runners do not guarantee it is on `PATH`.
   `platforms/android/gradle.properties` must mirror

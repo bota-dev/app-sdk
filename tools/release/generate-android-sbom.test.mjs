@@ -27,9 +27,9 @@ function input() {
       { name: 'bota-device-sdk-ffi', version: '1.0.2', license: 'MIT', dependencies: ['bota-device-sdk-core'] },
     ],
     gradleDependencies: [
-      { group: 'org.jetbrains.kotlinx', name: 'kotlinx-coroutines-android', version: '1.11.0', license: 'Apache-2.0' },
+      { group: 'org.jetbrains.kotlinx', name: 'kotlinx-coroutines-android', version: '1.10.2', license: 'Apache-2.0' },
       { group: 'com.squareup.okhttp3', name: 'okhttp', version: '4.12.0', license: 'Apache-2.0' },
-      { group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: '2.3.20', license: 'Apache-2.0' },
+      { group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib', version: '2.1.20', license: 'Apache-2.0' },
     ],
   };
 }
