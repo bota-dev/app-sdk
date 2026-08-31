@@ -1,4 +1,5 @@
 @testable import BotaDeviceSDKAppleAdapter
+import BotaAppleSDK
 import Foundation
 import XCTest
 
@@ -147,6 +148,67 @@ final class BotaDeviceSDKAppleLifecycleTests: XCTestCase {
     }
 }
 
+final class BotaDeviceSDKAppleDevicesTests: XCTestCase {
+    func testBridgeTimeoutValidationRejectsInvalidJavaScriptNumbers() throws {
+        XCTAssertEqual(
+            try BotaDeviceSDKAppleBridge.timeoutMilliseconds(5_000),
+            5_000
+        )
+        XCTAssertThrowsError(try BotaDeviceSDKAppleBridge.timeoutMilliseconds(.nan))
+        XCTAssertThrowsError(try BotaDeviceSDKAppleBridge.timeoutMilliseconds(-1))
+        XCTAssertThrowsError(try BotaDeviceSDKAppleBridge.timeoutMilliseconds(.infinity))
+    }
+
+    func testUnknownPairingStateUsesTheFrozenUnpairedFallback() {
+        XCTAssertEqual(BotaDeviceSDKAppleBridge.pairingState(.unknown(0xFF)), "unpaired")
+    }
+
+    func testScanAndConnectionsDelegateToTheAppleFacade() async throws {
+        let selected = DiscoveredDevice(id: "selected", name: "Bota Pin", rssi: -42)
+        let verified = ConnectedDevice(
+            id: "selected",
+            serialNumber: "EVFXXW67KP",
+            deviceType: .botaPin,
+            firmwareVersion: "1.0.11",
+            isProvisioned: false,
+            connectionState: .connected,
+            mtu: 247
+        )
+        let client = TestAppleDeviceClient(discovered: selected, connected: verified)
+        let devices = BotaDeviceSDKAppleDevices(client: client)
+        let received = DeviceCapture()
+
+        try await devices.startScan(
+            timeoutMilliseconds: 5_000,
+            allowDuplicates: true
+        ) { device in
+            Task { await received.append(device) }
+        }
+        await received.waitForCount(1)
+        let connected = try await devices.connect(selected)
+        let reconnected = try await devices.reconnect(
+            serialNumber: "EVFXXW67KP",
+            hint: DeviceReconnectHint(
+                scanTimeoutMilliseconds: 7_000,
+                connectionTimeoutMilliseconds: 8_000
+            )
+        )
+        try await devices.disconnect()
+
+        let snapshot = await client.snapshot()
+        XCTAssertEqual(
+            snapshot.scanOptions,
+            [TestAppleDeviceClient.ScanOptions(timeout: 5_000, allowDuplicates: true)]
+        )
+        XCTAssertEqual(snapshot.selectedIDs, ["selected"])
+        XCTAssertEqual(snapshot.reconnectSerials, ["EVFXXW67KP"])
+        XCTAssertEqual(snapshot.cancelCount, 1)
+        XCTAssertEqual(snapshot.disconnectCount, 1)
+        XCTAssertEqual(connected.serialNumber, "EVFXXW67KP")
+        XCTAssertEqual(reconnected.serialNumber, "EVFXXW67KP")
+    }
+}
+
 private enum TestError: Error {
     case configureFailed
 }
@@ -256,5 +318,93 @@ private actor TestAppleClient: BotaDeviceSDKAppleClient {
             }
         }
         destroyWaiters = pending
+    }
+}
+
+private actor DeviceCapture {
+    private var devices: [DiscoveredDevice] = []
+    private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
+
+    func append(_ device: DiscoveredDevice) {
+        devices.append(device)
+        let ready = waiters.filter { devices.count >= $0.0 }
+        waiters.removeAll { devices.count >= $0.0 }
+        ready.forEach { $0.1.resume() }
+    }
+
+    func waitForCount(_ count: Int) async {
+        if devices.count >= count { return }
+        await withCheckedContinuation { continuation in
+            waiters.append((count, continuation))
+        }
+    }
+}
+
+private actor TestAppleDeviceClient: BotaDeviceSDKAppleDeviceClient {
+    struct ScanOptions: Equatable, Sendable {
+        let timeout: UInt64
+        let allowDuplicates: Bool
+    }
+
+    struct Snapshot: Sendable {
+        let scanOptions: [ScanOptions]
+        let selectedIDs: [String]
+        let reconnectSerials: [String]
+        let cancelCount: Int
+        let disconnectCount: Int
+    }
+
+    private let discovered: DiscoveredDevice
+    private let connected: ConnectedDevice
+    private var scanOptions: [ScanOptions] = []
+    private var selectedIDs: [String] = []
+    private var reconnectSerials: [String] = []
+    private var cancelCount = 0
+    private var disconnectCount = 0
+
+    init(discovered: DiscoveredDevice, connected: ConnectedDevice) {
+        self.discovered = discovered
+        self.connected = connected
+    }
+
+    func startScan(
+        timeoutMilliseconds: UInt64,
+        allowDuplicates: Bool
+    ) async throws -> AsyncThrowingStream<DiscoveredDevice, Error> {
+        scanOptions.append(.init(timeout: timeoutMilliseconds, allowDuplicates: allowDuplicates))
+        return AsyncThrowingStream { continuation in
+            continuation.yield(discovered)
+        }
+    }
+
+    func cancelCurrentOperation() async throws {
+        cancelCount += 1
+    }
+
+    func connect(device: DiscoveredDevice) async throws -> ConnectedDevice {
+        selectedIDs.append(device.id)
+        return connected
+    }
+
+    func reconnect(
+        serialNumber: String,
+        hint _: DeviceReconnectHint
+    ) async throws -> ConnectedDevice {
+        reconnectSerials.append(serialNumber)
+        return connected
+    }
+
+    func disconnect() async throws {
+        disconnectCount += 1
+    }
+
+    func snapshot() -> Snapshot {
+        Snapshot(
+            scanOptions: scanOptions,
+            selectedIDs: selectedIDs,
+            reconnectSerials: reconnectSerials,
+            cancelCount: cancelCount,
+            disconnectCount: disconnectCount
+        )
     }
 }

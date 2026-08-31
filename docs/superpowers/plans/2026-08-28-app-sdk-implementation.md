@@ -888,12 +888,14 @@ alongside the 50 wire fixtures and 86 Jest tests. The private
 first lifecycle/capability TurboModule schema plus deterministic iOS and Android
 artifact digests. Optional lookup prevents import-time failure before a native
 rebuild, while invocation fails as `native_module_unavailable`. The Apple
-lifecycle adapter now serializes configure and destroy through `BotaAppleSDK`,
-and a real CocoaPods application compiles and links the generated spec,
+lifecycle adapter now serializes configure and destroy through `BotaAppleSDK`.
+The first device slice also supports discovery, selected-device connect,
+serial-strict reconnect, and disconnect while native actors own scan teardown;
+a real CocoaPods application compiles and links the generated typed event spec,
 Objective-C++, Swift, Swift Package, and Rust XCFramework layers. The Android
-lifecycle adapter now serializes configure and destroy through the public
-Android facade, and a checked-in React Native Gradle consumer runs Codegen,
-Kotlin tests, lint, and release assembly against the exact packaged AAR. The
+adapters provide the same lifecycle and device slice through the public Android
+facade, and a checked-in React Native Gradle consumer runs Codegen, Kotlin tests,
+lint, and release assembly against the exact packaged AAR. The
 package now matches all 75 frozen non-workflow exports, including every public
 type and the pure error, sync-status, and device-log runtime helpers. The five
 native workflow classes, app acceptance, and publication gates remain open.

@@ -25,13 +25,16 @@ all 80 root exports, expanded type aliases, static factories, and reachable
 public members; future React Native packages must match that digest in addition
 to the protocol and workflow gates. A private `frameworks/react-native`
 foundation now pins the apps' React Native 0.86.3 New Architecture floor,
-validates a low-volume lifecycle TurboModule contract for iOS and Android, and
+validates a low-volume lifecycle and device-connection TurboModule contract for
+iOS and Android, and
 rejects Codegen drift or bridge fields that could carry recording or firmware
 bytes. Its Apple lifecycle adapter now serializes configuration and destruction
-through `BotaAppleSDK`, and a disposable CocoaPods application proves that the
-generated TurboModule, Objective-C++, Swift, Swift Package, and Rust
-XCFramework layers compile and link together. Its Android lifecycle adapter now
-serializes configuration and destruction through `BotaDeviceClient.shared`; a
+through `BotaAppleSDK`; its device adapter owns discovery and delegates selected
+connect, serial-strict reconnect, and disconnect. A disposable CocoaPods
+application proves that the generated TurboModule, typed event emitter,
+Objective-C++, Swift, Swift Package, and Rust XCFramework layers compile and
+link together. Its Android adapters provide the same lifecycle and device
+slice through `BotaDeviceClient.shared`; a
 checked-in React Native Gradle consumer runs Codegen, Kotlin tests, lint, and
 release assembly against the exact locally packaged AAR. The package now
 matches 75 of the 80 frozen `0.0.65` root exports: every public type plus the

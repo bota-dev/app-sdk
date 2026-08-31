@@ -83,9 +83,10 @@ is `BotaDeviceSDK`. JavaScript uses optional TurboModule lookup so importing a
 bundle before the native application is rebuilt does not throw; the first
 native operation instead returns stable `native_module_unavailable`.
 
-The initial bridge contract contains only configure, destroy, state, and
-capability calls. React Native Codegen produces a canonical schema plus iOS and
-Android artifact digests in
+The bridge contract contains configure, destroy, state, capabilities, device
+discovery, selected-device connect, serial-strict reconnect, and disconnect.
+React Native Codegen produces a canonical schema plus iOS and Android artifact
+digests in
 `frameworks/react-native/generated/codegen-contract.json`; CI regenerates and
 compares that contract with the pinned React Native version. Recording and
 firmware payloads never cross the JavaScript bridge. Future workflow methods
@@ -99,11 +100,18 @@ test compares each declaration with the frozen contract, and behavior tests
 cover stable errors, transport precedence, and split log packets. The five
 manager/client classes remain withheld until equivalent native-backed workflow
 methods exist, so type parity cannot be mistaken for operational parity.
+The package's new `BotaDeviceSDK.devices` facade is intentionally smaller than
+the withheld `DeviceManager`: it owns a typed discovery subscription, preserves
+the frozen JavaScript scan filters, connects a selected peripheral while the
+native facade learns its serial identity, reconnects only by an expected serial,
+and disconnects. It is an incremental workflow surface, not class parity.
 
-The Apple lifecycle host is now executable. A Swift actor coalesces concurrent
+The Apple host is now executable. A Swift actor coalesces concurrent
 configuration, orders destruction after any in-flight configuration, and calls
-the public `BotaDeviceClient` facade. Objective-C++ implements only the
-generated TurboModule spec and promise conversion. The pod uses React Native
+the public `BotaDeviceClient` facade. A separate actor owns scan collection and
+cancels it before connect, reconnect, disconnect, or destroy. Objective-C++
+implements only the generated TurboModule spec, typed discovery event emission,
+and promise conversion. The pod uses React Native
 0.86's iOS 15.1 floor and resolves the exact matching `BotaAppleSDK` release;
 the local package-path override exists only for source and CI builds. A
 disposable Objective-C++ and Swift CocoaPods application compiles and links the
@@ -112,17 +120,20 @@ The build toolchain is locked, and a separate remote-resolution gate confirms
 that the default package URL resolves the synchronized immutable release. A
 target-scoped CocoaPods hook carries React Native's upstream fix for duplicate
 binary Swift-package module maps on Xcode 26.3 while the package floor remains
-0.86.3. This proves lifecycle integration, not the remaining workflow surface
-or application parity.
+0.86.3. This proves lifecycle plus device discovery/connection integration, not
+the remaining workflow surface or application parity.
 
-The Android lifecycle host is also executable. A coroutine mutex serializes
+The Android host is also executable. A coroutine mutex serializes
 configuration and destruction through `BotaDeviceClient.shared`, and a
 `BaseReactPackage` registers the generated TurboModule with stable state,
-capability, and `android_sdk_error` behavior. A checked-in React Native 0.86.3
+capability, and `android_sdk_error` behavior. A separate owner contains scan
+failures and cancels scan before selected connect, reconnect, disconnect, or
+destroy. A checked-in React Native 0.86.3
 Gradle consumer regenerates Codegen, runs lifecycle unit tests and lint, and
 assembles the adapter against the exact AAR reconstructed from the immutable
-local Maven payload. This proves Android lifecycle integration only; workflow
-bindings and application parity remain open.
+local Maven payload. This proves Android lifecycle plus device
+discovery/connection integration only; the remaining workflow bindings and
+application parity remain open.
 
 The Android migration has a native package foundation in `platforms/android`.
 `sdk-version.toml` is mirrored as `VERSION_NAME`, while release-readiness tests

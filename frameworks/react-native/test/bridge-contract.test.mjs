@@ -5,12 +5,19 @@ import { test } from 'node:test';
 
 const root = new URL('..', import.meta.url).pathname;
 const specPath = join(root, 'src/specs/NativeBotaDeviceSDK.ts');
+const indexPath = join(root, 'src/index.ts');
 
 test('Codegen contract freezes the lifecycle module identity and methods', () => {
   const source = readFileSync(specPath, 'utf8');
 
   assert.match(source, /interface Spec extends TurboModule/);
   assert.match(source, /configure:\s*\(/);
+  assert.match(source, /readonly onDeviceDiscovered:\s*EventEmitter/);
+  assert.match(source, /startScan:\s*\(/);
+  assert.match(source, /stopScan:\s*\(/);
+  assert.match(source, /connectSelected:\s*\(/);
+  assert.match(source, /reconnect:\s*\(/);
+  assert.match(source, /disconnect:\s*\(/);
   assert.match(source, /destroy:\s*\(/);
   assert.match(source, /getCapabilities:\s*\(/);
   assert.match(source, /getState:\s*\(/);
@@ -19,6 +26,13 @@ test('Codegen contract freezes the lifecycle module identity and methods', () =>
     /TurboModuleRegistry\.get<Spec>\(['"]BotaDeviceSDK['"]\)/
   );
   assert.doesNotMatch(source, /getEnforcing/);
+});
+
+test('package root exports the React Native device facade types', () => {
+  const source = readFileSync(indexPath, 'utf8');
+
+  assert.match(source, /BotaDeviceSDKDeviceClient/);
+  assert.match(source, /BotaEventSubscription/);
 });
 
 test('Codegen contract does not carry high-volume binary data', () => {

@@ -9,7 +9,9 @@ export type {
   BotaDeviceSDKCapabilities,
   BotaDeviceSDKClient,
   BotaDeviceSDKConfiguration,
+  BotaDeviceSDKDeviceClient,
   BotaDeviceSDKState,
+  BotaEventSubscription,
   BotaLogLevel,
 } from './client';
 

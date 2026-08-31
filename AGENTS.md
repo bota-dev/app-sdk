@@ -55,6 +55,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - The React Native package matches the 75 frozen `0.0.65` exports that do not
   own native workflows. Keep their structural contract test exact; the five
   deferred runtime classes must delegate to native facades before export.
+- The React Native package also exposes the native-backed
+  `BotaDeviceSDK.devices` discovery and connection slice. JavaScript preserves
+  the frozen scan filters; Apple and Android own scan cancellation and delegate
+  selected-device connect, serial-strict reconnect, and disconnect to their
+  public native facades. Preserve the frozen unknown pairing-state fallback as
+  `unpaired` at both bridge boundaries. This does not make the frozen
+  `DeviceManager` class complete or eligible for export.
 - Keep the Codegen names `BotaDeviceSDKSpec` and `BotaDeviceSDK` frozen. Import
   uses optional TurboModule lookup; missing native code fails on invocation as
   `native_module_unavailable`, not while the JavaScript module is imported.
@@ -80,11 +87,17 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `4a6620703c30b3f53917812720528684838d3bbf` and the pinned Xcode gate passes.
 - Keep React Native lifecycle serialization in the Swift actor. Concurrent
   configure calls coalesce, destroy waits for an in-flight configure, and the
-  Objective-C++ layer only translates generated-spec promises.
+  device actor owns only its scan task and waits for that collector to finish
+  during teardown. Objective-C++ translates generated-spec promises and must
+  subclass `NativeBotaDeviceSDKSpecBase` before emitting Codegen events.
 - Keep React Native Android lifecycle serialization in
   `BotaDeviceSDKAndroidLifecycle`. Its mutex orders configure and destroy,
   retries a failed configure, and delegates only to `BotaDeviceClient.shared`;
   the generated-spec module translates maps and promises without calling JNI.
+- Keep React Native Android discovery and connection serialization in
+  `BotaDeviceSDKAndroidDevices`. It owns only its scan coroutine, contains
+  asynchronous scan failures, and cancels that scan before connect, reconnect,
+  disconnect, destroy, or React Native invalidation.
 - The Android build foundation uses JDK 17, Gradle 8.13, AGP 8.13.2, Kotlin
   2.1.20, API 26 minimum with API 36 compile/lint/test targets, NDK
   28.2.13676358, CMake 3.22.1, and Maven Publish Plugin 0.35.0.

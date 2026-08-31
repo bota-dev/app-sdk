@@ -69,11 +69,164 @@
                 }
               }
             ]
+          },
+          "NativeConnectedDevice": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "id",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "serialNumber",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "deviceType",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "firmwareVersion",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "hardwareRevision",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "isProvisioned",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "connectionState",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "mtu",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeDiscoveredDevice": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "id",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "name",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "deviceType",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "firmwareVersion",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "macAddress",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "pairingState",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "rssi",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "discoveredAtMs",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeReconnectOptions": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "scanTimeoutMs",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "connectionTimeoutMs",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
           }
         },
         "enumMap": {},
         "spec": {
-          "eventEmitters": [],
+          "eventEmitters": [
+            {
+              "name": "onDeviceDiscovered",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeDiscoveredDevice"
+                }
+              }
+            }
+          ],
           "methods": [
             {
               "name": "configure",
@@ -99,7 +252,45 @@
               }
             },
             {
+              "name": "connectSelected",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeConnectedDevice"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeDiscoveredDevice"
+                    }
+                  }
+                ]
+              }
+            },
+            {
               "name": "destroy",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": []
+              }
+            },
+            {
+              "name": "disconnect",
               "optional": false,
               "typeAnnotation": {
                 "type": "FunctionTypeAnnotation",
@@ -140,6 +331,80 @@
                 },
                 "params": []
               }
+            },
+            {
+              "name": "reconnect",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeConnectedDevice"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "serialNumber",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "options",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeReconnectOptions"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "startScan",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "timeoutMs",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "NumberTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "allowDuplicates",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "BooleanTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "stopScan",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": []
+              }
             }
           ]
         },
@@ -151,11 +416,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "4ef51a149be81e735954668457a6d9afc00d652806f48812951d3e64f7a6e984"
+        "sha256": "cf78a9956890434f750e75df4e5404d5a66d6c6857d610f985065ad88d4ff655"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "b8489d7cdeb1fc90e84eca95bb41132fccfeffd91f447f16436ec79ac58f3763"
+        "sha256": "e7a4bd3c5094d233d9e7829a2dd7af2d1d46efa9e0c70ea6f0236f936ae2acca"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -167,23 +432,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "4a76856223986778feb8b92c5479df63056751dc619c94eb16847f021ba6f866"
+        "sha256": "f8542d7afa101676688d41c2abbdd86c1fc8b45e809d7f8a29226f003960284c"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "53e9a18257186800ea32d3ff5e0e5d41fa7543377a4f805bcf977d4b339a9e83"
+        "sha256": "da6fcc7187b3b9a7f89d02f575810b9b8f2885730663a6e19bfaf5abaa913144"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "08287bc61534475b581ecce5280f7614c7d5ab315a805e00bf2a8910dc652dbf"
+        "sha256": "b68fcff15407d0d6ed5f928787eef643a62ca2ec8936c7a253112022148ea3c4"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "4a76856223986778feb8b92c5479df63056751dc619c94eb16847f021ba6f866"
+        "sha256": "f8542d7afa101676688d41c2abbdd86c1fc8b45e809d7f8a29226f003960284c"
       }
     ]
   },
-  "contractDigest": "4a5c94fecf6bfc11f6373d6477360bca25724eb1758ef60cfac7ef31ce1f1213"
+  "contractDigest": "f404c432d27a40c736730ba4d701ae0dfcba637262027b7fa1b997342c7ad077"
 }
