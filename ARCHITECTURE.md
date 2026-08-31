@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`app-sdk` is the source monorepo for Bota's device-facing SDKs. It consolidates
+`app-sdk` is the source monorepo for the Bota App SDK family. It consolidates
 protocol and workflow behavior without hiding operating-system Bluetooth and
 lifecycle differences.
 
@@ -19,6 +19,9 @@ private normative design before merge.
 - React Native and Flutter delegate to native facades.
 - The host application obtains backend grants, device tokens, and presigned
   upload targets. This repository does not provide a Bota API client.
+- Customer-facing package and module names follow the public matrix in
+  [README.md](README.md). Internal Rust crates, C ABI artifacts, paths, and
+  symbols retain their established `device-sdk` names.
 - Firmware, Demo, Bota One, Portal, and backend services remain in their own
   repositories.
 
@@ -43,10 +46,14 @@ Every published App SDK artifact uses the exact semantic version in
 [`sdk-version.toml`](sdk-version.toml). Release tooling rejects a package or
 manifest with a different version.
 
-The release manifest also pins the source revision, firmware compatibility
-range, protocol-fixture digest, artifact checksums, and artifact capability
-sets. An artifact is not publishable unless it appears in a validated manifest
-and its version matches `sdk-version.toml`.
+Release manifest version 2 identifies the public family with
+`sdkFamily: "bota-app-sdk"` and requires every artifact's `platform` and
+`packageIdentifier` to match the public matrix in [README.md](README.md). It
+also pins the source revision, firmware compatibility range, protocol-fixture
+digest, artifact checksums, and artifact capability sets. Version 1 remains
+accepted for immutable published evidence. An artifact is not publishable
+unless it appears in a validated manifest and its version matches
+`sdk-version.toml`.
 
 ## Migration Rule
 
@@ -156,7 +163,8 @@ engine handles, borrowed inputs, explicitly freed SDK-owned outputs, and stable
 numeric request/cancellation identity. UniFFI `0.32.0` remains a non-shipping
 comparison spike only. The shipping boundary uses versioned typed field-list
 packets; the JSON smoke envelope remains comparison tooling and is not a public
-serialization contract. No facade artifact is published yet. See
+serialization contract. The Apple facade is published at `v1.0.0`; the
+remaining planned facades are not yet published. See
 [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md) and the
 [`FFI evaluation`](docs/spikes/ffi-boundary-evaluation.md).
 

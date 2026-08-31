@@ -143,10 +143,25 @@ approval are configured.
 ## Naming
 
 `app-sdk` is the source repository name. Public physical-device packages belong
-to the **Bota App SDK** family. The Apple package, product, and Swift module are
-named `BotaAppleSDK`; internal Rust and C artifacts retain their existing
-device-core names. Future backend API clients belong to a separate **Bota API
-SDK** family and repository.
+to the **Bota App SDK** family. Customer-facing documentation and package names
+follow this matrix:
+
+| Platform | Documentation name | Package or module identifier |
+|---|---|---|
+| Apple | Bota SDK for Apple platforms | `BotaAppleSDK` |
+| Android | Bota SDK for Android | `dev.bota:bota-android-sdk` |
+| React Native | Bota SDK for React Native | `@bota.dev/react-native-sdk` |
+| Flutter | Bota SDK for Flutter | `bota_flutter_sdk` |
+| Web | Bota SDK for Web | `@bota.dev/web-sdk` |
+| Windows | Bota SDK for Windows | `Bota.WindowsSdk` |
+| Electron | Bota SDK for Electron | `@bota.dev/electron-sdk`, only when a dedicated native desktop bridge exists |
+
+Electron applications use the Web SDK where Web Bluetooth satisfies the
+capability matrix. A separate Electron SDK is published only when native
+desktop BLE requires a distinct supported transport.
+
+Internal Rust and C artifacts retain their existing `device-sdk` names. Future
+backend API clients belong to a separate **Bota API SDK** family and repository.
 
 ## Contributing
 

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 1.98.0, Cargo workspace, Node.js 22 tooling, TypeScript, Swift Package Manager, Kotlin/Gradle, C#/.NET, Flutter/Dart, WebAssembly, GitHub Actions.
 
-**Normative design:** private Bota cross-system `Device SDK Architecture.md`
+**Normative design:** private Bota cross-system `App SDK Architecture.md`
 
 ## Program Baseline
 

@@ -18,7 +18,7 @@ traces pin decisions inherited from the production React Native SDK.
 **Tech Stack:** Rust 1.98, Serde, Cargo tests, Node.js 22 fixture tooling,
 language-neutral JSON scenarios.
 
-**Spec:** Bota's private `Device SDK Architecture.md`, sections 5, 7, 8, 11,
+**Spec:** Bota's private `App SDK Architecture.md`, sections 5, 7, 8, 11,
 and 12; public boundary contract in `docs/adr/0001-command-event-host-boundary.md`.
 
 ## Global Constraints

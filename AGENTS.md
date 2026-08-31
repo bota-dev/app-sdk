@@ -131,8 +131,13 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
 - The public Apple package is the root `Package.swift`; keep the nested
   `platforms/apple/Package.swift` for local development against the generated
   XCFramework.
-- `bota-device-sdk-core` and `bota-device-sdk-ffi` are implementation details
-  of the Apple artifact and are not published to crates.io by this workflow.
+- New release evidence uses manifest version 2 with `sdkFamily` set to
+  `bota-app-sdk`; each artifact's `platform` and `packageIdentifier` must match
+  the public matrix in `README.md`.
+- Customer-facing packages use the public names in `README.md`.
+  `bota-device-sdk-core`, `bota-device-sdk-ffi`, `BotaDeviceSDKC`, and
+  `bota_device_sdk_v1_*` remain internal implementation names; the Rust crates
+  are not published to crates.io by this workflow.
 - The protected `release` environment is the human approval gate for external
   hardware acceptance. CI never manufactures physical-device evidence.
 - Never push a release tag until `cargo xtask release verify-tag vVERSION`,

@@ -167,7 +167,7 @@ that binary target; consumer builds do not invoke Cargo.
 
 ## Android Facade
 
-The Maven coordinate is `dev.bota:device-sdk-android`; the public entry point is
+The Maven coordinate is `dev.bota:bota-android-sdk`; the public entry point is
 `BotaDeviceClient`. It supports API 26 and compiles against the CI-pinned modern
 Android SDK.
 
