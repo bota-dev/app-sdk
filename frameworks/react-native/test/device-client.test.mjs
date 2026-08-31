@@ -61,6 +61,7 @@ function nativeFixture() {
   let factoryResetHandler = null;
   let recordingProgressHandler = null;
   let uploadOwnershipProgressHandler = null;
+  let firmwareUpdateProgressHandler = null;
   let provisioningResolve = null;
   let provisioningReject = null;
   let factoryResetResolve = null;
@@ -132,6 +133,14 @@ function nativeFixture() {
         return {
           remove() {
             uploadOwnershipProgressHandler = null;
+          },
+        };
+      },
+      onFirmwareUpdateProgress(handler) {
+        firmwareUpdateProgressHandler = handler;
+        return {
+          remove() {
+            firmwareUpdateProgressHandler = null;
           },
         };
       },
@@ -252,6 +261,19 @@ function nativeFixture() {
           uploadId: request.uploadId,
           destinationId: request.destinationId,
         };
+      },
+      async updateFirmware(device, image) {
+        calls.push(['updateFirmware', device, image]);
+        firmwareUpdateProgressHandler?.({
+          phase: 'downloading',
+          completedUnits: 512_000,
+          totalUnits: 1_024_000,
+        });
+        firmwareUpdateProgressHandler?.({
+          phase: 'complete',
+          completedUnits: 1_024_000,
+          totalUnits: 1_024_000,
+        });
       },
     },
   };
@@ -547,5 +569,47 @@ test('upload ownership exposes only the native decision and low-volume progress'
   assert.deepEqual(progress, [{ completedBytes: 32_000, totalBytes: 48_000 }]);
   assert.deepEqual(fixture.calls, [
     ['observeUploadOwnership', connected, request],
+  ]);
+});
+
+test('firmware update keeps download bytes native and emits typed progress', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+  const progress = [];
+
+  await client.ota.updateFirmware(
+    connected,
+    {
+      version: '1.0.12',
+      sizeBytes: 1_024_000,
+      crc32: 0x12345678,
+      url: 'https://firmware.bota.dev/update.ufw',
+    },
+    (value) => progress.push(value)
+  );
+
+  assert.deepEqual(progress, [
+    {
+      phase: 'downloading',
+      completedBytes: 512_000,
+      totalBytes: 1_024_000,
+    },
+    {
+      phase: 'complete',
+      completedBytes: 1_024_000,
+      totalBytes: 1_024_000,
+    },
+  ]);
+  assert.deepEqual(fixture.calls, [
+    [
+      'updateFirmware',
+      connected,
+      {
+        version: '1.0.12',
+        sizeUnits: 1_024_000,
+        crc32: 0x12345678,
+        url: 'https://firmware.bota.dev/update.ufw',
+      },
+    ],
   ]);
 });

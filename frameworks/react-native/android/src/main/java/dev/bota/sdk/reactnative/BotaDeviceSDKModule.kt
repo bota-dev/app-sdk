@@ -21,6 +21,7 @@ internal class BotaDeviceSDKModule(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) : NativeBotaDeviceSDKSpec(reactContext) {
     private val devices = BotaDeviceSDKAndroidDevices(BotaDeviceSDKSharedAndroidDeviceClient(), scope)
+    private val ota = BotaDeviceSDKAndroidOTA()
     private val recordings = BotaDeviceSDKAndroidRecordings()
     private val security = BotaDeviceSDKAndroidSecurity()
 
@@ -39,6 +40,7 @@ internal class BotaDeviceSDKModule(
     override fun destroy(promise: Promise) {
         launch(promise) {
             security.cancelAll()
+            ota.cancelAll()
             recordings.cancelAll()
             devices.stopAll()
             lifecycle.destroy()
@@ -120,6 +122,24 @@ internal class BotaDeviceSDKModule(
             ) {
                 emitOnUploadOwnershipProgress(it.toWritableMap())
             }.toWritableMap()
+        }
+    }
+
+    override fun updateFirmware(
+        device: ReadableMap,
+        image: ReadableMap,
+        promise: Promise,
+    ) {
+        launch(promise) {
+            ota.updateFirmware(
+                device = device.toConnectedDevice(),
+                version = image.getString("version") ?: error("firmware version is required"),
+                sizeBytes = image.getDouble("sizeUnits").toUnsignedInt(),
+                crc32 = image.getDouble("crc32").toUnsignedInt(),
+                url = image.getString("url") ?: error("firmware URL is required"),
+            ) {
+                emitOnFirmwareUpdateProgress(it.toWritableMap())
+            }
         }
     }
 
@@ -231,6 +251,7 @@ internal class BotaDeviceSDKModule(
         scope.launch {
             try {
                 security.cancelAll()
+                ota.cancelAll()
                 recordings.cancelAll()
                 devices.stopAll()
                 lifecycle.destroy()
@@ -280,4 +301,12 @@ private fun Double.toUnsignedInteger(): ULong {
         "value must be a finite non-negative integer"
     }
     return toLong().toULong()
+}
+
+private fun Double.toUnsignedInt(): UInt {
+    val value = toUnsignedInteger()
+    require(value <= UInt.MAX_VALUE.toULong()) {
+        "value must fit an unsigned 32-bit integer"
+    }
+    return value.toUInt()
 }

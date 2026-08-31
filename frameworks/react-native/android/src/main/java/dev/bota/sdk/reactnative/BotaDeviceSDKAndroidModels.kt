@@ -14,6 +14,8 @@ import dev.bota.sdk.model.DeviceStatus
 import dev.bota.sdk.model.DeviceType
 import dev.bota.sdk.model.DiscoveredDevice
 import dev.bota.sdk.model.FactoryResetCompletion
+import dev.bota.sdk.model.FirmwareUpdatePhase
+import dev.bota.sdk.model.FirmwareUpdateProgress
 import dev.bota.sdk.model.LteStatus
 import dev.bota.sdk.model.ModemInfo
 import dev.bota.sdk.model.PairingState
@@ -117,6 +119,12 @@ internal fun UploadOwnershipResult.toWritableMap(): WritableMap = Arguments.crea
     }
 }
 
+internal fun FirmwareUpdateProgress.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putString("phase", phase.toBridgeValue())
+    putDouble("completedUnits", completedBytes.toDouble())
+    putDouble("totalUnits", totalBytes.toDouble())
+}
+
 internal fun DeviceStatus.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putInt("batteryLevel", batteryLevel)
     batteryMv?.let { putInt("batteryMv", it) }
@@ -207,6 +215,16 @@ private fun WireValue<AudioCodec>.toAudioCodecBridgeValue(): String = when (this
         AudioCodec.Opus8k -> "opus_8k"
     }
     is WireValue.Unknown -> "opus_16k"
+}
+
+private fun FirmwareUpdatePhase.toBridgeValue(): String = when (this) {
+    FirmwareUpdatePhase.Downloading -> "downloading"
+    FirmwareUpdatePhase.AwaitingDevice -> "awaiting_device"
+    FirmwareUpdatePhase.Transferring -> "transferring"
+    FirmwareUpdatePhase.Verifying -> "verifying"
+    FirmwareUpdatePhase.Rebooting -> "rebooting"
+    FirmwareUpdatePhase.Reconnecting -> "reconnecting"
+    FirmwareUpdatePhase.Complete -> "complete"
 }
 
 private fun String.toDeviceType(): DeviceType? = when (this) {

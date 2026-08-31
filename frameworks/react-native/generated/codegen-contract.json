@@ -450,6 +450,65 @@
               }
             ]
           },
+          "NativeFirmwareImage": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "version",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "sizeUnits",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "crc32",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "url",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeFirmwareUpdateProgress": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "phase",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "completedUnits",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "totalUnits",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
           "NativeModemInfo": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -762,6 +821,17 @@
                 "typeAnnotation": {
                   "type": "TypeAliasTypeAnnotation",
                   "name": "NativeRecordingTransferProgress"
+                }
+              }
+            },
+            {
+              "name": "onFirmwareUpdateProgress",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeFirmwareUpdateProgress"
                 }
               }
             }
@@ -1283,6 +1353,37 @@
                   }
                 ]
               }
+            },
+            {
+              "name": "updateFirmware",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "image",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeFirmwareImage"
+                    }
+                  }
+                ]
+              }
             }
           ]
         },
@@ -1294,11 +1395,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "dd568e03c1514fdd3fb2f8c7db0656f4ecec2750297ec40866d95ee926ddde46"
+        "sha256": "fe59088cd812f13c752085b9bf500876aeba3a4bd608c2707b995273b69d6954"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "5fc70af2a5f7750719aefcac4b67db47605b9ab7bcf788490a2e353eb959ca40"
+        "sha256": "cd516e7fb0ef4f60afeb88f31b06fa2959630f06bee686da517b08510db7539e"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -1310,23 +1411,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "be18bd2e846e37891759970e2a8d473221e7deeb51c93d933ce3c43594f407f8"
+        "sha256": "152102005db4d8be2554281c6b51b5692eaeb4a52d87651b8b2f48c621378b6e"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "60a2221f269b2ea9fb8fa9ea42b1186f312d1a3842ecb163acd21b2915eb14a8"
+        "sha256": "8f842219dcac6c62872519ab30e45268b2b02e39571b75fa9a100f2072d1aecf"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "0d823e0e50d491279aed87d912728d0a5a1a154f667902d51b0de04eb23bb0d2"
+        "sha256": "6cca6e9c39996650d71bc73f035c635560e24a5d059d226e2fcb0a8890b7a3c8"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "be18bd2e846e37891759970e2a8d473221e7deeb51c93d933ce3c43594f407f8"
+        "sha256": "152102005db4d8be2554281c6b51b5692eaeb4a52d87651b8b2f48c621378b6e"
       }
     ]
   },
-  "contractDigest": "b7434a164a7a4d7ba848d64b84603bf7eb77fd8208da0a78dbcd90b376d1d5ce"
+  "contractDigest": "37a19b29d2592de8282c098335be41fcacd22f544bcb6f36ed64996d4c1cde96"
 }

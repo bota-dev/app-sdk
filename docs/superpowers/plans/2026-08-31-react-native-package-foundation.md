@@ -115,11 +115,11 @@
 
 As of 2026-08-31, both lifecycle adapters and the discovery, connection,
 device-status, provisioning, authenticated-reset, recording-list/transfer, and
-upload-ownership workflow slices are complete. Apple configure,
+upload-ownership plus OTA workflow slices are complete. Apple configure,
 destroy, state, capabilities, discovery, selected-device connect,
 serial-strict reconnect, disconnect, status reads, status subscriptions,
 provision, remove-only deprovision, factory reset, exact-generation reset
-receipt recovery, recording list, recording transfer, and upload ownership call
+receipt recovery, recording list, recording transfer, upload ownership, and OTA call
 `BotaAppleSDK` through serialized Swift actors and pass a full CocoaPods
 application compile-and-link gate. Android delegates the same surface to
 `BotaDeviceClient.shared`, contains asynchronous scan/status failures, and
@@ -132,8 +132,11 @@ resume cannot request a grant or resend destructive opcode `0x06`. Recording
 metadata and progress cross Codegen, while completed audio remains a native
 file and JavaScript receives only its path. Upload handoff crosses Codegen as
 opaque identifiers, progress, and the reducer-authorized ownership result;
-destination URLs and credentials remain native. The package also matches the 75 frozen
-`0.0.65` exports that do not own native workflows, with runtime coverage for
+destination URLs and credentials remain native. OTA accepts a presigned
+firmware URL with version, size, and CRC32; native hosts own the download file
+and BLE bytes while Codegen carries only phase and byte progress. The package
+also matches the 75 frozen `0.0.65` exports that do not own native workflows,
+with runtime coverage for
 errors, sync-status derivation, and device-log decoding. `BotaClient`,
 `DeviceManager`, `RecordingManager`, `StreamingSession`, `OTAManager`, app
 migration, and npm publication are still open.

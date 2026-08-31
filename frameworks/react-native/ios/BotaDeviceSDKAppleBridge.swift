@@ -21,12 +21,14 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
 
     private let lifecycle: BotaDeviceSDKAppleLifecycle
     private let devices: BotaDeviceSDKAppleDevices
+    private let ota: BotaDeviceSDKAppleOTA
     private let recordings: BotaDeviceSDKAppleRecordings
     private let security: BotaDeviceSDKAppleSecurity
 
     override private init() {
         lifecycle = BotaDeviceSDKAppleLifecycle()
         devices = BotaDeviceSDKAppleDevices()
+        ota = BotaDeviceSDKAppleOTA()
         recordings = BotaDeviceSDKAppleRecordings()
         security = BotaDeviceSDKAppleSecurity()
         super.init()
@@ -55,6 +57,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
     public func destroy(completion: @escaping @Sendable () -> Void) {
         Task {
             await security.cancelAll()
+            await ota.cancelAll()
             await recordings.cancelAll()
             await devices.stopAll()
             await lifecycle.destroy()
@@ -291,6 +294,54 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                 completion(Self.uploadOwnershipResult(result), nil)
             } catch {
                 completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc(updateFirmwareWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:version:sizeUnits:crc32:url:onProgress:completion:)
+    public func updateFirmware(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        version: String,
+        sizeUnits: Double,
+        crc32: Double,
+        url: String,
+        onProgress: @escaping @Sendable ([String: Any]) -> Void,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await ota.updateFirmware(
+                    Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    ),
+                    version: version,
+                    sizeBytes: try Self.unsigned32(sizeUnits),
+                    crc32: try Self.unsigned32(crc32),
+                    url: url
+                ) { progress in
+                    onProgress([
+                        "phase": Self.firmwarePhase(progress.phase),
+                        "completedUnits": progress.completedBytes,
+                        "totalUnits": progress.totalBytes,
+                    ])
+                }
+                completion(nil)
+            } catch {
+                completion(error as NSError)
             }
         }
     }
@@ -626,6 +677,18 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
+    private static func firmwarePhase(_ phase: FirmwareUpdatePhase) -> String {
+        switch phase {
+        case .downloading: "downloading"
+        case .awaitingDevice: "awaiting_device"
+        case .transferring: "transferring"
+        case .verifying: "verifying"
+        case .rebooting: "rebooting"
+        case .reconnecting: "reconnecting"
+        case .complete: "complete"
+        }
+    }
+
     private static func audioCodec(_ codec: WireValue<AudioCodec>) -> String {
         switch codec {
         case let .known(value): audioCodec(value)
@@ -860,5 +923,13 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
             throw BotaDeviceSDKAppleBridgeInputError.invalidUnsignedInteger
         }
         return UInt64(value)
+    }
+
+    private static func unsigned32(_ value: Double) throws -> UInt32 {
+        let integer = try unsignedInteger(value)
+        guard let result = UInt32(exactly: integer) else {
+            throw BotaDeviceSDKAppleBridgeInputError.invalidUnsignedInteger
+        }
+        return result
     }
 }

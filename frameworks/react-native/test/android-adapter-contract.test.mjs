@@ -73,6 +73,7 @@ test('Android adapter implements the generated lifecycle module and package', ()
     'startStatusUpdates',
     'stopStatusUpdates',
     'syncRecording',
+    'updateFirmware',
   ]) {
     assert.match(module, new RegExp(`override fun ${method}\\(`));
   }

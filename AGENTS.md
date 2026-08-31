@@ -85,6 +85,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   the native reducer may authorize Bluetooth fallback. Destroy and invalidation
   cancel the active native recording operation. Preserve the frozen `opus_16k`
   fallback for unknown codec values.
+- `BotaDeviceSDK.ota` accepts a presigned firmware URL plus version, byte size,
+  and CRC32. Apple and Android generate the opaque download registration ID,
+  download into native storage, and run the native OTA workflow. Codegen emits
+  only phase and byte progress; firmware bodies never cross JavaScript. Destroy
+  and invalidation cancel the active native OTA operation.
 - Keep the Codegen names `BotaDeviceSDKSpec` and `BotaDeviceSDK` frozen. Import
   uses optional TurboModule lookup; missing native code fails on invocation as
   `native_module_unavailable`, not while the JavaScript module is imported.

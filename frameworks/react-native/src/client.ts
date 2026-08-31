@@ -7,6 +7,7 @@ import type {
   NativeDiscoveredDevice,
   NativeFactoryResetCompletion,
   NativeFactoryResetGrantRequest,
+  NativeFirmwareUpdateProgress,
   NativeRecordingTransferProgress,
   NativeProvisioningMaterialRequest,
   NativeUploadOwnershipResult,
@@ -122,6 +123,36 @@ export type BotaUploadOwnershipResult =
       destinationId: string;
     };
 
+export type BotaFirmwareImage = {
+  version: string;
+  sizeBytes: number;
+  crc32: number;
+  url: string;
+};
+
+export type BotaFirmwareUpdatePhase =
+  | 'downloading'
+  | 'awaiting_device'
+  | 'transferring'
+  | 'verifying'
+  | 'rebooting'
+  | 'reconnecting'
+  | 'complete';
+
+export type BotaFirmwareUpdateProgress = {
+  phase: BotaFirmwareUpdatePhase;
+  completedBytes: number;
+  totalBytes: number;
+};
+
+export type BotaDeviceSDKOTAClient = {
+  updateFirmware(
+    device: ConnectedDevice,
+    image: BotaFirmwareImage,
+    onProgress?: (progress: BotaFirmwareUpdateProgress) => void
+  ): Promise<void>;
+};
+
 export type BotaDeviceSDKRecordingClient = {
   listRecordings(device: ConnectedDevice): Promise<DeviceRecording[]>;
   syncRecording(
@@ -168,6 +199,7 @@ export class BotaNativeModuleError extends Error {
 export type BotaDeviceSDKClient = {
   readonly devices: BotaDeviceSDKDeviceClient;
   readonly factoryReset: BotaDeviceSDKFactoryResetClient;
+  readonly ota: BotaDeviceSDKOTAClient;
   readonly provisioning: BotaDeviceSDKProvisioningClient;
   readonly recordings: BotaDeviceSDKRecordingClient;
   configure(configuration?: BotaDeviceSDKConfiguration): Promise<void>;
@@ -289,6 +321,14 @@ const toNativeRecording = (recording: DeviceRecording): NativeDeviceRecording =>
 const mapRecordingProgress = (
   progress: NativeRecordingTransferProgress
 ): BotaRecordingTransferProgress => ({
+  completedBytes: progress.completedUnits,
+  totalBytes: progress.totalUnits,
+});
+
+const mapFirmwareProgress = (
+  progress: NativeFirmwareUpdateProgress
+): BotaFirmwareUpdateProgress => ({
+  phase: progress.phase as BotaFirmwareUpdatePhase,
   completedBytes: progress.completedUnits,
   totalBytes: progress.totalUnits,
 });
@@ -522,9 +562,29 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
   };
 
+  const ota: BotaDeviceSDKOTAClient = {
+    async updateFirmware(device, image, onProgress) {
+      const module = requireNativeModule();
+      const subscription = module.onFirmwareUpdateProgress((progress) => {
+        onProgress?.(mapFirmwareProgress(progress));
+      });
+      try {
+        await module.updateFirmware(toNativeConnectedDevice(device), {
+          version: image.version,
+          sizeUnits: image.sizeBytes,
+          crc32: image.crc32,
+          url: image.url,
+        });
+      } finally {
+        subscription.remove();
+      }
+    },
+  };
+
   return {
     devices,
     factoryReset,
+    ota,
     provisioning,
     recordings,
 

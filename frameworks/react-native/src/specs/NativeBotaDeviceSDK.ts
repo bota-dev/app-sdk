@@ -136,6 +136,19 @@ export type NativeUploadOwnershipResult = {
   destinationId?: string;
 };
 
+export type NativeFirmwareImage = {
+  version: string;
+  sizeUnits: number;
+  crc32: number;
+  url: string;
+};
+
+export type NativeFirmwareUpdateProgress = {
+  phase: string;
+  completedUnits: number;
+  totalUnits: number;
+};
+
 export interface Spec extends TurboModule {
   readonly onDeviceDiscovered: EventEmitter<NativeDiscoveredDevice>;
   readonly onDeviceStatusUpdated: EventEmitter<NativeDeviceStatus>;
@@ -143,6 +156,7 @@ export interface Spec extends TurboModule {
   readonly onFactoryResetGrantRequested: EventEmitter<NativeFactoryResetGrantRequest>;
   readonly onRecordingTransferProgress: EventEmitter<NativeRecordingTransferProgress>;
   readonly onUploadOwnershipProgress: EventEmitter<NativeRecordingTransferProgress>;
+  readonly onFirmwareUpdateProgress: EventEmitter<NativeFirmwareUpdateProgress>;
   configure: (configuration: NativeConfiguration) => Promise<void>;
   connectSelected: (
     device: NativeDiscoveredDevice
@@ -194,6 +208,10 @@ export interface Spec extends TurboModule {
     device: NativeConnectedDevice,
     recording: NativeDeviceRecording
   ) => Promise<string>;
+  updateFirmware: (
+    device: NativeConnectedDevice,
+    image: NativeFirmwareImage
+  ) => Promise<void>;
 }
 
 export default TurboModuleRegistry.get<Spec>('BotaDeviceSDK');

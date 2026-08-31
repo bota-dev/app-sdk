@@ -902,12 +902,14 @@ exact-generation receipt recovery. Recording list, transfer, and upload
 ownership now delegate to the native facades as well: metadata, progress,
 opaque upload identifiers, and the terminal ownership decision cross Codegen,
 while audio remains in a native file represented to JavaScript by its path and
-upload destinations remain native. A real CocoaPods application compiles and
-links the generated typed event spec,
+upload destinations remain native. OTA follows the same ownership rule:
+JavaScript supplies version, size, CRC32, and a presigned URL, while native
+adapters generate the opaque download registration and own HTTP and BLE bytes.
+A real CocoaPods application compiles and links the generated typed event spec,
 Objective-C++, Swift, Swift Package, and Rust XCFramework layers. The Android
 adapters provide the same lifecycle, connection, status, provisioning,
-authenticated-reset, recording-transfer, and upload-ownership slices through
-the public Android facade, and a checked-in React Native Gradle
+authenticated-reset, recording-transfer, upload-ownership, and OTA slices
+through the public Android facade, and a checked-in React Native Gradle
 consumer runs Codegen, Kotlin tests,
 lint, and release assembly against the exact packaged AAR. The
 package now matches all 75 frozen non-workflow exports, including every public

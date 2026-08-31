@@ -87,11 +87,15 @@ The bridge contract contains configure, destroy, state, capabilities, device
 discovery, selected-device connect, serial-strict reconnect, disconnect, a
 device-status read, a typed device-status event subscription, nonce-bound
 provision/deprovision operations, native-file recording transfer, and guarded
-upload ownership. Provisioning uses a one-shot application material event and
-response rather than separating nonce/public-key reads from the native
-workflow. Upload ownership passes opaque recording, upload, and destination
-identifiers into native code; JavaScript receives progress and the reducer's
-terminal ownership decision but never a destination URL or upload credential.
+upload ownership, plus native-download firmware update. Provisioning uses a
+one-shot application material event and response rather than separating
+nonce/public-key reads from the native workflow. Upload ownership passes opaque
+recording, upload, and destination identifiers into native code; JavaScript
+receives progress and the reducer's terminal ownership decision but never a
+destination URL or upload credential.
+Firmware update accepts version, size, CRC32, and a presigned URL; native code
+generates the download registration, owns HTTP and BLE bytes, and emits only
+typed phase and byte progress.
 React Native Codegen produces a canonical schema plus iOS and Android artifact
 digests in
 `frameworks/react-native/generated/codegen-contract.json`; CI regenerates and
@@ -134,8 +138,8 @@ that the default package URL resolves the synchronized immutable release. A
 target-scoped CocoaPods hook carries React Native's upstream fix for duplicate
 binary Swift-package module maps on Xcode 26.3 while the package floor remains
 0.86.3. This proves lifecycle plus device discovery, connection, status,
-provisioning, authenticated-reset, recording-transfer, and upload-ownership
-integration, not the remaining workflow surface or application parity.
+provisioning, authenticated-reset, recording-transfer, upload-ownership, and
+OTA integration, not the remaining workflow surface or application parity.
 
 The Android host is also executable. A coroutine mutex serializes
 configuration and destruction through `BotaDeviceClient.shared`, and a
