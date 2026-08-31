@@ -54,9 +54,11 @@ enum AppleRemoteConsumer {
 }
 EOF
 
-swift run \
+swift build \
     --package-path "$CONSUMER" \
     --scratch-path "$ROOT/target/apple-remote-consumer-build" \
     --jobs 1 \
     -Xswiftc -disable-batch-mode \
-    AppleRemoteConsumer
+    --product AppleRemoteConsumer
+
+printf 'BotaAppleSDK %s public consumer compiled successfully\n' "$VERSION"

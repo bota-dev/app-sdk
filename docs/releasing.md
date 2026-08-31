@@ -136,9 +136,10 @@ install its own Node.js dependencies before running repository tooling.
    drift.
 4. Waits for approval in the protected `release` environment.
 5. Creates the GitHub Release and uploads every Apple release file.
-6. Creates an unrelated macOS package that resolves the public Git tag and runs
-   while importing only `BotaAppleSDK`. The smoke uses one non-batched Swift
-   compiler job so it fits on the hosted macOS runner.
+6. Creates an unrelated macOS package that resolves the public Git tag and
+   compiles an executable importing only `BotaAppleSDK`. The smoke deliberately
+   does not launch a Bluetooth-capable process on the headless runner. It uses
+   one non-batched Swift compiler job to keep memory bounded.
 
 Do not move or recreate a published tag. If a released artifact or manifest is
 wrong, fix the source and publish a new patch version with a new checksum.

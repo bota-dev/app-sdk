@@ -190,5 +190,5 @@ jobs:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Resolve and run public package consumer
+      - name: Resolve and compile public package consumer
         run: tools/apple/test-remote-consumer.sh "${GITHUB_REF_NAME#v}"
