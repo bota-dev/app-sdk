@@ -42,10 +42,22 @@ fn mismatched_or_unprefixed_tags_are_rejected() {
 }
 
 #[test]
+fn ci_workflow_validates_the_current_release_manifest() {
+    let release = xtask::release::verify_release(&root(), "v1.0.1").unwrap();
+    let path = root().join(".github/workflows/ci.yml");
+    let contents = fs::read_to_string(path).unwrap();
+    let _: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
+    let expected = format!("release/examples/{}.json", release.version);
+
+    assert!(contents.contains(&expected));
+    assert!(!contents.contains("release/examples/1.0.0.json"));
+}
+
+#[test]
 fn release_workflow_publishes_and_smokes_the_public_apple_package() {
     let path = root().join(".github/workflows/release.yml");
     let contents = fs::read_to_string(path).unwrap();
-    let _: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
+    let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
 
     assert!(contents.contains("tags:"));
     assert!(!contents.contains("workflow_dispatch"));
@@ -69,6 +81,21 @@ fn release_workflow_publishes_and_smokes_the_public_apple_package() {
     assert!(contents.contains("target/apple-release/"));
     assert!(!contents.contains("secrets.CRATES_IO_TOKEN"));
     assert!(!contents.contains("cargo publish"));
+
+    let apple_steps = workflow["jobs"]["apple"]["steps"].as_sequence().unwrap();
+    let apple_commands = apple_steps
+        .iter()
+        .filter_map(|step| step["run"].as_str())
+        .collect::<Vec<_>>();
+    let install = apple_commands
+        .iter()
+        .position(|command| *command == "npm ci")
+        .unwrap();
+    let release_tests = apple_commands
+        .iter()
+        .position(|command| *command == "npm run test:release")
+        .unwrap();
+    assert!(install < release_tests);
 
     let smoke = fs::read_to_string(root().join("tools/apple/test-remote-consumer.sh")).unwrap();
     assert!(smoke.contains("--jobs 2"));

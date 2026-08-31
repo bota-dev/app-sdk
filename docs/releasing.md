@@ -126,6 +126,9 @@ git push origin "v$VERSION"
 
 The tag workflow:
 
+The `verify` and `apple` jobs use independent clean checkouts. Each job must
+install its own Node.js dependencies before running repository tooling.
+
 1. Verifies synchronized metadata and that the tagged commit belongs to
    `origin/main`.
 2. Runs the Rust, tooling, ABI, license, Apple package, and local-consumer gates.
