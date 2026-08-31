@@ -4,6 +4,7 @@
 !.env.example
 .idea/
 .vscode/
+.worktrees/
 *.iml
 *.log
 
