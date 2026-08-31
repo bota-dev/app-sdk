@@ -64,8 +64,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   local source and CI verification.
 - React Native Apple CI selects Xcode 26.3 and Ruby 3.3.12 and uses
   `frameworks/react-native/Gemfile.lock` for Bundler 2.6.9, CocoaPods 1.16.2,
-  and xcodeproj 1.27.0. Run both the local linked-consumer gate and the remote
-  exact-version resolution gate when changing pod or Swift-package wiring.
+  and xcodeproj 1.27.0. Main-branch lifecycle and linked-consumer gates use the
+  nested local Apple package because the next root binary URL does not exist
+  before publication. The tag release must run the remote exact-version
+  consumer only after the GitHub Release is public.
 - React Native 0.86.3 duplicates binary Swift-package module maps for static
   pods under Xcode 26.3. The packaged `bota_device_sdk_spm_workaround.rb`
   flattens only `BotaDeviceSDK` and rewrites its aggregate module-map flags.
@@ -255,6 +257,7 @@ npm run test:workflows -- --sdk-path ../react-native-sdk
 (cd frameworks/react-native && npm run test:apple:lifecycle)
 (cd frameworks/react-native && bundle _2.6.9_ install)
 (cd frameworks/react-native && bundle _2.6.9_ exec npm run test:apple:integration)
+# Run only after the matching public tag and Apple archive exist:
 (cd frameworks/react-native && bundle _2.6.9_ exec npm run test:apple:remote-resolution)
 JAVA_HOME=/path/to/jdk-17 ANDROID_HOME="$HOME/Library/Android/sdk" \
   npm run test:android:foundation

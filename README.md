@@ -202,6 +202,7 @@ npm run verify
 npm run test:apple:lifecycle
 npm run test:apple:spm-workaround
 bundle _2.6.9_ exec npm run test:apple:integration
+# After the matching GitHub Release is public:
 bundle _2.6.9_ exec npm run test:apple:remote-resolution
 cd ../../platforms/android
 ./gradlew :sdk:testDebugUnitTest :sdk:lintRelease :sdk:assembleRelease
@@ -228,8 +229,9 @@ React Native pod therefore uses that release's iOS 15.1 floor. By default it
 resolves the exact matching `BotaAppleSDK` release tag;
 `BOTA_APPLE_SDK_PACKAGE_PATH` is only a source and CI override and must not be
 used in a published application dependency. CI selects Xcode 26.3 and Ruby
-3.3.12 explicitly, uses the locked Ruby toolchain, and separately resolves the
-default remote package URL to the exact synchronized version.
+3.3.12 explicitly and uses the locked Ruby toolchain. Main CI tests the nested
+local package; the tag release resolves the default remote package URL to the
+exact synchronized version after publishing its binary archive.
 
 The pod includes a target-scoped compatibility hook for React Native 0.86.3's
 duplicate binary Swift-package module maps on Xcode 26.3; applications do not

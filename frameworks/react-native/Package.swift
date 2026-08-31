@@ -12,13 +12,13 @@ let package = Package(
         .library(name: "BotaDeviceSDKAppleAdapter", targets: ["BotaDeviceSDKAppleAdapter"]),
     ],
     dependencies: [
-        .package(name: "BotaAppSDK", path: "../.."),
+        .package(name: "BotaAppleSDK", path: "../../platforms/apple"),
     ],
     targets: [
         .target(
             name: "BotaDeviceSDKAppleAdapter",
             dependencies: [
-                .product(name: "BotaAppleSDK", package: "BotaAppSDK"),
+                .product(name: "BotaAppleSDK", package: "BotaAppleSDK"),
             ],
             path: "ios",
             exclude: ["BotaDeviceSDK.mm"]

@@ -214,10 +214,6 @@ jobs:
         working-directory: frameworks/react-native
         run: bundle _2.6.9_ exec npm run test:apple:integration
 
-      - name: Resolve tagged Apple dependency
-        working-directory: frameworks/react-native
-        run: bundle _2.6.9_ exec npm run test:apple:remote-resolution
-
   apple:
     name: Apple package and consumer
     runs-on: macos-15

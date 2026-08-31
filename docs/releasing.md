@@ -211,6 +211,11 @@ install its own Node.js dependencies before running repository tooling.
    does not launch a Bluetooth-capable process on the headless runner. It uses
    one non-batched Swift compiler job to keep memory bounded.
 
+Main CI must not resolve the candidate version through the public root package:
+its binary URL is created by this workflow. React Native lifecycle tests use
+`platforms/apple` and its locally built XCFramework; step 7 is the authoritative
+post-publication remote-resolution gate.
+
 The protected workflow stages the signed raw Maven repository with in-memory
 PGP material, normalizes it to the exact 30-file Portal tree, and persists the
 bundle, inventory, and `central-portal-state.json` on a draft GitHub Release

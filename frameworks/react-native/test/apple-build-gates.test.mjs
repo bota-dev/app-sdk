@@ -7,8 +7,13 @@ const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.me
 test('Apple build tooling is pinned and exposes local and remote gates', () => {
   const gemfile = readFileSync(new URL('../Gemfile', import.meta.url), 'utf8');
   const lockfile = readFileSync(new URL('../Gemfile.lock', import.meta.url), 'utf8');
+  const swiftPackage = readFileSync(new URL('../Package.swift', import.meta.url), 'utf8');
   const workflow = readFileSync(
     new URL('../../../.github/workflows/ci.yml', import.meta.url),
+    'utf8'
+  );
+  const releaseWorkflow = readFileSync(
+    new URL('../../../.github/workflows/release.yml', import.meta.url),
     'utf8'
   );
 
@@ -32,7 +37,9 @@ test('Apple build tooling is pinned and exposes local and remote gates', () => {
   assert.match(workflow, /BOTA_EXPECTED_RUBY_VERSION: "3\.3\.12"/);
   assert.match(workflow, /BOTA_EXPECTED_XCODE_BUILD: 17C529/);
   assert.match(workflow, /npm run test:apple:spm-workaround/);
-  assert.match(workflow, /bundle _2\.6\.9_ exec npm run test:apple:remote-resolution/);
+  assert.match(swiftPackage, /path: "\.\.\/\.\.\/platforms\/apple"/);
+  assert.doesNotMatch(workflow, /npm run test:apple:remote-resolution/);
+  assert.match(releaseWorkflow, /tools\/apple\/test-remote-consumer\.sh/);
 });
 
 test('remote consumer mode omits the local Apple package override', () => {
