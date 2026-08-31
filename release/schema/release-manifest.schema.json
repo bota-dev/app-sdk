@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://bota.dev/schemas/device-sdk-release-manifest-v1.json",
+  "$id": "https://bota.dev/schemas/app-sdk-release-manifest.json",
   "title": "Bota App SDK release manifest",
   "type": "object",
   "additionalProperties": false,
@@ -12,8 +12,31 @@
     "firmwareCompatibility",
     "artifacts"
   ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "manifestVersion": { "const": 2 }
+        },
+        "required": ["manifestVersion"]
+      },
+      "then": {
+        "required": ["sdkFamily"],
+        "properties": {
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["platform", "packageIdentifier"]
+            }
+          }
+        }
+      }
+    }
+  ],
   "properties": {
-    "manifestVersion": { "const": 1 },
+    "manifestVersion": { "enum": [1, 2] },
+    "sdkFamily": { "const": "bota-app-sdk" },
     "sdkVersion": { "$ref": "#/$defs/semanticVersion" },
     "sourceRevision": { "$ref": "#/$defs/gitRevision" },
     "protocolFixtureDigest": { "$ref": "#/$defs/sha256" },
@@ -41,6 +64,10 @@
           "capabilities"
         ],
         "properties": {
+          "platform": {
+            "enum": ["apple", "android", "react-native", "flutter", "web", "windows", "electron"]
+          },
+          "packageIdentifier": { "type": "string", "minLength": 1 },
           "name": { "type": "string", "minLength": 1 },
           "ecosystem": { "type": "string", "minLength": 1 },
           "version": { "$ref": "#/$defs/semanticVersion" },

@@ -7,6 +7,16 @@ pub mod release {
     use serde::Deserialize;
     use std::{collections::HashSet, fs, path::Path};
 
+    const APP_SDK_PACKAGES: &[(&str, &str)] = &[
+        ("apple", "BotaAppleSDK"),
+        ("android", "dev.bota:bota-android-sdk"),
+        ("react-native", "@bota.dev/react-native-sdk"),
+        ("flutter", "bota_flutter_sdk"),
+        ("web", "@bota.dev/web-sdk"),
+        ("windows", "Bota.WindowsSdk"),
+        ("electron", "@bota.dev/electron-sdk"),
+    ];
+
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub struct ReleaseInfo {
         pub version: String,
@@ -17,6 +27,7 @@ pub mod release {
     #[serde(rename_all = "camelCase", deny_unknown_fields)]
     struct ReleaseManifest {
         manifest_version: u32,
+        sdk_family: Option<String>,
         sdk_version: String,
         source_revision: String,
         protocol_fixture_digest: String,
@@ -35,6 +46,8 @@ pub mod release {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase", deny_unknown_fields)]
     struct Artifact {
+        platform: Option<String>,
+        package_identifier: Option<String>,
         name: String,
         ecosystem: String,
         version: String,
@@ -142,8 +155,14 @@ pub mod release {
         let expected: SdkVersion = toml::from_str(&sdk_version_file)
             .map_err(|error| format!("invalid sdk-version.toml: {error}"))?;
 
-        if manifest.manifest_version != 1 {
-            return Err("manifestVersion must be 1".to_owned());
+        match manifest.manifest_version {
+            1 => {}
+            2 => {
+                if manifest.sdk_family.as_deref() != Some("bota-app-sdk") {
+                    return Err("sdkFamily must be bota-app-sdk for manifestVersion 2".to_owned());
+                }
+            }
+            _ => return Err("manifestVersion must be 1 or 2".to_owned()),
         }
         parse_version("sdkVersion", &manifest.sdk_version)?;
         if manifest.sdk_version != expected.version {
@@ -180,6 +199,21 @@ pub mod release {
             return Err("artifacts must not be empty".to_owned());
         }
         for artifact in &manifest.artifacts {
+            if manifest.manifest_version == 2 {
+                let platform = artifact
+                    .platform
+                    .as_deref()
+                    .ok_or_else(|| format!("artifact {} is missing platform", artifact.name))?;
+                let package_identifier =
+                    artifact.package_identifier.as_deref().ok_or_else(|| {
+                        format!("artifact {} is missing packageIdentifier", artifact.name)
+                    })?;
+                if !APP_SDK_PACKAGES.contains(&(platform, package_identifier)) {
+                    return Err(format!(
+                        "artifact packageIdentifier {package_identifier} does not match platform {platform}"
+                    ));
+                }
+            }
             if artifact.name.is_empty() || artifact.ecosystem.is_empty() {
                 return Err("artifact name and ecosystem must not be empty".to_owned());
             }

@@ -34,6 +34,29 @@ fn example_release_manifest_is_valid() {
 }
 
 #[test]
+fn published_v1_manifest_remains_valid() {
+    let manifest = root().join("release/examples/published-1.0.0-v1.json");
+    let result = xtask::release::validate_manifest(&manifest);
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn v2_manifest_requires_the_app_sdk_family() {
+    let result = validate_modified("sdk-family", |manifest| {
+        manifest.as_object_mut().unwrap().remove("sdkFamily");
+    });
+    assert!(result.unwrap_err().contains("sdkFamily"));
+}
+
+#[test]
+fn v2_artifact_package_must_match_its_platform() {
+    let result = validate_modified("package-identifier", |manifest| {
+        manifest["artifacts"][0]["packageIdentifier"] = "BotaSDK".into();
+    });
+    assert!(result.unwrap_err().contains("packageIdentifier"));
+}
+
+#[test]
 fn artifact_version_must_match_sdk_version() {
     let result = validate_modified("artifact-version", |manifest| {
         manifest["artifacts"][0]["version"] = "9.9.9".into();
