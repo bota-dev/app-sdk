@@ -27,7 +27,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - The semantic TypeScript authority is
   `protocol/baseline/react-native-public-api-0.0.65.json`. A replacement must
   match its exported symbols and reachable public members, including inherited
-  EventEmitter and Error APIs, not only wire bytes.
+  EventEmitter and Error instance and static APIs, not only wire bytes. Capture
+  and verification require the reference SDK's declaration dependencies to be
+  installed from `package-lock.json` with `npm ci`; unresolved modules, missing
+  required packages, extras, and version drift are hard failures. npm may omit
+  packages that the lock marks optional for the current platform.
 
 ## Invariants
 
@@ -42,6 +46,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - React Native compatibility requires the frozen public API surface digest in
   addition to protocol fixtures and workflow traces. Internal legacy modules
   outside `src/index.ts` are not part of that public contract.
+- React Native baseline metadata must match the contract's package, version,
+  source revision, normalized path, and surface digest.
 - Recording transfer owns sequence/checkpoint decisions; native hosts own the
   durable sink and validate the final checksum before device deletion.
 - Direct-upload fallback requires a fresh inactive device status; busy,

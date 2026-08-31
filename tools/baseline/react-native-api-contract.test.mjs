@@ -8,8 +8,9 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   buildReactNativeApiContract,
@@ -58,9 +59,35 @@ function createSdkFixture() {
     types: 'index.d.ts',
     version: '1.0.0',
   });
+  const externalBaseLock = {
+    version: '1.0.0',
+    resolved: 'https://registry.example/external-base-1.0.0.tgz',
+    integrity: 'sha512-fixture',
+  };
+  writeJson(join(root, 'package-lock.json'), {
+    name: '@bota.dev/react-native-sdk',
+    version: '0.0.65',
+    lockfileVersion: 3,
+    packages: {
+      '': {
+        name: '@bota.dev/react-native-sdk',
+        version: '0.0.65',
+        dependencies: { 'external-base': '1.0.0' },
+      },
+      'node_modules/external-base': externalBaseLock,
+    },
+  });
+  writeJson(join(root, 'node_modules', '.package-lock.json'), {
+    name: '@bota.dev/react-native-sdk',
+    version: '0.0.65',
+    lockfileVersion: 3,
+    packages: {
+      'node_modules/external-base': externalBaseLock,
+    },
+  });
   writeFileSync(
     join(root, 'node_modules', 'external-base', 'index.d.ts'),
-    'export declare class ExternalBase { external(): void; }\n'
+    'export declare class ExternalBase { static inherited: boolean; external(): void; }\n'
   );
   writeFileSync(
     join(root, 'src', 'index.ts'),
@@ -127,7 +154,7 @@ test('extracts the sorted public API and excludes non-public ownership', () => {
   );
   assert.deepEqual(
     zebra.staticMembers.map((member) => member.name),
-    ['create']
+    ['create', 'inherited']
   );
   assert.equal(zebra.members.find((member) => member.name === 'label').optional, true);
   assert.equal(zebra.members.find((member) => member.name === 'label').readonly, true);
@@ -163,6 +190,62 @@ test('digest detects type-alias and static-member changes', () => {
 
   writeFileSync(indexPath, source.replace('static create()', 'static make()'));
   assert.notEqual(surfaceDigest(extractReactNativeApi(root)), surfaceDigest(original));
+});
+
+test('requires installed declarations for imported dependencies', () => {
+  const root = createSdkFixture();
+  rmSync(join(root, 'node_modules'), { recursive: true, force: true });
+
+  assert.throws(() => extractReactNativeApi(root), /unresolved dependencies/);
+});
+
+test('requires installed dependencies to match package-lock.json', () => {
+  const root = createSdkFixture();
+  const hiddenLockPath = join(root, 'node_modules', '.package-lock.json');
+  const hiddenLock = JSON.parse(readFileSync(hiddenLockPath, 'utf8'));
+  const installedPackagePath = join(
+    root,
+    'node_modules',
+    'external-base',
+    'package.json'
+  );
+  const installedPackage = JSON.parse(readFileSync(installedPackagePath, 'utf8'));
+  installedPackage.version = '2.0.0';
+  writeJson(installedPackagePath, installedPackage);
+
+  assert.throws(() => extractReactNativeApi(root), /run npm ci/);
+
+  installedPackage.version = '1.0.0';
+  writeJson(installedPackagePath, installedPackage);
+  hiddenLock.packages['node_modules/external-base'].version = '2.0.0';
+  writeJson(hiddenLockPath, hiddenLock);
+  assert.throws(() => extractReactNativeApi(root), /run npm ci/);
+});
+
+test('allows lock-recorded optional dependencies omitted by npm', () => {
+  const root = createSdkFixture();
+  const expectedLockPath = join(root, 'package-lock.json');
+  const expectedLock = JSON.parse(readFileSync(expectedLockPath, 'utf8'));
+  const optionalPackage = { version: '1.0.0', optional: true };
+  expectedLock.packages['node_modules/optional-base'] = optionalPackage;
+  writeJson(expectedLockPath, expectedLock);
+
+  assert.doesNotThrow(() => extractReactNativeApi(root));
+});
+
+test('allows platform-optional dependencies claimed by npm but absent on disk', () => {
+  const root = createSdkFixture();
+  const expectedLockPath = join(root, 'package-lock.json');
+  const hiddenLockPath = join(root, 'node_modules', '.package-lock.json');
+  const expectedLock = JSON.parse(readFileSync(expectedLockPath, 'utf8'));
+  const hiddenLock = JSON.parse(readFileSync(hiddenLockPath, 'utf8'));
+  const optionalPackage = { version: '1.0.0', optional: true };
+  expectedLock.packages['node_modules/optional-base'] = optionalPackage;
+  hiddenLock.packages['node_modules/optional-base'] = optionalPackage;
+  writeJson(expectedLockPath, expectedLock);
+  writeJson(hiddenLockPath, hiddenLock);
+
+  assert.doesNotThrow(() => extractReactNativeApi(root));
 });
 
 test('builds a pinned contract and rejects dirty capture by default', () => {
@@ -224,13 +307,46 @@ test('writes canonical JSON and validates its semantic digest', () => {
   malformed.surfaceDigest = surfaceDigest(malformed.surface);
   assert.throws(() => validateReactNativeApiContract(malformed), /runtime/);
 
+  const impossible = structuredClone(contract);
+  impossible.surface.exports[0] = {
+    name: impossible.surface.exports[0].name,
+    runtime: false,
+    declarationKinds: [],
+    callSignatures: [],
+    constructSignatures: [],
+    members: [],
+    staticMembers: [],
+  };
+  impossible.surfaceDigest = surfaceDigest(impossible.surface);
+  assert.throws(
+    () => validateReactNativeApiContract(impossible),
+    /declarationKinds|declaredType/
+  );
+});
+
+function createBaselineMetadataFixture() {
+  const root = createSdkFixture();
+  const revision = commitFixture(root);
+  const contract = buildReactNativeApiContract({
+    sdkPath: root,
+    expectedCommit: revision,
+    expectedVersion: '0.0.65',
+  });
+
   const metadata = {
+    package: '@bota.dev/react-native-sdk',
     packageVersion: '0.0.65',
+    sourceRevision: contract.sourceRevision,
     publicApi: {
       contract: 'protocol/baseline/react-native-public-api-0.0.65.json',
       surfaceDigest: contract.surfaceDigest,
     },
   };
+  return { contract, metadata };
+}
+
+test('accepts equivalent relative and absolute baseline contract paths', () => {
+  const { contract, metadata } = createBaselineMetadataFixture();
   assert.doesNotThrow(() =>
     validateReactNativeApiBaseline({
       contract,
@@ -238,6 +354,89 @@ test('writes canonical JSON and validates its semantic digest', () => {
       contractPath: 'protocol/baseline/react-native-public-api-0.0.65.json',
     })
   );
+  assert.doesNotThrow(() =>
+    validateReactNativeApiBaseline({
+      contract,
+      metadata,
+      contractPath: resolve(
+        'protocol/baseline/react-native-public-api-0.0.65.json'
+      ),
+    })
+  );
+});
+
+test('CLI validates absolute baseline paths outside the repository cwd', () => {
+  const root = createSdkFixture();
+  const revision = commitFixture(root);
+  const contract = buildReactNativeApiContract({
+    sdkPath: root,
+    expectedCommit: revision,
+    expectedVersion: '0.0.65',
+  });
+  const baselineDirectory = join(root, 'protocol', 'baseline');
+  mkdirSync(baselineDirectory, { recursive: true });
+  const contractPath = join(baselineDirectory, 'contract.json');
+  const metadataPath = join(baselineDirectory, 'metadata.json');
+  writeJson(contractPath, contract);
+  writeJson(metadataPath, {
+    package: contract.package,
+    packageVersion: contract.packageVersion,
+    sourceRevision: contract.sourceRevision,
+    publicApi: {
+      contract: 'protocol/baseline/contract.json',
+      surfaceDigest: contract.surfaceDigest,
+    },
+  });
+  const outside = mkdtempSync(join(tmpdir(), 'bota-rn-api-cwd-'));
+  temporaryDirectories.push(outside);
+  const cli = fileURLToPath(new URL('./react-native-api-contract.mjs', import.meta.url));
+
+  assert.doesNotThrow(() =>
+    execFileSync(
+      process.execPath,
+      [
+        cli,
+        'validate',
+        '--contract',
+        contractPath,
+        '--baseline-metadata',
+        metadataPath,
+      ],
+      { cwd: outside, encoding: 'utf8' }
+    )
+  );
+});
+
+test('rejects baseline metadata with a different package', () => {
+  const { contract, metadata } = createBaselineMetadataFixture();
+  metadata.package = '@bota.dev/wrong-sdk';
+  assert.throws(
+    () =>
+      validateReactNativeApiBaseline({
+        contract,
+        metadata,
+        contractPath: 'protocol/baseline/react-native-public-api-0.0.65.json',
+      }),
+    /metadata package/
+  );
+});
+
+test('rejects baseline metadata with a different source revision', () => {
+  const { contract, metadata } = createBaselineMetadataFixture();
+  metadata.sourceRevision = 'f'.repeat(40);
+  assert.throws(
+    () =>
+      validateReactNativeApiBaseline({
+        contract,
+        metadata,
+        contractPath: 'protocol/baseline/react-native-public-api-0.0.65.json',
+      }),
+    /metadata sourceRevision/
+  );
+});
+
+test('rejects baseline metadata with a different surface digest', () => {
+  const { contract, metadata } = createBaselineMetadataFixture();
   metadata.publicApi.surfaceDigest = 'f'.repeat(64);
   assert.throws(
     () =>

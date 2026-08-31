@@ -1,6 +1,12 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -11,6 +17,7 @@ const TYPE_FORMAT_FLAGS =
   ts.TypeFormatFlags.UseAliasDefinedOutsideCurrentScope |
   ts.TypeFormatFlags.WriteArrowStyleSignature;
 const TYPE_ALIAS_FORMAT_FLAGS = TYPE_FORMAT_FLAGS | ts.TypeFormatFlags.InTypeAlias;
+const UNRESOLVED_DEPENDENCY_DIAGNOSTIC_CODES = new Set([2307, 2688, 2792, 7016]);
 
 function normalizeType(value, sdkPath) {
   const normalizedRoot = resolve(sdkPath).split(sep).join('/');
@@ -20,6 +27,69 @@ function normalizeType(value, sdkPath) {
     .replaceAll(normalizedRoot, '<sdk>')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function verifyLockedDependencies(root) {
+  const failure = (detail) => {
+    throw new Error(
+      `React Native SDK dependencies do not match package-lock.json; run npm ci (${detail})`
+    );
+  };
+  let expectedLock;
+  let installedLock;
+  try {
+    expectedLock = JSON.parse(readFileSync(resolve(root, 'package-lock.json'), 'utf8'));
+    installedLock = JSON.parse(
+      readFileSync(resolve(root, 'node_modules/.package-lock.json'), 'utf8')
+    );
+  } catch {
+    failure('lock state is missing or invalid');
+  }
+  if (expectedLock.lockfileVersion !== installedLock.lockfileVersion) {
+    failure('lockfile versions differ');
+  }
+  const expectedPackages = Object.entries(expectedLock.packages ?? {})
+    .filter(([path]) => path !== '')
+    .sort(([left], [right]) => left.localeCompare(right));
+  const expectedByPath = new Map(expectedPackages);
+  const installedPackages = installedLock.packages ?? {};
+  const installedPaths = Object.keys(installedPackages).sort((left, right) =>
+    left.localeCompare(right)
+  );
+  const unexpectedPath = installedPaths.find((path) => !expectedByPath.has(path));
+  if (unexpectedPath) {
+    failure(`${unexpectedPath} is not in package-lock.json`);
+  }
+  for (const [path, expected] of expectedPackages) {
+    const installed = installedPackages[path];
+    if (!installed) {
+      if (expected.optional) continue;
+      failure(`${path} is not installed`);
+    }
+    for (const field of ['version', 'resolved', 'integrity', 'link']) {
+      if (expected[field] !== installed[field]) {
+        failure(`${path} ${field} differs`);
+      }
+    }
+    if (expected.version) {
+      const installedPackagePath = resolve(root, path, 'package.json');
+      if (!existsSync(installedPackagePath)) {
+        if (expected.optional) continue;
+        failure(`${path} package.json is missing`);
+      }
+      let actualVersion;
+      try {
+        actualVersion = JSON.parse(
+          readFileSync(installedPackagePath, 'utf8')
+        ).version;
+      } catch {
+        failure(`${path} package.json is invalid`);
+      }
+      if (actualVersion !== expected.version) {
+        failure(`${path} installed version differs`);
+      }
+    }
+  }
 }
 
 function declarationKinds(declarations = []) {
@@ -161,7 +231,7 @@ function formatExport(checker, exportedSymbol, sdkPath, sourceRoot, location) {
           sdkPath,
           sourceRoot,
           symbolLocation,
-          false
+          true
         )
       : [],
   };
@@ -199,8 +269,22 @@ export function extractReactNativeApi(sdkPath) {
     options: parsed.options,
     projectReferences: parsed.projectReferences,
   });
-  // The SDK build gate owns diagnostics; this tool reads the accepted public
-  // surface even when a newer compiler reports unrelated implementation drift.
+  const unresolvedDependencies = ts
+    .getPreEmitDiagnostics(program)
+    .filter((diagnostic) =>
+      UNRESOLVED_DEPENDENCY_DIAGNOSTIC_CODES.has(diagnostic.code)
+    );
+  if (unresolvedDependencies.length > 0) {
+    throw new Error(
+      `React Native API extraction has unresolved dependencies:\n${ts.formatDiagnosticsWithColorAndContext(
+        unresolvedDependencies,
+        diagnosticHost()
+      )}`
+    );
+  }
+  verifyLockedDependencies(root);
+  // The SDK build gate owns other diagnostics; this tool reads the accepted
+  // public surface even when a newer compiler reports implementation drift.
 
   const entrypoint = resolve(root, 'src/index.ts');
   const sourceFile = program.getSourceFile(entrypoint);
@@ -298,8 +382,11 @@ function requireBoolean(value, field) {
   }
 }
 
-function requireStringArray(values, field) {
+function requireStringArray(values, field, { nonEmpty = false } = {}) {
   if (!Array.isArray(values)) {
+    throw new Error(`invalid React Native API contract ${field}`);
+  }
+  if (nonEmpty && values.length === 0) {
     throw new Error(`invalid React Native API contract ${field}`);
   }
   for (const value of values) requireString(value, field);
@@ -327,7 +414,9 @@ function validateMember(member, field) {
   requireString(member.name, `${field} name`);
   requireBoolean(member.optional, `${field} optional`);
   requireBoolean(member.readonly, `${field} readonly`);
-  requireStringArray(member.declarationKinds, `${field} declarationKinds`);
+  requireStringArray(member.declarationKinds, `${field} declarationKinds`, {
+    nonEmpty: true,
+  });
   requireString(member.type, `${field} type`);
 }
 
@@ -356,7 +445,8 @@ export function validateReactNativeApiContract(contract) {
     requireBoolean(exported.runtime, `${exported.name} runtime`);
     requireStringArray(
       exported.declarationKinds,
-      `${exported.name} declarationKinds`
+      `${exported.name} declarationKinds`,
+      { nonEmpty: true }
     );
     requireStringArray(exported.callSignatures, `${exported.name} callSignatures`);
     requireStringArray(
@@ -368,6 +458,15 @@ export function validateReactNativeApiContract(contract) {
     }
     if ('declaredType' in exported) {
       requireString(exported.declaredType, `${exported.name} declaredType`);
+    }
+    if (exported.runtime && !('valueType' in exported)) {
+      throw new Error(`invalid React Native API contract ${exported.name} valueType`);
+    }
+    if (!exported.runtime && !('declaredType' in exported)) {
+      throw new Error(`invalid React Native API contract ${exported.name} declaredType`);
+    }
+    if (!exported.runtime && 'valueType' in exported) {
+      throw new Error(`invalid React Native API contract ${exported.name} valueType`);
     }
     assertSortedUniqueNamed(exported.members, `${exported.name} members`);
     assertSortedUniqueNamed(
@@ -394,15 +493,31 @@ export function validateReactNativeApiBaseline({
   contract,
   metadata,
   contractPath,
+  root = process.cwd(),
 }) {
   const validContract = validateReactNativeApiContract(contract);
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
     throw new Error('invalid React Native baseline metadata');
   }
+  if (metadata.package !== validContract.package) {
+    throw new Error('React Native baseline metadata package does not match contract');
+  }
   if (metadata.packageVersion !== validContract.packageVersion) {
     throw new Error('React Native baseline metadata packageVersion does not match contract');
   }
-  if (metadata.publicApi?.contract !== contractPath) {
+  if (metadata.sourceRevision !== validContract.sourceRevision) {
+    throw new Error('React Native baseline metadata sourceRevision does not match contract');
+  }
+  const canonicalRoot = realpathSync(resolve(root));
+  const normalizeContractPath = (path) =>
+    relative(canonicalRoot, realpathSync(resolve(canonicalRoot, path)))
+      .split(sep)
+      .join('/');
+  if (
+    typeof metadata.publicApi?.contract !== 'string' ||
+    normalizeContractPath(metadata.publicApi.contract) !==
+      normalizeContractPath(contractPath)
+  ) {
     throw new Error('React Native baseline metadata contract path does not match contract');
   }
   if (metadata.publicApi?.surfaceDigest !== validContract.surfaceDigest) {
@@ -593,12 +708,18 @@ function runCli(argv) {
     }
     case 'validate': {
       requireOptions(options, ['contract', 'baselineMetadata']);
+      const baselineMetadataPath = resolve(options.baselineMetadata);
       const contract = validateReactNativeApiBaseline({
         contract: JSON.parse(readFileSync(resolve(options.contract), 'utf8')),
         metadata: JSON.parse(
-          readFileSync(resolve(options.baselineMetadata), 'utf8')
+          readFileSync(baselineMetadataPath, 'utf8')
         ),
         contractPath: options.contract,
+        root: commandOutput(
+          'git',
+          ['rev-parse', '--show-toplevel'],
+          dirname(baselineMetadataPath)
+        ),
       });
       console.log(
         `validated ${contract.package} ${contract.packageVersion}: ${contract.surface.exports.length} exports (${contract.surfaceDigest})`

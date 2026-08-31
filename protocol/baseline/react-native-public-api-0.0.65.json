@@ -4,7 +4,7 @@
   "packageVersion": "0.0.65",
   "sourceRevision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4",
   "entrypoint": "src/index.ts",
-  "surfaceDigest": "a2fa1df1ed650cd4e84129e90dd79386210674f004fbe01208f6bfdee979d483",
+  "surfaceDigest": "a020668e31dd204c2c3ab7232df8d5b0853e3027b9e37d1f7aab07f134bbd576",
   "surface": {
     "exports": [
       {
@@ -1596,7 +1596,26 @@
             "type": "(device: ConnectedDevice, grantBlob: string) => Promise<void>"
           }
         ],
-        "staticMembers": [],
+        "staticMembers": [
+          {
+            "name": "EventEmitter",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "VariableDeclaration"
+            ],
+            "type": "EventEmitterStatic"
+          },
+          {
+            "name": "prefixed",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertyDeclaration"
+            ],
+            "type": "string | boolean"
+          }
+        ],
         "valueType": "typeof DeviceManager",
         "declaredType": "DeviceManager"
       },
@@ -1771,7 +1790,7 @@
         "constructSignatures": [],
         "members": [],
         "staticMembers": [],
-        "declaredType": "\"error\" | \"idle\" | \"uploading\" | \"recording\" | \"syncing\" | \"charging\" | \"lowBattery\" | \"storageFull\""
+        "declaredType": "\"error\" | \"idle\" | \"recording\" | \"syncing\" | \"uploading\" | \"charging\" | \"lowBattery\" | \"storageFull\""
       },
       {
         "name": "DeviceStateCacheEvents",
@@ -2233,7 +2252,7 @@
         "constructSignatures": [],
         "members": [],
         "staticMembers": [],
-        "declaredType": "\"error\" | \"debug\" | \"info\" | \"warn\" | \"none\""
+        "declaredType": "\"error\" | \"debug\" | \"warn\" | \"info\" | \"none\""
       },
       {
         "name": "LteStatus",
@@ -2506,7 +2525,26 @@
             "type": "<T extends keyof OTAManagerEvents>(event: T, fn?: ((...args: EventEmitter.ArgumentMap<OTAManagerEvents>[Extract<T, keyof OTAManagerEvents>]) => void) | undefined, context?: any, once?: boolean) => OTAManager"
           }
         ],
-        "staticMembers": [],
+        "staticMembers": [
+          {
+            "name": "EventEmitter",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "VariableDeclaration"
+            ],
+            "type": "EventEmitterStatic"
+          },
+          {
+            "name": "prefixed",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertyDeclaration"
+            ],
+            "type": "string | boolean"
+          }
+        ],
         "valueType": "typeof OTAManager",
         "declaredType": "OTAManager"
       },
@@ -2578,7 +2616,7 @@
         "constructSignatures": [],
         "members": [],
         "staticMembers": [],
-        "declaredType": "\"completed\" | \"failed\" | \"checking\" | \"downloading\" | \"preparing\" | \"updating\" | \"verifying\" | \"restarting\""
+        "declaredType": "\"failed\" | \"preparing\" | \"completed\" | \"checking\" | \"downloading\" | \"updating\" | \"verifying\" | \"restarting\""
       },
       {
         "name": "PairingState",
@@ -2590,7 +2628,7 @@
         "constructSignatures": [],
         "members": [],
         "staticMembers": [],
-        "declaredType": "\"error\" | \"unpaired\" | \"pairing\" | \"paired\""
+        "declaredType": "\"unpaired\" | \"pairing\" | \"paired\" | \"error\""
       },
       {
         "name": "ProvisioningError",
@@ -2733,7 +2771,7 @@
             "declarationKinds": [
               "PropertySignature"
             ],
-            "type": "\"unknown\" | \"invalid_token\" | \"storage_error\" | \"chunk_error\" | \"already_paired\" | undefined"
+            "type": "\"invalid_token\" | \"storage_error\" | \"chunk_error\" | \"already_paired\" | \"unknown\" | undefined"
           },
           {
             "name": "localRecordingsDeleted",
@@ -3043,7 +3081,26 @@
             "type": "(device: ConnectedDevice) => Promise<TriggerDeviceUploadResponse | null>"
           }
         ],
-        "staticMembers": [],
+        "staticMembers": [
+          {
+            "name": "EventEmitter",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "VariableDeclaration"
+            ],
+            "type": "EventEmitterStatic"
+          },
+          {
+            "name": "prefixed",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertyDeclaration"
+            ],
+            "type": "string | boolean"
+          }
+        ],
         "valueType": "typeof RecordingManager",
         "declaredType": "RecordingManager"
       },
@@ -3347,7 +3404,7 @@
         "constructSignatures": [],
         "members": [],
         "staticMembers": [],
-        "declaredType": "\"error\" | \"debug\" | \"info\" | \"warn\""
+        "declaredType": "\"error\" | \"debug\" | \"warn\" | \"info\""
       },
       {
         "name": "SdkState",
@@ -3359,7 +3416,7 @@
         "constructSignatures": [],
         "members": [],
         "staticMembers": [],
-        "declaredType": "\"uninitialized\" | \"initializing\" | \"ready\" | \"error\""
+        "declaredType": "\"error\" | \"uninitialized\" | \"initializing\" | \"ready\""
       },
       {
         "name": "SdkStatus",
@@ -3633,7 +3690,26 @@
             "type": "StreamingState"
           }
         ],
-        "staticMembers": [],
+        "staticMembers": [
+          {
+            "name": "EventEmitter",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "VariableDeclaration"
+            ],
+            "type": "EventEmitterStatic"
+          },
+          {
+            "name": "prefixed",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertyDeclaration"
+            ],
+            "type": "string | boolean"
+          }
+        ],
         "valueType": "typeof StreamingSession",
         "declaredType": "StreamingSession"
       },
@@ -3714,7 +3790,7 @@
         "constructSignatures": [],
         "members": [],
         "staticMembers": [],
-        "declaredType": "\"disconnected\" | \"completed\" | \"failed\" | \"idle\" | \"streaming\" | \"paused\" | \"uploading\" | \"completing\""
+        "declaredType": "\"disconnected\" | \"idle\" | \"uploading\" | \"failed\" | \"completing\" | \"completed\" | \"paused\" | \"streaming\""
       },
       {
         "name": "StreamingSyncOptions",
@@ -3924,7 +4000,7 @@
         "constructSignatures": [],
         "members": [],
         "staticMembers": [],
-        "declaredType": "\"completed\" | \"failed\" | \"uploading\" | \"completing\" | \"preparing\" | \"transferring\" | \"device_uploading\""
+        "declaredType": "\"uploading\" | \"failed\" | \"preparing\" | \"transferring\" | \"device_uploading\" | \"completing\" | \"completed\""
       },
       {
         "name": "SyncStatus",
@@ -4246,7 +4322,7 @@
             "declarationKinds": [
               "PropertySignature"
             ],
-            "type": "\"error\" | \"paused\" | \"data\" | \"eof\" | \"sha256\" | \"e2e_start\" | \"encrypted_data\" | \"encrypted_eof\""
+            "type": "\"error\" | \"data\" | \"eof\" | \"paused\" | \"sha256\" | \"e2e_start\" | \"encrypted_data\" | \"encrypted_eof\""
           }
         ],
         "staticMembers": [],
@@ -4607,7 +4683,7 @@
         "constructSignatures": [],
         "members": [],
         "staticMembers": [],
-        "declaredType": "\"completed\" | \"failed\" | \"uploading\" | \"pending\""
+        "declaredType": "\"uploading\" | \"pending\" | \"failed\" | \"completed\""
       },
       {
         "name": "WiFiConfigGrant",
@@ -4656,7 +4732,7 @@
             "declarationKinds": [
               "PropertySignature"
             ],
-            "type": "\"unknown\" | \"storage_error\" | \"invalid_grant\" | \"grant_expired\" | \"decryption_error\" | undefined"
+            "type": "\"storage_error\" | \"unknown\" | \"invalid_grant\" | \"grant_expired\" | \"decryption_error\" | undefined"
           },
           {
             "name": "success",
@@ -4794,7 +4870,7 @@
         "constructSignatures": [],
         "members": [],
         "staticMembers": [],
-        "declaredType": "\"disconnected\" | \"connecting\" | \"connected\" | \"failed\" | \"idle\""
+        "declaredType": "\"disconnected\" | \"connecting\" | \"connected\" | \"idle\" | \"failed\""
       },
       {
         "name": "WiFiStatusInfo",

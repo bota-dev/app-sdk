@@ -306,8 +306,14 @@ git commit -m "docs: define React Native compatibility gate" -m "Co-Authored-By:
 ## Completion Gate
 
 - A clean 0.0.65 checkout produces the committed semantic contract exactly.
+- Missing or stale dependency declarations fail extraction instead of silently
+  reducing or changing the captured API; the installed tree must match
+  `package-lock.json` after `npm ci`, except for packages the lock marks optional
+  and npm omits for the current platform.
 - Any exported symbol or reachable public member addition, removal, or signature
   change fails with a named diff.
+- Baseline package, version, source revision, normalized contract path, and
+  digest must identify the same captured contract.
 - Existing protocol fixtures, source digests, and Jest count gates still pass.
 - CI validates contract integrity without requiring the sibling React Native repository.
 - No React Native package is published and no native runtime capability is claimed by this milestone.

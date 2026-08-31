@@ -134,6 +134,11 @@ tools/apple/test-package.sh
 tools/apple/test-consumer.sh
 ```
 
+The React Native API check expects `npm ci` to have installed the reference SDK
+checkout's `package-lock.json` tree so inherited and dependency-owned
+declarations are included reproducibly in the frozen surface. Missing packages
+are accepted only when the lock marks them optional for the current platform.
+
 The supervised Apple lab procedure is documented in
 [docs/testing/apple-physical-device.md](docs/testing/apple-physical-device.md).
 Normal development and CI must leave `BOTA_PHYSICAL_TESTS` unset.
