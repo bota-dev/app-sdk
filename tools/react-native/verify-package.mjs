@@ -8,9 +8,10 @@ const EXPECTED_PACKAGE = '@bota.dev/react-native-sdk';
 const EXPECTED_REACT_NATIVE_FLOOR = '0.86.3';
 const EXPECTED_NATIVE_MODULE = 'BotaDeviceSDK';
 const EXPECTED_CODEGEN_LIBRARY = 'BotaDeviceSDKSpec';
-const EXPECTED_APPLE_DEPLOYMENT_TARGET = '15.0';
+const EXPECTED_APPLE_DEPLOYMENT_TARGET = '15.1';
 const EXPECTED_APPLE_PACKAGE_URL = 'https://github.com/bota-dev/app-sdk.git';
 const EXPECTED_APPLE_PRODUCT = 'BotaAppleSDK';
+const EXPECTED_COCOAPODS_VERSION = '1.13.0';
 const EXPECTED_LOCAL_APPLE_PATH_ENV = 'BOTA_APPLE_SDK_PACKAGE_PATH';
 const EXPECTED_SWIFT_VERSION = '6.0';
 
@@ -110,6 +111,11 @@ export const verifyPackage = ({ workspaceRoot, packageRoot }) => {
   }
   if (apple?.swiftVersion !== EXPECTED_SWIFT_VERSION) {
     throw new Error(`Apple Swift version must be ${EXPECTED_SWIFT_VERSION}`);
+  }
+  if (apple?.cocoapodsVersion !== EXPECTED_COCOAPODS_VERSION) {
+    throw new Error(
+      `Apple CocoaPods version must be ${EXPECTED_COCOAPODS_VERSION} or newer`
+    );
   }
   if (apple?.packageUrl !== EXPECTED_APPLE_PACKAGE_URL) {
     throw new Error(`Apple package URL must be ${EXPECTED_APPLE_PACKAGE_URL}`);

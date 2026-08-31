@@ -41,8 +41,9 @@ const validPackage = () => ({
     apple: {
       podName: 'BotaDeviceSDK',
       moduleName: 'BotaDeviceSDK',
-      deploymentTarget: '15.0',
+      deploymentTarget: '15.1',
       swiftVersion: '6.0',
+      cocoapodsVersion: '1.13.0',
       packageUrl: 'https://github.com/bota-dev/app-sdk.git',
       packageRequirement: 'exactVersion',
       packageProduct: 'BotaAppleSDK',
@@ -158,6 +159,15 @@ test('rejects Apple deployment or Swift version drift', () => {
   assert.match(outputOf(deploymentResult), /deployment target/);
   assert.notEqual(swiftResult.status, 0);
   assert.match(outputOf(swiftResult), /Swift version/);
+});
+
+test('rejects a CocoaPods version without visionOS podspec support', () => {
+  const result = runVerifier((pkg) => {
+    pkg.bota.apple.cocoapodsVersion = '1.11.2';
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(outputOf(result), /CocoaPods version/);
 });
 
 test('rejects an Apple package that is not pinned to the matching release', () => {

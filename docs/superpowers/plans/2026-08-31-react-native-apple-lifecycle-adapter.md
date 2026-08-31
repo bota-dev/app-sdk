@@ -32,11 +32,11 @@
 
 **Interfaces:**
 - Consumes: `sdk-version.toml`, package `codegenConfig`, React Native's `install_modules_dependencies` and `spm_dependency` helpers.
-- Produces: pod `BotaDeviceSDK`, module `BotaDeviceSDK`, iOS 15 floor, Swift 6 compilation, and an exact `BotaAppleSDK` dependency with `BOTA_APPLE_SDK_PACKAGE_PATH` as the local override.
+- Produces: pod `BotaDeviceSDK`, module `BotaDeviceSDK`, React Native's iOS 15.1 floor, Swift 6 compilation, and an exact `BotaAppleSDK` dependency with `BOTA_APPLE_SDK_PACKAGE_PATH` as the local override.
 
 - [x] **Step 1: Write failing package-verifier tests** that require the podspec in npm files, require synchronized pod metadata, reject a missing Apple dependency, reject a non-exact remote version, and reject a mismatched iOS floor or Swift version.
 - [x] **Step 2: Run `node --test tools/react-native/verify-package.test.mjs`** and confirm the new tests fail because the podspec and Apple metadata do not exist.
-- [x] **Step 3: Add the minimum podspec and verifier implementation** using `https://github.com/bota-dev/app-sdk.git`, `{ kind: "exactVersion", version: package["version"] }`, product `BotaAppleSDK`, iOS `15.0`, Swift `6.0`, and the local path override.
+- [x] **Step 3: Add the minimum podspec and verifier implementation** using `https://github.com/bota-dev/app-sdk.git`, `{ kind: "exactVersion", version: package["version"] }`, product `BotaAppleSDK`, iOS `15.1`, Swift `6.0`, and the local path override.
 - [x] **Step 4: Run the focused tests and package verification** and confirm both pass.
 - [x] **Step 5: Commit** the package contract with the required Codex co-author trailer.
 
@@ -87,11 +87,11 @@
 - Consumes: the local npm package, its podspec, React Native 0.86.3 pods, and the repository root `BotaAppleSDK` package.
 - Produces: a disposable iOS 15 CocoaPods consumer whose `BotaDeviceSDK` pod target resolves the local Swift package and compiles for the iOS simulator without signing.
 
-- [ ] **Step 1: Add a build-gate test command** and run it to confirm it fails before a consumer generator exists.
-- [ ] **Step 2: Generate a minimal temporary Xcode application and Podfile** with `BOTA_APPLE_SDK_PACKAGE_PATH` pointing to the repository root, then run `pod install` and build the `BotaDeviceSDK` pod target.
-- [ ] **Step 3: Fix only integration defects exposed by the real build** until Swift, Objective-C++, generated Codegen, and `BotaAppleSDK` link successfully.
-- [ ] **Step 4: Add the same build gate to a macOS CI job** after the nested npm install.
-- [ ] **Step 5: Commit** the build gate with the required Codex co-author trailer.
+- [x] **Step 1: Add a build-gate test command** and run it to confirm it fails before a consumer generator exists.
+- [x] **Step 2: Generate a minimal temporary Xcode application and Podfile** with `BOTA_APPLE_SDK_PACKAGE_PATH` pointing to the repository root, then run `pod install` and build and link the disposable application target.
+- [x] **Step 3: Fix only integration defects exposed by the real build** until Swift, Objective-C++, generated Codegen, and `BotaAppleSDK` link successfully.
+- [x] **Step 4: Add the same build gate to a macOS CI job** after the nested npm install.
+- [x] **Step 5: Commit** the build gate with the required Codex co-author trailer.
 
 ### Task 5: Documentation, Review, And Main Integration
 

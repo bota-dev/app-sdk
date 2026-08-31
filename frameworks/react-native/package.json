@@ -24,6 +24,7 @@
     "license-check": "node ../../scripts/check-licenses.mjs",
     "pretest": "npm run build",
     "test": "node --test test/*.test.mjs",
+    "test:apple:integration": "../../tools/react-native/test-apple-adapter.sh",
     "test:apple:lifecycle": "swift test -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors",
     "typecheck": "tsc --noEmit",
     "verify": "node ../../tools/react-native/verify-package.mjs --workspace-root ../.. --package-root . && npm run codegen:check && npm run typecheck && npm test && npm run license-check"
@@ -63,8 +64,9 @@
     "apple": {
       "podName": "BotaDeviceSDK",
       "moduleName": "BotaDeviceSDK",
-      "deploymentTarget": "15.0",
+      "deploymentTarget": "15.1",
       "swiftVersion": "6.0",
+      "cocoapodsVersion": "1.13.0",
       "packageUrl": "https://github.com/bota-dev/app-sdk.git",
       "packageRequirement": "exactVersion",
       "packageProduct": "BotaAppleSDK",

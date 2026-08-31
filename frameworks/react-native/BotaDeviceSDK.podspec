@@ -17,11 +17,14 @@ Pod::Spec.new do |spec|
     tag: "v#{version}",
   }
   spec.platforms = { ios: apple.fetch("deploymentTarget") }
+  spec.cocoapods_version = ">= #{apple.fetch("cocoapodsVersion")}"
   spec.swift_version = apple.fetch("swiftVersion")
   spec.source_files = "ios/**/*.{h,m,mm,swift}"
   spec.pod_target_xcconfig = {
     "CLANG_CXX_LANGUAGE_STANDARD" => "c++20",
     "DEFINES_MODULE" => "YES",
+    "SWIFT_STRICT_CONCURRENCY" => "complete",
+    "SWIFT_TREAT_WARNINGS_AS_ERRORS" => "YES",
   }
 
   if respond_to?(:install_modules_dependencies, true)
