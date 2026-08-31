@@ -28,12 +28,15 @@ cargo test --workspace
 ```
 
 React Native Apple changes also require macOS with Xcode 26 and CocoaPods 1.13
-or newer:
+or newer. The repository verification environment is locked by the nested
+Gemfile:
 
 ```bash
 cd frameworks/react-native
+bundle _2.6.9_ install
 npm run test:apple:lifecycle
-npm run test:apple:integration
+bundle _2.6.9_ exec npm run test:apple:integration
+bundle _2.6.9_ exec npm run test:apple:remote-resolution
 ```
 
 Dependencies with copyleft or source-available licenses are rejected by both

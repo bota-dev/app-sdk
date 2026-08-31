@@ -6,7 +6,7 @@
 
 **Architecture:** A Swift actor serializes `configure` and `destroy` against `BotaDeviceClient.shared`, owns the React Native lifecycle state, and exposes an Objective-C-compatible completion bridge. A narrow Objective-C++ module implements the generated `NativeBotaDeviceSDKSpec` and converts React Native promises only; it does not call the Rust ABI or move recording or firmware bytes. The pod attaches the exact matching `BotaAppleSDK` product from the App SDK release tag, with a local package-path override used by source and CI verification.
 
-**Tech Stack:** Swift 6, Objective-C++20, React Native 0.86.3 Codegen, CocoaPods 1.13+, Swift Package Manager, Node.js 22, Node test runner, XCTest, Xcode 26.
+**Tech Stack:** Swift 6, Objective-C++20, React Native 0.86.3 Codegen, CocoaPods 1.16.2 with a 1.13 consumer floor, xcodeproj 1.27.0, Bundler 2.6.9, Swift Package Manager, Node.js 22, Node test runner, XCTest, Xcode 26.
 
 **Spec:** `docs/superpowers/plans/2026-08-28-app-sdk-implementation.md` Milestone 4, `docs/superpowers/plans/2026-08-31-react-native-package-foundation.md`, and `ARCHITECTURE.md` React Native boundary.
 
@@ -85,13 +85,14 @@
 
 **Interfaces:**
 - Consumes: the local npm package, its podspec, React Native 0.86.3 pods, and the repository root `BotaAppleSDK` package.
-- Produces: a disposable iOS 15.1 CocoaPods consumer whose `BotaDeviceSDK` pod target resolves the local Swift package and compiles for the iOS simulator without signing.
+- Produces: a disposable iOS 15.1 CocoaPods consumer whose `BotaDeviceSDK` pod target resolves the local Swift package and compiles for the iOS simulator without signing, plus a separate exact-version resolution of the default remote package URL.
 
 - [x] **Step 1: Add a build-gate test command** and run it to confirm it fails before a consumer generator exists.
 - [x] **Step 2: Generate a minimal temporary Xcode application and Podfile** with `BOTA_APPLE_SDK_PACKAGE_PATH` pointing to the repository root, then run `pod install` and build and link the disposable application target.
 - [x] **Step 3: Fix only integration defects exposed by the real build** until Swift, Objective-C++, generated Codegen, and `BotaAppleSDK` link successfully.
 - [x] **Step 4: Add the same build gate to a macOS CI job** after the nested npm install.
 - [x] **Step 5: Commit** the build gate with the required Codex co-author trailer.
+- [x] **Step 6: Lock the Ruby build toolchain, select Xcode 26.3 explicitly in CI, and resolve the default remote Apple package at the synchronized version.**
 
 ### Task 5: Documentation, Review, And Main Integration
 

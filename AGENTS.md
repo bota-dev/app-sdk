@@ -62,6 +62,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   requires CocoaPods 1.13 or newer. It resolves the exact matching
   `BotaAppleSDK` release by default; `BOTA_APPLE_SDK_PACKAGE_PATH` is only for
   local source and CI verification.
+- React Native Apple CI selects Xcode 26.3 and Ruby 3.3.12 and uses
+  `frameworks/react-native/Gemfile.lock` for Bundler 2.6.9, CocoaPods 1.16.2,
+  and xcodeproj 1.27.0. Run both the local linked-consumer gate and the remote
+  exact-version resolution gate when changing pod or Swift-package wiring.
 - Keep React Native lifecycle serialization in the Swift actor. Concurrent
   configure calls coalesce, destroy waits for an in-flight configure, and the
   Objective-C++ layer only translates generated-spec promises.
@@ -131,7 +135,9 @@ npm run sync:apple-fixtures
 npm run test:workflows -- --sdk-path ../react-native-sdk
 (cd frameworks/react-native && npm ci && npm run verify)
 (cd frameworks/react-native && npm run test:apple:lifecycle)
-(cd frameworks/react-native && npm run test:apple:integration)
+(cd frameworks/react-native && bundle _2.6.9_ install)
+(cd frameworks/react-native && bundle _2.6.9_ exec npm run test:apple:integration)
+(cd frameworks/react-native && bundle _2.6.9_ exec npm run test:apple:remote-resolution)
 cargo xtask protocol generate --check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
