@@ -20,6 +20,32 @@ Applications request Bluetooth runtime permissions. The library declares the
 required permissions, including location for BLE scanning through API 30, and
 the optional BLE hardware feature but never prompts the user itself.
 
+## Client lifecycle
+
+`BotaDeviceClient` owns one configured Android runtime. Configuration retains
+the application context, is idempotent until `destroy()`, and may receive an
+application-owned `OkHttpClient` or storage directory. Applications remain
+responsible for requesting the permissions reported by
+`BotaSDKError.AuthorizationRequired`.
+
+```kotlin
+val bota = BotaDeviceClient.shared
+bota.configure(BotaConfiguration(applicationContext))
+
+val scan = bota.devices.startScan()
+val connected = bota.devices.connect(serialNumber, selectedDevice)
+
+bota.destroy()
+```
+
+Discovery, manual connection, and reconnect are Rust-owned workflows. A manual
+connection requires the selected peripheral plus the expected serial number;
+reconnect accepts saved peripheral and advertised-address hints. Display names
+are never identity. Connection and device-status observations are Kotlin
+`Flow`s, and status payloads use the shared Rust decoder. Destroy cancels the
+active workflow, ends status subscriptions, disconnects the verified device,
+closes observers, and releases the native engine and Android Bluetooth thread.
+
 ## Verify
 
 ```bash

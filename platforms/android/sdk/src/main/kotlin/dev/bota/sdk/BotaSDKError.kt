@@ -32,6 +32,7 @@ public sealed interface BotaOperation {
     public data object Discover : BotaOperation
     public data object Connect : BotaOperation
     public data object Reconnect : BotaOperation
+    public data object ReadStatus : BotaOperation
     public data object Provision : BotaOperation
     public data object TransferRecording : BotaOperation
     public data object Upload : BotaOperation

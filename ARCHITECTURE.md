@@ -150,9 +150,17 @@ only opaque IDs and bytes. OkHttp requests and application material are one-shot
 host registrations removed on completion, cancellation, failure, replacement,
 or destroy. The network host tracks and cancels only its own calls when sharing
 an injected client.
-The public workflow
-facade, Maven Central artifact, physical acceptance, and React Native Android
-runtime support are not claimed by this stage.
+Android now exposes the first public workflow facade through
+`BotaDeviceClient` and `DeviceManager`. Configuration is idempotent until
+destroy and retains only the application context. Permission checks occur
+before Rust starts a workflow. Scan cancellation preserves the original
+128-bit cancellation ID, manual connection requires a selected peripheral and
+exact serial, and reconnect only forwards saved peripheral/address/name hints
+to the canonical reducer. A device is published only after Rust reports the
+verified serial. Connection observers complete on destroy, while direct status
+reads and streams use the shared ABI decoder and serialized GATT driver. The
+secure lifecycle, recording, OTA, log, Maven Central, physical acceptance, and
+React Native Android runtime gates are not claimed by this stage.
 
 Native migration inputs are pinned separately in
 `protocol/baseline/native-sdks.json`. Apple revision `cd15e545cabb8` and Android

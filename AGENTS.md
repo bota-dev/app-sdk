@@ -107,6 +107,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   dedicated coroutine dispatcher. Every JNI call stays on that dispatcher;
   Rust owns concurrent-command rejection, and host callbacks preserve the
   original operation, request ID, and both cancellation-ID halves.
+- Android `BotaDeviceClient.configure()` is idempotent until `destroy()` and
+  retains only the application context. Check Bluetooth authorization before
+  starting Rust, require exact serial verification for manual connect, forward
+  reconnect hints without name-based selection, decode status through the
+  shared mapper, and finish every connection/status observer on destroy.
 - Keep Android `WorkflowFixtures` generated from all seven canonical workflow
   suites. `preDebugAndroidTestBuild` must reject stale protocol or workflow
   resources before packaged instrumentation runs.

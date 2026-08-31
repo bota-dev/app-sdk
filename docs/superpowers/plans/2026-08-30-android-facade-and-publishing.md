@@ -753,7 +753,7 @@ public class BotaDeviceClient private constructor() {
 }
 ```
 
-- [ ] **Step 1: Write failing public lifecycle tests**
+- [x] **Step 1: Write failing public lifecycle tests**
 
 Assert configure is idempotent until destroy, operations fail before configure,
 authorization fails before core start, capabilities reflect actual hosts, scan
@@ -762,7 +762,7 @@ peripheral/address hints to Rust, connection observation completes on destroy,
 status uses the shared decoder, cancellation stops scan, and destroy closes JNI,
 HandlerThread, dispatcher, registrations, and observers exactly once.
 
-- [ ] **Step 2: Run public API tests and verify RED**
+- [x] **Step 2: Run public API tests and verify RED**
 
 Run:
 
@@ -772,7 +772,7 @@ platforms/android/gradlew -p platforms/android :sdk:testDebugUnitTest --tests '*
 
 Expected: FAIL because the public client and manager do not exist.
 
-- [ ] **Step 3: Implement the public connection facade**
+- [x] **Step 3: Implement the public connection facade**
 
 `BotaConfiguration` requires an application `Context` and optional injected
 material/network/file policies; it retains only `applicationContext`. Public
@@ -781,7 +781,7 @@ original core cancellation ID and delegates manual/reconnect policy to Rust.
 It publishes a `ConnectedDevice` only after exact serial verification, never
 selects by display name, and routes status bytes through `CoreModelMapper`.
 
-- [ ] **Step 4: Run focused and shared connection gates**
+- [x] **Step 4: Run focused and shared connection gates**
 
 Run:
 
@@ -793,7 +793,7 @@ cargo test -p bota-device-sdk-core --test connection_workflow
 Expected: Kotlin lifecycle and public connection behavior follow the canonical
 reducer.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ARCHITECTURE.md platforms/android

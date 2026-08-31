@@ -10,6 +10,7 @@ internal object BotaBluetoothUUIDs {
 
     val AudioService: UUID = botaUuid(0x0001, 0x0000)
     val ControlService: UUID = botaUuid(0x0002, 0x0000)
+    val DeviceStatus: UUID = botaUuid(0x0002, 0x0001)
     val ProvisioningService: UUID = botaUuid(0x0003, 0x0000)
     val StorageService: UUID = botaUuid(0x0004, 0x0000)
     val AuthService: UUID = botaUuid(0x0005, 0x0000)
