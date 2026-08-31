@@ -898,14 +898,16 @@ nonce-bound workflow. Authenticated factory reset now uses the same one-shot
 request ownership while binding every grant and completion to the backend
 command ID and binding generation. Apple and Android decode the
 application-provided grant natively, and React Native resume delegates only to
-exact-generation receipt recovery. Recording list and transfer now delegate to
-the native facades as well: metadata and progress cross Codegen, while audio
-remains in a native file represented to JavaScript by its path. A real CocoaPods application compiles and
+exact-generation receipt recovery. Recording list, transfer, and upload
+ownership now delegate to the native facades as well: metadata, progress,
+opaque upload identifiers, and the terminal ownership decision cross Codegen,
+while audio remains in a native file represented to JavaScript by its path and
+upload destinations remain native. A real CocoaPods application compiles and
 links the generated typed event spec,
 Objective-C++, Swift, Swift Package, and Rust XCFramework layers. The Android
 adapters provide the same lifecycle, connection, status, provisioning,
-authenticated-reset, and recording-transfer slices through the public Android
-facade, and a checked-in React Native Gradle
+authenticated-reset, recording-transfer, and upload-ownership slices through
+the public Android facade, and a checked-in React Native Gradle
 consumer runs Codegen, Kotlin tests,
 lint, and release assembly against the exact packaged AAR. The
 package now matches all 75 frozen non-workflow exports, including every public

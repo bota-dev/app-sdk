@@ -177,6 +177,36 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
                 }];
 }
 
+- (void)observeUploadOwnership:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                       request:(JS::NativeBotaDeviceSDK::NativeUploadOwnershipRequest &)request
+                       resolve:(RCTPromiseResolveBlock)resolve
+                        reject:(RCTPromiseRejectBlock)reject
+{
+  __weak BotaDeviceSDK *weakSelf = self;
+  [[BotaDeviceSDKAppleBridge shared]
+      observeUploadOwnershipWithID:device.id_()
+                      serialNumber:device.serialNumber()
+                        deviceType:device.deviceType()
+                   firmwareVersion:device.firmwareVersion()
+                   hardwareRevision:device.hardwareRevision()
+                     isProvisioned:device.isProvisioned()
+                   connectionState:device.connectionState()
+                               mtu:device.mtu()
+                     recordingUUID:request.recordingUuid()
+                          uploadID:request.uploadId()
+                     destinationID:request.destinationId()
+                        onProgress:^(NSDictionary *progress) {
+                          [weakSelf emitOnUploadOwnershipProgress:progress];
+                        }
+                        completion:^(NSDictionary *_Nullable result, NSError *_Nullable error) {
+                          if (error != nil) {
+                            BotaRejectAppleError(error, reject);
+                            return;
+                          }
+                          resolve(result);
+                        }];
+}
+
 - (void)readStatus:(RCTPromiseResolveBlock)resolve
              reject:(RCTPromiseRejectBlock)reject
 {

@@ -60,6 +60,7 @@ function nativeFixture() {
   let provisioningHandler = null;
   let factoryResetHandler = null;
   let recordingProgressHandler = null;
+  let uploadOwnershipProgressHandler = null;
   let provisioningResolve = null;
   let provisioningReject = null;
   let factoryResetResolve = null;
@@ -123,6 +124,14 @@ function nativeFixture() {
         return {
           remove() {
             recordingProgressHandler = null;
+          },
+        };
+      },
+      onUploadOwnershipProgress(handler) {
+        uploadOwnershipProgressHandler = handler;
+        return {
+          remove() {
+            uploadOwnershipProgressHandler = null;
           },
         };
       },
@@ -230,6 +239,19 @@ function nativeFixture() {
         calls.push(['syncRecording', device, recording]);
         recordingProgressHandler?.({ completedUnits: 24_000, totalUnits: 48_000 });
         return '/tmp/bota-recordings/recording-1.ogg';
+      },
+      async observeUploadOwnership(device, request) {
+        calls.push(['observeUploadOwnership', device, request]);
+        uploadOwnershipProgressHandler?.({
+          completedUnits: 32_000,
+          totalUnits: 48_000,
+        });
+        return {
+          kind: 'bluetooth_fallback',
+          recordingUuid: request.recordingUuid,
+          uploadId: request.uploadId,
+          destinationId: request.destinationId,
+        };
       },
     },
   };
@@ -497,5 +519,33 @@ test('recording list and sync preserve metadata, progress, and native file owner
         isEncrypted: true,
       },
     ],
+  ]);
+});
+
+test('upload ownership exposes only the native decision and low-volume progress', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+  const progress = [];
+  const request = {
+    recordingUuid: 'recording-1',
+    uploadId: 'upload-1',
+    destinationId: 'destination-1',
+  };
+
+  const result = await client.recordings.observeUploadOwnership(
+    connected,
+    request,
+    (value) => progress.push(value)
+  );
+
+  assert.deepEqual(result, {
+    kind: 'bluetooth_fallback',
+    recordingUuid: 'recording-1',
+    uploadId: 'upload-1',
+    destinationId: 'destination-1',
+  });
+  assert.deepEqual(progress, [{ completedBytes: 32_000, totalBytes: 48_000 }]);
+  assert.deepEqual(fixture.calls, [
+    ['observeUploadOwnership', connected, request],
   ]);
 });

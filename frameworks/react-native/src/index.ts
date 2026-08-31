@@ -25,6 +25,8 @@ export type {
   BotaProvisioningMaterialProvider,
   BotaProvisioningMaterialRequest,
   BotaRecordingTransferProgress,
+  BotaUploadOwnershipRequest,
+  BotaUploadOwnershipResult,
 } from './client';
 
 export const BotaDeviceSDK = createBotaDeviceSDK(NativeBotaDeviceSDK);

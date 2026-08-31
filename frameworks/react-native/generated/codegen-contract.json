@@ -635,6 +635,65 @@
                 }
               }
             ]
+          },
+          "NativeUploadOwnershipRequest": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "recordingUuid",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "uploadId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "destinationId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeUploadOwnershipResult": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "kind",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "recordingUuid",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "uploadId",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "destinationId",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
           }
         },
         "enumMap": {},
@@ -686,6 +745,17 @@
             },
             {
               "name": "onRecordingTransferProgress",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeRecordingTransferProgress"
+                }
+              }
+            },
+            {
+              "name": "onUploadOwnershipProgress",
               "optional": false,
               "typeAnnotation": {
                 "type": "EventEmitterTypeAnnotation",
@@ -884,6 +954,38 @@
                     "typeAnnotation": {
                       "type": "TypeAliasTypeAnnotation",
                       "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "observeUploadOwnership",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeUploadOwnershipResult"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "request",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeUploadOwnershipRequest"
                     }
                   }
                 ]
@@ -1192,11 +1294,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "17a08ee76f8fc58f09406092f776d4a0f75b478db659d07637030e1b61634ece"
+        "sha256": "dd568e03c1514fdd3fb2f8c7db0656f4ecec2750297ec40866d95ee926ddde46"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "42caa622f60f61ae91ecbb010959c617307c9d23de293e76e21b7b2643c8944c"
+        "sha256": "5fc70af2a5f7750719aefcac4b67db47605b9ab7bcf788490a2e353eb959ca40"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -1208,23 +1310,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "a9a4e77d9b3b5e8b1f883e12386160aa7b2ea12b34ae38309c716d8ca8955100"
+        "sha256": "be18bd2e846e37891759970e2a8d473221e7deeb51c93d933ce3c43594f407f8"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "aa4658e11180a0962fbd58c1495099c20ed4f881c3e3a822b12cdec0de7891ba"
+        "sha256": "60a2221f269b2ea9fb8fa9ea42b1186f312d1a3842ecb163acd21b2915eb14a8"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "66d9207ca8bae57c4fe16712d10fce5593d286271ee7eeb08e9c91429c5acb53"
+        "sha256": "0d823e0e50d491279aed87d912728d0a5a1a154f667902d51b0de04eb23bb0d2"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "a9a4e77d9b3b5e8b1f883e12386160aa7b2ea12b34ae38309c716d8ca8955100"
+        "sha256": "be18bd2e846e37891759970e2a8d473221e7deeb51c93d933ce3c43594f407f8"
       }
     ]
   },
-  "contractDigest": "5c30c992e98bcf69f4b84c959dfb8b651542dc25d4414c8fd8a759a990dd37cb"
+  "contractDigest": "b7434a164a7a4d7ba848d64b84603bf7eb77fd8208da0a78dbcd90b376d1d5ce"
 }

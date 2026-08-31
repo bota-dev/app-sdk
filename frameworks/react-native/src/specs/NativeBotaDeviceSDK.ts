@@ -123,12 +123,26 @@ export type NativeRecordingTransferProgress = {
   totalUnits: number;
 };
 
+export type NativeUploadOwnershipRequest = {
+  recordingUuid: string;
+  uploadId: string;
+  destinationId: string;
+};
+
+export type NativeUploadOwnershipResult = {
+  kind: string;
+  recordingUuid?: string;
+  uploadId?: string;
+  destinationId?: string;
+};
+
 export interface Spec extends TurboModule {
   readonly onDeviceDiscovered: EventEmitter<NativeDiscoveredDevice>;
   readonly onDeviceStatusUpdated: EventEmitter<NativeDeviceStatus>;
   readonly onProvisioningMaterialRequested: EventEmitter<NativeProvisioningMaterialRequest>;
   readonly onFactoryResetGrantRequested: EventEmitter<NativeFactoryResetGrantRequest>;
   readonly onRecordingTransferProgress: EventEmitter<NativeRecordingTransferProgress>;
+  readonly onUploadOwnershipProgress: EventEmitter<NativeRecordingTransferProgress>;
   configure: (configuration: NativeConfiguration) => Promise<void>;
   connectSelected: (
     device: NativeDiscoveredDevice
@@ -146,6 +160,10 @@ export interface Spec extends TurboModule {
   listRecordings: (
     device: NativeConnectedDevice
   ) => Promise<ReadonlyArray<NativeDeviceRecording>>;
+  observeUploadOwnership: (
+    device: NativeConnectedDevice,
+    request: NativeUploadOwnershipRequest
+  ) => Promise<NativeUploadOwnershipResult>;
   reconnect: (
     serialNumber: string,
     options: NativeReconnectOptions

@@ -45,6 +45,51 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
         let cancelled = await client.wasCancelled()
         XCTAssertTrue(cancelled)
     }
+
+    func testUploadOwnershipReturnsNativeFallbackDecisionAndProgress() async throws {
+        let connected = ConnectedDevice(
+            id: "selected",
+            serialNumber: "EVFXXW67KP",
+            deviceType: .botaPin,
+            firmwareVersion: "1.0.11",
+            isProvisioned: true,
+            connectionState: .connected,
+            mtu: 247
+        )
+        let client = TestAppleRecordingClient(recording: DeviceRecording(
+            uuid: "recording-1",
+            startedAt: Date(timeIntervalSince1970: 1_788_200_000),
+            durationMs: 12_000,
+            fileSizeBytes: 48_000,
+            codec: .known(.opus16k),
+            isEncrypted: true
+        ))
+        let recordings = BotaDeviceSDKAppleRecordings(client: client)
+        let progress = RecordingProgressCapture()
+
+        let result = try await recordings.observeUploadOwnership(
+            connected,
+            recordingUUID: "recording-1",
+            uploadID: "upload-1",
+            destinationID: "destination-1"
+        ) { value in
+            Task { await progress.append(value) }
+        }
+
+        XCTAssertEqual(
+            result,
+            .bluetoothFallback(
+                recordingUUID: "recording-1",
+                uploadID: "upload-1",
+                destinationID: "destination-1"
+            )
+        )
+        let progressSnapshot = await progress.snapshot()
+        XCTAssertEqual(
+            progressSnapshot,
+            [.init(completedBytes: 32_000, totalBytes: 48_000)]
+        )
+    }
 }
 
 private actor RecordingProgressCapture {
@@ -78,6 +123,23 @@ private actor TestAppleRecordingClient: BotaDeviceSDKAppleRecordingClient {
         let pair = AsyncThrowingStream<RecordingSyncEvent, Error>.makeStream()
         pair.continuation.yield(.progress(.init(completedBytes: 24_000, totalBytes: 48_000)))
         pair.continuation.yield(.completed(URL(fileURLWithPath: "/tmp/bota-recordings/recording-1.ogg")))
+        pair.continuation.finish()
+        return pair.stream
+    }
+
+    func observeUploadOwnership(
+        _ device: ConnectedDevice,
+        recordingUUID: String,
+        uploadID: String,
+        destinationID: String
+    ) async throws -> AsyncThrowingStream<UploadOwnershipEvent, Error> {
+        let pair = AsyncThrowingStream<UploadOwnershipEvent, Error>.makeStream()
+        pair.continuation.yield(.progress(.init(completedBytes: 32_000, totalBytes: 48_000)))
+        pair.continuation.yield(.result(.bluetoothFallback(
+            recordingUUID: recordingUUID,
+            uploadID: uploadID,
+            destinationID: destinationID
+        )))
         pair.continuation.finish()
         return pair.stream
     }

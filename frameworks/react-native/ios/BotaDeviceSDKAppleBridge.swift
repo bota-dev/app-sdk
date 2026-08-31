@@ -250,6 +250,51 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
+    @objc(observeUploadOwnershipWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:recordingUUID:uploadID:destinationID:onProgress:completion:)
+    public func observeUploadOwnership(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        recordingUUID: String,
+        uploadID: String,
+        destinationID: String,
+        onProgress: @escaping @Sendable ([String: Any]) -> Void,
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let result = try await recordings.observeUploadOwnership(
+                    Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    ),
+                    recordingUUID: recordingUUID,
+                    uploadID: uploadID,
+                    destinationID: destinationID
+                ) { progress in
+                    onProgress([
+                        "completedUnits": progress.completedBytes,
+                        "totalUnits": progress.totalBytes,
+                    ])
+                }
+                completion(Self.uploadOwnershipResult(result), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
     @objc(readStatusWithCompletion:)
     public func readStatus(
         completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
@@ -560,6 +605,25 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
             "codec": audioCodec(recording.codec),
             "isEncrypted": recording.isEncrypted,
         ]
+    }
+
+    private static func uploadOwnershipResult(_ result: UploadOwnershipResult) -> [String: Any] {
+        switch result {
+        case .deviceUploadCompleted:
+            ["kind": "device_upload_completed"]
+        case let .deviceUploadPreserved(uploadID):
+            [
+                "kind": "device_upload_preserved",
+                "uploadId": uploadID,
+            ]
+        case let .bluetoothFallback(recordingUUID, uploadID, destinationID):
+            [
+                "kind": "bluetooth_fallback",
+                "recordingUuid": recordingUUID,
+                "uploadId": uploadID,
+                "destinationId": destinationID,
+            ]
+        }
     }
 
     private static func audioCodec(_ codec: WireValue<AudioCodec>) -> String {

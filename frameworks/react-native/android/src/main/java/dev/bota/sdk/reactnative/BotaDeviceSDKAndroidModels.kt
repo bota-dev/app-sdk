@@ -3,6 +3,7 @@ package dev.bota.sdk.reactnative
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableMap
+import dev.bota.sdk.UploadOwnershipResult
 import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.model.ConnectionState
 import dev.bota.sdk.model.AudioCodec
@@ -96,6 +97,24 @@ internal fun DeviceRecording.toWritableMap(): WritableMap = Arguments.createMap(
 internal fun RecordingTransferProgress.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putDouble("completedUnits", completedBytes.toDouble())
     putDouble("totalUnits", totalBytes.toDouble())
+}
+
+internal fun UploadOwnershipResult.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    when (this@toWritableMap) {
+        UploadOwnershipResult.DeviceUploadCompleted -> {
+            putString("kind", "device_upload_completed")
+        }
+        is UploadOwnershipResult.DeviceUploadPreserved -> {
+            putString("kind", "device_upload_preserved")
+            putString("uploadId", uploadId)
+        }
+        is UploadOwnershipResult.BluetoothFallback -> {
+            putString("kind", "bluetooth_fallback")
+            putString("recordingUuid", recordingUuid)
+            putString("uploadId", uploadId)
+            putString("destinationId", destinationId)
+        }
+    }
 }
 
 internal fun DeviceStatus.toWritableMap(): WritableMap = Arguments.createMap().apply {

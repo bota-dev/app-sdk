@@ -17,6 +17,7 @@ test('Codegen contract freezes the lifecycle module identity and methods', () =>
   assert.match(source, /readonly onProvisioningMaterialRequested:\s*EventEmitter/);
   assert.match(source, /readonly onFactoryResetGrantRequested:\s*EventEmitter/);
   assert.match(source, /readonly onRecordingTransferProgress:\s*EventEmitter/);
+  assert.match(source, /readonly onUploadOwnershipProgress:\s*EventEmitter/);
   assert.match(source, /startScan:\s*\(/);
   assert.match(source, /stopScan:\s*\(/);
   assert.match(source, /connectSelected:\s*\(/);
@@ -30,6 +31,7 @@ test('Codegen contract freezes the lifecycle module identity and methods', () =>
   assert.match(source, /resolveFactoryResetGrant:\s*\(/);
   assert.match(source, /listRecordings:\s*\(/);
   assert.match(source, /syncRecording:\s*\(/);
+  assert.match(source, /observeUploadOwnership:\s*\(/);
   assert.match(source, /rejectApplicationMaterial:\s*\(/);
   assert.match(source, /readStatus:\s*\(/);
   assert.match(source, /startStatusUpdates:\s*\(/);
@@ -51,6 +53,7 @@ test('package root exports the React Native device facade types', () => {
   assert.match(source, /BotaDeviceSDKProvisioningClient/);
   assert.match(source, /BotaDeviceSDKFactoryResetClient/);
   assert.match(source, /BotaDeviceSDKRecordingClient/);
+  assert.match(source, /BotaUploadOwnershipResult/);
   assert.match(source, /BotaEventSubscription/);
   assert.match(source, /BotaAsyncEventSubscription/);
   assert.match(source, /BotaProvisioningMaterialProvider/);

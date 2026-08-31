@@ -9,6 +9,7 @@ import type {
   NativeFactoryResetGrantRequest,
   NativeRecordingTransferProgress,
   NativeProvisioningMaterialRequest,
+  NativeUploadOwnershipResult,
   Spec,
 } from './specs/NativeBotaDeviceSDK';
 import type {
@@ -105,6 +106,22 @@ export type BotaRecordingTransferProgress = {
   totalBytes: number;
 };
 
+export type BotaUploadOwnershipRequest = {
+  recordingUuid: string;
+  uploadId: string;
+  destinationId: string;
+};
+
+export type BotaUploadOwnershipResult =
+  | { kind: 'device_upload_completed' }
+  | { kind: 'device_upload_preserved'; uploadId: string }
+  | {
+      kind: 'bluetooth_fallback';
+      recordingUuid: string;
+      uploadId: string;
+      destinationId: string;
+    };
+
 export type BotaDeviceSDKRecordingClient = {
   listRecordings(device: ConnectedDevice): Promise<DeviceRecording[]>;
   syncRecording(
@@ -112,6 +129,11 @@ export type BotaDeviceSDKRecordingClient = {
     recording: DeviceRecording,
     onProgress?: (progress: BotaRecordingTransferProgress) => void
   ): Promise<string>;
+  observeUploadOwnership(
+    device: ConnectedDevice,
+    request: BotaUploadOwnershipRequest,
+    onProgress?: (progress: BotaRecordingTransferProgress) => void
+  ): Promise<BotaUploadOwnershipResult>;
 };
 
 export type BotaDeviceSDKDeviceClient = {
@@ -270,6 +292,45 @@ const mapRecordingProgress = (
   completedBytes: progress.completedUnits,
   totalBytes: progress.totalUnits,
 });
+
+const requiredUploadOwnershipField = (
+  value: string | undefined,
+  field: string
+): string => {
+  if (value === undefined) {
+    throw new Error(`native upload ownership result is missing ${field}`);
+  }
+  return value;
+};
+
+const mapUploadOwnershipResult = (
+  result: NativeUploadOwnershipResult
+): BotaUploadOwnershipResult => {
+  switch (result.kind) {
+    case 'device_upload_completed':
+      return { kind: 'device_upload_completed' };
+    case 'device_upload_preserved':
+      return {
+        kind: 'device_upload_preserved',
+        uploadId: requiredUploadOwnershipField(result.uploadId, 'uploadId'),
+      };
+    case 'bluetooth_fallback':
+      return {
+        kind: 'bluetooth_fallback',
+        recordingUuid: requiredUploadOwnershipField(
+          result.recordingUuid,
+          'recordingUuid'
+        ),
+        uploadId: requiredUploadOwnershipField(result.uploadId, 'uploadId'),
+        destinationId: requiredUploadOwnershipField(
+          result.destinationId,
+          'destinationId'
+        ),
+      };
+    default:
+      throw new Error(`unsupported native upload ownership result: ${result.kind}`);
+  }
+};
 
 export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKClient => {
   const requireNativeModule = (): Spec => {
@@ -437,6 +498,23 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
         return await module.syncRecording(
           toNativeConnectedDevice(device),
           toNativeRecording(recording)
+        );
+      } finally {
+        subscription.remove();
+      }
+    },
+
+    async observeUploadOwnership(device, request, onProgress) {
+      const module = requireNativeModule();
+      const subscription = module.onUploadOwnershipProgress((progress) => {
+        onProgress?.(mapRecordingProgress(progress));
+      });
+      try {
+        return mapUploadOwnershipResult(
+          await module.observeUploadOwnership(
+            toNativeConnectedDevice(device),
+            request
+          )
         );
       } finally {
         subscription.remove();

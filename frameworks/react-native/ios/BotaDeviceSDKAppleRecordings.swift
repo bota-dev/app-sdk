@@ -7,6 +7,12 @@ protocol BotaDeviceSDKAppleRecordingClient: Sendable {
         _ device: ConnectedDevice,
         recording: DeviceRecording
     ) async throws -> AsyncThrowingStream<RecordingSyncEvent, Error>
+    func observeUploadOwnership(
+        _ device: ConnectedDevice,
+        recordingUUID: String,
+        uploadID: String,
+        destinationID: String
+    ) async throws -> AsyncThrowingStream<UploadOwnershipEvent, Error>
     func cancelCurrentOperation() async throws
 }
 
@@ -28,6 +34,20 @@ struct BotaDeviceSDKSharedAppleRecordingClient: BotaDeviceSDKAppleRecordingClien
         try await recordings.syncRecording(device, recording: recording)
     }
 
+    func observeUploadOwnership(
+        _ device: ConnectedDevice,
+        recordingUUID: String,
+        uploadID: String,
+        destinationID: String
+    ) async throws -> AsyncThrowingStream<UploadOwnershipEvent, Error> {
+        try await recordings.observeUploadOwnership(
+            device,
+            recordingUUID: recordingUUID,
+            uploadID: uploadID,
+            destinationID: destinationID
+        )
+    }
+
     func cancelCurrentOperation() async throws {
         try await recordings.cancelCurrentOperation()
     }
@@ -36,9 +56,15 @@ struct BotaDeviceSDKSharedAppleRecordingClient: BotaDeviceSDKAppleRecordingClien
 actor BotaDeviceSDKAppleRecordings {
     private enum RecordingError: LocalizedError {
         case missingNativeFile
+        case missingUploadOwnershipResult
 
         var errorDescription: String? {
-            "recording transfer completed without a native file"
+            switch self {
+            case .missingNativeFile:
+                "recording transfer completed without a native file"
+            case .missingUploadOwnershipResult:
+                "upload ownership completed without a result"
+            }
         }
     }
 
@@ -72,6 +98,32 @@ actor BotaDeviceSDKAppleRecordings {
         }
         guard let path else { throw RecordingError.missingNativeFile }
         return path
+    }
+
+    func observeUploadOwnership(
+        _ device: ConnectedDevice,
+        recordingUUID: String,
+        uploadID: String,
+        destinationID: String,
+        onProgress: @escaping @Sendable (RecordingTransferProgress) -> Void
+    ) async throws -> UploadOwnershipResult {
+        let events = try await client.observeUploadOwnership(
+            device,
+            recordingUUID: recordingUUID,
+            uploadID: uploadID,
+            destinationID: destinationID
+        )
+        var result: UploadOwnershipResult?
+        for try await event in events {
+            switch event {
+            case let .progress(progress):
+                onProgress(progress)
+            case let .result(value):
+                result = value
+            }
+        }
+        guard let result else { throw RecordingError.missingUploadOwnershipResult }
+        return result
     }
 
     func cancelAll() async {

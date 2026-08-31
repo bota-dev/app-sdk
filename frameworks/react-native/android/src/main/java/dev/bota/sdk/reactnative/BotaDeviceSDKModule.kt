@@ -104,6 +104,25 @@ internal class BotaDeviceSDKModule(
         }
     }
 
+    override fun observeUploadOwnership(
+        device: ReadableMap,
+        request: ReadableMap,
+        promise: Promise,
+    ) {
+        launchValue(promise) {
+            recordings.observeUploadOwnership(
+                device = device.toConnectedDevice(),
+                recordingUuid = request.getString("recordingUuid")
+                    ?: error("recording UUID is required"),
+                uploadId = request.getString("uploadId") ?: error("upload ID is required"),
+                destinationId = request.getString("destinationId")
+                    ?: error("destination ID is required"),
+            ) {
+                emitOnUploadOwnershipProgress(it.toWritableMap())
+            }.toWritableMap()
+        }
+    }
+
     override fun readStatus(promise: Promise) {
         launchValue(promise) { devices.readStatus().toWritableMap() }
     }
