@@ -77,6 +77,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Keep React Native lifecycle serialization in the Swift actor. Concurrent
   configure calls coalesce, destroy waits for an in-flight configure, and the
   Objective-C++ layer only translates generated-spec promises.
+- Keep React Native Android lifecycle serialization in
+  `BotaDeviceSDKAndroidLifecycle`. Its mutex orders configure and destroy,
+  retries a failed configure, and delegates only to `BotaDeviceClient.shared`;
+  the generated-spec module translates maps and promises without calling JNI.
 - The Android build foundation uses JDK 17, Gradle 8.13, AGP 8.13.2, Kotlin
   2.1.20, API 26 minimum with API 36 compile/lint/test targets, NDK
   28.2.13676358, CMake 3.22.1, and Maven Publish Plugin 0.35.0.
@@ -111,10 +115,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `@bota.dev/app-sdk-workspace`; nested React Native verification must not be
   required to install root-only ZIP and XML tooling.
 - Android CI packages once, reconstructs `target/android-m2` from that exact
-  `target/android-release` payload, and passes the immutable repository through
-  the API 26 x86 and API 35 x86_64 emulator lanes. `test-emulator-lane.sh` owns
-  AVD creation, boot readiness, fresh installs, animation settings, shutdown,
-  and deletion. Do not cache AVD state or put signing material in ordinary CI.
+  `target/android-release` payload, passes the immutable repository through the
+  React Native Codegen/Kotlin consumer, then runs the API 26 x86 and API 35
+  x86_64 emulator lanes. `test-emulator-lane.sh` owns AVD creation, boot
+  readiness, fresh installs, animation settings, shutdown, and deletion. Do not
+  cache AVD state or put signing material in ordinary CI.
 - The protected `v1.1.0` publication uses only
   `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
   `SIGNING_IN_MEMORY_KEY`, and `SIGNING_IN_MEMORY_KEY_PASSWORD`. Persist the

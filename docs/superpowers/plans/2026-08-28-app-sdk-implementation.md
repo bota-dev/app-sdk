@@ -890,9 +890,12 @@ artifact digests. Optional lookup prevents import-time failure before a native
 rebuild, while invocation fails as `native_module_unavailable`. The Apple
 lifecycle adapter now serializes configure and destroy through `BotaAppleSDK`,
 and a real CocoaPods application compiles and links the generated spec,
-Objective-C++, Swift, Swift Package, and Rust XCFramework layers. The remaining
-Apple workflow bindings, Android facade and adapter, complete 0.0.65
-compatibility layer, app acceptance, and publication gates remain open.
+Objective-C++, Swift, Swift Package, and Rust XCFramework layers. The Android
+lifecycle adapter now serializes configure and destroy through the public
+Android facade, and a checked-in React Native Gradle consumer runs Codegen,
+Kotlin tests, lint, and release assembly against the exact packaged AAR. The
+remaining React Native workflow bindings, complete 0.0.65 compatibility layer,
+app acceptance, and publication gates remain open.
 High-volume recording and firmware bytes stay native and are rejected from the
 Codegen contract.
 

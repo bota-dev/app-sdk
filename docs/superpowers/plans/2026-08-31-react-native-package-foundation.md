@@ -108,13 +108,15 @@
 - The checked bridge contract cannot carry recording or firmware payload bytes.
 - Generated Codegen review artifacts are deterministic and CI rejects drift.
 - Root and nested license, tooling, Rust, and package checks pass.
-- Remaining Apple workflow bindings, Android facade and adapter implementation,
-  0.0.65 API compatibility, app migration, and npm publication remain open.
+- Remaining React Native workflow bindings over both native facades, 0.0.65 API
+  compatibility, app migration, and npm publication remain open.
 
 ## Follow-On Status
 
-As of 2026-08-31, the Apple lifecycle portion of the native adapter is complete:
-configure, destroy, state, and capabilities call `BotaAppleSDK` through a
-serialized Swift actor and pass a full CocoaPods application compile-and-link
-gate. Remaining Apple workflow bindings, the Android facade and adapter, the
-0.0.65 compatibility layer, app migration, and npm publication are still open.
+As of 2026-08-31, both lifecycle adapters are complete. Apple configure,
+destroy, state, and capabilities call `BotaAppleSDK` through a serialized Swift
+actor and pass a full CocoaPods application compile-and-link gate. Android
+delegates the same lifecycle surface to `BotaDeviceClient.shared` through a
+mutex and passes a checked-in Codegen, Kotlin-test, lint, and release-assembly
+consumer against the packaged AAR. React Native workflow bindings, the 0.0.65
+compatibility layer, app migration, and npm publication are still open.

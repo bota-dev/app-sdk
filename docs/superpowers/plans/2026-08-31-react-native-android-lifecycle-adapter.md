@@ -101,10 +101,10 @@
 - Consumes: passing JavaScript, Codegen, Kotlin, Gradle, packaged-AAR, Apple adapter, native facade, license, and baseline gates.
 - Produces: accurate status marking only lifecycle adapters complete while leaving workflow bindings, full `0.0.65` compatibility, app rollout, and npm publication open.
 
-- [ ] **Step 1: Search the full documentation surface** for `frameworks/react-native`, `BotaDeviceSDK`, `BotaDeviceClient`, `TurboModule`, `0.0.65`, and `Android adapter`; update every relevant status statement.
-- [ ] **Step 2: Run the complete applicable gate:** root tooling/release/license tests, nested package verification, Swift lifecycle tests, Android adapter consumer, frozen `0.0.65` workflow/API comparison, Rust format/lint/tests, native ABI smoke, and `git diff --check`.
-- [ ] **Step 3: Verify generated and release artifacts leave no tracked diff** and the worktree contains only intentional documentation/status updates.
-- [ ] **Step 4: Mark this plan complete and commit** with `docs(react-native): record Android lifecycle acceptance` and the required Codex trailer.
+- [x] **Step 1: Search the full documentation surface** for `frameworks/react-native`, `BotaDeviceSDK`, `BotaDeviceClient`, `TurboModule`, `0.0.65`, and `Android adapter`; update every relevant status statement.
+- [x] **Step 2: Run the complete applicable gate:** root tooling/release/license tests, nested package verification, Swift lifecycle tests, Android adapter consumer, frozen `0.0.65` workflow/API comparison, Rust format/lint/tests, native ABI smoke, and `git diff --check`.
+- [x] **Step 3: Verify generated and release artifacts leave no tracked diff** and the worktree contains only intentional documentation/status updates.
+- [x] **Step 4: Mark this plan complete and commit** with `docs(react-native): record Android lifecycle acceptance` and the required Codex trailer.
 - [ ] **Step 5: Push `main` and require CI plus License Gate success** before beginning complete workflow/API compatibility or switching an application.
 
 ## Exit Criteria

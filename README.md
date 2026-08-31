@@ -30,10 +30,12 @@ rejects Codegen drift or bridge fields that could carry recording or firmware
 bytes. Its Apple lifecycle adapter now serializes configuration and destruction
 through `BotaAppleSDK`, and a disposable CocoaPods application proves that the
 generated TurboModule, Objective-C++, Swift, Swift Package, and Rust
-XCFramework layers compile and link together. It is not an installable
-replacement yet: the remaining Apple workflow bindings, Android facade and
-adapter, complete 0.0.65 compatibility surface, app acceptance, and npm
-publication remain open.
+XCFramework layers compile and link together. Its Android lifecycle adapter now
+serializes configuration and destruction through `BotaDeviceClient.shared`; a
+checked-in React Native Gradle consumer runs Codegen, Kotlin tests, lint, and
+release assembly against the exact locally packaged AAR. It is not an
+installable replacement yet: React Native workflow bindings, the complete
+0.0.65 compatibility surface, app acceptance, and npm publication remain open.
 The Android package foundation now pins JDK 17, Gradle 8.13, Android Gradle
 Plugin 8.13.2, Kotlin 2.1.20, API 26/36, NDK 28.2.13676358, and CMake 3.22.1.
 It produces a version-synchronized, unsigned local AAR with sources, Dokka
@@ -71,9 +73,10 @@ source, already-compiled bytecode, API 26, and API 35 consumer gates pass. New
 applications resolve only `dev.bota:bota-android-sdk` and must not package the
 old AAR beside it. See [Android SDK migration](docs/migration/android.md).
 The release coordinator has accepted the Apple and Android physical-device
-matrix for the `1.1.0` candidate. Maven Central publication, remote Android
-consumer verification, and the React Native Android adapter remain open until
-the protected release workflow records them.
+matrix for the `1.1.0` candidate, and the local React Native Android lifecycle
+consumer passes against the immutable AAR. Maven Central publication and
+remote Android consumer verification remain open until the protected release
+workflow records them.
 Ordinary CI builds one deterministic Android release payload and
 runs that exact AAR through API 26 x86 and API 35 x86_64 instrumentation,
 legacy migration, and unrelated Maven consumer lanes. The reviewed Maven
@@ -233,6 +236,12 @@ used in a published application dependency. CI selects Xcode 26.3 and Ruby
 local package after building its XCFramework from source; the tag release
 resolves the default remote package URL to the exact synchronized version after
 publishing its binary archive.
+
+On Android, the package consumes `dev.bota:bota-android-sdk` at the same
+`sdk-version.toml` version. CI reconstructs a local Maven repository from the
+immutable release payload, verifies the AAR digest, and runs the checked-in
+Codegen/Kotlin consumer with
+`tools/react-native/test-android-adapter.sh --repository target/android-m2`.
 
 The pod includes a target-scoped compatibility hook for React Native 0.86.3's
 duplicate binary Swift-package module maps on Xcode 26.3; applications do not

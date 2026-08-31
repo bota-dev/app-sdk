@@ -107,6 +107,15 @@ binary Swift-package module maps on Xcode 26.3 while the package floor remains
 0.86.3. This proves lifecycle integration, not the remaining workflow surface
 or application parity.
 
+The Android lifecycle host is also executable. A coroutine mutex serializes
+configuration and destruction through `BotaDeviceClient.shared`, and a
+`BaseReactPackage` registers the generated TurboModule with stable state,
+capability, and `android_sdk_error` behavior. A checked-in React Native 0.86.3
+Gradle consumer regenerates Codegen, runs lifecycle unit tests and lint, and
+assembles the adapter against the exact AAR reconstructed from the immutable
+local Maven payload. This proves Android lifecycle integration only; workflow
+bindings and application parity remain open.
+
 The Android migration has a native package foundation in `platforms/android`.
 `sdk-version.toml` is mirrored as `VERSION_NAME`, while release-readiness tests
 pin Gradle 8.13, Android Gradle Plugin 8.13.2, and Maven Publish Plugin 0.35.0.
@@ -177,8 +186,8 @@ to the private legacy repository.
 The clean consumer resolves only `dev.bota:bota-android-sdk`; coroutine and
 OkHttp types exposed by the public API are Maven API dependencies. The release
 coordinator accepted the native physical matrix for the synchronized `1.1.0`
-candidate. Maven Central and React Native Android runtime gates remain open
-until protected publication and remote-consumer evidence are recorded.
+candidate. The local React Native lifecycle consumer now passes against this
+AAR. Maven Central publication and public remote-consumer evidence remain open.
 
 Android release packaging has separate unsigned and protected graphs. Normal
 builds can publish only to `target/android-m2` and do not register a signing

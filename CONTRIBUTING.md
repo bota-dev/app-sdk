@@ -49,9 +49,15 @@ JAVA_HOME=/path/to/jdk-17 ANDROID_HOME="$HOME/Library/Android/sdk" \
   npm run test:android:foundation
 tools/android/package-release.sh --check
 tools/android/install-release-repository.sh target/android-release target/android-m2
+tools/react-native/test-android-adapter.sh --repository target/android-m2
 tools/android/test-emulator-lane.sh --api 26
 tools/android/test-emulator-lane.sh --api 35
 ```
+
+The React Native Android consumer also requires `npm ci` in
+`frameworks/react-native`. It checks that the repository AAR is byte-identical
+to the packaged release before running Codegen, Kotlin tests, lint, and release
+assembly.
 
 The stable compatibility gate uses an API 26 Google APIs `x86` image and an
 API 35 Google APIs `x86_64` image. Those exact images require an x86_64 host;
