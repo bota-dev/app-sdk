@@ -1,0 +1,62 @@
+{
+  "name": "@bota.dev/react-native-sdk",
+  "version": "1.0.2",
+  "private": true,
+  "description": "React Native facade for the Bota App SDK",
+  "main": "lib/commonjs/index.js",
+  "module": "lib/module/index.js",
+  "types": "lib/typescript/index.d.ts",
+  "react-native": "src/index.ts",
+  "source": "src/index.ts",
+  "files": [
+    "android/",
+    "generated/",
+    "ios/",
+    "lib/",
+    "src/"
+  ],
+  "scripts": {
+    "build": "bob build",
+    "clean": "rm -rf lib generated/build",
+    "codegen": "node scripts/verify-codegen.mjs --write",
+    "codegen:check": "node scripts/verify-codegen.mjs",
+    "license-check": "node ../../scripts/check-licenses.mjs",
+    "pretest": "npm run build",
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "verify": "node ../../tools/react-native/verify-package.mjs --workspace-root ../.. --package-root . && npm run codegen:check && npm run typecheck && npm test && npm run license-check"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bota-dev/app-sdk.git",
+    "directory": "frameworks/react-native"
+  },
+  "author": "Bota",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "react": ">=19.2.3",
+    "react-native": ">=0.86.3 <1.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.17",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-builder-bob": "0.43.0",
+    "typescript": "6.0.3"
+  },
+  "codegenConfig": {
+    "name": "BotaDeviceSDKSpec",
+    "type": "modules",
+    "jsSrcsDir": "./src/specs",
+    "android": {
+      "javaPackageName": "dev.bota.sdk.reactnative"
+    }
+  },
+  "bota": {
+    "nativeModuleName": "BotaDeviceSDK",
+    "reactNativeFloor": "0.86.3"
+  }
+}

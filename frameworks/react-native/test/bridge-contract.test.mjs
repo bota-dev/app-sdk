@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { test } from 'node:test';
+
+const root = new URL('..', import.meta.url).pathname;
+const specPath = join(root, 'src/specs/NativeBotaDeviceSDK.ts');
+
+test('Codegen contract freezes the lifecycle module identity and methods', () => {
+  const source = readFileSync(specPath, 'utf8');
+
+  assert.match(source, /interface Spec extends TurboModule/);
+  assert.match(source, /configure:\s*\(/);
+  assert.match(source, /destroy:\s*\(/);
+  assert.match(source, /getCapabilities:\s*\(/);
+  assert.match(source, /getState:\s*\(/);
+  assert.match(
+    source,
+    /TurboModuleRegistry\.get<Spec>\(['"]BotaDeviceSDK['"]\)/
+  );
+  assert.doesNotMatch(source, /getEnforcing/);
+});
+
+test('Codegen contract does not carry high-volume binary data', () => {
+  const source = readFileSync(specPath, 'utf8');
+  const forbidden = [
+    /ArrayBuffer/i,
+    /Uint8Array/i,
+    /base64/i,
+    /(?:recording|firmware)(?:Data|Payload|Bytes|Chunk)/i,
+    /(?:data|payload|bytes|chunk)\??\s*:/i,
+  ];
+
+  for (const pattern of forbidden) {
+    assert.doesNotMatch(source, pattern);
+  }
+});

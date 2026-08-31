@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 
 const FORBIDDEN = [
   'GPL',
@@ -60,10 +63,13 @@ const loadInstalledPackages = () => {
     ([path]) => path.startsWith('node_modules/')
   );
 
-  return entries.map(([path]) => {
+  return entries.flatMap(([path, lockEntry]) => {
     try {
-      return readJson(join(path, 'package.json'));
+      return [readJson(join(path, 'package.json'))];
     } catch (error) {
+      if (lockEntry.optional === true && error?.code === 'ENOENT') {
+        return [];
+      }
       throw new Error(
         `license-gate: cannot inspect ${path}; run npm ci before the license check`,
         { cause: error }
@@ -84,7 +90,9 @@ try {
     reportIndex >= 0
       ? loadReport(args[reportIndex + 1])
       : loadInstalledPackages();
-  const allowlist = readJson('scripts/check-license-allowlist.json').packages ?? {};
+  const allowlist = readJson(
+    join(scriptDirectory, 'check-license-allowlist.json')
+  ).packages ?? {};
   const violations = [];
 
   for (const pkg of packages) {

@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 1,
+  "package": "@bota.dev/react-native-sdk",
+  "packageVersion": "1.0.2",
+  "reactNativeVersion": "0.86.3",
+  "codegenLibrary": "BotaDeviceSDKSpec",
+  "nativeModule": "BotaDeviceSDK",
+  "schema": {
+    "libraryName": "BotaDeviceSDKSpec",
+    "modules": {
+      "NativeBotaDeviceSDK": {
+        "type": "NativeModule",
+        "aliasMap": {
+          "NativeCapabilities": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "backgroundReconnect",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "backgroundScan",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "bluetooth",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "nativeFileTransfer",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "platform",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeConfiguration": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "applicationSupportDirectory",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "logLevel",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          }
+        },
+        "enumMap": {},
+        "spec": {
+          "eventEmitters": [],
+          "methods": [
+            {
+              "name": "configure",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "configuration",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConfiguration"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "destroy",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": []
+              }
+            },
+            {
+              "name": "getCapabilities",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeCapabilities"
+                  }
+                },
+                "params": []
+              }
+            },
+            {
+              "name": "getState",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "StringTypeAnnotation"
+                  }
+                },
+                "params": []
+              }
+            }
+          ]
+        },
+        "moduleName": "BotaDeviceSDK"
+      }
+    }
+  },
+  "artifacts": {
+    "android": [
+      {
+        "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
+        "sha256": "4ef51a149be81e735954668457a6d9afc00d652806f48812951d3e64f7a6e984"
+      },
+      {
+        "path": "jni/BotaDeviceSDKSpec-generated.cpp",
+        "sha256": "b8489d7cdeb1fc90e84eca95bb41132fccfeffd91f447f16436ec79ac58f3763"
+      },
+      {
+        "path": "jni/BotaDeviceSDKSpec.h",
+        "sha256": "e82597a93c10fd0b8cded44c655abc919235f347879dae756545616925ab2c00"
+      },
+      {
+        "path": "jni/CMakeLists.txt",
+        "sha256": "1eaeaa13e75e391eced4ed186619bdefcb43425134733c6a510149d5dd24c0b6"
+      },
+      {
+        "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
+        "sha256": "4a76856223986778feb8b92c5479df63056751dc619c94eb16847f021ba6f866"
+      }
+    ],
+    "ios": [
+      {
+        "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
+        "sha256": "53e9a18257186800ea32d3ff5e0e5d41fa7543377a4f805bcf977d4b339a9e83"
+      },
+      {
+        "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
+        "sha256": "08287bc61534475b581ecce5280f7614c7d5ab315a805e00bf2a8910dc652dbf"
+      },
+      {
+        "path": "BotaDeviceSDKSpecJSI.h",
+        "sha256": "4a76856223986778feb8b92c5479df63056751dc619c94eb16847f021ba6f866"
+      }
+    ]
+  },
+  "contractDigest": "60645bd7bb336ca53655c72af83091eb3d454890e4e7bbd0d2444de680b4d207"
+}

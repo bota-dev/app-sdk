@@ -12,10 +12,12 @@
     "check": "npm run check:licenses",
     "check:licenses": "node scripts/check-licenses.mjs",
     "license-check": "npm run check:licenses",
+    "react-native:verify": "node tools/react-native/verify-package.mjs",
     "sync:apple-fixtures": "node tools/apple/sync-protocol-fixtures.mjs --check && node tools/apple/sync-workflow-fixtures.mjs --check",
     "test:fixtures": "node --test tools/baseline/*.test.mjs",
     "test:release": "node --test tools/release/*.test.mjs",
-    "test:tooling": "node --test scripts/*.test.mjs tools/baseline/*.test.mjs",
+    "test:react-native": "node --test tools/react-native/*.test.mjs",
+    "test:tooling": "node --test scripts/*.test.mjs tools/baseline/*.test.mjs tools/react-native/*.test.mjs",
     "test:workflows": "node tools/baseline/compare-workflows.mjs"
   },
   "devDependencies": {
