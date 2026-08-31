@@ -44,18 +44,19 @@ transport.
 
 ## Public API Vocabulary
 
-Platform facades should use ecosystem-idiomatic forms of the same concepts:
+New native facades should use ecosystem-idiomatic forms of the same concepts:
 
-- `BotaClient`
+- `BotaDeviceClient`
 - `BotaConfiguration`
 - `BotaSDKError`
 - `DeviceManager`
 - `RecordingManager`
 - `OTAManager`
 
-Exact casing and asynchronous types may vary by language. Concept names and
-behavior remain aligned through the shared capability matrix and conformance
-fixtures.
+The existing React Native `BotaClient` remains its compatibility entry point.
+Exact casing and asynchronous types may otherwise vary by language. Concept
+names and behavior remain aligned through the shared capability matrix and
+conformance fixtures.
 
 ## Internal Names
 
