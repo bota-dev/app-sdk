@@ -92,6 +92,14 @@ firmware payloads never cross the JavaScript bridge. Future workflow methods
 carry identifiers, progress, errors, and native file paths while native hosts
 own high-volume files and transfer buffers.
 
+The JavaScript compatibility layer now restores all 75 frozen exports that do
+not own a native workflow. This includes every `0.0.65` public type and the
+runtime error hierarchy, `deriveSyncStatus`, and `DeviceLogDecoder`; a semantic
+test compares each declaration with the frozen contract, and behavior tests
+cover stable errors, transport precedence, and split log packets. The five
+manager/client classes remain withheld until equivalent native-backed workflow
+methods exist, so type parity cannot be mistaken for operational parity.
+
 The Apple lifecycle host is now executable. A Swift actor coalesces concurrent
 configuration, orders destruction after any in-flight configuration, and calls
 the public `BotaDeviceClient` facade. Objective-C++ implements only the

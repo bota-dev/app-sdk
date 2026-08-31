@@ -52,6 +52,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   compatibility, app, and release gates pass, and pins React Native `0.86.3`
   for deterministic Codegen. Its package version still matches
   `sdk-version.toml`.
+- The React Native package matches the 75 frozen `0.0.65` exports that do not
+  own native workflows. Keep their structural contract test exact; the five
+  deferred runtime classes must delegate to native facades before export.
 - Keep the Codegen names `BotaDeviceSDKSpec` and `BotaDeviceSDK` frozen. Import
   uses optional TurboModule lookup; missing native code fails on invocation as
   `native_module_unavailable`, not while the JavaScript module is imported.

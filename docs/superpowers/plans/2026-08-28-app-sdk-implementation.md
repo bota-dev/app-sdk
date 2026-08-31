@@ -894,8 +894,9 @@ Objective-C++, Swift, Swift Package, and Rust XCFramework layers. The Android
 lifecycle adapter now serializes configure and destroy through the public
 Android facade, and a checked-in React Native Gradle consumer runs Codegen,
 Kotlin tests, lint, and release assembly against the exact packaged AAR. The
-remaining React Native workflow bindings, complete 0.0.65 compatibility layer,
-app acceptance, and publication gates remain open.
+package now matches all 75 frozen non-workflow exports, including every public
+type and the pure error, sync-status, and device-log runtime helpers. The five
+native workflow classes, app acceptance, and publication gates remain open.
 High-volume recording and firmware bytes stay native and are rejected from the
 Codegen contract.
 

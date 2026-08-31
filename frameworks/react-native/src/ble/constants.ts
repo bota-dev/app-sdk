@@ -1,0 +1,3 @@
+export const DEVICE_LOG_FLAG_BACKLOG = 0x01;
+export const DEVICE_LOG_FLAG_DROPPED = 0x02;
+export const BLE_ERROR_STORAGE_KEY_UNAVAILABLE = 0x14;

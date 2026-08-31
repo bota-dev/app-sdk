@@ -83,5 +83,8 @@
       "packageProduct": "BotaAppleSDK",
       "localPackagePathEnvironment": "BOTA_APPLE_SDK_PACKAGE_PATH"
     }
+  },
+  "dependencies": {
+    "buffer": "6.0.3"
   }
 }

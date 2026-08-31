@@ -118,5 +118,8 @@ destroy, state, and capabilities call `BotaAppleSDK` through a serialized Swift
 actor and pass a full CocoaPods application compile-and-link gate. Android
 delegates the same lifecycle surface to `BotaDeviceClient.shared` through a
 mutex and passes a checked-in Codegen, Kotlin-test, lint, and release-assembly
-consumer against the packaged AAR. React Native workflow bindings, the 0.0.65
-compatibility layer, app migration, and npm publication are still open.
+consumer against the packaged AAR. The package also matches the 75 frozen
+`0.0.65` exports that do not own native workflows, with runtime coverage for
+errors, sync-status derivation, and device-log decoding. `BotaClient`,
+`DeviceManager`, `RecordingManager`, `StreamingSession`, `OTAManager`, app
+migration, and npm publication are still open.

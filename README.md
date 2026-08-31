@@ -33,9 +33,12 @@ generated TurboModule, Objective-C++, Swift, Swift Package, and Rust
 XCFramework layers compile and link together. Its Android lifecycle adapter now
 serializes configuration and destruction through `BotaDeviceClient.shared`; a
 checked-in React Native Gradle consumer runs Codegen, Kotlin tests, lint, and
-release assembly against the exact locally packaged AAR. It is not an
-installable replacement yet: React Native workflow bindings, the complete
-0.0.65 compatibility surface, app acceptance, and npm publication remain open.
+release assembly against the exact locally packaged AAR. The package now
+matches 75 of the 80 frozen `0.0.65` root exports: every public type plus the
+pure errors, sync-status derivation, and device-log decoder. It is not an
+installable replacement yet: the five native workflow classes (`BotaClient`,
+`DeviceManager`, `RecordingManager`, `StreamingSession`, and `OTAManager`), app
+acceptance, and npm publication remain open.
 The Android package foundation now pins JDK 17, Gradle 8.13, Android Gradle
 Plugin 8.13.2, Kotlin 2.1.20, API 26/36, NDK 28.2.13676358, and CMake 3.22.1.
 It produces a version-synchronized, unsigned local AAR with sources, Dokka
