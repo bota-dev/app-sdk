@@ -116,8 +116,8 @@ The API compatibility lanes consume the reconstructed repository rather than
 republishing from source:
 
 ```bash
-tools/android/test-emulator-lane.sh --api 26 --legacy-path /path/to/pinned/legacy-sdk
-tools/android/test-emulator-lane.sh --api 35 --legacy-path /path/to/pinned/legacy-sdk
+tools/android/test-emulator-lane.sh --api 26
+tools/android/test-emulator-lane.sh --api 35
 ```
 
 The exact x86/x86_64 images run on Ubuntu release CI. Apple Silicon cannot run

@@ -172,6 +172,8 @@ fn android_ci_builds_once_and_verifies_both_supported_emulator_contracts() {
     let contents = fs::read_to_string(path).unwrap();
     let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
     let emulator = fs::read_to_string(root().join("tools/android/test-emulator-lane.sh")).unwrap();
+    let legacy_consumer =
+        fs::read_to_string(root().join("tools/android/test-legacy-consumer.sh")).unwrap();
 
     assert!(contents.contains("Set up JDK 17"));
     assert!(contents.contains("platforms;android-36"));
@@ -194,6 +196,7 @@ fn android_ci_builds_once_and_verifies_both_supported_emulator_contracts() {
     assert!(emulator.contains("dev.bota.sdk.internal.bluetooth.BluetoothPermissionTest"));
     assert!(emulator.contains("tools/android/test-legacy-consumer.sh"));
     assert!(emulator.contains("tools/android/test-consumer.sh"));
+    assert!(legacy_consumer.contains("verify-legacy-consumer-fixture.sh"));
     assert!(contents.contains("tools/android/package-release.sh --check"));
     assert!(contents.contains("target/android-release/"));
     assert!(contents.contains("compression-level: 0"));
@@ -202,6 +205,7 @@ fn android_ci_builds_once_and_verifies_both_supported_emulator_contracts() {
     assert!(!contents.contains("signingInMemoryKey"));
     assert!(!contents.contains("CENTRAL_"));
     assert!(!contents.contains("uploadBundle"));
+    assert!(!contents.contains("bota-mobile-sdk-android"));
 
     let android_steps = workflow["jobs"]["android-native"]["steps"]
         .as_sequence()

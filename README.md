@@ -211,8 +211,8 @@ tools/android/inspect-aar.sh platforms/android/sdk/build/outputs/aar/sdk-release
 tools/android/test-publication-graphs.sh
 tools/android/package-release.sh --check
 tools/android/install-release-repository.sh target/android-release target/android-m2
-tools/android/test-emulator-lane.sh --api 26 --legacy-path /path/to/pinned/legacy-sdk
-tools/android/test-emulator-lane.sh --api 35 --legacy-path /path/to/pinned/legacy-sdk
+tools/android/test-emulator-lane.sh --api 26
+tools/android/test-emulator-lane.sh --api 35
 ```
 
 The React Native API check expects `npm ci` to have installed the reference SDK

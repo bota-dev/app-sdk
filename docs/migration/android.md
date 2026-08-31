@@ -69,7 +69,11 @@ at runtime on API 26 and API 35.
 ```bash
 tools/android/verify-legacy-api.sh --legacy-path /path/to/pinned/legacy-sdk
 tools/android/test-legacy-consumer.sh --api 26 --mode source
-BOTA_LEGACY_ANDROID_PATH=/path/to/pinned/legacy-sdk \
-  tools/android/test-legacy-consumer.sh --api 26 --mode binary
+tools/android/test-legacy-consumer.sh --api 26 --mode binary
 tools/android/test-consumer.sh --api 26
 ```
+
+The binary lane uses a checksummed JAR containing only the frozen consumer
+bytecode compiled against the pinned legacy AAR. It does not embed or fetch the
+legacy SDK. Maintainers need the exact clean legacy checkout only to compare the
+API inventory or deliberately regenerate that fixture.

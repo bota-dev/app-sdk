@@ -49,8 +49,8 @@ JAVA_HOME=/path/to/jdk-17 ANDROID_HOME="$HOME/Library/Android/sdk" \
   npm run test:android:foundation
 tools/android/package-release.sh --check
 tools/android/install-release-repository.sh target/android-release target/android-m2
-tools/android/test-emulator-lane.sh --api 26 --legacy-path /path/to/pinned/legacy-sdk
-tools/android/test-emulator-lane.sh --api 35 --legacy-path /path/to/pinned/legacy-sdk
+tools/android/test-emulator-lane.sh --api 26
+tools/android/test-emulator-lane.sh --api 35
 ```
 
 The stable compatibility gate uses an API 26 Google APIs `x86` image and an

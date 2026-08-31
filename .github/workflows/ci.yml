@@ -118,13 +118,6 @@ jobs:
       - name: Cache Rust Android build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
 
-      - name: Check out pinned legacy Android SDK
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: bota-dev/bota-mobile-sdk-android
-          ref: 0f06d2a22c55e4976778520cce42230d23ca4226
-          path: target/legacy-android-sdk
-
       - name: Install pinned Android build tools
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
@@ -162,10 +155,10 @@ jobs:
         run: tools/android/inspect-aar.sh "target/android-release/bota-android-sdk-$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml).aar"
 
       - name: Test API 26 legacy location and consumers
-        run: tools/android/test-emulator-lane.sh --api 26 --legacy-path target/legacy-android-sdk
+        run: tools/android/test-emulator-lane.sh --api 26
 
       - name: Test API 35 Bluetooth permissions and consumers
-        run: tools/android/test-emulator-lane.sh --api 35 --legacy-path target/legacy-android-sdk
+        run: tools/android/test-emulator-lane.sh --api 35
 
       - name: Upload non-publishing Android evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

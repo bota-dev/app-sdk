@@ -3,6 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val mode = providers.gradleProperty("botaLegacyMode").orElse("source")
+val sdkVersion = providers.gradleProperty("botaSdkVersion")
+
 android {
     namespace = "dev.bota.legacy"
     compileSdk = 36
@@ -26,15 +29,17 @@ kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
+    if (mode.get() == "binary") {
+        sourceSets.getByName("main").kotlin.exclude("dev/bota/legacy/FrozenLegacyConsumer.kt")
+    }
 }
-
-val mode = providers.gradleProperty("botaLegacyMode").orElse("source")
-val sdkVersion = providers.gradleProperty("botaSdkVersion")
 
 dependencies {
     if (mode.get() == "binary") {
-        compileOnly(files(providers.gradleProperty("botaLegacyAar").get()))
+        implementation(files(providers.gradleProperty("botaLegacyConsumerJar").get()))
         runtimeOnly("dev.bota:bota-android-sdk:${sdkVersion.get()}")
+    } else if (mode.get() == "capture") {
+        compileOnly(files(providers.gradleProperty("botaLegacyAar").get()))
     } else {
         implementation("dev.bota:bota-android-sdk:${sdkVersion.get()}")
     }

@@ -219,8 +219,8 @@ the AVD:
 
 ```bash
 tools/android/install-release-repository.sh target/android-release target/android-m2
-tools/android/test-emulator-lane.sh --api 26 --legacy-path /path/to/pinned/legacy-sdk
-tools/android/test-emulator-lane.sh --api 35 --legacy-path /path/to/pinned/legacy-sdk
+tools/android/test-emulator-lane.sh --api 26
+tools/android/test-emulator-lane.sh --api 35
 ```
 
 API 26 uses `system-images;android-26;google_apis;x86`; API 35 uses
@@ -230,6 +230,15 @@ coordinates and their approved licenses are frozen in
 `protocol/baseline/android-maven-license-policy.json`; package generation and
 the license workflow require that policy, Gradle module metadata, and the SPDX
 document to match exactly.
+
+Binary migration testing uses the checksummed
+`protocol/baseline/android-legacy-consumer-0f06d2a.jar`. It contains only the
+frozen Bota consumer bytecode compiled against the pinned legacy AAR, never the
+legacy SDK itself. Normal CI verifies its revision, API-baseline digest, file
+inventory, and bytecode references without access to the private source repo.
+Maintainers regenerate it only with
+`generate-legacy-consumer-fixture.sh --legacy-path` from the exact clean pinned
+checkout.
 
 The clean Maven consumer and legacy migration consumers resolve only from that
 repository:

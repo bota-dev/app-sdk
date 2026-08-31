@@ -9,26 +9,19 @@ readonly ADB="$ANDROID_SDK/platform-tools/adb"
 
 api=""
 mode=""
-legacy_path="${BOTA_LEGACY_ANDROID_PATH:-}"
 repository=""
 while (($#)); do
   case "$1" in
     --api) api="${2:?--api requires a value}"; shift 2 ;;
     --mode) mode="${2:?--mode requires a value}"; shift 2 ;;
-    --legacy-path) legacy_path="${2:?--legacy-path requires a value}"; shift 2 ;;
     --repository) repository="${2:?--repository requires a value}"; shift 2 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 if [[ -z "$api" || ("$mode" != "source" && "$mode" != "binary") ]]; then
-  echo "Usage: test-legacy-consumer.sh --api API --mode source|binary [--legacy-path PATH]" >&2
+  echo "Usage: test-legacy-consumer.sh --api API --mode source|binary [--repository PATH]" >&2
   exit 2
 fi
-if [[ "$mode" == "binary" && -z "$legacy_path" ]]; then
-  echo "Binary mode requires --legacy-path or BOTA_LEGACY_ANDROID_PATH" >&2
-  exit 2
-fi
-
 version="$(awk -F'"' '/^version = / { print $2 }' "$ROOT/sdk-version.toml")"
 if [[ -z "$repository" ]]; then
   repository="$ROOT/target/android-m2"
@@ -39,9 +32,9 @@ test -s "$repository/dev/bota/bota-android-sdk/$version/bota-android-sdk-$versio
 
 arguments=(-PbotaSdkVersion="$version" -PbotaLegacyMode="$mode" "-PbotaSdkRepository=$repository")
 if [[ "$mode" == "binary" ]]; then
-  "$ROOT/tools/android/capture-legacy-api.sh" --legacy-path "$legacy_path" \
-    --check "$ROOT/protocol/baseline/android-sdk-0f06d2a-public-api.txt" >/dev/null
-  arguments+=("-PbotaLegacyAar=$legacy_path/sdk/build/outputs/aar/sdk-release.aar")
+  fixture="$ROOT/protocol/baseline/android-legacy-consumer-0f06d2a.jar"
+  "$ROOT/tools/android/verify-legacy-consumer-fixture.sh" "$fixture"
+  arguments+=("-PbotaLegacyConsumerJar=$fixture")
 fi
 
 "$GRADLEW" -p "$FIXTURE" --refresh-dependencies "${arguments[@]}" \

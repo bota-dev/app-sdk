@@ -10,14 +10,12 @@ readonly AVDMANAGER="$ANDROID_SDK/cmdline-tools/latest/bin/avdmanager"
 api=""
 repository="$ROOT/target/android-m2"
 release_directory="$ROOT/target/android-release"
-legacy_path="${BOTA_LEGACY_ANDROID_PATH:-}"
 public_only=false
 while (($#)); do
   case "$1" in
     --api) api="${2:?--api requires a value}"; shift 2 ;;
     --repository) repository="${2:?--repository requires a value}"; shift 2 ;;
     --release-directory) release_directory="${2:?--release-directory requires a value}"; shift 2 ;;
-    --legacy-path) legacy_path="${2:?--legacy-path requires a value}"; shift 2 ;;
     --public-only) public_only=true; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -37,10 +35,6 @@ case "$api" in
     exit 2
     ;;
 esac
-if [[ "$public_only" == false && -z "$legacy_path" ]]; then
-  echo "--legacy-path or BOTA_LEGACY_ANDROID_PATH is required" >&2
-  exit 2
-fi
 for tool in "$ADB" "$EMULATOR" "$AVDMANAGER"; do test -x "$tool"; done
 
 emulator_pid=""
@@ -86,7 +80,7 @@ instrumentation_classes="dev.bota.sdk.internal.bluetooth.BluetoothPermissionTest
 "$ROOT/tools/android/test-legacy-consumer.sh" --api "$api" --mode source \
   --repository "$repository"
 "$ROOT/tools/android/test-legacy-consumer.sh" --api "$api" --mode binary \
-  --repository "$repository" --legacy-path "$legacy_path"
+  --repository "$repository"
 "$ROOT/tools/android/test-consumer.sh" --api "$api" --repository "$repository"
 
 test "$release_digest" = "$(shasum -a 256 "$release_aar" | awk '{print $1}')"

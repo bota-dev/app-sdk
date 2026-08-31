@@ -255,8 +255,8 @@ tools/android/test-publication-graphs.sh
 tools/android/package-release.sh --check
 tools/android/verify-publication.sh target/android-release
 tools/android/install-release-repository.sh target/android-release target/android-m2
-tools/android/test-emulator-lane.sh --api 26 --legacy-path /path/to/pinned/legacy-sdk
-tools/android/test-emulator-lane.sh --api 35 --legacy-path /path/to/pinned/legacy-sdk
+tools/android/test-emulator-lane.sh --api 26
+tools/android/test-emulator-lane.sh --api 35
 cargo xtask protocol generate --check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings

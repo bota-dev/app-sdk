@@ -157,13 +157,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check out pinned legacy Android SDK
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: bota-dev/bota-mobile-sdk-android
-          ref: 0f06d2a22c55e4976778520cce42230d23ca4226
-          path: target/legacy-android-sdk
-
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -229,10 +222,10 @@ jobs:
             :sdk:assembleDebugAndroidTest
 
       - name: Test API 26 release consumers
-        run: tools/android/test-emulator-lane.sh --api 26 --legacy-path target/legacy-android-sdk
+        run: tools/android/test-emulator-lane.sh --api 26
 
       - name: Test API 35 release consumers
-        run: tools/android/test-emulator-lane.sh --api 35 --legacy-path target/legacy-android-sdk
+        run: tools/android/test-emulator-lane.sh --api 35
 
       - name: Upload unsigned Android publication inputs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
