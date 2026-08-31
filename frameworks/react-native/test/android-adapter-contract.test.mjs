@@ -55,7 +55,15 @@ test('Android adapter implements the generated lifecycle module and package', ()
   assert.match(module, /class BotaDeviceSDKModule/);
   assert.match(module, /NativeBotaDeviceSDKSpec\(reactContext\)/);
   assert.match(module, /@ReactModule\(name = NativeBotaDeviceSDKSpec\.NAME\)/);
-  for (const method of ['configure', 'destroy', 'getCapabilities', 'getState']) {
+  for (const method of [
+    'configure',
+    'destroy',
+    'getCapabilities',
+    'getState',
+    'readStatus',
+    'startStatusUpdates',
+    'stopStatusUpdates',
+  ]) {
     assert.match(module, new RegExp(`override fun ${method}\\(`));
   }
   assert.match(module, /android_sdk_error/);

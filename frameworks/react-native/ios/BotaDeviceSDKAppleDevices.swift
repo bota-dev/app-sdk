@@ -13,6 +13,8 @@ protocol BotaDeviceSDKAppleDeviceClient: Sendable {
         hint: DeviceReconnectHint
     ) async throws -> ConnectedDevice
     func disconnect() async throws
+    func readStatus() async throws -> DeviceStatus
+    func statusUpdates() async throws -> AsyncThrowingStream<DeviceStatus, Error>
 }
 
 struct BotaDeviceSDKSharedAppleDeviceClient: BotaDeviceSDKAppleDeviceClient {
@@ -50,6 +52,14 @@ struct BotaDeviceSDKSharedAppleDeviceClient: BotaDeviceSDKAppleDeviceClient {
     func disconnect() async throws {
         try await devices.disconnect()
     }
+
+    func readStatus() async throws -> DeviceStatus {
+        try await devices.readStatus()
+    }
+
+    func statusUpdates() async throws -> AsyncThrowingStream<DeviceStatus, Error> {
+        try await devices.statusUpdates()
+    }
 }
 
 actor BotaDeviceSDKAppleDevices {
@@ -58,8 +68,14 @@ actor BotaDeviceSDKAppleDevices {
         let task: Task<Void, Never>
     }
 
+    private struct ActiveStatusUpdates {
+        let id: UUID
+        let task: Task<Void, Never>
+    }
+
     private let client: any BotaDeviceSDKAppleDeviceClient
     private var activeScan: ActiveScan?
+    private var activeStatusUpdates: ActiveStatusUpdates?
 
     init(client: any BotaDeviceSDKAppleDeviceClient = BotaDeviceSDKSharedAppleDeviceClient()) {
         self.client = client
@@ -103,6 +119,7 @@ actor BotaDeviceSDKAppleDevices {
 
     func connect(_ device: DiscoveredDevice) async throws -> ConnectedDevice {
         await stopScan()
+        await stopStatusUpdates()
         return try await client.connect(device: device)
     }
 
@@ -111,17 +128,64 @@ actor BotaDeviceSDKAppleDevices {
         hint: DeviceReconnectHint
     ) async throws -> ConnectedDevice {
         await stopScan()
+        await stopStatusUpdates()
         return try await client.reconnect(serialNumber: serialNumber, hint: hint)
     }
 
     func disconnect() async throws {
         await stopScan()
+        await stopStatusUpdates()
         try await client.disconnect()
+    }
+
+    func readStatus() async throws -> DeviceStatus {
+        try await client.readStatus()
+    }
+
+    func startStatusUpdates(
+        onStatus: @escaping @Sendable (DeviceStatus) -> Void,
+        onError: @escaping @Sendable (Error) -> Void = { _ in }
+    ) async throws {
+        await stopStatusUpdates()
+        let stream = try await client.statusUpdates()
+        let id = UUID()
+        let task = Task {
+            do {
+                for try await status in stream {
+                    try Task.checkCancellation()
+                    onStatus(status)
+                }
+            } catch is CancellationError {
+                // Explicit stop is not a status subscription failure.
+            } catch {
+                onError(error)
+            }
+            statusUpdatesFinished(id: id)
+        }
+        activeStatusUpdates = ActiveStatusUpdates(id: id, task: task)
+    }
+
+    func stopStatusUpdates() async {
+        guard let updates = activeStatusUpdates else { return }
+        activeStatusUpdates = nil
+        updates.task.cancel()
+        await updates.task.value
+    }
+
+    func stopAll() async {
+        await stopScan()
+        await stopStatusUpdates()
     }
 
     private func scanFinished(id: UUID) {
         if activeScan?.id == id {
             activeScan = nil
+        }
+    }
+
+    private func statusUpdatesFinished(id: UUID) {
+        if activeStatusUpdates?.id == id {
+            activeStatusUpdates = nil
         }
     }
 }

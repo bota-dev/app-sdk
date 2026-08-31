@@ -3,6 +3,7 @@ package dev.bota.sdk.reactnative
 import dev.bota.sdk.BotaDeviceClient
 import dev.bota.sdk.DeviceReconnectHint
 import dev.bota.sdk.model.ConnectedDevice
+import dev.bota.sdk.model.DeviceStatus
 import dev.bota.sdk.model.DiscoveredDevice
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +26,10 @@ internal interface BotaDeviceSDKAndroidDeviceClient {
     suspend fun reconnect(serialNumber: String, hint: DeviceReconnectHint): ConnectedDevice
 
     suspend fun disconnect()
+
+    suspend fun readStatus(): DeviceStatus
+
+    suspend fun statusUpdates(): Flow<DeviceStatus>
 }
 
 internal class BotaDeviceSDKSharedAndroidDeviceClient(
@@ -49,6 +54,10 @@ internal class BotaDeviceSDKSharedAndroidDeviceClient(
     override suspend fun disconnect() {
         client.devices.disconnect()
     }
+
+    override suspend fun readStatus(): DeviceStatus = client.devices.readStatus()
+
+    override suspend fun statusUpdates(): Flow<DeviceStatus> = client.devices.statusUpdates()
 }
 
 internal class BotaDeviceSDKAndroidDevices(
@@ -57,7 +66,9 @@ internal class BotaDeviceSDKAndroidDevices(
 ) {
     private val operations = Mutex()
     private val scanLock = Any()
+    private val statusLock = Any()
     private var activeScan: Job? = null
+    private var activeStatusUpdates: Job? = null
 
     suspend fun startScan(
         timeoutMilliseconds: ULong,
@@ -91,17 +102,57 @@ internal class BotaDeviceSDKAndroidDevices(
 
     suspend fun connect(device: DiscoveredDevice): ConnectedDevice = operations.withLock {
         stopScanOwned()
+        stopStatusUpdatesOwned()
         client.connect(device)
     }
 
     suspend fun reconnect(serialNumber: String, hint: DeviceReconnectHint): ConnectedDevice = operations.withLock {
         stopScanOwned()
+        stopStatusUpdatesOwned()
         client.reconnect(serialNumber, hint)
     }
 
     suspend fun disconnect() = operations.withLock {
         stopScanOwned()
+        stopStatusUpdatesOwned()
         client.disconnect()
+    }
+
+    suspend fun readStatus(): DeviceStatus = operations.withLock {
+        client.readStatus()
+    }
+
+    suspend fun startStatusUpdates(
+        onError: (Throwable) -> Unit = {},
+        onStatus: (DeviceStatus) -> Unit,
+    ) = operations.withLock {
+        stopStatusUpdatesOwned()
+        val stream = client.statusUpdates()
+        lateinit var task: Job
+        task = scope.launch(start = CoroutineStart.LAZY) {
+            try {
+                stream.collect(onStatus)
+            } catch (_: CancellationException) {
+                // Explicit stop is not a status subscription failure.
+            } catch (error: Throwable) {
+                onError(error)
+            } finally {
+                synchronized(statusLock) {
+                    if (activeStatusUpdates === task) activeStatusUpdates = null
+                }
+            }
+        }
+        synchronized(statusLock) { activeStatusUpdates = task }
+        task.start()
+    }
+
+    suspend fun stopStatusUpdates() = operations.withLock {
+        stopStatusUpdatesOwned()
+    }
+
+    suspend fun stopAll() = operations.withLock {
+        stopScanOwned()
+        stopStatusUpdatesOwned()
     }
 
     private suspend fun stopScanOwned() {
@@ -110,5 +161,12 @@ internal class BotaDeviceSDKAndroidDevices(
         } ?: return
         scan.cancelAndJoin()
         runCatching { client.cancelCurrentOperation() }
+    }
+
+    private suspend fun stopStatusUpdatesOwned() {
+        val updates = synchronized(statusLock) {
+            activeStatusUpdates.also { activeStatusUpdates = null }
+        } ?: return
+        updates.cancelAndJoin()
     }
 }

@@ -113,14 +113,16 @@
 
 ## Follow-On Status
 
-As of 2026-08-31, both lifecycle adapters and the first device workflow slice
-are complete. Apple configure, destroy, state, capabilities, discovery,
-selected-device connect, serial-strict reconnect, and disconnect call
+As of 2026-08-31, both lifecycle adapters and the discovery, connection, and
+device-status workflow slices are complete. Apple configure, destroy, state,
+capabilities, discovery, selected-device connect, serial-strict reconnect,
+disconnect, status reads, and status subscriptions call
 `BotaAppleSDK` through serialized Swift actors and pass a full CocoaPods
 application compile-and-link gate. Android delegates the same surface to
-`BotaDeviceClient.shared`, contains asynchronous scan failures, and passes a
+`BotaDeviceClient.shared`, contains asynchronous scan/status failures, and passes a
 checked-in Codegen, Kotlin-test, lint, and release-assembly consumer against the
-packaged AAR. JavaScript preserves the frozen scan filters. The package also
+packaged AAR. JavaScript preserves the frozen scan filters, status shape, and
+date mapping. The package also
 matches the 75 frozen
 `0.0.65` exports that do not own native workflows, with runtime coverage for
 errors, sync-status derivation, and device-log decoding. `BotaClient`,

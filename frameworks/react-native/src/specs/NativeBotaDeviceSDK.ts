@@ -42,8 +42,50 @@ export type NativeReconnectOptions = {
   connectionTimeoutMs: number;
 };
 
+export type NativeDeviceFlags = {
+  charging: boolean;
+  lowBattery: boolean;
+  storageFull: boolean;
+  wifiConnected: boolean;
+  lteConnected: boolean;
+  syncActive: boolean;
+};
+
+export type NativeModemInfo = {
+  imei?: string;
+  iccid?: string;
+  operator?: string;
+  rat?: string;
+  band?: string;
+  apn?: string;
+  simStatus?: string;
+  csq?: number;
+  ipAddress?: string;
+  modemVoltage?: number;
+  modemFirmware?: string;
+  roaming?: boolean;
+};
+
+export type NativeDeviceStatus = {
+  batteryLevel: number;
+  batteryMv?: number;
+  storageTotalMb: number;
+  storageUsedMb: number;
+  state: string;
+  pendingRecordings: number;
+  lastTimeSyncAtMs?: number;
+  signalStrength: number;
+  flags: NativeDeviceFlags;
+  timestamp: number;
+  lteStatus: string;
+  lteSignalQuality?: number;
+  wifiStatus?: string;
+  modemInfo?: NativeModemInfo;
+};
+
 export interface Spec extends TurboModule {
   readonly onDeviceDiscovered: EventEmitter<NativeDiscoveredDevice>;
+  readonly onDeviceStatusUpdated: EventEmitter<NativeDeviceStatus>;
   configure: (configuration: NativeConfiguration) => Promise<void>;
   connectSelected: (
     device: NativeDiscoveredDevice
@@ -57,6 +99,9 @@ export interface Spec extends TurboModule {
     options: NativeReconnectOptions
   ) => Promise<NativeConnectedDevice>;
   startScan: (timeoutMs: number, allowDuplicates: boolean) => Promise<void>;
+  readStatus: () => Promise<NativeDeviceStatus>;
+  startStatusUpdates: () => Promise<void>;
+  stopStatusUpdates: () => Promise<void>;
   stopScan: () => Promise<void>;
 }
 

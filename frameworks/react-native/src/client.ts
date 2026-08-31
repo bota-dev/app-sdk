@@ -2,17 +2,22 @@ import type {
   NativeCapabilities,
   NativeConnectedDevice,
   NativeConfiguration,
+  NativeDeviceStatus,
   NativeDiscoveredDevice,
   Spec,
 } from './specs/NativeBotaDeviceSDK';
 import type {
   ConnectedDevice,
   ConnectionState,
+  DeviceState,
+  DeviceStatus,
   DeviceType,
   DiscoveredDevice,
   PairingState,
   ReconnectOptions,
   ScanOptions,
+  LteStatus,
+  WifiStatus,
 } from './models/Device';
 
 export type BotaLogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
@@ -34,6 +39,10 @@ export type BotaEventSubscription = {
   remove(): void;
 };
 
+export type BotaAsyncEventSubscription = {
+  remove(): Promise<void>;
+};
+
 export type BotaDeviceSDKDeviceClient = {
   startScan(
     options: ScanOptions | undefined,
@@ -46,6 +55,10 @@ export type BotaDeviceSDKDeviceClient = {
     options?: ReconnectOptions
   ): Promise<ConnectedDevice>;
   disconnect(): Promise<void>;
+  readStatus(): Promise<DeviceStatus>;
+  subscribeToStatus(
+    onStatus: (status: DeviceStatus) => void
+  ): Promise<BotaAsyncEventSubscription>;
 };
 
 export class BotaNativeModuleError extends Error {
@@ -117,6 +130,30 @@ const matchesScanOptions = (
   return true;
 };
 
+const mapDeviceStatus = (status: NativeDeviceStatus): DeviceStatus => ({
+  batteryLevel: status.batteryLevel,
+  ...(status.batteryMv === undefined ? {} : { batteryMv: status.batteryMv }),
+  storageTotalMb: status.storageTotalMb,
+  storageUsedMb: status.storageUsedMb,
+  state: status.state as DeviceState,
+  pendingRecordings: status.pendingRecordings,
+  lastTimeSyncAt:
+    status.lastTimeSyncAtMs === undefined
+      ? null
+      : new Date(status.lastTimeSyncAtMs),
+  signalStrength: status.signalStrength,
+  flags: status.flags,
+  timestamp: status.timestamp,
+  lteStatus: status.lteStatus as LteStatus,
+  ...(status.lteSignalQuality === undefined
+    ? {}
+    : { lteSignalQuality: status.lteSignalQuality }),
+  ...(status.wifiStatus === undefined
+    ? {}
+    : { wifiStatus: status.wifiStatus as WifiStatus }),
+  ...(status.modemInfo === undefined ? {} : { modemInfo: status.modemInfo }),
+});
+
 export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKClient => {
   const requireNativeModule = (): Spec => {
     if (!nativeModule) throw new BotaNativeModuleError();
@@ -165,6 +202,32 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
 
     async disconnect() {
       await requireNativeModule().disconnect();
+    },
+
+    async readStatus() {
+      return mapDeviceStatus(await requireNativeModule().readStatus());
+    },
+
+    async subscribeToStatus(onStatus) {
+      const module = requireNativeModule();
+      const eventSubscription = module.onDeviceStatusUpdated((status) => {
+        onStatus(mapDeviceStatus(status));
+      });
+      try {
+        await module.startStatusUpdates();
+      } catch (error) {
+        eventSubscription.remove();
+        throw error;
+      }
+      let removed = false;
+      return {
+        async remove() {
+          if (removed) return;
+          removed = true;
+          eventSubscription.remove();
+          await module.stopStatusUpdates();
+        },
+      };
     },
   };
 

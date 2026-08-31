@@ -56,11 +56,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   own native workflows. Keep their structural contract test exact; the five
   deferred runtime classes must delegate to native facades before export.
 - The React Native package also exposes the native-backed
-  `BotaDeviceSDK.devices` discovery and connection slice. JavaScript preserves
-  the frozen scan filters; Apple and Android own scan cancellation and delegate
-  selected-device connect, serial-strict reconnect, and disconnect to their
-  public native facades. Preserve the frozen unknown pairing-state fallback as
-  `unpaired` at both bridge boundaries. This does not make the frozen
+  `BotaDeviceSDK.devices` discovery, connection, and device-status slice.
+  JavaScript preserves the frozen scan filters and status date mapping; Apple
+  and Android own scan/status cancellation and delegate selected-device
+  connect, serial-strict reconnect, disconnect, status reads, and status
+  subscriptions to their public native facades. Preserve frozen unknown-value
+  fallbacks at both bridge boundaries: pairing state is `unpaired`, device
+  state is `idle`, and LTE/WiFi status is `off`. This does not make the frozen
   `DeviceManager` class complete or eligible for export.
 - Keep the Codegen names `BotaDeviceSDKSpec` and `BotaDeviceSDK` frozen. Import
   uses optional TurboModule lookup; missing native code fails on invocation as
@@ -87,17 +89,17 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `4a6620703c30b3f53917812720528684838d3bbf` and the pinned Xcode gate passes.
 - Keep React Native lifecycle serialization in the Swift actor. Concurrent
   configure calls coalesce, destroy waits for an in-flight configure, and the
-  device actor owns only its scan task and waits for that collector to finish
-  during teardown. Objective-C++ translates generated-spec promises and must
-  subclass `NativeBotaDeviceSDKSpecBase` before emitting Codegen events.
+  device actor owns its scan and status tasks and waits for those collectors to
+  finish during teardown. Objective-C++ translates generated-spec promises and
+  must subclass `NativeBotaDeviceSDKSpecBase` before emitting Codegen events.
 - Keep React Native Android lifecycle serialization in
   `BotaDeviceSDKAndroidLifecycle`. Its mutex orders configure and destroy,
   retries a failed configure, and delegates only to `BotaDeviceClient.shared`;
   the generated-spec module translates maps and promises without calling JNI.
-- Keep React Native Android discovery and connection serialization in
-  `BotaDeviceSDKAndroidDevices`. It owns only its scan coroutine, contains
-  asynchronous scan failures, and cancels that scan before connect, reconnect,
-  disconnect, destroy, or React Native invalidation.
+- Keep React Native Android device serialization in
+  `BotaDeviceSDKAndroidDevices`. It owns scan and status coroutines, contains
+  asynchronous stream failures, and cancels affected work before connect,
+  reconnect, disconnect, destroy, or React Native invalidation.
 - The Android build foundation uses JDK 17, Gradle 8.13, AGP 8.13.2, Kotlin
   2.1.20, API 26 minimum with API 36 compile/lint/test targets, NDK
   28.2.13676358, CMake 3.22.1, and Maven Publish Plugin 0.35.0.

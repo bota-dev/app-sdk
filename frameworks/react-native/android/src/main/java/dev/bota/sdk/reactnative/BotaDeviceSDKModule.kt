@@ -36,7 +36,7 @@ internal class BotaDeviceSDKModule(
 
     override fun destroy(promise: Promise) {
         launch(promise) {
-            devices.stopScan()
+            devices.stopAll()
             lifecycle.destroy()
         }
     }
@@ -75,6 +75,22 @@ internal class BotaDeviceSDKModule(
         launch(promise) { devices.disconnect() }
     }
 
+    override fun readStatus(promise: Promise) {
+        launchValue(promise) { devices.readStatus().toWritableMap() }
+    }
+
+    override fun startStatusUpdates(promise: Promise) {
+        launch(promise) {
+            devices.startStatusUpdates {
+                emitOnDeviceStatusUpdated(it.toWritableMap())
+            }
+        }
+    }
+
+    override fun stopStatusUpdates(promise: Promise) {
+        launch(promise) { devices.stopStatusUpdates() }
+    }
+
     override fun getCapabilities(promise: Promise) {
         val capabilities = lifecycle.capabilities()
         promise.resolve(
@@ -95,7 +111,7 @@ internal class BotaDeviceSDKModule(
     override fun invalidate() {
         scope.launch {
             try {
-                devices.stopScan()
+                devices.stopAll()
                 lifecycle.destroy()
             } finally {
                 scope.cancel()

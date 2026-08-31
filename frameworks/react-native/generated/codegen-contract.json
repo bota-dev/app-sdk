@@ -131,6 +131,158 @@
               }
             ]
           },
+          "NativeDeviceFlags": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "charging",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "lowBattery",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "storageFull",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "wifiConnected",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "lteConnected",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "syncActive",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeDeviceStatus": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "batteryLevel",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "batteryMv",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "storageTotalMb",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "storageUsedMb",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "state",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "pendingRecordings",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "lastTimeSyncAtMs",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "signalStrength",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "flags",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeDeviceFlags"
+                }
+              },
+              {
+                "name": "timestamp",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "lteStatus",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "lteSignalQuality",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "wifiStatus",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "modemInfo",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeModemInfo"
+                }
+              }
+            ]
+          },
           "NativeDiscoveredDevice": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -192,6 +344,95 @@
               }
             ]
           },
+          "NativeModemInfo": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "imei",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "iccid",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "operator",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "rat",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "band",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "apn",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "simStatus",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "csq",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "ipAddress",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "modemVoltage",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "modemFirmware",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "roaming",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              }
+            ]
+          },
           "NativeReconnectOptions": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -223,6 +464,17 @@
                 "typeAnnotation": {
                   "type": "TypeAliasTypeAnnotation",
                   "name": "NativeDiscoveredDevice"
+                }
+              }
+            },
+            {
+              "name": "onDeviceStatusUpdated",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeDeviceStatus"
                 }
               }
             }
@@ -393,6 +645,49 @@
               }
             },
             {
+              "name": "readStatus",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeDeviceStatus"
+                  }
+                },
+                "params": []
+              }
+            },
+            {
+              "name": "startStatusUpdates",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": []
+              }
+            },
+            {
+              "name": "stopStatusUpdates",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": []
+              }
+            },
+            {
               "name": "stopScan",
               "optional": false,
               "typeAnnotation": {
@@ -416,11 +711,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "cf78a9956890434f750e75df4e5404d5a66d6c6857d610f985065ad88d4ff655"
+        "sha256": "00be61f77ef93adadc31923ecc1b6ae51801bc98715acff74a8ecf6d5bc2ffa8"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "e7a4bd3c5094d233d9e7829a2dd7af2d1d46efa9e0c70ea6f0236f936ae2acca"
+        "sha256": "5c45166ebcb1d4f900aab24b70f237272142386ec192a3bfe5d6c58a4e952179"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -432,23 +727,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "f8542d7afa101676688d41c2abbdd86c1fc8b45e809d7f8a29226f003960284c"
+        "sha256": "9a8351ad22dca7e51b38ed4b0ed09bf2979770950332c7d67e3447fb131cd24d"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "da6fcc7187b3b9a7f89d02f575810b9b8f2885730663a6e19bfaf5abaa913144"
+        "sha256": "b8e376182670b6983f41a7c906d5070230685aabadc0c71ae06e7168717e23bb"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "b68fcff15407d0d6ed5f928787eef643a62ca2ec8936c7a253112022148ea3c4"
+        "sha256": "829024a25ebd563cad5794de786609e24e439d0e3fe64334952fbd3be0501864"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "f8542d7afa101676688d41c2abbdd86c1fc8b45e809d7f8a29226f003960284c"
+        "sha256": "9a8351ad22dca7e51b38ed4b0ed09bf2979770950332c7d67e3447fb131cd24d"
       }
     ]
   },
-  "contractDigest": "f404c432d27a40c736730ba4d701ae0dfcba637262027b7fa1b997342c7ad077"
+  "contractDigest": "5c517e43736b46b6ce4bafa7b77082870f3b3df905a66c91f420873f7008b7da"
 }

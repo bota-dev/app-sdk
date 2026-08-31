@@ -26,9 +26,37 @@ const connected = {
   mtu: 247,
 };
 
+const status = {
+  batteryLevel: 72,
+  batteryMv: 3_842,
+  storageTotalMb: 8_192,
+  storageUsedMb: 512,
+  state: 'idle',
+  pendingRecordings: 2,
+  lastTimeSyncAtMs: 1_788_200_000_000,
+  signalStrength: 4,
+  flags: {
+    charging: false,
+    lowBattery: false,
+    storageFull: false,
+    wifiConnected: true,
+    lteConnected: false,
+    syncActive: false,
+  },
+  timestamp: 1_788_200_000,
+  lteStatus: 'off',
+  lteSignalQuality: 99,
+  wifiStatus: 'connected',
+  modemInfo: {
+    imei: '234108029872409',
+    roaming: false,
+  },
+};
+
 function nativeFixture() {
   const calls = [];
   let discoveryHandler = null;
+  let statusHandler = null;
   let removed = false;
   return {
     calls,
@@ -37,6 +65,9 @@ function nativeFixture() {
     },
     emitDiscovery(value) {
       discoveryHandler?.(value);
+    },
+    emitStatus(value) {
+      statusHandler?.(value);
     },
     module: {
       async configure() {},
@@ -56,6 +87,14 @@ function nativeFixture() {
           },
         };
       },
+      onDeviceStatusUpdated(handler) {
+        statusHandler = handler;
+        return {
+          remove() {
+            statusHandler = null;
+          },
+        };
+      },
       async startScan(timeoutMs, allowDuplicates) {
         calls.push(['startScan', timeoutMs, allowDuplicates]);
       },
@@ -72,6 +111,16 @@ function nativeFixture() {
       },
       async disconnect() {
         calls.push(['disconnect']);
+      },
+      async readStatus() {
+        calls.push(['readStatus']);
+        return status;
+      },
+      async startStatusUpdates() {
+        calls.push(['startStatusUpdates']);
+      },
+      async stopStatusUpdates() {
+        calls.push(['stopStatusUpdates']);
       },
     },
   };
@@ -163,5 +212,27 @@ test('device connection delegates selected identity and strict reconnect separat
       },
     ],
     ['disconnect'],
+  ]);
+});
+
+test('device status reads and subscriptions map dates and own native teardown', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+  const updates = [];
+
+  const current = await client.devices.readStatus();
+  const subscription = await client.devices.subscribeToStatus((value) => {
+    updates.push(value);
+  });
+  fixture.emitStatus({ ...status, lastTimeSyncAtMs: undefined });
+  await subscription.remove();
+  await subscription.remove();
+
+  assert.deepEqual(current.lastTimeSyncAt, new Date(1_788_200_000_000));
+  assert.equal(updates[0].lastTimeSyncAt, null);
+  assert.deepEqual(fixture.calls, [
+    ['readStatus'],
+    ['startStatusUpdates'],
+    ['stopStatusUpdates'],
   ]);
 });

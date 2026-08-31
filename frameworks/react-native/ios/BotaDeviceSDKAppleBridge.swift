@@ -44,7 +44,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
     @objc(destroyWithCompletion:)
     public func destroy(completion: @escaping @Sendable () -> Void) {
         Task {
-            await devices.stopScan()
+            await devices.stopAll()
             await lifecycle.destroy()
             completion()
         }
@@ -151,6 +151,46 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
+    @objc(readStatusWithCompletion:)
+    public func readStatus(
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                completion(Self.deviceStatus(try await devices.readStatus()), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc(startStatusUpdatesWithOnStatus:onError:completion:)
+    public func startStatusUpdates(
+        onStatus: @escaping @Sendable ([String: Any]) -> Void,
+        onError: @escaping @Sendable (NSError) -> Void,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await devices.startStatusUpdates(
+                    onStatus: { onStatus(Self.deviceStatus($0)) },
+                    onError: { onError($0 as NSError) }
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(stopStatusUpdatesWithCompletion:)
+    public func stopStatusUpdates(completion: @escaping @Sendable () -> Void) {
+        Task {
+            await devices.stopStatusUpdates()
+            completion()
+        }
+    }
+
     @objc(stateWithCompletion:)
     public func state(completion: @escaping @Sendable (String) -> Void) {
         Task {
@@ -194,6 +234,56 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
             "mtu": device.mtu,
         ]
         if let revision = device.hardwareRevision { value["hardwareRevision"] = revision }
+        return value
+    }
+
+    private static func deviceStatus(_ status: DeviceStatus) -> [String: Any] {
+        var value: [String: Any] = [
+            "batteryLevel": status.batteryLevel,
+            "storageTotalMb": status.storageTotalMb,
+            "storageUsedMb": status.storageUsedMb,
+            "state": deviceState(status.state),
+            "pendingRecordings": status.pendingRecordings,
+            "signalStrength": status.signalStrength,
+            "flags": deviceFlags(status.flags),
+            "timestamp": status.timestamp,
+            "lteStatus": lteStatus(status.lteStatus),
+        ]
+        if let batteryMv = status.batteryMv { value["batteryMv"] = batteryMv }
+        if let syncedAt = status.lastTimeSyncAt {
+            value["lastTimeSyncAtMs"] = syncedAt.timeIntervalSince1970 * 1_000
+        }
+        if let quality = status.lteSignalQuality { value["lteSignalQuality"] = quality }
+        if let wifi = status.wifiStatus { value["wifiStatus"] = wifiStatus(wifi) }
+        if let modem = status.modemInfo { value["modemInfo"] = modemInfo(modem) }
+        return value
+    }
+
+    private static func deviceFlags(_ flags: DeviceFlags) -> [String: Any] {
+        [
+            "charging": flags.charging,
+            "lowBattery": flags.lowBattery,
+            "storageFull": flags.storageFull,
+            "wifiConnected": flags.wifiConnected,
+            "lteConnected": flags.lteConnected,
+            "syncActive": flags.syncActive,
+        ]
+    }
+
+    private static func modemInfo(_ modem: ModemInfo) -> [String: Any] {
+        var value: [String: Any] = [:]
+        if let imei = modem.imei { value["imei"] = imei }
+        if let iccid = modem.iccid { value["iccid"] = iccid }
+        if let carrier = modem.operator { value["operator"] = carrier }
+        if let rat = modem.rat { value["rat"] = rat }
+        if let band = modem.band { value["band"] = band }
+        if let apn = modem.apn { value["apn"] = apn }
+        if let simStatus = modem.simStatus { value["simStatus"] = simStatus }
+        if let csq = modem.csq { value["csq"] = csq }
+        if let address = modem.ipAddress { value["ipAddress"] = address }
+        if let voltage = modem.modemVoltage { value["modemVoltage"] = voltage }
+        if let firmware = modem.modemFirmware { value["modemFirmware"] = firmware }
+        if let roaming = modem.roaming { value["roaming"] = roaming }
         return value
     }
 
@@ -243,6 +333,49 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         case .discovering: "discovering"
         case .connected: "connected"
         case .disconnecting: "disconnecting"
+        }
+    }
+
+    private static func deviceState(_ value: WireValue<DeviceState>) -> String {
+        guard case let .known(state) = value else { return "idle" }
+        return switch state {
+        case .idle: "idle"
+        case .recording: "recording"
+        case .syncing: "syncing"
+        case .uploading: "uploading"
+        case .charging: "charging"
+        case .lowBattery: "lowBattery"
+        case .storageFull: "storageFull"
+        case .error: "error"
+        }
+    }
+
+    private static func lteStatus(_ value: WireValue<LteStatus>) -> String {
+        guard case let .known(status) = value else { return "off" }
+        return switch status {
+        case .off: "off"
+        case .searching: "searching"
+        case .registered: "registered"
+        case .connected: "connected"
+        case .denied: "denied"
+        case .noSim: "noSim"
+        case .error: "error"
+        case .lowVoltage: "lowVoltage"
+        case .disabled: "disabled"
+        }
+    }
+
+    private static func wifiStatus(_ value: WireValue<WifiRadioStatus>) -> String {
+        guard case let .known(status) = value else { return "off" }
+        return switch status {
+        case .off: "off"
+        case .scanning: "scanning"
+        case .connecting: "connecting"
+        case .connected: "connected"
+        case .connectFailed: "connectFailed"
+        case .noCredentials: "noCredentials"
+        case .disabled: "disabled"
+        case .error: "error"
         }
     }
 

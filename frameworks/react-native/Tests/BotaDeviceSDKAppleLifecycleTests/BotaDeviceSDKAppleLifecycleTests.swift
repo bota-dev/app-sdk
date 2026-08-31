@@ -163,6 +163,39 @@ final class BotaDeviceSDKAppleDevicesTests: XCTestCase {
         XCTAssertEqual(BotaDeviceSDKAppleBridge.pairingState(.unknown(0xFF)), "unpaired")
     }
 
+    func testStatusReadAndSubscriptionDelegateToTheAppleFacade() async throws {
+        let selected = DiscoveredDevice(id: "selected", name: "Bota Pin", rssi: -42)
+        let verified = ConnectedDevice(
+            id: "selected",
+            serialNumber: "EVFXXW67KP",
+            deviceType: .botaPin,
+            firmwareVersion: "1.0.11",
+            isProvisioned: false,
+            connectionState: .connected,
+            mtu: 247
+        )
+        let expected = testDeviceStatus()
+        let client = TestAppleDeviceClient(
+            discovered: selected,
+            connected: verified,
+            status: expected
+        )
+        let devices = BotaDeviceSDKAppleDevices(client: client)
+        let received = StatusCapture()
+
+        let current = try await devices.readStatus()
+        XCTAssertEqual(current, expected)
+        try await devices.startStatusUpdates { status in
+            Task { await received.append(status) }
+        }
+        await received.waitForCount(1)
+        await devices.stopStatusUpdates()
+
+        let snapshot = await client.snapshot()
+        XCTAssertEqual(snapshot.statusReadCount, 1)
+        XCTAssertEqual(snapshot.statusTerminationCount, 1)
+    }
+
     func testScanAndConnectionsDelegateToTheAppleFacade() async throws {
         let selected = DiscoveredDevice(id: "selected", name: "Bota Pin", rssi: -42)
         let verified = ConnectedDevice(
@@ -207,6 +240,32 @@ final class BotaDeviceSDKAppleDevicesTests: XCTestCase {
         XCTAssertEqual(connected.serialNumber, "EVFXXW67KP")
         XCTAssertEqual(reconnected.serialNumber, "EVFXXW67KP")
     }
+}
+
+private func testDeviceStatus() -> DeviceStatus {
+    DeviceStatus(
+        batteryLevel: 72,
+        batteryMv: 3_842,
+        storageTotalMb: 8_192,
+        storageUsedMb: 512,
+        state: .known(.idle),
+        pendingRecordings: 2,
+        lastTimeSyncAt: Date(timeIntervalSince1970: 1_788_200_000),
+        signalStrength: 4,
+        flags: DeviceFlags(
+            charging: false,
+            lowBattery: false,
+            storageFull: false,
+            wifiConnected: true,
+            lteConnected: false,
+            syncActive: false
+        ),
+        timestamp: 1_788_200_000,
+        lteStatus: .known(.off),
+        lteSignalQuality: 99,
+        wifiStatus: .known(.connected),
+        modemInfo: ModemInfo(imei: "234108029872409", roaming: false)
+    )
 }
 
 private enum TestError: Error {
@@ -340,6 +399,25 @@ private actor DeviceCapture {
     }
 }
 
+private actor StatusCapture {
+    private var statuses: [DeviceStatus] = []
+    private var waiters: [(Int, CheckedContinuation<Void, Never>)] = []
+
+    func append(_ status: DeviceStatus) {
+        statuses.append(status)
+        let ready = waiters.filter { statuses.count >= $0.0 }
+        waiters.removeAll { statuses.count >= $0.0 }
+        ready.forEach { $0.1.resume() }
+    }
+
+    func waitForCount(_ count: Int) async {
+        if statuses.count >= count { return }
+        await withCheckedContinuation { continuation in
+            waiters.append((count, continuation))
+        }
+    }
+}
+
 private actor TestAppleDeviceClient: BotaDeviceSDKAppleDeviceClient {
     struct ScanOptions: Equatable, Sendable {
         let timeout: UInt64
@@ -352,19 +430,29 @@ private actor TestAppleDeviceClient: BotaDeviceSDKAppleDeviceClient {
         let reconnectSerials: [String]
         let cancelCount: Int
         let disconnectCount: Int
+        let statusReadCount: Int
+        let statusTerminationCount: Int
     }
 
     private let discovered: DiscoveredDevice
     private let connected: ConnectedDevice
+    private let status: DeviceStatus
     private var scanOptions: [ScanOptions] = []
     private var selectedIDs: [String] = []
     private var reconnectSerials: [String] = []
     private var cancelCount = 0
     private var disconnectCount = 0
+    private var statusReadCount = 0
+    private var statusTerminationCount = 0
 
-    init(discovered: DiscoveredDevice, connected: ConnectedDevice) {
+    init(
+        discovered: DiscoveredDevice,
+        connected: ConnectedDevice,
+        status: DeviceStatus = testDeviceStatus()
+    ) {
         self.discovered = discovered
         self.connected = connected
+        self.status = status
     }
 
     func startScan(
@@ -398,13 +486,33 @@ private actor TestAppleDeviceClient: BotaDeviceSDKAppleDeviceClient {
         disconnectCount += 1
     }
 
+    func readStatus() async throws -> DeviceStatus {
+        statusReadCount += 1
+        return status
+    }
+
+    func statusUpdates() async throws -> AsyncThrowingStream<DeviceStatus, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.yield(status)
+            continuation.onTermination = { @Sendable _ in
+                Task { await self.statusTerminated() }
+            }
+        }
+    }
+
     func snapshot() -> Snapshot {
         Snapshot(
             scanOptions: scanOptions,
             selectedIDs: selectedIDs,
             reconnectSerials: reconnectSerials,
             cancelCount: cancelCount,
-            disconnectCount: disconnectCount
+            disconnectCount: disconnectCount,
+            statusReadCount: statusReadCount,
+            statusTerminationCount: statusTerminationCount
         )
+    }
+
+    private func statusTerminated() {
+        statusTerminationCount += 1
     }
 }

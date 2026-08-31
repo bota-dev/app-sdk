@@ -5,9 +5,16 @@ import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableMap
 import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.model.ConnectionState
+import dev.bota.sdk.model.DeviceFlags
+import dev.bota.sdk.model.DeviceState
+import dev.bota.sdk.model.DeviceStatus
 import dev.bota.sdk.model.DeviceType
 import dev.bota.sdk.model.DiscoveredDevice
+import dev.bota.sdk.model.LteStatus
+import dev.bota.sdk.model.ModemInfo
 import dev.bota.sdk.model.PairingState
+import dev.bota.sdk.model.WifiRadioStatus
+import dev.bota.sdk.model.WireValue
 import java.time.Instant
 
 internal fun ReadableMap.toDiscoveredDevice(): DiscoveredDevice = DiscoveredDevice(
@@ -41,6 +48,47 @@ internal fun ConnectedDevice.toWritableMap(): WritableMap = Arguments.createMap(
     putBoolean("isProvisioned", isProvisioned)
     putString("connectionState", connectionState.toBridgeValue())
     putInt("mtu", mtu)
+}
+
+internal fun DeviceStatus.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putInt("batteryLevel", batteryLevel)
+    batteryMv?.let { putInt("batteryMv", it) }
+    putInt("storageTotalMb", storageTotalMb)
+    putInt("storageUsedMb", storageUsedMb)
+    putString("state", state.toDeviceStateBridgeValue())
+    putInt("pendingRecordings", pendingRecordings)
+    lastTimeSyncAt?.let { putDouble("lastTimeSyncAtMs", it.toEpochMilli().toDouble()) }
+    putInt("signalStrength", signalStrength)
+    putMap("flags", flags.toWritableMap())
+    putDouble("timestamp", timestamp.toLong().toDouble())
+    putString("lteStatus", lteStatus.toLteStatusBridgeValue())
+    lteSignalQuality?.let { putInt("lteSignalQuality", it) }
+    wifiStatus?.let { putString("wifiStatus", it.toWifiStatusBridgeValue()) }
+    modemInfo?.let { putMap("modemInfo", it.toWritableMap()) }
+}
+
+private fun DeviceFlags.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putBoolean("charging", charging)
+    putBoolean("lowBattery", lowBattery)
+    putBoolean("storageFull", storageFull)
+    putBoolean("wifiConnected", wifiConnected)
+    putBoolean("lteConnected", lteConnected)
+    putBoolean("syncActive", syncActive)
+}
+
+private fun ModemInfo.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    imei?.let { putString("imei", it) }
+    iccid?.let { putString("iccid", it) }
+    operator?.let { putString("operator", it) }
+    rat?.let { putString("rat", it) }
+    band?.let { putString("band", it) }
+    apn?.let { putString("apn", it) }
+    simStatus?.let { putString("simStatus", it) }
+    csq?.let { putInt("csq", it) }
+    ipAddress?.let { putString("ipAddress", it) }
+    modemVoltage?.let { putInt("modemVoltage", it) }
+    modemFirmware?.let { putString("modemFirmware", it) }
+    roaming?.let { putBoolean("roaming", it) }
 }
 
 private fun ReadableMap.optionalString(key: String): String? =
@@ -83,4 +131,47 @@ private fun ConnectionState.toBridgeValue(): String = when (this) {
     ConnectionState.Discovering -> "discovering"
     ConnectionState.Connected -> "connected"
     ConnectionState.Disconnecting -> "disconnecting"
+}
+
+private fun WireValue<DeviceState>.toDeviceStateBridgeValue(): String = when (this) {
+    is WireValue.Known -> when (value) {
+        DeviceState.Idle -> "idle"
+        DeviceState.Recording -> "recording"
+        DeviceState.Syncing -> "syncing"
+        DeviceState.Uploading -> "uploading"
+        DeviceState.Charging -> "charging"
+        DeviceState.LowBattery -> "lowBattery"
+        DeviceState.StorageFull -> "storageFull"
+        DeviceState.Error -> "error"
+    }
+    is WireValue.Unknown -> "idle"
+}
+
+private fun WireValue<LteStatus>.toLteStatusBridgeValue(): String = when (this) {
+    is WireValue.Known -> when (value) {
+        LteStatus.Off -> "off"
+        LteStatus.Searching -> "searching"
+        LteStatus.Registered -> "registered"
+        LteStatus.Connected -> "connected"
+        LteStatus.Denied -> "denied"
+        LteStatus.NoSim -> "noSim"
+        LteStatus.Error -> "error"
+        LteStatus.LowVoltage -> "lowVoltage"
+        LteStatus.Disabled -> "disabled"
+    }
+    is WireValue.Unknown -> "off"
+}
+
+private fun WireValue<WifiRadioStatus>.toWifiStatusBridgeValue(): String = when (this) {
+    is WireValue.Known -> when (value) {
+        WifiRadioStatus.Off -> "off"
+        WifiRadioStatus.Scanning -> "scanning"
+        WifiRadioStatus.Connecting -> "connecting"
+        WifiRadioStatus.Connected -> "connected"
+        WifiRadioStatus.ConnectFailed -> "connectFailed"
+        WifiRadioStatus.NoCredentials -> "noCredentials"
+        WifiRadioStatus.Disabled -> "disabled"
+        WifiRadioStatus.Error -> "error"
+    }
+    is WireValue.Unknown -> "off"
 }
