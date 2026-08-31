@@ -18,7 +18,10 @@ fn compatibility_metadata_reports_the_public_apple_facade() {
     let contents = fs::read_to_string(path).unwrap();
     let compatibility: serde_json::Value = serde_json::from_str(&contents).unwrap();
 
-    assert_eq!(compatibility["nativeAbi"]["publishedFacades"], serde_json::json!(["apple"]));
+    assert_eq!(
+        compatibility["nativeAbi"]["publishedFacades"],
+        serde_json::json!(["apple"])
+    );
     assert_eq!(
         compatibility["platformFacades"]["apple"]["publicationStatus"],
         "published"
