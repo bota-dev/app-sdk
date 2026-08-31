@@ -69,11 +69,11 @@
 - Consumes: generated `NativeBotaDeviceSDKSpec`, the Swift lifecycle actor, and React Native resolve/reject blocks.
 - Produces: native module `BotaDeviceSDK` implementing `configure`, `destroy`, `getCapabilities`, `getState`, and `getTurboModule`.
 
-- [ ] **Step 1: Write a failing adapter-contract test** that requires every generated lifecycle selector, stable module registration, generated JSI construction, the Swift bridge import, and rejection through one native error path.
-- [ ] **Step 2: Run the focused Node test** and confirm failure because the native sources are missing.
-- [ ] **Step 3: Implement the Objective-C-compatible Swift completion bridge** over the actor and the minimum Objective-C++ generated-spec adapter.
-- [ ] **Step 4: Run the focused contract test and the existing Codegen drift test** and confirm both pass.
-- [ ] **Step 5: Commit** the TurboModule adapter with the required Codex co-author trailer.
+- [x] **Step 1: Write a failing adapter-contract test** that requires every generated lifecycle selector, stable module registration, generated JSI construction, the Swift bridge import, and rejection through one native error path.
+- [x] **Step 2: Run the focused Node test** and confirm failure because the native sources are missing.
+- [x] **Step 3: Implement the Objective-C-compatible Swift completion bridge** over the actor and the minimum Objective-C++ generated-spec adapter.
+- [x] **Step 4: Run the focused contract test and the existing Codegen drift test** and confirm both pass.
+- [x] **Step 5: Commit** the TurboModule adapter with the required Codex co-author trailer.
 
 ### Task 4: Real CocoaPods And Xcode Build Gate
 

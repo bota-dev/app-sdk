@@ -20,7 +20,8 @@ let package = Package(
             dependencies: [
                 .product(name: "BotaAppleSDK", package: "BotaAppSDK"),
             ],
-            path: "ios"
+            path: "ios",
+            exclude: ["BotaDeviceSDK.mm"]
         ),
         .testTarget(
             name: "BotaDeviceSDKAppleLifecycleTests",
