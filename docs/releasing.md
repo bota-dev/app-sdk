@@ -91,6 +91,11 @@ cargo deny check
 - `LICENSE`
 - `release-manifest.json`
 
+Future Apple packaging emits release manifest version 2 with
+`sdkFamily: "bota-app-sdk"` and artifact fields `platform: "apple"` and
+`packageIdentifier: "BotaAppleSDK"`. The public `v1.0.0` manifest is an
+immutable version 1 document that the release validator continues to accept.
+
 The packaging log includes SHA-256 digests for every normalized XCFramework
 input and for the final archive. Use those values to identify toolchain-specific
 output before changing the checksum pinned in `Package.swift`.

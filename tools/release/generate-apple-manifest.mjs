@@ -42,7 +42,8 @@ export function generateAppleManifest({
     ?? compatibility.firmwareBaseline.version;
 
   return {
-    manifestVersion: 1,
+    manifestVersion: 2,
+    sdkFamily: 'bota-app-sdk',
     sdkVersion,
     sourceRevision,
     protocolFixtureDigest: baseline.fixtureDigest,
@@ -55,6 +56,8 @@ export function generateAppleManifest({
       {
         name: 'BotaDeviceSDKCore.xcframework.zip',
         ecosystem: 'swiftpm',
+        platform: 'apple',
+        packageIdentifier: 'BotaAppleSDK',
         version: sdkVersion,
         checksumSha256: artifactChecksum,
         capabilities,

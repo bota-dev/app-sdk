@@ -28,6 +28,8 @@ test('Apple manifest uses synchronized release evidence and supported capabiliti
     },
   });
 
+  assert.equal(manifest.manifestVersion, 2);
+  assert.equal(manifest.sdkFamily, 'bota-app-sdk');
   assert.equal(manifest.sdkVersion, '1.0.0-alpha.1');
   assert.equal(manifest.sourceRevision, sourceRevision);
   assert.equal(manifest.protocolFixtureDigest, fixtureDigest);
@@ -37,6 +39,8 @@ test('Apple manifest uses synchronized release evidence and supported capabiliti
     baselineRevision: firmwareRevision,
   });
   assert.equal(manifest.artifacts[0].ecosystem, 'swiftpm');
+  assert.equal(manifest.artifacts[0].platform, 'apple');
+  assert.equal(manifest.artifacts[0].packageIdentifier, 'BotaAppleSDK');
   assert.equal(manifest.artifacts[0].version, '1.0.0-alpha.1');
   assert.equal(manifest.artifacts[0].checksumSha256, checksum);
   assert.deepEqual(manifest.artifacts[0].capabilities, ['device_status', 'workflow_connection']);

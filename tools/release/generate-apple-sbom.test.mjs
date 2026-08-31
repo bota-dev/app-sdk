@@ -54,6 +54,10 @@ test('Apple SPDX names the synchronized package and records the native dependenc
 
   assert.equal(sbom.spdxVersion, 'SPDX-2.3');
   assert.equal(sbom.name, 'BotaAppleSDK-1.0.0-alpha.1');
+  assert.equal(
+    sbom.documentNamespace,
+    `https://bota.dev/spdx/app-sdk/1.0.0-alpha.1/${sourceRevision}`
+  );
   assert.ok(sbom.packages.some((entry) => entry.name === 'BotaAppleSDK'));
   const core = sbom.packages.find((entry) => entry.name === 'bota-device-sdk-core');
   const ffi = sbom.packages.find((entry) => entry.name === 'bota-device-sdk-ffi');
