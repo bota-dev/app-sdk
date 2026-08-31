@@ -86,11 +86,11 @@
 - Modify: `.github/workflows/ci.yml`
 
 **Interfaces:**
-- Consumes: the local npm package, its podspec, React Native 0.86.3 pods, and the repository root `BotaAppleSDK` package.
+- Consumes: the local npm package, its podspec, React Native 0.86.3 pods, and the nested `platforms/apple` `BotaAppleSDK` package.
 - Produces: a disposable iOS 15.1 CocoaPods consumer whose `BotaDeviceSDK` pod target resolves the local Swift package and compiles for the iOS simulator without signing, plus a separate exact-version resolution of the default remote package URL.
 
 - [x] **Step 1: Add a build-gate test command** and run it to confirm it fails before a consumer generator exists.
-- [x] **Step 2: Generate a minimal temporary Xcode application and Podfile** with `BOTA_APPLE_SDK_PACKAGE_PATH` pointing to the repository root, then run `pod install` and build and link the disposable application target.
+- [x] **Step 2: Generate a minimal temporary Xcode application and Podfile** with `BOTA_APPLE_SDK_PACKAGE_PATH` pointing to `platforms/apple`, then run `pod install` and build and link the disposable application target.
 - [x] **Step 3: Fix only integration defects exposed by the real build** until Swift, Objective-C++, generated Codegen, and `BotaAppleSDK` link successfully.
 - [x] **Step 4: Add the same build gate to a macOS CI job** after the nested npm install.
 - [x] **Step 5: Commit** the build gate with the required Codex co-author trailer.

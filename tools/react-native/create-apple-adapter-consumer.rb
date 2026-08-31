@@ -10,6 +10,7 @@ workspace_root = Pathname.new(ARGV.fetch(1)).expand_path
 package_root = Pathname.new(ARGV.fetch(2)).expand_path
 source_mode = ARGV.fetch(3, "local")
 react_native_path = package_root.join("node_modules/react-native")
+apple_package_path = workspace_root.join("platforms/apple")
 
 abort "source mode must be local or remote" unless ["local", "remote"].include?(source_mode)
 
@@ -98,7 +99,7 @@ end
 project.save
 
 apple_package_override = if source_mode == "local"
-  "ENV[\"BOTA_APPLE_SDK_PACKAGE_PATH\"] = #{workspace_root.to_s.inspect}\n"
+  "ENV[\"BOTA_APPLE_SDK_PACKAGE_PATH\"] = #{apple_package_path.to_s.inspect}\n"
 else
   ""
 end
