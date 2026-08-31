@@ -141,7 +141,16 @@ blocked work, and manual selection preempts background reconnect ownership.
 Scan identity uses peripheral IDs plus advertised manufacturer data; names are
 display metadata only. The host checks location permission through API 30 and
 scan/connect permissions on API 31+ before an effect reaches the platform.
-Concrete durable host services, public workflow
+Android non-secret checkpoints, reconnect identity, and exact factory-reset
+receipts use AtomicFile journals under application no-backup storage. Secret
+values are AES-GCM ciphertext bound to opaque keys, with the non-exportable key
+held by Android Keystore. Recording sinks and firmware blobs use host-registered
+paths or ParcelFileDescriptors and bounded FileChannel operations; Rust receives
+only opaque IDs and bytes. OkHttp requests and application material are one-shot
+host registrations removed on completion, cancellation, failure, replacement,
+or destroy. The network host tracks and cancels only its own calls when sharing
+an injected client.
+The public workflow
 facade, Maven Central artifact, physical acceptance, and React Native Android
 runtime support are not claimed by this stage.
 

@@ -114,6 +114,15 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   port, only declared callback kinds may return, and every callback preserves
   the effect's operation, request ID, and cancellation identity. Bound host
   bytes before dispatch and map platform failures to the effect category.
+- Keep Android checkpoints, reconnect identity, and factory-reset receipts in
+  non-secret AtomicFile journals. Reset deletion must match the exact command;
+  bind saved results to the registered binding generation.
+- Store secrets only as AES-GCM ciphertext authenticated by the opaque key;
+  Android Keystore owns the non-exportable key. Rust must never receive a path,
+  URI, URL, header, token, grant, or Keystore material.
+- File and network resources are host registrations consumed by opaque IDs.
+  Force recording writes before durable progress, bound firmware reads, close
+  every response/descriptor path, and cancel only SDK-owned OkHttp calls.
 - Recording transfer owns sequence/checkpoint decisions; native hosts own the
   durable sink and validate the final checksum before device deletion.
 - Direct-upload fallback requires a fresh inactive device status; busy,

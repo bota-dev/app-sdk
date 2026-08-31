@@ -640,7 +640,7 @@ git commit -m "feat(android): add serialized bluetooth gatt host" \
 - Consumes: opaque checkpoint, key, sink, blob, material, destination, and download IDs.
 - Produces: atomic journals, Keystore-backed secrets, bounded file chunks, CRC32-verified recording sinks, and application-authorized OkHttp transfers.
 
-- [ ] **Step 1: Write failing restart, cancellation, and secrecy tests**
+- [x] **Step 1: Write failing restart, cancellation, and secrecy tests**
 
 Keep the local JVM suite Android-free. `JournalStoreContractTest` runs the
 checkpoint/reset-journal contract against an in-memory `JournalStore` fake;
@@ -659,7 +659,7 @@ binding. `AndroidFileHostTest` exercises `noBackupFilesDir`,
 Keystore key. All three scan persisted bytes to prove that URLs, headers, tokens,
 grants, keys, and external file paths are absent from core checkpoints.
 
-- [ ] **Step 2: Run host tests and verify RED**
+- [x] **Step 2: Run host tests and verify RED**
 
 Run:
 
@@ -677,7 +677,7 @@ API-26 instrumentation command fails because the concrete Android adapters do
 not exist. A local JVM test must never be used as evidence for `AtomicFile`,
 Android application storage, `ParcelFileDescriptor`, or Keystore behavior.
 
-- [ ] **Step 3: Implement Android-native storage and network ports**
+- [x] **Step 3: Implement Android-native storage and network ports**
 
 Use `AtomicFile` under `noBackupFilesDir/bota-app-sdk/` for checkpoints and
 reset journals. Use a non-exportable Android Keystore AES-GCM key and private
@@ -689,7 +689,7 @@ registrations, stream progress, and close response bodies on every terminal
 path. Application callbacks resolve provisioning/reset material in memory and
 remove each registration on completion, cancellation, failure, or destroy.
 
-- [ ] **Step 4: Run host, Keystore, and credential searches**
+- [x] **Step 4: Run host, Keystore, and credential searches**
 
 Run:
 
@@ -713,7 +713,7 @@ Expected: pure interface tests pass on the JVM; concrete AtomicFile, application
 storage, file-descriptor, and Keystore tests pass on both API 26 and API 35; and
 no embedded credential or Bota backend client is found.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ARCHITECTURE.md platforms/android

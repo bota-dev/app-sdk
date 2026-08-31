@@ -53,8 +53,12 @@ failures to stable ABI events. The Android BluetoothGatt host now keeps
 framework objects on one HandlerThread, serializes operations per connection,
 rejects stale callback generations, and enforces the API 26 and API 31+
 permission contracts without prompting. API 26 and API 35 instrumentation
-verify the merged permission manifest.
-Concrete durable host services, public workflow facades,
+verify the merged permission manifest. Android durable hosts now use AtomicFile
+journals, non-exportable Keystore AES-GCM secrets, bounded
+ParcelFileDescriptor/FileChannel recording and firmware access, one-shot
+application material, and application-authorized OkHttp registrations. The
+concrete framework contracts pass on API 26 and API 35.
+Public workflow facades,
 physical-device acceptance, Maven Central publication, and the React Native
 Android adapter remain open.
 The native-boundary spike selected a manually owned C ABI after comparing it

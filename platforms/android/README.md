@@ -108,6 +108,38 @@ tools/android/test-package.sh --api 35 \
   --instrumentation-class dev.bota.sdk.internal.bluetooth.BluetoothPermissionTest
 ```
 
+Android durable hosts keep non-secret workflow journals in AtomicFile entries
+under `noBackupFilesDir/bota-app-sdk/`. Factory-reset receipts bind the exact
+command ID and registered binding generation. Secure-storage values are
+AES-GCM ciphertext files whose non-exportable key remains in Android Keystore;
+opaque key names are SHA-256-derived filenames and are also authenticated data.
+
+Recording destinations and firmware sources are registered as opaque IDs backed
+by a host path or ParcelFileDescriptor. Recording append progress is emitted
+only after FileChannel force, finalization validates protocol CRC32, and firmware
+reads reject zero-length or oversized chunks. Presigned OkHttp requests are also
+registered outside Rust and consumed once. Response bodies and file resources
+close on every terminal path; destroying the host cancels only its owned calls,
+not unrelated requests on an injected OkHttpClient.
+
+Run the JVM contracts plus real framework tests on both supported compatibility
+targets:
+
+```bash
+platforms/android/gradlew -p platforms/android :sdk:testDebugUnitTest \
+  --tests '*JournalStoreContractTest' \
+  --tests '*FileHostContractTest' \
+  --tests '*NetworkHostTest'
+for api in 26 35; do
+  tools/android/test-package.sh --api "$api" \
+    --instrumentation-class dev.bota.sdk.internal.host.AtomicFilePersistenceHostTest
+  tools/android/test-package.sh --api "$api" \
+    --instrumentation-class dev.bota.sdk.internal.host.AndroidFileHostTest
+  tools/android/test-package.sh --api "$api" \
+    --instrumentation-class dev.bota.sdk.internal.host.KeystoreHostTest
+done
+```
+
 Normal builds can publish unsigned artifacts only to the `Local` repository at
 `target/android-m2`. Remote publication and signing require the exact
 `botaProtectedSigning=true` Gradle property and release-environment credentials.
