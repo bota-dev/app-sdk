@@ -100,9 +100,11 @@ generated TurboModule spec and promise conversion. The pod uses React Native
 the local package-path override exists only for source and CI builds. A
 disposable CocoaPods application compiles and links the complete native chain.
 The build toolchain is locked, and a separate remote-resolution gate confirms
-that the default package URL resolves the synchronized immutable release. This
-proves lifecycle integration, not the remaining workflow surface or application
-parity.
+that the default package URL resolves the synchronized immutable release. A
+target-scoped CocoaPods hook carries React Native's upstream fix for duplicate
+binary Swift-package module maps on Xcode 26.3 while the package floor remains
+0.86.3. This proves lifecycle integration, not the remaining workflow surface
+or application parity.
 
 Native migration inputs are pinned separately in
 `protocol/baseline/native-sdks.json`. Apple revision `cd15e545cabb8` and Android

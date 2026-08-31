@@ -14,6 +14,7 @@ const EXPECTED_APPLE_PRODUCT = 'BotaAppleSDK';
 const EXPECTED_COCOAPODS_VERSION = '1.13.0';
 const EXPECTED_LOCAL_APPLE_PATH_ENV = 'BOTA_APPLE_SDK_PACKAGE_PATH';
 const EXPECTED_SWIFT_VERSION = '6.0';
+const EXPECTED_APPLE_SPM_WORKAROUND = 'scripts/bota_device_sdk_spm_workaround.rb';
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
@@ -95,6 +96,9 @@ export const verifyPackage = ({ workspaceRoot, packageRoot }) => {
   }
   if (!packageJson.files?.includes('BotaDeviceSDK.podspec')) {
     throw new Error('React Native npm files must include BotaDeviceSDK.podspec');
+  }
+  if (!packageJson.files?.includes(EXPECTED_APPLE_SPM_WORKAROUND)) {
+    throw new Error('React Native npm files must include the Apple SPM workaround');
   }
 
   const apple = packageJson.bota?.apple;

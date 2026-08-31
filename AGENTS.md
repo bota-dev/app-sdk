@@ -66,6 +66,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `frameworks/react-native/Gemfile.lock` for Bundler 2.6.9, CocoaPods 1.16.2,
   and xcodeproj 1.27.0. Run both the local linked-consumer gate and the remote
   exact-version resolution gate when changing pod or Swift-package wiring.
+- React Native 0.86.3 duplicates binary Swift-package module maps for static
+  pods under Xcode 26.3. The packaged `bota_device_sdk_spm_workaround.rb`
+  flattens only `BotaDeviceSDK` and rewrites its aggregate module-map flags.
+  Remove it only after the React Native floor includes upstream commit
+  `4a6620703c30b3f53917812720528684838d3bbf` and the pinned Xcode gate passes.
 - Keep React Native lifecycle serialization in the Swift actor. Concurrent
   configure calls coalesce, destroy waits for an in-flight configure, and the
   Objective-C++ layer only translates generated-spec promises.

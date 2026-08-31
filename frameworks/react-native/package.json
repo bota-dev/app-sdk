@@ -14,6 +14,7 @@
     "generated/",
     "ios/",
     "lib/",
+    "scripts/bota_device_sdk_spm_workaround.rb",
     "src/"
   ],
   "scripts": {
@@ -27,6 +28,7 @@
     "test:apple:integration": "../../tools/react-native/test-apple-adapter.sh",
     "test:apple:lifecycle": "swift test -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors",
     "test:apple:remote-resolution": "../../tools/react-native/test-apple-adapter.sh remote",
+    "test:apple:spm-workaround": "ruby test/apple-spm-workaround.test.rb",
     "typecheck": "tsc --noEmit",
     "verify": "node ../../tools/react-native/verify-package.mjs --workspace-root ../.. --package-root . && npm run codegen:check && npm run typecheck && npm test && npm run license-check"
   },

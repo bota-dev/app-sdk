@@ -149,6 +149,7 @@ npm ci
 bundle _2.6.9_ install
 npm run verify
 npm run test:apple:lifecycle
+npm run test:apple:spm-workaround
 bundle _2.6.9_ exec npm run test:apple:integration
 bundle _2.6.9_ exec npm run test:apple:remote-resolution
 ```
@@ -166,6 +167,10 @@ resolves the exact matching `BotaAppleSDK` release tag;
 used in a published application dependency. CI selects Xcode 26.3 and Ruby
 3.3.12 explicitly, uses the locked Ruby toolchain, and separately resolves the
 default remote package URL to the exact synchronized version.
+
+The pod includes a target-scoped compatibility hook for React Native 0.86.3's
+duplicate binary Swift-package module maps on Xcode 26.3; applications do not
+need to patch their Podfile for this combination.
 
 The supervised Apple lab procedure is documented in
 [docs/testing/apple-physical-device.md](docs/testing/apple-physical-device.md).

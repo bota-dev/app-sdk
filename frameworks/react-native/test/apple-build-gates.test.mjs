@@ -18,12 +18,20 @@ test('Apple build tooling is pinned and exposes local and remote gates', () => {
   assert.match(lockfile, /cocoapods \(1\.16\.2\)/);
   assert.match(lockfile, /xcodeproj \(1\.27\.0\)/);
   assert.equal(
+    packageJson.scripts['test:apple:spm-workaround'],
+    'ruby test/apple-spm-workaround.test.rb'
+  );
+  assert.ok(
+    packageJson.files.includes('scripts/bota_device_sdk_spm_workaround.rb')
+  );
+  assert.equal(
     packageJson.scripts['test:apple:remote-resolution'],
     '../../tools/react-native/test-apple-adapter.sh remote'
   );
   assert.match(workflow, /DEVELOPER_DIR: \/Applications\/Xcode_26\.3\.app\/Contents\/Developer/);
   assert.match(workflow, /BOTA_EXPECTED_RUBY_VERSION: "3\.3\.12"/);
   assert.match(workflow, /BOTA_EXPECTED_XCODE_BUILD: 17C529/);
+  assert.match(workflow, /npm run test:apple:spm-workaround/);
   assert.match(workflow, /bundle _2\.6\.9_ exec npm run test:apple:remote-resolution/);
 });
 

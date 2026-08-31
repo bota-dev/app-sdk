@@ -17,6 +17,7 @@ const validPackage = () => ({
     'generated/',
     'ios/',
     'lib/',
+    'scripts/bota_device_sdk_spm_workaround.rb',
     'src/',
   ],
   peerDependencies: {
@@ -136,6 +137,17 @@ test('rejects a package that omits the podspec from npm files', () => {
 
   assert.notEqual(result.status, 0);
   assert.match(outputOf(result), /BotaDeviceSDK\.podspec/);
+});
+
+test('rejects a package that omits the Apple SPM workaround from npm files', () => {
+  const result = runVerifier((pkg) => {
+    pkg.files = pkg.files.filter(
+      (entry) => entry !== 'scripts/bota_device_sdk_spm_workaround.rb'
+    );
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(outputOf(result), /SPM workaround/);
 });
 
 test('rejects Apple pod identity drift', () => {

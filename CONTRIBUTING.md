@@ -35,6 +35,7 @@ Gemfile:
 cd frameworks/react-native
 bundle _2.6.9_ install
 npm run test:apple:lifecycle
+npm run test:apple:spm-workaround
 bundle _2.6.9_ exec npm run test:apple:integration
 bundle _2.6.9_ exec npm run test:apple:remote-resolution
 ```

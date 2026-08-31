@@ -1,4 +1,5 @@
 require "json"
+require_relative "scripts/bota_device_sdk_spm_workaround"
 
 package = JSON.parse(File.read(File.join(__dir__, "package.json")))
 apple = package.fetch("bota").fetch("apple")
@@ -36,6 +37,7 @@ Pod::Spec.new do |spec|
   end
 
   if respond_to?(:spm_dependency, true)
+    BotaDeviceSDKSPMWorkaround.install!(SPM)
     local_path = ENV[apple.fetch("localPackagePathEnvironment")]
     source = local_path.nil? || local_path.empty? ? apple.fetch("packageUrl") : File.expand_path(local_path)
     requirement = local_path.nil? || local_path.empty? ? {

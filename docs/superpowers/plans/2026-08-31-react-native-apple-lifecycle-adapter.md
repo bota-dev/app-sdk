@@ -80,6 +80,8 @@
 **Files:**
 - Create: `tools/react-native/create-apple-adapter-consumer.rb`
 - Create: `tools/react-native/test-apple-adapter.sh`
+- Create: `frameworks/react-native/scripts/bota_device_sdk_spm_workaround.rb`
+- Create: `frameworks/react-native/test/apple-spm-workaround.test.rb`
 - Modify: `frameworks/react-native/package.json`
 - Modify: `.github/workflows/ci.yml`
 
@@ -93,6 +95,7 @@
 - [x] **Step 4: Add the same build gate to a macOS CI job** after the nested npm install.
 - [x] **Step 5: Commit** the build gate with the required Codex co-author trailer.
 - [x] **Step 6: Lock the Ruby build toolchain, select Xcode 26.3 explicitly in CI, and resolve the default remote Apple package at the synchronized version.**
+- [x] **Step 7: Carry React Native's target-scoped module-map deduplication for the 0.86.3 floor** so the static `BotaDeviceSDK` pod builds against its binary Swift-package dependency on Xcode 26.3 without consumer Podfile changes.
 
 ### Task 5: Documentation, Review, And Main Integration
 
