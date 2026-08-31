@@ -52,11 +52,11 @@
 - Consumes: `BotaDeviceClient.configure(_:)`, `BotaDeviceClient.destroy()`, and an optional application-support filesystem path.
 - Produces: `BotaDeviceSDKAppleLifecycle.configure(applicationSupportDirectory:) async throws`, `destroy() async`, `state() -> String`, and fixed low-volume iOS capabilities.
 
-- [ ] **Step 1: Write failing XCTest cases** for initial state, successful configure, coalesced concurrent configure, configure failure, recovery after failure, destroy during configuration, idempotent destroy, exact directory forwarding, and capability values.
-- [ ] **Step 2: Run `swift test --package-path frameworks/react-native`** and confirm failure because the lifecycle actor is missing.
-- [ ] **Step 3: Implement the minimum actor and injectable Apple-client protocol** so configure calls are coalesced, destroy is ordered after an in-flight configure, and lifecycle state cannot be changed by a stale continuation.
-- [ ] **Step 4: Run XCTest with strict concurrency and warnings as errors** and confirm all lifecycle tests pass.
-- [ ] **Step 5: Commit** the Swift lifecycle behavior with the required Codex co-author trailer.
+- [x] **Step 1: Write failing XCTest cases** for initial state, successful configure, coalesced concurrent configure, configure failure, recovery after failure, destroy during configuration, idempotent destroy, exact directory forwarding, and capability values.
+- [x] **Step 2: Run `swift test --package-path frameworks/react-native`** and confirm failure because the lifecycle actor is missing.
+- [x] **Step 3: Implement the minimum actor and injectable Apple-client protocol** so configure calls are coalesced, destroy is ordered after an in-flight configure, and lifecycle state cannot be changed by a stale continuation.
+- [x] **Step 4: Run XCTest with strict concurrency and warnings as errors** and confirm all lifecycle tests pass.
+- [x] **Step 5: Commit** the Swift lifecycle behavior with the required Codex co-author trailer.
 
 ### Task 3: Objective-C Completion Bridge And TurboModule
 
