@@ -11,7 +11,7 @@ physical-device parity gates.
 
 ## Current Status
 
-The App SDK is versioned at `1.0.0`: the repository has a generated
+The App SDK is versioned at `1.0.1`: the repository has a generated
 protocol manifest, 50 language-neutral compatibility fixtures, bounded Rust
 decoders, byte-exact serializers, stable models/errors, and deterministic
 discovery, connection-recovery, provisioning, authenticated-reset, resumable
@@ -83,12 +83,12 @@ In Xcode, choose **File > Add Package Dependencies** and enter:
 https://github.com/bota-dev/app-sdk.git
 ```
 
-Select version `1.0.0` or **Up to Next Major Version**, then add the
+Select version `1.0.1` or **Up to Next Major Version**, then add the
 `BotaAppleSDK` product to an iOS 15+ or macOS 13+ target. Swift packages can
 declare the dependency directly:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", from: "1.0.0")
+.package(url: "https://github.com/bota-dev/app-sdk.git", from: "1.0.1")
 ```
 
 Import and configure the client from application code:

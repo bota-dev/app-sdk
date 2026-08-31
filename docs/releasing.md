@@ -34,8 +34,7 @@ new hardware or firmware requires another lab run.
 ## Prepare A Version
 
 Start from a clean `main` branch. Update every synchronized version authority
-and commit that version bump before calculating the Apple checksum. For
-`1.0.0`, the authorities are already synchronized.
+and commit that version bump before calculating the Apple checksum.
 
 Generate the deterministic archive and write the matching root Swift package:
 
@@ -68,7 +67,7 @@ npm run test:tooling
 npm run test:release
 npm run sync:apple-fixtures
 npm run test:workflows -- --sdk-path ../react-native-sdk
-cargo xtask release verify-tag v1.0.0
+cargo xtask release verify-tag "v$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml)"
 cargo xtask protocol generate --check
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
@@ -120,8 +119,9 @@ arm64/x86_64 macOS slices.
 After the release commit is on `main`, create and push the exact annotated tag:
 
 ```bash
-git tag -a v1.0.0 -m "Bota App SDK 1.0.0"
-git push origin v1.0.0
+VERSION=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml)
+git tag -a "v$VERSION" -m "Bota App SDK $VERSION"
+git push origin "v$VERSION"
 ```
 
 The tag workflow:

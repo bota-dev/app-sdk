@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sdkVersion": "1.0.0",
+  "sdkVersion": "1.0.1",
   "firmwareBaseline": {
     "version": "1.0.17",
     "revision": "8b175a89374c9833bdaa67fe73ada6672618e5f7"
@@ -18,13 +18,13 @@
     "notifications": 12,
     "protocolDecoders": 10,
     "protocolEncoders": 13,
-    "publishedFacades": []
+    "publishedFacades": ["apple"]
   },
   "platformFacades": {
     "apple": {
       "implementationStatus": "automated_verified",
       "physicalDeviceStatus": "not_run",
-      "publicationStatus": "release_process_ready_manual_hardware_approval_required",
+      "publicationStatus": "published",
       "evidence": "release/evidence/1.0.0-alpha.1-apple-facade.md",
       "models": {
         "bota_pin": "not_run",
@@ -196,7 +196,7 @@
     "1.0.17 is the earliest version established by the frozen firmware baseline; earlier introduction versions have not been audited.",
     "Supported means at least one positive and one malformed, rejected, or recovery fixture exists.",
     "Workflow support covers deterministic core behavior only, not native transports or physical-device acceptance.",
-    "Native ABI foundation verification does not publish Apple or Android facade capability.",
-    "Apple automated facade acceptance does not imply physical-device verification or publication approval."
+    "The native ABI foundation alone does not publish Apple or Android facade capability.",
+    "Apple publication does not imply supervised physical-device verification."
   ]
 }

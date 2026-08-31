@@ -6,16 +6,33 @@ fn root() -> PathBuf {
 
 #[test]
 fn version_tag_and_publishable_metadata_are_synchronized() {
-    let release = xtask::release::verify_release(&root(), "v1.0.0").unwrap();
+    let release = xtask::release::verify_release(&root(), "v1.0.1").unwrap();
 
-    assert_eq!(release.version, "1.0.0");
+    assert_eq!(release.version, "1.0.1");
     assert_eq!(release.crate_name, "bota-device-sdk-core");
+}
+
+#[test]
+fn compatibility_metadata_reports_the_public_apple_facade() {
+    let path = root().join("protocol/compatibility/firmware-compatibility.json");
+    let contents = fs::read_to_string(path).unwrap();
+    let compatibility: serde_json::Value = serde_json::from_str(&contents).unwrap();
+
+    assert_eq!(compatibility["nativeAbi"]["publishedFacades"], serde_json::json!(["apple"]));
+    assert_eq!(
+        compatibility["platformFacades"]["apple"]["publicationStatus"],
+        "published"
+    );
+    assert_eq!(
+        compatibility["platformFacades"]["apple"]["physicalDeviceStatus"],
+        "not_run"
+    );
 }
 
 #[test]
 fn mismatched_or_unprefixed_tags_are_rejected() {
     let wrong_version = xtask::release::verify_release(&root(), "v1.0.0-alpha.1").unwrap_err();
-    let missing_prefix = xtask::release::verify_release(&root(), "1.0.0").unwrap_err();
+    let missing_prefix = xtask::release::verify_release(&root(), "1.0.1").unwrap_err();
 
     assert!(wrong_version.contains("does not match"));
     assert!(missing_prefix.contains("must start with v"));

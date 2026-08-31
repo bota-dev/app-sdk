@@ -163,8 +163,8 @@ engine handles, borrowed inputs, explicitly freed SDK-owned outputs, and stable
 numeric request/cancellation identity. UniFFI `0.32.0` remains a non-shipping
 comparison spike only. The shipping boundary uses versioned typed field-list
 packets; the JSON smoke envelope remains comparison tooling and is not a public
-serialization contract. The Apple facade is published at `v1.0.0`; the
-remaining planned facades are not yet published. See
+serialization contract. The Apple facade has been published since `v1.0.0`;
+the remaining planned facades are not yet published. See
 [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md) and the
 [`FFI evaluation`](docs/spikes/ffi-boundary-evaluation.md).
 
