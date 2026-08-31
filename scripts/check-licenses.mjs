@@ -125,15 +125,17 @@ try {
 
   if (reportIndex < 0 && existsSync('package.json')) {
     const root = readJson('package.json');
-    const releaseTools = ANDROID_RELEASE_TOOLING.map((name) => {
-      const expected = root.devDependencies?.[name];
-      const installed = packages.find((pkg) => pkg.name === name);
-      if (!expected || expected !== installed?.version || licenseOf(installed) !== 'MIT') {
-        throw new Error(`license-gate: Android release tool ${name} must be pinned and MIT licensed`);
-      }
-      return `${name}@${installed.version}`;
-    });
-    console.log(`release tooling: ${releaseTools.join(', ')}`);
+    if (root.name === '@bota.dev/app-sdk-workspace') {
+      const releaseTools = ANDROID_RELEASE_TOOLING.map((name) => {
+        const expected = root.devDependencies?.[name];
+        const installed = packages.find((pkg) => pkg.name === name);
+        if (!expected || expected !== installed?.version || licenseOf(installed) !== 'MIT') {
+          throw new Error(`license-gate: Android release tool ${name} must be pinned and MIT licensed`);
+        }
+        return `${name}@${installed.version}`;
+      });
+      console.log(`release tooling: ${releaseTools.join(', ')}`);
+    }
   }
 
   console.log(

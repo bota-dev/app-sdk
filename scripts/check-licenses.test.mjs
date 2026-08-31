@@ -30,6 +30,15 @@ const writeInstalledPackageFixture = ({ missingEntry }) => {
     })}\n`
   );
   writeFileSync(
+    join(root, 'package.json'),
+    `${JSON.stringify({
+      name: '@bota.dev/nested-package',
+      version: '1.0.0',
+      private: true,
+      devDependencies: {},
+    })}\n`
+  );
+  writeFileSync(
     join(dependency, 'package.json'),
     `${JSON.stringify({
       name: 'permissive-package',

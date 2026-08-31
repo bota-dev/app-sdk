@@ -98,6 +98,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   authority for published Maven dependencies. Package generation must copy
   those licenses into the SPDX document, and the license workflow must reject
   an unreviewed coordinate, version, or SPDX license.
+- The shared npm license checker scans whichever package invokes it. Its extra
+  Android release-tool pin check belongs only to the root
+  `@bota.dev/app-sdk-workspace`; nested React Native verification must not be
+  required to install root-only ZIP and XML tooling.
 - Android CI packages once, reconstructs `target/android-m2` from that exact
   `target/android-release` payload, and passes the immutable repository through
   the API 26 x86 and API 35 x86_64 emulator lanes. `test-emulator-lane.sh` owns
