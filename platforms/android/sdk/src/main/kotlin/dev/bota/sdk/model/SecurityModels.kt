@@ -24,6 +24,19 @@ public class ProvisioningMaterial(
     public val deviceToken: ByteArray get() = storedDeviceToken.copyOf()
 }
 
+public enum class ProvisioningFailure(public val wireValue: String) {
+    InvalidToken("invalid_token"),
+    StorageError("storage_error"),
+    ChunkError("chunk_error"),
+    AlreadyPaired("already_paired"),
+    Unknown("unknown"),
+}
+
+public data class DeprovisionResult(
+    public val success: Boolean,
+    public val error: ProvisioningFailure? = null,
+)
+
 public class FactoryResetGrantRequest(
     public val serialNumber: String,
     nonce: ByteArray,

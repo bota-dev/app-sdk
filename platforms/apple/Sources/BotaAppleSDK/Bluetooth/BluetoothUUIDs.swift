@@ -15,6 +15,7 @@ enum BotaBluetoothUUIDs {
     static let timeSync = "B07A0002-0004-1000-8000-00805F9B34FB"
     static let deviceCommand = "B07A0002-0005-1000-8000-00805F9B34FB"
     static let pairingState = "B07A0003-0001-1000-8000-00805F9B34FB"
+    static let provisioningResult = "B07A0003-0002-1000-8000-00805F9B34FB"
     static let apiEndpoint = "B07A0003-0003-1000-8000-00805F9B34FB"
     static let deviceSettings = "B07A0003-0006-1000-8000-00805F9B34FB"
     static let recordingList = "B07A0004-0002-1000-8000-00805F9B34FB"

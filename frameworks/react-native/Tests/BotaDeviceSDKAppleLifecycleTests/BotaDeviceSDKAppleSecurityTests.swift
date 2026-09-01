@@ -118,13 +118,15 @@ final class BotaDeviceSDKAppleSecurityTests: XCTestCase {
             mtu: 247
         )
         try await operation.value
-        try await security.deprovision(connected)
+        let deprovision = try await security.deprovision(connected, grantBlob: "AQID")
 
         let snapshot = await client.snapshot()
         XCTAssertEqual(snapshot.material?.apiEndpoint, Data("https://api.bota.dev".utf8))
         XCTAssertEqual(snapshot.material?.deviceToken, Data("dtok_example".utf8))
         XCTAssertEqual(snapshot.material?.mtu, 247)
         XCTAssertEqual(snapshot.deprovisionedSerials, [connected.serialNumber])
+        XCTAssertEqual(snapshot.deprovisionGrant, "AQID")
+        XCTAssertEqual(deprovision, DeprovisionResult(success: true))
     }
 
     func testFactoryResetGrantRoundTripAndExactGenerationResumeDelegateToAppleFacade() async throws {
@@ -355,6 +357,7 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
     struct Snapshot: Sendable {
         let material: ProvisioningMaterial?
         let deprovisionedSerials: [String]
+        let deprovisionGrant: String?
         let factoryResetGrant: Data?
         let factoryResetCancelled: Bool
         let resumedBindingGenerations: [UInt64]
@@ -372,6 +375,7 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
 
     private var material: ProvisioningMaterial?
     private var deprovisionedSerials: [String] = []
+    private var deprovisionGrant: String?
     private var factoryResetGrant: Data?
     private var factoryResetCancelled = false
     private var resumedBindingGenerations: [UInt64] = []
@@ -407,8 +411,13 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
         ))
     }
 
-    func deprovision(_ device: ConnectedDevice) async throws {
+    func deprovision(
+        _ device: ConnectedDevice,
+        grantBlob: String
+    ) async throws -> DeprovisionResult {
         deprovisionedSerials.append(device.serialNumber)
+        deprovisionGrant = grantBlob
+        return DeprovisionResult(success: true)
     }
 
     func isProvisioned(_ device: ConnectedDevice) async throws -> Bool { true }
@@ -523,6 +532,7 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
         Snapshot(
             material: material,
             deprovisionedSerials: deprovisionedSerials,
+            deprovisionGrant: deprovisionGrant,
             factoryResetGrant: factoryResetGrant,
             factoryResetCancelled: factoryResetCancelled,
             resumedBindingGenerations: resumedBindingGenerations,

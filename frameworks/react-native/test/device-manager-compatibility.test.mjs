@@ -128,6 +128,11 @@ test('internal DeviceManager delegates frozen provisioning and control commands'
   await manager.deliverBackendPubkey(connectedDevice, publicKey);
   await manager.writeGrant(connectedDevice, 'AQID');
   await manager.syncTime(connectedDevice.id);
+  await manager.provision(connectedDevice, 'dtok_example', 'gamma');
+  assert.deepEqual(
+    await manager.deprovision(connectedDevice, 'AQID'),
+    { success: true }
+  );
 
   assert.deepEqual(fake.controlCalls, [
     ['isProvisioned', connectedDevice],
@@ -138,6 +143,51 @@ test('internal DeviceManager delegates frozen provisioning and control commands'
     ['deliverBackendPublicKey', connectedDevice, publicKey],
     ['writeGrant', connectedDevice, 'AQID'],
     ['syncTime', connectedDevice],
+  ]);
+  assert.deepEqual(fake.provisioningCalls, [
+    [
+      'provision',
+      connectedDevice,
+      {
+        apiEndpointCode: 2,
+        deviceToken: 'dtok_example',
+        mtu: connectedDevice.mtu,
+      },
+    ],
+    ['deprovision', connectedDevice, 'AQID'],
+  ]);
+});
+
+test('internal DeviceManager recovers ALREADY_PAIRED with nonce-bound deprovision', async () => {
+  const fake = createFakeClient();
+  fake.provisioningFailures.push(Object.assign(new Error('already paired'), {
+    protocolStatus: 4,
+  }));
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+  await manager.connect(discoveredDevice);
+  const nonces = [];
+
+  await manager.provision(connectedDevice, 'dtok_retry', 'production', {
+    fetchDeprovisionGrant: async (nonce) => {
+      nonces.push(nonce);
+      return 'retry-grant';
+    },
+  });
+
+  assert.deepEqual(nonces, ['cd'.repeat(16)]);
+  assert.deepEqual(fake.provisioningCalls, [
+    [
+      'provision',
+      connectedDevice,
+      { apiEndpointCode: 1, deviceToken: 'dtok_retry', mtu: connectedDevice.mtu },
+    ],
+    ['deprovision', connectedDevice, 'retry-grant'],
+    [
+      'provision',
+      connectedDevice,
+      { apiEndpointCode: 1, deviceToken: 'dtok_retry', mtu: connectedDevice.mtu },
+    ],
   ]);
 });
 
@@ -291,6 +341,8 @@ function createFakeClient() {
     recordingControlCalls: [],
     wifiConfiguration: null,
     controlCalls: [],
+    provisioningCalls: [],
+    provisioningFailures: [],
     emitDiscovered: (device) => onDiscovered?.(device),
     emitWiFiStatus: (status) => onWiFiStatus?.(status),
     emitDeviceStatus: (status) => onDeviceStatus?.(status),
@@ -332,8 +384,29 @@ function createFakeClient() {
     },
     logs: { async subscribe() { throw new Error('unused'); } },
     provisioning: {
-      async provision() {},
-      async deprovision() {},
+      async provision(device, provider) {
+        const request = {
+          serialNumber: device.serialNumber,
+          nonce: 'cd'.repeat(16),
+          devicePublicKey: 'ab'.repeat(64),
+        };
+        const material = await provider(request);
+        fake.provisioningCalls.push([
+          'provision',
+          device,
+          {
+            apiEndpointCode: material.apiEndpoint.charCodeAt(0),
+            deviceToken: material.deviceToken,
+            mtu: material.mtu,
+          },
+        ]);
+        const failure = fake.provisioningFailures.shift();
+        if (failure) throw failure;
+      },
+      async deprovision(device, grantBlob) {
+        fake.provisioningCalls.push(['deprovision', device, grantBlob]);
+        return { success: true };
+      },
       async readConnectionSettings() { throw new Error('unused'); },
       async writeConnectionSettings() {},
     },

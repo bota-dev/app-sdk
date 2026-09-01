@@ -144,9 +144,11 @@ final class PhysicalDeviceTests: XCTestCase {
         guard configuration.environment["BOTA_ALLOW_FACTORY_RESET"] != "1" else {
             throw ConfigurationError.invalid("run deprovision and factory reset separately")
         }
+        let grant = try configuration.value("BOTA_DEPROVISION_GRANT_BASE64")
         try await withClient(configuration) { client in
             let device = try await self.connectSelected(client, configuration)
-            try await client.provisioning.deprovision(device)
+            let result = try await client.provisioning.deprovision(device, grantBlob: grant)
+            XCTAssertTrue(result.success)
         }
     }
 

@@ -140,6 +140,7 @@ internal object SecureUUIDs {
     val ControlService: UUID = UUID.fromString("b07a0002-0000-1000-8000-00805f9b34fb")
     val DeviceCommand: UUID = UUID.fromString("b07a0002-0005-1000-8000-00805f9b34fb")
     val ProvisioningService: UUID = UUID.fromString("b07a0003-0000-1000-8000-00805f9b34fb")
+    val ProvisioningResult: UUID = UUID.fromString("b07a0003-0002-1000-8000-00805f9b34fb")
     val DeviceSettings: UUID = UUID.fromString("b07a0003-0006-1000-8000-00805f9b34fb")
 }
 

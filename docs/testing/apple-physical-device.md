@@ -118,8 +118,13 @@ authorizing the destructive reset workflow:
 
 ```bash
 BOTA_ALLOW_DEPROVISION=1 \
+BOTA_DEPROVISION_GRANT_BASE64='<nonce-bound deprovision grant>' \
 tools/apple/test-package.sh --filter PhysicalDeviceTests/testRemoveOnlyDeprovision
 ```
+
+The grant must be issued for the connected device's current BLE session nonce.
+The test writes it before opcode `0x05` and requires a successful firmware
+result.
 
 Do not set `BOTA_ALLOW_DEPROVISION` and `BOTA_ALLOW_FACTORY_RESET` in the same
 run.

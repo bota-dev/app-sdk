@@ -135,7 +135,12 @@ recording start/stop results plus recording-state reads and one owned state
 stream through Rust, Apple, Android, and Codegen. A third focused slice now
 preserves the corresponding internal `DeviceManager` grant overloads,
 pending-state precedence, cache fallback, and synchronous subscription removal.
-Reset compatibility remains in Task 2 and will be committed separately.
+The fourth focused slice fixes remove-only deprovision across Apple, Android,
+Codegen, and the internal compatibility owner: the grant is written natively,
+the result subscription starts before opcode `0x05`, typed firmware failures
+cross JavaScript, and frozen provisioning retries `ALREADY_PAIRED` with a fresh
+nonce-bound grant. Reset compatibility remains in Task 2 and will be committed
+separately.
 
 **Files:**
 - Modify: `frameworks/react-native/src/specs/NativeBotaDeviceSDK.ts`

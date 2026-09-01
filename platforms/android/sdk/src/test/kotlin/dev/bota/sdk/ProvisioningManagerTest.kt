@@ -15,15 +15,18 @@ import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.model.ConnectionState
 import dev.bota.sdk.model.DeviceConnectionSettings
 import dev.bota.sdk.model.DeviceType
+import dev.bota.sdk.model.DeprovisionResult
 import dev.bota.sdk.model.FactoryResetGrantRequest
 import dev.bota.sdk.model.ProvisioningMaterial
 import dev.bota.sdk.model.ProvisioningMaterialRequest
+import dev.bota.sdk.model.ProvisioningFailure
 import java.util.UUID
 import java.util.Base64
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -205,18 +208,48 @@ class ProvisioningManagerTest {
     }
 
     @Test
-    fun deprovisionWritesOnlyTheRemoveCommandAndStartsNoResetWorkflow() = runTest {
+    fun deprovisionWritesGrantThenSubscribesBeforeRemoveCommand() = runTest {
         val fixture = SecureRuntimeFixture()
         val manager = ProvisioningManager()
         fixture.connect()
         manager.attach(fixture.runtime)
+        fixture.notifications[BotaSecureUUIDs.ProvisioningResult] = listOf(byteArrayOf(0))
 
-        manager.deprovision(fixture.device)
+        val result = manager.deprovision(
+            fixture.device,
+            Base64.getEncoder().encodeToString(byteArrayOf(1, 2, 3)),
+        )
 
-        assertArrayEquals(byteArrayOf(5), fixture.writes.single().value)
+        assertEquals(DeprovisionResult(true), result)
+        assertEquals(
+            listOf("write:1,2,3", "subscribe", "write:5", "unsubscribe"),
+            fixture.deprovisionActions,
+        )
+        assertArrayEquals(byteArrayOf(1, 2, 3), fixture.writes[0].value)
+        assertArrayEquals(byteArrayOf(5), fixture.writes[1].value)
         assertEquals(listOf(1u.toUByte()), fixture.encodedDeviceCommands)
-        assertEquals(BotaSecureUUIDs.DeviceCommand, fixture.writes.single().characteristic)
+        assertEquals(
+            listOf(BotaSecureUUIDs.DeviceCommand, BotaSecureUUIDs.DeviceCommand),
+            fixture.writes.map { it.characteristic },
+        )
         assertTrue(fixture.runner.commands.isEmpty())
+        manager.detach()
+    }
+
+    @Test
+    fun deprovisionReturnsFirmwareRejectionWithoutThrowing() = runTest {
+        val fixture = SecureRuntimeFixture()
+        val manager = ProvisioningManager()
+        fixture.connect()
+        manager.attach(fixture.runtime)
+        fixture.notifications[BotaSecureUUIDs.ProvisioningResult] = listOf(byteArrayOf(1))
+
+        val result = manager.deprovision(
+            fixture.device,
+            Base64.getEncoder().encodeToString(byteArrayOf(4, 5, 6)),
+        )
+
+        assertEquals(DeprovisionResult(false, ProvisioningFailure.InvalidToken), result)
         manager.detach()
     }
 
@@ -271,6 +304,8 @@ internal class SecureRuntimeFixture(
     val operations = DeviceOperationCoordinator()
     val writes = mutableListOf<Write>()
     val reads = mutableListOf<Read>()
+    val notifications = mutableMapOf<UUID, List<ByteArray>>()
+    val deprovisionActions = mutableListOf<String>()
     val decodedSettingsBytes = mutableListOf<ByteArray>()
     var readValue = byteArrayOf()
     var parsedSettings = DeviceConnectionSettings(
@@ -303,11 +338,19 @@ internal class SecureRuntimeFixture(
         operations = operations,
         directWrite = { peripheralId, service, characteristic, value ->
             writes += Write(peripheralId, service, characteristic, value.copyOf())
+            if (characteristic == BotaSecureUUIDs.DeviceCommand) {
+                deprovisionActions += "write:${value.joinToString(",") { it.toUByte().toString() }}"
+            }
         },
         directRead = { peripheralId, service, characteristic ->
             reads += Read(peripheralId, service, characteristic)
             readValue.copyOf()
         },
+        directSubscribe = { _, _, characteristic ->
+            deprovisionActions += "subscribe"
+            flow { notifications[characteristic].orEmpty().forEach { emit(it.copyOf()) } }
+        },
+        directUnsubscribe = { _, _, _ -> deprovisionActions += "unsubscribe" },
         parseConnectionSettings = {
             decodedSettingsBytes += it.copyOf()
             parsedSettings
@@ -396,6 +439,7 @@ internal object BotaSecureUUIDs {
     val TimeSync: UUID = UUID.fromString("b07a0002-0004-1000-8000-00805f9b34fb")
     val DeviceCommand: UUID = UUID.fromString("b07a0002-0005-1000-8000-00805f9b34fb")
     val ProvisioningService: UUID = UUID.fromString("b07a0003-0000-1000-8000-00805f9b34fb")
+    val ProvisioningResult: UUID = UUID.fromString("b07a0003-0002-1000-8000-00805f9b34fb")
     val PairingState: UUID = UUID.fromString("b07a0003-0001-1000-8000-00805f9b34fb")
     val ApiEndpoint: UUID = UUID.fromString("b07a0003-0003-1000-8000-00805f9b34fb")
     val DeviceSettings: UUID = UUID.fromString("b07a0003-0006-1000-8000-00805f9b34fb")

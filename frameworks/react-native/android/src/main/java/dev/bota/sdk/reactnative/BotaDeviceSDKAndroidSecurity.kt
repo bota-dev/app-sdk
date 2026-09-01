@@ -4,6 +4,7 @@ import dev.bota.sdk.BotaDeviceClient
 import dev.bota.sdk.DeviceApiEnvironment
 import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.model.DeviceConnectionSettings
+import dev.bota.sdk.model.DeprovisionResult
 import dev.bota.sdk.model.FactoryResetCompletion
 import dev.bota.sdk.model.FactoryResetGrantRequest
 import dev.bota.sdk.model.ProvisioningMaterial
@@ -68,7 +69,7 @@ internal interface BotaDeviceSDKAndroidSecurityClient {
         provider: suspend (ProvisioningMaterialRequest) -> ProvisioningMaterial,
     )
 
-    suspend fun deprovision(device: ConnectedDevice)
+    suspend fun deprovision(device: ConnectedDevice, grantBlob: String): DeprovisionResult
 
     suspend fun readConnectionSettings(device: ConnectedDevice): DeviceConnectionSettings
 
@@ -153,9 +154,10 @@ internal class BotaDeviceSDKSharedAndroidSecurityClient(
         client.provisioning.provision(device, provider)
     }
 
-    override suspend fun deprovision(device: ConnectedDevice) {
-        client.provisioning.deprovision(device)
-    }
+    override suspend fun deprovision(
+        device: ConnectedDevice,
+        grantBlob: String,
+    ): DeprovisionResult = client.provisioning.deprovision(device, grantBlob)
 
     override suspend fun readConnectionSettings(device: ConnectedDevice): DeviceConnectionSettings =
         client.provisioning.readConnectionSettings(device)
@@ -216,9 +218,8 @@ internal class BotaDeviceSDKAndroidSecurity(
         }
     }
 
-    suspend fun deprovision(device: ConnectedDevice) {
-        client.deprovision(device)
-    }
+    suspend fun deprovision(device: ConnectedDevice, grantBlob: String): DeprovisionResult =
+        client.deprovision(device, grantBlob)
 
     suspend fun isProvisioned(device: ConnectedDevice): Boolean = client.isProvisioned(device)
     suspend fun readPublicKey(device: ConnectedDevice): String? = client.readPublicKey(device)

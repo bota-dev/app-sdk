@@ -144,19 +144,52 @@ final class ProvisioningManagerTests: XCTestCase {
         XCTAssertEqual(reads.first?.characteristicUUID, BotaBluetoothUUIDs.deviceSettings)
     }
 
-    func testDeprovisionWritesOnlyTheRemoveOpcode() async throws {
+    func testDeprovisionWritesGrantThenSubscribesBeforeRemoveOpcode() async throws {
         let runner = SecureWorkflowRunner()
         let recorder = SecureLifecycleRecorder()
         let manager = ProvisioningManager()
         await manager.attach(await secureRuntime(runner: runner, recorder: recorder))
+        await recorder.setNotifications(
+            [Data([0])],
+            for: BotaBluetoothUUIDs.provisioningResult
+        )
 
-        try await manager.deprovision(secureDevice())
+        let result = try await manager.deprovision(
+            secureDevice(),
+            grantBlob: Data([1, 2, 3]).base64EncodedString()
+        )
 
         let writes = await recorder.writes
-        XCTAssertEqual(writes.map(\.data), [Data([5])])
-        XCTAssertEqual(writes.first?.characteristicUUID, BotaBluetoothUUIDs.deviceCommand)
+        XCTAssertEqual(result, .init(success: true))
+        XCTAssertEqual(writes.map(\.data), [Data([1, 2, 3]), Data([5])])
+        XCTAssertEqual(
+            writes.map(\.characteristicUUID),
+            [BotaBluetoothUUIDs.deviceCommand, BotaBluetoothUUIDs.deviceCommand]
+        )
         XCTAssertFalse(writes.contains { $0.data == Data([6]) })
+        let subscribed = await recorder.subscribedCharacteristics
+        let unsubscribed = await recorder.unsubscribedCharacteristics
+        XCTAssertEqual(subscribed, [BotaBluetoothUUIDs.provisioningResult])
+        XCTAssertEqual(unsubscribed, [BotaBluetoothUUIDs.provisioningResult])
         let commands = await runner.commands
         XCTAssertTrue(commands.isEmpty)
+    }
+
+    func testDeprovisionReturnsFirmwareRejectionWithoutThrowing() async throws {
+        let runner = SecureWorkflowRunner()
+        let recorder = SecureLifecycleRecorder()
+        let manager = ProvisioningManager()
+        await manager.attach(await secureRuntime(runner: runner, recorder: recorder))
+        await recorder.setNotifications(
+            [Data([1])],
+            for: BotaBluetoothUUIDs.provisioningResult
+        )
+
+        let result = try await manager.deprovision(
+            secureDevice(),
+            grantBlob: Data([4, 5, 6]).base64EncodedString()
+        )
+
+        XCTAssertEqual(result, .init(success: false, error: .invalidToken))
     }
 }

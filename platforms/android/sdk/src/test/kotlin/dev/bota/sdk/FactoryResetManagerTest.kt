@@ -1,6 +1,7 @@
 package dev.bota.sdk
 
 import dev.bota.sdk.internal.host.PersistedFactoryResetResult
+import dev.bota.sdk.model.DeviceConnectionSettings
 import dev.bota.sdk.model.FactoryResetCompletion
 import kotlinx.coroutines.async
 import kotlinx.coroutines.supervisorScope
@@ -118,7 +119,13 @@ class FactoryResetManagerTest {
             reset.factoryReset(fixture.device, "reset-command-1", 9u) { byteArrayOf(1) }
         }.exceptionOrNull()
         fixture.failResetRegistration = false
-        provisioning.deprovision(fixture.device)
+        provisioning.writeConnectionSettings(
+            DeviceConnectionSettings(
+                enabledConnections = DeviceConnectionSettings.EnabledConnections(wifi = true, cellular = false),
+                uploadNetworkPreference = listOf(DeviceConnectionSettings.ConnectionType.Wifi),
+            ),
+            fixture.device,
+        )
 
         assertEquals("reset registration failed", error?.message)
         assertEquals(listOf("reset-command-1"), fixture.unregisteredGenerations)

@@ -1074,7 +1074,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
-    @objc(deprovisionWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:completion:)
+    @objc(deprovisionWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:grantBlob:completion:)
     public func deprovision(
         id: String,
         serialNumber: String,
@@ -1084,11 +1084,12 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         isProvisioned: Bool,
         connectionState: String,
         mtu: Double,
-        completion: @escaping @Sendable (NSError?) -> Void
+        grantBlob: String,
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
     ) {
         Task {
             do {
-                try await security.deprovision(Self.connectedDevice(
+                let result = try await security.deprovision(Self.connectedDevice(
                     id: id,
                     serialNumber: serialNumber,
                     deviceType: deviceType,
@@ -1097,10 +1098,13 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                     isProvisioned: isProvisioned,
                     connectionState: connectionState,
                     mtu: mtu
-                ))
-                completion(nil)
+                ), grantBlob: grantBlob)
+                completion([
+                    "success": result.success,
+                    "error": result.error?.rawValue as Any,
+                ], nil)
             } catch {
-                completion(error as NSError)
+                completion(nil, error as NSError)
             }
         }
     }

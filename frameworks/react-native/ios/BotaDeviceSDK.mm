@@ -759,6 +759,7 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
 }
 
 - (void)deprovision:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+          grantBlob:(NSString *)grantBlob
              resolve:(RCTPromiseResolveBlock)resolve
               reject:(RCTPromiseRejectBlock)reject
 {
@@ -771,12 +772,14 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
             isProvisioned:device.isProvisioned()
           connectionState:device.connectionState()
                       mtu:device.mtu()
-               completion:^(NSError *_Nullable error) {
+                grantBlob:grantBlob
+               completion:^(NSDictionary *_Nullable result,
+                            NSError *_Nullable error) {
                  if (error != nil) {
                    BotaRejectAppleError(error, reject);
                    return;
                  }
-                 resolve(nil);
+                 resolve(result);
                }];
 }
 

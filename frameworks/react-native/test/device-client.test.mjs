@@ -280,8 +280,9 @@ function nativeFixture() {
           provisioningReject?.(new Error(message));
         }
       },
-      async deprovision(device) {
-        calls.push(['deprovision', device]);
+      async deprovision(device, grantBlob) {
+        calls.push(['deprovision', device, grantBlob]);
+        return { success: false, error: 'invalid_token' };
       },
       async writeConnectionSettings(device, settings) {
         calls.push(['writeConnectionSettings', device, settings]);
@@ -540,7 +541,8 @@ test('provisioning resolves nonce-bound native material and supports remove-only
       mtu: 247,
     };
   });
-  await client.provisioning.deprovision(connected);
+  const deprovision = await client.provisioning.deprovision(connected, 'AQID');
+  assert.deepEqual(deprovision, { success: false, error: 'invalid_token' });
 
   assert.deepEqual(fixture.calls, [
     ['provision', connected],
@@ -553,7 +555,7 @@ test('provisioning resolves nonce-bound native material and supports remove-only
         mtu: 247,
       },
     ],
-    ['deprovision', connected],
+    ['deprovision', connected, 'AQID'],
   ]);
 });
 

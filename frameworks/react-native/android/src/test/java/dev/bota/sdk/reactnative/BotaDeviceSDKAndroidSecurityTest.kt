@@ -5,6 +5,7 @@ import dev.bota.sdk.DeviceApiEnvironment
 import dev.bota.sdk.model.ConnectionState
 import dev.bota.sdk.model.DeviceType
 import dev.bota.sdk.model.DeviceConnectionSettings
+import dev.bota.sdk.model.DeprovisionResult
 import dev.bota.sdk.model.FactoryResetCompletion
 import dev.bota.sdk.model.FactoryResetGrantRequest
 import dev.bota.sdk.model.ProvisioningMaterial
@@ -133,12 +134,14 @@ class BotaDeviceSDKAndroidSecurityTest {
             mtu = 247u,
         )
         operation.await()
-        security.deprovision(connected)
+        val deprovision = security.deprovision(connected, "AQID")
 
         assertArrayEquals("https://api.bota.dev".encodeToByteArray(), client.material?.apiEndpoint)
         assertArrayEquals("dtok_example".encodeToByteArray(), client.material?.deviceToken)
         assertEquals(247uL, client.material?.mtu)
         assertEquals(listOf(connected.serialNumber), client.deprovisionedSerials)
+        assertEquals("AQID", client.deprovisionGrant)
+        assertEquals(DeprovisionResult(success = true), deprovision)
     }
 
     @Test
@@ -290,6 +293,7 @@ class BotaDeviceSDKAndroidSecurityTest {
     private class TestAndroidSecurityClient : BotaDeviceSDKAndroidSecurityClient {
         var material: ProvisioningMaterial? = null
         val deprovisionedSerials = mutableListOf<String>()
+        var deprovisionGrant: String? = null
         var factoryResetGrant: ByteArray? = null
         var factoryResetCancelled = false
         val resumedBindingGenerations = mutableListOf<ULong>()
@@ -369,8 +373,13 @@ class BotaDeviceSDKAndroidSecurityTest {
             )
         }
 
-        override suspend fun deprovision(device: ConnectedDevice) {
+        override suspend fun deprovision(
+            device: ConnectedDevice,
+            grantBlob: String,
+        ): DeprovisionResult {
             deprovisionedSerials += device.serialNumber
+            deprovisionGrant = grantBlob
+            return DeprovisionResult(success = true)
         }
 
         override suspend fun writeConnectionSettings(

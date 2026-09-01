@@ -10,6 +10,7 @@ import dev.bota.sdk.model.AudioCodec
 import dev.bota.sdk.model.DeviceFlags
 import dev.bota.sdk.model.DeviceLogLine
 import dev.bota.sdk.model.DeviceConnectionSettings
+import dev.bota.sdk.model.DeprovisionResult
 import dev.bota.sdk.model.DeviceRecording
 import dev.bota.sdk.model.DeviceState
 import dev.bota.sdk.model.DeviceStatus
@@ -171,6 +172,11 @@ internal fun RecordingTransferProgress.toWritableMap(): WritableMap = Arguments.
 }
 
 internal fun RecordingControlResult.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putBoolean("success", success)
+    error?.let { putString("error", it.wireValue) }
+}
+
+internal fun DeprovisionResult.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putBoolean("success", success)
     error?.let { putString("error", it.wireValue) }
 }

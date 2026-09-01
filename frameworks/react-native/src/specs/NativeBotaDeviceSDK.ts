@@ -96,6 +96,11 @@ export type NativeProvisioningMaterial = {
   mtu: number;
 };
 
+export type NativeDeprovisionResult = {
+  success: boolean;
+  error?: string;
+};
+
 export type NativeEnabledConnections = {
   wifi: boolean;
   cellular: boolean;
@@ -224,7 +229,10 @@ export interface Spec extends TurboModule {
     device: NativeDiscoveredDevice
   ) => Promise<NativeConnectedDevice>;
   destroy: () => Promise<void>;
-  deprovision: (device: NativeConnectedDevice) => Promise<void>;
+  deprovision: (
+    device: NativeConnectedDevice,
+    grantBlob: string
+  ) => Promise<NativeDeprovisionResult>;
   disconnect: () => Promise<void>;
   isProvisioned: (device: NativeConnectedDevice) => Promise<boolean>;
   readPublicKey: (device: NativeConnectedDevice) => Promise<string | null>;

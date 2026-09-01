@@ -892,7 +892,9 @@ lifecycle adapter now serializes configure and destroy through `BotaAppleSDK`.
 The first device slices also support discovery, selected-device connect,
 serial-strict reconnect, disconnect, current-status reads, and typed status
 subscriptions while native actors own scan and status teardown. Provisioning
-and remove-only deprovision now delegate through the native facades; one-shot
+and grant-gated remove-only deprovision now delegate through the native facades;
+deprovision writes its application grant, subscribes before opcode `0x05`, and
+returns the typed firmware result. One-shot
 request IDs keep asynchronous JavaScript material lookup inside the active
 nonce-bound workflow. Connection-settings writes now expand the frozen
 JavaScript defaults before Codegen, then delegate device-model normalization,

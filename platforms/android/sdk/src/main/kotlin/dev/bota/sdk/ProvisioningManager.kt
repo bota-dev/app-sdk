@@ -6,9 +6,14 @@ import dev.bota.sdk.internal.core.CoreCommand
 import dev.bota.sdk.internal.runCleanupAfter
 import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.model.DeviceConnectionSettings
+import dev.bota.sdk.model.DeprovisionResult
 import dev.bota.sdk.model.ProvisioningMaterial
 import dev.bota.sdk.model.ProvisioningMaterialRequest
+import dev.bota.sdk.model.ProvisioningFailure
+import java.util.Base64
 import java.util.UUID
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeout
 
 public class ProvisioningManager internal constructor() {
     private data class Active(val cancellationId: UUID, val materialId: String)
@@ -95,14 +100,50 @@ public class ProvisioningManager internal constructor() {
         }
     }
 
-    public suspend fun deprovision(device: ConnectedDevice) {
+    public suspend fun deprovision(device: ConnectedDevice, grantBlob: String): DeprovisionResult {
         val configured = configuredRuntime()
         configured.connection.require(device)
+        val grant = try {
+            Base64.getDecoder().decode(grantBlob).takeIf { it.isNotEmpty() }
+                ?: throw IllegalArgumentException("empty grant")
+        } catch (_: IllegalArgumentException) {
+            throw BotaSDKError.Core(
+                BotaErrorCode.InvalidInput,
+                BotaOperation.Validate,
+                retryable = false,
+                protocolStatus = null,
+                detail = "deprovision grant is not valid base64 data",
+            )
+        }
         val operationId = UUID.randomUUID()
         configured.operations.begin(operationId, BotaOperation.Provision)
         try {
+            configured.directWrite(
+                device.id,
+                SecureUUIDs.ControlService,
+                SecureUUIDs.DeviceCommand,
+                grant,
+            )
+            val notifications = configured.directSubscribe(
+                device.id,
+                SecureUUIDs.ProvisioningService,
+                SecureUUIDs.ProvisioningResult,
+            )
             val encoded = configured.encodeDeviceCommand(DeprovisionCommand)
-            configured.directWrite(device.id, SecureUUIDs.ControlService, SecureUUIDs.DeviceCommand, encoded)
+            try {
+                configured.directWrite(device.id, SecureUUIDs.ControlService, SecureUUIDs.DeviceCommand, encoded)
+                return withTimeout(DeprovisionTimeoutMilliseconds) {
+                    deprovisionResult(notifications.first().firstOrNull()?.toUByte())
+                }
+            } finally {
+                runCatching {
+                    configured.directUnsubscribe(
+                        device.id,
+                        SecureUUIDs.ProvisioningService,
+                        SecureUUIDs.ProvisioningResult,
+                    )
+                }
+            }
         } finally {
             configured.operations.end(operationId)
         }
@@ -127,5 +168,15 @@ public class ProvisioningManager internal constructor() {
 
     private companion object {
         const val DeprovisionCommand: UByte = 1u
+        const val DeprovisionTimeoutMilliseconds: Long = 30_000
+
+        fun deprovisionResult(status: UByte?): DeprovisionResult = when (status?.toInt()) {
+            0 -> DeprovisionResult(true)
+            1 -> DeprovisionResult(false, ProvisioningFailure.InvalidToken)
+            2 -> DeprovisionResult(false, ProvisioningFailure.StorageError)
+            3 -> DeprovisionResult(false, ProvisioningFailure.ChunkError)
+            4 -> DeprovisionResult(false, ProvisioningFailure.AlreadyPaired)
+            else -> DeprovisionResult(false, ProvisioningFailure.Unknown)
+        }
     }
 }

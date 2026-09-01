@@ -88,12 +88,20 @@ export type BotaDeviceSDKProvisioningClient = {
     device: ConnectedDevice,
     provider: BotaProvisioningMaterialProvider
   ): Promise<void>;
-  deprovision(device: ConnectedDevice): Promise<void>;
+  deprovision(
+    device: ConnectedDevice,
+    grantBlob: string
+  ): Promise<BotaDeprovisionResult>;
   readConnectionSettings(device: ConnectedDevice): Promise<DeviceConnectionSettings>;
   writeConnectionSettings(
     device: ConnectedDevice,
     settings: DeviceConnectionSettings
   ): Promise<void>;
+};
+
+export type BotaDeprovisionResult = {
+  success: boolean;
+  error?: string;
 };
 
 export type BotaDeviceSDKControlClient = {
@@ -652,8 +660,14 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
       }
     },
 
-    async deprovision(device) {
-      await requireNativeModule().deprovision(toNativeConnectedDevice(device));
+    async deprovision(device, grantBlob) {
+      const result = await requireNativeModule().deprovision(
+        toNativeConnectedDevice(device),
+        grantBlob
+      );
+      return result.error === undefined
+        ? { success: result.success }
+        : { success: result.success, error: result.error };
     },
 
     async readConnectionSettings(device) {

@@ -142,10 +142,13 @@ native facade learns its serial identity, reconnects only by an expected serial,
 disconnects, reads current status, and owns a typed status subscription. It is
 an incremental workflow surface, not class parity.
 The sibling `BotaDeviceSDK.provisioning` facade delegates provisioning and
-remove-only deprovision to native managers. During provisioning, native code
+grant-gated remove-only deprovision to native managers. During provisioning, native code
 emits only a request ID, serial, nonce, and public device key; JavaScript
 returns the endpoint, token, and MTU or rejects the request. Pending requests
 are cancelled on destroy so no continuation outlives its native workflow.
+Deprovision decodes and writes the nonce-bound grant natively, subscribes before
+opcode `0x05`, maps the firmware response to a typed result, and tears down that
+notification owner exactly once.
 Its `writeConnectionSettings` operation accepts the frozen JavaScript settings
 shape, expands omitted defaults at the compatibility boundary, and passes a
 complete typed value through Codegen. Apple and Android apply their public
@@ -324,8 +327,8 @@ Android `ProvisioningManager` and `FactoryResetManager` use the same opaque
 material, durable reset, shared-codec, and facade-wide operation contracts as
 Apple. Provisioning tokens, endpoints, nonces, device public keys, and reset
 grants stay in application-memory host registrations. Bota Note settings are
-normalized before encoding, remove-only deprovision writes only the shared
-deprovision command, and authenticated reset persists the command-bound result
+normalized before encoding, remove-only deprovision writes the grant before the
+shared deprovision command and awaits its result, and authenticated reset persists the command-bound result
 with its binding generation before receipt. Restart recovery rejects a stale
 generation and runs only the exact receipt workflow. Registration, failure,
 cancellation, detach, and destroy paths release material and operation

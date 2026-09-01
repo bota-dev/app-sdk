@@ -37,8 +37,8 @@ firmware bytes, or raw log packets. Its Apple lifecycle adapter now serializes
 configuration and destruction through `BotaAppleSDK`; its device adapter owns
 discovery/status subscriptions
 and delegates selected connect, serial-strict reconnect, disconnect, and status
-reads. Its one-shot material broker delegates provisioning, remove-only
-deprovision, authenticated reset, and receipt-only reset recovery without
+reads. Its one-shot material broker delegates provisioning, grant-gated
+remove-only deprovision, authenticated reset, and receipt-only reset recovery without
 reopening the nonce race. The reset grant crosses JavaScript as an encoded
 application value and becomes bytes only inside the native adapter. The same
 facade expands frozen connection-setting defaults in JavaScript, then delegates
@@ -155,7 +155,8 @@ destruction cancels active work, stops status subscriptions, disconnects the
 verified peripheral, and closes observers. Public secure-lifecycle managers now
 resolve provisioning and command-bound reset material through application
 callbacks, normalize Bota Note connection settings, keep remove-only
-deprovision separate from destructive reset, and resume only an exact durable
+deprovision separate from destructive reset, write its nonce-bound grant before
+opcode `0x05`, await the typed firmware result, and resume only an exact durable
 reset result for the current binding generation. The Apple and Android control facades also
 writes command-bound recording grants, subscribes before start/stop opcodes,
 preserves the frozen stop pacing, and exposes shared-decoder state reads and

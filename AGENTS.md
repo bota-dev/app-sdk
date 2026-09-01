@@ -90,8 +90,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   resolves that request with the API endpoint, device token, and MTU or rejects
   it with an application error. Never split this into a read-then-provision
   sequence. Deprovision is remove-only and must remain separate from factory
-  reset. Destroy and invalidation must reject pending material requests and
-  cancel the native provisioning operation.
+  reset, but it is still authenticated: native code writes the decoded
+  nonce-bound grant, subscribes to the provisioning result, then writes opcode
+  `0x05` and returns the typed firmware result. Destroy and invalidation must
+  reject pending material requests and cancel the native provisioning
+  operation.
 - `BotaDeviceSDK.provisioning.writeConnectionSettings` accepts the frozen
   `DeviceConnectionSettings` shape. JavaScript expands omitted heartbeat,
   power-management, streaming, and flush-interval defaults before Codegen;
@@ -277,7 +280,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   share one facade operation coordinator with connection and direct-write
   workflows. Registration failure, cancellation, detach, and destroy must
   release every registration and owner; cleanup failure must not hide the
-  original operation failure. Deprovision is a separate remove-only write.
+  original operation failure. Deprovision is a separate remove-only workflow;
+  it must never send opcode `0x05` without first writing the application grant.
 - Store secrets only as AES-GCM ciphertext authenticated by the opaque key;
   Android Keystore owns the non-exportable key. Rust must never receive a path,
   URI, URL, header, token, grant, or Keystore material.

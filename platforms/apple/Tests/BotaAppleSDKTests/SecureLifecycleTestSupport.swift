@@ -49,6 +49,9 @@ actor SecureLifecycleRecorder {
     private(set) var provisioningIDs: [String] = []
     private(set) var resetIDs: [String] = []
     private(set) var unregisteredIDs: [String] = []
+    private(set) var subscribedCharacteristics: [String] = []
+    private(set) var unsubscribedCharacteristics: [String] = []
+    private var notifications: [String: [Data]] = [:]
     private(set) var resetProvider: FactoryResetMaterialProvider?
     var pendingReset: PersistedFactoryResetResult?
 
@@ -58,6 +61,16 @@ actor SecureLifecycleRecorder {
         return readData
     }
     func setReadData(_ data: Data) { readData = data }
+    func setNotifications(_ values: [Data], for characteristic: String) {
+        notifications[characteristic] = values
+    }
+    func subscribe(_ characteristic: String) -> [Data] {
+        subscribedCharacteristics.append(characteristic)
+        return notifications[characteristic] ?? []
+    }
+    func unsubscribe(_ characteristic: String) {
+        unsubscribedCharacteristics.append(characteristic)
+    }
     func registerProvisioning(_ id: String) { provisioningIDs.append(id) }
     func registerReset(_ id: String, provider: @escaping FactoryResetMaterialProvider) {
         resetIDs.append(id)
@@ -94,6 +107,16 @@ func secureRuntime(
                 characteristicUUID: characteristicUUID,
                 data: data
             ))
+        },
+        directSubscribe: { _, _, characteristicUUID in
+            let values = await recorder.subscribe(characteristicUUID)
+            return AsyncThrowingStream { continuation in
+                values.forEach { continuation.yield($0) }
+                continuation.finish()
+            }
+        },
+        directUnsubscribe: { _, _, characteristicUUID in
+            await recorder.unsubscribe(characteristicUUID)
         },
         createProvisioningChunks: { data, mtu in
             try mapper.createProvisioningChunks(data, mtu: mtu)

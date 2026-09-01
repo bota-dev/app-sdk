@@ -3,6 +3,7 @@ import EventEmitter from 'eventemitter3';
 import type {
   BotaAsyncEventSubscription,
   BotaDeviceSDKClient,
+  BotaDeprovisionResult,
   BotaEventSubscription,
   BotaRecordingControlResult,
 } from '../client';
@@ -30,13 +31,19 @@ import type {
   StopRecordingOptions,
 } from '../models/Device';
 import type { DeviceManagerEvents } from '../models/Status';
-import { DeviceError } from '../utils/errors';
+import { DeviceError, ProvisioningError } from '../utils/errors';
 
 type Subscription = { remove(): void };
 
 export type RecordingGrantFetcher = (
   nonce: string | null
 ) => Promise<string>;
+
+export type RadioPriority = 'user' | 'background';
+
+export interface ProvisionOptions {
+  fetchDeprovisionGrant?: RecordingGrantFetcher;
+}
 
 type CacheListener = (
   serialNumber: string,
@@ -125,7 +132,10 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     return Object.fromEntries(this.knownBleIds);
   }
 
-  async connect(device: DiscoveredDevice): Promise<ConnectedDevice> {
+  async connect(
+    device: DiscoveredDevice,
+    _priority: RadioPriority = 'user'
+  ): Promise<ConnectedDevice> {
     this.assertAlive();
     this.emit('connectionStateChanged', device.id, 'connecting');
     try {
@@ -229,6 +239,49 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
 
   async syncTime(deviceId: string): Promise<void> {
     await this.client.controls.syncTime(this.requireConnected(deviceId));
+  }
+
+  async provision(
+    device: ConnectedDevice,
+    deviceToken: string,
+    environment: Environment = 'production',
+    options?: ProvisionOptions
+  ): Promise<void> {
+    this.requireConnected(device.id);
+    const provision = () => this.client.provisioning.provision(
+      device,
+      async () => ({
+        apiEndpoint: String.fromCharCode(environmentCode(environment)),
+        deviceToken,
+        mtu: device.mtu,
+      })
+    );
+    try {
+      await provision();
+    } catch (error) {
+      if (!isAlreadyPaired(error) || !options?.fetchDeprovisionGrant) {
+        throw provisioningError(error, device.id);
+      }
+      const nonce = await this.readAuthNonce(device).catch(() => null);
+      const grantBlob = await options.fetchDeprovisionGrant(nonce);
+      const result = await this.deprovision(device, grantBlob);
+      if (!result.success) {
+        throw new ProvisioningError(
+          `Auto-deprovision failed: ${result.error ?? 'unknown'}`,
+          'PROVISIONING_FAILED',
+          device.id
+        );
+      }
+      await provision();
+    }
+  }
+
+  async deprovision(
+    device: ConnectedDevice,
+    grantBlob: string
+  ): Promise<BotaDeprovisionResult> {
+    this.requireConnected(device.id);
+    return this.client.provisioning.deprovision(device, grantBlob);
   }
 
   async requestStartRecording(
@@ -586,3 +639,39 @@ const mergeWiFiStatus = (
 
 const asError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
+
+const environmentCode = (environment: Environment): number => {
+  switch (environment) {
+    case 'development': return 0;
+    case 'production': return 1;
+    case 'gamma': return 2;
+  }
+};
+
+const nativeProtocolStatus = (error: unknown): number | undefined => {
+  if (!error || typeof error !== 'object') return undefined;
+  const direct = Reflect.get(error, 'protocolStatus');
+  if (typeof direct === 'number') return direct;
+  const userInfo = Reflect.get(error, 'userInfo');
+  if (!userInfo || typeof userInfo !== 'object') return undefined;
+  const nested = Reflect.get(userInfo, 'protocolStatus');
+  return typeof nested === 'number' ? nested : undefined;
+};
+
+const isAlreadyPaired = (error: unknown): boolean =>
+  (error instanceof ProvisioningError && error.code === 'ALREADY_PAIRED') ||
+  nativeProtocolStatus(error) === 4;
+
+const provisioningError = (
+  error: unknown,
+  deviceId: string
+): Error => {
+  if (error instanceof ProvisioningError) return error;
+  switch (nativeProtocolStatus(error)) {
+    case 1: return ProvisioningError.invalidToken(deviceId);
+    case 2: return ProvisioningError.storageError(deviceId);
+    case 3: return ProvisioningError.chunkError(deviceId);
+    case 4: return ProvisioningError.alreadyPaired(deviceId);
+    default: return asError(error);
+  }
+};

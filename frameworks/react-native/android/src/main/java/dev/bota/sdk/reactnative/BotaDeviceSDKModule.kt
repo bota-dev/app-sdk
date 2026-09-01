@@ -308,8 +308,10 @@ internal class BotaDeviceSDKModule(
         }
     }
 
-    override fun deprovision(device: ReadableMap, promise: Promise) {
-        launch(promise) { security.deprovision(device.toConnectedDevice()) }
+    override fun deprovision(device: ReadableMap, grantBlob: String, promise: Promise) {
+        launchValue(promise) {
+            security.deprovision(device.toConnectedDevice(), grantBlob).toWritableMap()
+        }
     }
 
     override fun readConnectionSettings(device: ReadableMap, promise: Promise) {
