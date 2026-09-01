@@ -219,6 +219,9 @@ git push origin "v$VERSION"
 Before tagging, verify the downloaded JSON records `SOURCE_REVISION` and the
 CI workflow succeeded for that exact commit. Local package commands remain
 useful preflight checks, but their output is not release identity.
+The CI React Native candidate job installs both root repository tooling and the
+package workspace because compatibility tests import the root API-contract
+parser.
 
 The tag workflow:
 

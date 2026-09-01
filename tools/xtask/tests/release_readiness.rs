@@ -298,6 +298,15 @@ fn ci_emits_the_exact_release_candidate_inventory_used_for_tagging() {
     assert!(contents.contains("tools/release/write-candidate-inventory.sh"));
     assert!(contents.contains("release-candidate-files.json.sha256"));
     assert!(contents.contains("name: release-candidate-${{ github.sha }}"));
+
+    let react_native_steps = workflow["jobs"]["react-native"]["steps"]
+        .as_sequence()
+        .unwrap();
+    assert!(
+        react_native_steps
+            .iter()
+            .any(|step| step["name"].as_str() == Some("Install repository tooling"))
+    );
 }
 
 #[test]
