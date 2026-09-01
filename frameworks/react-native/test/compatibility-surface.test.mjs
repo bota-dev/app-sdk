@@ -17,9 +17,7 @@ const baseline = JSON.parse(
     'utf8'
   )
 );
-const deferredWorkflowClasses = new Set([
-  'BotaClient',
-]);
+const deferredWorkflowClasses = new Set();
 
 const normalizeLiteralUnionOrder = (value) => {
   if (Array.isArray(value)) return value.map(normalizeLiteralUnionOrder);

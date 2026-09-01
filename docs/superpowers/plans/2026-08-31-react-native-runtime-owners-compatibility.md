@@ -183,6 +183,12 @@ Commit: `feat(react-native): restore OTAManager compatibility`
 
 Commit: `feat(react-native): restore BotaClient compatibility`
 
+**Status (2026-08-31): complete.** The singleton now serializes native
+configure/destroy ownership, coalesces duplicate calls without losing a
+configure queued after destroy, composes one manager graph per ready lifecycle,
+and preserves the frozen logger and event surface. The exact contract gate now
+matches all 80 baseline exports.
+
 ## Task 6: Final Compatibility And Release Gates
 
 1. Remove all four names from `deferredWorkflowClasses`; require 80 of 80

@@ -41,6 +41,8 @@ export type {
 export const BotaDeviceSDK = createBotaDeviceSDK(NativeBotaDeviceSDK);
 setDefaultCompatibilityClient(BotaDeviceSDK);
 
+export { BotaClient } from './BotaClient';
+
 export type {
   BleFactoryResetResult,
   BleFactoryResetResultPersister,
