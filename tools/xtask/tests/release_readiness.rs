@@ -357,6 +357,14 @@ fn android_build_authorities_are_synchronized() {
 }
 
 #[test]
+fn android_javadoc_publication_excludes_dokka_nondeterminism() {
+    let build = fs::read_to_string(root().join("platforms/android/sdk/build.gradle.kts")).unwrap();
+
+    assert!(build.contains("tasks.withType<Jar>().matching { it.name == \"javaDocReleaseJar\" }"));
+    assert!(build.contains("exclude(\"deprecated.html\")"));
+}
+
+#[test]
 fn android_native_artifacts_require_16_kib_page_alignment() {
     let build_native = fs::read_to_string(root().join("tools/android/build-native.sh")).unwrap();
     let inspect_aar = fs::read_to_string(root().join("tools/android/inspect-aar.sh")).unwrap();

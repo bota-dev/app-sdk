@@ -2,6 +2,7 @@ import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
 import org.gradle.api.artifacts.dsl.LockMode
 import org.gradle.api.tasks.Delete
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
+import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.Exec
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -199,6 +200,11 @@ dependencyLocking {
 tasks.withType<AbstractArchiveTask>().configureEach {
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
+}
+
+tasks.withType<Jar>().matching { it.name == "javaDocReleaseJar" }.configureEach {
+    // Dokka emits this aggregate with hash-map iteration order, so it is not reproducible.
+    exclude("deprecated.html")
 }
 
 tasks.withType<Test>().configureEach {

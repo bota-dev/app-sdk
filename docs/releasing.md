@@ -195,7 +195,9 @@ Before tagging, configure the npm trusted publisher for
 React Native repository publisher instead of retaining both.
 
 After the release commit is on `main`, build all three unsigned release
-payloads and bind their candidate inventory to the exact annotated tag:
+payloads and bind their candidate inventory to the exact annotated tag. The
+Android Javadoc archive intentionally omits Dokka's nondeterministic aggregate
+`deprecated.html` page so this inventory is stable across clean builders:
 
 ```bash
 VERSION=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml)

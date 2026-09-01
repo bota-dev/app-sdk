@@ -245,7 +245,10 @@ lanes and cannot be replaced by Apple Silicon arm64 images. Runtime Maven
 coordinates and their approved licenses are frozen in
 `protocol/baseline/android-maven-license-policy.json`; package generation and
 the license workflow require that policy, Gradle module metadata, and the SPDX
-document to match exactly.
+document to match exactly. The published Javadoc archive excludes Dokka's
+aggregate `deprecated.html` index because Dokka emits that page in unstable
+hash-map order; the per-type documentation remains present, and the archive is
+byte-reproducible across clean release runs.
 
 Binary migration testing uses the checksummed
 `protocol/baseline/android-legacy-consumer-0f06d2a.jar`. It contains only the
