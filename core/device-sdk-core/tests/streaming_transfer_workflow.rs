@@ -142,9 +142,7 @@ fn plaintext_stream_pauses_resumes_and_finalizes_before_device_confirmation() {
     engine
         .dispatch(host(
             append,
-            HostEventKind::StreamingSinkAccepted {
-                received_units: 3,
-            },
+            HostEventKind::StreamingSinkAccepted { received_units: 3 },
         ))
         .unwrap();
 
@@ -176,9 +174,7 @@ fn plaintext_stream_pauses_resumes_and_finalizes_before_device_confirmation() {
     engine
         .dispatch(host(
             append,
-            HostEventKind::StreamingSinkAccepted {
-                received_units: 5,
-            },
+            HostEventKind::StreamingSinkAccepted { received_units: 5 },
         ))
         .unwrap();
 
@@ -223,10 +219,7 @@ fn plaintext_stream_pauses_resumes_and_finalizes_before_device_confirmation() {
         )
     });
     let completed = engine
-        .dispatch(host(
-            confirm,
-            HostEventKind::Ble(BleEvent::WriteCompleted),
-        ))
+        .dispatch(host(confirm, HostEventKind::Ble(BleEvent::WriteCompleted)))
         .unwrap();
     assert!(completed.iter().any(|request| matches!(
         request.effect,

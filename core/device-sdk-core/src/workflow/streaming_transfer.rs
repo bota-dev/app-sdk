@@ -6,8 +6,10 @@ use crate::{
     error::{DeviceSdkError, ErrorCode, Operation},
     generated::protocol::{CHAR_RECORDING_TRANSFER, CHAR_TRANSFER_CONTROL, SERVICE_BOTA_STORAGE},
     model::{DeviceSerialNumber, RecordingSinkId, RecordingUuid},
-    protocol::{AckType, TransferCommand, TransferPacket, encode_ack, encode_transfer_command,
-        parse_transfer_packet},
+    protocol::{
+        AckType, TransferCommand, TransferPacket, encode_ack, encode_transfer_command,
+        parse_transfer_packet,
+    },
     workflow::{WorkflowContext, WorkflowReducer},
 };
 
@@ -177,15 +179,21 @@ impl StreamingTransferWorkflow {
     fn complete(&mut self, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
         self.phase = Phase::Completed;
         let mut effects = self.unsubscribe(context);
-        effects.push(context.request(Effect::Notify(WorkflowNotification::StreamingCompleted {
-            total_units: self.completed_units,
-            uploaded_chunks: self.uploaded_chunks,
-            encrypted: self.encrypted.unwrap_or(false),
-        })));
+        effects.push(
+            context.request(Effect::Notify(WorkflowNotification::StreamingCompleted {
+                total_units: self.completed_units,
+                uploaded_chunks: self.uploaded_chunks,
+                encrypted: self.encrypted.unwrap_or(false),
+            })),
+        );
         effects
     }
 
-    fn fail(&mut self, error: DeviceSdkError, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
+    fn fail(
+        &mut self,
+        error: DeviceSdkError,
+        context: &mut WorkflowContext<'_>,
+    ) -> Vec<EffectRequest> {
         self.phase = Phase::Failed;
         self.terminal_error = Some(error.clone());
         let mut effects = self.unsubscribe(context);
@@ -198,7 +206,11 @@ impl StreamingTransferWorkflow {
         effects
     }
 
-    fn protocol_failure(&mut self, detail: &str, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
+    fn protocol_failure(
+        &mut self,
+        detail: &str,
+        context: &mut WorkflowContext<'_>,
+    ) -> Vec<EffectRequest> {
         self.fail(
             DeviceSdkError::new(
                 ErrorCode::ProtocolRejected,
@@ -230,7 +242,9 @@ impl WorkflowReducer for StreamingTransferWorkflow {
         match (self.phase, event.kind) {
             (
                 Phase::Subscribing,
-                HostEventKind::Ble(BleEvent::Subscribed { characteristic_uuid }),
+                HostEventKind::Ble(BleEvent::Subscribed {
+                    characteristic_uuid,
+                }),
             ) if Some(request_id) == self.subscription_request_id
                 && characteristic_uuid == CHAR_RECORDING_TRANSFER =>
             {
@@ -245,7 +259,10 @@ impl WorkflowReducer for StreamingTransferWorkflow {
             }
             (
                 Phase::Transferring,
-                HostEventKind::Ble(BleEvent::Notification { characteristic_uuid, value }),
+                HostEventKind::Ble(BleEvent::Notification {
+                    characteristic_uuid,
+                    value,
+                }),
             ) if Some(request_id) == self.subscription_request_id
                 && characteristic_uuid == CHAR_RECORDING_TRANSFER =>
             {
@@ -256,14 +273,20 @@ impl WorkflowReducer for StreamingTransferWorkflow {
                 match packet {
                     TransferPacket::Data { sequence, data } => {
                         if self.encrypted == Some(true) {
-                            return Ok(self.protocol_failure("live transfer mixed plaintext and encrypted packets", context));
+                            return Ok(self.protocol_failure(
+                                "live transfer mixed plaintext and encrypted packets",
+                                context,
+                            ));
                         }
                         let expected = self.last_sequence.map_or(0, |value| value.wrapping_add(1));
                         if self.last_sequence.is_some_and(|value| sequence <= value) {
                             return Ok(Vec::new());
                         }
                         if sequence != expected {
-                            return Ok(self.protocol_failure("live plaintext transfer has a sequence gap", context));
+                            return Ok(self.protocol_failure(
+                                "live plaintext transfer has a sequence gap",
+                                context,
+                            ));
                         }
                         self.encrypted = Some(false);
                         let mut effects = self.resume_if_needed(context);
@@ -283,22 +306,30 @@ impl WorkflowReducer for StreamingTransferWorkflow {
                         self.paused = true;
                         Ok(vec![context.request(Effect::Notify(
                             WorkflowNotification::StreamingPaused {
-                                completed_units: bytes_sent
-                                    .map(u64::from)
-                                    .unwrap_or(self.completed_units),
+                                completed_units:
+                                    bytes_sent.map(u64::from).unwrap_or(self.completed_units),
                             },
                         ))])
                     }
                     TransferPacket::Eof { sequence, .. } => {
                         if self.encrypted == Some(true) {
-                            return Ok(self.protocol_failure("live transfer mixed plaintext and encrypted packets", context));
+                            return Ok(self.protocol_failure(
+                                "live transfer mixed plaintext and encrypted packets",
+                                context,
+                            ));
                         }
                         self.encrypted = Some(false);
                         Ok(self.finalize(sequence, false, context))
                     }
-                    TransferPacket::E2eStart { ephemeral_public_key, salt } => {
+                    TransferPacket::E2eStart {
+                        ephemeral_public_key,
+                        salt,
+                    } => {
                         if self.encrypted == Some(false) {
-                            return Ok(self.protocol_failure("live transfer mixed plaintext and encrypted packets", context));
+                            return Ok(self.protocol_failure(
+                                "live transfer mixed plaintext and encrypted packets",
+                                context,
+                            ));
                         }
                         self.encrypted = Some(true);
                         if self.e2e_header_received {
@@ -317,8 +348,14 @@ impl WorkflowReducer for StreamingTransferWorkflow {
                         ))
                     }
                     TransferPacket::EncryptedData { sequence, chunk } => {
-                        if self.encrypted != Some(true) || !self.e2e_header_received || chunk.len() < 16 {
-                            return Ok(self.protocol_failure("live encrypted transfer is malformed", context));
+                        if self.encrypted != Some(true)
+                            || !self.e2e_header_received
+                            || chunk.len() < 16
+                        {
+                            return Ok(self.protocol_failure(
+                                "live encrypted transfer is malformed",
+                                context,
+                            ));
                         }
                         if self.last_sequence.is_some_and(|value| sequence <= value) {
                             return Ok(Vec::new());
@@ -338,7 +375,10 @@ impl WorkflowReducer for StreamingTransferWorkflow {
                     }
                     TransferPacket::EncryptedEof { sequence } => {
                         if self.encrypted != Some(true) || !self.e2e_header_received {
-                            return Ok(self.protocol_failure("live encrypted transfer is missing its session header", context));
+                            return Ok(self.protocol_failure(
+                                "live encrypted transfer is missing its session header",
+                                context,
+                            ));
                         }
                         Ok(self.finalize(sequence, true, context))
                     }
@@ -381,9 +421,11 @@ impl WorkflowReducer for StreamingTransferWorkflow {
             }
             (
                 Phase::Finalizing,
-                HostEventKind::StreamingSinkFinalized { uploaded_chunks, total_units },
-            ) if Some(request_id) == self.sink_request_id =>
-            {
+                HostEventKind::StreamingSinkFinalized {
+                    uploaded_chunks,
+                    total_units,
+                },
+            ) if Some(request_id) == self.sink_request_id => {
                 self.sink_request_id = None;
                 if total_units != self.completed_units {
                     return Ok(self.fail(
@@ -426,16 +468,13 @@ impl WorkflowReducer for StreamingTransferWorkflow {
                 ))
             }
             (_, HostEventKind::Ble(BleEvent::Disconnected { .. })) => Ok(self.fail(
-                DeviceSdkError::new(
-                    ErrorCode::NotConnected,
-                    Operation::TransferRecording,
-                    true,
-                )
-                .with_detail("device disconnected during live recording transfer"),
+                DeviceSdkError::new(ErrorCode::NotConnected, Operation::TransferRecording, true)
+                    .with_detail("device disconnected during live recording transfer"),
                 context,
             )),
             (_, HostEventKind::Ble(BleEvent::Failed { platform_code }))
-                if [self.subscription_request_id, self.write_request_id].contains(&Some(request_id)) =>
+                if [self.subscription_request_id, self.write_request_id]
+                    .contains(&Some(request_id)) =>
             {
                 Ok(self.fail(
                     DeviceSdkError::new(
@@ -443,7 +482,9 @@ impl WorkflowReducer for StreamingTransferWorkflow {
                         Operation::TransferRecording,
                         true,
                     )
-                    .with_detail(format!("BLE live transfer failed with code {platform_code:?}")),
+                    .with_detail(format!(
+                        "BLE live transfer failed with code {platform_code:?}"
+                    )),
                     context,
                 ))
             }
@@ -458,22 +499,26 @@ impl WorkflowReducer for StreamingTransferWorkflow {
 
     fn cancel(&mut self, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
         let sequence = self.last_sequence.map_or(0, |value| value.wrapping_add(1));
-        let mut effects = vec![context.request(Effect::Ble(BleEffect::Write {
-            service_uuid: SERVICE_BOTA_STORAGE.into(),
-            characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
-            payload: encode_ack(AckType::Abort, sequence)
-                .expect("fixed acknowledgement always fits the wire format"),
-            with_response: true,
-        }))];
+        let mut effects = vec![
+            context.request(Effect::Ble(BleEffect::Write {
+                service_uuid: SERVICE_BOTA_STORAGE.into(),
+                characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                payload: encode_ack(AckType::Abort, sequence)
+                    .expect("fixed acknowledgement always fits the wire format"),
+                with_response: true,
+            })),
+        ];
         effects.extend(self.unsubscribe(context));
         effects.push(context.request(Effect::RecordingSink(
             RecordingSinkEffect::DiscardStreaming {
                 sink_id: self.sink_id.clone(),
             },
         )));
-        effects.push(context.request(Effect::Notify(WorkflowNotification::Cancelled {
-            operation: Operation::TransferRecording,
-        })));
+        effects.push(
+            context.request(Effect::Notify(WorkflowNotification::Cancelled {
+                operation: Operation::TransferRecording,
+            })),
+        );
         effects
     }
 
@@ -483,7 +528,10 @@ impl WorkflowReducer for StreamingTransferWorkflow {
                 operation: Operation::TransferRecording,
             }),
             Phase::Failed => Some(WorkflowStatus::Failed {
-                error: self.terminal_error.clone().expect("failed workflow has an error"),
+                error: self
+                    .terminal_error
+                    .clone()
+                    .expect("failed workflow has an error"),
             }),
             _ => None,
         }

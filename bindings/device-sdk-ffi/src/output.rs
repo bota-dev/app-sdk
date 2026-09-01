@@ -363,9 +363,7 @@ fn notification_kind(notification: &WorkflowNotification) -> u32 {
         WorkflowNotification::RecordingTransferCompleted { .. } => {
             packet_kind::NOTIFICATION_COMPLETED
         }
-        WorkflowNotification::StreamingPaused { .. } => {
-            packet_kind::NOTIFICATION_STREAMING_PAUSED
-        }
+        WorkflowNotification::StreamingPaused { .. } => packet_kind::NOTIFICATION_STREAMING_PAUSED,
         WorkflowNotification::StreamingResumed => packet_kind::NOTIFICATION_STREAMING_RESUMED,
         WorkflowNotification::StreamingCompleted { .. } => {
             packet_kind::NOTIFICATION_STREAMING_COMPLETED
@@ -1095,9 +1093,7 @@ mod tests {
             .iter()
             .find(|field| field.field_id == field_id::CONTENT_SHA256)
             .expect("SHA-256 field");
-        let bytes = unsafe {
-            slice::from_raw_parts(sha256.data.data, sha256.data.len as usize)
-        };
+        let bytes = unsafe { slice::from_raw_parts(sha256.data.data, sha256.data.len as usize) };
         assert_eq!(bytes, &[0x5a; 32]);
     }
 

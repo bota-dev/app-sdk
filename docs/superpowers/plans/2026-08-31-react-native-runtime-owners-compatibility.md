@@ -204,6 +204,12 @@ matches all 80 baseline exports.
 
 Commit: `feat(react-native): complete frozen runtime compatibility`
 
+**Gate remediation (2026-08-31):** final verification made the Rust workflow
+changes `rustfmt`-clean, updated the external Apple consumer to pass the
+required remove-only deprovision grant, and made React Native Apple streaming
+progress capture synchronous so the strict lifecycle gate observes every
+callback deterministically.
+
 ## Exit Criteria
 
 - All 80 frozen exports match exactly.

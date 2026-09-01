@@ -46,7 +46,10 @@ private func typeCheckPublicFacade(
     let _: AsyncThrowingStream<RecordingState, Error> = try await client.controls.recordingStateUpdates(
         for: device
     )
-    try await client.provisioning.deprovision(device)
+    let _: DeprovisionResult = try await client.provisioning.deprovision(
+        device,
+        grantBlob: Data([1]).base64EncodedString()
+    )
     let _: FactoryResetCompletion = try await client.factoryReset.factoryReset(
         device,
         commandID: "command-id",

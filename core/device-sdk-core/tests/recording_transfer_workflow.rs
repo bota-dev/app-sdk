@@ -350,7 +350,10 @@ fn transfer_waits_for_post_eof_sha_and_reports_completion_metadata() {
         ))
         .unwrap();
     let header_request = request_id(&header, |effect| {
-        matches!(effect, Effect::RecordingSink(RecordingSinkEffect::Append { .. }))
+        matches!(
+            effect,
+            Effect::RecordingSink(RecordingSinkEffect::Append { .. })
+        )
     });
     engine
         .dispatch(host(
@@ -368,7 +371,10 @@ fn transfer_waits_for_post_eof_sha_and_reports_completion_metadata() {
         ))
         .unwrap();
     let finalize_request = request_id(&finalizing, |effect| {
-        matches!(effect, Effect::RecordingSink(RecordingSinkEffect::Finalize { .. }))
+        matches!(
+            effect,
+            Effect::RecordingSink(RecordingSinkEffect::Finalize { .. })
+        )
     });
     assert!(finalizing.iter().any(|request| matches!(
         request.effect,
@@ -381,10 +387,11 @@ fn transfer_waits_for_post_eof_sha_and_reports_completion_metadata() {
             HostEventKind::RecordingSinkFinalized { durable_units: 36 },
         ))
         .unwrap();
-    assert!(!waiting.iter().any(|request| matches!(
-        request.effect,
-        Effect::Ble(BleEffect::Write { .. })
-    )));
+    assert!(
+        !waiting
+            .iter()
+            .any(|request| matches!(request.effect, Effect::Ble(BleEffect::Write { .. })))
+    );
 
     let digest = [0x5a; 32];
     let acknowledging = engine
@@ -403,10 +410,11 @@ fn transfer_waits_for_post_eof_sha_and_reports_completion_metadata() {
                 if payload.first() == Some(&ACK_TYPE_ACK)
         )
     });
-    assert!(acknowledging.iter().any(|request| matches!(
-        request.effect,
-        Effect::Timer(TimerEffect::Cancel { .. })
-    )));
+    assert!(
+        acknowledging
+            .iter()
+            .any(|request| matches!(request.effect, Effect::Timer(TimerEffect::Cancel { .. })))
+    );
 
     let confirming = engine
         .dispatch(host(
@@ -694,7 +702,10 @@ fn retained_transfer_completes_after_final_ack_without_confirming_delete() {
         .start(retained_command(), &capabilities(), CANCELLATION)
         .unwrap();
     let load_request = request_id(&started, |effect| {
-        matches!(effect, Effect::Persistence(PersistenceEffect::LoadCheckpoint))
+        matches!(
+            effect,
+            Effect::Persistence(PersistenceEffect::LoadCheckpoint)
+        )
     });
     let truncating = engine
         .dispatch(host(
@@ -703,10 +714,16 @@ fn retained_transfer_completes_after_final_ack_without_confirming_delete() {
         ))
         .unwrap();
     let truncate_request = request_id(&truncating, |effect| {
-        matches!(effect, Effect::RecordingSink(RecordingSinkEffect::Truncate { .. }))
+        matches!(
+            effect,
+            Effect::RecordingSink(RecordingSinkEffect::Truncate { .. })
+        )
     });
     let subscribing = engine
-        .dispatch(host(truncate_request, HostEventKind::RecordingSinkTruncated))
+        .dispatch(host(
+            truncate_request,
+            HostEventKind::RecordingSinkTruncated,
+        ))
         .unwrap();
     let subscription_request = request_id(&subscribing, |effect| {
         matches!(effect, Effect::Ble(BleEffect::Subscribe { .. }))
@@ -727,7 +744,10 @@ fn retained_transfer_completes_after_final_ack_without_confirming_delete() {
         )
     });
     engine
-        .dispatch(host(start_request, HostEventKind::Ble(BleEvent::WriteCompleted)))
+        .dispatch(host(
+            start_request,
+            HostEventKind::Ble(BleEvent::WriteCompleted),
+        ))
         .unwrap();
 
     let finalizing = engine
@@ -740,7 +760,10 @@ fn retained_transfer_completes_after_final_ack_without_confirming_delete() {
         ))
         .unwrap();
     let finalize_request = request_id(&finalizing, |effect| {
-        matches!(effect, Effect::RecordingSink(RecordingSinkEffect::Finalize { .. }))
+        matches!(
+            effect,
+            Effect::RecordingSink(RecordingSinkEffect::Finalize { .. })
+        )
     });
     engine
         .dispatch(host(
@@ -761,9 +784,10 @@ fn retained_transfer_completes_after_final_ack_without_confirming_delete() {
             HostEventKind::TimerFired { timer_id },
         ))
         .unwrap();
-    let ack_request = request_id(&acknowledging, |effect| {
-        matches!(effect, Effect::Ble(BleEffect::Write { payload, .. }) if payload.first() == Some(&ACK_TYPE_ACK))
-    });
+    let ack_request = request_id(
+        &acknowledging,
+        |effect| matches!(effect, Effect::Ble(BleEffect::Write { payload, .. }) if payload.first() == Some(&ACK_TYPE_ACK)),
+    );
 
     let completed = engine
         .dispatch(host(

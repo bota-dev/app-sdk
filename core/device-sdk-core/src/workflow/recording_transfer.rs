@@ -212,11 +212,7 @@ impl RecordingTransferWorkflow {
                 timer_id: SHA256_GRACE_TIMER_ID,
             })));
         }
-        effects.push(self.write_ack(
-            AckType::Ack,
-            self.eof_sequence.unwrap_or(0),
-            context,
-        ));
+        effects.push(self.write_ack(AckType::Ack, self.eof_sequence.unwrap_or(0), context));
         effects
     }
 
@@ -265,14 +261,12 @@ impl RecordingTransferWorkflow {
         self.phase = Phase::Completed;
         let mut effects = self.unsubscribe(context);
         effects.push(context.request(Effect::Persistence(PersistenceEffect::DeleteCheckpoint)));
-        effects.push(
-            context.request(Effect::Notify(
-                WorkflowNotification::RecordingTransferCompleted {
-                    encrypted: self.encrypted.unwrap_or(false),
-                    sha256: self.sha256.take(),
-                },
-            )),
-        );
+        effects.push(context.request(Effect::Notify(
+            WorkflowNotification::RecordingTransferCompleted {
+                encrypted: self.encrypted.unwrap_or(false),
+                sha256: self.sha256.take(),
+            },
+        )));
         effects
     }
 
@@ -611,10 +605,8 @@ impl WorkflowReducer for RecordingTransferWorkflow {
                 self.write_request_id = None;
                 Ok(self.complete(context))
             }
-            (
-                Phase::Finalizing | Phase::WaitingForSha,
-                HostEventKind::TimerFired { timer_id },
-            ) if timer_id == SHA256_GRACE_TIMER_ID =>
+            (Phase::Finalizing | Phase::WaitingForSha, HostEventKind::TimerFired { timer_id })
+                if timer_id == SHA256_GRACE_TIMER_ID =>
             {
                 self.sha_grace_timer_scheduled = false;
                 self.sha_grace_elapsed = true;

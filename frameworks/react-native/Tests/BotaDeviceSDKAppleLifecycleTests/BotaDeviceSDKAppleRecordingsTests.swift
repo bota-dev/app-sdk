@@ -109,6 +109,7 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
         ))
         let recordings = BotaDeviceSDKAppleRecordings(client: client)
         let capture = StreamingCapture()
+        let progressCapture = StreamingProgressCapture()
 
         let total = try await recordings.streamRecording(
             ConnectedDevice(
@@ -126,7 +127,7 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
             flushIntervalMilliseconds: 1_000,
             onProgress: { value in
                 let state = value["state"] as! String
-                Task { await capture.progress(state) }
+                progressCapture.append(state)
             },
             onDestinationRequest: { value in
                 let requestID = value["requestId"] as! String
@@ -159,7 +160,7 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
         let destinationSequence = await capture.destinationSequence
         let destinationEncrypted = await capture.destinationEncrypted
         let finalizedChunks = await capture.finalizedChunks
-        let states = await capture.states
+        let states = progressCapture.snapshot()
         XCTAssertEqual(destinationSequence, 1)
         XCTAssertEqual(destinationEncrypted, false)
         XCTAssertEqual(finalizedChunks, 2)
@@ -183,17 +184,25 @@ private actor StreamingCapture {
     private(set) var destinationSequence: UInt32?
     private(set) var destinationEncrypted: Bool?
     private(set) var finalizedChunks: UInt32?
-    private var progressValues: [String] = []
-
-    var states: [String] { progressValues }
-
-    func progress(_ state: String) { progressValues.append(state) }
     func destination(sequence: UInt32, encrypted: Bool) {
         destinationSequence = sequence
         destinationEncrypted = encrypted
     }
     func finalize(totalChunks: UInt32) {
         finalizedChunks = totalChunks
+    }
+}
+
+private final class StreamingProgressCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [String] = []
+
+    func append(_ value: String) {
+        lock.withLock { values.append(value) }
+    }
+
+    func snapshot() -> [String] {
+        lock.withLock { values }
     }
 }
 
