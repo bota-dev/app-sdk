@@ -83,6 +83,12 @@ internal class DeviceRuntime(
     val createWiFiScanCommand: () -> ByteArray = {
         error("WiFi scan-command encoder unavailable")
     },
+    val createProvisioningChunks: (ByteArray, Int) -> List<ByteArray> = { _, _ ->
+        error("provisioning chunk encoder unavailable")
+    },
+    val createTimeSyncData: (ULong, Short) -> ByteArray = { _, _ ->
+        error("time-sync encoder unavailable")
+    },
     val parseConnectionSettings: (ByteArray) -> DeviceConnectionSettings = {
         error("connection-settings decoder unavailable")
     },
@@ -200,6 +206,8 @@ internal class DeviceRuntime(
                     createWiFiGrantPacket = mapper::createWiFiGrantPacket,
                     createWiFiCredentialPacket = mapper::createWiFiCredentialPacket,
                     createWiFiScanCommand = mapper::createWiFiScanCommand,
+                    createProvisioningChunks = mapper::createProvisioningChunks,
+                    createTimeSyncData = mapper::createTimeSyncData,
                     parseConnectionSettings = { mapper.parseConnectionSettings(it).settings },
                     serializeConnectionSettings = mapper::serializeConnectionSettings,
                     encodeDeviceCommand = mapper::encodeDeviceCommand,

@@ -76,6 +76,8 @@ struct DeviceRuntime: Sendable {
     let createWiFiGrantPacket: @Sendable (String) throws -> Data
     let createWiFiCredentialPacket: @Sendable (String, String) throws -> Data
     let createWiFiScanCommand: @Sendable () throws -> Data
+    let createProvisioningChunks: @Sendable (Data, Int) throws -> [Data]
+    let createTimeSyncData: @Sendable (UInt64, Int16) throws -> Data
     let parseConnectionSettings: @Sendable (Data) throws -> ParsedConnectionSettings
     let serializeConnectionSettings: @Sendable (DeviceConnectionSettings, DeviceType) throws -> Data
     let encodeDeviceCommand: @Sendable (UInt8) throws -> Data
@@ -133,6 +135,12 @@ struct DeviceRuntime: Sendable {
         createWiFiScanCommand: @escaping @Sendable () throws -> Data = {
             throw NativeHostError.missingResource("WiFi scan-command encoder")
         },
+        createProvisioningChunks: @escaping @Sendable (Data, Int) throws -> [Data] = { _, _ in
+            throw NativeHostError.missingResource("provisioning chunk encoder")
+        },
+        createTimeSyncData: @escaping @Sendable (UInt64, Int16) throws -> Data = { _, _ in
+            throw NativeHostError.missingResource("time-sync encoder")
+        },
         parseConnectionSettings: @escaping @Sendable (Data) throws -> ParsedConnectionSettings = { _ in
             throw NativeHostError.missingResource("connection-settings decoder")
         },
@@ -183,6 +191,8 @@ struct DeviceRuntime: Sendable {
         self.createWiFiGrantPacket = createWiFiGrantPacket
         self.createWiFiCredentialPacket = createWiFiCredentialPacket
         self.createWiFiScanCommand = createWiFiScanCommand
+        self.createProvisioningChunks = createProvisioningChunks
+        self.createTimeSyncData = createTimeSyncData
         self.parseConnectionSettings = parseConnectionSettings
         self.serializeConnectionSettings = serializeConnectionSettings
         self.encodeDeviceCommand = encodeDeviceCommand

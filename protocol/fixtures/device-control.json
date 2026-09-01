@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "protocolRevision": "firmware-8b175a89374c",
+  "suite": "device-control",
+  "cases": [
+    {
+      "name": "time-sync-negative-offset",
+      "operation": "createTimeSyncData",
+      "input": {
+        "epochMilliseconds": 1725000000321,
+        "timezoneOffsetMinutes": -420
+      },
+      "expectedHex": "4069d16641015cfe",
+      "baselineReference": "src/ble/parsers.ts"
+    }
+  ]
+}

@@ -95,6 +95,15 @@ func secureRuntime(
                 data: data
             ))
         },
+        createProvisioningChunks: { data, mtu in
+            try mapper.createProvisioningChunks(data, mtu: mtu)
+        },
+        createTimeSyncData: { epochMilliseconds, timezoneOffsetMinutes in
+            try mapper.createTimeSyncData(
+                epochMilliseconds: epochMilliseconds,
+                timezoneOffsetMinutes: timezoneOffsetMinutes
+            )
+        },
         parseConnectionSettings: { try mapper.parseConnectionSettings($0) },
         serializeConnectionSettings: { settings, model in
             try mapper.serializeConnectionSettings(settings, model: model)
@@ -109,6 +118,10 @@ func secureRuntime(
 }
 
 func secureDevice(model: DeviceType = .botaNote) -> ConnectedDevice {
+    secureDevice(model: model, mtu: 185)
+}
+
+func secureDevice(model: DeviceType = .botaNote, mtu: Int) -> ConnectedDevice {
     ConnectedDevice(
         id: "00000000-0000-0000-0000-000000000001",
         serialNumber: "EVFXXW67KP",
@@ -116,7 +129,7 @@ func secureDevice(model: DeviceType = .botaNote) -> ConnectedDevice {
         firmwareVersion: "1.0.17",
         isProvisioned: true,
         connectionState: .connected,
-        mtu: 185
+        mtu: mtu
     )
 }
 

@@ -13,11 +13,12 @@ use bota_device_sdk_core::{
         WiFiScanUpdate, encode_ack, encode_bounded_payload, encode_connection_settings,
         encode_device_command, encode_firmware_data, encode_firmware_upload_start,
         encode_firmware_upload_verify, encode_firmware_window_ack, encode_ota_status,
-        encode_provisioning_chunks, encode_transfer_command, encode_wifi_credentials,
-        encode_wifi_grant, encode_wifi_scan_command, parse_ack, parse_connection_settings,
-        parse_device_status, parse_factory_reset_result, parse_ota_status, parse_recording_list,
-        parse_transfer_packet, parse_trigger_upload_response, parse_wifi_config_result,
-        parse_wifi_scan_result, parse_wifi_status_info,
+        encode_provisioning_chunks, encode_time_sync, encode_transfer_command,
+        encode_wifi_credentials, encode_wifi_grant, encode_wifi_scan_command, parse_ack,
+        parse_connection_settings, parse_device_status, parse_factory_reset_result,
+        parse_ota_status, parse_recording_list, parse_transfer_packet,
+        parse_trigger_upload_response, parse_wifi_config_result, parse_wifi_scan_result,
+        parse_wifi_status_info,
     },
 };
 
@@ -410,6 +411,13 @@ pub(crate) unsafe fn encode(
                 &fields.required_text(field_id::WIFI_PASSWORD)?,
             )?
         }
+        packet_kind::PROTOCOL_ENCODE_TIME_SYNC => {
+            fields.validate_allowed(&[field_id::TIMESTAMP, field_id::OFFSET])?;
+            encode_time_sync(
+                fields.required_u64(field_id::TIMESTAMP)?,
+                to_i16(&fields, field_id::OFFSET)?,
+            )?
+        }
         _ => return Err(unknown_packet(packet.kind)),
     };
 
@@ -504,6 +512,13 @@ fn optional_u8(fields: &PacketFields<'_>, id: u32) -> Result<Option<u8>, DeviceS
 fn to_u16(fields: &PacketFields<'_>, id: u32) -> Result<u16, DeviceSdkError> {
     fields
         .required_u64(id)?
+        .try_into()
+        .map_err(|_| invalid(format!("field {id} does not fit in 16 bits")))
+}
+
+fn to_i16(fields: &PacketFields<'_>, id: u32) -> Result<i16, DeviceSdkError> {
+    fields
+        .required_i64(id)?
         .try_into()
         .map_err(|_| invalid(format!("field {id} does not fit in 16 bits")))
 }
@@ -639,6 +654,9 @@ mod tests {
             packet(packet_kind::PROTOCOL_ENCODE_WIFI_CREDENTIALS)
                 .with_text(field_id::WIFI_SSID, "Bota")
                 .with_text(field_id::WIFI_PASSWORD, "secret"),
+            packet(packet_kind::PROTOCOL_ENCODE_TIME_SYNC)
+                .with_u64(field_id::TIMESTAMP, 1_725_000_000_321)
+                .with_i64(field_id::OFFSET, -420),
         ];
         for (index, input) in encode_cases.iter().enumerate() {
             let output = unsafe { encode(&input.view()) };

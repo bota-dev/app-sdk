@@ -17,6 +17,18 @@ struct BotaDeviceSDKAppleFactoryResetRequest: Equatable, Sendable {
 }
 
 protocol BotaDeviceSDKAppleSecurityClient: Sendable {
+    func isProvisioned(_ device: ConnectedDevice) async throws -> Bool
+    func readPublicKey(from device: ConnectedDevice) async throws -> String?
+    func readAuthNonce(from device: ConnectedDevice) async throws -> String?
+    func setAPIEndpoint(_ environment: DeviceAPIEnvironment, on device: ConnectedDevice) async throws
+    func deliverCertificate(
+        _ certificatePEM: String,
+        privateKeyPEM: String,
+        to device: ConnectedDevice
+    ) async throws
+    func deliverBackendPublicKey(_ publicKey: Data, to device: ConnectedDevice) async throws
+    func writeGrant(_ grantBlob: String, to device: ConnectedDevice) async throws
+    func syncTime(_ device: ConnectedDevice) async throws
     func provision(
         _ device: ConnectedDevice,
         using provider: @escaping ProvisioningMaterialProvider
@@ -42,12 +54,54 @@ protocol BotaDeviceSDKAppleSecurityClient: Sendable {
 }
 
 struct BotaDeviceSDKSharedAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
+    private let controls: DeviceControlManager
     private let provisioning: ProvisioningManager
     private let factoryResetManager: FactoryResetManager
 
     init(client: BotaDeviceClient = .shared) {
+        controls = client.controls
         provisioning = client.provisioning
         factoryResetManager = client.factoryReset
+    }
+
+    func isProvisioned(_ device: ConnectedDevice) async throws -> Bool {
+        try await controls.isProvisioned(device)
+    }
+
+    func readPublicKey(from device: ConnectedDevice) async throws -> String? {
+        try await controls.readPublicKey(from: device)
+    }
+
+    func readAuthNonce(from device: ConnectedDevice) async throws -> String? {
+        try await controls.readAuthNonce(from: device)
+    }
+
+    func setAPIEndpoint(_ environment: DeviceAPIEnvironment, on device: ConnectedDevice) async throws {
+        try await controls.setAPIEndpoint(environment, on: device)
+    }
+
+    func deliverCertificate(
+        _ certificatePEM: String,
+        privateKeyPEM: String,
+        to device: ConnectedDevice
+    ) async throws {
+        try await controls.deliverCertificate(
+            certificatePEM,
+            privateKeyPEM: privateKeyPEM,
+            to: device
+        )
+    }
+
+    func deliverBackendPublicKey(_ publicKey: Data, to device: ConnectedDevice) async throws {
+        try await controls.deliverBackendPublicKey(publicKey, to: device)
+    }
+
+    func writeGrant(_ grantBlob: String, to device: ConnectedDevice) async throws {
+        try await controls.writeGrant(grantBlob, to: device)
+    }
+
+    func syncTime(_ device: ConnectedDevice) async throws {
+        try await controls.syncTime(to: device)
     }
 
     func provision(
@@ -148,6 +202,46 @@ actor BotaDeviceSDKAppleSecurity {
 
     func deprovision(_ device: ConnectedDevice) async throws {
         try await client.deprovision(device)
+    }
+
+    func isProvisioned(_ device: ConnectedDevice) async throws -> Bool {
+        try await client.isProvisioned(device)
+    }
+
+    func readPublicKey(from device: ConnectedDevice) async throws -> String? {
+        try await client.readPublicKey(from: device)
+    }
+
+    func readAuthNonce(from device: ConnectedDevice) async throws -> String? {
+        try await client.readAuthNonce(from: device)
+    }
+
+    func setAPIEndpoint(_ environment: DeviceAPIEnvironment, on device: ConnectedDevice) async throws {
+        try await client.setAPIEndpoint(environment, on: device)
+    }
+
+    func deliverCertificate(
+        _ certificatePEM: String,
+        privateKeyPEM: String,
+        to device: ConnectedDevice
+    ) async throws {
+        try await client.deliverCertificate(
+            certificatePEM,
+            privateKeyPEM: privateKeyPEM,
+            to: device
+        )
+    }
+
+    func deliverBackendPublicKey(_ publicKey: Data, to device: ConnectedDevice) async throws {
+        try await client.deliverBackendPublicKey(publicKey, to: device)
+    }
+
+    func writeGrant(_ grantBlob: String, to device: ConnectedDevice) async throws {
+        try await client.writeGrant(grantBlob, to: device)
+    }
+
+    func syncTime(_ device: ConnectedDevice) async throws {
+        try await client.syncTime(device)
     }
 
     func readConnectionSettings(from device: ConnectedDevice) async throws -> DeviceConnectionSettings {

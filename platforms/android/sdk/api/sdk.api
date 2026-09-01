@@ -7,7 +7,6 @@ public final class com/bota/sdk/AudioCodec : java/lang/Enum {
 	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/AudioCodec;
 	public static fun values ()[Lcom/bota/sdk/AudioCodec;
 }
-
 public final class com/bota/sdk/BluetoothState : java/lang/Enum {
 	public static final field POWERED_OFF Lcom/bota/sdk/BluetoothState;
 	public static final field POWERED_ON Lcom/bota/sdk/BluetoothState;
@@ -643,6 +642,7 @@ public final class dev/bota/sdk/BotaDeviceClient {
 	public static final field shared Ldev/bota/sdk/BotaDeviceClient;
 	public final fun configure (Ldev/bota/sdk/BotaConfiguration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun destroy (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getControls ()Ldev/bota/sdk/DeviceControlManager;
 	public final fun getDevices ()Ldev/bota/sdk/DeviceManager;
 	public final fun getFactoryReset ()Ldev/bota/sdk/FactoryResetManager;
 	public final fun getLogs ()Ldev/bota/sdk/DeviceLogManager;
@@ -967,6 +967,15 @@ public final class dev/bota/sdk/BuildConfig {
 	public fun <init> ()V
 }
 
+public final class dev/bota/sdk/DeviceApiEnvironment : java/lang/Enum {
+	public static final field Development Ldev/bota/sdk/DeviceApiEnvironment;
+	public static final field Gamma Ldev/bota/sdk/DeviceApiEnvironment;
+	public static final field Production Ldev/bota/sdk/DeviceApiEnvironment;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/DeviceApiEnvironment;
+	public static fun values ()[Ldev/bota/sdk/DeviceApiEnvironment;
+}
+
 public final class dev/bota/sdk/DeviceCapabilities {
 	public final fun asSet ()Ljava/util/Set;
 	public final fun contains (Ldev/bota/sdk/DeviceCapability;)Z
@@ -982,6 +991,19 @@ public final class dev/bota/sdk/DeviceCapability : java/lang/Enum {
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/DeviceCapability;
 	public static fun values ()[Ldev/bota/sdk/DeviceCapability;
+}
+
+public final class dev/bota/sdk/DeviceControlManager {
+	public final fun deliverBackendPublicKey ([BLdev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun deliverCertificate (Ljava/lang/String;Ljava/lang/String;Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun isProvisioned (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun readAuthNonce (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun readPairingState (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun readPublicKey (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun setApiEndpoint (Ldev/bota/sdk/DeviceApiEnvironment;Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun syncTime (JLjava/lang/Integer;Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun syncTime$default (Ldev/bota/sdk/DeviceControlManager;JLjava/lang/Integer;Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun writeGrant (Ljava/lang/String;Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class dev/bota/sdk/DeviceLogManager {

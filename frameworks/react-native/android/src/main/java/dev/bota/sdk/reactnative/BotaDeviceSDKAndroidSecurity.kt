@@ -1,6 +1,7 @@
 package dev.bota.sdk.reactnative
 
 import dev.bota.sdk.BotaDeviceClient
+import dev.bota.sdk.DeviceApiEnvironment
 import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.model.DeviceConnectionSettings
 import dev.bota.sdk.model.FactoryResetCompletion
@@ -27,6 +28,14 @@ internal data class BotaDeviceSDKAndroidFactoryResetRequest(
 )
 
 internal interface BotaDeviceSDKAndroidSecurityClient {
+    suspend fun isProvisioned(device: ConnectedDevice): Boolean
+    suspend fun readPublicKey(device: ConnectedDevice): String?
+    suspend fun readAuthNonce(device: ConnectedDevice): String?
+    suspend fun setApiEndpoint(environment: DeviceApiEnvironment, device: ConnectedDevice)
+    suspend fun deliverCertificate(certificatePem: String, privateKeyPem: String, device: ConnectedDevice)
+    suspend fun deliverBackendPublicKey(publicKey: ByteArray, device: ConnectedDevice)
+    suspend fun writeGrant(grantBlob: String, device: ConnectedDevice)
+    suspend fun syncTime(device: ConnectedDevice)
     suspend fun provision(
         device: ConnectedDevice,
         provider: suspend (ProvisioningMaterialRequest) -> ProvisioningMaterial,
@@ -61,6 +70,38 @@ internal interface BotaDeviceSDKAndroidSecurityClient {
 internal class BotaDeviceSDKSharedAndroidSecurityClient(
     private val client: BotaDeviceClient = BotaDeviceClient.shared,
 ) : BotaDeviceSDKAndroidSecurityClient {
+    override suspend fun isProvisioned(device: ConnectedDevice): Boolean =
+        client.controls.isProvisioned(device)
+
+    override suspend fun readPublicKey(device: ConnectedDevice): String? =
+        client.controls.readPublicKey(device)
+
+    override suspend fun readAuthNonce(device: ConnectedDevice): String? =
+        client.controls.readAuthNonce(device)
+
+    override suspend fun setApiEndpoint(environment: DeviceApiEnvironment, device: ConnectedDevice) {
+        client.controls.setApiEndpoint(environment, device)
+    }
+
+    override suspend fun deliverCertificate(
+        certificatePem: String,
+        privateKeyPem: String,
+        device: ConnectedDevice,
+    ) {
+        client.controls.deliverCertificate(certificatePem, privateKeyPem, device)
+    }
+
+    override suspend fun deliverBackendPublicKey(publicKey: ByteArray, device: ConnectedDevice) {
+        client.controls.deliverBackendPublicKey(publicKey, device)
+    }
+
+    override suspend fun writeGrant(grantBlob: String, device: ConnectedDevice) {
+        client.controls.writeGrant(grantBlob, device)
+    }
+
+    override suspend fun syncTime(device: ConnectedDevice) {
+        client.controls.syncTime(device = device)
+    }
     override suspend fun provision(
         device: ConnectedDevice,
         provider: suspend (ProvisioningMaterialRequest) -> ProvisioningMaterial,
@@ -130,6 +171,18 @@ internal class BotaDeviceSDKAndroidSecurity(
     suspend fun deprovision(device: ConnectedDevice) {
         client.deprovision(device)
     }
+
+    suspend fun isProvisioned(device: ConnectedDevice): Boolean = client.isProvisioned(device)
+    suspend fun readPublicKey(device: ConnectedDevice): String? = client.readPublicKey(device)
+    suspend fun readAuthNonce(device: ConnectedDevice): String? = client.readAuthNonce(device)
+    suspend fun setApiEndpoint(environment: DeviceApiEnvironment, device: ConnectedDevice) =
+        client.setApiEndpoint(environment, device)
+    suspend fun deliverCertificate(certificatePem: String, privateKeyPem: String, device: ConnectedDevice) =
+        client.deliverCertificate(certificatePem, privateKeyPem, device)
+    suspend fun deliverBackendPublicKey(publicKey: ByteArray, device: ConnectedDevice) =
+        client.deliverBackendPublicKey(publicKey, device)
+    suspend fun writeGrant(grantBlob: String, device: ConnectedDevice) = client.writeGrant(grantBlob, device)
+    suspend fun syncTime(device: ConnectedDevice) = client.syncTime(device)
 
     suspend fun readConnectionSettings(device: ConnectedDevice): DeviceConnectionSettings =
         client.readConnectionSettings(device)

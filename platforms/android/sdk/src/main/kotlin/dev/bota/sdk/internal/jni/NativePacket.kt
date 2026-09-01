@@ -78,6 +78,9 @@ internal class NativePacket(
 
     fun bytes(fieldId: Int): ByteArray? = fieldIndices(fieldId, FIELD_TYPE_BYTES).firstOrNull()?.let(::dataAt)
 
+    fun byteArrays(fieldId: Int): List<ByteArray> =
+        fieldIndices(fieldId, FIELD_TYPE_BYTES).map(::dataAt)
+
     private fun requiredData(fieldId: Int, fieldType: Int): ByteArray {
         val index = fieldIndex(fieldId, fieldType)
         return dataAt(index)

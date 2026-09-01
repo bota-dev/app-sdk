@@ -354,6 +354,40 @@ final class CoreModelMapper: @unchecked Sendable {
         try encode(UInt32(BOTA_DEVICE_SDK_V1_PROTOCOL_ENCODE_WIFI_SCAN), fields: [])
     }
 
+    func createProvisioningChunks(_ data: Data, mtu: Int) throws -> [Data] {
+        do {
+            let packet = try client.protocolEncode(Self.protocolPacket(
+                kind: BotaPrivateProtocol.encodeProvisioningChunks,
+                fields: [
+                    .bytes(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_PAYLOAD), value: data),
+                    .unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_MTU), value: UInt64(mtu)),
+                ]
+            ))
+            return PacketFields(packet.fields).bytes(UInt32(BOTA_DEVICE_SDK_V1_FIELD_CHUNK))
+        } catch let error as CoreError {
+            throw BotaSDKError(error)
+        }
+    }
+
+    func createTimeSyncData(
+        epochMilliseconds: UInt64,
+        timezoneOffsetMinutes: Int16
+    ) throws -> Data {
+        try encode(
+            BotaPrivateProtocol.encodeTimeSync,
+            fields: [
+                .unsigned(
+                    id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_TIMESTAMP),
+                    value: epochMilliseconds
+                ),
+                .signed(
+                    id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_OFFSET),
+                    value: Int64(timezoneOffsetMinutes)
+                ),
+            ]
+        )
+    }
+
     func createWiFiCredentialPacket(ssid: String, password: String) throws -> Data {
         try encode(
             BotaPrivateProtocol.encodeWiFiCredentials,
@@ -513,6 +547,8 @@ private enum BotaPrivateProtocol {
     static let decodeWiFiStatus: UInt32 = 0x050B
     static let decodeWiFiScan: UInt32 = 0x050C
     static let encodeWiFiCredentials: UInt32 = 0x051D
+    static let encodeProvisioningChunks: UInt32 = 0x051C
+    static let encodeTimeSync: UInt32 = 0x051E
     static let wifiSSID: UInt32 = 114
     static let wifiSignalStrength: UInt32 = 115
     static let wifiQuality: UInt32 = 116
@@ -558,6 +594,13 @@ private struct PacketFields {
     func texts(_ id: UInt32) -> [String] {
         values.compactMap { field in
             guard case let .text(fieldID, value) = field, fieldID == id else { return nil }
+            return value
+        }
+    }
+
+    func bytes(_ id: UInt32) -> [Data] {
+        values.compactMap { field in
+            guard case let .bytes(fieldID, value) = field, fieldID == id else { return nil }
             return value
         }
     }

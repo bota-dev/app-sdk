@@ -4,6 +4,78 @@ import XCTest
 @testable import BotaAppleSDK
 
 final class ProvisioningManagerTests: XCTestCase {
+    func testDeviceControlReadsProvisioningIdentityAndWritesTypedPayloads() async throws {
+        let runner = SecureWorkflowRunner()
+        let recorder = SecureLifecycleRecorder()
+        let controls = DeviceControlManager()
+        await controls.attach(await secureRuntime(runner: runner, recorder: recorder))
+        let device = secureDevice()
+
+        await recorder.setReadData(Data([2]))
+        let provisioned = try await controls.isProvisioned(device)
+        XCTAssertTrue(provisioned)
+
+        await recorder.setReadData(Data(repeating: 0xab, count: 64))
+        let publicKey = try await controls.readPublicKey(from: device)
+        XCTAssertEqual(publicKey, String(repeating: "ab", count: 64))
+
+        await recorder.setReadData(Data(repeating: 0xcd, count: 16))
+        let nonce = try await controls.readAuthNonce(from: device)
+        XCTAssertEqual(nonce, String(repeating: "cd", count: 16))
+
+        try await controls.setAPIEndpoint(.gamma, on: device)
+        try await controls.deliverBackendPublicKey(Data(repeating: 0xef, count: 32), to: device)
+        try await controls.writeGrant(Data([1, 2, 3]).base64EncodedString(), to: device)
+        try await controls.syncTime(
+            Date(timeIntervalSince1970: 1_725_000_000.321),
+            timezoneOffsetMinutes: -420,
+            to: device
+        )
+
+        let reads = await recorder.reads
+        XCTAssertEqual(reads.map(\.characteristicUUID), [
+            BotaBluetoothUUIDs.pairingState,
+            BotaBluetoothUUIDs.devicePublicKey,
+            BotaBluetoothUUIDs.authNonce,
+        ])
+        let writes = await recorder.writes
+        XCTAssertEqual(writes.map(\.characteristicUUID), [
+            BotaBluetoothUUIDs.apiEndpoint,
+            BotaBluetoothUUIDs.backendPublicKey,
+            BotaBluetoothUUIDs.deviceCommand,
+            BotaBluetoothUUIDs.timeSync,
+        ])
+        XCTAssertEqual(writes[0].data, Data([2]))
+        XCTAssertEqual(writes[1].data, Data(repeating: 0xef, count: 32))
+        XCTAssertEqual(writes[2].data, Data([1, 2, 3]))
+        XCTAssertEqual(writes[3].data, Data([0x40, 0x69, 0xd1, 0x66, 0x41, 0x01, 0x5c, 0xfe]))
+    }
+
+    func testDeviceCertificateUsesFrozenProvisioningChunkFraming() async throws {
+        let runner = SecureWorkflowRunner()
+        let recorder = SecureLifecycleRecorder()
+        let controls = DeviceControlManager()
+        await controls.attach(await secureRuntime(runner: runner, recorder: recorder))
+        let device = secureDevice(mtu: 20)
+
+        let payload = Data("certificate\nprivate-key\n".utf8)
+        try await controls.deliverCertificate(
+            " certificate ",
+            privateKeyPEM: " private-key ",
+            to: device
+        )
+
+        let writes = await recorder.writes
+        XCTAssertEqual(writes.map(\.characteristicUUID), [
+            BotaBluetoothUUIDs.deviceCertificate,
+            BotaBluetoothUUIDs.deviceCertificate,
+        ])
+        XCTAssertEqual(writes.map(\.data), [
+            Data([0, 2]) + payload.prefix(13),
+            Data([1, 2]) + payload.dropFirst(13),
+        ])
+    }
+
     func testProvisionRegistersOpaqueMaterialAndForwardsOnlyItsIDToCore() async throws {
         let runner = SecureWorkflowRunner()
         let recorder = SecureLifecycleRecorder()

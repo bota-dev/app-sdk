@@ -60,6 +60,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   behavior over the existing facades, but it stays absent from `src/index.ts`
   until every frozen direct-command method has a native-backed implementation
   and the exact semantic class surface passes.
+- `BotaDeviceSDK.controls` and the internal `DeviceManager` now delegate
+  provisioning-state, device-public-key, auth-nonce, API-endpoint,
+  certificate, backend-public-key, recording-grant, and time-sync commands to
+  native `DeviceControlManager` facades. Keep public keys as typed native bytes
+  below Codegen and keep certificate chunk framing native. Recording control
+  and reset compatibility remain incomplete, so `DeviceManager` is still not a
+  root export.
 - The React Native package also exposes the native-backed
   `BotaDeviceSDK.devices` discovery, connection, and device-status slice.
   JavaScript preserves the frozen scan filters and status date mapping; Apple

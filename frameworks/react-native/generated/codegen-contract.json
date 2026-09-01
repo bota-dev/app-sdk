@@ -1176,6 +1176,231 @@
               }
             },
             {
+              "name": "isProvisioned",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "BooleanTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "readPublicKey",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "NullableTypeAnnotation",
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "readAuthNonce",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "NullableTypeAnnotation",
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "setApiEndpoint",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "environment",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "deliverCertificate",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "certificatePem",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "privateKeyPem",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "deliverBackendPublicKey",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "publicKeyHex",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "writeGrant",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "grantBlob",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "syncTime",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
+              }
+            },
+            {
               "name": "configureWiFi",
               "optional": false,
               "typeAnnotation": {
@@ -1881,11 +2106,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "8c6cb8a0cff03e21ddba555e9266cd77f2e44c07dfa50940137bb438285d21b0"
+        "sha256": "650ab8d6ab54ec50a28d714f9ec854106f68be24b784357ae5ae56f61eb90908"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "786dca79f162d1f9960c4b665891b65316bd5c9b7ceab411b7f32186345632cd"
+        "sha256": "174bea0b0cad2b63ecc39f177fd677dfda86e5561e6a2ff84f385033e516e460"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -1897,23 +2122,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "375fc16eddc9f34d695682bd619f3e6eb8aa4e11f1af29b76bbe784465c84741"
+        "sha256": "aaedaebc87fae2afc3a791e273751787aa321ea92cb496b9844813c73880fb38"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "ce3f57d91a30ecad881d216ac4e9c88a3232c7dfa31828818b9de860078ec605"
+        "sha256": "6a23a759860649b2f30e1325884c3aefa573fd2eb4154d0a089f9fdd299c3f67"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "20cf910d5f8a597e7613279404ffc42e0655587ae43bf72c5e0558a695d9a3c8"
+        "sha256": "db476bd77f40a16b8569c060ca0a12dd9417387248a87fb97b10bbce2c5bb561"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "375fc16eddc9f34d695682bd619f3e6eb8aa4e11f1af29b76bbe784465c84741"
+        "sha256": "aaedaebc87fae2afc3a791e273751787aa321ea92cb496b9844813c73880fb38"
       }
     ]
   },
-  "contractDigest": "3562ea0e08db53a669296d973c10957b9e267629b5dcee50d1f83e02b37a210f"
+  "contractDigest": "b9689e482aa1897f6d01643cdebf503d00a05e37bd9b9ea275e78d101ad45570"
 }

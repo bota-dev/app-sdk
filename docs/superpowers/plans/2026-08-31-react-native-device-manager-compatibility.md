@@ -127,6 +127,12 @@ Task 1.
 
 ### Task 2: Add Missing Low-Volume Device Commands
 
+**Progress (2026-08-31):** The first focused slice covers provisioning-state,
+device-public-key, auth-nonce, API-endpoint, certificate, backend-public-key,
+recording-grant, and time-sync commands through Rust, Apple, Android, Codegen,
+and the internal compatibility owner. Recording control/result state machines
+and reset compatibility remain in Task 2 and will be committed separately.
+
 **Files:**
 - Modify: `frameworks/react-native/src/specs/NativeBotaDeviceSDK.ts`
 - Modify: `frameworks/react-native/src/client.ts`

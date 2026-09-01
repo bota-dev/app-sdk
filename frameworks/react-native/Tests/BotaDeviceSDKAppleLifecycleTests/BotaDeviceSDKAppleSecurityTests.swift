@@ -4,6 +4,40 @@ import XCTest
 @testable import BotaDeviceSDKAppleAdapter
 
 final class BotaDeviceSDKAppleSecurityTests: XCTestCase {
+    func testDeviceControlsDelegateTypedValuesToAppleFacade() async throws {
+        let connected = ConnectedDevice(
+            id: "selected",
+            serialNumber: "EVFXXW67KP",
+            deviceType: .botaPin,
+            firmwareVersion: "1.0.11",
+            isProvisioned: true,
+            connectionState: .connected,
+            mtu: 247
+        )
+        let client = TestAppleSecurityClient()
+        let security = BotaDeviceSDKAppleSecurity(client: client)
+
+        let provisioned = try await security.isProvisioned(connected)
+        let publicKey = try await security.readPublicKey(from: connected)
+        let nonce = try await security.readAuthNonce(from: connected)
+        XCTAssertTrue(provisioned)
+        XCTAssertEqual(publicKey, "public-key")
+        XCTAssertEqual(nonce, "nonce")
+        try await security.setAPIEndpoint(.gamma, on: connected)
+        try await security.deliverCertificate("cert", privateKeyPEM: "key", to: connected)
+        try await security.deliverBackendPublicKey(Data([1, 2, 3]), to: connected)
+        try await security.writeGrant("AQID", to: connected)
+        try await security.syncTime(connected)
+
+        let snapshot = await client.snapshot()
+        XCTAssertEqual(snapshot.environment, .gamma)
+        XCTAssertEqual(snapshot.certificate, "cert")
+        XCTAssertEqual(snapshot.privateKey, "key")
+        XCTAssertEqual(snapshot.backendPublicKey, Data([1, 2, 3]))
+        XCTAssertEqual(snapshot.grantBlob, "AQID")
+        XCTAssertTrue(snapshot.timeSynced)
+    }
+
     func testProvisioningMaterialRoundTripAndDeprovisionDelegateToAppleFacade() async throws {
         let connected = ConnectedDevice(
             id: "selected",
@@ -257,6 +291,12 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
         let factoryResetCancelled: Bool
         let resumedBindingGenerations: [UInt64]
         let connectionSettings: DeviceConnectionSettings?
+        let environment: DeviceAPIEnvironment?
+        let certificate: String?
+        let privateKey: String?
+        let backendPublicKey: Data?
+        let grantBlob: String?
+        let timeSynced: Bool
     }
 
     private var material: ProvisioningMaterial?
@@ -265,6 +305,12 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
     private var factoryResetCancelled = false
     private var resumedBindingGenerations: [UInt64] = []
     private var connectionSettings: DeviceConnectionSettings?
+    private var environment: DeviceAPIEnvironment?
+    private var certificate: String?
+    private var privateKey: String?
+    private var backendPublicKey: Data?
+    private var grantBlob: String?
+    private var timeSynced = false
     private let connectionSettingsReadResult: DeviceConnectionSettings
 
     init(connectionSettingsReadResult: DeviceConnectionSettings = .init(
@@ -288,6 +334,28 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
     func deprovision(_ device: ConnectedDevice) async throws {
         deprovisionedSerials.append(device.serialNumber)
     }
+
+    func isProvisioned(_ device: ConnectedDevice) async throws -> Bool { true }
+    func readPublicKey(from device: ConnectedDevice) async throws -> String? { "public-key" }
+    func readAuthNonce(from device: ConnectedDevice) async throws -> String? { "nonce" }
+    func setAPIEndpoint(_ environment: DeviceAPIEnvironment, on device: ConnectedDevice) async throws {
+        self.environment = environment
+    }
+    func deliverCertificate(
+        _ certificatePEM: String,
+        privateKeyPEM: String,
+        to device: ConnectedDevice
+    ) async throws {
+        certificate = certificatePEM
+        privateKey = privateKeyPEM
+    }
+    func deliverBackendPublicKey(_ publicKey: Data, to device: ConnectedDevice) async throws {
+        backendPublicKey = publicKey
+    }
+    func writeGrant(_ grantBlob: String, to device: ConnectedDevice) async throws {
+        self.grantBlob = grantBlob
+    }
+    func syncTime(_ device: ConnectedDevice) async throws { timeSynced = true }
 
     func writeConnectionSettings(
         _ settings: DeviceConnectionSettings,
@@ -339,7 +407,13 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
             factoryResetGrant: factoryResetGrant,
             factoryResetCancelled: factoryResetCancelled,
             resumedBindingGenerations: resumedBindingGenerations,
-            connectionSettings: connectionSettings
+            connectionSettings: connectionSettings,
+            environment: environment,
+            certificate: certificate,
+            privateKey: privateKey,
+            backendPublicKey: backendPublicKey,
+            grantBlob: grantBlob,
+            timeSynced: timeSynced
         )
     }
 }

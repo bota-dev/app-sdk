@@ -4,6 +4,8 @@ import Foundation
 private enum BotaDeviceSDKAppleBridgeInputError: LocalizedError {
     case invalidConnectedDevice
     case invalidConnectionSettings
+    case invalidEnvironment
+    case invalidHexadecimal
     case invalidTimeout
     case invalidUnsignedInteger
 
@@ -11,6 +13,8 @@ private enum BotaDeviceSDKAppleBridgeInputError: LocalizedError {
         switch self {
         case .invalidConnectedDevice: "connected device contains an unsupported value"
         case .invalidConnectionSettings: "connection settings contain an unsupported value"
+        case .invalidEnvironment: "API environment is unsupported"
+        case .invalidHexadecimal: "public key must be hexadecimal"
         case .invalidTimeout: "timeout must be a finite non-negative number"
         case .invalidUnsignedInteger: "value must be a finite non-negative integer"
         }
@@ -167,6 +171,269 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         Task {
             do {
                 try await devices.disconnect()
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(isProvisionedWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:completion:)
+    public func isProvisioned(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        completion: @escaping @Sendable (Bool, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                completion(try await security.isProvisioned(Self.connectedDevice(
+                    id: id,
+                    serialNumber: serialNumber,
+                    deviceType: deviceType,
+                    firmwareVersion: firmwareVersion,
+                    hardwareRevision: hardwareRevision,
+                    isProvisioned: isProvisioned,
+                    connectionState: connectionState,
+                    mtu: mtu
+                )), nil)
+            } catch {
+                completion(false, error as NSError)
+            }
+        }
+    }
+
+    @objc(readPublicKeyWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:completion:)
+    public func readPublicKey(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        completion: @escaping @Sendable (String?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                completion(try await security.readPublicKey(from: Self.connectedDevice(
+                    id: id,
+                    serialNumber: serialNumber,
+                    deviceType: deviceType,
+                    firmwareVersion: firmwareVersion,
+                    hardwareRevision: hardwareRevision,
+                    isProvisioned: isProvisioned,
+                    connectionState: connectionState,
+                    mtu: mtu
+                )), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc(readAuthNonceWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:completion:)
+    public func readAuthNonce(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        completion: @escaping @Sendable (String?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                completion(try await security.readAuthNonce(from: Self.connectedDevice(
+                    id: id,
+                    serialNumber: serialNumber,
+                    deviceType: deviceType,
+                    firmwareVersion: firmwareVersion,
+                    hardwareRevision: hardwareRevision,
+                    isProvisioned: isProvisioned,
+                    connectionState: connectionState,
+                    mtu: mtu
+                )), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc(setApiEndpointWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:environment:completion:)
+    public func setAPIEndpoint(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        environment: String,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await security.setAPIEndpoint(
+                    try Self.environment(environment),
+                    on: Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    )
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(deliverCertificateWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:certificatePem:privateKeyPem:completion:)
+    public func deliverCertificate(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        certificatePEM: String,
+        privateKeyPEM: String,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await security.deliverCertificate(
+                    certificatePEM,
+                    privateKeyPEM: privateKeyPEM,
+                    to: Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    )
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(deliverBackendPublicKeyWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:publicKeyHex:completion:)
+    public func deliverBackendPublicKey(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        publicKeyHex: String,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await security.deliverBackendPublicKey(
+                    try Self.hexData(publicKeyHex),
+                    to: Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    )
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(writeGrantWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:grantBlob:completion:)
+    public func writeGrant(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        grantBlob: String,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await security.writeGrant(
+                    grantBlob,
+                    to: Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    )
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(syncTimeWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:completion:)
+    public func syncTime(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await security.syncTime(Self.connectedDevice(
+                    id: id,
+                    serialNumber: serialNumber,
+                    deviceType: deviceType,
+                    firmwareVersion: firmwareVersion,
+                    hardwareRevision: hardwareRevision,
+                    isProvisioned: isProvisioned,
+                    connectionState: connectionState,
+                    mtu: mtu
+                ))
                 completion(nil)
             } catch {
                 completion(error as NSError)
@@ -1190,6 +1457,32 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
             throw BotaDeviceSDKAppleBridgeInputError.invalidConnectionSettings
         }
         return result
+    }
+
+    private static func environment(_ value: String) throws -> DeviceAPIEnvironment {
+        switch value {
+        case "development": .development
+        case "gamma": .gamma
+        case "production": .production
+        default: throw BotaDeviceSDKAppleBridgeInputError.invalidEnvironment
+        }
+    }
+
+    private static func hexData(_ value: String) throws -> Data {
+        guard value.count.isMultiple(of: 2) else {
+            throw BotaDeviceSDKAppleBridgeInputError.invalidHexadecimal
+        }
+        var data = Data(capacity: value.count / 2)
+        var index = value.startIndex
+        while index < value.endIndex {
+            let end = value.index(index, offsetBy: 2)
+            guard let byte = UInt8(value[index..<end], radix: 16) else {
+                throw BotaDeviceSDKAppleBridgeInputError.invalidHexadecimal
+            }
+            data.append(byte)
+            index = end
+        }
+        return data
     }
 
     private static func deviceStatus(_ status: DeviceStatus) -> [String: Any] {

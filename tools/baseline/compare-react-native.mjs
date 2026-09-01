@@ -101,6 +101,14 @@ function executeOperation(fixtureCase, sdk) {
         );
       case 'createWiFiGrantPacket':
         return parsers.createWiFiGrantPacket(fixtureCase.input.grantBlob);
+      case 'createTimeSyncData':
+        return parsers.createTimeSyncData({
+          getTime: () => fixtureCase.input.epochMilliseconds,
+          getMilliseconds: () =>
+            ((fixtureCase.input.epochMilliseconds % 1000) + 1000) % 1000,
+          getTimezoneOffset: () =>
+            -fixtureCase.input.timezoneOffsetMinutes,
+        });
       case 'createWiFiScanCommand':
         return parsers.createWiFiScanCommand();
       case 'constantByte': {

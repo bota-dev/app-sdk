@@ -7,6 +7,7 @@ import kotlinx.coroutines.sync.withLock
 
 public class BotaDeviceClient internal constructor() {
     public val devices: DeviceManager = DeviceManager()
+    public val controls: DeviceControlManager = DeviceControlManager()
     public val wifi: WiFiManager = WiFiManager()
     public val provisioning: ProvisioningManager = ProvisioningManager()
     public val factoryReset: FactoryResetManager = FactoryResetManager()
@@ -23,6 +24,7 @@ public class BotaDeviceClient internal constructor() {
             val configured = configuration.runtimeFactory()
             runtime = configured
             devices.attach(configured)
+            controls.attach(configured)
             wifi.attach(configured)
             provisioning.attach(configured)
             factoryReset.attach(configured)
@@ -43,6 +45,7 @@ public class BotaDeviceClient internal constructor() {
                     { wifi.detach() },
                     { factoryReset.detach() },
                     { provisioning.detach() },
+                    { controls.detach() },
                     { devices.detach() },
                     { configured.close() },
                 )

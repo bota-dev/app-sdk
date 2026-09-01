@@ -186,6 +186,33 @@ function nativeFixture() {
         calls.push(['readStatus']);
         return status;
       },
+      async isProvisioned(device) {
+        calls.push(['isProvisioned', device]);
+        return true;
+      },
+      async readPublicKey(device) {
+        calls.push(['readPublicKey', device]);
+        return 'ab'.repeat(64);
+      },
+      async readAuthNonce(device) {
+        calls.push(['readAuthNonce', device]);
+        return 'cd'.repeat(16);
+      },
+      async setApiEndpoint(device, environment) {
+        calls.push(['setApiEndpoint', device, environment]);
+      },
+      async deliverCertificate(device, certificatePem, privateKeyPem) {
+        calls.push(['deliverCertificate', device, certificatePem, privateKeyPem]);
+      },
+      async deliverBackendPublicKey(device, publicKeyHex) {
+        calls.push(['deliverBackendPublicKey', device, publicKeyHex]);
+      },
+      async writeGrant(device, grantBlob) {
+        calls.push(['writeGrant', device, grantBlob]);
+      },
+      async syncTime(device) {
+        calls.push(['syncTime', device]);
+      },
       async startStatusUpdates() {
         calls.push(['startStatusUpdates']);
       },
@@ -563,6 +590,36 @@ test('connection settings reads map the complete native value to the frozen shap
     streaming_flush_interval_seconds: 30,
   });
   assert.deepEqual(fixture.calls, [['readConnectionSettings', connected]]);
+});
+
+test('device controls preserve typed values and keep packet bytes native', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+  const publicKey = Uint8Array.from({ length: 32 }, (_, index) => index);
+
+  assert.equal(await client.controls.isProvisioned(connected), true);
+  assert.equal(await client.controls.readPublicKey(connected), 'ab'.repeat(64));
+  assert.equal(await client.controls.readAuthNonce(connected), 'cd'.repeat(16));
+  await client.controls.setApiEndpoint(connected, 'gamma');
+  await client.controls.deliverCertificate(connected, 'cert', 'key');
+  await client.controls.deliverBackendPublicKey(connected, publicKey);
+  await client.controls.writeGrant(connected, 'AQID');
+  await client.controls.syncTime(connected);
+
+  assert.deepEqual(fixture.calls, [
+    ['isProvisioned', connected],
+    ['readPublicKey', connected],
+    ['readAuthNonce', connected],
+    ['setApiEndpoint', connected, 'gamma'],
+    ['deliverCertificate', connected, 'cert', 'key'],
+    [
+      'deliverBackendPublicKey',
+      connected,
+      '000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f',
+    ],
+    ['writeGrant', connected, 'AQID'],
+    ['syncTime', connected],
+  ]);
 });
 
 test('factory reset resolves a nonce-bound grant and resumes only the exact generation', async () => {

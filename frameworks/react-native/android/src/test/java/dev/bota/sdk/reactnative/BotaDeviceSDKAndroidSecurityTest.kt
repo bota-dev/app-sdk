@@ -1,6 +1,7 @@
 package dev.bota.sdk.reactnative
 
 import dev.bota.sdk.model.ConnectedDevice
+import dev.bota.sdk.DeviceApiEnvironment
 import dev.bota.sdk.model.ConnectionState
 import dev.bota.sdk.model.DeviceType
 import dev.bota.sdk.model.DeviceConnectionSettings
@@ -18,6 +19,37 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BotaDeviceSDKAndroidSecurityTest {
+    @Test
+    fun deviceControlsDelegateTypedValuesToAndroidFacade() = runTest {
+        val connected = ConnectedDevice(
+            id = "selected",
+            serialNumber = "EVFXXW67KP",
+            deviceType = DeviceType.BotaPin,
+            firmwareVersion = "1.0.11",
+            isProvisioned = true,
+            connectionState = ConnectionState.Connected,
+            mtu = 247,
+        )
+        val client = TestAndroidSecurityClient()
+        val security = BotaDeviceSDKAndroidSecurity(client)
+
+        assertTrue(security.isProvisioned(connected))
+        assertEquals("public-key", security.readPublicKey(connected))
+        assertEquals("nonce", security.readAuthNonce(connected))
+        security.setApiEndpoint(DeviceApiEnvironment.Gamma, connected)
+        security.deliverCertificate("cert", "key", connected)
+        security.deliverBackendPublicKey(byteArrayOf(1, 2, 3), connected)
+        security.writeGrant("AQID", connected)
+        security.syncTime(connected)
+
+        assertEquals(DeviceApiEnvironment.Gamma, client.environment)
+        assertEquals("cert", client.certificate)
+        assertEquals("key", client.privateKey)
+        assertArrayEquals(byteArrayOf(1, 2, 3), client.backendPublicKey)
+        assertEquals("AQID", client.grantBlob)
+        assertTrue(client.timeSynced)
+    }
+
     @Test
     fun provisioningMaterialRoundTripAndDeprovisionDelegateToAndroidFacade() = runTest {
         val connected = ConnectedDevice(
@@ -213,6 +245,34 @@ class BotaDeviceSDKAndroidSecurityTest {
             enabledConnections = DeviceConnectionSettings.EnabledConnections(true, false),
             uploadNetworkPreference = listOf(DeviceConnectionSettings.ConnectionType.Wifi),
         )
+        var environment: DeviceApiEnvironment? = null
+        var certificate: String? = null
+        var privateKey: String? = null
+        var backendPublicKey: ByteArray? = null
+        var grantBlob: String? = null
+        var timeSynced = false
+
+        override suspend fun isProvisioned(device: ConnectedDevice): Boolean = true
+        override suspend fun readPublicKey(device: ConnectedDevice): String? = "public-key"
+        override suspend fun readAuthNonce(device: ConnectedDevice): String? = "nonce"
+        override suspend fun setApiEndpoint(environment: DeviceApiEnvironment, device: ConnectedDevice) {
+            this.environment = environment
+        }
+        override suspend fun deliverCertificate(
+            certificatePem: String,
+            privateKeyPem: String,
+            device: ConnectedDevice,
+        ) {
+            certificate = certificatePem
+            privateKey = privateKeyPem
+        }
+        override suspend fun deliverBackendPublicKey(publicKey: ByteArray, device: ConnectedDevice) {
+            backendPublicKey = publicKey
+        }
+        override suspend fun writeGrant(grantBlob: String, device: ConnectedDevice) {
+            this.grantBlob = grantBlob
+        }
+        override suspend fun syncTime(device: ConnectedDevice) { timeSynced = true }
 
         override suspend fun provision(
             device: ConnectedDevice,

@@ -111,6 +111,15 @@ public struct BotaConfiguration: @unchecked Sendable {
                     try mapper.createWiFiCredentialPacket(ssid: ssid, password: password)
                 },
                 createWiFiScanCommand: { try mapper.createWiFiScanCommand() },
+                createProvisioningChunks: { data, mtu in
+                    try mapper.createProvisioningChunks(data, mtu: mtu)
+                },
+                createTimeSyncData: { epochMilliseconds, timezoneOffsetMinutes in
+                    try mapper.createTimeSyncData(
+                        epochMilliseconds: epochMilliseconds,
+                        timezoneOffsetMinutes: timezoneOffsetMinutes
+                    )
+                },
                 parseConnectionSettings: { data in try mapper.parseConnectionSettings(data) },
                 serializeConnectionSettings: { settings, model in
                     try mapper.serializeConnectionSettings(settings, model: model)

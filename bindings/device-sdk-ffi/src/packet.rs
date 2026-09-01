@@ -120,6 +120,7 @@ pub mod kind {
     pub const PROTOCOL_ENCODE_WIFI_SCAN: u32 = 0x051b;
     pub const PROTOCOL_ENCODE_PROVISIONING_CHUNKS: u32 = 0x051c;
     pub const PROTOCOL_ENCODE_WIFI_CREDENTIALS: u32 = 0x051d;
+    pub const PROTOCOL_ENCODE_TIME_SYNC: u32 = 0x051e;
 }
 
 pub mod field_type {

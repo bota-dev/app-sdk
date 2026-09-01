@@ -379,6 +379,25 @@ internal class CoreModelMapper(
 
     fun createWiFiScanCommand(): ByteArray = encode(Protocol.Kind.EncodeWifiScan, emptyList())
 
+    fun createProvisioningChunks(data: ByteArray, mtu: Int): List<ByteArray> =
+        nativeCall {
+            core.encode(packet(
+                Protocol.Kind.EncodeProvisioningChunks,
+                listOf(
+                    Field.bytes(Protocol.Field.Payload, data),
+                    Field.unsigned(Protocol.Field.Mtu, mtu.toULongChecked("MTU")),
+                ),
+            )).byteArrays(Protocol.Field.Chunk)
+        }
+
+    fun createTimeSyncData(epochMilliseconds: ULong, timezoneOffsetMinutes: Short): ByteArray = encode(
+        Protocol.Kind.EncodeTimeSync,
+        listOf(
+            Field.unsigned(Protocol.Field.Timestamp, epochMilliseconds),
+            Field.signed(Protocol.Field.Offset, timezoneOffsetMinutes.toLong()),
+        ),
+    )
+
     fun createWiFiCredentialPacket(ssid: String, password: String): ByteArray = encode(
         Protocol.Kind.EncodeWifiCredentials,
         listOf(
@@ -678,6 +697,8 @@ private object Protocol {
         const val EncodeWifiGrant = 0x051a
         const val EncodeWifiScan = 0x051b
         const val EncodeWifiCredentials = 0x051d
+        const val EncodeProvisioningChunks = 0x051c
+        const val EncodeTimeSync = 0x051e
     }
 
     object Field {
@@ -753,5 +774,8 @@ private object Protocol {
         const val WifiIsCurrent = 117
         const val WifiIsOpen = 118
         const val WifiPassword = 119
+        const val Mtu = 57
+        const val Chunk = 113
+        const val Offset = 39
     }
 }

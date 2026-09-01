@@ -10,7 +10,7 @@ use bota_device_sdk_core::{
         AckType, FirmwareStatus, TransferCommand, encode_ack, encode_bounded_payload,
         encode_connection_settings, encode_firmware_data, encode_firmware_upload_start,
         encode_firmware_upload_verify, encode_firmware_window_ack, encode_ota_status,
-        encode_transfer_command, encode_wifi_credentials, encode_wifi_grant,
+        encode_time_sync, encode_transfer_command, encode_wifi_credentials, encode_wifi_grant,
         encode_wifi_scan_command,
     },
 };
@@ -46,7 +46,7 @@ fn encode_fixtures_match_react_native_bytes() {
             }
         }
     }
-    assert_eq!(matched, 24);
+    assert_eq!(matched, 25);
 }
 
 fn encode_fixture(fixture_case: &Value) -> Option<Result<Vec<u8>, String>> {
@@ -88,6 +88,10 @@ fn encode_fixture(fixture_case: &Value) -> Option<Result<Vec<u8>, String>> {
         "createWiFiCredentialPacket" => encode_wifi_credentials(
             input["ssid"].as_str().unwrap(),
             input["password"].as_str().unwrap(),
+        ),
+        "createTimeSyncData" => encode_time_sync(
+            input["epochMilliseconds"].as_u64().unwrap(),
+            input["timezoneOffsetMinutes"].as_i64().unwrap() as i16,
         ),
         "identityBytes" => encode_bounded_payload(
             &hex_decode(fixture_case["inputHex"].as_str().unwrap()),

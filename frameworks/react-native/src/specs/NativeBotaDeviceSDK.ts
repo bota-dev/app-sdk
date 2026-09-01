@@ -214,6 +214,27 @@ export interface Spec extends TurboModule {
   destroy: () => Promise<void>;
   deprovision: (device: NativeConnectedDevice) => Promise<void>;
   disconnect: () => Promise<void>;
+  isProvisioned: (device: NativeConnectedDevice) => Promise<boolean>;
+  readPublicKey: (device: NativeConnectedDevice) => Promise<string | null>;
+  readAuthNonce: (device: NativeConnectedDevice) => Promise<string | null>;
+  setApiEndpoint: (
+    device: NativeConnectedDevice,
+    environment: string
+  ) => Promise<void>;
+  deliverCertificate: (
+    device: NativeConnectedDevice,
+    certificatePem: string,
+    privateKeyPem: string
+  ) => Promise<void>;
+  deliverBackendPublicKey: (
+    device: NativeConnectedDevice,
+    publicKeyHex: string
+  ) => Promise<void>;
+  writeGrant: (
+    device: NativeConnectedDevice,
+    grantBlob: string
+  ) => Promise<void>;
+  syncTime: (device: NativeConnectedDevice) => Promise<void>;
   configureWiFi: (
     device: NativeConnectedDevice,
     ssid: string,

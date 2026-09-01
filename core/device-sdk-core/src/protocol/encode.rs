@@ -16,6 +16,23 @@ pub fn encode_wifi_scan_command() -> Result<Vec<u8>, DeviceSdkError> {
     Ok(vec![protocol::WIFI_SCAN_CMD_START])
 }
 
+pub fn encode_time_sync(
+    epoch_milliseconds: u64,
+    timezone_offset_minutes: i16,
+) -> Result<Vec<u8>, DeviceSdkError> {
+    let unix_seconds = epoch_milliseconds / 1_000;
+    let unix_seconds = u32::try_from(unix_seconds).map_err(|_| {
+        DeviceSdkError::new(ErrorCode::InvalidInput, Operation::Encode, false)
+            .with_detail("time sync timestamp exceeds the firmware range")
+    })?;
+    let milliseconds = (epoch_milliseconds % 1_000) as u16;
+    let mut packet = Vec::with_capacity(8);
+    packet.extend_from_slice(&unix_seconds.to_le_bytes());
+    packet.extend_from_slice(&milliseconds.to_le_bytes());
+    packet.extend_from_slice(&timezone_offset_minutes.to_le_bytes());
+    Ok(packet)
+}
+
 pub fn encode_wifi_credentials(ssid: &str, password: &str) -> Result<Vec<u8>, DeviceSdkError> {
     let ssid = ssid.as_bytes();
     let password = password.as_bytes();

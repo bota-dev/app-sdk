@@ -2,6 +2,7 @@ public final class BotaDeviceClient: @unchecked Sendable {
     public static let shared = BotaDeviceClient()
 
     public let devices: DeviceManager
+    public let controls: DeviceControlManager
     public let wifi: WiFiManager
     public let provisioning: ProvisioningManager
     public let factoryReset: FactoryResetManager
@@ -12,6 +13,7 @@ public final class BotaDeviceClient: @unchecked Sendable {
 
     public init() {
         devices = DeviceManager()
+        controls = DeviceControlManager()
         wifi = WiFiManager()
         provisioning = ProvisioningManager()
         factoryReset = FactoryResetManager()
@@ -24,6 +26,7 @@ public final class BotaDeviceClient: @unchecked Sendable {
         try await lifecycle.configure(
             configuration,
             devices: devices,
+            controls: controls,
             wifi: wifi,
             provisioning: provisioning,
             factoryReset: factoryReset,
@@ -36,6 +39,7 @@ public final class BotaDeviceClient: @unchecked Sendable {
     public func destroy() async {
         await lifecycle.destroy(
             devices: devices,
+            controls: controls,
             wifi: wifi,
             provisioning: provisioning,
             factoryReset: factoryReset,
@@ -52,6 +56,7 @@ private actor BotaClientLifecycle {
     func configure(
         _ configuration: BotaConfiguration,
         devices: DeviceManager,
+        controls: DeviceControlManager,
         wifi: WiFiManager,
         provisioning: ProvisioningManager,
         factoryReset: FactoryResetManager,
@@ -63,6 +68,7 @@ private actor BotaClientLifecycle {
         let runtime = try await configuration.runtimeFactory()
         self.runtime = runtime
         await devices.attach(runtime)
+        await controls.attach(runtime)
         await wifi.attach(runtime)
         await provisioning.attach(runtime)
         await factoryReset.attach(runtime)
@@ -73,6 +79,7 @@ private actor BotaClientLifecycle {
 
     func destroy(
         devices: DeviceManager,
+        controls: DeviceControlManager,
         wifi: WiFiManager,
         provisioning: ProvisioningManager,
         factoryReset: FactoryResetManager,
@@ -87,6 +94,7 @@ private actor BotaClientLifecycle {
         await wifi.detach()
         await provisioning.detach()
         await factoryReset.detach()
+        await controls.detach()
         await devices.detach()
         runtime = nil
     }

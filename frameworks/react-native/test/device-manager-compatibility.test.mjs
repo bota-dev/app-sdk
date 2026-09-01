@@ -113,6 +113,34 @@ test('internal DeviceManager status subscriptions and destroy release native own
   assert.equal(fake.stopScanCalls, 0);
 });
 
+test('internal DeviceManager delegates frozen provisioning and control commands', async () => {
+  const fake = createFakeClient();
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+  await manager.connect(discoveredDevice);
+  const publicKey = Uint8Array.from({ length: 32 }, (_, index) => index);
+
+  assert.equal(await manager.isProvisioned(connectedDevice), true);
+  assert.equal(await manager.readPublicKey(connectedDevice), 'ab'.repeat(64));
+  assert.equal(await manager.readAuthNonce(connectedDevice), 'cd'.repeat(16));
+  await manager.setApiEndpoint(connectedDevice, 'gamma');
+  await manager.deliverCert(connectedDevice, 'cert', 'key');
+  await manager.deliverBackendPubkey(connectedDevice, publicKey);
+  await manager.writeGrant(connectedDevice, 'AQID');
+  await manager.syncTime(connectedDevice.id);
+
+  assert.deepEqual(fake.controlCalls, [
+    ['isProvisioned', connectedDevice],
+    ['readPublicKey', connectedDevice],
+    ['readAuthNonce', connectedDevice],
+    ['setApiEndpoint', connectedDevice, 'gamma'],
+    ['deliverCertificate', connectedDevice, 'cert', 'key'],
+    ['deliverBackendPublicKey', connectedDevice, publicKey],
+    ['writeGrant', connectedDevice, 'AQID'],
+    ['syncTime', connectedDevice],
+  ]);
+});
+
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const discoveredDevice = {
@@ -166,6 +194,7 @@ function createFakeClient() {
     wifiStatusSubscriptionRemovals: 0,
     deviceStatusSubscriptionRemovals: 0,
     wifiConfiguration: null,
+    controlCalls: [],
     emitDiscovered: (device) => onDiscovered?.(device),
     emitWiFiStatus: (status) => onWiFiStatus?.(status),
     emitDeviceStatus: (status) => onDeviceStatus?.(status),
@@ -210,6 +239,35 @@ function createFakeClient() {
       async deprovision() {},
       async readConnectionSettings() { throw new Error('unused'); },
       async writeConnectionSettings() {},
+    },
+    controls: {
+      async isProvisioned(device) {
+        fake.controlCalls.push(['isProvisioned', device]);
+        return true;
+      },
+      async readPublicKey(device) {
+        fake.controlCalls.push(['readPublicKey', device]);
+        return 'ab'.repeat(64);
+      },
+      async readAuthNonce(device) {
+        fake.controlCalls.push(['readAuthNonce', device]);
+        return 'cd'.repeat(16);
+      },
+      async setApiEndpoint(device, environment) {
+        fake.controlCalls.push(['setApiEndpoint', device, environment]);
+      },
+      async deliverCertificate(device, certificatePem, privateKeyPem) {
+        fake.controlCalls.push(['deliverCertificate', device, certificatePem, privateKeyPem]);
+      },
+      async deliverBackendPublicKey(device, publicKey) {
+        fake.controlCalls.push(['deliverBackendPublicKey', device, publicKey]);
+      },
+      async writeGrant(device, grantBlob) {
+        fake.controlCalls.push(['writeGrant', device, grantBlob]);
+      },
+      async syncTime(device) {
+        fake.controlCalls.push(['syncTime', device]);
+      },
     },
     factoryReset: {},
     recordings: {},

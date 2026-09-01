@@ -19,6 +19,7 @@ import dev.bota.sdk.model.FactoryResetGrantRequest
 import dev.bota.sdk.model.ProvisioningMaterial
 import dev.bota.sdk.model.ProvisioningMaterialRequest
 import java.util.UUID
+import java.util.Base64
 import kotlinx.coroutines.channels.SendChannel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -32,6 +33,79 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProvisioningManagerTest {
+    @Test
+    fun deviceControlReadsProvisioningIdentityAndWritesTypedPayloads() = runTest {
+        val fixture = SecureRuntimeFixture()
+        val controls = DeviceControlManager()
+        fixture.connect()
+        controls.attach(fixture.runtime)
+
+        fixture.readValue = byteArrayOf(2)
+        assertTrue(controls.isProvisioned(fixture.device))
+
+        fixture.readValue = ByteArray(64) { 0xab.toByte() }
+        assertEquals("ab".repeat(64), controls.readPublicKey(fixture.device))
+
+        fixture.readValue = ByteArray(16) { 0xcd.toByte() }
+        assertEquals("cd".repeat(16), controls.readAuthNonce(fixture.device))
+
+        controls.setApiEndpoint(DeviceApiEnvironment.Gamma, fixture.device)
+        controls.deliverBackendPublicKey(ByteArray(32) { 0xef.toByte() }, fixture.device)
+        controls.writeGrant(Base64.getEncoder().encodeToString(byteArrayOf(1, 2, 3)), fixture.device)
+        controls.syncTime(
+            epochMilliseconds = 1_725_000_000_321,
+            timezoneOffsetMinutes = -420,
+            device = fixture.device,
+        )
+
+        assertEquals(
+            listOf(
+                BotaSecureUUIDs.PairingState,
+                BotaSecureUUIDs.DevicePublicKey,
+                BotaSecureUUIDs.AuthNonce,
+            ),
+            fixture.reads.map { it.characteristic },
+        )
+        assertEquals(
+            listOf(
+                BotaSecureUUIDs.ApiEndpoint,
+                BotaSecureUUIDs.BackendPublicKey,
+                BotaSecureUUIDs.DeviceCommand,
+                BotaSecureUUIDs.TimeSync,
+            ),
+            fixture.writes.map { it.characteristic },
+        )
+        assertArrayEquals(byteArrayOf(2), fixture.writes[0].value)
+        assertArrayEquals(ByteArray(32) { 0xef.toByte() }, fixture.writes[1].value)
+        assertArrayEquals(byteArrayOf(1, 2, 3), fixture.writes[2].value)
+        assertArrayEquals(
+            byteArrayOf(0x40, 0x69, 0xd1.toByte(), 0x66, 0x41, 0x01, 0x5c, 0xfe.toByte()),
+            fixture.writes[3].value,
+        )
+        controls.detach()
+    }
+
+    @Test
+    fun deviceCertificateUsesFrozenProvisioningChunkFraming() = runTest {
+        val fixture = SecureRuntimeFixture(
+            device = secureAndroidDevice(mtu = 20),
+        )
+        val controls = DeviceControlManager()
+        fixture.connect()
+        controls.attach(fixture.runtime)
+
+        val payload = "certificate\nprivate-key\n".encodeToByteArray()
+        controls.deliverCertificate(" certificate ", " private-key ", fixture.device)
+
+        assertEquals(
+            listOf(BotaSecureUUIDs.DeviceCertificate, BotaSecureUUIDs.DeviceCertificate),
+            fixture.writes.map { it.characteristic },
+        )
+        assertArrayEquals(byteArrayOf(0, 2) + payload.take(13), fixture.writes[0].value)
+        assertArrayEquals(byteArrayOf(1, 2) + payload.drop(13), fixture.writes[1].value)
+        controls.detach()
+    }
+
     @Test
     fun provisionRegistersOneOpaqueMaterialIdAndAlwaysUnregistersIt() = runTest {
         val fixture = SecureRuntimeFixture()
@@ -175,22 +249,24 @@ class ProvisioningManagerTest {
     }
 }
 
+private fun secureAndroidDevice(mtu: Int = 185): ConnectedDevice = ConnectedDevice(
+    id = "peripheral-1",
+    serialNumber = "EVFXXW67KP",
+    deviceType = DeviceType.BotaNote,
+    firmwareVersion = "1.0.17",
+    isProvisioned = true,
+    connectionState = ConnectionState.Connected,
+    mtu = mtu,
+)
+
 internal class SecureRuntimeFixture(
     val runner: SecureWorkflowRunner = SecureWorkflowRunner(),
     pendingReset: PersistedFactoryResetResult? = null,
+    val device: ConnectedDevice = secureAndroidDevice(),
 ) {
     data class Write(val peripheralId: String, val service: UUID, val characteristic: UUID, val value: ByteArray)
     data class Read(val peripheralId: String, val service: UUID, val characteristic: UUID)
 
-    val device = ConnectedDevice(
-        id = "peripheral-1",
-        serialNumber = "EVFXXW67KP",
-        deviceType = DeviceType.BotaNote,
-        firmwareVersion = "1.0.17",
-        isProvisioned = true,
-        connectionState = ConnectionState.Connected,
-        mtu = 185,
-    )
     val connection = DeviceConnectionRegistry()
     val operations = DeviceOperationCoordinator()
     val writes = mutableListOf<Write>()
@@ -244,6 +320,21 @@ internal class SecureRuntimeFixture(
         encodeDeviceCommand = {
             encodedDeviceCommands += it
             byteArrayOf(5)
+        },
+        createProvisioningChunks = { data, mtu ->
+            val capacity = mtu - 7
+            val chunks = data.toList().chunked(capacity)
+            chunks.mapIndexed { index, chunk ->
+                byteArrayOf(index.toByte(), chunks.size.toByte()) + chunk
+            }
+        },
+        createTimeSyncData = { epochMilliseconds, timezoneOffsetMinutes ->
+            java.nio.ByteBuffer.allocate(8)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                .putInt((epochMilliseconds / 1_000u).toInt())
+                .putShort((epochMilliseconds % 1_000u).toShort())
+                .putShort(timezoneOffsetMinutes)
+                .array()
         },
         registerProvisioning = { id, provider ->
             if (failProvisioningRegistration) error("registration failed")
@@ -302,9 +393,16 @@ internal class SecureWorkflowRunner(
 
 internal object BotaSecureUUIDs {
     val ControlService: UUID = UUID.fromString("b07a0002-0000-1000-8000-00805f9b34fb")
+    val TimeSync: UUID = UUID.fromString("b07a0002-0004-1000-8000-00805f9b34fb")
     val DeviceCommand: UUID = UUID.fromString("b07a0002-0005-1000-8000-00805f9b34fb")
     val ProvisioningService: UUID = UUID.fromString("b07a0003-0000-1000-8000-00805f9b34fb")
+    val PairingState: UUID = UUID.fromString("b07a0003-0001-1000-8000-00805f9b34fb")
+    val ApiEndpoint: UUID = UUID.fromString("b07a0003-0003-1000-8000-00805f9b34fb")
     val DeviceSettings: UUID = UUID.fromString("b07a0003-0006-1000-8000-00805f9b34fb")
+    val DevicePublicKey: UUID = UUID.fromString("b07a0005-0001-1000-8000-00805f9b34fb")
+    val AuthNonce: UUID = UUID.fromString("b07a0005-0002-1000-8000-00805f9b34fb")
+    val BackendPublicKey: UUID = UUID.fromString("b07a0005-0003-1000-8000-00805f9b34fb")
+    val DeviceCertificate: UUID = UUID.fromString("b07a0005-0004-1000-8000-00805f9b34fb")
 }
 
 private fun secureNotification(kind: CoreNotificationKind, operation: Int): CoreNotification = CoreNotification(

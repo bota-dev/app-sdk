@@ -122,9 +122,15 @@ methods exist, so type parity cannot be mistaken for operational parity.
 An internal `DeviceManager` compatibility owner now preserves the already
 native-backed scan, selected connection, status, settings, logs, WiFi, and
 last-known WiFi cache behavior, including idempotent legacy removal functions.
-It is deliberately not a root export: nonce/key reads, direct provisioning
-writes, recording control, time sync, and reset compatibility still need typed
-native methods before the frozen class can pass its exact surface gate.
+The sibling `BotaDeviceSDK.controls` facade now delegates provisioning-state,
+device-public-key, auth-nonce, API-endpoint, certificate, backend-public-key,
+recording-grant, and time-sync commands to native Apple and Android
+`DeviceControlManager` facades. Certificate chunk framing and public-key bytes
+remain native; Codegen carries only typed text and command results. The
+compatibility owner delegates the corresponding frozen methods, but it is
+deliberately not a root export: recording control and reset compatibility still
+need typed native methods before the frozen class can pass its exact surface
+gate.
 The package's new `BotaDeviceSDK.devices` facade is intentionally smaller than
 the withheld `DeviceManager`: it owns a typed discovery subscription, preserves
 the frozen JavaScript scan filters, connects a selected peripheral while the

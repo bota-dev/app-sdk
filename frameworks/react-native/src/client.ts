@@ -37,6 +37,7 @@ import type {
   WiFiStatus,
   WiFiStatusInfo,
   DeviceWiFiScanResult,
+  Environment,
   WifiStatus,
 } from './models/Device';
 import type { AudioCodec, DeviceRecording } from './models/Recording';
@@ -90,6 +91,27 @@ export type BotaDeviceSDKProvisioningClient = {
     device: ConnectedDevice,
     settings: DeviceConnectionSettings
   ): Promise<void>;
+};
+
+export type BotaDeviceSDKControlClient = {
+  isProvisioned(device: ConnectedDevice): Promise<boolean>;
+  readPublicKey(device: ConnectedDevice): Promise<string | null>;
+  readAuthNonce(device: ConnectedDevice): Promise<string | null>;
+  setApiEndpoint(
+    device: ConnectedDevice,
+    environment: Environment
+  ): Promise<void>;
+  deliverCertificate(
+    device: ConnectedDevice,
+    certificatePem: string,
+    privateKeyPem: string
+  ): Promise<void>;
+  deliverBackendPublicKey(
+    device: ConnectedDevice,
+    publicKey: Uint8Array
+  ): Promise<void>;
+  writeGrant(device: ConnectedDevice, grantBlob: string): Promise<void>;
+  syncTime(device: ConnectedDevice): Promise<void>;
 };
 
 export type BotaFactoryResetGrantRequest = Omit<
@@ -237,6 +259,7 @@ export class BotaNativeModuleError extends Error {
 }
 
 export type BotaDeviceSDKClient = {
+  readonly controls: BotaDeviceSDKControlClient;
   readonly devices: BotaDeviceSDKDeviceClient;
   readonly factoryReset: BotaDeviceSDKFactoryResetClient;
   readonly logs: BotaDeviceSDKLogClient;
@@ -301,6 +324,9 @@ const toNativeConnectedDevice = (
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
+
+const bytesToHex = (value: Uint8Array): string =>
+  Array.from(value, (byte) => byte.toString(16).padStart(2, '0')).join('');
 
 const toNativeConnectionSettings = (settings: DeviceConnectionSettings) => ({
   enabledConnections: settings.enabled_connections,
@@ -610,6 +636,53 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
   };
 
+  const controls: BotaDeviceSDKControlClient = {
+    async isProvisioned(device) {
+      return requireNativeModule().isProvisioned(toNativeConnectedDevice(device));
+    },
+
+    async readPublicKey(device) {
+      return requireNativeModule().readPublicKey(toNativeConnectedDevice(device));
+    },
+
+    async readAuthNonce(device) {
+      return requireNativeModule().readAuthNonce(toNativeConnectedDevice(device));
+    },
+
+    async setApiEndpoint(device, environment) {
+      await requireNativeModule().setApiEndpoint(
+        toNativeConnectedDevice(device),
+        environment
+      );
+    },
+
+    async deliverCertificate(device, certificatePem, privateKeyPem) {
+      await requireNativeModule().deliverCertificate(
+        toNativeConnectedDevice(device),
+        certificatePem,
+        privateKeyPem
+      );
+    },
+
+    async deliverBackendPublicKey(device, publicKey) {
+      await requireNativeModule().deliverBackendPublicKey(
+        toNativeConnectedDevice(device),
+        bytesToHex(publicKey)
+      );
+    },
+
+    async writeGrant(device, grantBlob) {
+      await requireNativeModule().writeGrant(
+        toNativeConnectedDevice(device),
+        grantBlob
+      );
+    },
+
+    async syncTime(device) {
+      await requireNativeModule().syncTime(toNativeConnectedDevice(device));
+    },
+  };
+
   const factoryReset: BotaDeviceSDKFactoryResetClient = {
     async factoryReset(device, options, provider) {
       const module = requireNativeModule();
@@ -798,6 +871,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
   };
 
   return {
+    controls,
     devices,
     factoryReset,
     logs,

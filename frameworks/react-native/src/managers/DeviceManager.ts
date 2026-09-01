@@ -23,6 +23,7 @@ import type {
   WiFiConfigResult,
   WiFiCredentials,
   WiFiStatusInfo,
+  Environment,
 } from '../models/Device';
 import type { DeviceManagerEvents } from '../models/Status';
 import { DeviceError } from '../utils/errors';
@@ -155,6 +156,59 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   async getStatus(device: ConnectedDevice): Promise<DeviceStatus> {
     this.requireConnected(device.id);
     return this.client.devices.readStatus();
+  }
+
+  async isProvisioned(device: ConnectedDevice): Promise<boolean> {
+    this.requireConnected(device.id);
+    return this.client.controls.isProvisioned(device);
+  }
+
+  async readPublicKey(device: ConnectedDevice): Promise<string | null> {
+    this.requireConnected(device.id);
+    return this.client.controls.readPublicKey(device);
+  }
+
+  async readAuthNonce(device: ConnectedDevice): Promise<string | null> {
+    this.requireConnected(device.id);
+    return this.client.controls.readAuthNonce(device);
+  }
+
+  async setApiEndpoint(
+    device: ConnectedDevice,
+    environment: Environment
+  ): Promise<void> {
+    this.requireConnected(device.id);
+    await this.client.controls.setApiEndpoint(device, environment);
+  }
+
+  async deliverCert(
+    device: ConnectedDevice,
+    certificatePem: string,
+    privateKeyPem: string
+  ): Promise<void> {
+    this.requireConnected(device.id);
+    await this.client.controls.deliverCertificate(
+      device,
+      certificatePem,
+      privateKeyPem
+    );
+  }
+
+  async deliverBackendPubkey(
+    device: ConnectedDevice,
+    publicKey: Uint8Array
+  ): Promise<void> {
+    this.requireConnected(device.id);
+    await this.client.controls.deliverBackendPublicKey(device, publicKey);
+  }
+
+  async writeGrant(device: ConnectedDevice, grantBlob: string): Promise<void> {
+    this.requireConnected(device.id);
+    await this.client.controls.writeGrant(device, grantBlob);
+  }
+
+  async syncTime(deviceId: string): Promise<void> {
+    await this.client.controls.syncTime(this.requireConnected(deviceId));
   }
 
   subscribeToStatus(

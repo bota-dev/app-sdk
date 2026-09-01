@@ -6,6 +6,7 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.module.annotations.ReactModule
 import dev.bota.sdk.DeviceReconnectHint
+import dev.bota.sdk.DeviceApiEnvironment
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -83,6 +84,53 @@ internal class BotaDeviceSDKModule(
 
     override fun disconnect(promise: Promise) {
         launch(promise) { devices.disconnect() }
+    }
+
+    override fun isProvisioned(device: ReadableMap, promise: Promise) {
+        launchValue(promise) { security.isProvisioned(device.toConnectedDevice()) }
+    }
+
+    override fun readPublicKey(device: ReadableMap, promise: Promise) {
+        launchValue(promise) { security.readPublicKey(device.toConnectedDevice()) }
+    }
+
+    override fun readAuthNonce(device: ReadableMap, promise: Promise) {
+        launchValue(promise) { security.readAuthNonce(device.toConnectedDevice()) }
+    }
+
+    override fun setApiEndpoint(device: ReadableMap, environment: String, promise: Promise) {
+        launch(promise) {
+            security.setApiEndpoint(environment.toDeviceApiEnvironment(), device.toConnectedDevice())
+        }
+    }
+
+    override fun deliverCertificate(
+        device: ReadableMap,
+        certificatePem: String,
+        privateKeyPem: String,
+        promise: Promise,
+    ) {
+        launch(promise) {
+            security.deliverCertificate(certificatePem, privateKeyPem, device.toConnectedDevice())
+        }
+    }
+
+    override fun deliverBackendPublicKey(
+        device: ReadableMap,
+        publicKeyHex: String,
+        promise: Promise,
+    ) {
+        launch(promise) {
+            security.deliverBackendPublicKey(publicKeyHex.hexBytes(), device.toConnectedDevice())
+        }
+    }
+
+    override fun writeGrant(device: ReadableMap, grantBlob: String, promise: Promise) {
+        launch(promise) { security.writeGrant(grantBlob, device.toConnectedDevice()) }
+    }
+
+    override fun syncTime(device: ReadableMap, promise: Promise) {
+        launch(promise) { security.syncTime(device.toConnectedDevice()) }
     }
 
     override fun configureWiFi(
@@ -382,4 +430,18 @@ private fun Double.toUnsignedInt(): UInt {
         "value must fit an unsigned 32-bit integer"
     }
     return value.toUInt()
+}
+
+private fun String.toDeviceApiEnvironment(): DeviceApiEnvironment = when (this) {
+    "development" -> DeviceApiEnvironment.Development
+    "gamma" -> DeviceApiEnvironment.Gamma
+    "production" -> DeviceApiEnvironment.Production
+    else -> error("unsupported API environment: $this")
+}
+
+private fun String.hexBytes(): ByteArray {
+    require(length % 2 == 0 && all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
+        "public key must be lowercase or uppercase hexadecimal"
+    }
+    return chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 }
