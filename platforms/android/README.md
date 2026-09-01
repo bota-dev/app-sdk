@@ -195,6 +195,11 @@ registered outside Rust and consumed once. Response bodies and file resources
 close on every terminal path; destroying the host cancels only its owned calls,
 not unrelated requests on an injected OkHttpClient.
 
+After a recording stream completes, `RecordingManager.transferMetadata(sinkId)`
+returns and consumes whether that transfer used E2E framing and the optional
+device SHA-256. Use this completion metadata for upload routing; the list entry's
+`isEncrypted` value is not evidence of the bytes delivered in that session.
+
 Run the JVM contracts plus real framework tests on both supported compatibility
 targets:
 

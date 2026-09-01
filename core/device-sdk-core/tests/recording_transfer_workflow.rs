@@ -2,8 +2,8 @@ use bota_device_sdk_core::{
     engine::{
         BleEffect, BleEvent, CancellationId, Capability, CapabilitySet, CheckpointPhase, Command,
         Effect, EffectRequest, Event, HostEvent, HostEventKind, PersistenceEffect,
-        RecordingSinkEffect, RequestId, WorkflowCheckpoint, WorkflowEngine, WorkflowKind,
-        WorkflowNotification, WorkflowStatus,
+        RecordingSinkEffect, RequestId, TimerEffect, WorkflowCheckpoint, WorkflowEngine,
+        WorkflowKind, WorkflowNotification, WorkflowStatus,
     },
     error::{ErrorCode, Operation},
     generated::protocol::{
@@ -22,6 +22,7 @@ fn capabilities() -> CapabilitySet {
         Capability::Persistence,
         Capability::Progress,
         Capability::RecordingSink,
+        Capability::Timer,
     ])
 }
 
@@ -154,6 +155,13 @@ fn encrypted_data(sequence: u16, ciphertext_with_tag: &[u8]) -> Vec<u8> {
 fn encrypted_eof(sequence: u16) -> Vec<u8> {
     let mut bytes = vec![PACKET_TYPE_ENCRYPTED_EOF];
     bytes.extend_from_slice(&sequence.to_le_bytes());
+    bytes
+}
+
+fn sha256(value: &[u8; 32]) -> Vec<u8> {
+    let mut bytes = vec![4];
+    bytes.extend_from_slice(value);
+    bytes.extend_from_slice(recording().as_bytes());
     bytes
 }
 
@@ -314,6 +322,106 @@ fn encrypted_transfer_stages_backend_decryption_wire_format() {
             expected_crc32: None,
             ..
         })
+    )));
+}
+
+#[test]
+fn transfer_waits_for_post_eof_sha_and_reports_completion_metadata() {
+    let mut engine = WorkflowEngine::default();
+    let (subscription_request, _) = start_with_checkpoint(&mut engine, None);
+    let header = engine
+        .dispatch(host(
+            subscription_request,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                value: e2e_start(&[0x11; 32], &[0x22; 4]),
+            }),
+        ))
+        .unwrap();
+    let header_request = request_id(&header, |effect| {
+        matches!(effect, Effect::RecordingSink(RecordingSinkEffect::Append { .. }))
+    });
+    engine
+        .dispatch(host(
+            header_request,
+            HostEventKind::RecordingSinkAppendCompleted { durable_units: 36 },
+        ))
+        .unwrap();
+    let finalizing = engine
+        .dispatch(host(
+            subscription_request,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                value: encrypted_eof(0),
+            }),
+        ))
+        .unwrap();
+    let finalize_request = request_id(&finalizing, |effect| {
+        matches!(effect, Effect::RecordingSink(RecordingSinkEffect::Finalize { .. }))
+    });
+    assert!(finalizing.iter().any(|request| matches!(
+        request.effect,
+        Effect::Timer(TimerEffect::Schedule { delay_ms: 200, .. })
+    )));
+
+    let waiting = engine
+        .dispatch(host(
+            finalize_request,
+            HostEventKind::RecordingSinkFinalized { durable_units: 36 },
+        ))
+        .unwrap();
+    assert!(!waiting.iter().any(|request| matches!(
+        request.effect,
+        Effect::Ble(BleEffect::Write { .. })
+    )));
+
+    let digest = [0x5a; 32];
+    let acknowledging = engine
+        .dispatch(host(
+            subscription_request,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                value: sha256(&digest),
+            }),
+        ))
+        .unwrap();
+    let ack_request = request_id(&acknowledging, |effect| {
+        matches!(
+            effect,
+            Effect::Ble(BleEffect::Write { payload, .. })
+                if payload.first() == Some(&ACK_TYPE_ACK)
+        )
+    });
+    assert!(acknowledging.iter().any(|request| matches!(
+        request.effect,
+        Effect::Timer(TimerEffect::Cancel { .. })
+    )));
+
+    let confirming = engine
+        .dispatch(host(
+            ack_request,
+            HostEventKind::Ble(BleEvent::WriteCompleted),
+        ))
+        .unwrap();
+    let confirm_request = request_id(&confirming, |effect| {
+        matches!(
+            effect,
+            Effect::Ble(BleEffect::Write { characteristic_uuid, payload, .. })
+                if characteristic_uuid == CHAR_TRANSFER_CONTROL && payload.first() == Some(&7)
+        )
+    });
+    let completed = engine
+        .dispatch(host(
+            confirm_request,
+            HostEventKind::Ble(BleEvent::WriteCompleted),
+        ))
+        .unwrap();
+    assert!(completed.iter().any(|request| matches!(
+        &request.effect,
+        Effect::Notify(WorkflowNotification::RecordingTransferCompleted {
+            encrypted: true,
+            sha256: Some(value),
+        }) if value == &digest
     )));
 }
 
@@ -501,6 +609,20 @@ fn confirm_delete_occurs_only_after_durable_sink_finalization_and_final_ack() {
             HostEventKind::RecordingSinkFinalized { durable_units: 10 },
         ))
         .unwrap();
+    assert!(acknowledging.is_empty());
+    let timer_id = finalizing
+        .iter()
+        .find_map(|request| match request.effect {
+            Effect::Timer(TimerEffect::Schedule { timer_id, .. }) => Some(timer_id),
+            _ => None,
+        })
+        .expect("SHA grace timer");
+    let acknowledging = engine
+        .dispatch(host(
+            RequestId::from_u64(0),
+            HostEventKind::TimerFired { timer_id },
+        ))
+        .unwrap();
     let ack_request = request_id(&acknowledging, |effect| {
         matches!(
             effect,
@@ -547,8 +669,9 @@ fn confirm_delete_occurs_only_after_durable_sink_finalization_and_final_ack() {
         .unwrap();
     assert!(completed.iter().any(|request| matches!(
         request.effect,
-        Effect::Notify(WorkflowNotification::Completed {
-            operation: Operation::TransferRecording,
+        Effect::Notify(WorkflowNotification::RecordingTransferCompleted {
+            encrypted: false,
+            sha256: None,
         })
     )));
 }

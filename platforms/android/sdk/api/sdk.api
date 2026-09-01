@@ -1053,8 +1053,11 @@ public final class dev/bota/sdk/DeviceReconnectHint {
 
 public final class dev/bota/sdk/FactoryResetManager {
 	public final fun cancelCurrentOperation (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun factoryReset-bdvP6-E (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;JLkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun resumePendingFactoryReset-z13BHRw (Ldev/bota/sdk/model/ConnectedDevice;JLkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun factoryReset-7hoFjp4 (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;JLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun factoryReset-7hoFjp4$default (Ldev/bota/sdk/FactoryResetManager;Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;JLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun resumePendingFactoryReset-32etgaw (Ldev/bota/sdk/model/ConnectedDevice;JLkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun resumePendingFactoryReset-32etgaw$default (Ldev/bota/sdk/FactoryResetManager;Ldev/bota/sdk/model/ConnectedDevice;JLkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun resumeUnjournaledFactoryReset-bdvP6-E (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;JLkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class dev/bota/sdk/FirmwareImage {
@@ -1083,8 +1086,9 @@ public final class dev/bota/sdk/OTAManager {
 
 public final class dev/bota/sdk/ProvisioningManager {
 	public static final field DeprovisionCommand B
+	public static final field DeprovisionTimeoutMilliseconds J
 	public final fun cancelCurrentOperation (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun deprovision (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun deprovision (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun provision (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun readConnectionSettings (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun writeConnectionSettings (Ldev/bota/sdk/model/DeviceConnectionSettings;Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -1096,6 +1100,7 @@ public final class dev/bota/sdk/RecordingManager {
 	public final fun observeUploadOwnership (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lkotlinx/coroutines/flow/Flow;
 	public final fun syncRecording (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/model/DeviceRecording;Ljava/lang/String;)Lkotlinx/coroutines/flow/Flow;
 	public static synthetic fun syncRecording$default (Ldev/bota/sdk/RecordingManager;Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/model/DeviceRecording;Ljava/lang/String;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+	public final fun transferMetadata (Ljava/lang/String;)Ldev/bota/sdk/RecordingTransferMetadata;
 }
 
 public abstract interface class dev/bota/sdk/RecordingSyncEvent {
@@ -1120,6 +1125,19 @@ public final class dev/bota/sdk/RecordingSyncEvent$Progress : dev/bota/sdk/Recor
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getProgress ()Ldev/bota/sdk/model/RecordingTransferProgress;
 	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/RecordingTransferMetadata {
+	public fun <init> (ZLjava/lang/String;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (ZLjava/lang/String;)Ldev/bota/sdk/RecordingTransferMetadata;
+	public static synthetic fun copy$default (Ldev/bota/sdk/RecordingTransferMetadata;ZLjava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/RecordingTransferMetadata;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContentSha256Hex ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isE2EEncrypted ()Z
 	public fun toString ()Ljava/lang/String;
 }
 
@@ -1252,6 +1270,20 @@ public final class dev/bota/sdk/model/ConnectionState : java/lang/Enum {
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/model/ConnectionState;
 	public static fun values ()[Ldev/bota/sdk/model/ConnectionState;
+}
+
+public final class dev/bota/sdk/model/DeprovisionResult {
+	public fun <init> (ZLdev/bota/sdk/model/ProvisioningFailure;)V
+	public synthetic fun <init> (ZLdev/bota/sdk/model/ProvisioningFailure;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Ldev/bota/sdk/model/ProvisioningFailure;
+	public final fun copy (ZLdev/bota/sdk/model/ProvisioningFailure;)Ldev/bota/sdk/model/DeprovisionResult;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/DeprovisionResult;ZLdev/bota/sdk/model/ProvisioningFailure;ILjava/lang/Object;)Ldev/bota/sdk/model/DeprovisionResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getError ()Ldev/bota/sdk/model/ProvisioningFailure;
+	public final fun getSuccess ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 
 public final class dev/bota/sdk/model/DeviceConnectionSettings {
@@ -1538,6 +1570,17 @@ public final class dev/bota/sdk/model/FactoryResetGrantRequest {
 	public final fun getSerialNumber ()Ljava/lang/String;
 }
 
+public final class dev/bota/sdk/model/FactoryResetPersistenceResult {
+	public synthetic fun <init> (SLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-Mh2AYeg ()S
+	public final fun copy-xj2QHRw (S)Ldev/bota/sdk/model/FactoryResetPersistenceResult;
+	public static synthetic fun copy-xj2QHRw$default (Ldev/bota/sdk/model/FactoryResetPersistenceResult;SILjava/lang/Object;)Ldev/bota/sdk/model/FactoryResetPersistenceResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getLocalRecordingsDeleted-Mh2AYeg ()S
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class dev/bota/sdk/model/FactoryResetResult {
 	public synthetic fun <init> (BSLkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1-w2LRezQ ()B
@@ -1698,6 +1741,18 @@ public final class dev/bota/sdk/model/ParsedConnectionSettings {
 	public final fun getSupportedVersion ()Z
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/ProvisioningFailure : java/lang/Enum {
+	public static final field AlreadyPaired Ldev/bota/sdk/model/ProvisioningFailure;
+	public static final field ChunkError Ldev/bota/sdk/model/ProvisioningFailure;
+	public static final field InvalidToken Ldev/bota/sdk/model/ProvisioningFailure;
+	public static final field StorageError Ldev/bota/sdk/model/ProvisioningFailure;
+	public static final field Unknown Ldev/bota/sdk/model/ProvisioningFailure;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWireValue ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/model/ProvisioningFailure;
+	public static fun values ()[Ldev/bota/sdk/model/ProvisioningFailure;
 }
 
 public final class dev/bota/sdk/model/ProvisioningMaterial {

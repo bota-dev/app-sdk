@@ -308,6 +308,9 @@ fn notification_kind(notification: &WorkflowNotification) -> u32 {
             packet_kind::NOTIFICATION_FIRMWARE_PROGRESS
         }
         WorkflowNotification::DeviceLog { .. } => packet_kind::NOTIFICATION_DEVICE_LOG,
+        WorkflowNotification::RecordingTransferCompleted { .. } => {
+            packet_kind::NOTIFICATION_COMPLETED
+        }
         WorkflowNotification::Completed { .. } => packet_kind::NOTIFICATION_COMPLETED,
         WorkflowNotification::Cancelled { .. } => packet_kind::NOTIFICATION_CANCELLED,
         WorkflowNotification::Failed { .. } => packet_kind::NOTIFICATION_FAILED,
@@ -361,6 +364,13 @@ fn notification(
         WorkflowNotification::DeviceLog { event } => packet
             .with_text(field_id::LOG_MESSAGE, event.message)
             .with_bool(field_id::IS_BACKLOG, event.is_backlog),
+        WorkflowNotification::RecordingTransferCompleted { encrypted, sha256 } => {
+            let packet = packet.with_bool(field_id::ENCRYPTED, encrypted);
+            match sha256 {
+                Some(value) => packet.with_bytes(field_id::CONTENT_SHA256, value),
+                None => packet,
+            }
+        }
         WorkflowNotification::Failed { error } => {
             let mut packet = packet
                 .with_u64(
@@ -948,6 +958,13 @@ mod tests {
                 packet_kind::NOTIFICATION_DEVICE_LOG,
             ),
             (
+                Effect::Notify(WorkflowNotification::RecordingTransferCompleted {
+                    encrypted: true,
+                    sha256: Some(vec![0x5a; 32]),
+                }),
+                packet_kind::NOTIFICATION_COMPLETED,
+            ),
+            (
                 Effect::Notify(WorkflowNotification::Completed {
                     operation: Operation::Discover,
                 }),
@@ -981,6 +998,36 @@ mod tests {
             assert_eq!(view.kind, expected_kind, "case {index}");
             assert_eq!(view.request_id, (index + 1) as u64);
         }
+    }
+
+    #[test]
+    fn recording_completion_exposes_encryption_and_integrity_metadata() {
+        let packet = packet_from_effect_request(EffectRequest::new(
+            RequestId::from_u64(1),
+            Operation::TransferRecording,
+            CancellationId::from_bytes([3; 16]),
+            Effect::Notify(WorkflowNotification::RecordingTransferCompleted {
+                encrypted: true,
+                sha256: Some(vec![0x5a; 32]),
+            }),
+        ))
+        .unwrap();
+        let view = packet.view();
+        let fields = unsafe { slice::from_raw_parts(view.fields, view.field_count as usize) };
+        let encrypted = fields
+            .iter()
+            .find(|field| field.field_id == field_id::ENCRYPTED)
+            .expect("encrypted field");
+        assert_eq!(encrypted.field_type, field_type::BOOL);
+        assert_eq!(encrypted.unsigned_value, 1);
+        let sha256 = fields
+            .iter()
+            .find(|field| field.field_id == field_id::CONTENT_SHA256)
+            .expect("SHA-256 field");
+        let bytes = unsafe {
+            slice::from_raw_parts(sha256.data.data, sha256.data.len as usize)
+        };
+        assert_eq!(bytes, &[0x5a; 32]);
     }
 
     #[test]

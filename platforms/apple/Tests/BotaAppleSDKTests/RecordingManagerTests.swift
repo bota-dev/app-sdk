@@ -36,7 +36,14 @@ final class RecordingManagerTests: XCTestCase {
                     .unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_TOTAL_UNITS), value: 1024),
                 ]
             ),
-            transferCompleted(operation: UInt32(BOTA_DEVICE_SDK_V1_OPERATION_TRANSFER_RECORDING)),
+            transferNotification(
+                UInt32(BOTA_DEVICE_SDK_V1_NOTIFICATION_COMPLETED),
+                operation: UInt32(BOTA_DEVICE_SDK_V1_OPERATION_TRANSFER_RECORDING),
+                fields: [
+                    .bool(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_ENCRYPTED), value: true),
+                    .bytes(id: 123, value: Data(repeating: 0x5a, count: 32)),
+                ]
+            ),
         ] }
         let recorder = TransferFacadeRecorder()
         let manager = RecordingManager()
@@ -50,13 +57,24 @@ final class RecordingManagerTests: XCTestCase {
             isEncrypted: true
         )
 
-        let stream = try await manager.syncRecording(transferDevice(), recording: recording)
+        let stream = try await manager.syncRecording(
+            transferDevice(),
+            recording: recording,
+            sinkID: "sink-1"
+        )
         var values: [RecordingSyncEvent] = []
         for try await value in stream { values.append(value) }
 
         XCTAssertEqual(values.first, .progress(.init(completedBytes: 512, totalBytes: 1024)))
         guard case let .completed(fileURL) = values.last else { return XCTFail("expected file completion") }
         XCTAssertEqual(fileURL.pathExtension, "recording")
+        let metadata = await manager.transferMetadata(sinkID: "sink-1")
+        XCTAssertEqual(metadata, .init(
+            isE2EEncrypted: true,
+            contentSHA256Hex: String(repeating: "5a", count: 32)
+        ))
+        let consumedMetadata = await manager.transferMetadata(sinkID: "sink-1")
+        XCTAssertNil(consumedMetadata)
         let commands = await runner.commands
         XCTAssertEqual(commands.first?.kind, UInt32(BOTA_DEVICE_SDK_V1_COMMAND_TRANSFER_RECORDING))
     }

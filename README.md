@@ -104,9 +104,12 @@ reset receipt recovery. An optional application persistence callback is awaited
 after the native reset journal is saved and before the firmware result receipt
 is written. Application material stays behind opaque native registrations, and
 every manager shares one facade operation owner. Recording
-sync now returns native file paths, upload handoff exposes only ownership
-outcomes, OTA keeps request and firmware bytes in native hosts, and logs expose
-only complete core-sanitized lines. The AAR also carries a one-major deprecated
+sync now returns native file paths; `transferMetadata` reports whether that
+specific transfer used E2E framing and its optional device SHA-256; the lookup
+consumes that ephemeral metadata. Upload
+handoff exposes only ownership outcomes, OTA keeps request and firmware bytes
+in native hosts, and logs expose only complete core-sanitized lines. The AAR
+also carries a one-major deprecated
 `com.bota.sdk` adapter frozen from Android revision `0f06d2a…`; JVM descriptor,
 source, already-compiled bytecode, API 26, and API 35 consumer gates pass. New
 applications resolve only `dev.bota:bota-android-sdk` and must not package the

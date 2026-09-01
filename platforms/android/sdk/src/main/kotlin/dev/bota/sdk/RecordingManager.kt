@@ -15,6 +15,7 @@ import dev.bota.sdk.model.RecordingTransferProgress
 import dev.bota.sdk.model.TransferCommand
 import java.nio.file.Path
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.NonCancellable
@@ -31,6 +32,11 @@ public sealed interface RecordingSyncEvent {
     public data class Progress(public val progress: RecordingTransferProgress) : RecordingSyncEvent
     public data class Completed(public val path: Path) : RecordingSyncEvent
 }
+
+public data class RecordingTransferMetadata(
+    public val isE2EEncrypted: Boolean,
+    public val contentSha256Hex: String?,
+)
 
 public sealed interface UploadOwnershipResult {
     public data object DeviceUploadCompleted : UploadOwnershipResult
@@ -49,9 +55,13 @@ public sealed interface UploadOwnershipEvent {
 
 public class RecordingManager internal constructor() {
     private val state = StreamingOperationState("recording")
+    private val transferMetadataBySinkId = ConcurrentHashMap<String, RecordingTransferMetadata>()
 
     internal fun attach(runtime: dev.bota.sdk.internal.DeviceRuntime) = state.attach(runtime)
-    internal suspend fun detach() = state.detach()
+    internal suspend fun detach() {
+        transferMetadataBySinkId.clear()
+        state.detach()
+    }
 
     public suspend fun listRecordings(device: ConnectedDevice): List<DeviceRecording> {
         val runtime = state.configuredRuntime()
@@ -111,6 +121,7 @@ public class RecordingManager internal constructor() {
         recording: DeviceRecording,
         sinkId: String = UUID.randomUUID().toString(),
     ): Flow<RecordingSyncEvent> = callbackFlow {
+        transferMetadataBySinkId.remove(sinkId)
         val runtime = state.configuredRuntime()
         runtime.connection.require(device)
         val command = CoreCommand.transferRecording(
@@ -142,7 +153,10 @@ public class RecordingManager internal constructor() {
                         CoreNotificationKind.Progress -> send(
                             RecordingSyncEvent.Progress(notification.transferProgress(BotaOperation.TransferRecording)),
                         )
-                        CoreNotificationKind.Completed -> send(RecordingSyncEvent.Completed(path))
+                        CoreNotificationKind.Completed -> {
+                            transferMetadataBySinkId[sinkId] = notification.transferMetadata()
+                            send(RecordingSyncEvent.Completed(path))
+                        }
                         CoreNotificationKind.Failed -> throw notification.workflowError()
                         CoreNotificationKind.Cancelled -> throw cancelled(BotaOperation.TransferRecording)
                         else -> Unit
@@ -177,6 +191,9 @@ public class RecordingManager internal constructor() {
             managerScope.launch { state.cancel(command.cancellationId, cancelTask = false) }
         }
     }
+
+    public fun transferMetadata(sinkId: String): RecordingTransferMetadata? =
+        transferMetadataBySinkId.remove(sinkId)
 
     public fun observeUploadOwnership(
         device: ConnectedDevice,
@@ -259,6 +276,14 @@ public class RecordingManager internal constructor() {
 
     public suspend fun cancelCurrentOperation(): Unit = state.cancelCurrentOperation()
 }
+
+private fun dev.bota.sdk.internal.core.CoreNotification.transferMetadata(): RecordingTransferMetadata =
+    RecordingTransferMetadata(
+        isE2EEncrypted = packet.booleans(90).firstOrNull() ?: false,
+        contentSha256Hex = packet.bytes(123)?.joinToString("") {
+            "%02x".format(it.toInt() and 0xff)
+        },
+    )
 
 private fun dev.bota.sdk.internal.core.CoreNotification.transferProgress(
     operation: BotaOperation,

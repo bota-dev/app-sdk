@@ -126,6 +126,7 @@ impl Command {
                 Capability::Persistence,
                 Capability::Progress,
                 Capability::RecordingSink,
+                Capability::Timer,
             ],
             Self::UploadRecording { .. } => {
                 &[Capability::Ble, Capability::Timer, Capability::Progress]

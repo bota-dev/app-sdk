@@ -185,7 +185,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   reconnect, disconnect, destroy, or React Native invalidation.
 - Keep React Native recording stream ownership in
   `BotaDeviceSDKAndroidRecordings`. Collect the public facade flow natively,
-  emit only progress, and return only the completed native path.
+  emit only progress, and return the completed native path plus actual
+  transfer E2E and optional SHA-256 metadata. Never infer relay ownership from
+  the recording-list encryption flag.
 - Keep React Native device-log stream ownership in
   `BotaDeviceSDKAndroidLogs`. It owns one native collector, contains
   asynchronous stream failures, and stops that collector during explicit
@@ -347,9 +349,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Direct Apple BLE writes and reducer workflows share one facade operation
   coordinator; release ownership on success, failure, cancellation, and destroy.
 - Apple recording, upload-ownership, OTA, and device-log APIs expose typed
-  streams and native file URLs only. Keep upload destinations opaque, let only
-  the reducer authorize BLE fallback, and unregister OTA host resources on
-  every terminal path.
+  streams and native file URLs plus bounded transfer-completion metadata only.
+  Keep upload destinations opaque, let only the reducer authorize BLE fallback,
+  and unregister OTA host resources on every terminal path.
 - Add new ABI effects to the exhaustive `CoreEffect` and `HostEffectExecutor`
   switches. Never route a new kind through a default branch.
 - Keep CoreBluetooth objects inside `CoreBluetoothDriver`'s dedicated serial

@@ -257,6 +257,7 @@ pub mod field_id {
     pub const RECORDING_ACTIVE: u32 = 120;
     pub const RECORDING_INITIATED_REMOTELY: u32 = 121;
     pub const RECORDING_SUCCESS: u32 = 122;
+    pub const CONTENT_SHA256: u32 = 123;
 }
 
 #[repr(C)]

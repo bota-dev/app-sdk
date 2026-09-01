@@ -63,6 +63,10 @@ pub enum WorkflowNotification {
     DeviceLog {
         event: DeviceLogEvent,
     },
+    RecordingTransferCompleted {
+        encrypted: bool,
+        sha256: Option<Vec<u8>>,
+    },
     Completed {
         operation: Operation,
     },

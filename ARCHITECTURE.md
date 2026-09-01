@@ -221,8 +221,11 @@ the application hook, and send only receipt opcode `0x0A`.
 The React Native recording broker maps native recording metadata to the frozen
 JavaScript shape and emits transfer progress as counts only. Apple and Android
 consume their public recording streams behind the TurboModule and return the
-completed native file path. Audio content, transfer packets, and sink handles
-never enter Codegen, and teardown cancels the native recording owner.
+completed native file path together with the actual transfer's E2E-framing flag
+and optional device SHA-256. Relay selection must use that completion metadata,
+not the recording-list encryption flag. Audio content, transfer packets, and
+sink handles never enter Codegen, and teardown cancels the native recording
+owner.
 
 The React Native device-log broker subscribes to the public native log stream
 before starting delivery. Apple and Android retain packet decoding and emit

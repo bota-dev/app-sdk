@@ -6,6 +6,16 @@ public enum RecordingSyncEvent: Equatable, Sendable {
     case completed(URL)
 }
 
+public struct RecordingTransferMetadata: Equatable, Sendable {
+    public let isE2EEncrypted: Bool
+    public let contentSHA256Hex: String?
+
+    public init(isE2EEncrypted: Bool, contentSHA256Hex: String?) {
+        self.isE2EEncrypted = isE2EEncrypted
+        self.contentSHA256Hex = contentSHA256Hex
+    }
+}
+
 public enum UploadOwnershipResult: Equatable, Sendable {
     case deviceUploadCompleted
     case deviceUploadPreserved(uploadID: String)
@@ -21,6 +31,7 @@ public actor RecordingManager {
     private var runtime: DeviceRuntime?
     private var activeCancellationID: UUID?
     private var activeTask: Task<Void, Never>?
+    private var transferMetadataBySinkID: [String: RecordingTransferMetadata] = [:]
 
     public init() {}
 
@@ -34,6 +45,7 @@ public actor RecordingManager {
         }
         activeTask = nil
         activeCancellationID = nil
+        transferMetadataBySinkID.removeAll()
         runtime = nil
     }
 
@@ -81,6 +93,7 @@ public actor RecordingManager {
         sinkID: String = UUID().uuidString
     ) async throws -> AsyncThrowingStream<RecordingSyncEvent, Error> {
         let runtime = try configuredRuntime()
+        transferMetadataBySinkID.removeValue(forKey: sinkID)
         try await runtime.connection.require(device)
         let command = CoreCommand.transferRecording(
             serialNumber: device.serialNumber,
@@ -103,6 +116,10 @@ public actor RecordingManager {
             Task { await self.cancel(command.cancellationID) }
         }
         return pair.stream
+    }
+
+    public func transferMetadata(sinkID: String) -> RecordingTransferMetadata? {
+        transferMetadataBySinkID.removeValue(forKey: sinkID)
     }
 
     public func observeUploadOwnership(
@@ -156,6 +173,7 @@ public actor RecordingManager {
                 case .cancelled:
                     throw facadeCancelled(operation: .transferRecording)
                 case .completed:
+                    transferMetadataBySinkID[sinkID] = Self.transferMetadata(notification)
                     continuation.yield(.completed(try await runtime.recordingFileURL(sinkID)))
                 case .started, .deviceDiscovered, .connectionEstablished, .retrying,
                      .deviceUploadPreserved, .bleFallbackReady, .firmwareProgress,
@@ -169,6 +187,27 @@ public actor RecordingManager {
             await finish(command.cancellationID, runtime: runtime)
             continuation.finish(throwing: facadePublicError(error))
         }
+    }
+
+    private static func transferMetadata(
+        _ notification: CoreNotification
+    ) -> RecordingTransferMetadata {
+        let encrypted = notification.packet.fields.compactMap { field -> Bool? in
+            guard case let .bool(id, value) = field,
+                  id == UInt32(BOTA_DEVICE_SDK_V1_FIELD_ENCRYPTED)
+            else { return nil }
+            return value
+        }.first ?? false
+        let sha256 = notification.packet.fields.compactMap { field -> Data? in
+            guard case let .bytes(id, value) = field, id == 123 else { return nil }
+            return value
+        }.first
+        return RecordingTransferMetadata(
+            isE2EEncrypted: encrypted,
+            contentSHA256Hex: sha256.map { data in
+                data.map { String(format: "%02x", $0) }.joined()
+            }
+        )
     }
 
     private func consumeOwnership(

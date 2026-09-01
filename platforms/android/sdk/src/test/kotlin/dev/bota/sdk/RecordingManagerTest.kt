@@ -11,6 +11,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import okhttp3.Request
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -32,7 +33,17 @@ class RecordingManagerTest {
     fun syncMapsProgressAndReturnsOnlyTheNativePath() = runTest {
         val runner = ManagerWorkflowRunner(
             responses = {
-                listOf(progressNotification(2_048u, 4_096u), completedNotification(operation = 8))
+                listOf(
+                    progressNotification(2_048u, 4_096u),
+                    managerNotification(
+                        CoreNotificationKind.Completed,
+                        operation = 8,
+                        fields = listOf(
+                            CoreField.BooleanValue(90, true),
+                            CoreField.Bytes(123, ByteArray(32) { 0x5a }),
+                        ),
+                    ),
+                )
             },
         )
         val fixture = ManagerRuntimeFixture(runner)
@@ -43,6 +54,11 @@ class RecordingManagerTest {
 
         assertEquals(RecordingSyncEvent.Progress(RecordingTransferProgress(2_048u, 4_096u)), events[0])
         assertEquals(RecordingSyncEvent.Completed(fixture.sinkPaths.getValue("sink-1")), events[1])
+        assertEquals(
+            RecordingTransferMetadata(true, "5a".repeat(32)),
+            manager.transferMetadata("sink-1"),
+        )
+        assertNull(manager.transferMetadata("sink-1"))
         assertEquals(listOf("sink-1"), fixture.removedSinks)
         manager.detach()
     }

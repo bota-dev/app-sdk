@@ -4,7 +4,7 @@ use crate::{
     engine::{
         BleEffect, BleEvent, CancellationId, CheckpointPhase, Effect, EffectRequest, HostEvent,
         HostEventKind, PersistenceEffect, ProgressEffect, RecordingSinkEffect, RequestId,
-        WorkflowCheckpoint, WorkflowKind, WorkflowNotification, WorkflowStatus,
+        TimerEffect, WorkflowCheckpoint, WorkflowKind, WorkflowNotification, WorkflowStatus,
     },
     error::{DeviceSdkError, ErrorCode, Operation},
     generated::protocol::{CHAR_RECORDING_TRANSFER, CHAR_TRANSFER_CONTROL, SERVICE_BOTA_STORAGE},
@@ -25,11 +25,15 @@ enum Phase {
     Transferring,
     Appending,
     Finalizing,
+    WaitingForSha,
     Acknowledging,
     Confirming,
     Completed,
     Failed,
 }
+
+const SHA256_GRACE_TIMER_ID: u64 = 0x5245_435f_5348_4132;
+const SHA256_GRACE_DELAY_MS: u64 = 200;
 
 pub(crate) struct RecordingTransferWorkflow {
     device: DeviceSerialNumber,
@@ -51,6 +55,9 @@ pub(crate) struct RecordingTransferWorkflow {
     checkpoint_request_ids: BTreeSet<RequestId>,
     encrypted: Option<bool>,
     e2e_header_received: bool,
+    sha256: Option<Vec<u8>>,
+    sha_grace_timer_scheduled: bool,
+    sha_grace_elapsed: bool,
     terminal_error: Option<DeviceSdkError>,
 }
 
@@ -82,6 +89,9 @@ impl RecordingTransferWorkflow {
             checkpoint_request_ids: BTreeSet::new(),
             encrypted: None,
             e2e_header_received: false,
+            sha256: None,
+            sha_grace_timer_scheduled: false,
+            sha_grace_elapsed: false,
             terminal_error: None,
         }
     }
@@ -180,7 +190,31 @@ impl RecordingTransferWorkflow {
             expected_crc32: checksum,
         }));
         self.sink_request_id = Some(request.request_id);
-        vec![request]
+        self.sha_grace_timer_scheduled = true;
+        vec![
+            request,
+            context.request(Effect::Timer(TimerEffect::Schedule {
+                timer_id: SHA256_GRACE_TIMER_ID,
+                delay_ms: SHA256_GRACE_DELAY_MS,
+            })),
+        ]
+    }
+
+    fn acknowledge(&mut self, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
+        self.phase = Phase::Acknowledging;
+        let mut effects = Vec::new();
+        if self.sha_grace_timer_scheduled {
+            self.sha_grace_timer_scheduled = false;
+            effects.push(context.request(Effect::Timer(TimerEffect::Cancel {
+                timer_id: SHA256_GRACE_TIMER_ID,
+            })));
+        }
+        effects.push(self.write_ack(
+            AckType::Ack,
+            self.eof_sequence.unwrap_or(0),
+            context,
+        ));
+        effects
     }
 
     fn write_ack(
@@ -229,9 +263,12 @@ impl RecordingTransferWorkflow {
         let mut effects = self.unsubscribe(context);
         effects.push(context.request(Effect::Persistence(PersistenceEffect::DeleteCheckpoint)));
         effects.push(
-            context.request(Effect::Notify(WorkflowNotification::Completed {
-                operation: Operation::TransferRecording,
-            })),
+            context.request(Effect::Notify(
+                WorkflowNotification::RecordingTransferCompleted {
+                    encrypted: self.encrypted.unwrap_or(false),
+                    sha256: self.sha256.take(),
+                },
+            )),
         );
         effects
     }
@@ -244,6 +281,12 @@ impl RecordingTransferWorkflow {
         self.phase = Phase::Failed;
         self.terminal_error = Some(error.clone());
         let mut effects = self.unsubscribe(context);
+        if self.sha_grace_timer_scheduled {
+            self.sha_grace_timer_scheduled = false;
+            effects.push(context.request(Effect::Timer(TimerEffect::Cancel {
+                timer_id: SHA256_GRACE_TIMER_ID,
+            })));
+        }
         effects.push(context.request(Effect::Notify(WorkflowNotification::Failed { error })));
         effects
     }
@@ -444,7 +487,10 @@ impl WorkflowReducer for RecordingTransferWorkflow {
                         }
                         Ok(self.finalize(sequence, None, context))
                     }
-                    TransferPacket::Sha256(_) => Ok(Vec::new()),
+                    TransferPacket::Sha256(value) => {
+                        self.sha256 = Some(value);
+                        Ok(Vec::new())
+                    }
                     TransferPacket::Error { code, .. } => Ok(self.fail(
                         DeviceSdkError::new(
                             ErrorCode::ProtocolRejected,
@@ -464,6 +510,36 @@ impl WorkflowReducer for RecordingTransferWorkflow {
                         .with_detail("transfer packet type is not supported by batch sink"),
                         context,
                     )),
+                }
+            }
+            (
+                Phase::Finalizing | Phase::WaitingForSha,
+                HostEventKind::Ble(BleEvent::Notification {
+                    characteristic_uuid,
+                    value,
+                }),
+            ) if Some(request_id) == self.subscription_request_id
+                && characteristic_uuid == CHAR_RECORDING_TRANSFER =>
+            {
+                match parse_transfer_packet(&value) {
+                    Ok(TransferPacket::Sha256(value)) => {
+                        self.sha256 = Some(value);
+                        if self.phase == Phase::WaitingForSha {
+                            Ok(self.acknowledge(context))
+                        } else {
+                            Ok(Vec::new())
+                        }
+                    }
+                    Ok(TransferPacket::Eof { .. } | TransferPacket::EncryptedEof { .. }) => {
+                        Ok(Vec::new())
+                    }
+                    Ok(_) => Err(DeviceSdkError::new(
+                        ErrorCode::UnexpectedEvent,
+                        Operation::TransferRecording,
+                        false,
+                    )
+                    .with_detail("packet arrived after recording EOF")),
+                    Err(error) => Ok(self.fail(error, context)),
                 }
             }
             (Phase::Appending, HostEventKind::RecordingSinkAppendCompleted { durable_units })
@@ -503,12 +579,12 @@ impl WorkflowReducer for RecordingTransferWorkflow {
             {
                 self.sink_request_id = None;
                 self.completed_units = durable_units;
-                self.phase = Phase::Acknowledging;
-                Ok(vec![self.write_ack(
-                    AckType::Ack,
-                    self.eof_sequence.unwrap_or(0),
-                    context,
-                )])
+                if self.sha256.is_some() || self.sha_grace_elapsed {
+                    Ok(self.acknowledge(context))
+                } else {
+                    self.phase = Phase::WaitingForSha;
+                    Ok(Vec::new())
+                }
             }
             (Phase::Finalizing, HostEventKind::RecordingSinkIntegrityFailed)
                 if Some(request_id) == self.sink_request_id =>
@@ -527,6 +603,19 @@ impl WorkflowReducer for RecordingTransferWorkflow {
             {
                 self.write_request_id = None;
                 Ok(self.complete(context))
+            }
+            (
+                Phase::Finalizing | Phase::WaitingForSha,
+                HostEventKind::TimerFired { timer_id },
+            ) if timer_id == SHA256_GRACE_TIMER_ID =>
+            {
+                self.sha_grace_timer_scheduled = false;
+                self.sha_grace_elapsed = true;
+                if self.phase == Phase::WaitingForSha {
+                    Ok(self.acknowledge(context))
+                } else {
+                    Ok(Vec::new())
+                }
             }
             (_, HostEventKind::RecordingSinkFailed { platform_code })
                 if Some(request_id) == self.sink_request_id =>
@@ -573,6 +662,12 @@ impl WorkflowReducer for RecordingTransferWorkflow {
     fn cancel(&mut self, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
         let sequence = self.last_sequence.map_or(0, |last| last.wrapping_add(1));
         let mut effects = vec![self.write_ack(AckType::Abort, sequence, context)];
+        if self.sha_grace_timer_scheduled {
+            self.sha_grace_timer_scheduled = false;
+            effects.push(context.request(Effect::Timer(TimerEffect::Cancel {
+                timer_id: SHA256_GRACE_TIMER_ID,
+            })));
+        }
         effects.extend(self.unsubscribe(context));
         effects.push(
             context.request(Effect::RecordingSink(RecordingSinkEffect::Discard {
@@ -623,6 +718,7 @@ mod tests {
             Phase::Transferring,
             Phase::Appending,
             Phase::Finalizing,
+            Phase::WaitingForSha,
             Phase::Acknowledging,
             Phase::Confirming,
         ] {
