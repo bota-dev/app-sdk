@@ -332,7 +332,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Keep the one-major `com.bota.sdk` adapter descriptor-compatible with pinned
   Android revision `0f06d2a22c55e4976778520cce42230d23ca4226`. Run the frozen
   `javap`, Kotlin API, source-consumer, and precompiled-binary gates after every
-  compatibility edit. Never publish or package a second legacy coordinate.
+  compatibility edit. The checked-in consumer JAR must use the Kotlin metadata
+  major/minor derived from the pinned legacy-consumer compiler so that the
+  compatibility lane can compile it. Never publish or package a second legacy
+  coordinate.
 - Public Android signatures expose `Flow` and OkHttp `Request`, so coroutines
   and OkHttp remain Maven API dependencies. The clean consumer must compile
   without declaring either dependency itself.

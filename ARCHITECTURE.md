@@ -325,7 +325,8 @@ JVM descriptors from pinned revision `0f06d2a…` while delegating supported
 behavior to this facade. Kotlin API dumps, source recompilation, and
 already-compiled bytecode run against the replacement AAR on API 26 and API 35.
 The checked-in binary fixture contains only that consumer bytecode and binds
-the pinned legacy revision plus frozen API digest; CI does not require access
+the pinned legacy revision plus frozen API digest. Its metadata version must
+match the Kotlin 2.1 consumer floor; CI verifies that invariant without access
 to the private legacy repository.
 The clean consumer resolves only `dev.bota:bota-android-sdk`; coroutine and
 OkHttp types exposed by the public API are Maven API dependencies. The release

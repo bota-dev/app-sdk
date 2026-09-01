@@ -5,6 +5,7 @@ readonly ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly REVISION="0f06d2a22c55e4976778520cce42230d23ca4226"
 readonly BASELINE="$ROOT/protocol/baseline/android-sdk-0f06d2a-public-api.txt"
 readonly FIXTURE="${1:-$ROOT/protocol/baseline/android-legacy-consumer-0f06d2a.jar}"
+readonly KOTLIN_BUILD="$ROOT/tests/conformance/android-legacy-consumer/build.gradle.kts"
 
 test -s "$FIXTURE"
 test -s "$FIXTURE.sha256"
@@ -28,8 +29,22 @@ grep -Fx "legacyRevision=$REVISION" "$temporary/META-INF/bota-legacy-consumer.pr
 grep -Fx "baselineSha256=$baseline_sha" "$temporary/META-INF/bota-legacy-consumer.properties"
 javap -classpath "$FIXTURE" -c dev.bota.legacy.FrozenLegacyConsumer \
   | grep -F 'com/bota/sdk/' >/dev/null
+kotlin_version="$(sed -n 's/.*org\.jetbrains\.kotlin\.android.*version "\([0-9][0-9.]*\)".*/\1/p' "$KOTLIN_BUILD")"
+IFS=. read -r kotlin_major kotlin_minor _ <<< "$kotlin_version"
+expected_metadata="$kotlin_major.$kotlin_minor.0"
+actual_metadata="$(
+  javap -classpath "$FIXTURE" -v dev.bota.legacy.FrozenLegacyConsumer \
+    | sed -n 's/.*mv=\[\([0-9,]*\)\].*/\1/p' \
+    | head -n 1 \
+    | tr ',' '.'
+)"
+if [[ -z "$actual_metadata" || "$actual_metadata" != "$expected_metadata" ]]; then
+  echo "Frozen legacy consumer Kotlin metadata $actual_metadata does not match compiler $kotlin_version ($expected_metadata)" >&2
+  exit 1
+fi
 if grep -a -E '/(Users|private|home)/' "$FIXTURE" >/dev/null; then
   echo "Frozen legacy consumer contains a local path" >&2
   exit 1
 fi
+echo "kotlinMetadata=$actual_metadata"
 echo "Frozen legacy consumer fixture matches revision and API baseline"

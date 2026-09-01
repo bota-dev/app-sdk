@@ -251,8 +251,8 @@ Binary migration testing uses the checksummed
 `protocol/baseline/android-legacy-consumer-0f06d2a.jar`. It contains only the
 frozen Bota consumer bytecode compiled against the pinned legacy AAR, never the
 legacy SDK itself. Normal CI verifies its revision, API-baseline digest, file
-inventory, and bytecode references without access to the private source repo.
-Maintainers regenerate it only with
+inventory, bytecode references, and Kotlin `2.1.0` metadata without access to
+the private source repo. Maintainers regenerate it only with
 `generate-legacy-consumer-fixture.sh --legacy-path` from the exact clean pinned
 checkout.
 
@@ -262,8 +262,7 @@ repository:
 ```bash
 tools/android/verify-legacy-api.sh --legacy-path /path/to/pinned/legacy-sdk
 tools/android/test-legacy-consumer.sh --api 26 --mode source
-tools/android/test-legacy-consumer.sh --api 26 --mode binary \
-  --legacy-path /path/to/pinned/legacy-sdk
+tools/android/test-legacy-consumer.sh --api 26 --mode binary
 tools/android/test-consumer.sh --api 26
 ```
 
