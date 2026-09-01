@@ -167,6 +167,12 @@ grant-gated remove-only deprovision to native managers. During provisioning, nat
 emits only a request ID, serial, nonce, and public device key; JavaScript
 returns the endpoint, token, and MTU or rejects the request. Pending requests
 are cancelled on destroy so no continuation outlives its native workflow.
+The endpoint field and native `API_ENDPOINT` write are retained compatibility
+behavior in the current implementation, not the target environment boundary.
+Firmware treats that characteristic as a no-op; the replacement flow must
+validate the signed firmware/build environment against the Partner backend and
+omit the write. Current conformance is tracked in `internal-docs/System Design
+v5.md`.
 Deprovision decodes and writes the nonce-bound grant natively, subscribes before
 opcode `0x05`, maps the firmware response to a typed result, and tears down that
 notification owner exactly once.
