@@ -714,7 +714,11 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
       startStatusUpdatesWithOnStatus:^(NSDictionary *status) {
         [weakSelf emitOnDeviceStatusUpdated:status];
       }
-      onError:^(__unused NSError *error) {}
+      onError:^(NSError *error) {
+        [weakSelf emitOnDeviceDisconnected:@{
+          @"error": error.localizedDescription ?: @"Bluetooth link lost"
+        }];
+      }
       completion:^(NSError *_Nullable error) {
         if (error != nil) {
           BotaRejectAppleError(error, reject);

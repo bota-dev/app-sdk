@@ -2,7 +2,7 @@ use crate::{
     engine::{Capability, CapabilitySet},
     error::{DeviceSdkError, ErrorCode, Operation},
     model::{
-        DeviceCandidate, DeviceSerialNumber, DurableFactoryResetResult, FactoryResetCommandId,
+        DeviceCandidate, DeviceSerialNumber, FactoryResetCommandId, FactoryResetResult,
         FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId, RecordingUuid,
         UploadDestinationId, UploadSessionId,
     },
@@ -58,7 +58,8 @@ pub enum Command {
     },
     ResumeFactoryReset {
         device: DeviceSerialNumber,
-        result: DurableFactoryResetResult,
+        command_id: FactoryResetCommandId,
+        expected_result: Option<FactoryResetResult>,
     },
 }
 

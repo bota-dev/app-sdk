@@ -13,6 +13,7 @@ test('Codegen contract freezes the lifecycle module identity and methods', () =>
   assert.match(source, /interface Spec extends TurboModule/);
   assert.match(source, /configure:\s*\(/);
   assert.match(source, /readonly onDeviceDiscovered:\s*EventEmitter/);
+  assert.match(source, /readonly onDeviceDisconnected:\s*EventEmitter/);
   assert.match(source, /readonly onDeviceStatusUpdated:\s*EventEmitter/);
   assert.match(source, /readonly onRecordingStateUpdated:\s*EventEmitter/);
   assert.match(source, /readonly onProvisioningMaterialRequested:\s*EventEmitter/);

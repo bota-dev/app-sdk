@@ -110,6 +110,7 @@ export type {
 } from './managers/types';
 
 export { DeviceLogDecoder } from './ble/deviceLogs';
+export { DeviceManager } from './managers/DeviceManager';
 export {
   BotaError,
   BluetoothError,

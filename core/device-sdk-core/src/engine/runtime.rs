@@ -126,10 +126,15 @@ impl WorkflowEngine {
                 grant_id,
                 cancellation_id,
             ))),
-            Command::ResumeFactoryReset { device, result } => {
+            Command::ResumeFactoryReset {
+                device,
+                command_id,
+                expected_result,
+            } => {
                 ActiveWorkflow::FactoryReset(Box::new(FactoryResetWorkflow::resume(
                     device,
-                    result,
+                    command_id,
+                    expected_result,
                     cancellation_id,
                 )))
             }

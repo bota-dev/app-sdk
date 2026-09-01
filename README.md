@@ -56,12 +56,12 @@ device-log, and WiFi slices through `BotaDeviceClient.shared`; a checked-in
 React Native Gradle consumer runs
 Codegen, Kotlin tests, lint, and release assembly against the exact locally
 packaged AAR. The package now
-matches 75 of the 80 frozen `0.0.65` root exports: every public type plus the
-pure errors, sync-status derivation, and device-log decoder. It is not an
-installable replacement yet: the five native workflow classes (`BotaClient`,
-`DeviceManager`, `RecordingManager`, `StreamingSession`, and `OTAManager`), app
-acceptance, and npm publication remain open.
-The internal `DeviceManager` compatibility owner already delegates scan,
+matches 76 of the 80 frozen `0.0.65` root exports: every public type, the pure
+errors, sync-status derivation, device-log decoder, and the native-backed
+`DeviceManager`. It is not an installable replacement yet: `BotaClient`,
+`RecordingManager`, `StreamingSession`, `OTAManager`, app acceptance, and npm
+publication remain open.
+The exported `DeviceManager` compatibility owner delegates scan,
 selected connection, status, settings, logs, WiFi/cache behavior, provisioning
 state and key reads, direct provisioning writes, and time sync. Those low-volume
 commands run through native Apple and Android `DeviceControlManager` facades;
@@ -69,8 +69,10 @@ certificate framing and public-key bytes do not cross JavaScript. The sibling
 controls facade also exposes native-owned recording start/stop, state reads,
 and one state subscription using typed Codegen values only. The compatibility
 owner preserves the frozen grant-fetcher overloads, pending-state behavior,
-cache fallback, and synchronous removal function. The class is not exported
-until reset compatibility and the complete frozen class contract pass.
+cache fallback, synchronous removal, one serialized reconnect attempt, and
+native-link-loss auto-reconnect. Authenticated reset recovery survives app
+reinstallation by waiting for the firmware replay, persisting it through the
+application hook, and sending only the receipt.
 The Android package foundation now pins JDK 17, Gradle 8.13, Android Gradle
 Plugin 8.13.2, Kotlin 2.1.20, API 26/36, NDK 28.2.13676358, and CMake 3.22.1.
 It produces a version-synchronized, unsigned local AAR with sources, Dokka

@@ -212,6 +212,17 @@ internal data class CoreCommand(
             CoreField.Unsigned(25, deletedRecordingCount.toULong()),
         )
 
+        fun resumeUnjournaledFactoryReset(
+            serialNumber: String,
+            commandId: String,
+            cancellationId: UUID = UUID.randomUUID(),
+        ) = command(
+            0x010a,
+            cancellationId,
+            CoreField.Text(3, serialNumber),
+            CoreField.Text(22, commandId),
+        )
+
         fun fixtureNamed(name: String): CoreCommand? {
             val serial = "EVFXXW67KP"
             val recording = "00112233445566778899aabbccddeeff"

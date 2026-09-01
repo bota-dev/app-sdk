@@ -290,9 +290,16 @@ internal class BotaDeviceSDKModule(
 
     override fun startStatusUpdates(promise: Promise) {
         launch(promise) {
-            devices.startStatusUpdates {
-                emitOnDeviceStatusUpdated(it.toWritableMap())
-            }
+            devices.startStatusUpdates(
+                onError = { error ->
+                    emitOnDeviceDisconnected(
+                        Arguments.createMap().apply {
+                            putString("error", error.message ?: "Bluetooth link lost")
+                        },
+                    )
+                },
+                onStatus = { emitOnDeviceStatusUpdated(it.toWritableMap()) },
+            )
         }
     }
 

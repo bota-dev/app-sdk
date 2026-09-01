@@ -55,14 +55,14 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   compatibility, app, and release gates pass, and pins React Native `0.86.3`
   for deterministic Codegen. Its package version still matches
   `sdk-version.toml`.
-- The React Native package matches the 75 frozen `0.0.65` exports that do not
-  own native workflows. Keep their structural contract test exact; the five
-  deferred runtime classes must delegate to native facades before export.
-- The internal React Native `DeviceManager` compatibility owner may preserve
-  scan, selected-device connection, status, settings, logs, WiFi, and cache
-  behavior over the existing facades, but it stays absent from `src/index.ts`
-  until every frozen direct-command method has a native-backed implementation
-  and the exact semantic class surface passes.
+- The React Native package matches 76 of the 80 frozen `0.0.65` exports. Keep
+  their structural contract test exact; `BotaClient`, `RecordingManager`,
+  `StreamingSession`, and `OTAManager` remain deferred until their native
+  workflows and application gates pass.
+- The root React Native `DeviceManager` compatibility export preserves scan,
+  selected-device connection, status, settings, logs, WiFi, cache, serialized
+  reconnect, and auto-reconnect behavior over the native facades. Keep its
+  zero-argument constructor and exact semantic class surface frozen.
 - `BotaDeviceSDK.controls` and the internal `DeviceManager` now delegate
   provisioning-state, device-public-key, auth-nonce, API-endpoint,
   certificate, backend-public-key, recording-grant, and time-sync commands to
@@ -72,18 +72,19 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   public keys as typed native bytes below Codegen and keep certificate chunk
   framing plus recording-control BLE sequencing native. The compatibility
   owner preserves the frozen grant-fetcher overloads, pending-state precedence,
-  state cache fallback, and synchronous subscription removal. Reset
-  compatibility and the remaining exact class surface are incomplete, so
-  `DeviceManager` is still not a root export.
+  state cache fallback, and synchronous subscription removal. Authenticated
+  reset and reinstall-safe receipt recovery are native-backed, and the exact
+  class surface passes as a root export.
 - The React Native package also exposes the native-backed
   `BotaDeviceSDK.devices` discovery, connection, and device-status slice.
   JavaScript preserves the frozen scan filters and status date mapping; Apple
   and Android own scan/status cancellation and delegate selected-device
   connect, serial-strict reconnect, disconnect, status reads, and status
-  subscriptions to their public native facades. Preserve frozen unknown-value
-  fallbacks at both bridge boundaries: pairing state is `unpaired`, device
-  state is `idle`, and LTE/WiFi status is `off`. This does not make the frozen
-  `DeviceManager` class complete or eligible for export.
+  subscriptions to their public native facades. A private disconnect event from
+  the native status stream drives the compatibility owner's single serialized
+  reconnect loop; explicit user disconnect pauses it. Preserve frozen
+  unknown-value fallbacks at both bridge boundaries: pairing state is
+  `unpaired`, device state is `idle`, and LTE/WiFi status is `off`.
 - `BotaDeviceSDK.provisioning` is the native-backed provisioning slice.
   Provisioning material stays nonce-bound: native emits a one-shot request ID,
   serial, nonce, and public device key while the workflow is active; JavaScript
@@ -114,6 +115,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   native code decodes the grant and owns all BLE bytes. Resume accepts the
   current binding generation and runs only native receipt recovery. Destroy and
   invalidation reject pending grants and cancel the active reset operation.
+- Reinstall-safe reset resume may begin without a native journal. It waits for
+  the exact successful firmware replay, durably re-persists that result through
+  the application hook, and only then sends receipt opcode `0x0A`; it never
+  requests another grant or resends reset opcode `0x06`.
 - `BotaDeviceSDK.recordings` delegates recording list, transfer, and upload
   ownership to the native facades. Codegen carries metadata, opaque upload
   identifiers, progress, and the native ownership decision only; completed

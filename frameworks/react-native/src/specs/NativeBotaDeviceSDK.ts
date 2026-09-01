@@ -37,6 +37,10 @@ export type NativeConnectedDevice = {
   mtu: number;
 };
 
+export type NativeDeviceDisconnection = {
+  error?: string;
+};
+
 export type NativeReconnectOptions = {
   scanTimeoutMs: number;
   connectionTimeoutMs: number;
@@ -220,6 +224,7 @@ export type NativeDeviceWiFiScanResult = {
 
 export interface Spec extends TurboModule {
   readonly onDeviceDiscovered: EventEmitter<NativeDiscoveredDevice>;
+  readonly onDeviceDisconnected: EventEmitter<NativeDeviceDisconnection>;
   readonly onDeviceStatusUpdated: EventEmitter<NativeDeviceStatus>;
   readonly onRecordingStateUpdated: EventEmitter<NativeRecordingState>;
   readonly onProvisioningMaterialRequested: EventEmitter<NativeProvisioningMaterialRequest>;

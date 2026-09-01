@@ -6,9 +6,9 @@ use bota_device_sdk_core::{
     engine::{Capability, CapabilitySet, Command},
     error::{DeviceSdkError, ErrorCode, Operation},
     model::{
-        DeviceCandidate, DeviceSerialNumber, DurableFactoryResetResult, FactoryResetCommandId,
-        FactoryResetResult, FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId,
-        RecordingUuid, UploadDestinationId, UploadSessionId,
+        DeviceCandidate, DeviceSerialNumber, FactoryResetCommandId, FactoryResetResult,
+        FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId, RecordingUuid,
+        UploadDestinationId, UploadSessionId,
     },
 };
 use std::{collections::BTreeSet, str::FromStr};
@@ -250,25 +250,31 @@ pub(crate) unsafe fn command_from_packet(
                 field_id::RESULT_CODE,
                 field_id::DELETED_RECORDING_COUNT,
             ])?;
+            let result_code = fields.optional_u64(field_id::RESULT_CODE)?;
+            let deleted_recording_count =
+                fields.optional_u64(field_id::DELETED_RECORDING_COUNT)?;
+            let expected_result = match (result_code, deleted_recording_count) {
+                (None, None) => None,
+                (Some(result_code), Some(deleted_recording_count)) => Some(FactoryResetResult {
+                    result_code: result_code
+                        .try_into()
+                        .map_err(|_| invalid("reset result code does not fit in 8 bits"))?,
+                    deleted_recording_count: deleted_recording_count.try_into().map_err(|_| {
+                        invalid("deleted recording count does not fit in 16 bits")
+                    })?,
+                }),
+                _ => {
+                    return Err(invalid(
+                        "reset result code and deleted recording count must be provided together",
+                    ));
+                }
+            };
             Ok(Command::ResumeFactoryReset {
                 device: serial()?,
-                result: DurableFactoryResetResult {
-                    command_id: FactoryResetCommandId::new(
-                        fields.required_text(field_id::COMMAND_ID)?,
-                    )?,
-                    result: FactoryResetResult {
-                        result_code: fields
-                            .required_u64(field_id::RESULT_CODE)?
-                            .try_into()
-                            .map_err(|_| invalid("reset result code does not fit in 8 bits"))?,
-                        deleted_recording_count: fields
-                            .required_u64(field_id::DELETED_RECORDING_COUNT)?
-                            .try_into()
-                            .map_err(|_| {
-                                invalid("deleted recording count does not fit in 16 bits")
-                            })?,
-                    },
-                },
+                command_id: FactoryResetCommandId::new(
+                    fields.required_text(field_id::COMMAND_ID)?,
+                )?,
+                expected_result,
             })
         }
         _ => Err(

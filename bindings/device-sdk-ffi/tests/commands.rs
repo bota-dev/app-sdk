@@ -76,6 +76,8 @@ fn every_workflow_command_starts_through_the_native_entry_point() {
             .with_text(field_id::COMMAND_ID, "reset-1")
             .with_u64(field_id::RESULT_CODE, 0)
             .with_u64(field_id::DELETED_RECORDING_COUNT, 9),
+        serial_command(packet_kind::COMMAND_RESUME_FACTORY_RESET)
+            .with_text(field_id::COMMAND_ID, "reset-after-reinstall"),
     ];
 
     for command in &commands {
@@ -124,6 +126,9 @@ fn invalid_command_inputs_fail_without_bypassing_core_validation() {
         .with_u64(field_id::TIMEOUT_MS, 5_000)
         .with_bool(field_id::ALLOW_DUPLICATES, false)
         .with_u64(999, 1);
+    let partial_reset_result = serial_command(packet_kind::COMMAND_RESUME_FACTORY_RESET)
+        .with_text(field_id::COMMAND_ID, "reset-1")
+        .with_u64(field_id::RESULT_CODE, 0);
 
     for command in [
         invalid_serial,
@@ -134,6 +139,7 @@ fn invalid_command_inputs_fail_without_bypassing_core_validation() {
         duplicate_field,
         mistyped_field,
         unknown_field,
+        partial_reset_result,
     ] {
         assert_eq!(
             start(&command, all_capabilities()),

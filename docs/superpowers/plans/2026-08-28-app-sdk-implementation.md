@@ -932,9 +932,12 @@ upload-ownership, and OTA slices plus device logs through the public Android
 facade, and a checked-in React Native Gradle
 consumer runs Codegen, Kotlin tests,
 lint, and release assembly against the exact packaged AAR. The
-package now matches all 75 frozen non-workflow exports, including every public
-type and the pure error, sync-status, and device-log runtime helpers. The five
-native workflow classes, app acceptance, and publication gates remain open.
+package now matches 76 of 80 frozen exports, including every public type, the
+pure error, sync-status, and device-log runtime helpers, and the native-backed
+`DeviceManager`. That manager preserves authenticated reset recovery across
+app reinstallation and serializes native reconnect attempts. `BotaClient`,
+`RecordingManager`, `StreamingSession`, `OTAManager`, app acceptance, and
+publication gates remain open.
 High-volume recording and firmware bytes stay native and are rejected from the
 Codegen contract.
 

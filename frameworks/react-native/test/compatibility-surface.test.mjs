@@ -19,7 +19,6 @@ const baseline = JSON.parse(
 );
 const deferredWorkflowClasses = new Set([
   'BotaClient',
-  'DeviceManager',
   'OTAManager',
   'RecordingManager',
   'StreamingSession',

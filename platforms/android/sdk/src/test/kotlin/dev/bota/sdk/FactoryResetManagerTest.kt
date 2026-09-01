@@ -63,6 +63,29 @@ class FactoryResetManagerTest {
     }
 
     @Test
+    fun resumeAfterReinstallWaitsForFirmwareReplayWithoutGrantOrResetOpcode() = runTest {
+        val fixture = SecureRuntimeFixture()
+        val manager = FactoryResetManager()
+        fixture.connect()
+        manager.attach(fixture.runtime)
+
+        val completion = manager.resumeUnjournaledFactoryReset(
+            fixture.device,
+            commandId = "reset-after-reinstall",
+            bindingGeneration = 0u,
+        ) {}
+
+        val command = fixture.runner.commands.single()
+        assertEquals(0x010a, command.kind)
+        assertEquals("reset-after-reinstall", command.textField(22))
+        assertNull(command.fields.firstOrNull { it.id == 24 })
+        assertNull(command.fields.firstOrNull { it.id == 25 })
+        assertNull(command.textField(23))
+        assertEquals(FactoryResetCompletion("reset-after-reinstall", 0u), completion)
+        manager.detach()
+    }
+
+    @Test
     fun staleBindingGenerationFailsBeforeRustStarts() = runTest {
         val fixture = SecureRuntimeFixture(
             pendingReset = PersistedFactoryResetResult("old-reset", 0u, 7u, 8u),

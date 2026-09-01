@@ -187,4 +187,11 @@ extension Array where Element == CoreField {
         }
         return nil
     }
+
+    func secureUnsigned(_ id: UInt32) -> UInt64? {
+        for field in self {
+            if case let .unsigned(fieldID, value) = field, fieldID == id { return value }
+        }
+        return nil
+    }
 }

@@ -13,8 +13,8 @@ use crate::{
         PROVISIONING_SUCCESS, SERVICE_BOTA_AUTH, SERVICE_BOTA_CONTROL, SERVICE_BOTA_PROVISIONING,
     },
     model::{
-        DeviceSerialNumber, DurableFactoryResetResult, FactoryResetCommandId, HostMaterialId,
-        ProvisioningNonce,
+        DeviceSerialNumber, DurableFactoryResetResult, FactoryResetCommandId, FactoryResetResult,
+        HostMaterialId, ProvisioningNonce,
     },
     protocol::{encode_bounded_payload, parse_factory_reset_result},
     workflow::{WorkflowContext, WorkflowReducer},
@@ -31,7 +31,8 @@ enum Mode {
         grant_id: HostMaterialId,
     },
     Resume {
-        result: DurableFactoryResetResult,
+        command_id: FactoryResetCommandId,
+        expected_result: Option<FactoryResetResult>,
     },
 }
 
@@ -101,19 +102,21 @@ impl FactoryResetWorkflow {
 
     pub(crate) fn resume(
         device: DeviceSerialNumber,
-        result: DurableFactoryResetResult,
+        command_id: FactoryResetCommandId,
+        expected_result: Option<FactoryResetResult>,
         cancellation_id: CancellationId,
     ) -> Self {
         Self {
             device,
             mode: Mode::Resume {
-                result: result.clone(),
+                command_id,
+                expected_result,
             },
             cancellation_id,
             phase: Phase::Subscribing,
             nonce: None,
             grant: Vec::new(),
-            durable_result: Some(result),
+            durable_result: None,
             nonce_request_id: None,
             material_request_id: None,
             subscription_request_id: None,
@@ -129,7 +132,7 @@ impl FactoryResetWorkflow {
     fn command_id(&self) -> FactoryResetCommandId {
         match &self.mode {
             Mode::Start { command_id, .. } => command_id.clone(),
-            Mode::Resume { result } => result.command_id.clone(),
+            Mode::Resume { command_id, .. } => command_id.clone(),
         }
     }
 
@@ -472,9 +475,20 @@ impl WorkflowReducer for FactoryResetWorkflow {
                         },
                         context,
                     )),
-                    Mode::Resume { result: persisted } if persisted.result == result => {
-                        Ok(self.persist_result(persisted, context))
-                    }
+                    Mode::Resume {
+                        command_id,
+                        expected_result: None,
+                    } => Ok(self.persist_result(
+                        DurableFactoryResetResult { command_id, result },
+                        context,
+                    )),
+                    Mode::Resume {
+                        command_id,
+                        expected_result: Some(expected),
+                    } if expected == result => Ok(self.persist_result(
+                        DurableFactoryResetResult { command_id, result },
+                        context,
+                    )),
                     Mode::Resume { .. } => Ok(self.fail(
                         DeviceSdkError::new(
                             ErrorCode::ProtocolRejected,

@@ -138,6 +138,38 @@ public class FactoryResetManager internal constructor() {
         }
     }
 
+    /**
+     * Resumes a firmware-held reset result when this installation has no native
+     * journal. No grant or reset opcode is sent.
+     */
+    public suspend fun resumeUnjournaledFactoryReset(
+        device: ConnectedDevice,
+        commandId: String,
+        bindingGeneration: ULong,
+        persistResult: suspend (FactoryResetPersistenceResult) -> Unit,
+    ): FactoryResetCompletion {
+        requireIdentifier(commandId, "command ID")
+        val configured = configuredRuntime()
+        configured.connection.require(device)
+        val command = CoreCommand.resumeUnjournaledFactoryReset(device.serialNumber, commandId)
+        configured.operations.begin(command.cancellationId, BotaOperation.FactoryReset)
+        synchronized(lock) { active = Active(command.cancellationId, commandId, null) }
+        configured.registerFactoryResetGeneration(commandId, bindingGeneration)
+        configured.registerFactoryResetResultPersister(commandId) { result ->
+            persistResult(result.toPublicPersistenceResult())
+        }
+        try {
+            awaitWorkflowCompletion(command, configured)
+            return FactoryResetCompletion(commandId, bindingGeneration)
+        } finally {
+            runCleanupActions(
+                { configured.unregisterFactoryResetResultPersister(commandId) },
+                { configured.unregisterFactoryResetGeneration(commandId) },
+                { finish(command.cancellationId) },
+            )
+        }
+    }
+
     public suspend fun cancelCurrentOperation() {
         val configured = configuredRuntime()
         val operation = synchronized(lock) { active } ?: return

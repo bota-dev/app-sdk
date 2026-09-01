@@ -44,6 +44,7 @@ import type {
   RecordingState,
   WifiStatus,
 } from './models/Device';
+import { reportCompatibilityDisconnection } from './compatibility/runtime';
 import type { AudioCodec, DeviceRecording } from './models/Recording';
 
 export type BotaLogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
@@ -1015,7 +1016,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
   };
 
-  return {
+  const client: BotaDeviceSDKClient = {
     controls,
     devices,
     factoryReset,
@@ -1050,4 +1051,11 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
       return (await requireNativeModule().getState()) as BotaDeviceSDKState;
     },
   };
+  nativeModule?.onDeviceDisconnected?.((event) => {
+    reportCompatibilityDisconnection(
+      client,
+      event.error ? new Error(event.error) : undefined
+    );
+  });
+  return client;
 };

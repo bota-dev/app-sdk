@@ -98,6 +98,13 @@ internal interface BotaDeviceSDKAndroidSecurityClient {
         persistResult: (suspend (FactoryResetPersistenceResult) -> Unit)?,
     ): FactoryResetCompletion?
 
+    suspend fun resumeUnjournaledFactoryReset(
+        device: ConnectedDevice,
+        commandId: String,
+        bindingGeneration: ULong,
+        persistResult: suspend (FactoryResetPersistenceResult) -> Unit,
+    ): FactoryResetCompletion
+
     suspend fun cancelCurrentOperation()
 
     suspend fun cancelFactoryReset()
@@ -198,6 +205,18 @@ internal class BotaDeviceSDKSharedAndroidSecurityClient(
     ): FactoryResetCompletion? = client.factoryReset.resumePendingFactoryReset(
         device,
         currentBindingGeneration,
+        persistResult,
+    )
+
+    override suspend fun resumeUnjournaledFactoryReset(
+        device: ConnectedDevice,
+        commandId: String,
+        bindingGeneration: ULong,
+        persistResult: suspend (FactoryResetPersistenceResult) -> Unit,
+    ): FactoryResetCompletion = client.factoryReset.resumeUnjournaledFactoryReset(
+        device,
+        commandId,
+        bindingGeneration,
         persistResult,
     )
 
@@ -315,13 +334,28 @@ internal class BotaDeviceSDKAndroidSecurity(
         device: ConnectedDevice,
         currentBindingGeneration: ULong,
         onPersistenceRequest: ((BotaDeviceSDKAndroidFactoryResetPersistenceRequest) -> Unit)?,
-    ): FactoryResetCompletion? = client.resumePendingFactoryReset(
-        device = device,
-        currentBindingGeneration = currentBindingGeneration,
-        persistResult = onPersistenceRequest?.let { onRequest ->
-            { result -> requestFactoryResetPersistence(result, onRequest) }
-        },
-    )
+    ): FactoryResetCompletion? {
+        val persister: (suspend (FactoryResetPersistenceResult) -> Unit)? =
+            if (onPersistenceRequest == null) {
+                null
+            } else {
+                { result ->
+                    requestFactoryResetPersistence(result, onPersistenceRequest)
+                }
+            }
+        val pending = client.resumePendingFactoryReset(
+            device = device,
+            currentBindingGeneration = currentBindingGeneration,
+            persistResult = persister,
+        )
+        if (pending != null || persister == null) return pending
+        return client.resumeUnjournaledFactoryReset(
+            device = device,
+            commandId = "rn-resume-${UUID.randomUUID()}",
+            bindingGeneration = currentBindingGeneration,
+            persistResult = persister,
+        )
+    }
 
     fun resolveProvisioningMaterial(
         requestId: String,

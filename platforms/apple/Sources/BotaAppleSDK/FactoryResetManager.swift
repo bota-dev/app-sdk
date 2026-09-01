@@ -152,6 +152,40 @@ public actor FactoryResetManager {
         }
     }
 
+    /// Resumes a firmware-held reset result when this installation has no
+    /// native journal. This operation only subscribes for the replay and sends
+    /// its receipt after both native and application persistence complete.
+    public func resumeUnjournaledFactoryReset(
+        _ device: ConnectedDevice,
+        commandID: String,
+        bindingGeneration: UInt64,
+        persistResult: @escaping FactoryResetResultPersister
+    ) async throws -> FactoryResetCompletion {
+        let runtime = try configuredRuntime()
+        try await runtime.connection.require(device)
+        await runtime.registerFactoryResetGeneration(commandID, bindingGeneration)
+        await runtime.registerFactoryResetResultPersister(commandID) { result in
+            try await persistResult(try Self.persistenceResult(result))
+        }
+        do {
+            try await run(
+                .resumeUnjournaledFactoryReset(
+                    serialNumber: device.serialNumber,
+                    commandID: commandID
+                ),
+                runtime: runtime
+            )
+            await cleanup(commandID: commandID, grantID: nil, runtime: runtime)
+            return FactoryResetCompletion(
+                commandID: commandID,
+                bindingGeneration: bindingGeneration
+            )
+        } catch {
+            await cleanup(commandID: commandID, grantID: nil, runtime: runtime)
+            throw error
+        }
+    }
+
     public func cancelCurrentOperation() async throws {
         guard let activeCancellationID else { return }
         let runtime = try configuredRuntime()

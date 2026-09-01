@@ -228,6 +228,38 @@ class BotaDeviceSDKAndroidSecurityTest {
     }
 
     @Test
+    fun factoryResetResumeFallsBackToFirmwareReplayAfterReinstall() = runTest {
+        val connected = ConnectedDevice(
+            id = "selected",
+            serialNumber = "EVFXXW67KP",
+            deviceType = DeviceType.BotaPin,
+            firmwareVersion = "1.0.11",
+            isProvisioned = true,
+            connectionState = ConnectionState.Connected,
+            mtu = 247,
+        )
+        val client = TestAndroidSecurityClient().apply { hasPendingFactoryReset = false }
+        val security = BotaDeviceSDKAndroidSecurity(client)
+        val persistenceRequests = CompletableDeferred<
+            BotaDeviceSDKAndroidFactoryResetPersistenceRequest
+        >()
+
+        val operation = async {
+            security.resumePendingFactoryReset(
+                connected,
+                currentBindingGeneration = 0u,
+                onPersistenceRequest = { persistenceRequests.complete(it) },
+            )
+        }
+        val request = persistenceRequests.await()
+        assertEquals(7u.toUShort(), request.localRecordingsDeleted)
+        security.resolveFactoryResetResultPersistence(request.requestId)
+
+        assertEquals(0uL, operation.await()?.bindingGeneration)
+        assertEquals(listOf(0uL), client.unjournaledResumeBindingGenerations)
+    }
+
+    @Test
     fun connectionSettingsDelegateToAndroidFacade() = runTest {
         val connected = ConnectedDevice(
             id = "selected",
@@ -344,6 +376,8 @@ class BotaDeviceSDKAndroidSecurityTest {
         var factoryResetCancelled = false
         var factoryResetPersistenceCompletions = 0
         val resumedBindingGenerations = mutableListOf<ULong>()
+        val unjournaledResumeBindingGenerations = mutableListOf<ULong>()
+        var hasPendingFactoryReset = true
         var connectionSettings: DeviceConnectionSettings? = null
         var connectionSettingsReadResult = DeviceConnectionSettings(
             enabledConnections = DeviceConnectionSettings.EnabledConnections(true, false),
@@ -467,7 +501,19 @@ class BotaDeviceSDKAndroidSecurityTest {
             persistResult: (suspend (FactoryResetPersistenceResult) -> Unit)?,
         ): FactoryResetCompletion? {
             resumedBindingGenerations += currentBindingGeneration
+            if (!hasPendingFactoryReset) return null
             return FactoryResetCompletion("reset-command-1", currentBindingGeneration)
+        }
+
+        override suspend fun resumeUnjournaledFactoryReset(
+            device: ConnectedDevice,
+            commandId: String,
+            bindingGeneration: ULong,
+            persistResult: suspend (FactoryResetPersistenceResult) -> Unit,
+        ): FactoryResetCompletion {
+            unjournaledResumeBindingGenerations += bindingGeneration
+            persistResult(FactoryResetPersistenceResult(7u))
+            return FactoryResetCompletion(commandId, bindingGeneration)
         }
 
         override suspend fun cancelFactoryReset() {

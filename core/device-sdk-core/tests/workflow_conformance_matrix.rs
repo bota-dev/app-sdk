@@ -5,8 +5,8 @@ use bota_device_sdk_core::{
     },
     error::ErrorCode,
     model::{
-        DeviceCandidate, DeviceSerialNumber, DurableFactoryResetResult, FactoryResetCommandId,
-        FactoryResetResult, FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId,
+        DeviceCandidate, DeviceSerialNumber, FactoryResetCommandId, FactoryResetResult,
+        FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId,
         RecordingUuid, UploadDestinationId, UploadSessionId,
     },
 };
@@ -112,13 +112,11 @@ fn commands() -> Vec<(&'static str, Command)> {
             "factory reset resume",
             Command::ResumeFactoryReset {
                 device: device(),
-                result: DurableFactoryResetResult {
-                    command_id: reset_command,
-                    result: FactoryResetResult {
-                        result_code: 0,
-                        deleted_recording_count: 2,
-                    },
-                },
+                command_id: reset_command,
+                expected_result: Some(FactoryResetResult {
+                    result_code: 0,
+                    deleted_recording_count: 2,
+                }),
             },
         ),
     ]

@@ -4,7 +4,10 @@ import { afterEach, test } from 'node:test';
 
 const require = createRequire(import.meta.url);
 const { DeviceManager } = require('../lib/commonjs/managers/DeviceManager.js');
-const { setCompatibilityClientForTesting } = require(
+const {
+  reportCompatibilityDisconnection,
+  setCompatibilityClientForTesting,
+} = require(
   '../lib/commonjs/compatibility/runtime.js'
 );
 
@@ -158,6 +161,59 @@ test('internal DeviceManager delegates frozen provisioning and control commands'
   ]);
 });
 
+test('internal DeviceManager covers remaining status, settings, log, WiFi, and cache methods', async () => {
+  const fake = createFakeClient();
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+
+  await manager.initialize();
+  await manager.connect(discoveredDevice);
+  assert.deepEqual(manager.getKnownBleIds(), {
+    [connectedDevice.serialNumber]: connectedDevice.id,
+  });
+  assert.deepEqual(await manager.getStatus(connectedDevice), deviceStatus);
+  assert.deepEqual(
+    await manager.readConnectionSettings(connectedDevice),
+    connectionSettings
+  );
+  await manager.writeConnectionSettings(connectedDevice, connectionSettings);
+  assert.deepEqual(fake.connectionSettingsWrites, [
+    [connectedDevice, connectionSettings],
+  ]);
+  assert.deepEqual(await manager.disconnectWiFi(connectedDevice.id), {
+    success: true,
+  });
+  assert.deepEqual(await manager.scanWiFiNetworks(connectedDevice), {
+    networks: [],
+    currentSsid: null,
+  });
+
+  const stopLogs = await manager.subscribeToDeviceLogs(
+    connectedDevice,
+    () => undefined
+  );
+  stopLogs();
+  stopLogs();
+  await tick();
+  assert.equal(fake.logSubscriptionRemovals, 1);
+
+  manager.updateCachedDeviceState(connectedDevice.serialNumber, {
+    wifiStatus,
+  });
+  assert.deepEqual(
+    manager.getCachedDeviceState(connectedDevice.serialNumber)?.wifiStatus,
+    wifiStatus
+  );
+  manager.clearCachedDeviceState(connectedDevice.serialNumber);
+  assert.equal(manager.getCachedDeviceState(connectedDevice.serialNumber), null);
+  manager.updateCachedDeviceState(connectedDevice.serialNumber, {
+    wifiStatus,
+  });
+  manager.clearAllCachedDeviceStates();
+  assert.equal(manager.getCachedDeviceState(connectedDevice.serialNumber), null);
+  manager.destroy();
+});
+
 test('internal DeviceManager recovers ALREADY_PAIRED with nonce-bound deprovision', async () => {
   const fake = createFakeClient();
   fake.provisioningFailures.push(Object.assign(new Error('already paired'), {
@@ -263,6 +319,141 @@ test('internal DeviceManager recording subscriptions are synchronous and release
   assert.equal(fake.recordingStateSubscriptionRemovals, 1);
 });
 
+test('internal DeviceManager preserves authenticated reset and reinstall resume results', async () => {
+  const fake = createFakeClient();
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+  await manager.connect(discoveredDevice);
+  const persisted = [];
+
+  const reset = await manager.bleFactoryReset(
+    connectedDevice,
+    'reset-grant',
+    async (result) => persisted.push(['reset', result])
+  );
+  const resumed = await manager.resumeBleFactoryReset(
+    connectedDevice,
+    async (result) => persisted.push(['resume', result])
+  );
+
+  assert.deepEqual(reset, { success: true, localRecordingsDeleted: 7 });
+  assert.deepEqual(resumed, { success: true, localRecordingsDeleted: 7 });
+  assert.deepEqual(persisted, [
+    ['reset', { success: true, localRecordingsDeleted: 7 }],
+    ['resume', { success: true, localRecordingsDeleted: 7 }],
+  ]);
+  assert.equal(fake.factoryResetCalls[0][0], 'factoryReset');
+  assert.equal(fake.factoryResetCalls[0][2].bindingGeneration, 0);
+  assert.equal(fake.factoryResetCalls[0][3], 'reset-grant');
+  assert.equal(fake.factoryResetCalls[1][0], 'resumePendingFactoryReset');
+  assert.equal(fake.factoryResetCalls[1][2], 0);
+});
+
+test('internal DeviceManager maps factory-reset firmware rejection to frozen result', async () => {
+  const fake = createFakeClient();
+  fake.factoryResetFailure = Object.assign(new Error('rejected'), {
+    protocolStatus: 1,
+  });
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+  await manager.connect(discoveredDevice);
+
+  const result = await manager.bleFactoryReset(
+    connectedDevice,
+    'reset-grant',
+    async () => assert.fail('rejected reset must not persist')
+  );
+
+  assert.deepEqual(result, { success: false, error: 'invalid_token' });
+});
+
+test('internal DeviceManager serializes reconnects and shares duplicate serial attempts', async () => {
+  const fake = createFakeClient();
+  const first = deferred();
+  fake.reconnectImplementation = async (serialNumber) => {
+    if (serialNumber === 'FIRST') await first.promise;
+    return {
+      ...connectedDevice,
+      id: `device-${serialNumber}`,
+      serialNumber,
+    };
+  };
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+
+  const firstAttempt = manager.reconnect('FIRST');
+  const duplicateAttempt = manager.reconnect('FIRST');
+  const secondAttempt = manager.reconnect('SECOND');
+  await tick();
+
+  assert.deepEqual(fake.reconnectCalls, ['FIRST']);
+  assert.equal(fake.maximumReconnectsInFlight, 1);
+  first.resolve();
+  assert.deepEqual(await firstAttempt, await duplicateAttempt);
+  assert.equal((await secondAttempt).serialNumber, 'SECOND');
+  assert.deepEqual(fake.reconnectCalls, ['FIRST', 'SECOND']);
+  assert.equal(fake.maximumReconnectsInFlight, 1);
+});
+
+test('internal DeviceManager auto reconnect starts immediately and user disconnect pauses it', async () => {
+  const fake = createFakeClient();
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+
+  manager.enableAutoReconnect('EVFXXW67KP');
+  await tick();
+  await tick();
+  assert.deepEqual(fake.reconnectCalls, ['EVFXXW67KP']);
+
+  await manager.disconnect(connectedDevice);
+  await tick();
+  assert.deepEqual(fake.reconnectCalls, ['EVFXXW67KP']);
+  manager.disableAutoReconnect();
+  manager.destroy();
+});
+
+test('internal DeviceManager restarts auto reconnect after a native link loss', async () => {
+  const fake = createFakeClient();
+  const reconnect = deferred();
+  fake.reconnectImplementation = async () => reconnect.promise;
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+  const disconnects = [];
+  manager.on('deviceDisconnected', (deviceId, error) => {
+    disconnects.push([deviceId, error?.message]);
+  });
+
+  await manager.connect(discoveredDevice);
+  manager.enableAutoReconnect(connectedDevice.serialNumber);
+  await tick();
+  reportCompatibilityDisconnection(fake.client, new Error('link lost'));
+  await tick();
+
+  assert.deepEqual(disconnects, [[connectedDevice.id, 'link lost']]);
+  assert.equal(manager.isConnected(connectedDevice.id), false);
+  assert.deepEqual(fake.reconnectCalls, [connectedDevice.serialNumber]);
+  assert.equal(fake.deviceStatusSubscriptionRemovals, 1);
+
+  reconnect.resolve(connectedDevice);
+  await tick();
+  await tick();
+  assert.equal(manager.isConnected(connectedDevice.id), true);
+  manager.destroy();
+});
+
+test('internal DeviceManager refuses the deprecated unauthenticated reset opcode', async () => {
+  const fake = createFakeClient();
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+  await manager.connect(discoveredDevice);
+
+  await assert.rejects(
+    manager.factoryReset(connectedDevice),
+    (error) => error.code === 'INVALID_TOKEN'
+  );
+  assert.deepEqual(fake.factoryResetCalls, []);
+});
+
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const discoveredDevice = {
@@ -312,6 +503,18 @@ const recordingState = {
   initiatedBy: 'remote',
 };
 
+const connectionSettings = {
+  enabled_connections: { wifi: true, cellular: false },
+  heartbeat_enabled_connections: { wifi: true, cellular: false },
+  upload_network_preference: ['wifi', 'ble'],
+  power_management: {
+    wifi_idle_timeout_seconds: 180,
+    cellular_idle_timeout_seconds: 0,
+  },
+  streaming_enabled: false,
+  streaming_flush_interval_seconds: 60,
+};
+
 const deferred = () => {
   let resolve;
   let reject;
@@ -332,6 +535,7 @@ function createFakeClient() {
     stopScanCalls: 0,
     wifiStatusSubscriptionRemovals: 0,
     deviceStatusSubscriptionRemovals: 0,
+    logSubscriptionRemovals: 0,
     recordingStateSubscriptionRemovals: 0,
     recordingStateReadCalls: 0,
     recordingStateError: null,
@@ -343,6 +547,13 @@ function createFakeClient() {
     controlCalls: [],
     provisioningCalls: [],
     provisioningFailures: [],
+    connectionSettingsWrites: [],
+    factoryResetCalls: [],
+    factoryResetFailure: null,
+    reconnectCalls: [],
+    reconnectsInFlight: 0,
+    maximumReconnectsInFlight: 0,
+    reconnectImplementation: null,
     emitDiscovered: (device) => onDiscovered?.(device),
     emitWiFiStatus: (status) => onWiFiStatus?.(status),
     emitDeviceStatus: (status) => onDeviceStatus?.(status),
@@ -357,7 +568,22 @@ function createFakeClient() {
       },
       async stopScan() { fake.stopScanCalls += 1; },
       async connect() { return connectedDevice; },
-      async reconnect() { return connectedDevice; },
+      async reconnect(serialNumber) {
+        fake.reconnectCalls.push(serialNumber);
+        fake.reconnectsInFlight += 1;
+        fake.maximumReconnectsInFlight = Math.max(
+          fake.maximumReconnectsInFlight,
+          fake.reconnectsInFlight
+        );
+        try {
+          if (fake.reconnectImplementation) {
+            return await fake.reconnectImplementation(serialNumber);
+          }
+          return { ...connectedDevice, serialNumber };
+        } finally {
+          fake.reconnectsInFlight -= 1;
+        }
+      },
       async disconnect() {},
       async readStatus() { return deviceStatus; },
       async subscribeToStatus(callback) {
@@ -382,7 +608,13 @@ function createFakeClient() {
       },
       async scanNetworks() { return { networks: [], currentSsid: null }; },
     },
-    logs: { async subscribe() { throw new Error('unused'); } },
+    logs: {
+      async subscribe() {
+        return {
+          async remove() { fake.logSubscriptionRemovals += 1; },
+        };
+      },
+    },
     provisioning: {
       async provision(device, provider) {
         const request = {
@@ -407,8 +639,10 @@ function createFakeClient() {
         fake.provisioningCalls.push(['deprovision', device, grantBlob]);
         return { success: true };
       },
-      async readConnectionSettings() { throw new Error('unused'); },
-      async writeConnectionSettings() {},
+      async readConnectionSettings() { return connectionSettings; },
+      async writeConnectionSettings(device, settings) {
+        fake.connectionSettingsWrites.push([device, settings]);
+      },
     },
     controls: {
       async isProvisioned(device) {
@@ -458,7 +692,29 @@ function createFakeClient() {
         };
       },
     },
-    factoryReset: {},
+    factoryReset: {
+      async factoryReset(device, options, provider, persistResult) {
+        const grant = await provider({
+          serialNumber: device.serialNumber,
+          nonce: 'ef'.repeat(16),
+          commandId: options.commandId,
+          bindingGeneration: options.bindingGeneration,
+        });
+        fake.factoryResetCalls.push(['factoryReset', device, options, grant]);
+        if (fake.factoryResetFailure) throw fake.factoryResetFailure;
+        await persistResult?.({ success: true, localRecordingsDeleted: 7 });
+        return options;
+      },
+      async resumePendingFactoryReset(device, bindingGeneration, persistResult) {
+        fake.factoryResetCalls.push([
+          'resumePendingFactoryReset',
+          device,
+          bindingGeneration,
+        ]);
+        await persistResult?.({ success: true, localRecordingsDeleted: 7 });
+        return { commandId: 'resumed-reset', bindingGeneration };
+      },
+    },
     recordings: {},
     ota: {},
     async configure() {},

@@ -112,14 +112,14 @@ firmware payloads never cross the JavaScript bridge. Future workflow methods
 carry identifiers, progress, errors, and native file paths while native hosts
 own high-volume files and transfer buffers.
 
-The JavaScript compatibility layer now restores all 75 frozen exports that do
-not own a native workflow. This includes every `0.0.65` public type and the
-runtime error hierarchy, `deriveSyncStatus`, and `DeviceLogDecoder`; a semantic
-test compares each declaration with the frozen contract, and behavior tests
-cover stable errors, transport precedence, and split log packets. The five
-manager/client classes remain withheld until equivalent native-backed workflow
-methods exist, so type parity cannot be mistaken for operational parity.
-An internal `DeviceManager` compatibility owner now preserves the already
+The JavaScript compatibility layer now restores 76 of 80 frozen exports. This
+includes every `0.0.65` public type, the runtime error hierarchy,
+`deriveSyncStatus`, `DeviceLogDecoder`, and `DeviceManager`; a semantic test
+compares each declaration with the frozen contract, and behavior tests cover
+every non-inherited manager method. `BotaClient`, `RecordingManager`,
+`StreamingSession`, and `OTAManager` remain withheld until equivalent
+native-backed workflow methods exist.
+The exported `DeviceManager` compatibility owner preserves the already
 native-backed scan, selected connection, status, settings, logs, WiFi, and
 last-known WiFi cache behavior, including idempotent legacy removal functions.
 The sibling `BotaDeviceSDK.controls` facade now delegates provisioning-state,
@@ -129,14 +129,14 @@ reads, and one owned recording-state stream to native Apple and Android
 `DeviceControlManager` facades. Certificate chunk framing, public-key bytes,
 grant writes, subscription ordering, opcodes, and stop-command pacing remain
 native; Codegen carries only typed text, command results, and recording state.
-The compatibility owner delegates the earlier frozen methods, but it is
-deliberately not a root export. It now also preserves the frozen recording
-grant-fetcher overloads, pending command precedence, state cache fallback, and
-synchronous idempotent subscription removal over those native controls. Reset
-compatibility and the remaining class members must still pass the exact surface
-gate before export.
+The compatibility owner preserves the frozen recording grant-fetcher overloads,
+pending command precedence, state cache fallback, synchronous idempotent
+subscription removal, serialized reconnect ownership, and user-disconnect
+pause. While auto-reconnect is enabled, one native status watchdog reports
+transport loss through a private Codegen event, clears stale connection state,
+and restarts the single serial-strict reconnect loop.
 The package's new `BotaDeviceSDK.devices` facade is intentionally smaller than
-the withheld `DeviceManager`: it owns a typed discovery subscription, preserves
+the exported compatibility `DeviceManager`: it owns a typed discovery subscription, preserves
 the frozen JavaScript scan filters, connects a selected peripheral while the
 native facade learns its serial identity, reconnects only by an expected serial,
 disconnects, reads current status, and owns a typed status subscription. It is
@@ -210,6 +210,9 @@ sent. Exact-result replay repeats that application save before the receipt.
 `resumePendingFactoryReset` delegates directly to the native receipt-only
 workflow, which rejects a stale generation before Rust starts and cannot
 request another grant or resend opcode `0x06`.
+After application reinstallation removes the native reset journal, resume can
+still wait for the device's exact successful replay, persist that result through
+the application hook, and send only receipt opcode `0x0A`.
 
 The React Native recording broker maps native recording metadata to the frozen
 JavaScript shape and emits transfer progress as counts only. Apple and Android

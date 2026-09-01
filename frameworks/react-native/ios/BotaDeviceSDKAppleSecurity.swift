@@ -71,6 +71,12 @@ protocol BotaDeviceSDKAppleSecurityClient: Sendable {
         currentBindingGeneration: UInt64,
         persistResult: FactoryResetResultPersister?
     ) async throws -> FactoryResetCompletion?
+    func resumeUnjournaledFactoryReset(
+        _ device: ConnectedDevice,
+        commandID: String,
+        bindingGeneration: UInt64,
+        persistResult: @escaping FactoryResetResultPersister
+    ) async throws -> FactoryResetCompletion
     func cancelCurrentOperation() async throws
     func cancelFactoryReset() async throws
 }
@@ -204,6 +210,20 @@ struct BotaDeviceSDKSharedAppleSecurityClient: BotaDeviceSDKAppleSecurityClient 
         try await factoryResetManager.resumePendingFactoryReset(
             device,
             currentBindingGeneration: currentBindingGeneration,
+            persistResult: persistResult
+        )
+    }
+
+    func resumeUnjournaledFactoryReset(
+        _ device: ConnectedDevice,
+        commandID: String,
+        bindingGeneration: UInt64,
+        persistResult: @escaping FactoryResetResultPersister
+    ) async throws -> FactoryResetCompletion {
+        try await factoryResetManager.resumeUnjournaledFactoryReset(
+            device,
+            commandID: commandID,
+            bindingGeneration: bindingGeneration,
             persistResult: persistResult
         )
     }
@@ -405,9 +425,17 @@ actor BotaDeviceSDKAppleSecurity {
         } else {
             persister = nil
         }
-        return try await client.resumePendingFactoryReset(
+        let pending = try await client.resumePendingFactoryReset(
             device,
             currentBindingGeneration: currentBindingGeneration,
+            persistResult: persister
+        )
+        if let pending { return pending }
+        guard let persister else { return nil }
+        return try await client.resumeUnjournaledFactoryReset(
+            device,
+            commandID: "rn-resume-\(UUID().uuidString)",
+            bindingGeneration: currentBindingGeneration,
             persistResult: persister
         )
     }

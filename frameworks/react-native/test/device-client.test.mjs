@@ -4,6 +4,9 @@ import { test } from 'node:test';
 
 const require = createRequire(import.meta.url);
 const { createBotaDeviceSDK } = require('../lib/commonjs/client.js');
+const { subscribeToCompatibilityDisconnections } = require(
+  '../lib/commonjs/compatibility/runtime.js'
+);
 
 const discovered = {
   id: 'peripheral-1',
@@ -56,6 +59,7 @@ const status = {
 function nativeFixture() {
   const calls = [];
   let discoveryHandler = null;
+  let disconnectionHandler = null;
   let statusHandler = null;
   let recordingStateHandler = null;
   let provisioningHandler = null;
@@ -82,6 +86,9 @@ function nativeFixture() {
     emitDiscovery(value) {
       discoveryHandler?.(value);
     },
+    emitDisconnection(value) {
+      disconnectionHandler?.(value);
+    },
     emitStatus(value) {
       statusHandler?.(value);
     },
@@ -106,6 +113,14 @@ function nativeFixture() {
           remove() {
             removed = true;
             discoveryHandler = null;
+          },
+        };
+      },
+      onDeviceDisconnected(handler) {
+        disconnectionHandler = handler;
+        return {
+          remove() {
+            disconnectionHandler = null;
           },
         };
       },
@@ -548,6 +563,22 @@ test('device connection delegates selected identity and strict reconnect separat
     ],
     ['disconnect'],
   ]);
+});
+
+test('native disconnect events stay private and notify the compatibility owner', () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+  const errors = [];
+  const subscription = subscribeToCompatibilityDisconnections(
+    client,
+    (error) => errors.push(error?.message)
+  );
+
+  fixture.emitDisconnection({ error: 'link lost' });
+  subscription.remove();
+  fixture.emitDisconnection({ error: 'ignored' });
+
+  assert.deepEqual(errors, ['link lost']);
 });
 
 test('device status reads and subscriptions map dates and own native teardown', async () => {

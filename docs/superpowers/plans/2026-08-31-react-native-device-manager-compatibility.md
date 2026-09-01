@@ -127,7 +127,7 @@ Task 1.
 
 ### Task 2: Add Missing Low-Volume Device Commands
 
-**Progress (2026-08-31):** The first focused slice covers provisioning-state,
+**Completed (2026-08-31):** The first focused slice covers provisioning-state,
 device-public-key, auth-nonce, API-endpoint, certificate, backend-public-key,
 recording-grant, and time-sync commands through Rust, Apple, Android, Codegen,
 and the internal compatibility owner. A second focused slice now carries
@@ -139,10 +139,12 @@ The fourth focused slice fixes remove-only deprovision across Apple, Android,
 Codegen, and the internal compatibility owner: the grant is written natively,
 the result subscription starts before opcode `0x05`, typed firmware failures
 cross JavaScript, and frozen provisioning retries `ALREADY_PAIRED` with a fresh
-nonce-bound grant. Reset compatibility remains in Task 2 and will be committed
-separately. The reset persistence foundation is now complete: Rust re-persists
-exact replay, both native hosts await an optional application durable-save hook,
-and the React Native bridge resolves that hook before receipt opcode `0x0A`.
+nonce-bound grant. Reset compatibility completes Task 2. Rust re-persists exact
+replay, both native hosts await an optional application durable-save hook, and
+the React Native bridge resolves that hook before receipt opcode `0x0A`.
+Reinstall-safe resume accepts the device's exact success replay when the native
+journal is gone, persists it through the application hook, and sends only the
+receipt. All direct methods pass the frozen behavior and surface gates.
 
 **Files:**
 - Modify: `frameworks/react-native/src/specs/NativeBotaDeviceSDK.ts`
@@ -158,38 +160,38 @@ and the React Native bridge resolves that hook before receipt opcode `0x0A`.
 - Produces typed methods for nonce/public-key/provisioning-state reads, endpoint,
   certificate, backend-key, grant, time-sync, and recording-control writes.
 
-- [ ] **Step 1: Freeze direct-command behavior from `0.0.65`**
+- [x] **Step 1: Freeze direct-command behavior from `0.0.65`**
 
 Add byte fixtures and native tests for each exact characteristic, payload,
 subscribe-before-write rule, result mapping, timeout, and cancellation path.
 
-- [ ] **Step 2: Verify RED at Rust, Apple, Android, and Codegen boundaries**
+- [x] **Step 2: Verify RED at Rust, Apple, Android, and Codegen boundaries**
 
 Each test must fail because its typed facade method or Codegen method is absent.
 
-- [ ] **Step 3: Implement shared codecs and native facades**
+- [x] **Step 3: Implement shared codecs and native facades**
 
 Keep wire bytes native. Public native methods accept typed values and return
 typed results; direct command methods share the same per-device operation
 coordinator as connection, provisioning, reset, and WiFi.
 
-- [ ] **Step 4: Add low-volume Codegen methods**
+- [x] **Step 4: Add low-volume Codegen methods**
 
 Codegen may carry strings, booleans, numeric status, and certificate/public-key
 text. It must not carry raw characteristic packets or recording bodies.
 
-- [ ] **Step 5: Complete the corresponding internal `DeviceManager` methods**
+- [x] **Step 5: Complete the corresponding internal `DeviceManager` methods**
 
 Every frozen method delegates to the new client facade and preserves frozen
 errors and result shapes.
 
-- [ ] **Step 6: Run full native and React Native integration gates**
+- [x] **Step 6: Run full native and React Native integration gates**
 
 Require Rust tests, `swift test`, Android unit/lint/API checks, React Native
 package verification, the CocoaPods linked consumer, and the immutable-AAR
 Android adapter consumer.
 
-- [ ] **Step 7: Document and commit**
+- [x] **Step 7: Document and commit**
 
 Update every doc hit for the new command symbols, then commit Task 2 separately.
 
@@ -207,29 +209,29 @@ Update every doc hit for the new command symbols, then commit Task 2 separately.
 - Consumes: every native-backed method completed by Tasks 1 and 2.
 - Produces: public frozen `DeviceManager` export with no placeholder method.
 
-- [ ] **Step 1: Add the class to the exact semantic-surface comparison**
+- [x] **Step 1: Add the class to the exact semantic-surface comparison**
 
 Remove only `DeviceManager` from `deferredWorkflowClasses`. Expected RED until
 constructor, inherited EventEmitter API, members, and static members match.
 
-- [ ] **Step 2: Complete reconnect registry and auto-reconnect behavior**
+- [x] **Step 2: Complete reconnect registry and auto-reconnect behavior**
 
 Preserve one active native reconnect attempt, serial-strict identity, known BLE
 ID updates after connection, user-disconnect pause, and idempotent teardown.
 
-- [ ] **Step 3: Verify every frozen method has a native-backed test**
+- [x] **Step 3: Verify every frozen method has a native-backed test**
 
 Generate the frozen member list from the baseline and fail if any method lacks
 a named behavior case. Do not satisfy this gate with an unsupported-operation
 stub.
 
-- [ ] **Step 4: Export and verify**
+- [x] **Step 4: Export and verify**
 
 Export `DeviceManager`, run `npm run verify`, both linked native consumers, and
 the frozen baseline extraction. Expected: 76 of 80 exports match, with only
 `BotaClient`, `RecordingManager`, `StreamingSession`, and `OTAManager` deferred.
 
-- [ ] **Step 5: Document, commit, and push `main`**
+- [x] **Step 5: Document, commit, and push `main`**
 
 Update status counts and milestone evidence, commit the export independently,
 and push only after the clean-tree release gates pass.

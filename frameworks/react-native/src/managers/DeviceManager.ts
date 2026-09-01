@@ -3,14 +3,14 @@ import EventEmitter from 'eventemitter3';
 import type {
   BotaAsyncEventSubscription,
   BotaDeviceSDKClient,
-  BotaDeprovisionResult,
   BotaEventSubscription,
-  BotaRecordingControlResult,
 } from '../client';
-import { getCompatibilityClient } from '../compatibility/runtime';
+import {
+  getCompatibilityClient,
+  subscribeToCompatibilityDisconnections,
+} from '../compatibility/runtime';
 import type {
   CachedDeviceState,
-  DeviceStatePatch,
 } from '../cache/DeviceStateCache';
 import type {
   ConnectedDevice,
@@ -26,6 +26,8 @@ import type {
   WiFiCredentials,
   WiFiStatusInfo,
   Environment,
+  BleFactoryResetResult,
+  BleFactoryResetResultPersister,
   RecordingState,
   StartRecordingOptions,
   StopRecordingOptions,
@@ -47,7 +49,7 @@ export interface ProvisionOptions {
 
 type CacheListener = (
   serialNumber: string,
-  patch: DeviceStatePatch,
+  patch: { wifiStatus?: Partial<WiFiStatusInfo> | null },
   state: CachedDeviceState
 ) => void;
 
@@ -61,6 +63,10 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   private readonly statusSubscriptions = new Map<
     string,
     Promise<BotaAsyncEventSubscription>
+  >();
+  private readonly statusCallbacks = new Map<
+    string,
+    Set<(status: DeviceStatus) => void>
   >();
   private readonly wifiStatusSubscriptions = new Map<
     string,
@@ -79,13 +85,28 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     string,
     Promise<BotaAsyncEventSubscription>
   >();
+  private readonly reconnectInFlight = new Map<
+    string,
+    Promise<ConnectedDevice>
+  >();
+  private reconnectChain: Promise<unknown> = Promise.resolve();
   private scanSubscription: BotaEventSubscription | null = null;
   private scanActive = false;
+  private autoReconnectEnabled = false;
+  private autoReconnectSerial: string | null = null;
+  private autoReconnectTimer: ReturnType<typeof setInterval> | null = null;
+  private autoReconnectAttempting = false;
+  private userDisconnected = false;
   private destroyed = false;
+  private readonly disconnectionSubscription: Subscription;
 
   constructor() {
     super();
     this.client = getCompatibilityClient();
+    this.disconnectionSubscription = subscribeToCompatibilityDisconnections(
+      this.client,
+      (error) => this.handleNativeDisconnection(error)
+    );
   }
 
   async initialize(): Promise<void> {}
@@ -134,13 +155,16 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
 
   async connect(
     device: DiscoveredDevice,
-    _priority: RadioPriority = 'user'
+    priority: RadioPriority = 'user'
   ): Promise<ConnectedDevice> {
+    void priority;
     this.assertAlive();
+    this.userDisconnected = false;
     this.emit('connectionStateChanged', device.id, 'connecting');
     try {
       const connected = await this.client.devices.connect(device);
       this.rememberConnected(connected);
+      if (this.autoReconnectEnabled) this.ensureStatusWatchdog(connected);
       this.emit('connectionStateChanged', connected.id, 'connected');
       this.emit('deviceConnected', connected);
       return connected;
@@ -157,17 +181,39 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     this.assertAlive();
     const existing = this.findConnectedBySerial(serialNumber);
     if (existing) return existing;
-    const connected = await this.client.devices.reconnect(serialNumber, options);
-    this.rememberConnected(connected);
-    this.emit('connectionStateChanged', connected.id, 'connected');
-    this.emit('deviceConnected', connected);
-    return connected;
+    this.userDisconnected = false;
+    const inFlight = this.reconnectInFlight.get(serialNumber);
+    if (inFlight) return inFlight;
+    const run = this.reconnectChain
+      .catch(() => undefined)
+      .then(async () => {
+        const connected = await this.client.devices.reconnect(
+          serialNumber,
+          options
+        );
+        this.rememberConnected(connected);
+        if (this.autoReconnectEnabled) this.ensureStatusWatchdog(connected);
+        this.emit('connectionStateChanged', connected.id, 'connected');
+        this.emit('deviceConnected', connected);
+        return connected;
+      });
+    this.reconnectChain = run.catch(() => undefined);
+    this.reconnectInFlight.set(serialNumber, run);
+    void run.finally(() => {
+      if (this.reconnectInFlight.get(serialNumber) === run) {
+        this.reconnectInFlight.delete(serialNumber);
+      }
+    }).catch(() => undefined);
+    return run;
   }
 
   async disconnect(device: ConnectedDevice): Promise<void> {
     this.assertAlive();
+    this.userDisconnected = true;
+    this.stopAutoReconnectLoop();
     this.emit('connectionStateChanged', device.id, 'disconnecting');
     await this.removeOwned(this.statusSubscriptions, device.id);
+    this.statusCallbacks.delete(device.id);
     await this.removeOwned(this.wifiStatusSubscriptions, device.id);
     await this.removeOwned(this.logSubscriptions, device.id);
     await this.removeOwned(this.recordingStateSubscriptions, device.id);
@@ -213,23 +259,23 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
 
   async deliverCert(
     device: ConnectedDevice,
-    certificatePem: string,
-    privateKeyPem: string
+    certPem: string,
+    privkeyPem: string
   ): Promise<void> {
     this.requireConnected(device.id);
     await this.client.controls.deliverCertificate(
       device,
-      certificatePem,
-      privateKeyPem
+      certPem,
+      privkeyPem
     );
   }
 
   async deliverBackendPubkey(
     device: ConnectedDevice,
-    publicKey: Uint8Array
+    pubkey: Uint8Array
   ): Promise<void> {
     this.requireConnected(device.id);
-    await this.client.controls.deliverBackendPublicKey(device, publicKey);
+    await this.client.controls.deliverBackendPublicKey(device, pubkey);
   }
 
   async writeGrant(device: ConnectedDevice, grantBlob: string): Promise<void> {
@@ -279,16 +325,78 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   async deprovision(
     device: ConnectedDevice,
     grantBlob: string
-  ): Promise<BotaDeprovisionResult> {
+  ): Promise<{ success: boolean; error?: string }> {
     this.requireConnected(device.id);
     return this.client.provisioning.deprovision(device, grantBlob);
+  }
+
+  async factoryReset(device: ConnectedDevice): Promise<void> {
+    this.requireConnected(device.id);
+    throw ProvisioningError.invalidToken(device.id);
+  }
+
+  async bleFactoryReset(
+    device: ConnectedDevice,
+    grantBlob: string,
+    persistResult: BleFactoryResetResultPersister
+  ): Promise<BleFactoryResetResult> {
+    this.requireConnected(device.id);
+    let persisted: Extract<BleFactoryResetResult, { success: true }> | undefined;
+    try {
+      await this.client.factoryReset.factoryReset(
+        device,
+        {
+          commandId: nextCompatibilityResetCommandId(),
+          bindingGeneration: 0,
+        },
+        async () => grantBlob,
+        async (result) => {
+          await persistResult(result);
+          persisted = result;
+        }
+      );
+    } catch (error) {
+      const rejected = factoryResetRejection(error);
+      if (rejected) return rejected;
+      throw error;
+    }
+    if (!persisted) {
+      throw new Error('Factory reset completed without a persisted result');
+    }
+    return persisted;
+  }
+
+  async resumeBleFactoryReset(
+    device: ConnectedDevice,
+    persistResult: BleFactoryResetResultPersister
+  ): Promise<BleFactoryResetResult> {
+    this.requireConnected(device.id);
+    let persisted: Extract<BleFactoryResetResult, { success: true }> | undefined;
+    try {
+      await this.client.factoryReset.resumePendingFactoryReset(
+        device,
+        0,
+        async (result) => {
+          await persistResult(result);
+          persisted = result;
+        }
+      );
+    } catch (error) {
+      const rejected = factoryResetRejection(error);
+      if (rejected) return rejected;
+      throw error;
+    }
+    if (!persisted) {
+      throw new Error('Factory reset resume completed without a persisted result');
+    }
+    return persisted;
   }
 
   async requestStartRecording(
     device: ConnectedDevice,
     grantOrFetcher: string | RecordingGrantFetcher,
     _options?: StartRecordingOptions
-  ): Promise<BotaRecordingControlResult> {
+  ): Promise<{ success: boolean; error?: string }> {
     this.requireConnected(device.id);
     if (typeof grantOrFetcher === 'string') {
       return this.runRecordingControl(device, grantOrFetcher, 'start');
@@ -301,7 +409,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     device: ConnectedDevice,
     grantOrFetcher: string | RecordingGrantFetcher,
     _options?: StopRecordingOptions
-  ): Promise<BotaRecordingControlResult> {
+  ): Promise<{ success: boolean; error?: string }> {
     this.requireConnected(device.id);
     if (typeof grantOrFetcher === 'string') {
       return this.runRecordingControl(device, grantOrFetcher, 'stop');
@@ -345,16 +453,19 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     callback: (status: DeviceStatus) => void
   ): () => void {
     this.requireConnected(device.id);
-    const promise = this.replaceOwned(
-      this.statusSubscriptions,
-      device.id,
-      this.client.devices.subscribeToStatus((status) => {
-        callback(status);
-        this.emit('deviceStatusUpdated', device.id, status);
-      })
-    );
+    const callbacks = this.statusCallbacks.get(device.id) ?? new Set();
+    callbacks.add(callback);
+    this.statusCallbacks.set(device.id, callbacks);
+    this.ensureStatusWatchdog(device);
     return idempotentRemoval(() => {
-      void this.removeExpected(this.statusSubscriptions, device.id, promise);
+      callbacks.delete(callback);
+      if (callbacks.size === 0) {
+        this.statusCallbacks.delete(device.id);
+        if (!this.autoReconnectEnabled) {
+          void this.removeOwned(this.statusSubscriptions, device.id)
+            .catch(() => undefined);
+        }
+      }
     });
   }
 
@@ -447,7 +558,10 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     return this.cache.get(serialNumber)?.wifiStatus ?? null;
   }
 
-  updateCachedDeviceState(serialNumber: string, patch: DeviceStatePatch): void {
+  updateCachedDeviceState(
+    serialNumber: string,
+    patch: { wifiStatus?: Partial<WiFiStatusInfo> | null }
+  ): void {
     const previous = this.cache.get(serialNumber);
     const wifiStatus = mergeWiFiStatus(previous?.wifiStatus, patch.wifiStatus);
     const state: CachedDeviceState = {
@@ -466,7 +580,41 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     this.cache.clear();
   }
 
-  onCachedDeviceStateChanged(listener: CacheListener): Subscription {
+  enableAutoReconnect(serialNumber: string): void {
+    this.assertAlive();
+    this.autoReconnectSerial = serialNumber;
+    this.autoReconnectEnabled = true;
+    this.userDisconnected = false;
+    const connected = this.findConnectedBySerial(serialNumber);
+    if (connected) {
+      this.ensureStatusWatchdog(connected);
+    } else {
+      this.startAutoReconnectLoop();
+    }
+  }
+
+  disableAutoReconnect(): void {
+    const serialNumber = this.autoReconnectSerial;
+    this.autoReconnectEnabled = false;
+    this.autoReconnectSerial = null;
+    this.userDisconnected = false;
+    this.stopAutoReconnectLoop();
+    const connected = serialNumber
+      ? this.findConnectedBySerial(serialNumber)
+      : null;
+    if (connected && !this.statusCallbacks.has(connected.id)) {
+      void this.removeOwned(this.statusSubscriptions, connected.id)
+        .catch(() => undefined);
+    }
+  }
+
+  onCachedDeviceStateChanged(
+    listener: (
+      serialNumber: string,
+      patch: { wifiStatus?: Partial<WiFiStatusInfo> | null },
+      state: CachedDeviceState
+    ) => void
+  ): { remove: () => void } {
     this.cacheListeners.add(listener);
     return { remove: () => this.cacheListeners.delete(listener) };
   }
@@ -474,6 +622,8 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.disconnectionSubscription.remove();
+    this.disableAutoReconnect();
     this.stopScan();
     for (const [deviceId] of this.statusSubscriptions) {
       void this.removeOwned(this.statusSubscriptions, deviceId);
@@ -490,6 +640,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     this.connectedDevices.clear();
     this.recordingStateCache.clear();
     this.recordingStatePending.clear();
+    this.statusCallbacks.clear();
     this.cache.clear();
     this.cacheListeners.clear();
     this.removeAllListeners();
@@ -498,6 +649,86 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   private rememberConnected(device: ConnectedDevice): void {
     this.connectedDevices.set(device.id, device);
     this.knownBleIds.set(device.serialNumber, device.id);
+  }
+
+  private ensureStatusWatchdog(device: ConnectedDevice): void {
+    if (this.statusSubscriptions.has(device.id)) return;
+    const subscription = this.client.devices.subscribeToStatus((status) => {
+      for (const callback of this.statusCallbacks.get(device.id) ?? []) {
+        callback(status);
+      }
+      this.emit('deviceStatusUpdated', device.id, status);
+    });
+    this.statusSubscriptions.set(device.id, subscription);
+    void subscription.catch(() => {
+      if (this.statusSubscriptions.get(device.id) === subscription) {
+        this.statusSubscriptions.delete(device.id);
+      }
+    });
+  }
+
+  private handleNativeDisconnection(error?: Error): void {
+    if (this.destroyed || this.userDisconnected) return;
+    for (const device of this.connectedDevices.values()) {
+      this.connectedDevices.delete(device.id);
+      this.recordingStateCache.delete(device.id);
+      this.recordingStatePending.delete(device.id);
+      this.statusCallbacks.delete(device.id);
+      void this.removeOwned(this.statusSubscriptions, device.id)
+        .catch(() => undefined);
+      void this.removeOwned(this.wifiStatusSubscriptions, device.id)
+        .catch(() => undefined);
+      void this.removeOwned(this.logSubscriptions, device.id)
+        .catch(() => undefined);
+      void this.removeOwned(this.recordingStateSubscriptions, device.id)
+        .catch(() => undefined);
+      this.emit('connectionStateChanged', device.id, 'disconnected');
+      this.emit('deviceDisconnected', device.id, error);
+      if (
+        this.autoReconnectEnabled &&
+        this.autoReconnectSerial === device.serialNumber
+      ) {
+        this.startAutoReconnectLoop();
+      }
+    }
+  }
+
+  private startAutoReconnectLoop(): void {
+    if (this.autoReconnectTimer || !this.autoReconnectSerial) return;
+    const attempt = async (): Promise<void> => {
+      const serialNumber = this.autoReconnectSerial;
+      if (
+        !this.autoReconnectEnabled ||
+        !serialNumber ||
+        this.userDisconnected ||
+        this.destroyed
+      ) {
+        this.stopAutoReconnectLoop();
+        return;
+      }
+      if (this.findConnectedBySerial(serialNumber)) {
+        this.stopAutoReconnectLoop();
+        return;
+      }
+      if (this.autoReconnectAttempting) return;
+      this.autoReconnectAttempting = true;
+      try {
+        await this.reconnect(serialNumber, { scanTimeout: 5_000 });
+        this.stopAutoReconnectLoop();
+      } catch {
+        // The timer owns retries; callers still receive errors from reconnect().
+      } finally {
+        this.autoReconnectAttempting = false;
+      }
+    };
+    void attempt();
+    this.autoReconnectTimer = setInterval(() => void attempt(), 3_000);
+  }
+
+  private stopAutoReconnectLoop(): void {
+    if (!this.autoReconnectTimer) return;
+    clearInterval(this.autoReconnectTimer);
+    this.autoReconnectTimer = null;
   }
 
   private findConnectedBySerial(serialNumber: string): ConnectedDevice | null {
@@ -532,7 +763,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     device: ConnectedDevice,
     grantBlob: string,
     command: 'start' | 'stop'
-  ): Promise<BotaRecordingControlResult> {
+  ): Promise<{ success: boolean; error?: string }> {
     const operation = command === 'start'
       ? this.client.controls.requestStartRecording(device, grantBlob)
       : this.client.controls.requestStopRecording(device, grantBlob);
@@ -673,5 +904,24 @@ const provisioningError = (
     case 3: return ProvisioningError.chunkError(deviceId);
     case 4: return ProvisioningError.alreadyPaired(deviceId);
     default: return asError(error);
+  }
+};
+
+let compatibilityResetSequence = 0;
+
+const nextCompatibilityResetCommandId = (): string => {
+  compatibilityResetSequence += 1;
+  return `rn-reset-${Date.now().toString(36)}-${compatibilityResetSequence.toString(36)}`;
+};
+
+const factoryResetRejection = (
+  error: unknown
+): Extract<BleFactoryResetResult, { success: false }> | undefined => {
+  switch (nativeProtocolStatus(error)) {
+    case 1: return { success: false, error: 'invalid_token' };
+    case 2: return { success: false, error: 'storage_error' };
+    case 3: return { success: false, error: 'chunk_error' };
+    case 4: return { success: false, error: 'already_paired' };
+    default: return undefined;
   }
 };

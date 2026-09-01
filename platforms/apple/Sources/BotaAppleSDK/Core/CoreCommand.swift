@@ -266,6 +266,21 @@ struct CoreCommand: Equatable, Sendable {
             ]
         )
     }
+
+    static func resumeUnjournaledFactoryReset(
+        serialNumber: String,
+        commandID: String,
+        cancellationID: UUID = UUID()
+    ) -> Self {
+        Self(
+            kind: UInt32(BOTA_DEVICE_SDK_V1_COMMAND_RESUME_FACTORY_RESET),
+            cancellationID: cancellationID,
+            fields: [
+                .text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_SERIAL_NUMBER), value: serialNumber),
+                .text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_COMMAND_ID), value: commandID),
+            ]
+        )
+    }
 }
 
 extension CoreCommand {

@@ -231,6 +231,39 @@ final class BotaDeviceSDKAppleSecurityTests: XCTestCase {
         XCTAssertEqual(completedSnapshot.factoryResetPersistenceCompletions, 1)
     }
 
+    func testFactoryResetResumeFallsBackToFirmwareReplayAfterReinstall() async throws {
+        let connected = ConnectedDevice(
+            id: "selected",
+            serialNumber: "EVFXXW67KP",
+            deviceType: .botaPin,
+            firmwareVersion: "1.0.11",
+            isProvisioned: true,
+            connectionState: .connected,
+            mtu: 247
+        )
+        let client = TestAppleSecurityClient(hasPendingFactoryReset: false)
+        let security = BotaDeviceSDKAppleSecurity(client: client)
+        let persistenceRequests = FactoryResetPersistenceRequestCapture()
+
+        let operation = Task {
+            try await security.resumePendingFactoryReset(
+                connected,
+                currentBindingGeneration: 0,
+                onPersistenceRequest: { request in
+                    Task { await persistenceRequests.append(request) }
+                }
+            )
+        }
+        let request = await persistenceRequests.next()
+        XCTAssertEqual(request.localRecordingsDeleted, 7)
+        try await security.resolveFactoryResetResultPersistence(requestID: request.requestID)
+
+        let completion = try await operation.value
+        XCTAssertEqual(completion?.bindingGeneration, 0)
+        let snapshot = await client.snapshot()
+        XCTAssertEqual(snapshot.unjournaledResumeBindingGenerations, [0])
+    }
+
     func testConnectionSettingsDelegateToAppleFacade() async throws {
         let connected = ConnectedDevice(
             id: "selected",
@@ -438,6 +471,7 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
         let factoryResetCancelled: Bool
         let factoryResetPersistenceCompletions: Int
         let resumedBindingGenerations: [UInt64]
+        let unjournaledResumeBindingGenerations: [UInt64]
         let connectionSettings: DeviceConnectionSettings?
         let environment: DeviceAPIEnvironment?
         let certificate: String?
@@ -457,6 +491,7 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
     private var factoryResetCancelled = false
     private var factoryResetPersistenceCompletions = 0
     private var resumedBindingGenerations: [UInt64] = []
+    private var unjournaledResumeBindingGenerations: [UInt64] = []
     private var connectionSettings: DeviceConnectionSettings?
     private var environment: DeviceAPIEnvironment?
     private var certificate: String?
@@ -470,12 +505,14 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
     private var recordingStateTerminationCount = 0
     private var recordingStateTerminationWaiter: CheckedContinuation<Void, Never>?
     private let connectionSettingsReadResult: DeviceConnectionSettings
+    private let hasPendingFactoryReset: Bool
 
     init(connectionSettingsReadResult: DeviceConnectionSettings = .init(
         enabledConnections: .init(wifi: true, cellular: false),
         uploadNetworkPreference: [.wifi, .ble]
-    )) {
+    ), hasPendingFactoryReset: Bool = true) {
         self.connectionSettingsReadResult = connectionSettingsReadResult
+        self.hasPendingFactoryReset = hasPendingFactoryReset
     }
 
     func provision(
@@ -602,10 +639,22 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
         persistResult: FactoryResetResultPersister?
     ) async throws -> FactoryResetCompletion? {
         resumedBindingGenerations.append(currentBindingGeneration)
+        guard hasPendingFactoryReset else { return nil }
         return .init(
             commandID: "reset-command-1",
             bindingGeneration: currentBindingGeneration
         )
+    }
+
+    func resumeUnjournaledFactoryReset(
+        _ device: ConnectedDevice,
+        commandID: String,
+        bindingGeneration: UInt64,
+        persistResult: @escaping FactoryResetResultPersister
+    ) async throws -> FactoryResetCompletion {
+        unjournaledResumeBindingGenerations.append(bindingGeneration)
+        try await persistResult(.init(localRecordingsDeleted: 7))
+        return .init(commandID: commandID, bindingGeneration: bindingGeneration)
     }
 
     func cancelFactoryReset() async throws {
@@ -621,6 +670,7 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
             factoryResetCancelled: factoryResetCancelled,
             factoryResetPersistenceCompletions: factoryResetPersistenceCompletions,
             resumedBindingGenerations: resumedBindingGenerations,
+            unjournaledResumeBindingGenerations: unjournaledResumeBindingGenerations,
             connectionSettings: connectionSettings,
             environment: environment,
             certificate: certificate,
