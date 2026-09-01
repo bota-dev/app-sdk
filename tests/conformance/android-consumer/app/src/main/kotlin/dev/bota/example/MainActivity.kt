@@ -10,6 +10,7 @@ import dev.bota.sdk.model.DeviceConnectionSettings
 import dev.bota.sdk.model.DeviceRecording
 import dev.bota.sdk.model.DiscoveredDevice
 import dev.bota.sdk.model.ProvisioningMaterial
+import java.util.Base64
 
 public object AndroidConsumer {
     public suspend fun configureAndDestroy(context: Context) {
@@ -39,6 +40,11 @@ public object AndroidConsumer {
         }
         client.provisioning.writeConnectionSettings(settings, connected)
         client.provisioning.deprovision(connected)
+        val recordingGrant = Base64.getEncoder().encodeToString(byteArrayOf(1))
+        client.controls.requestStartRecording(connected, recordingGrant)
+        client.controls.requestStopRecording(connected, recordingGrant)
+        client.controls.readRecordingState(connected)
+        client.controls.recordingStateUpdates(connected)
         client.factoryReset.factoryReset(connected, "command", 1u) { byteArrayOf(1) }
         client.factoryReset.resumePendingFactoryReset(connected, 1u)
         client.recordings.listRecordings(connected)

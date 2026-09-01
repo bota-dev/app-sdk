@@ -29,6 +29,8 @@ import dev.bota.sdk.model.DeviceType
 import dev.bota.sdk.model.ProvisioningMaterial
 import dev.bota.sdk.model.ProvisioningMaterialRequest
 import dev.bota.sdk.model.DeviceRecording
+import dev.bota.sdk.model.RecordingControlResult
+import dev.bota.sdk.model.RecordingState
 import dev.bota.sdk.model.TransferCommand
 import dev.bota.sdk.model.WiFiConfigResult
 import dev.bota.sdk.model.WiFiScanUpdate
@@ -65,6 +67,16 @@ internal class DeviceRuntime(
         error("direct subscription unavailable")
     },
     val directUnsubscribe: suspend (String, UUID, UUID) -> Unit = { _, _, _ -> },
+    val delay: suspend (Long) -> Unit = { milliseconds -> kotlinx.coroutines.delay(milliseconds) },
+    val parseRecordingState: (ByteArray) -> RecordingState = {
+        error("recording-state decoder unavailable")
+    },
+    val parseRecordingControlResult: (ByteArray) -> RecordingControlResult = {
+        error("recording-control-result decoder unavailable")
+    },
+    val createRecordingControlCommand: (dev.bota.sdk.RecordingControlCommand) -> ByteArray = {
+        error("recording-control encoder unavailable")
+    },
     val parseWiFiConfigResult: (ByteArray) -> WiFiConfigResult = {
         error("WiFi config-result decoder unavailable")
     },
@@ -200,6 +212,9 @@ internal class DeviceRuntime(
                     directUnsubscribe = { peripheralId, service, characteristic ->
                         driver.unsubscribe(peripheralId, service, characteristic)
                     },
+                    parseRecordingState = mapper::parseRecordingState,
+                    parseRecordingControlResult = mapper::parseRecordingControlResult,
+                    createRecordingControlCommand = mapper::createRecordingControlCommand,
                     parseWiFiConfigResult = mapper::parseWiFiConfigResult,
                     parseWiFiStatusInfo = mapper::parseWiFiStatusInfo,
                     parseWiFiScanResult = mapper::parseWiFiScanResult,

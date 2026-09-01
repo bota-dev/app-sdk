@@ -152,7 +152,7 @@ verified peripheral, and closes observers. Public secure-lifecycle managers now
 resolve provisioning and command-bound reset material through application
 callbacks, normalize Bota Note connection settings, keep remove-only
 deprovision separate from destructive reset, and resume only an exact durable
-reset result for the current binding generation. The Apple control facade also
+reset result for the current binding generation. The Apple and Android control facades also
 writes command-bound recording grants, subscribes before start/stop opcodes,
 preserves the frozen stop pacing, and exposes shared-decoder state reads and
 updates. Public recording, upload

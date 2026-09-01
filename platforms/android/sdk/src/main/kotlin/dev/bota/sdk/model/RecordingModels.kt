@@ -18,6 +18,32 @@ public data class DeviceRecording(
     public val isEncrypted: Boolean,
 )
 
+public enum class RecordingInitiator {
+    Local,
+    Remote,
+}
+
+public data class RecordingState(
+    public val active: Boolean,
+    public val recordingId: String? = null,
+    public val initiatedBy: RecordingInitiator = RecordingInitiator.Local,
+)
+
+public enum class RecordingControlError(public val wireValue: String) {
+    AlreadyRecording("already_recording"),
+    NotRecording("not_recording"),
+    InvalidGrant("invalid_grant"),
+    GrantExpired("grant_expired"),
+    InvalidState("invalid_state"),
+    InvalidResponse("invalid_response"),
+    UnknownError("unknown_error"),
+}
+
+public data class RecordingControlResult(
+    public val success: Boolean,
+    public val error: RecordingControlError? = null,
+)
+
 public enum class TransferPacketType {
     Data,
     Eof,

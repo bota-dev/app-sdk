@@ -70,6 +70,11 @@ saved command's receipt workflow. Material callbacks are memory-only, and all
 secure operations share the facade-wide operation owner with discovery and
 connection workflows.
 
+`DeviceControlManager` writes application-provided recording grants, subscribes
+before shared-core start/stop opcodes, preserves the two 50 ms stop-command
+pacing gaps, and exposes shared-decoder recording-state reads and `Flow`
+updates. Temporary and long-lived subscriptions are released exactly once.
+
 ## Recording, OTA, and logs
 
 `RecordingManager` lists recordings through subscribe-before-write BLE access,

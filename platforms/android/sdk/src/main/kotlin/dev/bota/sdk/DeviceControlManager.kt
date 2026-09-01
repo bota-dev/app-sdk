@@ -4,18 +4,62 @@ import dev.bota.sdk.internal.DeviceRuntime
 import dev.bota.sdk.internal.bluetooth.BotaBluetoothUUIDs
 import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.model.PairingState
+import dev.bota.sdk.model.RecordingControlResult
+import dev.bota.sdk.model.RecordingState
 import java.util.Base64
 import java.util.TimeZone
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 public enum class DeviceApiEnvironment { Development, Gamma, Production }
 
+internal enum class RecordingControlCommand { Start, Stop }
+
 public class DeviceControlManager internal constructor() {
+    private data class RecordingStateObserver(
+        val runtime: DeviceRuntime,
+        val deviceId: String,
+        val channel: SendChannel<RecordingState>,
+        val task: Job,
+    )
+
     private val lock = Any()
     private var runtime: DeviceRuntime? = null
+    private var callbackScope: CoroutineScope? = null
+    private val recordingStateObservers = mutableMapOf<UUID, RecordingStateObserver>()
 
-    internal fun attach(runtime: DeviceRuntime) { synchronized(lock) { this.runtime = runtime } }
-    internal fun detach() { synchronized(lock) { runtime = null } }
+    internal fun attach(runtime: DeviceRuntime) {
+        synchronized(lock) {
+            this.runtime = runtime
+            callbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        }
+    }
+
+    internal suspend fun detach() {
+        stopAllRecordingStateObservers()
+        synchronized(lock) {
+            callbackScope?.cancel()
+            callbackScope = null
+            runtime = null
+        }
+    }
 
     public suspend fun isProvisioned(device: ConnectedDevice): Boolean =
         readPairingState(device) == PairingState.Paired
@@ -90,10 +134,74 @@ public class DeviceControlManager internal constructor() {
     }
 
     public suspend fun writeGrant(grantBlob: String, device: ConnectedDevice) {
-        val grant = runCatching { Base64.getDecoder().decode(grantBlob) }
-            .getOrElse { throw invalidControl("grant blob is not valid base64 data") }
-        if (grant.isEmpty()) throw invalidControl("grant blob is not valid base64 data")
+        val grant = grantData(grantBlob)
         write(grant, BotaBluetoothUUIDs.ControlService, BotaBluetoothUUIDs.DeviceCommand, device)
+    }
+
+    public suspend fun requestStartRecording(
+        device: ConnectedDevice,
+        grantBlob: String,
+    ): RecordingControlResult = requestRecordingControl(RecordingControlCommand.Start, device, grantBlob)
+
+    public suspend fun requestStopRecording(
+        device: ConnectedDevice,
+        grantBlob: String,
+    ): RecordingControlResult = requestRecordingControl(RecordingControlCommand.Stop, device, grantBlob)
+
+    public suspend fun readRecordingState(device: ConnectedDevice): RecordingState =
+        performOperation(device, BotaOperation.ReadStatus) { configured ->
+            configured.parseRecordingState(
+                configured.directRead(
+                    device.id,
+                    BotaBluetoothUUIDs.ControlService,
+                    BotaBluetoothUUIDs.RecordingStatus,
+                ),
+            )
+        }
+
+    public fun recordingStateUpdates(device: ConnectedDevice): Flow<RecordingState> {
+        val configured = configuredRuntime()
+        configured.connection.require(device)
+        configured.authorize(BotaOperation.ReadStatus)
+        val cleanupScope = synchronized(lock) { callbackScope } ?: unavailable()
+        return callbackFlow {
+            val source = configured.directSubscribe(
+                device.id,
+                BotaBluetoothUUIDs.ControlService,
+                BotaBluetoothUUIDs.RecordingStatus,
+            )
+            val id = UUID.randomUUID()
+            val collector = launch(start = CoroutineStart.LAZY) {
+                try {
+                    source.collect { send(configured.parseRecordingState(it)) }
+                    close()
+                } catch (error: CancellationException) {
+                    close()
+                    throw error
+                } catch (error: Throwable) {
+                    close(error)
+                } finally {
+                    withContext(NonCancellable) {
+                        stopRecordingStateObserver(id, cancelTask = false, closeChannel = false)
+                    }
+                }
+            }
+            synchronized(lock) {
+                recordingStateObservers[id] = RecordingStateObserver(
+                    configured,
+                    device.id,
+                    channel,
+                    collector,
+                )
+            }
+            collector.start()
+            awaitClose {
+                collector.cancel()
+                cleanupScope.launch {
+                    stopRecordingStateObserver(id, cancelTask = true, closeChannel = true)
+                }
+            }
+        }
     }
 
     public suspend fun syncTime(
@@ -113,6 +221,33 @@ public class DeviceControlManager internal constructor() {
                 BotaBluetoothUUIDs.TimeSync,
                 configured.createTimeSyncData(epochMilliseconds.toULong(), offset.toShort()),
             )
+        }
+    }
+
+    private suspend fun requestRecordingControl(
+        command: RecordingControlCommand,
+        device: ConnectedDevice,
+        grantBlob: String,
+    ): RecordingControlResult {
+        val grant = grantData(grantBlob)
+        return performOperation(device, BotaOperation.Encode) { configured ->
+            configured.directWrite(
+                device.id,
+                BotaBluetoothUUIDs.ControlService,
+                BotaBluetoothUUIDs.DeviceCommand,
+                grant,
+            )
+            if (command == RecordingControlCommand.Stop) configured.delay(50)
+            withRecordingSubscription(configured, device.id) { notifications ->
+                if (command == RecordingControlCommand.Stop) configured.delay(50)
+                configured.directWrite(
+                    device.id,
+                    BotaBluetoothUUIDs.ControlService,
+                    BotaBluetoothUUIDs.RecordingControl,
+                    configured.createRecordingControlCommand(command),
+                )
+                awaitRecordingControlResult(notifications, configured)
+            }
         }
     }
 
@@ -144,6 +279,90 @@ public class DeviceControlManager internal constructor() {
         }
     }
 
+    private suspend fun <T> withRecordingSubscription(
+        configured: DeviceRuntime,
+        deviceId: String,
+        body: suspend (Flow<ByteArray>) -> T,
+    ): T {
+        val source = configured.directSubscribe(
+            deviceId,
+            BotaBluetoothUUIDs.ControlService,
+            BotaBluetoothUUIDs.RecordingStatus,
+        )
+        return try {
+            body(source)
+        } finally {
+            withContext(NonCancellable) {
+                runCatching {
+                    configured.directUnsubscribe(
+                        deviceId,
+                        BotaBluetoothUUIDs.ControlService,
+                        BotaBluetoothUUIDs.RecordingStatus,
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun awaitRecordingControlResult(
+        notifications: Flow<ByteArray>,
+        configured: DeviceRuntime,
+    ): RecordingControlResult = try {
+        withTimeout(recordingControlTimeoutMilliseconds) {
+            configured.parseRecordingControlResult(notifications.first())
+        }
+    } catch (_: TimeoutCancellationException) {
+        throw BotaSDKError.Core(
+            BotaErrorCode.Timeout,
+            BotaOperation.Encode,
+            retryable = true,
+            protocolStatus = null,
+            detail = "Recording control timed out",
+        )
+    } catch (_: NoSuchElementException) {
+        throw BotaSDKError.Core(
+            BotaErrorCode.UnexpectedEvent,
+            BotaOperation.Encode,
+            retryable = true,
+            protocolStatus = null,
+            detail = "Recording control ended without a result",
+        )
+    }
+
+    private suspend fun stopRecordingStateObserver(
+        id: UUID,
+        cancelTask: Boolean,
+        closeChannel: Boolean,
+    ) {
+        val observer = synchronized(lock) { recordingStateObservers.remove(id) } ?: return
+        if (cancelTask) observer.task.cancel()
+        if (closeChannel) observer.channel.close()
+        runCatching {
+            observer.runtime.directUnsubscribe(
+                observer.deviceId,
+                BotaBluetoothUUIDs.ControlService,
+                BotaBluetoothUUIDs.RecordingStatus,
+            )
+        }
+    }
+
+    private suspend fun stopAllRecordingStateObservers() {
+        val observers = synchronized(lock) {
+            recordingStateObservers.values.toList().also { recordingStateObservers.clear() }
+        }
+        observers.forEach { observer ->
+            observer.task.cancel()
+            observer.channel.close()
+            runCatching {
+                observer.runtime.directUnsubscribe(
+                    observer.deviceId,
+                    BotaBluetoothUUIDs.ControlService,
+                    BotaBluetoothUUIDs.RecordingStatus,
+                )
+            }
+        }
+    }
+
     private fun configuredRuntime(): DeviceRuntime = synchronized(lock) { runtime } ?: unavailable()
 
     private fun pairingState(value: UByte): PairingState = when (value.toInt()) {
@@ -159,6 +378,13 @@ public class DeviceControlManager internal constructor() {
         DeviceApiEnvironment.Production -> 1
         DeviceApiEnvironment.Gamma -> 2
     }
+
+    private fun grantData(value: String): ByteArray {
+        val data = runCatching { Base64.getDecoder().decode(value) }
+            .getOrElse { throw invalidControl("grant blob is not valid base64 data") }
+        if (data.isEmpty()) throw invalidControl("grant blob is not valid base64 data")
+        return data
+    }
 }
 
 private fun ByteArray.hexString(): String = joinToString("") { "%02x".format(it.toInt() and 0xff) }
@@ -170,3 +396,5 @@ private fun invalidControl(detail: String): BotaSDKError.Core = BotaSDKError.Cor
     protocolStatus = null,
     detail = detail,
 )
+
+private const val recordingControlTimeoutMilliseconds: Long = 30_000

@@ -21,6 +21,10 @@ import dev.bota.sdk.model.FirmwareStatus
 import dev.bota.sdk.model.LteStatus
 import dev.bota.sdk.model.ModemInfo
 import dev.bota.sdk.model.ParsedConnectionSettings
+import dev.bota.sdk.model.RecordingControlError
+import dev.bota.sdk.model.RecordingControlResult
+import dev.bota.sdk.model.RecordingInitiator
+import dev.bota.sdk.model.RecordingState
 import dev.bota.sdk.model.TransferCommand
 import dev.bota.sdk.model.TransferPacket
 import dev.bota.sdk.model.TransferPacketType
@@ -118,6 +122,28 @@ internal class CoreModelMapper(
                 isEncrypted = encrypted[index],
             )
         }
+    }
+
+    fun parseRecordingState(data: ByteArray): RecordingState {
+        val fields = decode(Protocol.Kind.DecodeRecordingState, data)
+        return RecordingState(
+            active = fields.requiredBoolean(Protocol.Field.RecordingActive),
+            recordingId = fields.text(Protocol.Field.RecordingUuid),
+            initiatedBy = if (fields.requiredBoolean(Protocol.Field.RecordingInitiatedRemotely)) {
+                RecordingInitiator.Remote
+            } else {
+                RecordingInitiator.Local
+            },
+        )
+    }
+
+    fun parseRecordingControlResult(data: ByteArray): RecordingControlResult {
+        val fields = decode(Protocol.Kind.DecodeRecordingControlResult, data)
+        val success = fields.requiredBoolean(Protocol.Field.RecordingSuccess)
+        return RecordingControlResult(
+            success = success,
+            error = if (success) null else recordingControlError(fields.text(Protocol.Field.ErrorDetail)),
+        )
     }
 
     fun parseTransferPacket(data: ByteArray): TransferPacket {
@@ -291,6 +317,16 @@ internal class CoreModelMapper(
         }
         return encode(Protocol.Kind.EncodeTransferCommand, fields)
     }
+
+    fun createRecordingControlCommand(command: dev.bota.sdk.RecordingControlCommand): ByteArray = encode(
+        Protocol.Kind.EncodeRecordingControlCommand,
+        listOf(
+            Field.unsigned(
+                Protocol.Field.Command,
+                if (command == dev.bota.sdk.RecordingControlCommand.Start) 1u else 2u,
+            ),
+        ),
+    )
 
     fun encodeDeviceCommand(command: UByte): ByteArray = encode(
         Protocol.Kind.EncodeDeviceCommand,
@@ -554,6 +590,9 @@ private fun wifiConnectionStatus(raw: UByte): WiFiConnectionStatus = when (raw.t
     else -> WiFiConnectionStatus.Unknown(raw)
 }
 
+private fun recordingControlError(value: String?): RecordingControlError =
+    RecordingControlError.entries.firstOrNull { it.wireValue == value } ?: RecordingControlError.UnknownError
+
 private fun audioCodec(raw: UByte): WireValue<AudioCodec> = when (raw.toInt()) {
     0x00 -> WireValue.Known(AudioCodec.Pcm16k)
     0x01 -> WireValue.Known(AudioCodec.Pcm8k)
@@ -684,6 +723,8 @@ private object Protocol {
         const val DecodeDeviceLogs = 0x050a
         const val DecodeWifiStatus = 0x050b
         const val DecodeWifiScan = 0x050c
+        const val DecodeRecordingState = 0x050d
+        const val DecodeRecordingControlResult = 0x050e
         const val EncodeAck = 0x0510
         const val EncodeTransferCommand = 0x0511
         const val EncodeDeviceCommand = 0x0512
@@ -699,6 +740,7 @@ private object Protocol {
         const val EncodeWifiCredentials = 0x051d
         const val EncodeProvisioningChunks = 0x051c
         const val EncodeTimeSync = 0x051e
+        const val EncodeRecordingControlCommand = 0x051f
     }
 
     object Field {
@@ -774,6 +816,9 @@ private object Protocol {
         const val WifiIsCurrent = 117
         const val WifiIsOpen = 118
         const val WifiPassword = 119
+        const val RecordingActive = 120
+        const val RecordingInitiatedRemotely = 121
+        const val RecordingSuccess = 122
         const val Mtu = 57
         const val Chunk = 113
         const val Offset = 39

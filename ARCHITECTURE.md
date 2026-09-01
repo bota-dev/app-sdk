@@ -567,12 +567,12 @@ backend command ID and binding generation. Restart recovery rejects a stale
 generation before starting the receipt-only reducer. A facade-wide operation
 coordinator prevents direct writes from interleaving with any active workflow.
 
-`DeviceControlManager` owns Apple remote-recording commands. It writes the
+`DeviceControlManager` owns Apple and Android remote-recording commands. It writes the
 application-provided grant, subscribes before the shared-core start or stop
 opcode, preserves the two frozen 50 ms stop-command pacing gaps, and always
 releases the temporary notification lease. Recording-state reads and streams
 also use the shared decoder; client destruction closes every active observer
-exactly once.
+exactly once on both facades.
 
 `RecordingManager`, `OTAManager`, and `DeviceLogManager` expose the remaining
 public Apple workflows as typed `AsyncThrowingStream` values. Recording list

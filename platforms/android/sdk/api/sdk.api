@@ -7,6 +7,7 @@ public final class com/bota/sdk/AudioCodec : java/lang/Enum {
 	public static fun valueOf (Ljava/lang/String;)Lcom/bota/sdk/AudioCodec;
 	public static fun values ()[Lcom/bota/sdk/AudioCodec;
 }
+
 public final class com/bota/sdk/BluetoothState : java/lang/Enum {
 	public static final field POWERED_OFF Lcom/bota/sdk/BluetoothState;
 	public static final field POWERED_ON Lcom/bota/sdk/BluetoothState;
@@ -1000,6 +1001,10 @@ public final class dev/bota/sdk/DeviceControlManager {
 	public final fun readAuthNonce (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun readPairingState (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun readPublicKey (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun readRecordingState (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun recordingStateUpdates (Ldev/bota/sdk/model/ConnectedDevice;)Lkotlinx/coroutines/flow/Flow;
+	public final fun requestStartRecording (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun requestStopRecording (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun setApiEndpoint (Ldev/bota/sdk/DeviceApiEnvironment;Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun syncTime (JLjava/lang/Integer;Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public static synthetic fun syncTime$default (Ldev/bota/sdk/DeviceControlManager;JLjava/lang/Integer;Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
@@ -1709,6 +1714,58 @@ public final class dev/bota/sdk/model/ProvisioningMaterialRequest {
 	public final fun getSerialNumber ()Ljava/lang/String;
 }
 
+public final class dev/bota/sdk/model/RecordingControlError : java/lang/Enum {
+	public static final field AlreadyRecording Ldev/bota/sdk/model/RecordingControlError;
+	public static final field GrantExpired Ldev/bota/sdk/model/RecordingControlError;
+	public static final field InvalidGrant Ldev/bota/sdk/model/RecordingControlError;
+	public static final field InvalidResponse Ldev/bota/sdk/model/RecordingControlError;
+	public static final field InvalidState Ldev/bota/sdk/model/RecordingControlError;
+	public static final field NotRecording Ldev/bota/sdk/model/RecordingControlError;
+	public static final field UnknownError Ldev/bota/sdk/model/RecordingControlError;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWireValue ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/model/RecordingControlError;
+	public static fun values ()[Ldev/bota/sdk/model/RecordingControlError;
+}
+
+public final class dev/bota/sdk/model/RecordingControlResult {
+	public fun <init> (ZLdev/bota/sdk/model/RecordingControlError;)V
+	public synthetic fun <init> (ZLdev/bota/sdk/model/RecordingControlError;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Ldev/bota/sdk/model/RecordingControlError;
+	public final fun copy (ZLdev/bota/sdk/model/RecordingControlError;)Ldev/bota/sdk/model/RecordingControlResult;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/RecordingControlResult;ZLdev/bota/sdk/model/RecordingControlError;ILjava/lang/Object;)Ldev/bota/sdk/model/RecordingControlResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getError ()Ldev/bota/sdk/model/RecordingControlError;
+	public final fun getSuccess ()Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/RecordingInitiator : java/lang/Enum {
+	public static final field Local Ldev/bota/sdk/model/RecordingInitiator;
+	public static final field Remote Ldev/bota/sdk/model/RecordingInitiator;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/model/RecordingInitiator;
+	public static fun values ()[Ldev/bota/sdk/model/RecordingInitiator;
+}
+
+public final class dev/bota/sdk/model/RecordingState {
+	public fun <init> (ZLjava/lang/String;Ldev/bota/sdk/model/RecordingInitiator;)V
+	public synthetic fun <init> (ZLjava/lang/String;Ldev/bota/sdk/model/RecordingInitiator;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Z
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ldev/bota/sdk/model/RecordingInitiator;
+	public final fun copy (ZLjava/lang/String;Ldev/bota/sdk/model/RecordingInitiator;)Ldev/bota/sdk/model/RecordingState;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/RecordingState;ZLjava/lang/String;Ldev/bota/sdk/model/RecordingInitiator;ILjava/lang/Object;)Ldev/bota/sdk/model/RecordingState;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getActive ()Z
+	public final fun getInitiatedBy ()Ldev/bota/sdk/model/RecordingInitiator;
+	public final fun getRecordingId ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class dev/bota/sdk/model/RecordingTransferProgress {
 	public synthetic fun <init> (JJLkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1-s-VKNKU ()J
@@ -1985,3 +2042,4 @@ public final class dev/bota/sdk/model/WireValue$Unknown : dev/bota/sdk/model/Wir
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
+
