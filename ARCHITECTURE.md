@@ -101,9 +101,9 @@ Batch recording transfer accepts both plaintext packets and the encrypted
 streaming-AEAD packet family. The shared reducer writes encrypted sessions in
 the backend relay format directly into the native sink and rejects mixed or
 headerless encrypted streams before upload ownership can advance.
-Firmware update accepts version, size, CRC32, and a presigned URL; native code
-generates the download registration, owns HTTP and BLE bytes, and emits only
-typed phase and byte progress.
+Firmware update accepts version, size, and a presigned URL; native hosts derive
+CRC32 from the downloaded bytes after durable storage, Rust uses that value for
+device verification, and Codegen emits only typed phase and byte progress.
 Device-log framing, sequence recovery, and UTF-8 assembly stay in the Apple and
 Android facades. Codegen carries only complete `message` and `isBacklog`
 values, while the JavaScript subscription preserves the frozen
@@ -116,15 +116,15 @@ firmware payloads never cross the JavaScript bridge. Future workflow methods
 carry identifiers, progress, errors, and native file paths while native hosts
 own high-volume files and transfer buffers.
 
-The JavaScript compatibility layer now restores 78 of 80 frozen exports. This
+The JavaScript compatibility layer now restores 79 of 80 frozen exports. This
 includes every `0.0.65` public type, the runtime error hierarchy,
 `deriveSyncStatus`, `DeviceLogDecoder`, `DeviceManager`, `RecordingManager`, and
-`StreamingSession`; a semantic test compares each declaration with the frozen
+`StreamingSession`, and `OTAManager`; a semantic test compares each declaration with the frozen
 contract, and behavior tests cover every non-inherited manager method. Rust and
 the platform hosts own live-transfer ordering, buffers, upload bytes,
 finalization, and cancellation; Codegen carries only low-volume requests and
-progress. `BotaClient` and `OTAManager` remain withheld until equivalent
-native-backed workflow methods exist.
+progress. Only `BotaClient` remains withheld until its native-backed lifecycle
+composition exists.
 The exported `DeviceManager` compatibility owner preserves the already
 native-backed scan, selected connection, status, settings, logs, WiFi, and
 last-known WiFi cache behavior, including idempotent legacy removal functions.

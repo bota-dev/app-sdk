@@ -17,6 +17,7 @@ use bota_device_sdk_core::{
 
 const CANCELLATION: CancellationId = CancellationId::from_bytes([7; 16]);
 const DOWNLOAD_ID: u64 = 41;
+const DOWNLOADED_CRC32: u32 = 0x89ab_cdef;
 
 fn capabilities() -> CapabilitySet {
     CapabilitySet::from([
@@ -112,6 +113,7 @@ fn complete_download(
             download_request,
             HostEventKind::Network(NetworkEvent::DownloadCompleted {
                 download_id: DOWNLOAD_ID,
+                crc32: DOWNLOADED_CRC32,
             }),
         ))
         .unwrap();
@@ -224,6 +226,13 @@ fn reach_verify(
                     && payload.first() == Some(&FIRMWARE_UPLOAD_VERIFY)
         )
     });
+    let mut expected_verify = vec![FIRMWARE_UPLOAD_VERIFY];
+    expected_verify.extend_from_slice(&DOWNLOADED_CRC32.to_le_bytes());
+    assert!(verifying.iter().any(|request| matches!(
+        &request.effect,
+        Effect::Ble(BleEffect::Write { characteristic_uuid, payload, .. })
+            if characteristic_uuid == CHAR_TRANSFER_CONTROL && payload == &expected_verify
+    )));
     (subscription_request, verify_request, verifying)
 }
 

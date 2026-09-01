@@ -849,6 +849,13 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
                 }];
 }
 
+- (void)cancelFirmwareUpdate:(RCTPromiseResolveBlock)resolve
+                      reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      cancelFirmwareUpdateWithCompletion:^{ resolve(nil); }];
+}
+
 - (void)startDeviceLogs:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
                 resolve:(RCTPromiseResolveBlock)resolve
                  reject:(RCTPromiseRejectBlock)reject

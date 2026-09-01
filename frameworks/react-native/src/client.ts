@@ -233,6 +233,7 @@ export type BotaDeviceSDKOTAClient = {
     image: BotaFirmwareImage,
     onProgress?: (progress: BotaFirmwareUpdateProgress) => void
   ): Promise<void>;
+  cancelFirmwareUpdate(): Promise<void>;
 };
 
 export type BotaDeviceSDKLogClient = {
@@ -1075,6 +1076,10 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
       } finally {
         subscription.remove();
       }
+    },
+
+    async cancelFirmwareUpdate() {
+      await requireNativeModule().cancelFirmwareUpdate();
     },
   };
 

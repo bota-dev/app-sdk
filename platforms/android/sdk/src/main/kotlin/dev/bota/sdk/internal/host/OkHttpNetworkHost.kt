@@ -6,6 +6,7 @@ import dev.bota.sdk.internal.core.CoreEffectKind
 import dev.bota.sdk.internal.core.CoreField
 import dev.bota.sdk.internal.core.HostEventKind
 import java.nio.ByteBuffer
+import java.util.zip.CRC32
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
@@ -110,6 +111,7 @@ internal class OkHttpNetworkHost(
                     validate(response.code)
                     val body = response.body ?: throw NativeHostException(502, "download response has no body")
                     val total = body.contentLength().takeIf { it >= 0 }?.toULong()
+                    val crc32 = CRC32()
                     registry.resource(registration.resourceId).openWrite().use { channel ->
                         channel.truncate(0)
                         channel.position(0)
@@ -119,6 +121,7 @@ internal class OkHttpNetworkHost(
                             while (true) {
                                 val count = input.read(bytes)
                                 if (count < 0) break
+                                crc32.update(bytes, 0, count)
                                 val buffer = ByteBuffer.wrap(bytes, 0, count)
                                 while (buffer.hasRemaining()) channel.write(buffer)
                                 completed += count.toULong()
@@ -127,8 +130,16 @@ internal class OkHttpNetworkHost(
                         }
                         channel.force(true)
                     }
+                    send(
+                        CoreHostEventPayload(
+                            HostEventKind.NetworkDownloadCompleted,
+                            listOf(
+                                CoreField.Unsigned(21, id),
+                                CoreField.Unsigned(20, crc32.value.toULong()),
+                            ),
+                        ),
+                    )
                 }
-                send(CoreHostEventPayload(HostEventKind.NetworkDownloadCompleted, listOf(CoreField.Unsigned(21, id))))
                 close()
             } catch (error: CancellationException) {
                 throw error

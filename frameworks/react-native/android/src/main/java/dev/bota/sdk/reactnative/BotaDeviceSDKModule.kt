@@ -388,6 +388,10 @@ internal class BotaDeviceSDKModule(
         }
     }
 
+    override fun cancelFirmwareUpdate(promise: Promise) {
+        launch(promise) { ota.cancelAll() }
+    }
+
     override fun startDeviceLogs(device: ReadableMap, promise: Promise) {
         launch(promise) {
             logs.start(device.toConnectedDevice()) {

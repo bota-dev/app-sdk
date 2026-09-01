@@ -133,6 +133,11 @@ Commit: `feat(react-native): restore StreamingSession compatibility`
 
 ## Task 4: Restore `OTAManager`
 
+**Status:** Complete. The compatibility owner preserves CDN checks, direct XHR
+downloads, frozen progress events, and native URL-driven updates. Apple and
+Android calculate CRC32 from the downloaded firmware bytes, Rust owns transfer
+and serial-strict reconnect, and destroy cancels native OTA ownership.
+
 **Files:**
 
 - Create: `frameworks/react-native/src/managers/OTAManager.ts`
@@ -146,10 +151,10 @@ Commit: `feat(react-native): restore StreamingSession compatibility`
 2. `downloadFirmware()` preserves the frozen direct `ArrayBuffer` contract and
    byte progress through `XMLHttpRequest`; this method is not used by
    `performUpdate()`.
-3. `performUpdate()` converts the checksum to CRC32, delegates URL download and
-   BLE transfer to `BotaDeviceSDK.ota`, translates phases to frozen stages,
-   writes an optional grant before native update, and waits for serial-strict
-   reconnect after reboot.
+3. `performUpdate()` delegates URL download and BLE transfer to
+   `BotaDeviceSDK.ota`, translates phases to frozen stages, and writes an
+   optional grant before native update. Native hosts calculate CRC32 from the
+   downloaded bytes and Rust waits for serial-strict reconnect after reboot.
 4. Destroy removes listeners and cancels native OTA ownership.
 
 Commit: `feat(react-native): restore OTAManager compatibility`

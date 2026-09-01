@@ -913,8 +913,9 @@ ownership now delegate to the native facades as well: metadata, progress,
 opaque upload identifiers, and the terminal ownership decision cross Codegen,
 while audio remains in a native file represented to JavaScript by its path and
 upload destinations remain native. OTA follows the same ownership rule:
-JavaScript supplies version, size, CRC32, and a presigned URL, while native
-adapters generate the opaque download registration and own HTTP and BLE bytes.
+JavaScript supplies version, size, and a presigned URL, while native adapters
+generate the opaque download registration, calculate CRC32 from the durable
+download, and own HTTP and BLE bytes.
 Device-log subscriptions now delegate to the public Apple and Android facades:
 native code owns BLE framing, sequence recovery, UTF-8 assembly, and the single
 active collector, while Codegen emits only complete sanitized lines and
@@ -932,13 +933,13 @@ upload-ownership, and OTA slices plus device logs through the public Android
 facade, and a checked-in React Native Gradle
 consumer runs Codegen, Kotlin tests,
 lint, and release assembly against the exact packaged AAR. The
-package now matches 78 of 80 frozen exports, including every public type, the
+package now matches 79 of 80 frozen exports, including every public type, the
 pure error, sync-status, and device-log runtime helpers, and the native-backed
-`DeviceManager`, `RecordingManager`, and `StreamingSession`. Those owners keep
+`DeviceManager`, `RecordingManager`, `StreamingSession`, and `OTAManager`. Those owners keep
 recording and live-stream payloads native while exposing only typed metadata
 and progress through Codegen. `DeviceManager` preserves authenticated reset
 recovery across app reinstallation and serializes native reconnect attempts.
-`BotaClient`, `OTAManager`, app acceptance, and publication gates remain open.
+`BotaClient`, app acceptance, and publication gates remain open.
 High-volume recording and firmware bytes stay native and are rejected from the
 Codegen contract.
 

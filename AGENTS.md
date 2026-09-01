@@ -55,9 +55,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   compatibility, app, and release gates pass, and pins React Native `0.86.3`
   for deterministic Codegen. Its package version still matches
   `sdk-version.toml`.
-- The React Native package matches 78 of the 80 frozen `0.0.65` exports. Keep
-  their structural contract test exact; only `BotaClient` and `OTAManager`
-  remain deferred until their native workflows and application gates pass.
+- The React Native package matches 79 of the 80 frozen `0.0.65` exports. Keep
+  their structural contract test exact; only `BotaClient` remains deferred
+  until its lifecycle and application gates pass.
 - `RecordingManager` and `StreamingSession` preserve their frozen object model
   while Rust plus the Apple/Android hosts own recording bytes, live-transfer
   buffering, chunk uploads, finalization ordering, and cancellation. Codegen
@@ -129,11 +129,12 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   the native reducer may authorize Bluetooth fallback. Destroy and invalidation
   cancel the active native recording operation. Preserve the frozen `opus_16k`
   fallback for unknown codec values.
-- `BotaDeviceSDK.ota` accepts a presigned firmware URL plus version, byte size,
-  and CRC32. Apple and Android generate the opaque download registration ID,
-  download into native storage, and run the native OTA workflow. Codegen emits
-  only phase and byte progress; firmware bodies never cross JavaScript. Destroy
-  and invalidation cancel the active native OTA operation.
+- `BotaDeviceSDK.ota` accepts a presigned firmware URL plus version and byte
+  size. Apple and Android generate the opaque download registration ID,
+  calculate CRC32 from the native download bytes after durable storage, and run
+  the native OTA workflow. Codegen emits only phase and byte progress; firmware
+  bodies never cross JavaScript. Destroy and invalidation cancel the active
+  native OTA operation.
 - `BotaDeviceSDK.logs` delegates device-log subscription to the native facades.
   Apple and Android own BLE packet framing, sequence recovery, UTF-8 assembly,
   and cancellation. Codegen emits only complete sanitized `message` and

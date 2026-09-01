@@ -1199,6 +1199,14 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
+    @objc(cancelFirmwareUpdateWithCompletion:)
+    public func cancelFirmwareUpdate(completion: @escaping @Sendable () -> Void) {
+        Task {
+            await ota.cancelAll()
+            completion()
+        }
+    }
+
     @objc(startDeviceLogsWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:onLine:onError:completion:)
     public func startDeviceLogs(
         id: String,

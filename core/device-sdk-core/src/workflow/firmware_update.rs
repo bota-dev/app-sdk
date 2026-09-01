@@ -638,11 +638,12 @@ impl WorkflowReducer for FirmwareUpdateWorkflow {
             }
             (
                 Phase::Downloading,
-                HostEventKind::Network(NetworkEvent::DownloadCompleted { download_id }),
+                HostEventKind::Network(NetworkEvent::DownloadCompleted { download_id, crc32 }),
             ) if Some(request_id) == self.download_request_id
                 && download_id == self.download_id =>
             {
                 self.download_request_id = None;
+                self.image.crc32 = crc32;
                 let mut effects = vec![self.checkpoint(CheckpointPhase::Transferring, context)];
                 effects.extend(self.subscribe(context));
                 Ok(effects)

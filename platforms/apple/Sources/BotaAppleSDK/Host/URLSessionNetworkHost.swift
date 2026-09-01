@@ -62,7 +62,13 @@ actor URLSessionNetworkHost: NetworkHost {
                     try downloadedData.write(to: download.destinationURL, options: .atomic)
                     pair.continuation.yield(.init(
                         kind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_NETWORK_DOWNLOAD_COMPLETED),
-                        fields: [.unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_DOWNLOAD_ID), value: id)]
+                        fields: [
+                            .unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_DOWNLOAD_ID), value: id),
+                            .unsigned(
+                                id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_FIRMWARE_CRC32),
+                                value: UInt64(crc32(downloadedData))
+                            ),
+                        ]
                     ))
                 case .networkUpload:
                     let id = try requiredUnsigned(effect, UInt32(BOTA_DEVICE_SDK_V1_FIELD_UPLOAD_ID))
@@ -133,6 +139,17 @@ actor URLSessionNetworkHost: NetworkHost {
                 .unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_TOTAL_UNITS), value: total),
             ]
         )
+    }
+
+    private func crc32(_ data: Data) -> UInt32 {
+        var value = UInt32.max
+        for byte in data {
+            value ^= UInt32(byte)
+            for _ in 0 ..< 8 {
+                value = value & 1 == 1 ? (value >> 1) ^ 0xedb8_8320 : value >> 1
+            }
+        }
+        return value ^ UInt32.max
     }
 }
 

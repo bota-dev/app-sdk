@@ -454,6 +454,7 @@ export interface Spec extends TurboModule {
     device: NativeConnectedDevice,
     image: NativeFirmwareImage
   ) => Promise<void>;
+  cancelFirmwareUpdate: () => Promise<void>;
   writeConnectionSettings: (
     device: NativeConnectedDevice,
     settings: NativeDeviceConnectionSettings

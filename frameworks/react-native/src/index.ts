@@ -112,6 +112,7 @@ export type {
 
 export { DeviceLogDecoder } from './ble/deviceLogs';
 export { DeviceManager } from './managers/DeviceManager';
+export { OTAManager } from './managers/OTAManager';
 export { RecordingManager } from './managers/RecordingManager';
 export { StreamingSession } from './managers/StreamingSession';
 export {

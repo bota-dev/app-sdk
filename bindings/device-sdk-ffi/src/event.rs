@@ -241,9 +241,13 @@ pub(crate) unsafe fn host_event_from_packet(
             })
         }
         packet_kind::HOST_EVENT_NETWORK_DOWNLOAD_COMPLETED => {
-            fields.validate_allowed(&[field_id::DOWNLOAD_ID])?;
+            fields.validate_allowed(&[field_id::DOWNLOAD_ID, field_id::FIRMWARE_CRC32])?;
             HostEventKind::Network(NetworkEvent::DownloadCompleted {
                 download_id: fields.required_u64(field_id::DOWNLOAD_ID)?,
+                crc32: fields
+                    .required_u64(field_id::FIRMWARE_CRC32)?
+                    .try_into()
+                    .map_err(|_| invalid("firmware CRC32 does not fit in 32 bits"))?,
             })
         }
         packet_kind::HOST_EVENT_NETWORK_UPLOAD_PROGRESS => {
@@ -406,7 +410,8 @@ mod tests {
                 .with_u64(field_id::COMPLETED_UNITS, 2)
                 .with_u64(field_id::TOTAL_UNITS, 3),
             event(packet_kind::HOST_EVENT_NETWORK_DOWNLOAD_COMPLETED)
-                .with_u64(field_id::DOWNLOAD_ID, 1),
+                .with_u64(field_id::DOWNLOAD_ID, 1)
+                .with_u64(field_id::FIRMWARE_CRC32, 0x1234_5678),
             event(packet_kind::HOST_EVENT_NETWORK_UPLOAD_PROGRESS)
                 .with_u64(field_id::UPLOAD_ID, 1)
                 .with_u64(field_id::COMPLETED_UNITS, 2)

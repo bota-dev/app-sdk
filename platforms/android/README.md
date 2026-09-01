@@ -86,7 +86,8 @@ resolution.
 
 `OTAManager` accepts a `FirmwareImage` containing an OkHttp `Request`. The URL,
 headers, downloaded image, and blob path remain in Android hosts; Rust receives
-only the opaque download ID and bounded bytes. `DeviceLogManager` emits complete
+only the opaque download ID, the CRC32 calculated from the durable native file,
+and bounded bytes. `DeviceLogManager` emits complete
 sanitized `DeviceLogLine` values. These APIs are cold Kotlin `Flow`s, and
 collector termination, explicit cancellation, failure, success, and client
 destroy all release their native registrations and shared operation owner.

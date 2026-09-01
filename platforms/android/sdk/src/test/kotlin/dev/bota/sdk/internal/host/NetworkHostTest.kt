@@ -43,6 +43,7 @@ class NetworkHostTest {
 
         assertArrayEquals("firmware".encodeToByteArray(), Files.readAllBytes(destination))
         assertEquals(HostEventKind.NetworkDownloadCompleted, events.last().kind)
+        assertEquals(0xd5ecd7c4uL, events.last().unsigned(20))
         assertEquals(events.mapNotNull { it.unsigned(36) }.sorted(), events.mapNotNull { it.unsigned(36) })
         assertTrue(closed.get())
         assertFalse(host.hasRegistration(7u))

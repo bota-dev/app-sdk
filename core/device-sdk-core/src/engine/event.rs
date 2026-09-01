@@ -119,6 +119,7 @@ pub enum NetworkEvent {
     },
     DownloadCompleted {
         download_id: u64,
+        crc32: u32,
     },
     UploadProgress {
         upload_id: u64,

@@ -32,6 +32,10 @@ final class NetworkHostTests: XCTestCase {
         XCTAssertEqual(completed.first, 0)
         XCTAssertEqual(completed.last, UInt64(Data("firmware".utf8).count))
         XCTAssertEqual(events.last?.kind, UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_NETWORK_DOWNLOAD_COMPLETED))
+        XCTAssertEqual(
+            events.last?.unsigned(UInt32(BOTA_DEVICE_SDK_V1_FIELD_FIRMWARE_CRC32)),
+            0xd5ec_d7c4
+        )
     }
 
     func testUploadReadsOnlyTheRegisteredSource() async throws {
