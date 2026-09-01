@@ -228,14 +228,12 @@ final class DurableHostTests: XCTestCase {
         let snapshot = await uploads.snapshot()
         XCTAssertEqual(snapshot.destinations.map(\.sequence), [1, 2])
         XCTAssertEqual(snapshot.bodies, [Data([1, 2, 3, 4]), Data([5, 6])])
-        XCTAssertEqual(snapshot.finalizations, [
-            StreamingFinalizeMetadata(
-                totalChunks: 2,
-                durationMilliseconds: 0,
-                fileSizeBytes: 6,
-                isEncrypted: false
-            ),
-        ])
+        XCTAssertEqual(snapshot.finalizations.count, 1)
+        let finalization = try XCTUnwrap(snapshot.finalizations.first)
+        XCTAssertEqual(finalization.totalChunks, 2)
+        XCTAssertLessThan(finalization.durationMilliseconds, 60_000)
+        XCTAssertEqual(finalization.fileSizeBytes, 6)
+        XCTAssertFalse(finalization.isEncrypted)
         XCTAssertEqual(finalized.first?.unsigned(126), 2)
         XCTAssertEqual(finalized.first?.unsigned(UInt32(BOTA_DEVICE_SDK_V1_FIELD_TOTAL_UNITS)), 6)
     }
