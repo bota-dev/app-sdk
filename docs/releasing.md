@@ -122,7 +122,10 @@ tools/android/test-emulator-lane.sh --api 35
 
 The exact x86/x86_64 images run on Ubuntu release CI. Apple Silicon cannot run
 the required API 26 x86 image, so a local arm64 emulator is not equivalent
-release evidence.
+release evidence. Each lane exports a fresh, lane-local `ANDROID_AVD_HOME` so
+`avdmanager` and the emulator resolve the same AVD. ADB attachment is bounded;
+an emulator that exits or never registers fails with the ADB device list and
+captured emulator output instead of leaving the release job blocked.
 
 The separate publication-graph test creates a password-protected ephemeral PGP
 key in a mode-0700 temporary keyring. It proves that protected staging cannot

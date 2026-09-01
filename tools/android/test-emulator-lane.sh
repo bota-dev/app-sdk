@@ -35,21 +35,56 @@ case "$api" in
     exit 2
     ;;
 esac
+export ANDROID_AVD_HOME="$ROOT/target/android-avd-$api"
 for tool in "$ADB" "$EMULATOR" "$AVDMANAGER"; do test -x "$tool"; done
 
 emulator_pid=""
+emulator_log="$ROOT/target/android-emulator-$api.log"
+emulator_attach_attempts="${BOTA_EMULATOR_ATTACH_ATTEMPTS:-180}"
+emulator_poll_seconds="${BOTA_EMULATOR_POLL_SECONDS:-2}"
 cleanup() {
   "$ADB" emu kill >/dev/null 2>&1 || true
   if [[ -n "$emulator_pid" ]]; then wait "$emulator_pid" 2>/dev/null || true; fi
   "$AVDMANAGER" delete avd --name "$avd" >/dev/null 2>&1 || true
+  rm -rf "$ANDROID_AVD_HOME"
+}
+report_emulator_failure() {
+  echo "$1" >&2
+  "$ADB" devices -l >&2 || true
+  if [[ -s "$emulator_log" ]]; then
+    echo "--- emulator output ---" >&2
+    cat "$emulator_log" >&2
+  fi
 }
 trap cleanup EXIT HUP INT TERM
 
+rm -rf "$ANDROID_AVD_HOME"
+mkdir -p "$ANDROID_AVD_HOME"
 "$AVDMANAGER" delete avd --name "$avd" >/dev/null 2>&1 || true
 printf 'no\n' | "$AVDMANAGER" create avd --force --name "$avd" --package "$image"
-"$EMULATOR" -avd "$avd" -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data &
+mkdir -p "$(dirname "$emulator_log")"
+"$EMULATOR" -avd "$avd" -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data \
+  >"$emulator_log" 2>&1 &
 emulator_pid=$!
-"$ADB" wait-for-device
+adb_connected=false
+for _ in $(seq 1 "$emulator_attach_attempts"); do
+  if [[ "$("$ADB" get-state 2>/dev/null || true)" == "device" ]]; then
+    adb_connected=true
+    break
+  fi
+  if ! kill -0 "$emulator_pid" 2>/dev/null; then
+    emulator_status=0
+    wait "$emulator_pid" || emulator_status=$?
+    report_emulator_failure \
+      "emulator exited before ADB connected (status=$emulator_status)"
+    exit 1
+  fi
+  sleep "$emulator_poll_seconds"
+done
+if [[ "$adb_connected" != true ]]; then
+  report_emulator_failure "timed out waiting for emulator to connect to ADB"
+  exit 1
+fi
 for _ in $(seq 1 180); do
   if [[ "$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; then break; fi
   sleep 2

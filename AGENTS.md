@@ -245,8 +245,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `target/android-release` payload, passes the immutable repository through the
   React Native Codegen/Kotlin consumer, then runs the API 26 x86 and API 35
   x86_64 emulator lanes. `test-emulator-lane.sh` owns AVD creation, boot
-  readiness, fresh installs, animation settings, shutdown, and deletion. Do not
-  cache AVD state or put signing material in ordinary CI.
+  readiness, fresh installs, animation settings, shutdown, and deletion. It
+  exports one lane-local `ANDROID_AVD_HOME` for both `avdmanager` and the
+  emulator, bounds ADB attachment, and prints the captured emulator output on
+  startup failure. Do not cache AVD state or put signing material in ordinary
+  CI.
 - The protected `v1.1.0` publication uses only
   `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
   `SIGNING_IN_MEMORY_KEY`, and `SIGNING_IN_MEMORY_KEY_PASSWORD`. Persist the
