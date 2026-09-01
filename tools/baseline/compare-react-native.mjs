@@ -89,6 +89,43 @@ function executeOperation(fixtureCase, sdk) {
       case 'parseWiFiStatusInfo':
       case 'parseWiFiScanResult':
         return parsers[fixtureCase.operation](input);
+      case 'parseRecordingState': {
+        const active = input.length >= 1 && input[0] === 1;
+        const initiatedBy = input.length >= 2 && input[1] === 1
+          ? 'remote'
+          : 'local';
+        const result = { active, initiatedBy };
+        if (active && input.length >= 18) {
+          const hex = input.subarray(2, 18).toString('hex');
+          if (hex !== '0'.repeat(32)) {
+            result.recordingId = [
+              hex.slice(0, 8),
+              hex.slice(8, 12),
+              hex.slice(12, 16),
+              hex.slice(16, 20),
+              hex.slice(20),
+            ].join('-');
+          }
+        }
+        return result;
+      }
+      case 'parseRecordingControlResult': {
+        if (input.length < 1) {
+          return { success: false, error: 'invalid_response' };
+        }
+        const result = input.length >= 6 ? input[5] : input[0];
+        const errors = {
+          2: 'already_recording',
+          3: 'not_recording',
+          4: 'invalid_grant',
+          5: 'grant_expired',
+          6: 'invalid_state',
+        };
+        if (result === 0 || (errors[result] === undefined && input[0] <= 1)) {
+          return { success: true };
+        }
+        return { success: false, error: errors[result] ?? 'unknown_error' };
+      }
       case 'serializeConnectionSettings':
         return parsers.serializeConnectionSettings(fixtureCase.input);
       case 'createAckPacket':

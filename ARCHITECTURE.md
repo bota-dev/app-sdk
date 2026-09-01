@@ -353,6 +353,9 @@ checkouts before native source is imported.
 Language-neutral protocol fixtures live under `protocol/fixtures/`. The baseline
 record under `protocol/baseline/` pins the SDK and firmware revisions, source
 digests, fixture digest, public API digest, and passing test counts.
+Recording-control fixtures freeze both the 18-byte state notification and the
+6-byte command result whose result code is byte 5, including the legacy
+one-byte fallback used by React Native `0.0.65`.
 `npm run baseline:react-native` builds and tests an explicit SDK checkout before
 comparing every applicable fixture and the semantic public API. It refuses
 dirty checkouts unless the audit flag is supplied. The narrower

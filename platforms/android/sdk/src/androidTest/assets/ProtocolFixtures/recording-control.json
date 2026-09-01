@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "protocolRevision": "firmware-8b175a89374c",
+  "suite": "recording-control",
+  "cases": [
+    {
+      "name": "active-remote-recording-state",
+      "operation": "parseRecordingState",
+      "inputHex": "010100112233445566778899aabbccddeeff",
+      "expected": {
+        "active": true,
+        "initiatedBy": "remote",
+        "recordingId": "00112233-4455-6677-8899-aabbccddeeff"
+      },
+      "baselineReference": "src/managers/DeviceManager.ts"
+    },
+    {
+      "name": "idle-local-recording-state",
+      "operation": "parseRecordingState",
+      "inputHex": "000000000000000000000000000000000000",
+      "expected": { "active": false, "initiatedBy": "local" },
+      "baselineReference": "src/managers/DeviceManager.ts"
+    },
+    {
+      "name": "recording-control-success",
+      "operation": "parseRecordingControlResult",
+      "inputHex": "010000000000",
+      "expected": { "success": true },
+      "baselineReference": "src/managers/DeviceManager.ts"
+    },
+    {
+      "name": "recording-control-invalid-grant",
+      "operation": "parseRecordingControlResult",
+      "inputHex": "000000000004",
+      "expected": { "success": false, "error": "invalid_grant" },
+      "baselineReference": "src/managers/DeviceManager.ts"
+    },
+    {
+      "name": "recording-control-short-active-fallback",
+      "operation": "parseRecordingControlResult",
+      "inputHex": "01",
+      "expected": { "success": true },
+      "baselineReference": "src/managers/DeviceManager.ts"
+    },
+    {
+      "name": "recording-control-empty-response",
+      "operation": "parseRecordingControlResult",
+      "inputHex": "",
+      "expected": { "success": false, "error": "invalid_response" },
+      "baselineReference": "src/managers/DeviceManager.ts"
+    }
+  ]
+}

@@ -3,9 +3,9 @@ use bota_device_sdk_core::{
     protocol::{
         DeviceLogDecoder, ParsedConnectionSettings, TransferPacket, WiFiConfigResult,
         WiFiScanUpdate, WiFiStatus, parse_connection_settings, parse_device_status,
-        parse_ota_status, parse_recording_list, parse_transfer_packet,
-        parse_trigger_upload_response, parse_wifi_config_result, parse_wifi_scan_result,
-        parse_wifi_status_info,
+        parse_ota_status, parse_recording_control_result, parse_recording_list,
+        parse_recording_state, parse_transfer_packet, parse_trigger_upload_response,
+        parse_wifi_config_result, parse_wifi_scan_result, parse_wifi_status_info,
     },
 };
 use serde_json::{Map, Value, json};
@@ -38,7 +38,7 @@ fn decode_fixtures_match_react_native_compatibility_values() {
             }
         }
     }
-    assert_eq!(matched, 33);
+    assert_eq!(matched, 39);
 }
 
 #[test]
@@ -47,6 +47,8 @@ fn parsers_never_panic_for_short_or_oversized_deterministic_input() {
         let bytes: Vec<u8> = (0..length).map(|index| (index * 17) as u8).collect();
         let _ = parse_device_status(&bytes);
         let _ = parse_recording_list(&bytes);
+        let _ = parse_recording_state(&bytes);
+        let _ = parse_recording_control_result(&bytes);
         let _ = parse_transfer_packet(&bytes);
         let _ = parse_trigger_upload_response(&bytes);
         let _ = parse_connection_settings(&bytes);
@@ -66,6 +68,31 @@ fn decode_fixture(fixture_case: &Value) -> Option<Result<Value, String>> {
         "parseDeviceStatus" => parse_device_status(&bytes).map(status_json),
         "parseRecordingList" => parse_recording_list(&bytes)
             .map(|recordings| Value::Array(recordings.into_iter().map(recording_json).collect())),
+        "parseRecordingState" => parse_recording_state(&bytes).map(|state| {
+            let mut value = Map::new();
+            value.insert("active".into(), state.active.into());
+            value.insert(
+                "initiatedBy".into(),
+                if state.initiated_remotely {
+                    "remote"
+                } else {
+                    "local"
+                }
+                .into(),
+            );
+            if let Some(recording_id) = state.recording_uuid {
+                value.insert("recordingId".into(), recording_id.to_string().into());
+            }
+            Value::Object(value)
+        }),
+        "parseRecordingControlResult" => parse_recording_control_result(&bytes).map(|result| {
+            let mut value = Map::new();
+            value.insert("success".into(), result.success.into());
+            if let Some(error) = result.error {
+                value.insert("error".into(), error.as_str().into());
+            }
+            Value::Object(value)
+        }),
         "parseTransferPacket" => parse_transfer_packet(&bytes).map(transfer_json),
         "parseTriggerDeviceUploadResponse" => {
             parse_trigger_upload_response(&bytes).map(|response| match response {

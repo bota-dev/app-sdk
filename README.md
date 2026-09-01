@@ -12,7 +12,7 @@ physical-device parity gates.
 ## Current Status
 
 The App SDK is preparing synchronized native release `1.1.0`: the repository has a generated
-protocol manifest, 55 language-neutral compatibility fixtures, bounded Rust
+protocol manifest, 64 language-neutral compatibility fixtures, bounded Rust
 decoders, byte-exact serializers, stable models/errors, and deterministic
 discovery, connection-recovery, provisioning, authenticated-reset, resumable
 recording-transfer, guarded upload-handoff, and resumable firmware-update
