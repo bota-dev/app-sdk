@@ -8,9 +8,23 @@ import dev.bota.sdk.model.FactoryResetCompletion
 import dev.bota.sdk.model.FactoryResetGrantRequest
 import dev.bota.sdk.model.ProvisioningMaterial
 import dev.bota.sdk.model.ProvisioningMaterialRequest
+import dev.bota.sdk.model.RecordingControlResult
+import dev.bota.sdk.model.RecordingState
 import java.util.Base64
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 internal data class BotaDeviceSDKAndroidProvisioningRequest(
     val requestId: String,
@@ -36,6 +50,19 @@ internal interface BotaDeviceSDKAndroidSecurityClient {
     suspend fun deliverBackendPublicKey(publicKey: ByteArray, device: ConnectedDevice)
     suspend fun writeGrant(grantBlob: String, device: ConnectedDevice)
     suspend fun syncTime(device: ConnectedDevice)
+    suspend fun requestStartRecording(
+        device: ConnectedDevice,
+        grantBlob: String,
+    ): RecordingControlResult
+
+    suspend fun requestStopRecording(
+        device: ConnectedDevice,
+        grantBlob: String,
+    ): RecordingControlResult
+
+    suspend fun readRecordingState(device: ConnectedDevice): RecordingState
+
+    fun recordingStateUpdates(device: ConnectedDevice): Flow<RecordingState>
     suspend fun provision(
         device: ConnectedDevice,
         provider: suspend (ProvisioningMaterialRequest) -> ProvisioningMaterial,
@@ -102,6 +129,23 @@ internal class BotaDeviceSDKSharedAndroidSecurityClient(
     override suspend fun syncTime(device: ConnectedDevice) {
         client.controls.syncTime(device = device)
     }
+
+    override suspend fun requestStartRecording(
+        device: ConnectedDevice,
+        grantBlob: String,
+    ): RecordingControlResult = client.controls.requestStartRecording(device, grantBlob)
+
+    override suspend fun requestStopRecording(
+        device: ConnectedDevice,
+        grantBlob: String,
+    ): RecordingControlResult = client.controls.requestStopRecording(device, grantBlob)
+
+    override suspend fun readRecordingState(device: ConnectedDevice): RecordingState =
+        client.controls.readRecordingState(device)
+
+    override fun recordingStateUpdates(device: ConnectedDevice): Flow<RecordingState> =
+        client.controls.recordingStateUpdates(device)
+
     override suspend fun provision(
         device: ConnectedDevice,
         provider: suspend (ProvisioningMaterialRequest) -> ProvisioningMaterial,
@@ -154,10 +198,14 @@ internal class BotaDeviceSDKSharedAndroidSecurityClient(
 
 internal class BotaDeviceSDKAndroidSecurity(
     private val client: BotaDeviceSDKAndroidSecurityClient = BotaDeviceSDKSharedAndroidSecurityClient(),
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
 ) {
     private val lock = Any()
+    private val streamOperations = Mutex()
+    private val streamLock = Any()
     private val provisioningRequests = mutableMapOf<String, CompletableDeferred<ProvisioningMaterial>>()
     private val factoryResetRequests = mutableMapOf<String, CompletableDeferred<ByteArray>>()
+    private var recordingStateStream: Job? = null
 
     suspend fun provision(
         device: ConnectedDevice,
@@ -183,6 +231,45 @@ internal class BotaDeviceSDKAndroidSecurity(
         client.deliverBackendPublicKey(publicKey, device)
     suspend fun writeGrant(grantBlob: String, device: ConnectedDevice) = client.writeGrant(grantBlob, device)
     suspend fun syncTime(device: ConnectedDevice) = client.syncTime(device)
+    suspend fun requestStartRecording(
+        device: ConnectedDevice,
+        grantBlob: String,
+    ): RecordingControlResult = client.requestStartRecording(device, grantBlob)
+    suspend fun requestStopRecording(
+        device: ConnectedDevice,
+        grantBlob: String,
+    ): RecordingControlResult = client.requestStopRecording(device, grantBlob)
+    suspend fun readRecordingState(device: ConnectedDevice): RecordingState =
+        client.readRecordingState(device)
+
+    suspend fun startRecordingStateUpdates(
+        device: ConnectedDevice,
+        onError: (Throwable) -> Unit = {},
+        onState: (RecordingState) -> Unit,
+    ) = streamOperations.withLock {
+        stopOwnedRecordingStateStream()
+        val updates = client.recordingStateUpdates(device)
+        lateinit var task: Job
+        task = scope.launch(start = CoroutineStart.LAZY) {
+            try {
+                updates.collect(onState)
+            } catch (_: CancellationException) {
+                // Explicit stop is not a recording-state stream failure.
+            } catch (error: Throwable) {
+                onError(error)
+            } finally {
+                synchronized(streamLock) {
+                    if (recordingStateStream === task) recordingStateStream = null
+                }
+            }
+        }
+        synchronized(streamLock) { recordingStateStream = task }
+        task.start()
+    }
+
+    suspend fun stopRecordingStateUpdates() = streamOperations.withLock {
+        stopOwnedRecordingStateStream()
+    }
 
     suspend fun readConnectionSettings(device: ConnectedDevice): DeviceConnectionSettings =
         client.readConnectionSettings(device)
@@ -258,6 +345,7 @@ internal class BotaDeviceSDKAndroidSecurity(
     }
 
     suspend fun cancelAll() {
+        runCatching { stopRecordingStateUpdates() }
         val pending = synchronized(lock) {
             provisioningRequests.values.toList().also { provisioningRequests.clear() }
         }
@@ -268,6 +356,13 @@ internal class BotaDeviceSDKAndroidSecurity(
         pendingResets.forEach { it.cancel() }
         runCatching { client.cancelCurrentOperation() }
         runCatching { client.cancelFactoryReset() }
+    }
+
+    private suspend fun stopOwnedRecordingStateStream() {
+        val stream = synchronized(streamLock) {
+            recordingStateStream.also { recordingStateStream = null }
+        } ?: return
+        stream.cancelAndJoin()
     }
 
     private suspend fun requestProvisioningMaterial(

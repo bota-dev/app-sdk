@@ -25,7 +25,10 @@ internal class BotaDeviceSDKModule(
     private val logs = BotaDeviceSDKAndroidLogs(BotaDeviceSDKSharedAndroidLogClient(), scope)
     private val ota = BotaDeviceSDKAndroidOTA()
     private val recordings = BotaDeviceSDKAndroidRecordings()
-    private val security = BotaDeviceSDKAndroidSecurity()
+    private val security = BotaDeviceSDKAndroidSecurity(
+        BotaDeviceSDKSharedAndroidSecurityClient(),
+        scope,
+    )
     private val wifi = BotaDeviceSDKAndroidWiFi(BotaDeviceSDKSharedAndroidWiFiClient(), scope)
 
     override fun configure(configuration: ReadableMap, promise: Promise) {
@@ -131,6 +134,44 @@ internal class BotaDeviceSDKModule(
 
     override fun syncTime(device: ReadableMap, promise: Promise) {
         launch(promise) { security.syncTime(device.toConnectedDevice()) }
+    }
+
+    override fun requestStartRecording(
+        device: ReadableMap,
+        grantBlob: String,
+        promise: Promise,
+    ) {
+        launchValue(promise) {
+            security.requestStartRecording(device.toConnectedDevice(), grantBlob).toWritableMap()
+        }
+    }
+
+    override fun requestStopRecording(
+        device: ReadableMap,
+        grantBlob: String,
+        promise: Promise,
+    ) {
+        launchValue(promise) {
+            security.requestStopRecording(device.toConnectedDevice(), grantBlob).toWritableMap()
+        }
+    }
+
+    override fun readRecordingState(device: ReadableMap, promise: Promise) {
+        launchValue(promise) {
+            security.readRecordingState(device.toConnectedDevice()).toWritableMap()
+        }
+    }
+
+    override fun startRecordingStateUpdates(device: ReadableMap, promise: Promise) {
+        launch(promise) {
+            security.startRecordingStateUpdates(device.toConnectedDevice()) {
+                emitOnRecordingStateUpdated(it.toWritableMap())
+            }
+        }
+    }
+
+    override fun stopRecordingStateUpdates(promise: Promise) {
+        launch(promise) { security.stopRecordingStateUpdates() }
     }
 
     override fun configureWiFi(

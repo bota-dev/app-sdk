@@ -14,6 +14,7 @@ test('Codegen contract freezes the lifecycle module identity and methods', () =>
   assert.match(source, /configure:\s*\(/);
   assert.match(source, /readonly onDeviceDiscovered:\s*EventEmitter/);
   assert.match(source, /readonly onDeviceStatusUpdated:\s*EventEmitter/);
+  assert.match(source, /readonly onRecordingStateUpdated:\s*EventEmitter/);
   assert.match(source, /readonly onProvisioningMaterialRequested:\s*EventEmitter/);
   assert.match(source, /readonly onFactoryResetGrantRequested:\s*EventEmitter/);
   assert.match(source, /readonly onRecordingTransferProgress:\s*EventEmitter/);
@@ -42,6 +43,11 @@ test('Codegen contract freezes the lifecycle module identity and methods', () =>
   assert.match(source, /stopDeviceLogs:\s*\(/);
   assert.match(source, /rejectApplicationMaterial:\s*\(/);
   assert.match(source, /readStatus:\s*\(/);
+  assert.match(source, /requestStartRecording:\s*\(/);
+  assert.match(source, /requestStopRecording:\s*\(/);
+  assert.match(source, /readRecordingState:\s*\(/);
+  assert.match(source, /startRecordingStateUpdates:\s*\(/);
+  assert.match(source, /stopRecordingStateUpdates:\s*\(/);
   assert.match(source, /startStatusUpdates:\s*\(/);
   assert.match(source, /stopStatusUpdates:\s*\(/);
   assert.match(source, /configureWiFi:\s*\(/);

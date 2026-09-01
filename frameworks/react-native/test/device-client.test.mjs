@@ -57,6 +57,7 @@ function nativeFixture() {
   const calls = [];
   let discoveryHandler = null;
   let statusHandler = null;
+  let recordingStateHandler = null;
   let provisioningHandler = null;
   let factoryResetHandler = null;
   let recordingProgressHandler = null;
@@ -79,6 +80,9 @@ function nativeFixture() {
     },
     emitStatus(value) {
       statusHandler?.(value);
+    },
+    emitRecordingState(value) {
+      recordingStateHandler?.(value);
     },
     emitWiFiStatus(value) {
       wifiStatusHandler?.(value);
@@ -106,6 +110,14 @@ function nativeFixture() {
         return {
           remove() {
             statusHandler = null;
+          },
+        };
+      },
+      onRecordingStateUpdated(handler) {
+        recordingStateHandler = handler;
+        return {
+          remove() {
+            recordingStateHandler = null;
           },
         };
       },
@@ -212,6 +224,28 @@ function nativeFixture() {
       },
       async syncTime(device) {
         calls.push(['syncTime', device]);
+      },
+      async requestStartRecording(device, grantBlob) {
+        calls.push(['requestStartRecording', device, grantBlob]);
+        return { success: true };
+      },
+      async requestStopRecording(device, grantBlob) {
+        calls.push(['requestStopRecording', device, grantBlob]);
+        return { success: false, error: 'not_recording' };
+      },
+      async readRecordingState(device) {
+        calls.push(['readRecordingState', device]);
+        return {
+          active: true,
+          recordingId: 'recording-1',
+          initiatedBy: 'remote',
+        };
+      },
+      async startRecordingStateUpdates(device) {
+        calls.push(['startRecordingStateUpdates', device]);
+      },
+      async stopRecordingStateUpdates() {
+        calls.push(['stopRecordingStateUpdates']);
       },
       async startStatusUpdates() {
         calls.push(['startStatusUpdates']);
@@ -619,6 +653,43 @@ test('device controls preserve typed values and keep packet bytes native', async
     ],
     ['writeGrant', connected, 'AQID'],
     ['syncTime', connected],
+  ]);
+});
+
+test('recording controls preserve typed results and own state subscriptions natively', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+  const updates = [];
+
+  assert.deepEqual(
+    await client.controls.requestStartRecording(connected, 'c3RhcnQ='),
+    { success: true }
+  );
+  assert.deepEqual(
+    await client.controls.requestStopRecording(connected, 'c3RvcA=='),
+    { success: false, error: 'not_recording' }
+  );
+  assert.deepEqual(await client.controls.readRecordingState(connected), {
+    active: true,
+    recordingId: 'recording-1',
+    initiatedBy: 'remote',
+  });
+
+  const subscription = await client.controls.subscribeToRecordingState(
+    connected,
+    (state) => updates.push(state)
+  );
+  fixture.emitRecordingState({ active: false, initiatedBy: 'local' });
+  await subscription.remove();
+  await subscription.remove();
+
+  assert.deepEqual(updates, [{ active: false, initiatedBy: 'local' }]);
+  assert.deepEqual(fixture.calls, [
+    ['requestStartRecording', connected, 'c3RhcnQ='],
+    ['requestStopRecording', connected, 'c3RvcA=='],
+    ['readRecordingState', connected],
+    ['startRecordingStateUpdates', connected],
+    ['stopRecordingStateUpdates'],
   ]);
 });
 

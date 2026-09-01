@@ -66,10 +66,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - `BotaDeviceSDK.controls` and the internal `DeviceManager` now delegate
   provisioning-state, device-public-key, auth-nonce, API-endpoint,
   certificate, backend-public-key, recording-grant, and time-sync commands to
-  native `DeviceControlManager` facades. Keep public keys as typed native bytes
-  below Codegen and keep certificate chunk framing native. Recording control
-  and reset compatibility remain incomplete, so `DeviceManager` is still not a
-  root export.
+  native `DeviceControlManager` facades. The controls facade also delegates
+  grant-gated recording start/stop, recording-state reads, and one owned
+  recording-state stream; Codegen carries only typed results and state. Keep
+  public keys as typed native bytes below Codegen and keep certificate chunk
+  framing plus recording-control BLE sequencing native. The compatibility
+  owner does not yet expose those recording methods, and reset compatibility
+  remains incomplete, so `DeviceManager` is still not a root export.
 - The React Native package also exposes the native-backed
   `BotaDeviceSDK.devices` discovery, connection, and device-status slice.
   JavaScript preserves the frozen scan filters and status date mapping; Apple

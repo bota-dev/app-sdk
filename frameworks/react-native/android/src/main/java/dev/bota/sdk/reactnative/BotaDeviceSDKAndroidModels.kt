@@ -22,6 +22,9 @@ import dev.bota.sdk.model.LteStatus
 import dev.bota.sdk.model.ModemInfo
 import dev.bota.sdk.model.PairingState
 import dev.bota.sdk.model.RecordingTransferProgress
+import dev.bota.sdk.model.RecordingControlResult
+import dev.bota.sdk.model.RecordingInitiator
+import dev.bota.sdk.model.RecordingState
 import dev.bota.sdk.model.WifiRadioStatus
 import dev.bota.sdk.model.DeviceWiFiScanResult
 import dev.bota.sdk.model.WiFiConfigResult
@@ -165,6 +168,20 @@ internal fun DeviceRecording.toWritableMap(): WritableMap = Arguments.createMap(
 internal fun RecordingTransferProgress.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putDouble("completedUnits", completedBytes.toDouble())
     putDouble("totalUnits", totalBytes.toDouble())
+}
+
+internal fun RecordingControlResult.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putBoolean("success", success)
+    error?.let { putString("error", it.wireValue) }
+}
+
+internal fun RecordingState.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putBoolean("active", active)
+    recordingId?.let { putString("recordingId", it) }
+    putString(
+        "initiatedBy",
+        if (initiatedBy == RecordingInitiator.Remote) "remote" else "local",
+    )
 }
 
 internal fun UploadOwnershipResult.toWritableMap(): WritableMap = Arguments.createMap().apply {

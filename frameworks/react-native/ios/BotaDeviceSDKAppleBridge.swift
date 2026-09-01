@@ -441,6 +441,152 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
+    @objc(requestStartRecordingWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:grantBlob:completion:)
+    public func requestStartRecording(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        grantBlob: String,
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let result = try await security.requestStartRecording(
+                    Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    ),
+                    grantBlob: grantBlob
+                )
+                completion(Self.recordingControlResult(result), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc(requestStopRecordingWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:grantBlob:completion:)
+    public func requestStopRecording(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        grantBlob: String,
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let result = try await security.requestStopRecording(
+                    Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    ),
+                    grantBlob: grantBlob
+                )
+                completion(Self.recordingControlResult(result), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc(readRecordingStateWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:completion:)
+    public func readRecordingState(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let state = try await security.readRecordingState(from: Self.connectedDevice(
+                    id: id,
+                    serialNumber: serialNumber,
+                    deviceType: deviceType,
+                    firmwareVersion: firmwareVersion,
+                    hardwareRevision: hardwareRevision,
+                    isProvisioned: isProvisioned,
+                    connectionState: connectionState,
+                    mtu: mtu
+                ))
+                completion(Self.recordingState(state), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc(startRecordingStateUpdatesWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:onState:onError:completion:)
+    public func startRecordingStateUpdates(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        onState: @escaping @Sendable ([String: Any]) -> Void,
+        onError: @escaping @Sendable (NSError) -> Void,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await security.startRecordingStateUpdates(
+                    Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    ),
+                    onState: { onState(Self.recordingState($0)) },
+                    onError: { onError($0 as NSError) }
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(stopRecordingStateUpdatesWithCompletion:)
+    public func stopRecordingStateUpdates(completion: @escaping @Sendable () -> Void) {
+        Task {
+            await security.stopRecordingStateUpdates()
+            completion()
+        }
+    }
+
     @objc(configureWiFiWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:ssid:password:grantBlob:completion:)
     public func configureWiFi(
         id: String,
@@ -1263,6 +1409,21 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
             "codec": audioCodec(recording.codec),
             "isEncrypted": recording.isEncrypted,
         ]
+    }
+
+    private static func recordingControlResult(_ result: RecordingControlResult) -> [String: Any] {
+        var value: [String: Any] = ["success": result.success]
+        if let error = result.error { value["error"] = error.rawValue }
+        return value
+    }
+
+    private static func recordingState(_ state: RecordingState) -> [String: Any] {
+        var value: [String: Any] = [
+            "active": state.active,
+            "initiatedBy": state.initiatedBy == .remote ? "remote" : "local",
+        ]
+        if let recordingID = state.recordingID { value["recordingId"] = recordingID }
+        return value
     }
 
     private static func uploadOwnershipResult(_ result: UploadOwnershipResult) -> [String: Any] {

@@ -9,8 +9,17 @@ import dev.bota.sdk.model.FactoryResetCompletion
 import dev.bota.sdk.model.FactoryResetGrantRequest
 import dev.bota.sdk.model.ProvisioningMaterial
 import dev.bota.sdk.model.ProvisioningMaterialRequest
+import dev.bota.sdk.model.RecordingControlError
+import dev.bota.sdk.model.RecordingControlResult
+import dev.bota.sdk.model.RecordingInitiator
+import dev.bota.sdk.model.RecordingState
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
@@ -48,6 +57,50 @@ class BotaDeviceSDKAndroidSecurityTest {
         assertArrayEquals(byteArrayOf(1, 2, 3), client.backendPublicKey)
         assertEquals("AQID", client.grantBlob)
         assertTrue(client.timeSynced)
+    }
+
+    @Test
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun recordingControlsAndStateStreamDelegateToAndroidFacade() = runTest {
+        val connected = ConnectedDevice(
+            id = "selected",
+            serialNumber = "EVFXXW67KP",
+            deviceType = DeviceType.BotaPin,
+            firmwareVersion = "1.0.11",
+            isProvisioned = true,
+            connectionState = ConnectionState.Connected,
+            mtu = 247,
+        )
+        val client = TestAndroidSecurityClient()
+        val security = BotaDeviceSDKAndroidSecurity(client, backgroundScope)
+        val update = CompletableDeferred<RecordingState>()
+
+        assertEquals(
+            RecordingControlResult(success = true),
+            security.requestStartRecording(connected, "c3RhcnQ="),
+        )
+        assertEquals(
+            RecordingControlResult(success = false, error = RecordingControlError.NotRecording),
+            security.requestStopRecording(connected, "c3RvcA=="),
+        )
+        assertEquals(
+            RecordingState(true, "recording-1", RecordingInitiator.Remote),
+            security.readRecordingState(connected),
+        )
+
+        security.startRecordingStateUpdates(connected) { update.complete(it) }
+        runCurrent()
+        assertEquals(
+            RecordingState(false, initiatedBy = RecordingInitiator.Local),
+            update.await(),
+        )
+        security.stopRecordingStateUpdates()
+        security.stopRecordingStateUpdates()
+        client.recordingStateTerminated.await()
+
+        assertEquals("c3RhcnQ=", client.startRecordingGrant)
+        assertEquals("c3RvcA==", client.stopRecordingGrant)
+        assertEquals(1, client.recordingStateTerminationCount)
     }
 
     @Test
@@ -251,6 +304,10 @@ class BotaDeviceSDKAndroidSecurityTest {
         var backendPublicKey: ByteArray? = null
         var grantBlob: String? = null
         var timeSynced = false
+        var startRecordingGrant: String? = null
+        var stopRecordingGrant: String? = null
+        val recordingStateTerminated = CompletableDeferred<Unit>()
+        var recordingStateTerminationCount = 0
 
         override suspend fun isProvisioned(device: ConnectedDevice): Boolean = true
         override suspend fun readPublicKey(device: ConnectedDevice): String? = "public-key"
@@ -273,6 +330,31 @@ class BotaDeviceSDKAndroidSecurityTest {
             this.grantBlob = grantBlob
         }
         override suspend fun syncTime(device: ConnectedDevice) { timeSynced = true }
+        override suspend fun requestStartRecording(
+            device: ConnectedDevice,
+            grantBlob: String,
+        ): RecordingControlResult {
+            startRecordingGrant = grantBlob
+            return RecordingControlResult(success = true)
+        }
+        override suspend fun requestStopRecording(
+            device: ConnectedDevice,
+            grantBlob: String,
+        ): RecordingControlResult {
+            stopRecordingGrant = grantBlob
+            return RecordingControlResult(success = false, error = RecordingControlError.NotRecording)
+        }
+        override suspend fun readRecordingState(device: ConnectedDevice): RecordingState =
+            RecordingState(true, "recording-1", RecordingInitiator.Remote)
+        override fun recordingStateUpdates(device: ConnectedDevice): Flow<RecordingState> = flow {
+            try {
+                emit(RecordingState(false, initiatedBy = RecordingInitiator.Local))
+                awaitCancellation()
+            } finally {
+                recordingStateTerminationCount += 1
+                recordingStateTerminated.complete(Unit)
+            }
+        }
 
         override suspend fun provision(
             device: ConnectedDevice,

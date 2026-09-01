@@ -29,6 +29,18 @@ protocol BotaDeviceSDKAppleSecurityClient: Sendable {
     func deliverBackendPublicKey(_ publicKey: Data, to device: ConnectedDevice) async throws
     func writeGrant(_ grantBlob: String, to device: ConnectedDevice) async throws
     func syncTime(_ device: ConnectedDevice) async throws
+    func requestStartRecording(
+        _ device: ConnectedDevice,
+        grantBlob: String
+    ) async throws -> RecordingControlResult
+    func requestStopRecording(
+        _ device: ConnectedDevice,
+        grantBlob: String
+    ) async throws -> RecordingControlResult
+    func readRecordingState(from device: ConnectedDevice) async throws -> RecordingState
+    func recordingStateUpdates(
+        _ device: ConnectedDevice
+    ) async throws -> AsyncThrowingStream<RecordingState, Error>
     func provision(
         _ device: ConnectedDevice,
         using provider: @escaping ProvisioningMaterialProvider
@@ -102,6 +114,30 @@ struct BotaDeviceSDKSharedAppleSecurityClient: BotaDeviceSDKAppleSecurityClient 
 
     func syncTime(_ device: ConnectedDevice) async throws {
         try await controls.syncTime(to: device)
+    }
+
+    func requestStartRecording(
+        _ device: ConnectedDevice,
+        grantBlob: String
+    ) async throws -> RecordingControlResult {
+        try await controls.requestStartRecording(device, grantBlob: grantBlob)
+    }
+
+    func requestStopRecording(
+        _ device: ConnectedDevice,
+        grantBlob: String
+    ) async throws -> RecordingControlResult {
+        try await controls.requestStopRecording(device, grantBlob: grantBlob)
+    }
+
+    func readRecordingState(from device: ConnectedDevice) async throws -> RecordingState {
+        try await controls.readRecordingState(from: device)
+    }
+
+    func recordingStateUpdates(
+        _ device: ConnectedDevice
+    ) async throws -> AsyncThrowingStream<RecordingState, Error> {
+        try await controls.recordingStateUpdates(for: device)
     }
 
     func provision(
@@ -186,6 +222,7 @@ actor BotaDeviceSDKAppleSecurity {
         String: CheckedContinuation<ProvisioningMaterial, Error>
     ] = [:]
     private var factoryResetRequests: [String: CheckedContinuation<Data, Error>] = [:]
+    private var recordingStateTask: Task<Void, Never>?
 
     init(client: any BotaDeviceSDKAppleSecurityClient = BotaDeviceSDKSharedAppleSecurityClient()) {
         self.client = client
@@ -242,6 +279,50 @@ actor BotaDeviceSDKAppleSecurity {
 
     func syncTime(_ device: ConnectedDevice) async throws {
         try await client.syncTime(device)
+    }
+
+    func requestStartRecording(
+        _ device: ConnectedDevice,
+        grantBlob: String
+    ) async throws -> RecordingControlResult {
+        try await client.requestStartRecording(device, grantBlob: grantBlob)
+    }
+
+    func requestStopRecording(
+        _ device: ConnectedDevice,
+        grantBlob: String
+    ) async throws -> RecordingControlResult {
+        try await client.requestStopRecording(device, grantBlob: grantBlob)
+    }
+
+    func readRecordingState(from device: ConnectedDevice) async throws -> RecordingState {
+        try await client.readRecordingState(from: device)
+    }
+
+    func startRecordingStateUpdates(
+        _ device: ConnectedDevice,
+        onState: @escaping @Sendable (RecordingState) -> Void,
+        onError: @escaping @Sendable (Error) -> Void = { _ in }
+    ) async throws {
+        await stopRecordingStateUpdates()
+        let updates = try await client.recordingStateUpdates(device)
+        let task = Task {
+            do {
+                for try await state in updates { onState(state) }
+            } catch is CancellationError {
+                // Explicit stop is not a recording-state stream failure.
+            } catch {
+                onError(error)
+            }
+        }
+        recordingStateTask = task
+    }
+
+    func stopRecordingStateUpdates() async {
+        guard let task = recordingStateTask else { return }
+        recordingStateTask = nil
+        task.cancel()
+        await task.value
     }
 
     func readConnectionSettings(from device: ConnectedDevice) async throws -> DeviceConnectionSettings {
@@ -320,6 +401,7 @@ actor BotaDeviceSDKAppleSecurity {
     }
 
     func cancelAll() async {
+        await stopRecordingStateUpdates()
         let pending = provisioningRequests.values
         provisioningRequests.removeAll()
         pending.forEach { $0.resume(throwing: MaterialError.cancelled) }

@@ -124,13 +124,14 @@ native-backed scan, selected connection, status, settings, logs, WiFi, and
 last-known WiFi cache behavior, including idempotent legacy removal functions.
 The sibling `BotaDeviceSDK.controls` facade now delegates provisioning-state,
 device-public-key, auth-nonce, API-endpoint, certificate, backend-public-key,
-recording-grant, and time-sync commands to native Apple and Android
-`DeviceControlManager` facades. Certificate chunk framing and public-key bytes
-remain native; Codegen carries only typed text and command results. The
-compatibility owner delegates the corresponding frozen methods, but it is
-deliberately not a root export: recording control and reset compatibility still
-need typed native methods before the frozen class can pass its exact surface
-gate.
+recording-grant, time-sync, grant-gated recording start/stop, recording-state
+reads, and one owned recording-state stream to native Apple and Android
+`DeviceControlManager` facades. Certificate chunk framing, public-key bytes,
+grant writes, subscription ordering, opcodes, and stop-command pacing remain
+native; Codegen carries only typed text, command results, and recording state.
+The compatibility owner delegates the earlier frozen methods, but it is
+deliberately not a root export until its recording-control methods and reset
+compatibility pass the exact class-surface gate.
 The package's new `BotaDeviceSDK.devices` facade is intentionally smaller than
 the withheld `DeviceManager`: it owns a typed discovery subscription, preserves
 the frozen JavaScript scan filters, connects a selected peripheral while the
@@ -160,7 +161,8 @@ configuration, orders destruction after any in-flight configuration, and calls
 the public `BotaDeviceClient` facade. A separate actor owns scan and status
 collection and cancels status before a connection transition or destruction.
 Objective-C++ implements only the generated TurboModule spec, typed discovery,
-status, provisioning, and reset-grant event emission, and promise conversion. The pod uses React Native
+status, recording-state, provisioning, and reset-grant event emission, and
+promise conversion. The pod uses React Native
 0.86's iOS 15.1 floor and resolves the exact matching `BotaAppleSDK` release;
 the local package-path override exists only for source and CI builds. A
 disposable Objective-C++ and Swift CocoaPods application compiles and links the
@@ -171,8 +173,9 @@ target-scoped CocoaPods hook carries React Native's upstream fix for duplicate
 binary Swift-package module maps on Xcode 26.3 while the package floor remains
 0.86.3. This proves lifecycle plus device discovery, connection, status,
 provisioning, connection-settings reads and writes, authenticated-reset,
-recording-transfer, upload-ownership, OTA, device-log, and WiFi integration, not the
-remaining workflow surface or application parity.
+recording control and state, recording-transfer, upload-ownership, OTA,
+device-log, and WiFi integration, not the remaining workflow surface or
+application parity.
 
 The Android host is also executable. A coroutine mutex serializes
 configuration and destruction through `BotaDeviceClient.shared`, and a
@@ -186,9 +189,9 @@ Gradle consumer regenerates Codegen, runs lifecycle unit tests and lint, and
 assembles the adapter against the exact AAR reconstructed from the immutable
 local Maven payload. This proves Android lifecycle plus device discovery,
 connection, status, provisioning, connection-settings reads and writes,
-authenticated-reset, recording-transfer, upload-ownership, OTA, device-log, and
-WiFi integration only; the remaining workflow bindings and application parity
-remain open.
+authenticated-reset, recording control and state, recording-transfer,
+upload-ownership, OTA, device-log, and WiFi integration only; the remaining
+workflow bindings and application parity remain open.
 
 The React Native reset broker exposes only the nonce, command ID, binding
 generation, and an encoded grant string. Apple and Android decode the grant into

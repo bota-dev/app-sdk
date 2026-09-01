@@ -9,6 +9,8 @@ import type {
   NativeFactoryResetCompletion,
   NativeFactoryResetGrantRequest,
   NativeFirmwareUpdateProgress,
+  NativeRecordingControlResult,
+  NativeRecordingState,
   NativeRecordingTransferProgress,
   NativeProvisioningMaterialRequest,
   NativeUploadOwnershipResult,
@@ -38,6 +40,7 @@ import type {
   WiFiStatusInfo,
   DeviceWiFiScanResult,
   Environment,
+  RecordingState,
   WifiStatus,
 } from './models/Device';
 import type { AudioCodec, DeviceRecording } from './models/Recording';
@@ -112,6 +115,24 @@ export type BotaDeviceSDKControlClient = {
   ): Promise<void>;
   writeGrant(device: ConnectedDevice, grantBlob: string): Promise<void>;
   syncTime(device: ConnectedDevice): Promise<void>;
+  requestStartRecording(
+    device: ConnectedDevice,
+    grantBlob: string
+  ): Promise<BotaRecordingControlResult>;
+  requestStopRecording(
+    device: ConnectedDevice,
+    grantBlob: string
+  ): Promise<BotaRecordingControlResult>;
+  readRecordingState(device: ConnectedDevice): Promise<RecordingState>;
+  subscribeToRecordingState(
+    device: ConnectedDevice,
+    onState: (state: RecordingState) => void
+  ): Promise<BotaAsyncEventSubscription>;
+};
+
+export type BotaRecordingControlResult = {
+  success: boolean;
+  error?: string;
 };
 
 export type BotaFactoryResetGrantRequest = Omit<
@@ -451,6 +472,21 @@ const mapWiFiStatus = (status: NativeWiFiStatusInfo): WiFiStatusInfo => ({
   ...(status.lastError === undefined ? {} : { lastError: status.lastError }),
 });
 
+const mapRecordingControlResult = (
+  result: NativeRecordingControlResult
+): BotaRecordingControlResult => ({
+  success: result.success,
+  ...(result.error === undefined ? {} : { error: result.error }),
+});
+
+const mapRecordingState = (state: NativeRecordingState): RecordingState => ({
+  active: state.active,
+  ...(state.recordingId === undefined
+    ? {}
+    : { recordingId: state.recordingId }),
+  initiatedBy: state.initiatedBy === 'remote' ? 'remote' : 'local',
+});
+
 const mapWiFiConfigResult = (
   result: NativeWiFiConfigResult
 ): WiFiConfigResult => {
@@ -680,6 +716,54 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
 
     async syncTime(device) {
       await requireNativeModule().syncTime(toNativeConnectedDevice(device));
+    },
+
+    async requestStartRecording(device, grantBlob) {
+      return mapRecordingControlResult(
+        await requireNativeModule().requestStartRecording(
+          toNativeConnectedDevice(device),
+          grantBlob
+        )
+      );
+    },
+
+    async requestStopRecording(device, grantBlob) {
+      return mapRecordingControlResult(
+        await requireNativeModule().requestStopRecording(
+          toNativeConnectedDevice(device),
+          grantBlob
+        )
+      );
+    },
+
+    async readRecordingState(device) {
+      return mapRecordingState(
+        await requireNativeModule().readRecordingState(
+          toNativeConnectedDevice(device)
+        )
+      );
+    },
+
+    async subscribeToRecordingState(device, onState) {
+      const module = requireNativeModule();
+      const eventSubscription = module.onRecordingStateUpdated((state) => {
+        onState(mapRecordingState(state));
+      });
+      try {
+        await module.startRecordingStateUpdates(toNativeConnectedDevice(device));
+      } catch (error) {
+        eventSubscription.remove();
+        throw error;
+      }
+      let removed = false;
+      return {
+        async remove() {
+          if (removed) return;
+          removed = true;
+          eventSubscription.remove();
+          await module.stopRecordingStateUpdates();
+        },
+      };
     },
   };
 

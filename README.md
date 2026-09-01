@@ -51,8 +51,9 @@ typed event emitter,
 Objective-C++, Swift, Swift Package, and Rust XCFramework layers compile and
 link together. Its Android adapters provide the same lifecycle, connection,
 status, provisioning, connection-settings reads and writes, authenticated-reset,
-recording-transfer, upload ownership, OTA, device-log, and WiFi slices through
-`BotaDeviceClient.shared`; a checked-in React Native Gradle consumer runs
+recording control and state, recording-transfer, upload ownership, OTA,
+device-log, and WiFi slices through `BotaDeviceClient.shared`; a checked-in
+React Native Gradle consumer runs
 Codegen, Kotlin tests, lint, and release assembly against the exact locally
 packaged AAR. The package now
 matches 75 of the 80 frozen `0.0.65` root exports: every public type plus the
@@ -64,8 +65,10 @@ The internal `DeviceManager` compatibility owner already delegates scan,
 selected connection, status, settings, logs, WiFi/cache behavior, provisioning
 state and key reads, direct provisioning writes, and time sync. Those low-volume
 commands run through native Apple and Android `DeviceControlManager` facades;
-certificate framing and public-key bytes do not cross JavaScript. The class is
-not exported until recording control, reset compatibility, and the complete
+certificate framing and public-key bytes do not cross JavaScript. The sibling
+controls facade also exposes native-owned recording start/stop, state reads,
+and one state subscription using typed Codegen values only. The class is not
+exported until its recording methods, reset compatibility, and the complete
 frozen class contract pass.
 The Android package foundation now pins JDK 17, Gradle 8.13, Android Gradle
 Plugin 8.13.2, Kotlin 2.1.20, API 26/36, NDK 28.2.13676358, and CMake 3.22.1.

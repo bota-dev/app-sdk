@@ -809,6 +809,51 @@
               }
             ]
           },
+          "NativeRecordingControlResult": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "success",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "error",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeRecordingState": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "active",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "recordingId",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "initiatedBy",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
           "NativeRecordingTransferProgress": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -995,6 +1040,17 @@
                 "typeAnnotation": {
                   "type": "TypeAliasTypeAnnotation",
                   "name": "NativeDeviceStatus"
+                }
+              }
+            },
+            {
+              "name": "onRecordingStateUpdated",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeRecordingState"
                 }
               }
             },
@@ -1398,6 +1454,129 @@
                     }
                   }
                 ]
+              }
+            },
+            {
+              "name": "requestStartRecording",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeRecordingControlResult"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "grantBlob",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "requestStopRecording",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeRecordingControlResult"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "grantBlob",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "readRecordingState",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeRecordingState"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "startRecordingStateUpdates",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "stopRecordingStateUpdates",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": []
               }
             },
             {
@@ -2106,11 +2285,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "650ab8d6ab54ec50a28d714f9ec854106f68be24b784357ae5ae56f61eb90908"
+        "sha256": "02e693719138961e1c73c56161ee59b6fb8aed1c57f8415750f45f6e3e7a8f54"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "174bea0b0cad2b63ecc39f177fd677dfda86e5561e6a2ff84f385033e516e460"
+        "sha256": "e8bc6d96114bd33285cff7e4f19e2268d982c98b659a03e372f6c3ff60c720d6"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -2122,23 +2301,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "aaedaebc87fae2afc3a791e273751787aa321ea92cb496b9844813c73880fb38"
+        "sha256": "107b48350cb88bf876a2d8e5e2aa06fd52b8e3e20e24671cef4e9a65037b92e5"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "6a23a759860649b2f30e1325884c3aefa573fd2eb4154d0a089f9fdd299c3f67"
+        "sha256": "e2194a9c3247b7795111d9d9af4efffabcd8b96366fe777d44efa8bc57b25d1c"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "db476bd77f40a16b8569c060ca0a12dd9417387248a87fb97b10bbce2c5bb561"
+        "sha256": "46ba56ab7da2003530f546ee1367e64cc7112be1b9d35992394322775287a791"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "aaedaebc87fae2afc3a791e273751787aa321ea92cb496b9844813c73880fb38"
+        "sha256": "107b48350cb88bf876a2d8e5e2aa06fd52b8e3e20e24671cef4e9a65037b92e5"
       }
     ]
   },
-  "contractDigest": "b9689e482aa1897f6d01643cdebf503d00a05e37bd9b9ea275e78d101ad45570"
+  "contractDigest": "dbccb0c47c13e0a0b84c6f9f81e1ed6742356e7075270097dcbe6636798c1e8b"
 }

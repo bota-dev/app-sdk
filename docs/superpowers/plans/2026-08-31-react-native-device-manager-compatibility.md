@@ -130,8 +130,11 @@ Task 1.
 **Progress (2026-08-31):** The first focused slice covers provisioning-state,
 device-public-key, auth-nonce, API-endpoint, certificate, backend-public-key,
 recording-grant, and time-sync commands through Rust, Apple, Android, Codegen,
-and the internal compatibility owner. Recording control/result state machines
-and reset compatibility remain in Task 2 and will be committed separately.
+and the internal compatibility owner. A second focused slice now carries
+recording start/stop results plus recording-state reads and one owned state
+stream through Rust, Apple, Android, and Codegen. The corresponding internal
+`DeviceManager` behavior and reset compatibility remain in Task 2 and will be
+committed separately.
 
 **Files:**
 - Modify: `frameworks/react-native/src/specs/NativeBotaDeviceSDK.ts`

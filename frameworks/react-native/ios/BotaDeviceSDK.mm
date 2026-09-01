@@ -307,6 +307,111 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
                }];
 }
 
+- (void)requestStartRecording:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                     grantBlob:(NSString *)grantBlob
+                       resolve:(RCTPromiseResolveBlock)resolve
+                        reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      requestStartRecordingWithID:device.id_()
+                     serialNumber:device.serialNumber()
+                       deviceType:device.deviceType()
+                  firmwareVersion:device.firmwareVersion()
+                  hardwareRevision:device.hardwareRevision()
+                    isProvisioned:device.isProvisioned()
+                  connectionState:device.connectionState()
+                              mtu:device.mtu()
+                        grantBlob:grantBlob
+                       completion:^(NSDictionary *_Nullable result, NSError *_Nullable error) {
+                         if (error != nil) {
+                           BotaRejectAppleError(error, reject);
+                           return;
+                         }
+                         resolve(result);
+                       }];
+}
+
+- (void)requestStopRecording:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                    grantBlob:(NSString *)grantBlob
+                      resolve:(RCTPromiseResolveBlock)resolve
+                       reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      requestStopRecordingWithID:device.id_()
+                    serialNumber:device.serialNumber()
+                      deviceType:device.deviceType()
+                 firmwareVersion:device.firmwareVersion()
+                 hardwareRevision:device.hardwareRevision()
+                   isProvisioned:device.isProvisioned()
+                 connectionState:device.connectionState()
+                             mtu:device.mtu()
+                       grantBlob:grantBlob
+                      completion:^(NSDictionary *_Nullable result, NSError *_Nullable error) {
+                        if (error != nil) {
+                          BotaRejectAppleError(error, reject);
+                          return;
+                        }
+                        resolve(result);
+                      }];
+}
+
+- (void)readRecordingState:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                    resolve:(RCTPromiseResolveBlock)resolve
+                     reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      readRecordingStateWithID:device.id_()
+                  serialNumber:device.serialNumber()
+                    deviceType:device.deviceType()
+               firmwareVersion:device.firmwareVersion()
+               hardwareRevision:device.hardwareRevision()
+                 isProvisioned:device.isProvisioned()
+               connectionState:device.connectionState()
+                           mtu:device.mtu()
+                    completion:^(NSDictionary *_Nullable state, NSError *_Nullable error) {
+                      if (error != nil) {
+                        BotaRejectAppleError(error, reject);
+                        return;
+                      }
+                      resolve(state);
+                    }];
+}
+
+- (void)startRecordingStateUpdates:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                            resolve:(RCTPromiseResolveBlock)resolve
+                             reject:(RCTPromiseRejectBlock)reject
+{
+  __weak BotaDeviceSDK *weakSelf = self;
+  [[BotaDeviceSDKAppleBridge shared]
+      startRecordingStateUpdatesWithID:device.id_()
+                         serialNumber:device.serialNumber()
+                           deviceType:device.deviceType()
+                      firmwareVersion:device.firmwareVersion()
+                      hardwareRevision:device.hardwareRevision()
+                        isProvisioned:device.isProvisioned()
+                      connectionState:device.connectionState()
+                                  mtu:device.mtu()
+                              onState:^(NSDictionary *state) {
+                                [weakSelf emitOnRecordingStateUpdated:state];
+                              }
+                              onError:^(__unused NSError *error) {}
+                           completion:^(NSError *_Nullable error) {
+                             if (error != nil) {
+                               BotaRejectAppleError(error, reject);
+                               return;
+                             }
+                             resolve(nil);
+                           }];
+}
+
+- (void)stopRecordingStateUpdates:(RCTPromiseResolveBlock)resolve
+                            reject:(__unused RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared] stopRecordingStateUpdatesWithCompletion:^{
+    resolve(nil);
+  }];
+}
+
 - (void)configureWiFi:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
                   ssid:(NSString *)ssid
               password:(NSString *)password

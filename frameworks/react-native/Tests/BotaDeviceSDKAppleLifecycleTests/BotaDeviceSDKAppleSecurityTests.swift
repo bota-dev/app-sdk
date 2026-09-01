@@ -38,6 +38,55 @@ final class BotaDeviceSDKAppleSecurityTests: XCTestCase {
         XCTAssertTrue(snapshot.timeSynced)
     }
 
+    func testRecordingControlsAndStateStreamDelegateToAppleFacade() async throws {
+        let connected = ConnectedDevice(
+            id: "selected",
+            serialNumber: "EVFXXW67KP",
+            deviceType: .botaPin,
+            firmwareVersion: "1.0.11",
+            isProvisioned: true,
+            connectionState: .connected,
+            mtu: 247
+        )
+        let client = TestAppleSecurityClient()
+        let security = BotaDeviceSDKAppleSecurity(client: client)
+        let updates = RecordingStateCapture()
+
+        let startResult = try await security.requestStartRecording(
+            connected,
+            grantBlob: "c3RhcnQ="
+        )
+        let stopResult = try await security.requestStopRecording(
+            connected,
+            grantBlob: "c3RvcA=="
+        )
+        let recordingState = try await security.readRecordingState(from: connected)
+        XCTAssertEqual(startResult, RecordingControlResult(success: true))
+        XCTAssertEqual(
+            stopResult,
+            RecordingControlResult(success: false, error: .notRecording)
+        )
+        XCTAssertEqual(
+            recordingState,
+            RecordingState(active: true, recordingID: "recording-1", initiatedBy: .remote)
+        )
+
+        try await security.startRecordingStateUpdates(connected) { state in
+            Task { await updates.append(state) }
+        }
+        await client.emitRecordingState(.init(active: false, initiatedBy: .local))
+        let update = await updates.next()
+        XCTAssertEqual(update, RecordingState(active: false, initiatedBy: .local))
+        await security.stopRecordingStateUpdates()
+        await security.stopRecordingStateUpdates()
+        await client.waitForRecordingStateTermination()
+
+        let snapshot = await client.snapshot()
+        XCTAssertEqual(snapshot.startRecordingGrant, "c3RhcnQ=")
+        XCTAssertEqual(snapshot.stopRecordingGrant, "c3RvcA==")
+        XCTAssertEqual(snapshot.recordingStateTerminationCount, 1)
+    }
+
     func testProvisioningMaterialRoundTripAndDeprovisionDelegateToAppleFacade() async throws {
         let connected = ConnectedDevice(
             id: "selected",
@@ -283,6 +332,25 @@ private actor FactoryResetRequestCapture {
     }
 }
 
+private actor RecordingStateCapture {
+    private var values: [RecordingState] = []
+    private var waiter: CheckedContinuation<RecordingState, Never>?
+
+    func append(_ value: RecordingState) {
+        if let waiter {
+            self.waiter = nil
+            waiter.resume(returning: value)
+        } else {
+            values.append(value)
+        }
+    }
+
+    func next() async -> RecordingState {
+        if !values.isEmpty { return values.removeFirst() }
+        return await withCheckedContinuation { waiter = $0 }
+    }
+}
+
 private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
     struct Snapshot: Sendable {
         let material: ProvisioningMaterial?
@@ -297,6 +365,9 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
         let backendPublicKey: Data?
         let grantBlob: String?
         let timeSynced: Bool
+        let startRecordingGrant: String?
+        let stopRecordingGrant: String?
+        let recordingStateTerminationCount: Int
     }
 
     private var material: ProvisioningMaterial?
@@ -311,6 +382,11 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
     private var backendPublicKey: Data?
     private var grantBlob: String?
     private var timeSynced = false
+    private var startRecordingGrant: String?
+    private var stopRecordingGrant: String?
+    private var recordingStateContinuation: AsyncThrowingStream<RecordingState, Error>.Continuation?
+    private var recordingStateTerminationCount = 0
+    private var recordingStateTerminationWaiter: CheckedContinuation<Void, Never>?
     private let connectionSettingsReadResult: DeviceConnectionSettings
 
     init(connectionSettingsReadResult: DeviceConnectionSettings = .init(
@@ -356,6 +432,49 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
         self.grantBlob = grantBlob
     }
     func syncTime(_ device: ConnectedDevice) async throws { timeSynced = true }
+    func requestStartRecording(
+        _ device: ConnectedDevice,
+        grantBlob: String
+    ) async throws -> RecordingControlResult {
+        startRecordingGrant = grantBlob
+        return .init(success: true)
+    }
+    func requestStopRecording(
+        _ device: ConnectedDevice,
+        grantBlob: String
+    ) async throws -> RecordingControlResult {
+        stopRecordingGrant = grantBlob
+        return .init(success: false, error: .notRecording)
+    }
+    func readRecordingState(from device: ConnectedDevice) async throws -> RecordingState {
+        .init(active: true, recordingID: "recording-1", initiatedBy: .remote)
+    }
+    func recordingStateUpdates(
+        _ device: ConnectedDevice
+    ) async throws -> AsyncThrowingStream<RecordingState, Error> {
+        let pair = AsyncThrowingStream<RecordingState, Error>.makeStream()
+        pair.continuation.onTermination = { @Sendable _ in
+            Task { await self.recordingStateTerminated() }
+        }
+        recordingStateContinuation = pair.continuation
+        return pair.stream
+    }
+
+    func emitRecordingState(_ state: RecordingState) {
+        recordingStateContinuation?.yield(state)
+    }
+
+    func waitForRecordingStateTermination() async {
+        if recordingStateTerminationCount > 0 { return }
+        await withCheckedContinuation { recordingStateTerminationWaiter = $0 }
+    }
+
+    private func recordingStateTerminated() {
+        recordingStateTerminationCount += 1
+        recordingStateContinuation = nil
+        recordingStateTerminationWaiter?.resume()
+        recordingStateTerminationWaiter = nil
+    }
 
     func writeConnectionSettings(
         _ settings: DeviceConnectionSettings,
@@ -413,7 +532,10 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
             privateKey: privateKey,
             backendPublicKey: backendPublicKey,
             grantBlob: grantBlob,
-            timeSynced: timeSynced
+            timeSynced: timeSynced,
+            startRecordingGrant: startRecordingGrant,
+            stopRecordingGrant: stopRecordingGrant,
+            recordingStateTerminationCount: recordingStateTerminationCount
         )
     }
 }

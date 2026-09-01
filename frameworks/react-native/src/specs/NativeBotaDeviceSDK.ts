@@ -142,6 +142,17 @@ export type NativeRecordingTransferProgress = {
   totalUnits: number;
 };
 
+export type NativeRecordingControlResult = {
+  success: boolean;
+  error?: string;
+};
+
+export type NativeRecordingState = {
+  active: boolean;
+  recordingId?: string;
+  initiatedBy: string;
+};
+
 export type NativeUploadOwnershipRequest = {
   recordingUuid: string;
   uploadId: string;
@@ -200,6 +211,7 @@ export type NativeDeviceWiFiScanResult = {
 export interface Spec extends TurboModule {
   readonly onDeviceDiscovered: EventEmitter<NativeDiscoveredDevice>;
   readonly onDeviceStatusUpdated: EventEmitter<NativeDeviceStatus>;
+  readonly onRecordingStateUpdated: EventEmitter<NativeRecordingState>;
   readonly onProvisioningMaterialRequested: EventEmitter<NativeProvisioningMaterialRequest>;
   readonly onFactoryResetGrantRequested: EventEmitter<NativeFactoryResetGrantRequest>;
   readonly onRecordingTransferProgress: EventEmitter<NativeRecordingTransferProgress>;
@@ -235,6 +247,21 @@ export interface Spec extends TurboModule {
     grantBlob: string
   ) => Promise<void>;
   syncTime: (device: NativeConnectedDevice) => Promise<void>;
+  requestStartRecording: (
+    device: NativeConnectedDevice,
+    grantBlob: string
+  ) => Promise<NativeRecordingControlResult>;
+  requestStopRecording: (
+    device: NativeConnectedDevice,
+    grantBlob: string
+  ) => Promise<NativeRecordingControlResult>;
+  readRecordingState: (
+    device: NativeConnectedDevice
+  ) => Promise<NativeRecordingState>;
+  startRecordingStateUpdates: (
+    device: NativeConnectedDevice
+  ) => Promise<void>;
+  stopRecordingStateUpdates: () => Promise<void>;
   configureWiFi: (
     device: NativeConnectedDevice,
     ssid: string,
