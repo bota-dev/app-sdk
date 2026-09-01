@@ -67,9 +67,10 @@ state and key reads, direct provisioning writes, and time sync. Those low-volume
 commands run through native Apple and Android `DeviceControlManager` facades;
 certificate framing and public-key bytes do not cross JavaScript. The sibling
 controls facade also exposes native-owned recording start/stop, state reads,
-and one state subscription using typed Codegen values only. The class is not
-exported until its recording methods, reset compatibility, and the complete
-frozen class contract pass.
+and one state subscription using typed Codegen values only. The compatibility
+owner preserves the frozen grant-fetcher overloads, pending-state behavior,
+cache fallback, and synchronous removal function. The class is not exported
+until reset compatibility and the complete frozen class contract pass.
 The Android package foundation now pins JDK 17, Gradle 8.13, Android Gradle
 Plugin 8.13.2, Kotlin 2.1.20, API 26/36, NDK 28.2.13676358, and CMake 3.22.1.
 It produces a version-synchronized, unsigned local AAR with sources, Dokka

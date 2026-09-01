@@ -71,8 +71,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   recording-state stream; Codegen carries only typed results and state. Keep
   public keys as typed native bytes below Codegen and keep certificate chunk
   framing plus recording-control BLE sequencing native. The compatibility
-  owner does not yet expose those recording methods, and reset compatibility
-  remains incomplete, so `DeviceManager` is still not a root export.
+  owner preserves the frozen grant-fetcher overloads, pending-state precedence,
+  state cache fallback, and synchronous subscription removal. Reset
+  compatibility and the remaining exact class surface are incomplete, so
+  `DeviceManager` is still not a root export.
 - The React Native package also exposes the native-backed
   `BotaDeviceSDK.devices` discovery, connection, and device-status slice.
   JavaScript preserves the frozen scan filters and status date mapping; Apple

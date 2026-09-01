@@ -141,6 +141,78 @@ test('internal DeviceManager delegates frozen provisioning and control commands'
   ]);
 });
 
+test('internal DeviceManager preserves recording grant overloads and pending state precedence', async () => {
+  const fake = createFakeClient();
+  const command = deferred();
+  fake.startRecordingResult = command.promise;
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+  await manager.connect(discoveredDevice);
+
+  const start = manager.requestStartRecording(connectedDevice, 'start-grant');
+  const pendingState = manager.getRecordingState(connectedDevice);
+  assert.equal(fake.recordingStateReadCalls, 0);
+  command.resolve({ success: true });
+
+  assert.deepEqual(await start, { success: true });
+  assert.deepEqual(await pendingState, recordingState);
+  assert.equal(fake.recordingStateReadCalls, 1);
+
+  const stop = await manager.requestStopRecording(
+    connectedDevice,
+    async (nonce) => `stop-grant:${nonce}`
+  );
+  assert.deepEqual(stop, { success: false, error: 'not_recording' });
+  assert.deepEqual(fake.recordingControlCalls, [
+    ['requestStartRecording', connectedDevice, 'start-grant'],
+    ['requestStopRecording', connectedDevice, `stop-grant:${'cd'.repeat(16)}`],
+  ]);
+  assert.deepEqual(fake.controlCalls.at(-1), ['readAuthNonce', connectedDevice]);
+});
+
+test('internal DeviceManager caches recording state and falls back to frozen idle state', async () => {
+  const fake = createFakeClient();
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+  await manager.connect(discoveredDevice);
+
+  assert.deepEqual(await manager.getRecordingState(connectedDevice), recordingState);
+  fake.recordingStateError = new Error('read failed');
+  assert.deepEqual(await manager.getRecordingState(connectedDevice), recordingState);
+
+  const uncachedFake = createFakeClient();
+  uncachedFake.recordingStateError = new Error('read failed');
+  setCompatibilityClientForTesting(uncachedFake.client);
+  const uncachedManager = new DeviceManager();
+  await uncachedManager.connect(discoveredDevice);
+  assert.deepEqual(await uncachedManager.getRecordingState(connectedDevice), {
+    active: false,
+    initiatedBy: 'local',
+  });
+});
+
+test('internal DeviceManager recording subscriptions are synchronous and release native ownership once', async () => {
+  const fake = createFakeClient();
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+  await manager.connect(discoveredDevice);
+  const values = [];
+
+  const remove = manager.subscribeToRecordingState(
+    connectedDevice,
+    (state) => values.push(state)
+  );
+  assert.equal(typeof remove, 'function');
+  await tick();
+  fake.emitRecordingState(recordingState);
+  remove();
+  remove();
+  await tick();
+
+  assert.deepEqual(values, [recordingState]);
+  assert.equal(fake.recordingStateSubscriptionRemovals, 1);
+});
+
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const discoveredDevice = {
@@ -184,20 +256,45 @@ const deviceStatus = {
   timestamp: 1,
 };
 
+const recordingState = {
+  active: true,
+  recordingId: '00112233-4455-6677-8899-aabbccddeeff',
+  initiatedBy: 'remote',
+};
+
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
+
 function createFakeClient() {
   let onDiscovered;
   let onWiFiStatus;
   let onDeviceStatus;
+  let onRecordingState;
   const fake = {
     scanSubscriptionRemovals: 0,
     stopScanCalls: 0,
     wifiStatusSubscriptionRemovals: 0,
     deviceStatusSubscriptionRemovals: 0,
+    recordingStateSubscriptionRemovals: 0,
+    recordingStateReadCalls: 0,
+    recordingStateError: null,
+    recordingState: recordingState,
+    startRecordingResult: Promise.resolve({ success: true }),
+    stopRecordingResult: Promise.resolve({ success: false, error: 'not_recording' }),
+    recordingControlCalls: [],
     wifiConfiguration: null,
     controlCalls: [],
     emitDiscovered: (device) => onDiscovered?.(device),
     emitWiFiStatus: (status) => onWiFiStatus?.(status),
     emitDeviceStatus: (status) => onDeviceStatus?.(status),
+    emitRecordingState: (state) => onRecordingState?.(state),
   };
 
   fake.client = {
@@ -267,6 +364,25 @@ function createFakeClient() {
       },
       async syncTime(device) {
         fake.controlCalls.push(['syncTime', device]);
+      },
+      async requestStartRecording(device, grantBlob) {
+        fake.recordingControlCalls.push(['requestStartRecording', device, grantBlob]);
+        return fake.startRecordingResult;
+      },
+      async requestStopRecording(device, grantBlob) {
+        fake.recordingControlCalls.push(['requestStopRecording', device, grantBlob]);
+        return fake.stopRecordingResult;
+      },
+      async readRecordingState() {
+        fake.recordingStateReadCalls += 1;
+        if (fake.recordingStateError) throw fake.recordingStateError;
+        return fake.recordingState;
+      },
+      async subscribeToRecordingState(_device, callback) {
+        onRecordingState = callback;
+        return {
+          async remove() { fake.recordingStateSubscriptionRemovals += 1; },
+        };
       },
     },
     factoryReset: {},

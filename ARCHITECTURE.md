@@ -130,8 +130,11 @@ reads, and one owned recording-state stream to native Apple and Android
 grant writes, subscription ordering, opcodes, and stop-command pacing remain
 native; Codegen carries only typed text, command results, and recording state.
 The compatibility owner delegates the earlier frozen methods, but it is
-deliberately not a root export until its recording-control methods and reset
-compatibility pass the exact class-surface gate.
+deliberately not a root export. It now also preserves the frozen recording
+grant-fetcher overloads, pending command precedence, state cache fallback, and
+synchronous idempotent subscription removal over those native controls. Reset
+compatibility and the remaining class members must still pass the exact surface
+gate before export.
 The package's new `BotaDeviceSDK.devices` facade is intentionally smaller than
 the withheld `DeviceManager`: it owns a typed discovery subscription, preserves
 the frozen JavaScript scan filters, connects a selected peripheral while the

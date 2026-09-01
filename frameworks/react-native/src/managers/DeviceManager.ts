@@ -4,6 +4,7 @@ import type {
   BotaAsyncEventSubscription,
   BotaDeviceSDKClient,
   BotaEventSubscription,
+  BotaRecordingControlResult,
 } from '../client';
 import { getCompatibilityClient } from '../compatibility/runtime';
 import type {
@@ -24,11 +25,18 @@ import type {
   WiFiCredentials,
   WiFiStatusInfo,
   Environment,
+  RecordingState,
+  StartRecordingOptions,
+  StopRecordingOptions,
 } from '../models/Device';
 import type { DeviceManagerEvents } from '../models/Status';
 import { DeviceError } from '../utils/errors';
 
 type Subscription = { remove(): void };
+
+export type RecordingGrantFetcher = (
+  nonce: string | null
+) => Promise<string>;
 
 type CacheListener = (
   serialNumber: string,
@@ -52,6 +60,15 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     Promise<BotaAsyncEventSubscription>
   >();
   private readonly logSubscriptions = new Map<
+    string,
+    Promise<BotaAsyncEventSubscription>
+  >();
+  private readonly recordingStateCache = new Map<string, RecordingState>();
+  private readonly recordingStatePending = new Map<
+    string,
+    Promise<RecordingState>
+  >();
+  private readonly recordingStateSubscriptions = new Map<
     string,
     Promise<BotaAsyncEventSubscription>
   >();
@@ -143,8 +160,11 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     await this.removeOwned(this.statusSubscriptions, device.id);
     await this.removeOwned(this.wifiStatusSubscriptions, device.id);
     await this.removeOwned(this.logSubscriptions, device.id);
+    await this.removeOwned(this.recordingStateSubscriptions, device.id);
     await this.client.devices.disconnect();
     this.connectedDevices.delete(device.id);
+    this.recordingStateCache.delete(device.id);
+    this.recordingStatePending.delete(device.id);
     this.emit('connectionStateChanged', device.id, 'disconnected');
     this.emit('deviceDisconnected', device.id);
   }
@@ -209,6 +229,62 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
 
   async syncTime(deviceId: string): Promise<void> {
     await this.client.controls.syncTime(this.requireConnected(deviceId));
+  }
+
+  async requestStartRecording(
+    device: ConnectedDevice,
+    grantOrFetcher: string | RecordingGrantFetcher,
+    _options?: StartRecordingOptions
+  ): Promise<BotaRecordingControlResult> {
+    this.requireConnected(device.id);
+    if (typeof grantOrFetcher === 'string') {
+      return this.runRecordingControl(device, grantOrFetcher, 'start');
+    }
+    const grantBlob = await this.fetchRecordingGrant(device, grantOrFetcher);
+    return this.runRecordingControl(device, grantBlob, 'start');
+  }
+
+  async requestStopRecording(
+    device: ConnectedDevice,
+    grantOrFetcher: string | RecordingGrantFetcher,
+    _options?: StopRecordingOptions
+  ): Promise<BotaRecordingControlResult> {
+    this.requireConnected(device.id);
+    if (typeof grantOrFetcher === 'string') {
+      return this.runRecordingControl(device, grantOrFetcher, 'stop');
+    }
+    const grantBlob = await this.fetchRecordingGrant(device, grantOrFetcher);
+    return this.runRecordingControl(device, grantBlob, 'stop');
+  }
+
+  async getRecordingState(device: ConnectedDevice): Promise<RecordingState> {
+    this.requireConnected(device.id);
+    const pending = this.recordingStatePending.get(device.id);
+    if (pending) return pending;
+    try {
+      return await this.readAndCacheRecordingState(device);
+    } catch {
+      return this.cachedRecordingState(device.id);
+    }
+  }
+
+  subscribeToRecordingState(
+    device: ConnectedDevice,
+    callback: (state: RecordingState) => void
+  ): () => void {
+    this.requireConnected(device.id);
+    const promise = this.replaceOwned(
+      this.recordingStateSubscriptions,
+      device.id,
+      this.client.controls.subscribeToRecordingState(device, callback)
+    );
+    return idempotentRemoval(() => {
+      void this.removeExpected(
+        this.recordingStateSubscriptions,
+        device.id,
+        promise
+      );
+    });
   }
 
   subscribeToStatus(
@@ -355,7 +431,12 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     for (const [deviceId] of this.logSubscriptions) {
       void this.removeOwned(this.logSubscriptions, deviceId);
     }
+    for (const [deviceId] of this.recordingStateSubscriptions) {
+      void this.removeOwned(this.recordingStateSubscriptions, deviceId);
+    }
     this.connectedDevices.clear();
+    this.recordingStateCache.clear();
+    this.recordingStatePending.clear();
     this.cache.clear();
     this.cacheListeners.clear();
     this.removeAllListeners();
@@ -384,6 +465,56 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
       throw DeviceError.notConnected(deviceId);
     }
     return device;
+  }
+
+  private async fetchRecordingGrant(
+    device: ConnectedDevice,
+    fetcher: RecordingGrantFetcher
+  ): Promise<string> {
+    const nonce = await this.readAuthNonce(device).catch(() => null);
+    return fetcher(nonce);
+  }
+
+  private async runRecordingControl(
+    device: ConnectedDevice,
+    grantBlob: string,
+    command: 'start' | 'stop'
+  ): Promise<BotaRecordingControlResult> {
+    const operation = command === 'start'
+      ? this.client.controls.requestStartRecording(device, grantBlob)
+      : this.client.controls.requestStopRecording(device, grantBlob);
+    const pendingState = operation.then(
+      () => this.readAndCacheRecordingState(device),
+      () => this.cachedRecordingState(device.id)
+    );
+    this.recordingStatePending.set(device.id, pendingState);
+    try {
+      const result = await operation;
+      await pendingState;
+      return result;
+    } catch (error) {
+      await pendingState;
+      throw error;
+    } finally {
+      if (this.recordingStatePending.get(device.id) === pendingState) {
+        this.recordingStatePending.delete(device.id);
+      }
+    }
+  }
+
+  private async readAndCacheRecordingState(
+    device: ConnectedDevice
+  ): Promise<RecordingState> {
+    const state = await this.client.controls.readRecordingState(device);
+    this.recordingStateCache.set(device.id, state);
+    return state;
+  }
+
+  private cachedRecordingState(deviceId: string): RecordingState {
+    return this.recordingStateCache.get(deviceId) ?? {
+      active: false,
+      initiatedBy: 'local',
+    };
   }
 
   private replaceOwned(
