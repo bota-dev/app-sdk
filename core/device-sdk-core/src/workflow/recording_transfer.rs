@@ -40,6 +40,7 @@ pub(crate) struct RecordingTransferWorkflow {
     recording: RecordingUuid,
     sink_id: RecordingSinkId,
     total_units: u64,
+    confirm_on_completion: bool,
     cancellation_id: CancellationId,
     phase: Phase,
     completed_units: u64,
@@ -67,6 +68,7 @@ impl RecordingTransferWorkflow {
         recording: RecordingUuid,
         sink_id: RecordingSinkId,
         total_units: u64,
+        confirm_on_completion: bool,
         cancellation_id: CancellationId,
     ) -> Self {
         Self {
@@ -74,6 +76,7 @@ impl RecordingTransferWorkflow {
             recording,
             sink_id,
             total_units,
+            confirm_on_completion,
             cancellation_id,
             phase: Phase::LoadingCheckpoint,
             completed_units: 0,
@@ -596,7 +599,11 @@ impl WorkflowReducer for RecordingTransferWorkflow {
                 if Some(request_id) == self.write_request_id =>
             {
                 self.write_request_id = None;
-                Ok(self.confirm(context))
+                if self.confirm_on_completion {
+                    Ok(self.confirm(context))
+                } else {
+                    Ok(self.complete(context))
+                }
             }
             (Phase::Confirming, HostEventKind::Ble(BleEvent::WriteCompleted))
                 if Some(request_id) == self.write_request_id =>
@@ -727,6 +734,7 @@ mod tests {
                 RecordingUuid::from_bytes([1; 16]),
                 RecordingSinkId::new("sink-1").unwrap(),
                 1_024,
+                true,
                 CancellationId::from_bytes([1; 16]),
             );
             workflow.phase = phase;

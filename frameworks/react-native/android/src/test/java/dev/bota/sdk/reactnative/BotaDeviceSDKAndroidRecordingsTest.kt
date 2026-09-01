@@ -45,9 +45,14 @@ class BotaDeviceSDKAndroidRecordingsTest {
 
         assertEquals(listOf(recording), recordings.listRecordings(connected))
         assertEquals(
-            "/tmp/bota-recordings/recording-1.ogg",
-            recordings.syncRecording(connected, recording, progress::add),
+            BotaDeviceSDKAndroidRecordings.BotaRecordingFile(
+                "/tmp/bota-recordings/recording-1.ogg",
+                true,
+                "5a".repeat(32),
+            ),
+            recordings.syncRecording(connected, recording, "sink-1", progress::add),
         )
+        assertEquals(listOf("sink-1"), client.sinkIds)
         assertEquals(
             listOf(RecordingTransferProgress(24_000u, 48_000u)),
             progress,
@@ -106,6 +111,7 @@ class BotaDeviceSDKAndroidRecordingsTest {
         private val recording: DeviceRecording,
     ) : BotaDeviceSDKAndroidRecordingClient {
         var cancelled = false
+        val sinkIds = mutableListOf<String>()
 
         override suspend fun listRecordings(device: ConnectedDevice): List<DeviceRecording> =
             listOf(recording)
@@ -113,10 +119,16 @@ class BotaDeviceSDKAndroidRecordingsTest {
         override fun syncRecording(
             device: ConnectedDevice,
             recording: DeviceRecording,
+            sinkId: String,
         ): Flow<RecordingSyncEvent> = flowOf(
             RecordingSyncEvent.Progress(RecordingTransferProgress(24_000u, 48_000u)),
             RecordingSyncEvent.Completed(Path.of("/tmp/bota-recordings/recording-1.ogg")),
-        )
+        ).also { sinkIds += sinkId }
+
+        override fun transferMetadata(sinkId: String): dev.bota.sdk.RecordingTransferMetadata =
+            dev.bota.sdk.RecordingTransferMetadata(true, "5a".repeat(32))
+
+        override suspend fun confirmRecording(device: ConnectedDevice, recordingUuid: String) = Unit
 
         override fun observeUploadOwnership(
             device: ConnectedDevice,

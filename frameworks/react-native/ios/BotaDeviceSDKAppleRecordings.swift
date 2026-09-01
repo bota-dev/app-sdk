@@ -1,12 +1,21 @@
 import BotaAppleSDK
 import Foundation
 
+struct BotaDeviceSDKAppleRecordingFile: Equatable, Sendable {
+    let localPath: String
+    let isE2EEncrypted: Bool
+    let contentSHA256Hex: String?
+}
+
 protocol BotaDeviceSDKAppleRecordingClient: Sendable {
     func listRecordings(_ device: ConnectedDevice) async throws -> [DeviceRecording]
     func syncRecording(
         _ device: ConnectedDevice,
-        recording: DeviceRecording
+        recording: DeviceRecording,
+        sinkID: String
     ) async throws -> AsyncThrowingStream<RecordingSyncEvent, Error>
+    func transferMetadata(sinkID: String) async -> RecordingTransferMetadata?
+    func confirmRecording(_ device: ConnectedDevice, recordingUUID: String) async throws
     func observeUploadOwnership(
         _ device: ConnectedDevice,
         recordingUUID: String,
@@ -29,9 +38,23 @@ struct BotaDeviceSDKSharedAppleRecordingClient: BotaDeviceSDKAppleRecordingClien
 
     func syncRecording(
         _ device: ConnectedDevice,
-        recording: DeviceRecording
+        recording: DeviceRecording,
+        sinkID: String
     ) async throws -> AsyncThrowingStream<RecordingSyncEvent, Error> {
-        try await recordings.syncRecording(device, recording: recording)
+        try await recordings.syncRecording(
+            device,
+            recording: recording,
+            sinkID: sinkID,
+            confirmOnCompletion: false
+        )
+    }
+
+    func transferMetadata(sinkID: String) async -> RecordingTransferMetadata? {
+        await recordings.transferMetadata(sinkID: sinkID)
+    }
+
+    func confirmRecording(_ device: ConnectedDevice, recordingUUID: String) async throws {
+        try await recordings.confirmRecording(device, recordingUUID: recordingUUID)
     }
 
     func observeUploadOwnership(
@@ -84,9 +107,14 @@ actor BotaDeviceSDKAppleRecordings {
     func syncRecording(
         _ device: ConnectedDevice,
         recording: DeviceRecording,
+        sinkID: String,
         onProgress: @escaping @Sendable (RecordingTransferProgress) -> Void
-    ) async throws -> String {
-        let events = try await client.syncRecording(device, recording: recording)
+    ) async throws -> BotaDeviceSDKAppleRecordingFile {
+        let events = try await client.syncRecording(
+            device,
+            recording: recording,
+            sinkID: sinkID
+        )
         var path: String?
         for try await event in events {
             switch event {
@@ -97,7 +125,12 @@ actor BotaDeviceSDKAppleRecordings {
             }
         }
         guard let path else { throw RecordingError.missingNativeFile }
-        return path
+        let metadata = await client.transferMetadata(sinkID: sinkID)
+        return BotaDeviceSDKAppleRecordingFile(
+            localPath: path,
+            isE2EEncrypted: metadata?.isE2EEncrypted ?? false,
+            contentSHA256Hex: metadata?.contentSHA256Hex
+        )
     }
 
     func observeUploadOwnership(
@@ -124,6 +157,10 @@ actor BotaDeviceSDKAppleRecordings {
         }
         guard let result else { throw RecordingError.missingUploadOwnershipResult }
         return result
+    }
+
+    func confirmRecording(_ device: ConnectedDevice, recordingUUID: String) async throws {
+        try await client.confirmRecording(device, recordingUUID: recordingUUID)
     }
 
     func cancelAll() async {

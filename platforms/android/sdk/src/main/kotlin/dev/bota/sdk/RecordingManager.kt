@@ -120,6 +120,7 @@ public class RecordingManager internal constructor() {
         device: ConnectedDevice,
         recording: DeviceRecording,
         sinkId: String = UUID.randomUUID().toString(),
+        confirmOnCompletion: Boolean = true,
     ): Flow<RecordingSyncEvent> = callbackFlow {
         transferMetadataBySinkId.remove(sinkId)
         val runtime = state.configuredRuntime()
@@ -129,6 +130,7 @@ public class RecordingManager internal constructor() {
             recordingUuid = recording.uuid,
             sinkId = sinkId,
             totalUnits = recording.fileSizeBytes,
+            confirmOnCompletion = confirmOnCompletion,
         )
         state.begin(
             runtime,
@@ -263,15 +265,26 @@ public class RecordingManager internal constructor() {
         }
     }
 
-    internal suspend fun confirmRecording(device: ConnectedDevice, recordingUuid: String) {
+    public suspend fun confirmRecording(device: ConnectedDevice, recordingUuid: String) {
         val runtime = state.configuredRuntime()
         runtime.connection.require(device)
-        runtime.directWrite(
-            device.id,
-            RecordingUUIDs.StorageService,
-            RecordingUUIDs.TransferControl,
-            runtime.createTransferCommand(TransferCommand.Confirm(recordingUuid)),
-        )
+        val operationId = UUID.randomUUID()
+        state.begin(runtime, operationId, BotaOperation.TransferRecording)
+        var failure: Throwable? = null
+        try {
+            runtime.directWrite(
+                device.id,
+                RecordingUUIDs.StorageService,
+                RecordingUUIDs.TransferControl,
+                runtime.createTransferCommand(TransferCommand.Confirm(recordingUuid)),
+            )
+        } catch (error: Throwable) {
+            val publicError = error.facadePublicError(BotaOperation.TransferRecording)
+            failure = publicError
+            throw publicError
+        } finally {
+            runCleanupAfter(failure, { state.finish(operationId) })
+        }
     }
 
     public suspend fun cancelCurrentOperation(): Unit = state.cancelCurrentOperation()

@@ -923,6 +923,140 @@
               }
             ]
           },
+          "NativeRecordingTransferResult": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "localPath",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "e2eEncrypted",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "contentSha256",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeRecordingUploadProgress": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "taskId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "completedBytes",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "totalBytes",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeRecordingUploadRequest": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "taskId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "recordingId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "deviceId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "localPath",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "uploadUrl",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "uploadToken",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "completeUrl",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "contentType",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "contentSha256",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "relayUrl",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "relayBearerToken",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
           "NativeUploadOwnershipRequest": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -1156,6 +1290,17 @@
                 "typeAnnotation": {
                   "type": "TypeAliasTypeAnnotation",
                   "name": "NativeRecordingTransferProgress"
+                }
+              }
+            },
+            {
+              "name": "onRecordingUploadProgress",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeRecordingUploadProgress"
                 }
               }
             },
@@ -2306,7 +2451,8 @@
                 "returnTypeAnnotation": {
                   "type": "PromiseTypeAnnotation",
                   "elementType": {
-                    "type": "StringTypeAnnotation"
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeRecordingTransferResult"
                   }
                 },
                 "params": [
@@ -2325,8 +2471,140 @@
                       "type": "TypeAliasTypeAnnotation",
                       "name": "NativeDeviceRecording"
                     }
+                  },
+                  {
+                    "name": "sinkId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
                   }
                 ]
+              }
+            },
+            {
+              "name": "confirmRecording",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "recordingUuid",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "uploadRecordingFile",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "request",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeRecordingUploadRequest"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "cancelRecordingUpload",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "taskId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "loadCompatibilityUploadQueue",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "StringTypeAnnotation"
+                  }
+                },
+                "params": []
+              }
+            },
+            {
+              "name": "saveCompatibilityUploadQueue",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "serializedTasks",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "stopAllRecordingOperations",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": []
               }
             },
             {
@@ -2401,11 +2679,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "f5a9e2b5aa4d7b88d62f7ad79030a8ad9829137cc7e824009d86e2c0e5b8e5b2"
+        "sha256": "9b14f3aa4a81610683ee7040f2c22bf3fb30c5205d28a0256cd4453e31a56006"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "83ab619ecc00ffe03b0fd1d23e4936a5827a47fe411c895f60c6ae07a072076b"
+        "sha256": "96a574ed72b4385057be819b9d1aba8726377a7ed5325c084e80f7a5ba4362df"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -2417,23 +2695,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "e000368a70398353e58ed4fc0ee38ffbdca957914762e3e21713cf18de3b4421"
+        "sha256": "91683d13d6c697a33b487ceba4a14d4efcff43f80afa71fb5955d482c092e9cd"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "81f129cda6e2a6aa980b143374a6c81e40ff01002993dcce0da7d1e831f5995f"
+        "sha256": "f46f8fda72b01b3eb1142380c28abe7b7ec59b9638e4b8e3d8bebbcf61956fce"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "45985cb1672dfa24f95517378395e185435e846898fdf4401e5f78678747da0a"
+        "sha256": "96315a41797b84b6189f5079bb20c01c8a8599870cd16dc4a0d3ce9d293c00d4"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "e000368a70398353e58ed4fc0ee38ffbdca957914762e3e21713cf18de3b4421"
+        "sha256": "91683d13d6c697a33b487ceba4a14d4efcff43f80afa71fb5955d482c092e9cd"
       }
     ]
   },
-  "contractDigest": "eb0d368b3007f0fb82a85b79f3361eaea6521e8c29fcd17e1e533b03c9a669ff"
+  "contractDigest": "470f66b3a7fed80a8801c166639fa9b7a6d08d82cb1f20c511d11c7b90fe324d"
 }

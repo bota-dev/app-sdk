@@ -223,8 +223,10 @@ JavaScript shape and emits transfer progress as counts only. Apple and Android
 consume their public recording streams behind the TurboModule and return the
 completed native file path together with the actual transfer's E2E-framing flag
 and optional device SHA-256. Relay selection must use that completion metadata,
-not the recording-list encryption flag. Audio content, transfer packets, and
-sink handles never enter Codegen, and teardown cancels the native recording
+not the recording-list encryption flag. The compatibility path asks native code
+to retain the device copy, completes the native file upload, and only then sends
+a typed native confirm for the exact recording. Audio content, transfer packets,
+and sink handles never enter Codegen, and teardown cancels the native recording
 owner.
 
 The React Native device-log broker subscribes to the public native log stream

@@ -139,6 +139,7 @@ internal data class CoreCommand(
             recordingUuid: String,
             sinkId: String,
             totalUnits: ULong,
+            confirmOnCompletion: Boolean = true,
             cancellationId: UUID = UUID.randomUUID(),
         ) = command(
             0x0105,
@@ -147,6 +148,7 @@ internal data class CoreCommand(
             CoreField.Text(13, recordingUuid),
             CoreField.Text(14, sinkId),
             CoreField.Unsigned(15, totalUnits),
+            CoreField.BooleanValue(124, confirmOnCompletion),
         )
 
         fun uploadRecording(

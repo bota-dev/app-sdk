@@ -35,6 +35,7 @@ pub enum Command {
         recording: RecordingUuid,
         sink_id: RecordingSinkId,
         total_units: u64,
+        confirm_on_completion: bool,
     },
     UploadRecording {
         device: DeviceSerialNumber,

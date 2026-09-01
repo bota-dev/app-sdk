@@ -18,6 +18,7 @@ fn unsupported_capability_fails_before_transport_effect_is_built() {
         recording: recording_id(),
         sink_id: RecordingSinkId::new("sink-1").unwrap(),
         total_units: 4,
+        confirm_on_completion: true,
     };
     let capabilities = CapabilitySet::from([Capability::Persistence]);
     let mut transport_effect_built = false;

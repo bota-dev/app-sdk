@@ -25,6 +25,7 @@ internal class BotaDeviceSDKModule(
     private val logs = BotaDeviceSDKAndroidLogs(BotaDeviceSDKSharedAndroidLogClient(), scope)
     private val ota = BotaDeviceSDKAndroidOTA()
     private val recordings = BotaDeviceSDKAndroidRecordings()
+    private val recordingUploads = BotaDeviceSDKAndroidRecordingUploads(reactContext)
     private val security = BotaDeviceSDKAndroidSecurity(
         BotaDeviceSDKSharedAndroidSecurityClient(),
         scope,
@@ -49,6 +50,7 @@ internal class BotaDeviceSDKModule(
             wifi.cancelAll()
             logs.cancelAll()
             ota.cancelAll()
+            recordingUploads.cancelAll()
             recordings.cancelAll()
             devices.stopAll()
             lifecycle.destroy()
@@ -223,15 +225,54 @@ internal class BotaDeviceSDKModule(
     override fun syncRecording(
         device: ReadableMap,
         recording: ReadableMap,
+        sinkId: String,
         promise: Promise,
     ) {
         launchValue(promise) {
             recordings.syncRecording(
                 device.toConnectedDevice(),
                 recording.toDeviceRecording(),
+                sinkId,
             ) {
                 emitOnRecordingTransferProgress(it.toWritableMap())
+            }.toWritableMap()
+        }
+    }
+
+    override fun confirmRecording(
+        device: ReadableMap,
+        recordingUuid: String,
+        promise: Promise,
+    ) {
+        launch(promise) {
+            recordings.confirmRecording(device.toConnectedDevice(), recordingUuid)
+        }
+    }
+
+    override fun uploadRecordingFile(request: ReadableMap, promise: Promise) {
+        launch(promise) {
+            recordingUploads.upload(request.toRecordingUploadRequest()) {
+                emitOnRecordingUploadProgress(it.toWritableMap())
             }
+        }
+    }
+
+    override fun cancelRecordingUpload(taskId: String, promise: Promise) {
+        launch(promise) { recordingUploads.cancel(taskId) }
+    }
+
+    override fun loadCompatibilityUploadQueue(promise: Promise) {
+        launchValue(promise) { recordingUploads.loadQueue() }
+    }
+
+    override fun saveCompatibilityUploadQueue(serializedTasks: String, promise: Promise) {
+        launch(promise) { recordingUploads.saveQueue(serializedTasks) }
+    }
+
+    override fun stopAllRecordingOperations(promise: Promise) {
+        launch(promise) {
+            recordingUploads.cancelAll()
+            recordings.cancelAll()
         }
     }
 

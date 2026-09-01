@@ -30,6 +30,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
     private let logs: BotaDeviceSDKAppleLogs
     private let ota: BotaDeviceSDKAppleOTA
     private let recordings: BotaDeviceSDKAppleRecordings
+    private let recordingUploads: BotaDeviceSDKAppleRecordingUploads
     private let security: BotaDeviceSDKAppleSecurity
     private let wifi: BotaDeviceSDKAppleWiFi
 
@@ -39,6 +40,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         logs = BotaDeviceSDKAppleLogs()
         ota = BotaDeviceSDKAppleOTA()
         recordings = BotaDeviceSDKAppleRecordings()
+        recordingUploads = BotaDeviceSDKAppleRecordingUploads()
         security = BotaDeviceSDKAppleSecurity()
         wifi = BotaDeviceSDKAppleWiFi()
         super.init()
@@ -56,6 +58,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         Task {
             do {
                 try await lifecycle.configure(applicationSupportDirectory: directory)
+                await recordingUploads.configure(applicationSupportDirectory: directory)
                 completion(nil)
             } catch {
                 completion(error as NSError)
@@ -71,6 +74,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
             await logs.stop()
             await ota.cancelAll()
             await recordings.cancelAll()
+            await recordingUploads.cancelAll()
             await devices.stopAll()
             await lifecycle.destroy()
             completion()
@@ -795,7 +799,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
-    @objc(syncRecordingWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:recordingUUID:startedAtMilliseconds:durationMilliseconds:fileSize:codec:isEncrypted:onProgress:completion:)
+    @objc(syncRecordingWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:recordingUUID:startedAtMilliseconds:durationMilliseconds:fileSize:codec:isEncrypted:sinkID:onProgress:completion:)
     public func syncRecording(
         id: String,
         serialNumber: String,
@@ -811,12 +815,13 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         fileSize: Double,
         codec: String,
         isEncrypted: Bool,
+        sinkID: String,
         onProgress: @escaping @Sendable ([String: Any]) -> Void,
-        completion: @escaping @Sendable (String?, NSError?) -> Void
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
     ) {
         Task {
             do {
-                let path = try await recordings.syncRecording(
+                let result = try await recordings.syncRecording(
                     Self.connectedDevice(
                         id: id,
                         serialNumber: serialNumber,
@@ -837,17 +842,150 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                         fileSizeBytes: try Self.unsignedInteger(fileSize),
                         codec: .known(Self.audioCodec(codec)),
                         isEncrypted: isEncrypted
-                    )
+                    ),
+                    sinkID: sinkID
                 ) { progress in
                     onProgress([
                         "completedUnits": progress.completedBytes,
                         "totalUnits": progress.totalBytes,
                     ])
                 }
-                completion(path, nil)
+                var value: [String: Any] = [
+                    "localPath": result.localPath,
+                    "e2eEncrypted": result.isE2EEncrypted,
+                ]
+                if let contentSHA256Hex = result.contentSHA256Hex {
+                    value["contentSha256"] = contentSHA256Hex
+                }
+                completion(value, nil)
             } catch {
                 completion(nil, error as NSError)
             }
+        }
+    }
+
+    @objc(confirmRecordingWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:recordingUUID:completion:)
+    public func confirmRecording(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        recordingUUID: String,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await recordings.confirmRecording(
+                    Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    ),
+                    recordingUUID: recordingUUID
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(uploadRecordingFileWithTaskID:recordingID:localPath:uploadURL:uploadToken:completeURL:contentType:contentSHA256:relayURL:relayBearerToken:onProgress:completion:)
+    public func uploadRecordingFile(
+        taskID: String,
+        recordingID: String,
+        localPath: String,
+        uploadURL: String,
+        uploadToken: String?,
+        completeURL: String?,
+        contentType: String?,
+        contentSHA256: String?,
+        relayURL: String?,
+        relayBearerToken: String?,
+        onProgress: @escaping @Sendable ([String: Any]) -> Void,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await recordingUploads.upload(.init(
+                    taskID: taskID,
+                    recordingID: recordingID,
+                    localPath: localPath,
+                    uploadURL: uploadURL,
+                    uploadToken: uploadToken,
+                    completeURL: completeURL,
+                    contentType: contentType,
+                    contentSHA256: contentSHA256,
+                    relayURL: relayURL,
+                    relayBearerToken: relayBearerToken
+                )) { progress in
+                    onProgress([
+                        "taskId": progress.taskID,
+                        "completedBytes": progress.completedBytes,
+                        "totalBytes": progress.totalBytes,
+                    ])
+                }
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(cancelRecordingUploadWithTaskID:completion:)
+    public func cancelRecordingUpload(
+        taskID: String,
+        completion: @escaping @Sendable () -> Void
+    ) {
+        Task {
+            await recordingUploads.cancel(taskID: taskID)
+            completion()
+        }
+    }
+
+    @objc(loadCompatibilityUploadQueueWithCompletion:)
+    public func loadCompatibilityUploadQueue(
+        completion: @escaping @Sendable (String?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                completion(try await recordingUploads.loadQueue(), nil)
+            } catch {
+                completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc(saveCompatibilityUploadQueueWithSerializedTasks:completion:)
+    public func saveCompatibilityUploadQueue(
+        serializedTasks: String,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await recordingUploads.saveQueue(serializedTasks)
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(stopAllRecordingOperationsWithCompletion:)
+    public func stopAllRecordingOperations(completion: @escaping @Sendable () -> Void) {
+        Task {
+            await recordingUploads.cancelAll()
+            await recordings.cancelAll()
+            completion()
         }
     }
 

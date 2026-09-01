@@ -75,6 +75,7 @@ fn commands() -> Vec<(&'static str, Command)> {
                 recording: RecordingUuid::from_bytes([0x11; 16]),
                 sink_id: RecordingSinkId::new("recording-sink-1").unwrap(),
                 total_units: 1_024,
+                confirm_on_completion: true,
             },
         ),
         (

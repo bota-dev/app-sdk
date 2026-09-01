@@ -1,7 +1,10 @@
 package dev.bota.sdk.reactnative
 
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.WritableMap
 import dev.bota.sdk.BotaDeviceClient
 import dev.bota.sdk.RecordingSyncEvent
+import dev.bota.sdk.RecordingTransferMetadata
 import dev.bota.sdk.UploadOwnershipEvent
 import dev.bota.sdk.UploadOwnershipResult
 import dev.bota.sdk.model.ConnectedDevice
@@ -16,7 +19,12 @@ internal interface BotaDeviceSDKAndroidRecordingClient {
     fun syncRecording(
         device: ConnectedDevice,
         recording: DeviceRecording,
+        sinkId: String,
     ): Flow<RecordingSyncEvent>
+
+    fun transferMetadata(sinkId: String): RecordingTransferMetadata?
+
+    suspend fun confirmRecording(device: ConnectedDevice, recordingUuid: String)
 
     fun observeUploadOwnership(
         device: ConnectedDevice,
@@ -28,6 +36,13 @@ internal interface BotaDeviceSDKAndroidRecordingClient {
     suspend fun cancelCurrentOperation()
 }
 
+internal fun BotaDeviceSDKAndroidRecordings.BotaRecordingFile.toWritableMap(): WritableMap =
+    Arguments.createMap().apply {
+        putString("localPath", localPath)
+        putBoolean("e2eEncrypted", isE2EEncrypted)
+        contentSha256Hex?.let { putString("contentSha256", it) }
+    }
+
 internal class BotaDeviceSDKSharedAndroidRecordingClient(
     private val client: BotaDeviceClient = BotaDeviceClient.shared,
 ) : BotaDeviceSDKAndroidRecordingClient {
@@ -37,7 +52,20 @@ internal class BotaDeviceSDKSharedAndroidRecordingClient(
     override fun syncRecording(
         device: ConnectedDevice,
         recording: DeviceRecording,
-    ): Flow<RecordingSyncEvent> = client.recordings.syncRecording(device, recording)
+        sinkId: String,
+    ): Flow<RecordingSyncEvent> = client.recordings.syncRecording(
+        device,
+        recording,
+        sinkId,
+        confirmOnCompletion = false,
+    )
+
+    override fun transferMetadata(sinkId: String): RecordingTransferMetadata? =
+        client.recordings.transferMetadata(sinkId)
+
+    override suspend fun confirmRecording(device: ConnectedDevice, recordingUuid: String) {
+        client.recordings.confirmRecording(device, recordingUuid)
+    }
 
     override fun observeUploadOwnership(
         device: ConnectedDevice,
@@ -60,22 +88,35 @@ internal class BotaDeviceSDKAndroidRecordings(
     private val client: BotaDeviceSDKAndroidRecordingClient =
         BotaDeviceSDKSharedAndroidRecordingClient(),
 ) {
+    internal data class BotaRecordingFile(
+        val localPath: String,
+        val isE2EEncrypted: Boolean,
+        val contentSha256Hex: String?,
+    )
+
     suspend fun listRecordings(device: ConnectedDevice): List<DeviceRecording> =
         client.listRecordings(device)
 
     suspend fun syncRecording(
         device: ConnectedDevice,
         recording: DeviceRecording,
+        sinkId: String,
         onProgress: (RecordingTransferProgress) -> Unit,
-    ): String {
+    ): BotaRecordingFile {
         var path: String? = null
-        client.syncRecording(device, recording).collect { event ->
+        client.syncRecording(device, recording, sinkId).collect { event ->
             when (event) {
                 is RecordingSyncEvent.Progress -> onProgress(event.progress)
                 is RecordingSyncEvent.Completed -> path = event.path.toString()
             }
         }
-        return path ?: error("recording transfer completed without a native file")
+        val localPath = path ?: error("recording transfer completed without a native file")
+        val metadata = client.transferMetadata(sinkId)
+        return BotaRecordingFile(
+            localPath,
+            metadata?.isE2EEncrypted ?: false,
+            metadata?.contentSha256Hex,
+        )
     }
 
     suspend fun observeUploadOwnership(
@@ -93,6 +134,10 @@ internal class BotaDeviceSDKAndroidRecordings(
             }
         }
         return result ?: error("upload ownership completed without a result")
+    }
+
+    suspend fun confirmRecording(device: ConnectedDevice, recordingUuid: String) {
+        client.confirmRecording(device, recordingUuid)
     }
 
     suspend fun cancelAll() {

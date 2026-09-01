@@ -50,7 +50,12 @@ class RecordingManagerTest {
         val manager = RecordingManager()
         manager.attach(fixture.runtime)
 
-        val events = manager.syncRecording(fixture.device, fixture.recording, sinkId = "sink-1").toList()
+        val events = manager.syncRecording(
+            fixture.device,
+            fixture.recording,
+            sinkId = "sink-1",
+            confirmOnCompletion = false,
+        ).toList()
 
         assertEquals(RecordingSyncEvent.Progress(RecordingTransferProgress(2_048u, 4_096u)), events[0])
         assertEquals(RecordingSyncEvent.Completed(fixture.sinkPaths.getValue("sink-1")), events[1])
@@ -59,7 +64,20 @@ class RecordingManagerTest {
             manager.transferMetadata("sink-1"),
         )
         assertNull(manager.transferMetadata("sink-1"))
+        assertTrue(runner.commands.single().fields.contains(CoreField.BooleanValue(124, false)))
         assertEquals(listOf("sink-1"), fixture.removedSinks)
+        manager.detach()
+    }
+
+    @Test
+    fun confirmRecordingWritesDeleteOnlyAfterTheCallerRequestsIt() = runTest {
+        val fixture = ManagerRuntimeFixture(ManagerWorkflowRunner())
+        val manager = RecordingManager()
+        manager.attach(fixture.runtime)
+
+        manager.confirmRecording(fixture.device, fixture.recording.uuid)
+
+        assertEquals(listOf("encode-Confirm", "write"), fixture.actions)
         manager.detach()
     }
 

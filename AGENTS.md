@@ -187,7 +187,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `BotaDeviceSDKAndroidRecordings`. Collect the public facade flow natively,
   emit only progress, and return the completed native path plus actual
   transfer E2E and optional SHA-256 metadata. Never infer relay ownership from
-  the recording-list encryption flag.
+  the recording-list encryption flag. React Native batch sync retains the
+  device copy and sends the exact native confirm only after upload succeeds.
 - Keep React Native device-log stream ownership in
   `BotaDeviceSDKAndroidLogs`. It owns one native collector, contains
   asynchronous stream failures, and stops that collector during explicit
@@ -351,7 +352,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Apple recording, upload-ownership, OTA, and device-log APIs expose typed
   streams and native file URLs plus bounded transfer-completion metadata only.
   Keep upload destinations opaque, let only the reducer authorize BLE fallback,
-  and unregister OTA host resources on every terminal path.
+  retain batch recordings until the application upload succeeds, and unregister
+  OTA host resources on every terminal path.
 - Add new ABI effects to the exhaustive `CoreEffect` and `HostEffectExecutor`
   switches. Never route a new kind through a default branch.
 - Keep CoreBluetooth objects inside `CoreBluetoothDriver`'s dedicated serial

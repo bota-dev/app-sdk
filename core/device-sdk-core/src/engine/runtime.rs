@@ -141,11 +141,13 @@ impl WorkflowEngine {
                 recording,
                 sink_id,
                 total_units,
+                confirm_on_completion,
             } => ActiveWorkflow::RecordingTransfer(Box::new(RecordingTransferWorkflow::new(
                 device,
                 recording,
                 sink_id,
                 total_units,
+                confirm_on_completion,
                 cancellation_id,
             ))),
             Command::UploadRecording {

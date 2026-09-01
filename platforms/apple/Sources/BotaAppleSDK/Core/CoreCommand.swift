@@ -166,6 +166,7 @@ struct CoreCommand: Equatable, Sendable {
         recordingUUID: String,
         sinkID: String,
         totalUnits: UInt64,
+        confirmOnCompletion: Bool = true,
         cancellationID: UUID = UUID()
     ) -> Self {
         Self(
@@ -176,6 +177,7 @@ struct CoreCommand: Equatable, Sendable {
                 .text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_RECORDING_UUID), value: recordingUUID),
                 .text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_SINK_ID), value: sinkID),
                 .unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_TOTAL_UNITS), value: totalUnits),
+                .bool(id: 124, value: confirmOnCompletion),
             ]
         )
     }

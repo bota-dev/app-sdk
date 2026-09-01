@@ -566,6 +566,7 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
 
 - (void)syncRecording:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
              recording:(JS::NativeBotaDeviceSDK::NativeDeviceRecording &)recording
+                sinkId:(NSString *)sinkId
                resolve:(RCTPromiseResolveBlock)resolve
                 reject:(RCTPromiseRejectBlock)reject
 {
@@ -585,16 +586,114 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
                   fileSize:recording.fileSize()
                      codec:recording.codec()
                isEncrypted:recording.isEncrypted()
+                     sinkID:sinkId
                 onProgress:^(NSDictionary *progress) {
                   [weakSelf emitOnRecordingTransferProgress:progress];
                 }
-                completion:^(NSString *_Nullable path, NSError *_Nullable error) {
+                completion:^(NSDictionary *_Nullable result, NSError *_Nullable error) {
                   if (error != nil) {
                     BotaRejectAppleError(error, reject);
                     return;
                   }
-                  resolve(path);
+                  resolve(result);
                 }];
+}
+
+- (void)confirmRecording:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+          recordingUuid:(NSString *)recordingUuid
+                resolve:(RCTPromiseResolveBlock)resolve
+                 reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      confirmRecordingWithID:device.id_()
+              serialNumber:device.serialNumber()
+                deviceType:device.deviceType()
+           firmwareVersion:device.firmwareVersion()
+           hardwareRevision:device.hardwareRevision()
+             isProvisioned:device.isProvisioned()
+           connectionState:device.connectionState()
+                       mtu:device.mtu()
+             recordingUUID:recordingUuid
+                completion:^(NSError *_Nullable error) {
+                  if (error != nil) {
+                    BotaRejectAppleError(error, reject);
+                    return;
+                  }
+                  resolve(nil);
+                }];
+}
+
+- (void)uploadRecordingFile:(JS::NativeBotaDeviceSDK::NativeRecordingUploadRequest &)request
+                    resolve:(RCTPromiseResolveBlock)resolve
+                     reject:(RCTPromiseRejectBlock)reject
+{
+  __weak BotaDeviceSDK *weakSelf = self;
+  [[BotaDeviceSDKAppleBridge shared]
+      uploadRecordingFileWithTaskID:request.taskId()
+                          recordingID:request.recordingId()
+                             localPath:request.localPath()
+                             uploadURL:request.uploadUrl()
+                           uploadToken:request.uploadToken()
+                            completeURL:request.completeUrl()
+                            contentType:request.contentType()
+                          contentSHA256:request.contentSha256()
+                                relayURL:request.relayUrl()
+                        relayBearerToken:request.relayBearerToken()
+                              onProgress:^(NSDictionary *progress) {
+                                [weakSelf emitOnRecordingUploadProgress:progress];
+                              }
+                              completion:^(NSError *_Nullable error) {
+                                if (error != nil) {
+                                  BotaRejectAppleError(error, reject);
+                                  return;
+                                }
+                                resolve(nil);
+                              }];
+}
+
+- (void)cancelRecordingUpload:(NSString *)taskId
+                      resolve:(RCTPromiseResolveBlock)resolve
+                       reject:(__unused RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      cancelRecordingUploadWithTaskID:taskId
+                           completion:^{ resolve(nil); }];
+}
+
+- (void)loadCompatibilityUploadQueue:(RCTPromiseResolveBlock)resolve
+                               reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      loadCompatibilityUploadQueueWithCompletion:^(NSString *_Nullable value,
+                                                   NSError *_Nullable error) {
+        if (error != nil) {
+          BotaRejectAppleError(error, reject);
+          return;
+        }
+        resolve(value);
+      }];
+}
+
+- (void)saveCompatibilityUploadQueue:(NSString *)serializedTasks
+                              resolve:(RCTPromiseResolveBlock)resolve
+                               reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      saveCompatibilityUploadQueueWithSerializedTasks:serializedTasks
+                                           completion:^(NSError *_Nullable error) {
+                                             if (error != nil) {
+                                               BotaRejectAppleError(error, reject);
+                                               return;
+                                             }
+                                             resolve(nil);
+                                           }];
+}
+
+- (void)stopAllRecordingOperations:(RCTPromiseResolveBlock)resolve
+                             reject:(__unused RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      stopAllRecordingOperationsWithCompletion:^{ resolve(nil); }];
 }
 
 - (void)observeUploadOwnership:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device

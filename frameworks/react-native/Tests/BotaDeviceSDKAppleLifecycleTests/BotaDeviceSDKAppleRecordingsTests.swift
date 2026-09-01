@@ -28,19 +28,26 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
 
         let listed = try await recordings.listRecordings(connected)
         XCTAssertEqual(listed, [recording])
-        let path = try await recordings.syncRecording(
+        let result = try await recordings.syncRecording(
             connected,
-            recording: recording
+            recording: recording,
+            sinkID: "sink-1"
         ) { value in
             Task { await progress.append(value) }
         }
 
-        XCTAssertEqual(path, "/tmp/bota-recordings/recording-1.ogg")
+        XCTAssertEqual(result, .init(
+            localPath: "/tmp/bota-recordings/recording-1.ogg",
+            isE2EEncrypted: true,
+            contentSHA256Hex: String(repeating: "5a", count: 32)
+        ))
         let progressSnapshot = await progress.snapshot()
         XCTAssertEqual(
             progressSnapshot,
             [.init(completedBytes: 24_000, totalBytes: 48_000)]
         )
+        let sinkIDs = await client.observedSinkIDs()
+        XCTAssertEqual(sinkIDs, ["sink-1"])
         await recordings.cancelAll()
         let cancelled = await client.wasCancelled()
         XCTAssertTrue(cancelled)
@@ -107,6 +114,8 @@ private actor RecordingProgressCapture {
 private actor TestAppleRecordingClient: BotaDeviceSDKAppleRecordingClient {
     private let recording: DeviceRecording
     private var cancelled = false
+    private var sinkIDs: [String] = []
+    private var confirmedRecordingUUIDs: [String] = []
 
     init(recording: DeviceRecording) {
         self.recording = recording
@@ -118,13 +127,26 @@ private actor TestAppleRecordingClient: BotaDeviceSDKAppleRecordingClient {
 
     func syncRecording(
         _ device: ConnectedDevice,
-        recording: DeviceRecording
+        recording: DeviceRecording,
+        sinkID: String
     ) async throws -> AsyncThrowingStream<RecordingSyncEvent, Error> {
+        sinkIDs.append(sinkID)
         let pair = AsyncThrowingStream<RecordingSyncEvent, Error>.makeStream()
         pair.continuation.yield(.progress(.init(completedBytes: 24_000, totalBytes: 48_000)))
         pair.continuation.yield(.completed(URL(fileURLWithPath: "/tmp/bota-recordings/recording-1.ogg")))
         pair.continuation.finish()
         return pair.stream
+    }
+
+    func transferMetadata(sinkID _: String) async -> RecordingTransferMetadata? {
+        RecordingTransferMetadata(
+            isE2EEncrypted: true,
+            contentSHA256Hex: String(repeating: "5a", count: 32)
+        )
+    }
+
+    func confirmRecording(_ device: ConnectedDevice, recordingUUID: String) async throws {
+        confirmedRecordingUUIDs.append(recordingUUID)
     }
 
     func observeUploadOwnership(
@@ -150,5 +172,9 @@ private actor TestAppleRecordingClient: BotaDeviceSDKAppleRecordingClient {
 
     func wasCancelled() -> Bool {
         cancelled
+    }
+
+    func observedSinkIDs() -> [String] {
+        sinkIDs
     }
 }

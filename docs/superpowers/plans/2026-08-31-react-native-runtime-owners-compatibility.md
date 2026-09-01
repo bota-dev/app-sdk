@@ -42,14 +42,15 @@ revision `44ac1221cb71eb01cafcdbfdf7a370847d3a10b4`.
 
 ## Task 2: Restore `RecordingManager`
 
-**Status:** In progress. The shared reducer now stages encrypted batch packets
-in the backend relay wire format; React Native queue and native upload ownership
-remain.
+**Status:** Complete, with root export intentionally staged with Task 3 because
+the frozen `RecordingManager` surface includes streaming-session methods. The
+shared reducer stages encrypted packets in relay wire format, both native hosts
+own file upload and queue persistence, transfer completion reports actual E2E
+and SHA-256 metadata, and device deletion occurs only after upload success.
 
 **JavaScript files:**
 
 - Create: `frameworks/react-native/src/managers/RecordingManager.ts`
-- Create: `frameworks/react-native/src/compatibility/UploadQueue.ts`
 - Modify: `frameworks/react-native/src/client.ts`
 - Modify: `frameworks/react-native/src/index.ts`
 - Modify: `frameworks/react-native/src/specs/NativeBotaDeviceSDK.ts`
@@ -71,14 +72,14 @@ remain.
    success. It emits the frozen stage sequence and events.
 3. E2E ciphertext uses `UploadInfo.relay`; plaintext uses the presigned object
    URL plus optional completion callback. The platform uploader owns file IO.
-4. Queue metadata is persisted using the legacy AsyncStorage namespace.
-   Paused, retry, clear, and cancel methods preserve the frozen behavior.
+4. Queue metadata is persisted atomically by the native host. Paused, retry,
+   clear, and cancel methods preserve the frozen behavior.
 5. `syncAllRecordings()` delegates upload ownership to the native reducer. BLE
    fallback begins only for a native `bluetooth_fallback` result.
 6. `getStorageInfo()` uses the native status/storage read and preserves the
    frozen return shape.
-7. Export `RecordingManager` only after its exact surface passes. Keep
-   `StreamingSession` deferred until Task 3.
+7. Keep `RecordingManager` and `StreamingSession` root exports deferred together
+   until Task 3 adds the frozen streaming methods and both exact surfaces pass.
 
 **Verification:**
 

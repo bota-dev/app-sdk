@@ -106,7 +106,9 @@ is written. Application material stays behind opaque native registrations, and
 every manager shares one facade operation owner. Recording
 sync now returns native file paths; `transferMetadata` reports whether that
 specific transfer used E2E framing and its optional device SHA-256; the lookup
-consumes that ephemeral metadata. Upload
+consumes that ephemeral metadata. `syncRecording` confirms by default, while
+callers that retain the device copy must invoke `confirmRecording` only after
+their upload succeeds. Upload
 handoff exposes only ownership outcomes, OTA keeps request and firmware bytes
 in native hosts, and logs expose only complete core-sanitized lines. The AAR
 also carries a one-major deprecated

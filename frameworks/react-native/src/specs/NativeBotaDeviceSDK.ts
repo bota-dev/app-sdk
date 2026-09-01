@@ -156,6 +156,32 @@ export type NativeRecordingTransferProgress = {
   totalUnits: number;
 };
 
+export type NativeRecordingTransferResult = {
+  localPath: string;
+  e2eEncrypted: boolean;
+  contentSha256?: string;
+};
+
+export type NativeRecordingUploadProgress = {
+  taskId: string;
+  completedBytes: number;
+  totalBytes: number;
+};
+
+export type NativeRecordingUploadRequest = {
+  taskId: string;
+  recordingId: string;
+  deviceId: string;
+  localPath: string;
+  uploadUrl: string;
+  uploadToken?: string;
+  completeUrl?: string;
+  contentType?: string;
+  contentSha256?: string;
+  relayUrl?: string;
+  relayBearerToken?: string;
+};
+
 export type NativeRecordingControlResult = {
   success: boolean;
   error?: string;
@@ -231,6 +257,7 @@ export interface Spec extends TurboModule {
   readonly onFactoryResetGrantRequested: EventEmitter<NativeFactoryResetGrantRequest>;
   readonly onFactoryResetResultPersistenceRequested: EventEmitter<NativeFactoryResetPersistenceRequest>;
   readonly onRecordingTransferProgress: EventEmitter<NativeRecordingTransferProgress>;
+  readonly onRecordingUploadProgress: EventEmitter<NativeRecordingUploadProgress>;
   readonly onUploadOwnershipProgress: EventEmitter<NativeRecordingTransferProgress>;
   readonly onFirmwareUpdateProgress: EventEmitter<NativeFirmwareUpdateProgress>;
   readonly onDeviceLog: EventEmitter<NativeDeviceLogLine>;
@@ -348,8 +375,18 @@ export interface Spec extends TurboModule {
   stopScan: () => Promise<void>;
   syncRecording: (
     device: NativeConnectedDevice,
-    recording: NativeDeviceRecording
-  ) => Promise<string>;
+    recording: NativeDeviceRecording,
+    sinkId: string
+  ) => Promise<NativeRecordingTransferResult>;
+  confirmRecording: (
+    device: NativeConnectedDevice,
+    recordingUuid: string
+  ) => Promise<void>;
+  uploadRecordingFile: (request: NativeRecordingUploadRequest) => Promise<void>;
+  cancelRecordingUpload: (taskId: string) => Promise<void>;
+  loadCompatibilityUploadQueue: () => Promise<string>;
+  saveCompatibilityUploadQueue: (serializedTasks: string) => Promise<void>;
+  stopAllRecordingOperations: () => Promise<void>;
   updateFirmware: (
     device: NativeConnectedDevice,
     image: NativeFirmwareImage

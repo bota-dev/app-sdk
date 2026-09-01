@@ -12,6 +12,7 @@ import type {
   NativeRecordingControlResult,
   NativeRecordingState,
   NativeRecordingTransferProgress,
+  NativeRecordingUploadRequest,
   NativeProvisioningMaterialRequest,
   NativeUploadOwnershipResult,
   NativeWiFiConfigResult,
@@ -45,7 +46,11 @@ import type {
   WifiStatus,
 } from './models/Device';
 import { reportCompatibilityDisconnection } from './compatibility/runtime';
-import type { AudioCodec, DeviceRecording } from './models/Recording';
+import type {
+  AudioCodec,
+  DeviceRecording,
+  UploadTask,
+} from './models/Recording';
 
 export type BotaLogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
 
@@ -253,8 +258,25 @@ export type BotaDeviceSDKRecordingClient = {
   syncRecording(
     device: ConnectedDevice,
     recording: DeviceRecording,
+    onProgress?: (progress: BotaRecordingTransferProgress) => void,
+    sinkId?: string
+  ): Promise<{
+    localPath: string;
+    e2eEncrypted: boolean;
+    contentSha256?: string;
+  }>;
+  confirmRecording(
+    device: ConnectedDevice,
+    recordingUuid: string
+  ): Promise<void>;
+  uploadRecordingFile(
+    task: UploadTask,
     onProgress?: (progress: BotaRecordingTransferProgress) => void
-  ): Promise<string>;
+  ): Promise<void>;
+  cancelRecordingUpload(taskId: string): Promise<void>;
+  loadUploadQueue(): Promise<UploadTask[]>;
+  saveUploadQueue(tasks: UploadTask[]): Promise<void>;
+  destroyCompatibilityOperations(): Promise<void>;
   observeUploadOwnership(
     device: ConnectedDevice,
     request: BotaUploadOwnershipRequest,
@@ -357,6 +379,13 @@ const toNativeConnectedDevice = (
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
+
+const createOpaqueId = (): string =>
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (value) => {
+    const random = Math.floor(Math.random() * 16);
+    const nibble = value === 'x' ? random : (random & 0x3) | 0x8;
+    return nibble.toString(16);
+  });
 
 const bytesToHex = (value: Uint8Array): string =>
   Array.from(value, (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -558,6 +587,42 @@ const mapUploadOwnershipResult = (
     default:
       throw new Error(`unsupported native upload ownership result: ${result.kind}`);
   }
+};
+
+const toNativeRecordingUploadRequest = (
+  task: UploadTask
+): NativeRecordingUploadRequest => ({
+  taskId: task.id,
+  recordingId: task.recordingId,
+  deviceId: task.deviceId,
+  localPath: task.localPath,
+  uploadUrl: task.uploadUrl,
+  ...(task.uploadToken ? { uploadToken: task.uploadToken } : {}),
+  ...(task.completeUrl ? { completeUrl: task.completeUrl } : {}),
+  ...(task.contentType ? { contentType: task.contentType } : {}),
+  ...(task.contentSha256 ? { contentSha256: task.contentSha256 } : {}),
+  ...(task.relay
+    ? {
+        relayUrl: task.relay.url,
+        relayBearerToken: task.relay.bearerToken,
+      }
+    : {}),
+});
+
+const parseUploadQueue = (serialized: string): UploadTask[] => {
+  const value: unknown = JSON.parse(serialized || '[]');
+  if (!Array.isArray(value)) return [];
+  return value.map((task) => {
+    const candidate = task as UploadTask & {
+      createdAt: string | Date;
+      updatedAt: string | Date;
+    };
+    return {
+      ...candidate,
+      createdAt: new Date(candidate.createdAt),
+      updatedAt: new Date(candidate.updatedAt),
+    };
+  });
 };
 
 export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKClient => {
@@ -877,7 +942,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
       return values.map(mapRecording);
     },
 
-    async syncRecording(device, recording, onProgress) {
+    async syncRecording(device, recording, onProgress, sinkId) {
       const module = requireNativeModule();
       const subscription = module.onRecordingTransferProgress((progress) => {
         onProgress?.(mapRecordingProgress(progress));
@@ -885,11 +950,55 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
       try {
         return await module.syncRecording(
           toNativeConnectedDevice(device),
-          toNativeRecording(recording)
+          toNativeRecording(recording),
+          sinkId ?? createOpaqueId()
         );
       } finally {
         subscription.remove();
       }
+    },
+
+    async uploadRecordingFile(task, onProgress) {
+      const module = requireNativeModule();
+      const subscription = module.onRecordingUploadProgress((progress) => {
+        if (progress.taskId !== task.id) return;
+        onProgress?.({
+          completedBytes: progress.completedBytes,
+          totalBytes: progress.totalBytes,
+        });
+      });
+      try {
+        await module.uploadRecordingFile(toNativeRecordingUploadRequest(task));
+      } finally {
+        subscription.remove();
+      }
+    },
+
+    async confirmRecording(device, recordingUuid) {
+      await requireNativeModule().confirmRecording(
+        toNativeConnectedDevice(device),
+        recordingUuid
+      );
+    },
+
+    async cancelRecordingUpload(taskId) {
+      await requireNativeModule().cancelRecordingUpload(taskId);
+    },
+
+    async loadUploadQueue() {
+      return parseUploadQueue(
+        await requireNativeModule().loadCompatibilityUploadQueue()
+      );
+    },
+
+    async saveUploadQueue(tasks) {
+      await requireNativeModule().saveCompatibilityUploadQueue(
+        JSON.stringify(tasks)
+      );
+    },
+
+    async destroyCompatibilityOperations() {
+      await requireNativeModule().stopAllRecordingOperations();
     },
 
     async observeUploadOwnership(device, request, onProgress) {

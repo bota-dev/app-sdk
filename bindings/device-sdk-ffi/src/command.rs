@@ -156,6 +156,7 @@ pub(crate) unsafe fn command_from_packet(
                 field_id::RECORDING_UUID,
                 field_id::SINK_ID,
                 field_id::TOTAL_UNITS,
+                field_id::CONFIRM_ON_COMPLETION,
             ])?;
             Ok(Command::TransferRecording {
                 device: serial()?,
@@ -164,6 +165,9 @@ pub(crate) unsafe fn command_from_packet(
                 )?,
                 sink_id: RecordingSinkId::new(fields.required_text(field_id::SINK_ID)?)?,
                 total_units: fields.required_u64(field_id::TOTAL_UNITS)?,
+                confirm_on_completion: fields
+                    .optional_bool(field_id::CONFIRM_ON_COMPLETION)?
+                    .unwrap_or(true),
             })
         }
         packet_kind::COMMAND_UPLOAD_RECORDING => {

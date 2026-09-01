@@ -60,7 +60,8 @@ final class RecordingManagerTests: XCTestCase {
         let stream = try await manager.syncRecording(
             transferDevice(),
             recording: recording,
-            sinkID: "sink-1"
+            sinkID: "sink-1",
+            confirmOnCompletion: false
         )
         var values: [RecordingSyncEvent] = []
         for try await value in stream { values.append(value) }
@@ -77,6 +78,26 @@ final class RecordingManagerTests: XCTestCase {
         XCTAssertNil(consumedMetadata)
         let commands = await runner.commands
         XCTAssertEqual(commands.first?.kind, UInt32(BOTA_DEVICE_SDK_V1_COMMAND_TRANSFER_RECORDING))
+        XCTAssertTrue(commands.first?.fields.contains(.bool(id: 124, value: false)) == true)
+    }
+
+    func testConfirmRecordingWritesDeleteOnlyAfterTheCallerRequestsIt() async throws {
+        let recorder = TransferFacadeRecorder()
+        let manager = RecordingManager()
+        await manager.attach(await transferRuntime(
+            runner: TransferWorkflowRunner { _ in [] },
+            recorder: recorder
+        ))
+
+        try await manager.confirmRecording(
+            transferDevice(),
+            recordingUUID: "00112233-4455-6677-8899-aabbccddeeff"
+        )
+
+        let writes = await recorder.writes
+        XCTAssertEqual(writes.count, 1)
+        XCTAssertEqual(writes.first?.characteristic, BotaBluetoothUUIDs.transferControl)
+        XCTAssertEqual(writes.first?.data.first, 7)
     }
 
     func testUploadOwnershipYieldsFallbackOnlyFromCoreNotification() async throws {

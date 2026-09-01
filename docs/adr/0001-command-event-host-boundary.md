@@ -44,8 +44,9 @@ receipt ordering and retains the durable result when receipt delivery fails.
 Recording transfer uses an opaque host-owned sink for truncate, append,
 finalize, and discard effects. The core deduplicates replayed sequence numbers
 after restart and sends the firmware's terminal ACK only after durable sink
-finalization; `CONFIRM` follows that ACK and is therefore the only step that can
-delete the device copy.
+finalization. Native callers may confirm immediately or retain the recording for
+an application-owned upload; `CONFIRM` remains the only step that can delete the
+device copy and can be sent later through the facade after upload success.
 Upload handoff carries only opaque upload and destination IDs. It treats busy,
 detached, and unreadable direct-upload state as device-owned and can expose a
 Bluetooth fallback only after a fresh status read reports inactive ownership.

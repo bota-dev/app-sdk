@@ -44,6 +44,17 @@ fn command() -> Command {
         recording: recording(),
         sink_id: sink(),
         total_units: 10,
+        confirm_on_completion: true,
+    }
+}
+
+fn retained_command() -> Command {
+    Command::TransferRecording {
+        device: device(),
+        recording: recording(),
+        sink_id: sink(),
+        total_units: 10,
+        confirm_on_completion: false,
     }
 }
 
@@ -673,5 +684,100 @@ fn confirm_delete_occurs_only_after_durable_sink_finalization_and_final_ack() {
             encrypted: false,
             sha256: None,
         })
+    )));
+}
+
+#[test]
+fn retained_transfer_completes_after_final_ack_without_confirming_delete() {
+    let mut engine = WorkflowEngine::default();
+    let started = engine
+        .start(retained_command(), &capabilities(), CANCELLATION)
+        .unwrap();
+    let load_request = request_id(&started, |effect| {
+        matches!(effect, Effect::Persistence(PersistenceEffect::LoadCheckpoint))
+    });
+    let truncating = engine
+        .dispatch(host(
+            load_request,
+            HostEventKind::CheckpointLoaded { checkpoint: None },
+        ))
+        .unwrap();
+    let truncate_request = request_id(&truncating, |effect| {
+        matches!(effect, Effect::RecordingSink(RecordingSinkEffect::Truncate { .. }))
+    });
+    let subscribing = engine
+        .dispatch(host(truncate_request, HostEventKind::RecordingSinkTruncated))
+        .unwrap();
+    let subscription_request = request_id(&subscribing, |effect| {
+        matches!(effect, Effect::Ble(BleEffect::Subscribe { .. }))
+    });
+    let starting = engine
+        .dispatch(host(
+            subscription_request,
+            HostEventKind::Ble(BleEvent::Subscribed {
+                characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+            }),
+        ))
+        .unwrap();
+    let start_request = request_id(&starting, |effect| {
+        matches!(
+            effect,
+            Effect::Ble(BleEffect::Write { characteristic_uuid, payload, .. })
+                if characteristic_uuid == CHAR_TRANSFER_CONTROL && payload.first() == Some(&2)
+        )
+    });
+    engine
+        .dispatch(host(start_request, HostEventKind::Ble(BleEvent::WriteCompleted)))
+        .unwrap();
+
+    let finalizing = engine
+        .dispatch(host(
+            subscription_request,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                value: eof(0, 0x1234_5678),
+            }),
+        ))
+        .unwrap();
+    let finalize_request = request_id(&finalizing, |effect| {
+        matches!(effect, Effect::RecordingSink(RecordingSinkEffect::Finalize { .. }))
+    });
+    engine
+        .dispatch(host(
+            finalize_request,
+            HostEventKind::RecordingSinkFinalized { durable_units: 10 },
+        ))
+        .unwrap();
+    let timer_id = finalizing
+        .iter()
+        .find_map(|request| match request.effect {
+            Effect::Timer(TimerEffect::Schedule { timer_id, .. }) => Some(timer_id),
+            _ => None,
+        })
+        .expect("SHA grace timer");
+    let acknowledging = engine
+        .dispatch(host(
+            RequestId::from_u64(0),
+            HostEventKind::TimerFired { timer_id },
+        ))
+        .unwrap();
+    let ack_request = request_id(&acknowledging, |effect| {
+        matches!(effect, Effect::Ble(BleEffect::Write { payload, .. }) if payload.first() == Some(&ACK_TYPE_ACK))
+    });
+
+    let completed = engine
+        .dispatch(host(
+            ack_request,
+            HostEventKind::Ble(BleEvent::WriteCompleted),
+        ))
+        .unwrap();
+    assert!(!completed.iter().any(|request| matches!(
+        &request.effect,
+        Effect::Ble(BleEffect::Write { characteristic_uuid, payload, .. })
+            if characteristic_uuid == CHAR_TRANSFER_CONTROL && payload.first() == Some(&7)
+    )));
+    assert!(completed.iter().any(|request| matches!(
+        request.effect,
+        Effect::Notify(WorkflowNotification::RecordingTransferCompleted { .. })
     )));
 }

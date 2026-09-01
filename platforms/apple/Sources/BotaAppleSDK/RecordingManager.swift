@@ -90,7 +90,8 @@ public actor RecordingManager {
     public func syncRecording(
         _ device: ConnectedDevice,
         recording: DeviceRecording,
-        sinkID: String = UUID().uuidString
+        sinkID: String = UUID().uuidString,
+        confirmOnCompletion: Bool = true
     ) async throws -> AsyncThrowingStream<RecordingSyncEvent, Error> {
         let runtime = try configuredRuntime()
         transferMetadataBySinkID.removeValue(forKey: sinkID)
@@ -99,7 +100,8 @@ public actor RecordingManager {
             serialNumber: device.serialNumber,
             recordingUUID: recording.uuid,
             sinkID: sinkID,
-            totalUnits: recording.fileSizeBytes
+            totalUnits: recording.fileSizeBytes,
+            confirmOnCompletion: confirmOnCompletion
         )
         try await begin(command.cancellationID, operation: .transferRecording, runtime: runtime)
         let pair = AsyncThrowingStream<RecordingSyncEvent, Error>.makeStream()
@@ -120,6 +122,28 @@ public actor RecordingManager {
 
     public func transferMetadata(sinkID: String) -> RecordingTransferMetadata? {
         transferMetadataBySinkID.removeValue(forKey: sinkID)
+    }
+
+    public func confirmRecording(
+        _ device: ConnectedDevice,
+        recordingUUID: String
+    ) async throws {
+        let runtime = try configuredRuntime()
+        try await runtime.connection.require(device)
+        let operationID = UUID()
+        try await begin(operationID, operation: .transferRecording, runtime: runtime)
+        do {
+            try await runtime.directWrite(
+                device.id,
+                BotaBluetoothUUIDs.storageService,
+                BotaBluetoothUUIDs.transferControl,
+                runtime.createTransferCommand(.confirm(recordingUUID: recordingUUID))
+            )
+            await finish(operationID, runtime: runtime)
+        } catch {
+            await finish(operationID, runtime: runtime)
+            throw error
+        }
     }
 
     public func observeUploadOwnership(
