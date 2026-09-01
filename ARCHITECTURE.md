@@ -504,6 +504,8 @@ states use `WireValue.unknown` rather than legacy fallbacks. Protocol fixtures
 are mirrored into SwiftPM resources by `sync-protocol-fixtures.mjs`, checked for
 drift on every package test, and executed through the Rust decode/encode ABI;
 Swift does not contain a second wire parser.
+The Apple and Android fixture runners both execute all 39 frozen decode cases,
+including recording state and command-result compatibility.
 
 `CoreEngineActor` is the single Swift workflow executor. It submits all ten
 typed command shapes to Rust, drains notifications and host effects in order,

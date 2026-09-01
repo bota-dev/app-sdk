@@ -145,6 +145,9 @@ class ProtocolCodecTest {
             when (operation) {
                 "parseDeviceStatus" -> mapper.parseDeviceStatus(fixture.getString("inputHex").hexBytes())
                 "parseRecordingList" -> mapper.parseRecordingList(fixture.getString("inputHex").hexBytes())
+                "parseRecordingState" -> mapper.parseRecordingState(fixture.getString("inputHex").hexBytes())
+                "parseRecordingControlResult" ->
+                    mapper.parseRecordingControlResult(fixture.getString("inputHex").hexBytes())
                 "parseTransferPacket" -> mapper.parseTransferPacket(fixture.getString("inputHex").hexBytes())
                 "parseTriggerDeviceUploadResponse" ->
                     mapper.parseTriggerDeviceUploadResponse(fixture.getString("inputHex").hexBytes())
@@ -198,11 +201,14 @@ class ProtocolCodecTest {
             "ota",
             "provisioning",
             "recording-list",
+            "recording-control",
             "transfer-control",
         )
         val decodeOperations = setOf(
             "parseDeviceStatus",
             "parseRecordingList",
+            "parseRecordingState",
+            "parseRecordingControlResult",
             "parseTransferPacket",
             "parseTriggerDeviceUploadResponse",
             "parseConnectionSettings",

@@ -40,7 +40,7 @@ final class ProtocolCodecTests: XCTestCase {
                 XCTAssertTrue(expectsError, "\(fixtureCase["name"] ?? operation): \(error)")
             }
         }
-        XCTAssertEqual(matched, 33)
+        XCTAssertEqual(matched, 39)
     }
 
     func testEncryptedRecordingAndTransferMetadataRemainOpaque() throws {
@@ -129,6 +129,10 @@ final class ProtocolCodecTests: XCTestCase {
             _ = try mapper.parseDeviceStatus(Self.data(fixtureCase["inputHex"] as! String))
         case "parseRecordingList":
             _ = try mapper.parseRecordingList(Self.data(fixtureCase["inputHex"] as! String))
+        case "parseRecordingState":
+            _ = try mapper.parseRecordingState(Self.data(fixtureCase["inputHex"] as! String))
+        case "parseRecordingControlResult":
+            _ = try mapper.parseRecordingControlResult(Self.data(fixtureCase["inputHex"] as! String))
         case "parseTransferPacket":
             _ = try mapper.parseTransferPacket(Self.data(fixtureCase["inputHex"] as! String))
         case "parseTriggerDeviceUploadResponse":
@@ -153,6 +157,8 @@ final class ProtocolCodecTests: XCTestCase {
     private static let decodeOperations: Set<String> = [
         "parseDeviceStatus",
         "parseRecordingList",
+        "parseRecordingState",
+        "parseRecordingControlResult",
         "parseTransferPacket",
         "parseTriggerDeviceUploadResponse",
         "parseConnectionSettings",
@@ -186,6 +192,7 @@ final class ProtocolCodecTests: XCTestCase {
             "ota",
             "provisioning",
             "recording-list",
+            "recording-control",
             "transfer-control",
         ]
         return try names.flatMap { name in
