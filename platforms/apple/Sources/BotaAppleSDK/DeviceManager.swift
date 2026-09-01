@@ -70,6 +70,10 @@ struct DeviceRuntime: Sendable {
     let directWrite: @Sendable (String, String, String, Data) async throws -> Void
     let directSubscribe: @Sendable (String, String, String) async throws -> AsyncThrowingStream<Data, Error>
     let directUnsubscribe: @Sendable (String, String, String) async throws -> Void
+    let delay: @Sendable (UInt64) async throws -> Void
+    let parseRecordingState: @Sendable (Data) throws -> RecordingState
+    let parseRecordingControlResult: @Sendable (Data) throws -> RecordingControlResult
+    let createRecordingControlCommand: @Sendable (RecordingControlCommand) throws -> Data
     let parseWiFiConfigResult: @Sendable (Data) throws -> WiFiConfigResult
     let parseWiFiStatusInfo: @Sendable (Data) throws -> WiFiStatusInfo
     let parseWiFiScanResult: @Sendable (Data) throws -> WiFiScanUpdate
@@ -117,6 +121,18 @@ struct DeviceRuntime: Sendable {
             throw NativeHostError.missingResource("direct device subscription")
         },
         directUnsubscribe: @escaping @Sendable (String, String, String) async throws -> Void = { _, _, _ in },
+        delay: @escaping @Sendable (UInt64) async throws -> Void = { milliseconds in
+            try await Task.sleep(nanoseconds: milliseconds * 1_000_000)
+        },
+        parseRecordingState: @escaping @Sendable (Data) throws -> RecordingState = { _ in
+            throw NativeHostError.missingResource("recording-state decoder")
+        },
+        parseRecordingControlResult: @escaping @Sendable (Data) throws -> RecordingControlResult = { _ in
+            throw NativeHostError.missingResource("recording-control-result decoder")
+        },
+        createRecordingControlCommand: @escaping @Sendable (RecordingControlCommand) throws -> Data = { _ in
+            throw NativeHostError.missingResource("recording-control encoder")
+        },
         parseWiFiConfigResult: @escaping @Sendable (Data) throws -> WiFiConfigResult = { _ in
             throw NativeHostError.missingResource("WiFi config-result decoder")
         },
@@ -185,6 +201,10 @@ struct DeviceRuntime: Sendable {
         self.directWrite = directWrite
         self.directSubscribe = directSubscribe
         self.directUnsubscribe = directUnsubscribe
+        self.delay = delay
+        self.parseRecordingState = parseRecordingState
+        self.parseRecordingControlResult = parseRecordingControlResult
+        self.createRecordingControlCommand = createRecordingControlCommand
         self.parseWiFiConfigResult = parseWiFiConfigResult
         self.parseWiFiStatusInfo = parseWiFiStatusInfo
         self.parseWiFiScanResult = parseWiFiScanResult

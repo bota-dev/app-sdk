@@ -32,6 +32,47 @@ public struct DeviceRecording: Equatable, Sendable {
     }
 }
 
+public enum RecordingInitiator: Equatable, Sendable {
+    case local
+    case remote
+}
+
+public struct RecordingState: Equatable, Sendable {
+    public var active: Bool
+    public var recordingID: String?
+    public var initiatedBy: RecordingInitiator
+
+    public init(
+        active: Bool,
+        recordingID: String? = nil,
+        initiatedBy: RecordingInitiator = .local
+    ) {
+        self.active = active
+        self.recordingID = recordingID
+        self.initiatedBy = initiatedBy
+    }
+}
+
+public enum RecordingControlError: String, Equatable, Sendable {
+    case alreadyRecording = "already_recording"
+    case notRecording = "not_recording"
+    case invalidGrant = "invalid_grant"
+    case grantExpired = "grant_expired"
+    case invalidState = "invalid_state"
+    case invalidResponse = "invalid_response"
+    case unknownError = "unknown_error"
+}
+
+public struct RecordingControlResult: Equatable, Sendable {
+    public var success: Bool
+    public var error: RecordingControlError?
+
+    public init(success: Bool, error: RecordingControlError? = nil) {
+        self.success = success
+        self.error = error
+    }
+}
+
 public enum TransferPacketType: Equatable, Sendable {
     case data
     case eof

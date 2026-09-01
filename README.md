@@ -152,7 +152,10 @@ verified peripheral, and closes observers. Public secure-lifecycle managers now
 resolve provisioning and command-bound reset material through application
 callbacks, normalize Bota Note connection settings, keep remove-only
 deprovision separate from destructive reset, and resume only an exact durable
-reset result for the current binding generation. Public recording, upload
+reset result for the current binding generation. The Apple control facade also
+writes command-bound recording grants, subscribes before start/stop opcodes,
+preserves the frozen stop pacing, and exposes shared-decoder state reads and
+updates. Public recording, upload
 ownership, OTA, and device-log managers now expose typed async streams while
 keeping recording and firmware bytes in native files and accepting only opaque
 application-supplied upload identifiers. An unrelated Swift package now imports

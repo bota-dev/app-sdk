@@ -34,6 +34,18 @@ private func typeCheckPublicFacade(
         image: firmware
     )
     let _: AsyncThrowingStream<DeviceLogLine, Error> = try await client.logs.streamLogs(device)
+    let _: RecordingControlResult = try await client.controls.requestStartRecording(
+        device,
+        grantBlob: Data([1]).base64EncodedString()
+    )
+    let _: RecordingControlResult = try await client.controls.requestStopRecording(
+        device,
+        grantBlob: Data([1]).base64EncodedString()
+    )
+    let _: RecordingState = try await client.controls.readRecordingState(from: device)
+    let _: AsyncThrowingStream<RecordingState, Error> = try await client.controls.recordingStateUpdates(
+        for: device
+    )
     try await client.provisioning.deprovision(device)
     let _: FactoryResetCompletion = try await client.factoryReset.factoryReset(
         device,

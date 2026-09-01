@@ -103,6 +103,9 @@ public struct BotaConfiguration: @unchecked Sendable {
                         characteristicUUID: characteristicUUID
                     )
                 },
+                parseRecordingState: { try mapper.parseRecordingState($0) },
+                parseRecordingControlResult: { try mapper.parseRecordingControlResult($0) },
+                createRecordingControlCommand: { try mapper.createRecordingControlCommand($0) },
                 parseWiFiConfigResult: { try mapper.parseWiFiConfigResult($0) },
                 parseWiFiStatusInfo: { try mapper.parseWiFiStatusInfo($0) },
                 parseWiFiScanResult: { try mapper.parseWiFiScanResult($0) },

@@ -80,6 +80,28 @@ final class CoreModelMapper: @unchecked Sendable {
         }
     }
 
+    func parseRecordingState(_ data: Data) throws -> RecordingState {
+        let fields = try decode(BotaPrivateProtocol.decodeRecordingState, data)
+        return RecordingState(
+            active: try fields.requiredBool(BotaPrivateProtocol.recordingActive),
+            recordingID: fields.text(UInt32(BOTA_DEVICE_SDK_V1_FIELD_RECORDING_UUID)),
+            initiatedBy: try fields.requiredBool(BotaPrivateProtocol.recordingInitiatedRemotely)
+                ? .remote
+                : .local
+        )
+    }
+
+    func parseRecordingControlResult(_ data: Data) throws -> RecordingControlResult {
+        let fields = try decode(BotaPrivateProtocol.decodeRecordingControlResult, data)
+        let success = try fields.requiredBool(BotaPrivateProtocol.recordingSuccess)
+        return RecordingControlResult(
+            success: success,
+            error: success ? nil : Self.recordingControlError(
+                fields.text(UInt32(BOTA_DEVICE_SDK_V1_FIELD_ERROR_DETAIL))
+            )
+        )
+    }
+
     func parseTransferPacket(_ data: Data) throws -> TransferPacket {
         let fields = try decode(UInt32(BOTA_DEVICE_SDK_V1_PROTOCOL_DECODE_TRANSFER_PACKET), data)
         let variant = try fields.requiredUInt8(UInt32(BOTA_DEVICE_SDK_V1_FIELD_PROTOCOL_VARIANT))
@@ -256,6 +278,18 @@ final class CoreModelMapper: @unchecked Sendable {
             ]
         }
         return try encode(UInt32(BOTA_DEVICE_SDK_V1_PROTOCOL_ENCODE_TRANSFER_COMMAND), fields: fields)
+    }
+
+    func createRecordingControlCommand(_ command: RecordingControlCommand) throws -> Data {
+        try encode(
+            BotaPrivateProtocol.encodeRecordingControlCommand,
+            fields: [
+                .unsigned(
+                    id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_COMMAND),
+                    value: command == .start ? 1 : 2
+                ),
+            ]
+        )
     }
 
     func encodeDeviceCommand(_ command: UInt8) throws -> Data {
@@ -483,6 +517,10 @@ final class CoreModelMapper: @unchecked Sendable {
         }
     }
 
+    private static func recordingControlError(_ value: String?) -> RecordingControlError {
+        value.flatMap(RecordingControlError.init(rawValue:)) ?? .unknownError
+    }
+
     private static func audioCodec(_ raw: UInt8) -> WireValue<AudioCodec> {
         switch raw {
         case 0x00: return .known(.pcm16k)
@@ -546,15 +584,21 @@ final class CoreModelMapper: @unchecked Sendable {
 private enum BotaPrivateProtocol {
     static let decodeWiFiStatus: UInt32 = 0x050B
     static let decodeWiFiScan: UInt32 = 0x050C
+    static let decodeRecordingState: UInt32 = 0x050D
+    static let decodeRecordingControlResult: UInt32 = 0x050E
     static let encodeWiFiCredentials: UInt32 = 0x051D
     static let encodeProvisioningChunks: UInt32 = 0x051C
     static let encodeTimeSync: UInt32 = 0x051E
+    static let encodeRecordingControlCommand: UInt32 = 0x051F
     static let wifiSSID: UInt32 = 114
     static let wifiSignalStrength: UInt32 = 115
     static let wifiQuality: UInt32 = 116
     static let wifiIsCurrent: UInt32 = 117
     static let wifiIsOpen: UInt32 = 118
     static let wifiPassword: UInt32 = 119
+    static let recordingActive: UInt32 = 120
+    static let recordingInitiatedRemotely: UInt32 = 121
+    static let recordingSuccess: UInt32 = 122
 }
 
 enum BotaProtocolConstants {
