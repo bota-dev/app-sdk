@@ -203,9 +203,13 @@ The React Native reset broker exposes only the nonce, command ID, binding
 generation, and an encoded grant string. Apple and Android decode the grant into
 native bytes before calling their public `FactoryResetManager`; Codegen never
 carries the destructive payload. Both adapters return the exact command and
-generation completion. `resumePendingFactoryReset` delegates directly to the
-native receipt-only workflow, which rejects a stale generation before Rust
-starts and cannot request another grant or resend opcode `0x06`.
+generation completion. When the application supplies a result persister, each
+native host writes its own reset journal, awaits the application durable-save
+callback, and only then reports the save to Rust so receipt opcode `0x0A` can be
+sent. Exact-result replay repeats that application save before the receipt.
+`resumePendingFactoryReset` delegates directly to the native receipt-only
+workflow, which rejects a stale generation before Rust starts and cannot
+request another grant or resend opcode `0x06`.
 
 The React Native recording broker maps native recording metadata to the frozen
 JavaScript shape and emits transfer progress as counts only. Apple and Android

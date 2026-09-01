@@ -33,6 +33,9 @@ actor FilePersistenceHost: PersistenceHost {
     private let rootDirectory: URL
     private let secureStorage: any PersistenceHost
     private var factoryResetGenerations: [String: UInt64] = [:]
+    private var factoryResetResultPersisters: [
+        String: @Sendable (PersistedFactoryResetResult) async throws -> Void
+    ] = [:]
 
     init(
         rootDirectory: URL,
@@ -51,45 +54,50 @@ actor FilePersistenceHost: PersistenceHost {
         default:
             break
         }
-        return AsyncThrowingStream { continuation in
-            do {
-                try ensureRoot()
-                switch effect {
-                case .persistenceLoadCheckpoint:
-                    var fields: [CoreField] = []
-                    if fileManager.fileExists(atPath: checkpointURL.path) {
-                        fields.append(.bytes(
-                            id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_CHECKPOINT),
-                            value: try Data(contentsOf: checkpointURL)
-                        ))
-                    }
-                    continuation.yield(.init(
-                        kind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_CHECKPOINT_LOADED),
-                        fields: fields
+        do {
+            try ensureRoot()
+            let payload: CoreHostEventPayload
+            switch effect {
+            case .persistenceLoadCheckpoint:
+                var fields: [CoreField] = []
+                if fileManager.fileExists(atPath: checkpointURL.path) {
+                    fields.append(.bytes(
+                        id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_CHECKPOINT),
+                        value: try Data(contentsOf: checkpointURL)
                     ))
-                case .persistenceSaveCheckpoint:
-                    try atomicWrite(
-                        try requiredBytes(effect, UInt32(BOTA_DEVICE_SDK_V1_FIELD_CHECKPOINT)),
-                        to: checkpointURL
-                    )
-                    continuation.yield(checkpointSaved())
-                case .persistenceDeleteCheckpoint:
-                    try removeIfPresent(checkpointURL)
-                    continuation.yield(checkpointSaved())
-                case .persistenceSaveConnectionIdentity:
-                    try saveConnectionIdentity(effect)
-                    continuation.yield(.init(kind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_CONNECTION_IDENTITY_SAVED)))
-                case .persistenceSaveFactoryResetResult:
-                    try saveFactoryResetResult(effect)
-                    continuation.yield(.init(kind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_FACTORY_RESET_RESULT_SAVED)))
-                case .persistenceDeleteFactoryResetResult:
-                    try deleteFactoryResetResult(effect)
-                    continuation.yield(.init(kind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_FACTORY_RESET_RESULT_DELETED)))
-                default:
-                    throw NativeHostError.invalidEffect(effect.kind)
                 }
+                payload = .init(
+                    kind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_CHECKPOINT_LOADED),
+                    fields: fields
+                )
+            case .persistenceSaveCheckpoint:
+                try atomicWrite(
+                    try requiredBytes(effect, UInt32(BOTA_DEVICE_SDK_V1_FIELD_CHECKPOINT)),
+                    to: checkpointURL
+                )
+                payload = checkpointSaved()
+            case .persistenceDeleteCheckpoint:
+                try removeIfPresent(checkpointURL)
+                payload = checkpointSaved()
+            case .persistenceSaveConnectionIdentity:
+                try saveConnectionIdentity(effect)
+                payload = .init(kind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_CONNECTION_IDENTITY_SAVED))
+            case .persistenceSaveFactoryResetResult:
+                let result = try saveFactoryResetResult(effect)
+                try await factoryResetResultPersisters[result.commandID]?(result)
+                payload = .init(kind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_FACTORY_RESET_RESULT_SAVED))
+            case .persistenceDeleteFactoryResetResult:
+                try deleteFactoryResetResult(effect)
+                payload = .init(kind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_FACTORY_RESET_RESULT_DELETED))
+            default:
+                throw NativeHostError.invalidEffect(effect.kind)
+            }
+            return AsyncThrowingStream { continuation in
+                continuation.yield(payload)
                 continuation.finish()
-            } catch {
+            }
+        } catch {
+            return AsyncThrowingStream { continuation in
                 continuation.finish(throwing: error)
             }
         }
@@ -106,6 +114,17 @@ actor FilePersistenceHost: PersistenceHost {
 
     func unregisterFactoryReset(commandID: String) {
         factoryResetGenerations[commandID] = nil
+    }
+
+    func registerFactoryResetResultPersister(
+        commandID: String,
+        persister: @escaping @Sendable (PersistedFactoryResetResult) async throws -> Void
+    ) {
+        factoryResetResultPersisters[commandID] = persister
+    }
+
+    func unregisterFactoryResetResultPersister(commandID: String) {
+        factoryResetResultPersisters[commandID] = nil
     }
 
     private var checkpointURL: URL { rootDirectory.appendingPathComponent("workflow-checkpoint.bin") }
@@ -141,7 +160,7 @@ actor FilePersistenceHost: PersistenceHost {
         try atomicWrite(try JSONEncoder().encode(identity), to: identityURL)
     }
 
-    private func saveFactoryResetResult(_ effect: CoreEffect) throws {
+    private func saveFactoryResetResult(_ effect: CoreEffect) throws -> PersistedFactoryResetResult {
         let commandID = try requiredText(effect, UInt32(BOTA_DEVICE_SDK_V1_FIELD_COMMAND_ID))
         let result = PersistedFactoryResetResult(
             commandID: commandID,
@@ -153,6 +172,7 @@ actor FilePersistenceHost: PersistenceHost {
             bindingGeneration: factoryResetGenerations[commandID]
         )
         try atomicWrite(try JSONEncoder().encode(result), to: resetURL)
+        return result
     }
 
     private func deleteFactoryResetResult(_ effect: CoreEffect) throws {

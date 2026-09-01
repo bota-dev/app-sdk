@@ -133,6 +133,11 @@ export type NativeFactoryResetCompletion = {
   bindingGeneration: number;
 };
 
+export type NativeFactoryResetPersistenceRequest = {
+  requestId: string;
+  localRecordingsDeleted: number;
+};
+
 export type NativeDeviceRecording = {
   uuid: string;
   startedAtMs: number;
@@ -219,6 +224,7 @@ export interface Spec extends TurboModule {
   readonly onRecordingStateUpdated: EventEmitter<NativeRecordingState>;
   readonly onProvisioningMaterialRequested: EventEmitter<NativeProvisioningMaterialRequest>;
   readonly onFactoryResetGrantRequested: EventEmitter<NativeFactoryResetGrantRequest>;
+  readonly onFactoryResetResultPersistenceRequested: EventEmitter<NativeFactoryResetPersistenceRequest>;
   readonly onRecordingTransferProgress: EventEmitter<NativeRecordingTransferProgress>;
   readonly onUploadOwnershipProgress: EventEmitter<NativeRecordingTransferProgress>;
   readonly onFirmwareUpdateProgress: EventEmitter<NativeFirmwareUpdateProgress>;
@@ -282,7 +288,8 @@ export interface Spec extends TurboModule {
   factoryReset: (
     device: NativeConnectedDevice,
     commandId: string,
-    bindingGeneration: number
+    bindingGeneration: number,
+    requiresApplicationPersistence: boolean
   ) => Promise<NativeFactoryResetCompletion>;
   getCapabilities: () => Promise<NativeCapabilities>;
   getState: () => Promise<string>;
@@ -310,9 +317,11 @@ export interface Spec extends TurboModule {
     requestId: string,
     grantBlob: string
   ) => Promise<void>;
+  resolveFactoryResetResultPersistence: (requestId: string) => Promise<void>;
   resumePendingFactoryReset: (
     device: NativeConnectedDevice,
-    currentBindingGeneration: number
+    currentBindingGeneration: number,
+    requiresApplicationPersistence: boolean
   ) => Promise<NativeFactoryResetCompletion | null>;
   readConnectionSettings: (
     device: NativeConnectedDevice

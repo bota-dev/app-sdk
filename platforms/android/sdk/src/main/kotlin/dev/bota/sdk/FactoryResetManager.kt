@@ -8,6 +8,7 @@ import dev.bota.sdk.internal.runCleanupAfter
 import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.model.FactoryResetCompletion
 import dev.bota.sdk.model.FactoryResetGrantRequest
+import dev.bota.sdk.model.FactoryResetPersistenceResult
 import java.util.UUID
 
 public class FactoryResetManager internal constructor() {
@@ -37,6 +38,7 @@ public class FactoryResetManager internal constructor() {
             runCleanupActions(
                 { runCatching { configured.engine.cancel(operation.cancellationId) } },
                 { operation.grantId?.let(configured.unregisterMaterial) },
+                { configured.unregisterFactoryResetResultPersister(operation.commandId) },
                 { configured.unregisterFactoryResetGeneration(operation.commandId) },
                 { configured.operations.end(operation.cancellationId) },
             )
@@ -47,6 +49,7 @@ public class FactoryResetManager internal constructor() {
         device: ConnectedDevice,
         commandId: String,
         bindingGeneration: ULong,
+        persistResult: (suspend (FactoryResetPersistenceResult) -> Unit)? = null,
         provider: suspend (FactoryResetGrantRequest) -> ByteArray,
     ): FactoryResetCompletion {
         requireIdentifier(commandId, "command ID")
@@ -59,6 +62,11 @@ public class FactoryResetManager internal constructor() {
         var failure: Throwable? = null
         try {
             configured.registerFactoryResetGeneration(commandId, bindingGeneration)
+            persistResult?.let { persister ->
+                configured.registerFactoryResetResultPersister(commandId) { result ->
+                    persister(result.toPublicPersistenceResult())
+                }
+            }
             configured.registerFactoryReset(grantId) { serialNumber, nonce ->
                 provider(FactoryResetGrantRequest(serialNumber, nonce, commandId, bindingGeneration))
             }
@@ -71,6 +79,7 @@ public class FactoryResetManager internal constructor() {
             runCleanupAfter(
                 failure,
                 { configured.unregisterMaterial(grantId) },
+                { configured.unregisterFactoryResetResultPersister(commandId) },
                 { configured.unregisterFactoryResetGeneration(commandId) },
                 { finish(command.cancellationId) },
             )
@@ -80,6 +89,7 @@ public class FactoryResetManager internal constructor() {
     public suspend fun resumePendingFactoryReset(
         device: ConnectedDevice,
         currentBindingGeneration: ULong,
+        persistResult: (suspend (FactoryResetPersistenceResult) -> Unit)? = null,
     ): FactoryResetCompletion? {
         val configured = configuredRuntime()
         configured.connection.require(device)
@@ -110,11 +120,21 @@ public class FactoryResetManager internal constructor() {
         )
         configured.operations.begin(command.cancellationId, BotaOperation.FactoryReset)
         synchronized(lock) { active = Active(command.cancellationId, saved.commandId, null) }
+        configured.registerFactoryResetGeneration(saved.commandId, currentBindingGeneration)
+        persistResult?.let { persister ->
+            configured.registerFactoryResetResultPersister(saved.commandId) { result ->
+                persister(result.toPublicPersistenceResult())
+            }
+        }
         try {
             awaitWorkflowCompletion(command, configured)
             return FactoryResetCompletion(saved.commandId, currentBindingGeneration)
         } finally {
-            finish(command.cancellationId)
+            runCleanupActions(
+                { configured.unregisterFactoryResetResultPersister(saved.commandId) },
+                { configured.unregisterFactoryResetGeneration(saved.commandId) },
+                { finish(command.cancellationId) },
+            )
         }
     }
 
@@ -134,6 +154,20 @@ public class FactoryResetManager internal constructor() {
     }
 
     private fun configuredRuntime(): DeviceRuntime = synchronized(lock) { runtime } ?: unavailable()
+}
+
+private fun dev.bota.sdk.internal.host.PersistedFactoryResetResult.toPublicPersistenceResult():
+    FactoryResetPersistenceResult {
+    if (resultCode != 0uL || deletedRecordingCount > UShort.MAX_VALUE.toULong()) {
+        throw BotaSDKError.Core(
+            BotaErrorCode.PersistenceFailed,
+            BotaOperation.FactoryReset,
+            retryable = false,
+            protocolStatus = null,
+            detail = "factory-reset persistence result is out of range",
+        )
+    }
+    return FactoryResetPersistenceResult(deletedRecordingCount.toUShort())
 }
 
 internal object SecureUUIDs {

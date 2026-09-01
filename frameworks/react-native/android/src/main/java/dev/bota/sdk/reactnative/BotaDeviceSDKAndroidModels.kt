@@ -300,6 +300,12 @@ internal fun BotaDeviceSDKAndroidFactoryResetRequest.toWritableMap(): WritableMa
         putDouble("bindingGeneration", bindingGeneration.toDouble())
     }
 
+internal fun BotaDeviceSDKAndroidFactoryResetPersistenceRequest.toWritableMap(): WritableMap =
+    Arguments.createMap().apply {
+        putString("requestId", requestId)
+        putDouble("localRecordingsDeleted", localRecordingsDeleted.toDouble())
+    }
+
 internal fun FactoryResetCompletion.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putString("commandId", commandId)
     putDouble("bindingGeneration", bindingGeneration.toDouble())

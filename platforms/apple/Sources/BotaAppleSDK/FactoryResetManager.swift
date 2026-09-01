@@ -16,6 +16,18 @@ public struct FactoryResetGrantRequest: Sendable {
 
 public typealias FactoryResetGrantProvider = @Sendable (FactoryResetGrantRequest) async throws -> Data
 
+public struct FactoryResetPersistenceResult: Equatable, Sendable {
+    public let localRecordingsDeleted: UInt16
+
+    public init(localRecordingsDeleted: UInt16) {
+        self.localRecordingsDeleted = localRecordingsDeleted
+    }
+}
+
+public typealias FactoryResetResultPersister = @Sendable (
+    FactoryResetPersistenceResult
+) async throws -> Void
+
 public struct FactoryResetCompletion: Equatable, Sendable {
     public let commandID: String
     public let bindingGeneration: UInt64
@@ -48,11 +60,17 @@ public actor FactoryResetManager {
         commandID: String,
         grantID: String,
         bindingGeneration: UInt64,
+        persistResult: FactoryResetResultPersister? = nil,
         using provider: @escaping FactoryResetGrantProvider
     ) async throws -> FactoryResetCompletion {
         let runtime = try configuredRuntime()
         try await runtime.connection.require(device)
         await runtime.registerFactoryResetGeneration(commandID, bindingGeneration)
+        if let persistResult {
+            await runtime.registerFactoryResetResultPersister(commandID) { result in
+                try await persistResult(try Self.persistenceResult(result))
+            }
+        }
         await runtime.registerFactoryReset(grantID) { request in
             try await provider(.init(
                 serialNumber: request.serialNumber,
@@ -83,7 +101,8 @@ public actor FactoryResetManager {
 
     public func resumePendingFactoryReset(
         _ device: ConnectedDevice,
-        currentBindingGeneration: UInt64
+        currentBindingGeneration: UInt64,
+        persistResult: FactoryResetResultPersister? = nil
     ) async throws -> FactoryResetCompletion? {
         let runtime = try configuredRuntime()
         try await runtime.connection.require(device)
@@ -106,19 +125,31 @@ public actor FactoryResetManager {
                 detail: "pending factory-reset result is out of range"
             )
         }
-        try await run(
-            .resumeFactoryReset(
-                serialNumber: device.serialNumber,
+        await runtime.registerFactoryResetGeneration(saved.commandID, currentBindingGeneration)
+        if let persistResult {
+            await runtime.registerFactoryResetResultPersister(saved.commandID) { result in
+                try await persistResult(try Self.persistenceResult(result))
+            }
+        }
+        do {
+            try await run(
+                .resumeFactoryReset(
+                    serialNumber: device.serialNumber,
+                    commandID: saved.commandID,
+                    resultCode: resultCode,
+                    deletedRecordingCount: deletedCount
+                ),
+                runtime: runtime
+            )
+            await cleanup(commandID: saved.commandID, grantID: nil, runtime: runtime)
+            return FactoryResetCompletion(
                 commandID: saved.commandID,
-                resultCode: resultCode,
-                deletedRecordingCount: deletedCount
-            ),
-            runtime: runtime
-        )
-        return FactoryResetCompletion(
-            commandID: saved.commandID,
-            bindingGeneration: currentBindingGeneration
-        )
+                bindingGeneration: currentBindingGeneration
+            )
+        } catch {
+            await cleanup(commandID: saved.commandID, grantID: nil, runtime: runtime)
+            throw error
+        }
     }
 
     public func cancelCurrentOperation() async throws {
@@ -151,9 +182,26 @@ public actor FactoryResetManager {
         }
     }
 
-    private func cleanup(commandID: String, grantID: String, runtime: DeviceRuntime) async {
-        await runtime.unregisterMaterial(grantID)
+    private func cleanup(commandID: String, grantID: String?, runtime: DeviceRuntime) async {
+        if let grantID { await runtime.unregisterMaterial(grantID) }
+        await runtime.unregisterFactoryResetResultPersister(commandID)
         await runtime.unregisterFactoryResetGeneration(commandID)
+    }
+
+    private static func persistenceResult(
+        _ result: PersistedFactoryResetResult
+    ) throws -> FactoryResetPersistenceResult {
+        guard result.resultCode == 0,
+              let deleted = UInt16(exactly: result.deletedRecordingCount)
+        else {
+            throw BotaSDKError(
+                code: .persistenceFailed,
+                operation: .factoryReset,
+                retryable: false,
+                detail: "factory-reset persistence result is out of range"
+            )
+        }
+        return .init(localRecordingsDeleted: deleted)
     }
 
     private func configuredRuntime() throws -> DeviceRuntime {

@@ -140,7 +140,9 @@ Codegen, and the internal compatibility owner: the grant is written natively,
 the result subscription starts before opcode `0x05`, typed firmware failures
 cross JavaScript, and frozen provisioning retries `ALREADY_PAIRED` with a fresh
 nonce-bound grant. Reset compatibility remains in Task 2 and will be committed
-separately.
+separately. The reset persistence foundation is now complete: Rust re-persists
+exact replay, both native hosts await an optional application durable-save hook,
+and the React Native bridge resolves that hook before receipt opcode `0x0A`.
 
 **Files:**
 - Modify: `frameworks/react-native/src/specs/NativeBotaDeviceSDK.ts`

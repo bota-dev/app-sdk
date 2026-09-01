@@ -47,6 +47,10 @@ public class FactoryResetGrantRequest(
     public val nonce: ByteArray get() = storedNonce.copyOf()
 }
 
+public data class FactoryResetPersistenceResult(
+    public val localRecordingsDeleted: UShort,
+)
+
 public data class FactoryResetCompletion(
     public val commandId: String,
     public val bindingGeneration: ULong,

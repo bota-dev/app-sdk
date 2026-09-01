@@ -67,8 +67,28 @@ internal class AtomicFileJournalStore(rootDirectory: File) : JournalStore {
 internal class AtomicFilePersistenceHost(private val store: JournalStore) : PersistenceHost {
     private val mutex = Mutex()
     private val resetGenerations = mutableMapOf<String, ULong>()
+    private val resetResultPersisters = mutableMapOf<
+        String,
+        suspend (PersistedFactoryResetResult) -> Unit,
+    >()
 
     override fun execute(effect: CoreEffect): Flow<CoreHostEventPayload> = flow {
+        if (effect.kind == CoreEffectKind.PersistenceSaveFactoryResetResult) {
+            val (result, persister) = mutex.withLock {
+                val commandId = requiredText(effect, HostFieldId.CommandId)
+                val saved = PersistedFactoryResetResult(
+                    commandId,
+                    requiredUnsigned(effect, HostFieldId.ResultCode),
+                    requiredUnsigned(effect, HostFieldId.DeletedRecordingCount),
+                    resetGenerations[commandId],
+                )
+                store.write(ResetJournal, encodeResetResult(saved))
+                saved to resetResultPersisters[commandId]
+            }
+            persister?.invoke(result)
+            emit(CoreHostEventPayload(HostEventKind.FactoryResetResultSaved))
+            return@flow
+        }
         mutex.withLock {
             when (effect.kind) {
                 CoreEffectKind.PersistenceLoadCheckpoint -> {
@@ -92,17 +112,7 @@ internal class AtomicFilePersistenceHost(private val store: JournalStore) : Pers
                     store.write(ConnectionJournal, encodeConnectionIdentity(effect))
                     emit(CoreHostEventPayload(HostEventKind.ConnectionIdentitySaved))
                 }
-                CoreEffectKind.PersistenceSaveFactoryResetResult -> {
-                    val commandId = requiredText(effect, HostFieldId.CommandId)
-                    val result = PersistedFactoryResetResult(
-                        commandId,
-                        requiredUnsigned(effect, HostFieldId.ResultCode),
-                        requiredUnsigned(effect, HostFieldId.DeletedRecordingCount),
-                        resetGenerations[commandId],
-                    )
-                    store.write(ResetJournal, encodeResetResult(result))
-                    emit(CoreHostEventPayload(HostEventKind.FactoryResetResultSaved))
-                }
+                CoreEffectKind.PersistenceSaveFactoryResetResult -> error("handled before lock")
                 CoreEffectKind.PersistenceDeleteFactoryResetResult -> {
                     val commandId = requiredText(effect, HostFieldId.CommandId)
                     val saved = loadFactoryResetResult()
@@ -124,6 +134,17 @@ internal class AtomicFilePersistenceHost(private val store: JournalStore) : Pers
 
     suspend fun unregisterFactoryReset(commandId: String) = mutex.withLock {
         resetGenerations.remove(commandId)
+    }
+
+    suspend fun registerFactoryResetResultPersister(
+        commandId: String,
+        persister: suspend (PersistedFactoryResetResult) -> Unit,
+    ) = mutex.withLock {
+        resetResultPersisters[validOpaqueId(commandId)] = persister
+    }
+
+    suspend fun unregisterFactoryResetResultPersister(commandId: String) = mutex.withLock {
+        resetResultPersisters.remove(commandId)
     }
 
     suspend fun loadFactoryResetResult(): PersistedFactoryResetResult? =

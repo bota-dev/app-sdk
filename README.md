@@ -98,8 +98,10 @@ concrete framework contracts pass on API 26 and API 35.
 The public Android client now exposes serial-verified discovery, connect and
 reconnect, status observation, provisioning, normalized connection settings,
 remove-only deprovision, authenticated factory reset, and exact-generation
-reset receipt recovery. Application material stays behind opaque native
-registrations, and every manager shares one facade operation owner. Recording
+reset receipt recovery. An optional application persistence callback is awaited
+after the native reset journal is saved and before the firmware result receipt
+is written. Application material stays behind opaque native registrations, and
+every manager shares one facade operation owner. Recording
 sync now returns native file paths, upload handoff exposes only ownership
 outcomes, OTA keeps request and firmware bytes in native hosts, and logs expose
 only complete core-sanitized lines. The AAR also carries a one-major deprecated

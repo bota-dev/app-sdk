@@ -7,6 +7,7 @@ import dev.bota.sdk.model.DeviceConnectionSettings
 import dev.bota.sdk.model.DeprovisionResult
 import dev.bota.sdk.model.FactoryResetCompletion
 import dev.bota.sdk.model.FactoryResetGrantRequest
+import dev.bota.sdk.model.FactoryResetPersistenceResult
 import dev.bota.sdk.model.ProvisioningMaterial
 import dev.bota.sdk.model.ProvisioningMaterialRequest
 import dev.bota.sdk.model.RecordingControlResult
@@ -40,6 +41,11 @@ internal data class BotaDeviceSDKAndroidFactoryResetRequest(
     val nonce: String,
     val commandId: String,
     val bindingGeneration: ULong,
+)
+
+internal data class BotaDeviceSDKAndroidFactoryResetPersistenceRequest(
+    val requestId: String,
+    val localRecordingsDeleted: UShort,
 )
 
 internal interface BotaDeviceSDKAndroidSecurityClient {
@@ -82,12 +88,14 @@ internal interface BotaDeviceSDKAndroidSecurityClient {
         device: ConnectedDevice,
         commandId: String,
         bindingGeneration: ULong,
+        persistResult: (suspend (FactoryResetPersistenceResult) -> Unit)?,
         provider: suspend (FactoryResetGrantRequest) -> ByteArray,
     ): FactoryResetCompletion
 
     suspend fun resumePendingFactoryReset(
         device: ConnectedDevice,
         currentBindingGeneration: ULong,
+        persistResult: (suspend (FactoryResetPersistenceResult) -> Unit)?,
     ): FactoryResetCompletion?
 
     suspend fun cancelCurrentOperation()
@@ -173,20 +181,24 @@ internal class BotaDeviceSDKSharedAndroidSecurityClient(
         device: ConnectedDevice,
         commandId: String,
         bindingGeneration: ULong,
+        persistResult: (suspend (FactoryResetPersistenceResult) -> Unit)?,
         provider: suspend (FactoryResetGrantRequest) -> ByteArray,
     ): FactoryResetCompletion = client.factoryReset.factoryReset(
         device,
         commandId,
         bindingGeneration,
+        persistResult,
         provider,
     )
 
     override suspend fun resumePendingFactoryReset(
         device: ConnectedDevice,
         currentBindingGeneration: ULong,
+        persistResult: (suspend (FactoryResetPersistenceResult) -> Unit)?,
     ): FactoryResetCompletion? = client.factoryReset.resumePendingFactoryReset(
         device,
         currentBindingGeneration,
+        persistResult,
     )
 
     override suspend fun cancelCurrentOperation() {
@@ -207,6 +219,7 @@ internal class BotaDeviceSDKAndroidSecurity(
     private val streamLock = Any()
     private val provisioningRequests = mutableMapOf<String, CompletableDeferred<ProvisioningMaterial>>()
     private val factoryResetRequests = mutableMapOf<String, CompletableDeferred<ByteArray>>()
+    private val factoryResetPersistenceRequests = mutableMapOf<String, CompletableDeferred<Unit>>()
     private var recordingStateStream: Job? = null
 
     suspend fun provision(
@@ -287,20 +300,27 @@ internal class BotaDeviceSDKAndroidSecurity(
         commandId: String,
         bindingGeneration: ULong,
         onGrantRequest: (BotaDeviceSDKAndroidFactoryResetRequest) -> Unit,
+        onPersistenceRequest: ((BotaDeviceSDKAndroidFactoryResetPersistenceRequest) -> Unit)?,
     ): FactoryResetCompletion = client.factoryReset(
-        device,
-        commandId,
-        bindingGeneration,
-    ) { request ->
-        requestFactoryResetGrant(request, onGrantRequest)
-    }
+        device = device,
+        commandId = commandId,
+        bindingGeneration = bindingGeneration,
+        persistResult = onPersistenceRequest?.let { onRequest ->
+            { result -> requestFactoryResetPersistence(result, onRequest) }
+        },
+        provider = { request -> requestFactoryResetGrant(request, onGrantRequest) },
+    )
 
     suspend fun resumePendingFactoryReset(
         device: ConnectedDevice,
         currentBindingGeneration: ULong,
+        onPersistenceRequest: ((BotaDeviceSDKAndroidFactoryResetPersistenceRequest) -> Unit)?,
     ): FactoryResetCompletion? = client.resumePendingFactoryReset(
-        device,
-        currentBindingGeneration,
+        device = device,
+        currentBindingGeneration = currentBindingGeneration,
+        persistResult = onPersistenceRequest?.let { onRequest ->
+            { result -> requestFactoryResetPersistence(result, onRequest) }
+        },
     )
 
     fun resolveProvisioningMaterial(
@@ -322,6 +342,8 @@ internal class BotaDeviceSDKAndroidSecurity(
         synchronized(lock) { provisioningRequests.remove(requestId) }
             ?.completeExceptionally(IllegalStateException(message))
             ?: synchronized(lock) { factoryResetRequests.remove(requestId) }
+                ?.completeExceptionally(IllegalStateException(message))
+            ?: synchronized(lock) { factoryResetPersistenceRequests.remove(requestId) }
                 ?.completeExceptionally(IllegalStateException(message))
             ?: error("application material request is no longer pending")
     }
@@ -345,6 +367,12 @@ internal class BotaDeviceSDKAndroidSecurity(
         pending.complete(grant)
     }
 
+    fun resolveFactoryResetResultPersistence(requestId: String) {
+        val pending = synchronized(lock) { factoryResetPersistenceRequests.remove(requestId) }
+            ?: error("application material request is no longer pending")
+        pending.complete(Unit)
+    }
+
     suspend fun cancelAll() {
         runCatching { stopRecordingStateUpdates() }
         val pending = synchronized(lock) {
@@ -355,6 +383,12 @@ internal class BotaDeviceSDKAndroidSecurity(
             factoryResetRequests.values.toList().also { factoryResetRequests.clear() }
         }
         pendingResets.forEach { it.cancel() }
+        val pendingPersistence = synchronized(lock) {
+            factoryResetPersistenceRequests.values.toList().also {
+                factoryResetPersistenceRequests.clear()
+            }
+        }
+        pendingPersistence.forEach { it.cancel() }
         runCatching { client.cancelCurrentOperation() }
         runCatching { client.cancelFactoryReset() }
     }
@@ -412,6 +446,26 @@ internal class BotaDeviceSDKAndroidSecurity(
             pending.await()
         } finally {
             synchronized(lock) { factoryResetRequests.remove(requestId, pending) }
+        }
+    }
+
+    private suspend fun requestFactoryResetPersistence(
+        result: FactoryResetPersistenceResult,
+        onRequest: (BotaDeviceSDKAndroidFactoryResetPersistenceRequest) -> Unit,
+    ) {
+        val requestId = UUID.randomUUID().toString()
+        val pending = CompletableDeferred<Unit>()
+        synchronized(lock) { factoryResetPersistenceRequests[requestId] = pending }
+        try {
+            onRequest(
+                BotaDeviceSDKAndroidFactoryResetPersistenceRequest(
+                    requestId = requestId,
+                    localRecordingsDeleted = result.localRecordingsDeleted,
+                ),
+            )
+            pending.await()
+        } finally {
+            synchronized(lock) { factoryResetPersistenceRequests.remove(requestId, pending) }
         }
     }
 }

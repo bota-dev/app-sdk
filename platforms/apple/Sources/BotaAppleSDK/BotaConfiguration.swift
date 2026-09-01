@@ -162,6 +162,15 @@ public struct BotaConfiguration: @unchecked Sendable {
                 unregisterFactoryResetGeneration: { commandID in
                     await persistence.unregisterFactoryReset(commandID: commandID)
                 },
+                registerFactoryResetResultPersister: { commandID, persister in
+                    await persistence.registerFactoryResetResultPersister(
+                        commandID: commandID,
+                        persister: persister
+                    )
+                },
+                unregisterFactoryResetResultPersister: { commandID in
+                    await persistence.unregisterFactoryResetResultPersister(commandID: commandID)
+                },
                 loadPendingFactoryReset: { try await persistence.loadFactoryResetResult() }
             )
         }

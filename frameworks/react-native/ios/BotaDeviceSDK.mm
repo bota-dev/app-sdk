@@ -851,6 +851,7 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
 - (void)factoryReset:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
            commandId:(NSString *)commandId
    bindingGeneration:(double)bindingGeneration
+requiresApplicationPersistence:(BOOL)requiresApplicationPersistence
              resolve:(RCTPromiseResolveBlock)resolve
               reject:(RCTPromiseRejectBlock)reject
 {
@@ -866,9 +867,13 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
                       mtu:device.mtu()
                 commandID:commandId
         bindingGeneration:bindingGeneration
+requiresApplicationPersistence:requiresApplicationPersistence
            onGrantRequest:^(NSDictionary *request) {
              [weakSelf emitOnFactoryResetGrantRequested:request];
            }
+     onPersistenceRequest:^(NSDictionary *request) {
+       [weakSelf emitOnFactoryResetResultPersistenceRequested:request];
+     }
                completion:^(NSDictionary *_Nullable result, NSError *_Nullable error) {
                  if (error != nil) {
                    BotaRejectAppleError(error, reject);
@@ -881,9 +886,11 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
 - (void)resumePendingFactoryReset:
             (JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
                   currentBindingGeneration:(double)currentBindingGeneration
+            requiresApplicationPersistence:(BOOL)requiresApplicationPersistence
                                     resolve:(RCTPromiseResolveBlock)resolve
                                      reject:(RCTPromiseRejectBlock)reject
 {
+  __weak BotaDeviceSDK *weakSelf = self;
   [[BotaDeviceSDKAppleBridge shared]
       resumePendingFactoryResetWithID:device.id_()
                        serialNumber:device.serialNumber()
@@ -894,6 +901,10 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
                     connectionState:device.connectionState()
                                 mtu:device.mtu()
            currentBindingGeneration:currentBindingGeneration
+      requiresApplicationPersistence:requiresApplicationPersistence
+              onPersistenceRequest:^(NSDictionary *request) {
+                [weakSelf emitOnFactoryResetResultPersistenceRequested:request];
+              }
                          completion:^(NSDictionary *_Nullable result, NSError *_Nullable error) {
                            if (error != nil) {
                              BotaRejectAppleError(error, reject);
@@ -901,6 +912,21 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
                            }
                            resolve(result);
                          }];
+}
+
+- (void)resolveFactoryResetResultPersistence:(NSString *)requestId
+                                      resolve:(RCTPromiseResolveBlock)resolve
+                                       reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      resolveFactoryResetResultPersistenceWithRequestID:requestId
+                                              completion:^(NSError *_Nullable error) {
+                                                if (error != nil) {
+                                                  BotaRejectAppleError(error, reject);
+                                                  return;
+                                                }
+                                                resolve(nil);
+                                              }];
 }
 
 - (void)resolveProvisioningMaterial:(NSString *)requestId

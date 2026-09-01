@@ -38,6 +38,7 @@ import type {
   WiFiCredentials,
   WiFiStatus,
   WiFiStatusInfo,
+  BleFactoryResetResultPersister,
   DeviceWiFiScanResult,
   Environment,
   RecordingState,
@@ -163,11 +164,13 @@ export type BotaDeviceSDKFactoryResetClient = {
   factoryReset(
     device: ConnectedDevice,
     options: BotaFactoryResetOptions,
-    provider: BotaFactoryResetGrantProvider
+    provider: BotaFactoryResetGrantProvider,
+    persistResult?: BleFactoryResetResultPersister
   ): Promise<BotaFactoryResetCompletion>;
   resumePendingFactoryReset(
     device: ConnectedDevice,
-    currentBindingGeneration: number
+    currentBindingGeneration: number,
+    persistResult?: BleFactoryResetResultPersister
   ): Promise<BotaFactoryResetCompletion | null>;
 };
 
@@ -782,9 +785,9 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
   };
 
   const factoryReset: BotaDeviceSDKFactoryResetClient = {
-    async factoryReset(device, options, provider) {
+    async factoryReset(device, options, provider, persistResult) {
       const module = requireNativeModule();
-      const subscription = module.onFactoryResetGrantRequested((request) => {
+      const grantSubscription = module.onFactoryResetGrantRequested((request) => {
         void (async () => {
           try {
             const grantBlob = await provider({
@@ -802,22 +805,66 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
           }
         })().catch(() => {});
       });
+      const persistenceSubscription = persistResult
+        ? module.onFactoryResetResultPersistenceRequested((request) => {
+            void (async () => {
+              try {
+                await persistResult({
+                  success: true,
+                  localRecordingsDeleted: request.localRecordingsDeleted,
+                });
+                await module.resolveFactoryResetResultPersistence(request.requestId);
+              } catch (error) {
+                await module.rejectApplicationMaterial(
+                  request.requestId,
+                  errorMessage(error)
+                );
+              }
+            })().catch(() => {});
+          })
+        : null;
       try {
         return await module.factoryReset(
           toNativeConnectedDevice(device),
           options.commandId,
-          options.bindingGeneration
+          options.bindingGeneration,
+          persistResult !== undefined
         );
       } finally {
-        subscription.remove();
+        grantSubscription.remove();
+        persistenceSubscription?.remove();
       }
     },
 
-    async resumePendingFactoryReset(device, currentBindingGeneration) {
-      return requireNativeModule().resumePendingFactoryReset(
-        toNativeConnectedDevice(device),
-        currentBindingGeneration
-      );
+    async resumePendingFactoryReset(device, currentBindingGeneration, persistResult) {
+      const module = requireNativeModule();
+      const subscription = persistResult
+        ? module.onFactoryResetResultPersistenceRequested((request) => {
+            void (async () => {
+              try {
+                await persistResult({
+                  success: true,
+                  localRecordingsDeleted: request.localRecordingsDeleted,
+                });
+                await module.resolveFactoryResetResultPersistence(request.requestId);
+              } catch (error) {
+                await module.rejectApplicationMaterial(
+                  request.requestId,
+                  errorMessage(error)
+                );
+              }
+            })().catch(() => {});
+          })
+        : null;
+      try {
+        return await module.resumePendingFactoryReset(
+          toNativeConnectedDevice(device),
+          currentBindingGeneration,
+          persistResult !== undefined
+        );
+      } finally {
+        subscription?.remove();
+      }
     },
   };
 

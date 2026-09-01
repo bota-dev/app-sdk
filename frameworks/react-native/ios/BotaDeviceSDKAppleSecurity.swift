@@ -16,6 +16,11 @@ struct BotaDeviceSDKAppleFactoryResetRequest: Equatable, Sendable {
     let bindingGeneration: UInt64
 }
 
+struct BotaDeviceSDKAppleFactoryResetPersistenceRequest: Equatable, Sendable {
+    let requestID: String
+    let localRecordingsDeleted: UInt16
+}
+
 protocol BotaDeviceSDKAppleSecurityClient: Sendable {
     func isProvisioned(_ device: ConnectedDevice) async throws -> Bool
     func readPublicKey(from device: ConnectedDevice) async throws -> String?
@@ -58,11 +63,13 @@ protocol BotaDeviceSDKAppleSecurityClient: Sendable {
         _ device: ConnectedDevice,
         commandID: String,
         bindingGeneration: UInt64,
+        persistResult: FactoryResetResultPersister?,
         using provider: @escaping FactoryResetGrantProvider
     ) async throws -> FactoryResetCompletion
     func resumePendingFactoryReset(
         _ device: ConnectedDevice,
-        currentBindingGeneration: UInt64
+        currentBindingGeneration: UInt64,
+        persistResult: FactoryResetResultPersister?
     ) async throws -> FactoryResetCompletion?
     func cancelCurrentOperation() async throws
     func cancelFactoryReset() async throws
@@ -176,6 +183,7 @@ struct BotaDeviceSDKSharedAppleSecurityClient: BotaDeviceSDKAppleSecurityClient 
         _ device: ConnectedDevice,
         commandID: String,
         bindingGeneration: UInt64,
+        persistResult: FactoryResetResultPersister?,
         using provider: @escaping FactoryResetGrantProvider
     ) async throws -> FactoryResetCompletion {
         try await factoryResetManager.factoryReset(
@@ -183,17 +191,20 @@ struct BotaDeviceSDKSharedAppleSecurityClient: BotaDeviceSDKAppleSecurityClient 
             commandID: commandID,
             grantID: UUID().uuidString,
             bindingGeneration: bindingGeneration,
+            persistResult: persistResult,
             using: provider
         )
     }
 
     func resumePendingFactoryReset(
         _ device: ConnectedDevice,
-        currentBindingGeneration: UInt64
+        currentBindingGeneration: UInt64,
+        persistResult: FactoryResetResultPersister?
     ) async throws -> FactoryResetCompletion? {
         try await factoryResetManager.resumePendingFactoryReset(
             device,
-            currentBindingGeneration: currentBindingGeneration
+            currentBindingGeneration: currentBindingGeneration,
+            persistResult: persistResult
         )
     }
 
@@ -228,6 +239,7 @@ actor BotaDeviceSDKAppleSecurity {
         String: CheckedContinuation<ProvisioningMaterial, Error>
     ] = [:]
     private var factoryResetRequests: [String: CheckedContinuation<Data, Error>] = [:]
+    private var factoryResetPersistenceRequests: [String: CheckedContinuation<Void, Error>] = [:]
     private var recordingStateTask: Task<Void, Never>?
 
     init(client: any BotaDeviceSDKAppleSecurityClient = BotaDeviceSDKSharedAppleSecurityClient()) {
@@ -349,12 +361,27 @@ actor BotaDeviceSDKAppleSecurity {
         _ device: ConnectedDevice,
         commandID: String,
         bindingGeneration: UInt64,
-        onGrantRequest: @escaping @Sendable (BotaDeviceSDKAppleFactoryResetRequest) -> Void
+        onGrantRequest: @escaping @Sendable (BotaDeviceSDKAppleFactoryResetRequest) -> Void,
+        onPersistenceRequest: (@Sendable (
+            BotaDeviceSDKAppleFactoryResetPersistenceRequest
+        ) -> Void)?
     ) async throws -> FactoryResetCompletion {
-        try await client.factoryReset(
+        let persister: FactoryResetResultPersister?
+        if let onPersistenceRequest {
+            persister = { result in
+                try await self.requestFactoryResetPersistence(
+                    result,
+                    onRequest: onPersistenceRequest
+                )
+            }
+        } else {
+            persister = nil
+        }
+        return try await client.factoryReset(
             device,
             commandID: commandID,
-            bindingGeneration: bindingGeneration
+            bindingGeneration: bindingGeneration,
+            persistResult: persister
         ) { request in
             try await self.requestFactoryResetGrant(request, onRequest: onGrantRequest)
         }
@@ -362,11 +389,26 @@ actor BotaDeviceSDKAppleSecurity {
 
     func resumePendingFactoryReset(
         _ device: ConnectedDevice,
-        currentBindingGeneration: UInt64
+        currentBindingGeneration: UInt64,
+        onPersistenceRequest: (@Sendable (
+            BotaDeviceSDKAppleFactoryResetPersistenceRequest
+        ) -> Void)?
     ) async throws -> FactoryResetCompletion? {
-        try await client.resumePendingFactoryReset(
+        let persister: FactoryResetResultPersister?
+        if let onPersistenceRequest {
+            persister = { result in
+                try await self.requestFactoryResetPersistence(
+                    result,
+                    onRequest: onPersistenceRequest
+                )
+            }
+        } else {
+            persister = nil
+        }
+        return try await client.resumePendingFactoryReset(
             device,
-            currentBindingGeneration: currentBindingGeneration
+            currentBindingGeneration: currentBindingGeneration,
+            persistResult: persister
         )
     }
 
@@ -395,6 +437,10 @@ actor BotaDeviceSDKAppleSecurity {
             continuation.resume(throwing: MaterialError.rejected(message))
             return
         }
+        if let continuation = factoryResetPersistenceRequests.removeValue(forKey: requestID) {
+            continuation.resume(throwing: MaterialError.rejected(message))
+            return
+        }
         throw MaterialError.unknownRequest
     }
 
@@ -409,6 +455,13 @@ actor BotaDeviceSDKAppleSecurity {
         continuation.resume(returning: grant)
     }
 
+    func resolveFactoryResetResultPersistence(requestID: String) throws {
+        guard let continuation = factoryResetPersistenceRequests.removeValue(forKey: requestID) else {
+            throw MaterialError.unknownRequest
+        }
+        continuation.resume()
+    }
+
     func cancelAll() async {
         await stopRecordingStateUpdates()
         let pending = provisioningRequests.values
@@ -417,6 +470,9 @@ actor BotaDeviceSDKAppleSecurity {
         let pendingResets = factoryResetRequests.values
         factoryResetRequests.removeAll()
         pendingResets.forEach { $0.resume(throwing: MaterialError.cancelled) }
+        let pendingPersistence = factoryResetPersistenceRequests.values
+        factoryResetPersistenceRequests.removeAll()
+        pendingPersistence.forEach { $0.resume(throwing: MaterialError.cancelled) }
         try? await client.cancelCurrentOperation()
         try? await client.cancelFactoryReset()
     }
@@ -448,6 +504,9 @@ actor BotaDeviceSDKAppleSecurity {
         if let continuation = factoryResetRequests.removeValue(forKey: requestID) {
             continuation.resume(throwing: MaterialError.cancelled)
         }
+        if let continuation = factoryResetPersistenceRequests.removeValue(forKey: requestID) {
+            continuation.resume(throwing: MaterialError.cancelled)
+        }
     }
 
     private func requestFactoryResetGrant(
@@ -464,6 +523,26 @@ actor BotaDeviceSDKAppleSecurity {
                     nonce: request.nonce.hexString,
                     commandID: request.commandID,
                     bindingGeneration: request.bindingGeneration
+                ))
+            }
+        } onCancel: {
+            Task { await self.cancel(requestID: requestID) }
+        }
+    }
+
+    private func requestFactoryResetPersistence(
+        _ result: FactoryResetPersistenceResult,
+        onRequest: @escaping @Sendable (
+            BotaDeviceSDKAppleFactoryResetPersistenceRequest
+        ) -> Void
+    ) async throws {
+        let requestID = UUID().uuidString
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                factoryResetPersistenceRequests[requestID] = continuation
+                onRequest(.init(
+                    requestID: requestID,
+                    localRecordingsDeleted: result.localRecordingsDeleted
                 ))
             }
         } onCancel: {

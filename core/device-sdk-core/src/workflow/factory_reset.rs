@@ -464,18 +464,16 @@ impl WorkflowReducer for FactoryResetWorkflow {
                     self.write_request_id = None;
                 }
                 let result = parse_factory_reset_result(&value)?;
-                match &self.mode {
+                match self.mode.clone() {
                     Mode::Start { command_id, .. } => Ok(self.persist_result(
                         DurableFactoryResetResult {
-                            command_id: command_id.clone(),
+                            command_id,
                             result,
                         },
                         context,
                     )),
                     Mode::Resume { result: persisted } if persisted.result == result => {
-                        let mut effects = self.unsubscribe(context);
-                        effects.extend(self.write_receipt(context));
-                        Ok(effects)
+                        Ok(self.persist_result(persisted, context))
                     }
                     Mode::Resume { .. } => Ok(self.fail(
                         DeviceSdkError::new(

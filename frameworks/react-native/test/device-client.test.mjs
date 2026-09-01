@@ -60,6 +60,7 @@ function nativeFixture() {
   let recordingStateHandler = null;
   let provisioningHandler = null;
   let factoryResetHandler = null;
+  let factoryResetPersistenceHandler = null;
   let recordingProgressHandler = null;
   let uploadOwnershipProgressHandler = null;
   let firmwareUpdateProgressHandler = null;
@@ -69,6 +70,9 @@ function nativeFixture() {
   let provisioningReject = null;
   let factoryResetResolve = null;
   let factoryResetReject = null;
+  let factoryResetCommandId = null;
+  let factoryResetBindingGeneration = null;
+  let factoryResetRequiresPersistence = false;
   let removed = false;
   return {
     calls,
@@ -134,6 +138,14 @@ function nativeFixture() {
         return {
           remove() {
             factoryResetHandler = null;
+          },
+        };
+      },
+      onFactoryResetResultPersistenceRequested(handler) {
+        factoryResetPersistenceHandler = handler;
+        return {
+          remove() {
+            factoryResetPersistenceHandler = null;
           },
         };
       },
@@ -274,7 +286,7 @@ function nativeFixture() {
       },
       async rejectApplicationMaterial(requestId, message) {
         calls.push(['rejectApplicationMaterial', requestId, message]);
-        if (requestId === 'factory-reset-request') {
+        if (requestId === 'factory-reset-request' || requestId === 'factory-reset-persistence') {
           factoryResetReject?.(new Error(message));
         } else {
           provisioningReject?.(new Error(message));
@@ -301,8 +313,11 @@ function nativeFixture() {
           streamingFlushIntervalSeconds: 30,
         };
       },
-      async factoryReset(device, commandId, bindingGeneration) {
-        calls.push(['factoryReset', device, commandId, bindingGeneration]);
+      async factoryReset(device, commandId, bindingGeneration, requiresPersistence) {
+        calls.push(['factoryReset', device, commandId, bindingGeneration, requiresPersistence]);
+        factoryResetCommandId = commandId;
+        factoryResetBindingGeneration = bindingGeneration;
+        factoryResetRequiresPersistence = requiresPersistence;
         queueMicrotask(() => {
           factoryResetHandler?.({
             requestId: 'factory-reset-request',
@@ -319,13 +334,45 @@ function nativeFixture() {
       },
       async resolveFactoryResetGrant(requestId, grantBlob) {
         calls.push(['resolveFactoryResetGrant', requestId, grantBlob]);
+        if (factoryResetRequiresPersistence) {
+          queueMicrotask(() => {
+            factoryResetPersistenceHandler?.({
+              requestId: 'factory-reset-persistence',
+              commandId: factoryResetCommandId,
+              localRecordingsDeleted: 7,
+            });
+          });
+          return;
+        }
         factoryResetResolve?.({
-          commandId: 'reset-command-1',
-          bindingGeneration: 9,
+          commandId: factoryResetCommandId,
+          bindingGeneration: factoryResetBindingGeneration,
         });
       },
-      async resumePendingFactoryReset(device, bindingGeneration) {
-        calls.push(['resumePendingFactoryReset', device, bindingGeneration]);
+      async resolveFactoryResetResultPersistence(requestId) {
+        calls.push(['resolveFactoryResetResultPersistence', requestId]);
+        factoryResetResolve?.({
+          commandId: factoryResetCommandId,
+          bindingGeneration: factoryResetBindingGeneration,
+        });
+      },
+      async resumePendingFactoryReset(device, bindingGeneration, requiresPersistence) {
+        calls.push(['resumePendingFactoryReset', device, bindingGeneration, requiresPersistence]);
+        if (requiresPersistence) {
+          factoryResetCommandId = 'reset-command-1';
+          factoryResetBindingGeneration = bindingGeneration;
+          return new Promise((resolve, reject) => {
+            factoryResetResolve = resolve;
+            factoryResetReject = reject;
+            queueMicrotask(() => {
+              factoryResetPersistenceHandler?.({
+                requestId: 'factory-reset-persistence',
+                commandId: factoryResetCommandId,
+                localRecordingsDeleted: 7,
+              });
+            });
+          });
+        }
         return {
           commandId: 'reset-command-1',
           bindingGeneration,
@@ -723,9 +770,35 @@ test('factory reset resolves a nonce-bound grant and resumes only the exact gene
   });
   assert.deepEqual(resumed, completion);
   assert.deepEqual(fixture.calls, [
-    ['factoryReset', connected, 'reset-command-1', 9],
+    ['factoryReset', connected, 'reset-command-1', 9, false],
     ['resolveFactoryResetGrant', 'factory-reset-request', 'Z3JhbnQ='],
-    ['resumePendingFactoryReset', connected, 9],
+    ['resumePendingFactoryReset', connected, 9, false],
+  ]);
+});
+
+test('factory reset awaits application result persistence before native completion', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+  const persisted = [];
+
+  const completion = await client.factoryReset.factoryReset(
+    connected,
+    { commandId: 'reset-command-1', bindingGeneration: 9 },
+    async () => 'Z3JhbnQ=',
+    async (result) => {
+      persisted.push(result);
+    }
+  );
+
+  assert.deepEqual(persisted, [{ success: true, localRecordingsDeleted: 7 }]);
+  assert.deepEqual(completion, {
+    commandId: 'reset-command-1',
+    bindingGeneration: 9,
+  });
+  assert.deepEqual(fixture.calls, [
+    ['factoryReset', connected, 'reset-command-1', 9, true],
+    ['resolveFactoryResetGrant', 'factory-reset-request', 'Z3JhbnQ='],
+    ['resolveFactoryResetResultPersistence', 'factory-reset-persistence'],
   ]);
 });
 
@@ -745,7 +818,7 @@ test('factory reset rejects its native request when the application grant provid
   );
 
   assert.deepEqual(fixture.calls, [
-    ['factoryReset', connected, 'reset-command-1', 9],
+    ['factoryReset', connected, 'reset-command-1', 9, false],
     [
       'rejectApplicationMaterial',
       'factory-reset-request',

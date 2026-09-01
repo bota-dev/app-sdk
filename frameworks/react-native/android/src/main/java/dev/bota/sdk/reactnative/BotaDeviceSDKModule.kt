@@ -337,6 +337,7 @@ internal class BotaDeviceSDKModule(
         device: ReadableMap,
         commandId: String,
         bindingGeneration: Double,
+        requiresApplicationPersistence: Boolean,
         promise: Promise,
     ) {
         launchValue(promise) {
@@ -344,21 +345,31 @@ internal class BotaDeviceSDKModule(
                 device = device.toConnectedDevice(),
                 commandId = commandId,
                 bindingGeneration = bindingGeneration.toUnsignedInteger(),
-            ) {
-                emitOnFactoryResetGrantRequested(it.toWritableMap())
-            }.toWritableMap()
+                onGrantRequest = { emitOnFactoryResetGrantRequested(it.toWritableMap()) },
+                onPersistenceRequest = if (requiresApplicationPersistence) {
+                    { emitOnFactoryResetResultPersistenceRequested(it.toWritableMap()) }
+                } else {
+                    null
+                },
+            ).toWritableMap()
         }
     }
 
     override fun resumePendingFactoryReset(
         device: ReadableMap,
         currentBindingGeneration: Double,
+        requiresApplicationPersistence: Boolean,
         promise: Promise,
     ) {
         launchValue(promise) {
             security.resumePendingFactoryReset(
                 device.toConnectedDevice(),
                 currentBindingGeneration.toUnsignedInteger(),
+                if (requiresApplicationPersistence) {
+                    { emitOnFactoryResetResultPersistenceRequested(it.toWritableMap()) }
+                } else {
+                    null
+                },
             )?.toWritableMap()
         }
     }
@@ -386,6 +397,10 @@ internal class BotaDeviceSDKModule(
         promise: Promise,
     ) {
         launch(promise) { security.resolveFactoryResetGrant(requestId, grantBlob) }
+    }
+
+    override fun resolveFactoryResetResultPersistence(requestId: String, promise: Promise) {
+        launch(promise) { security.resolveFactoryResetResultPersistence(requestId) }
     }
 
     override fun rejectApplicationMaterial(requestId: String, message: String, promise: Promise) {

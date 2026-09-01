@@ -1214,7 +1214,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
-    @objc(factoryResetWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:commandID:bindingGeneration:onGrantRequest:completion:)
+    @objc(factoryResetWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:commandID:bindingGeneration:requiresApplicationPersistence:onGrantRequest:onPersistenceRequest:completion:)
     public func factoryReset(
         id: String,
         serialNumber: String,
@@ -1226,11 +1226,26 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         mtu: Double,
         commandID: String,
         bindingGeneration: Double,
+        requiresApplicationPersistence: Bool,
         onGrantRequest: @escaping @Sendable ([String: Any]) -> Void,
+        onPersistenceRequest: @escaping @Sendable ([String: Any]) -> Void,
         completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
     ) {
         Task {
             do {
+                let persistenceHandler: (@Sendable (
+                    BotaDeviceSDKAppleFactoryResetPersistenceRequest
+                ) -> Void)?
+                if requiresApplicationPersistence {
+                    persistenceHandler = { request in
+                        onPersistenceRequest([
+                            "requestId": request.requestID,
+                            "localRecordingsDeleted": request.localRecordingsDeleted,
+                        ])
+                    }
+                } else {
+                    persistenceHandler = nil
+                }
                 let result = try await security.factoryReset(
                     Self.connectedDevice(
                         id: id,
@@ -1243,16 +1258,18 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                         mtu: mtu
                     ),
                     commandID: commandID,
-                    bindingGeneration: try Self.unsignedInteger(bindingGeneration)
-                ) { request in
-                    onGrantRequest([
-                        "requestId": request.requestID,
-                        "serialNumber": request.serialNumber,
-                        "nonce": request.nonce,
-                        "commandId": request.commandID,
-                        "bindingGeneration": request.bindingGeneration,
-                    ])
-                }
+                    bindingGeneration: try Self.unsignedInteger(bindingGeneration),
+                    onGrantRequest: { request in
+                        onGrantRequest([
+                            "requestId": request.requestID,
+                            "serialNumber": request.serialNumber,
+                            "nonce": request.nonce,
+                            "commandId": request.commandID,
+                            "bindingGeneration": request.bindingGeneration,
+                        ])
+                    },
+                    onPersistenceRequest: persistenceHandler
+                )
                 completion(Self.factoryResetCompletion(result), nil)
             } catch {
                 completion(nil, error as NSError)
@@ -1260,7 +1277,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
-    @objc(resumePendingFactoryResetWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:currentBindingGeneration:completion:)
+    @objc(resumePendingFactoryResetWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:currentBindingGeneration:requiresApplicationPersistence:onPersistenceRequest:completion:)
     public func resumePendingFactoryReset(
         id: String,
         serialNumber: String,
@@ -1271,10 +1288,25 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         connectionState: String,
         mtu: Double,
         currentBindingGeneration: Double,
+        requiresApplicationPersistence: Bool,
+        onPersistenceRequest: @escaping @Sendable ([String: Any]) -> Void,
         completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
     ) {
         Task {
             do {
+                let persistenceHandler: (@Sendable (
+                    BotaDeviceSDKAppleFactoryResetPersistenceRequest
+                ) -> Void)?
+                if requiresApplicationPersistence {
+                    persistenceHandler = { request in
+                        onPersistenceRequest([
+                            "requestId": request.requestID,
+                            "localRecordingsDeleted": request.localRecordingsDeleted,
+                        ])
+                    }
+                } else {
+                    persistenceHandler = nil
+                }
                 let result = try await security.resumePendingFactoryReset(
                     Self.connectedDevice(
                         id: id,
@@ -1286,9 +1318,8 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                         connectionState: connectionState,
                         mtu: mtu
                     ),
-                    currentBindingGeneration: try Self.unsignedInteger(
-                        currentBindingGeneration
-                    )
+                    currentBindingGeneration: try Self.unsignedInteger(currentBindingGeneration),
+                    onPersistenceRequest: persistenceHandler
                 )
                 completion(result.map(Self.factoryResetCompletion), nil)
             } catch {
@@ -1332,6 +1363,21 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                     requestID: requestID,
                     grantBlob: grantBlob
                 )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(resolveFactoryResetResultPersistenceWithRequestID:completion:)
+    public func resolveFactoryResetResultPersistence(
+        requestID: String,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await security.resolveFactoryResetResultPersistence(requestID: requestID)
                 completion(nil)
             } catch {
                 completion(error as NSError)

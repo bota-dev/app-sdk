@@ -187,8 +187,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   removal, destroy, or React Native invalidation.
 - Keep React Native Android provisioning and factory-reset material ownership
   in `BotaDeviceSDKAndroidSecurity`. Request IDs are one-shot, material is
-  copied into the public Android facade, and destroy/invalidation cancels
-  pending deferred values plus both active native workflows.
+  copied into the public Android facade, factory-reset result persistence must
+  resolve before the native receipt can be written, and destroy/invalidation
+  cancels pending deferred values plus both active native workflows.
 - The Android build foundation uses JDK 17, Gradle 8.13, AGP 8.13.2, Kotlin
   2.1.20, API 26 minimum with API 36 compile/lint/test targets, NDK
   28.2.13676358, CMake 3.22.1, and Maven Publish Plugin 0.35.0.

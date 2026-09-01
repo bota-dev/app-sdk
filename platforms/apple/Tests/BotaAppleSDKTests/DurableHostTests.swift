@@ -5,6 +5,39 @@ import XCTest
 @testable import BotaAppleSDK
 
 final class DurableHostTests: XCTestCase {
+    func testFactoryResetSavedEventWaitsForApplicationPersistence() async throws {
+        let root = temporaryDirectory()
+        let host = FilePersistenceHost(
+            rootDirectory: root,
+            secureStorage: KeychainSecureStorageHost(
+                service: "dev.bota.tests.\(UUID().uuidString)",
+                backend: InMemoryKeychainBackend()
+            )
+        )
+        let recorder = FactoryResetPersistenceRecorder()
+        await host.registerFactoryResetResultPersister(commandID: "reset-1") { result in
+            let durable = try await host.loadFactoryResetResult()
+            XCTAssertEqual(durable, result)
+            await recorder.record(result)
+        }
+
+        let events = try await payloads(host, effect(
+            UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_PERSISTENCE_SAVE_FACTORY_RESET_RESULT),
+            fields: [
+                .text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_COMMAND_ID), value: "reset-1"),
+                .unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_RESULT_CODE), value: 0),
+                .unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_DELETED_RECORDING_COUNT), value: 42),
+            ]
+        ))
+
+        XCTAssertEqual(
+            events.first?.kind,
+            UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_FACTORY_RESET_RESULT_SAVED)
+        )
+        let persisted = await recorder.result
+        XCTAssertEqual(persisted?.deletedRecordingCount, 42)
+    }
+
     func testCheckpointAndFactoryResetJournalSurviveHostRecreation() async throws {
         let root = temporaryDirectory()
         let secureStorage = KeychainSecureStorageHost(
@@ -269,6 +302,14 @@ final class DurableHostTests: XCTestCase {
         var values: [CoreHostEventPayload] = []
         for try await value in stream { values.append(value) }
         return values
+    }
+}
+
+private actor FactoryResetPersistenceRecorder {
+    private(set) var result: PersistedFactoryResetResult?
+
+    func record(_ result: PersistedFactoryResetResult) {
+        self.result = result
     }
 }
 

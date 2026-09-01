@@ -583,6 +583,25 @@
               }
             ]
           },
+          "NativeFactoryResetPersistenceRequest": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "requestId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "localRecordingsDeleted",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
           "NativeFirmwareImage": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -1092,6 +1111,17 @@
                 "typeAnnotation": {
                   "type": "TypeAliasTypeAnnotation",
                   "name": "NativeFactoryResetGrantRequest"
+                }
+              }
+            },
+            {
+              "name": "onFactoryResetResultPersistenceRequested",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeFactoryResetPersistenceRequest"
                 }
               }
             },
@@ -1709,6 +1739,13 @@
                     "typeAnnotation": {
                       "type": "NumberTypeAnnotation"
                     }
+                  },
+                  {
+                    "name": "requiresApplicationPersistence",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "BooleanTypeAnnotation"
+                    }
                   }
                 ]
               }
@@ -1944,6 +1981,28 @@
               }
             },
             {
+              "name": "resolveFactoryResetResultPersistence",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
               "name": "resumePendingFactoryReset",
               "optional": false,
               "typeAnnotation": {
@@ -1972,6 +2031,13 @@
                     "optional": false,
                     "typeAnnotation": {
                       "type": "NumberTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "requiresApplicationPersistence",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "BooleanTypeAnnotation"
                     }
                   }
                 ]
@@ -2312,11 +2378,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "29e450d615abe8cab8ba2b775e21bdf9d5913226f5fc82499649444c8d9939e1"
+        "sha256": "361b8e19ba528b609c080758b73c14e48abe145479207bfe5fca869f6b20e27c"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "f2d52d20fb38d9a1caf226318e91ac12ced11c7e0fdc5f57e423891d6e32419a"
+        "sha256": "a6318174576135d09565c97dcd77704495cd36d390669037afc02e2bedf85abd"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -2328,23 +2394,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "0b8c64f3bda5aae536e3fae09e83561b995ee177c8cfc6423b5dcfed2fd2d9a1"
+        "sha256": "c3261ad4b69fa837a72daaeb40ca1d6fa8dfa425558873a6905e6150bc11d0db"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "71da08558d34be09e57f2ba8512054cb68b3541461c8c9641c88a73fdd3cf2df"
+        "sha256": "606bd6a8d89c966f799da11a9b8b15e9e9bd15bd3feef242c1492fb863a1ce12"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "10c262dfa3f8a58f6192607c4b7563d20d4df269f3e4b4e536ba9d187088b2e7"
+        "sha256": "ebe834fb615fd49db44b03be970e7a2d8aeb0e29c09861e78e26cfc7abd9e35c"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "0b8c64f3bda5aae536e3fae09e83561b995ee177c8cfc6423b5dcfed2fd2d9a1"
+        "sha256": "c3261ad4b69fa837a72daaeb40ca1d6fa8dfa425558873a6905e6150bc11d0db"
       }
     ]
   },
-  "contractDigest": "536b3cc0757fe70ebf43a9bb6df8ce5f54b9c867676468ac28b88f49df921f30"
+  "contractDigest": "478da2dba17e4d8ec0ad86d767ff142a1c3a0847e0018e02ec42f4e65aeedc07"
 }

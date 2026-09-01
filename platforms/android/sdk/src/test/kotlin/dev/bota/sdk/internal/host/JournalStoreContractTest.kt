@@ -14,6 +14,29 @@ import org.junit.Test
 
 class JournalStoreContractTest {
     @Test
+    fun factoryResetSavedEventWaitsForApplicationPersistence() = runTest {
+        val store = MemoryJournalStore()
+        val host = AtomicFilePersistenceHost(store)
+        var persisted: PersistedFactoryResetResult? = null
+        host.registerFactoryResetResultPersister("reset-1") { result ->
+            assertEquals(result, host.loadFactoryResetResult())
+            persisted = result
+        }
+
+        val event = host.execute(
+            hostEffect(
+                CoreEffectKind.PersistenceSaveFactoryResetResult,
+                CoreField.Text(22, "reset-1"),
+                CoreField.Unsigned(24, 0u),
+                CoreField.Unsigned(25, 42u),
+            ),
+        ).toList().single()
+
+        assertEquals(HostEventKind.FactoryResetResultSaved, event.kind)
+        assertEquals(42uL, persisted?.deletedRecordingCount)
+    }
+
+    @Test
     fun checkpointAndResetResultSurviveHostRecreationAndRejectStaleDeletion() = runTest {
         val store = MemoryJournalStore()
         val first = AtomicFilePersistenceHost(store)
@@ -121,4 +144,3 @@ private class MemoryJournalStore : JournalStore {
         values.remove(name)
     }
 }
-

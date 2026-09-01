@@ -96,6 +96,11 @@ struct DeviceRuntime: Sendable {
     let unregisterMaterial: @Sendable (String) async -> Void
     let registerFactoryResetGeneration: @Sendable (String, UInt64) async -> Void
     let unregisterFactoryResetGeneration: @Sendable (String) async -> Void
+    let registerFactoryResetResultPersister: @Sendable (
+        String,
+        @escaping @Sendable (PersistedFactoryResetResult) async throws -> Void
+    ) async -> Void
+    let unregisterFactoryResetResultPersister: @Sendable (String) async -> Void
     let loadPendingFactoryReset: @Sendable () async throws -> PersistedFactoryResetResult?
 
     init(
@@ -187,6 +192,11 @@ struct DeviceRuntime: Sendable {
         unregisterMaterial: @escaping @Sendable (String) async -> Void = { _ in },
         registerFactoryResetGeneration: @escaping @Sendable (String, UInt64) async -> Void = { _, _ in },
         unregisterFactoryResetGeneration: @escaping @Sendable (String) async -> Void = { _ in },
+        registerFactoryResetResultPersister: @escaping @Sendable (
+            String,
+            @escaping @Sendable (PersistedFactoryResetResult) async throws -> Void
+        ) async -> Void = { _, _ in },
+        unregisterFactoryResetResultPersister: @escaping @Sendable (String) async -> Void = { _ in },
         loadPendingFactoryReset: @escaping @Sendable () async throws -> PersistedFactoryResetResult? = { nil }
     ) {
         self.engine = engine
@@ -227,6 +237,8 @@ struct DeviceRuntime: Sendable {
         self.unregisterMaterial = unregisterMaterial
         self.registerFactoryResetGeneration = registerFactoryResetGeneration
         self.unregisterFactoryResetGeneration = unregisterFactoryResetGeneration
+        self.registerFactoryResetResultPersister = registerFactoryResetResultPersister
+        self.unregisterFactoryResetResultPersister = unregisterFactoryResetResultPersister
         self.loadPendingFactoryReset = loadPendingFactoryReset
     }
 }

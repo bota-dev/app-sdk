@@ -8,6 +8,7 @@ import dev.bota.sdk.model.DeviceConnectionSettings
 import dev.bota.sdk.model.DeprovisionResult
 import dev.bota.sdk.model.FactoryResetCompletion
 import dev.bota.sdk.model.FactoryResetGrantRequest
+import dev.bota.sdk.model.FactoryResetPersistenceResult
 import dev.bota.sdk.model.ProvisioningMaterial
 import dev.bota.sdk.model.ProvisioningMaterialRequest
 import dev.bota.sdk.model.RecordingControlError
@@ -164,7 +165,9 @@ class BotaDeviceSDKAndroidSecurityTest {
                 connected,
                 commandId = "reset-command-1",
                 bindingGeneration = 9u,
-            ) { requests.complete(it) }
+                onGrantRequest = { requests.complete(it) },
+                onPersistenceRequest = null,
+            )
         }
         val request = requests.await()
         assertEquals(connected.serialNumber, request.serialNumber)
@@ -179,10 +182,49 @@ class BotaDeviceSDKAndroidSecurityTest {
         )
         assertEquals(
             FactoryResetCompletion("reset-command-1", 9u),
-            security.resumePendingFactoryReset(connected, 9u),
+            security.resumePendingFactoryReset(connected, 9u, null),
         )
         assertArrayEquals("grant".encodeToByteArray(), client.factoryResetGrant)
         assertEquals(listOf(9uL), client.resumedBindingGenerations)
+    }
+
+    @Test
+    fun factoryResetWaitsForApplicationPersistenceResolution() = runTest {
+        val connected = ConnectedDevice(
+            id = "selected",
+            serialNumber = "EVFXXW67KP",
+            deviceType = DeviceType.BotaPin,
+            firmwareVersion = "1.0.11",
+            isProvisioned = true,
+            connectionState = ConnectionState.Connected,
+            mtu = 247,
+        )
+        val client = TestAndroidSecurityClient()
+        val security = BotaDeviceSDKAndroidSecurity(client)
+        val grantRequests = CompletableDeferred<BotaDeviceSDKAndroidFactoryResetRequest>()
+        val persistenceRequests = CompletableDeferred<
+            BotaDeviceSDKAndroidFactoryResetPersistenceRequest
+        >()
+
+        val operation = async {
+            security.factoryReset(
+                connected,
+                commandId = "reset-command-1",
+                bindingGeneration = 9u,
+                onGrantRequest = { grantRequests.complete(it) },
+                onPersistenceRequest = { persistenceRequests.complete(it) },
+            )
+        }
+        val grantRequest = grantRequests.await()
+        security.resolveFactoryResetGrant(grantRequest.requestId, "Z3JhbnQ=")
+        val persistenceRequest = persistenceRequests.await()
+        assertEquals(7u.toUShort(), persistenceRequest.localRecordingsDeleted)
+        assertEquals(0, client.factoryResetPersistenceCompletions)
+
+        security.resolveFactoryResetResultPersistence(persistenceRequest.requestId)
+        operation.await()
+
+        assertEquals(1, client.factoryResetPersistenceCompletions)
     }
 
     @Test
@@ -262,7 +304,9 @@ class BotaDeviceSDKAndroidSecurityTest {
                     connected,
                     commandId = "reset-command-1",
                     bindingGeneration = 9u,
-                ) { malformedRequests.complete(it) }
+                    onGrantRequest = { malformedRequests.complete(it) },
+                    onPersistenceRequest = null,
+                )
             }
             val malformedRequest = malformedRequests.await()
 
@@ -280,7 +324,9 @@ class BotaDeviceSDKAndroidSecurityTest {
                     connected,
                     commandId = "reset-command-2",
                     bindingGeneration = 10u,
-                ) { cancelledRequests.complete(it) }
+                    onGrantRequest = { cancelledRequests.complete(it) },
+                    onPersistenceRequest = null,
+                )
             }
             cancelledRequests.await()
             cancelledSecurity.cancelAll()
@@ -296,6 +342,7 @@ class BotaDeviceSDKAndroidSecurityTest {
         var deprovisionGrant: String? = null
         var factoryResetGrant: ByteArray? = null
         var factoryResetCancelled = false
+        var factoryResetPersistenceCompletions = 0
         val resumedBindingGenerations = mutableListOf<ULong>()
         var connectionSettings: DeviceConnectionSettings? = null
         var connectionSettingsReadResult = DeviceConnectionSettings(
@@ -398,6 +445,7 @@ class BotaDeviceSDKAndroidSecurityTest {
             device: ConnectedDevice,
             commandId: String,
             bindingGeneration: ULong,
+            persistResult: (suspend (FactoryResetPersistenceResult) -> Unit)?,
             provider: suspend (FactoryResetGrantRequest) -> ByteArray,
         ): FactoryResetCompletion {
             factoryResetGrant = provider(
@@ -408,12 +456,15 @@ class BotaDeviceSDKAndroidSecurityTest {
                     bindingGeneration = bindingGeneration,
                 ),
             )
+            persistResult?.invoke(FactoryResetPersistenceResult(7u))
+            if (persistResult != null) factoryResetPersistenceCompletions += 1
             return FactoryResetCompletion(commandId, bindingGeneration)
         }
 
         override suspend fun resumePendingFactoryReset(
             device: ConnectedDevice,
             currentBindingGeneration: ULong,
+            persistResult: (suspend (FactoryResetPersistenceResult) -> Unit)?,
         ): FactoryResetCompletion? {
             resumedBindingGenerations += currentBindingGeneration
             return FactoryResetCompletion("reset-command-1", currentBindingGeneration)

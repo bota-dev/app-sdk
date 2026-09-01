@@ -277,7 +277,7 @@ fn persistence_failure_prevents_receipt_and_receipt_failure_retains_result() {
 }
 
 #[test]
-fn resume_waits_for_exact_replay_then_sends_only_receipt() {
+fn resume_repersist_exact_replay_before_sending_only_receipt() {
     let mut engine = WorkflowEngine::default();
     let persisted = DurableFactoryResetResult {
         command_id: command_id(),
@@ -313,7 +313,7 @@ fn resume_waits_for_exact_replay_then_sends_only_receipt() {
             }),
         ))
         .unwrap();
-    let receipting = engine
+    let repersisting = engine
         .dispatch(host(
             subscribe_request,
             HostEventKind::Ble(BleEvent::Notification {
@@ -322,12 +322,28 @@ fn resume_waits_for_exact_replay_then_sends_only_receipt() {
             }),
         ))
         .unwrap();
+    let save_request = request_id(&repersisting, |effect| {
+        matches!(
+            effect,
+            Effect::Persistence(PersistenceEffect::SaveFactoryResetResult { result })
+                if result.command_id == command_id()
+                    && result.result.deleted_recording_count == 7
+        )
+    });
+    assert!(!repersisting.iter().any(|request| matches!(
+        &request.effect,
+        Effect::Ble(BleEffect::Write { payload, .. })
+            if payload == &[DEVICE_CMD_BLE_FACTORY_RESET_RESULT_ACK]
+    )));
+    let receipting = engine
+        .dispatch(host(save_request, HostEventKind::FactoryResetResultSaved))
+        .unwrap();
     assert!(receipting.iter().any(|request| matches!(
         &request.effect,
         Effect::Ble(BleEffect::Write { payload, .. })
             if payload == &[DEVICE_CMD_BLE_FACTORY_RESET_RESULT_ACK]
     )));
-    assert!(!receipting.iter().any(|request| matches!(
+    assert!(!repersisting.iter().any(|request| matches!(
         &request.effect,
         Effect::Ble(BleEffect::Write { payload, .. })
             if payload == &[DEVICE_CMD_BLE_FACTORY_RESET]
