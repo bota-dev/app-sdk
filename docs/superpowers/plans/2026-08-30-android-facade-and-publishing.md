@@ -2543,7 +2543,7 @@ test "$(jq -r .sourceRevision target/android-release/release-manifest.json)" = "
 tools/release/write-candidate-inventory.sh \
   --source-revision "$SOURCE_REVISION" \
   --output target/release-candidate-files.json \
-  target/apple-release target/android-release
+  target/apple-release target/android-release target/react-native-release
 test -z "$(git status --porcelain --untracked-files=normal)"
 ```
 

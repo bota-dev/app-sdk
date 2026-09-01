@@ -181,11 +181,34 @@ arm64/x86_64 macOS slices.
 
 ## Publish
 
-After the release commit is on `main`, create and push the exact annotated tag:
+Before tagging, configure the npm trusted publisher for
+`@bota.dev/react-native-sdk` with organization `bota-dev`, repository
+`app-sdk`, workflow `release.yml`, environment `release`, and allowed action
+`npm publish`. The package has one trusted publisher, so replace the legacy
+React Native repository publisher instead of retaining both.
+
+After the release commit is on `main`, build all three unsigned release
+payloads and bind their candidate inventory to the exact annotated tag:
 
 ```bash
 VERSION=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml)
-git tag -a "v$VERSION" -m "Bota App SDK $VERSION"
+SOURCE_REVISION=$(git rev-parse HEAD)
+tools/apple/package-release.sh
+tools/android/package-release.sh --check
+mkdir -p target/react-native-release
+(cd frameworks/react-native && npx --yes npm@12.0.2 pack \
+  --pack-destination ../../target/react-native-release)
+tools/release/write-candidate-inventory.sh \
+  --source-revision "$SOURCE_REVISION" \
+  --output target/release-candidate-files.json \
+  target/apple-release target/android-release target/react-native-release
+CANDIDATE_INVENTORY_SHA256=$(shasum -a 256 \
+  target/release-candidate-files.json | awk '{print $1}')
+git tag -a "v$VERSION" \
+  -m "Bota App SDK $VERSION" \
+  -m "Source-Revision: $SOURCE_REVISION" \
+  -m "Candidate-Inventory-SHA256: $CANDIDATE_INVENTORY_SHA256"
+cargo xtask release verify-tag "v$VERSION"
 git push origin "v$VERSION"
 ```
 
@@ -202,11 +225,15 @@ install its own Node.js dependencies before running repository tooling.
 4. Rebuilds the deterministic XCFramework and rejects root-package checksum
    drift.
 5. Waits for approval in the protected `release` environment.
-6. Creates the GitHub Release and uploads every public Apple release file. The
-   Android payload remains an immutable workflow artifact downloaded inside the
-   protected job; its flat filenames intentionally are not mixed with Apple's
-   colliding `LICENSE` and manifest assets.
-7. Creates an unrelated macOS package that resolves the public Git tag and
+6. Publishes the exact npm tarball through OIDC trusted publishing and verifies
+   the registry `dist.shasum` against the candidate. A rerun verifies an
+   existing version instead of attempting to replace it.
+7. Creates the GitHub Release and uploads every public Apple release file and
+   the React Native tarball. The Android payload remains an immutable workflow
+   artifact downloaded inside the protected job; its flat filenames
+   intentionally are not mixed with Apple's colliding `LICENSE` and manifest
+   assets.
+8. Creates an unrelated macOS package that resolves the public Git tag and
    compiles an executable importing only `BotaAppleSDK`. The smoke deliberately
    does not launch a Bluetooth-capable process on the headless runner. It uses
    one non-batched Swift compiler job to keep memory bounded.
