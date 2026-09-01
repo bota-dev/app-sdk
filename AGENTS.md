@@ -48,6 +48,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   outside `src/index.ts` are not part of that public contract.
 - React Native baseline metadata must match the contract's package, version,
   source revision, normalized path, and surface digest.
+- The React Native baseline comparator must route every operation present in
+  `protocol/fixtures`; target-core error codes do not replace frozen JavaScript
+  parser messages in those comparison expectations.
 - `frameworks/react-native` has its own lockfile, stays private until native,
   compatibility, app, and release gates pass, and pins React Native `0.86.3`
   for deterministic Codegen. Its package version still matches

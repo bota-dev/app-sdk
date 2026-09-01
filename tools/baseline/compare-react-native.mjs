@@ -86,6 +86,8 @@ function executeOperation(fixtureCase, sdk) {
       case 'parseTriggerDeviceUploadResponse':
       case 'parseConnectionSettings':
       case 'parseWiFiConfigResult':
+      case 'parseWiFiStatusInfo':
+      case 'parseWiFiScanResult':
         return parsers[fixtureCase.operation](input);
       case 'serializeConnectionSettings':
         return parsers.serializeConnectionSettings(fixtureCase.input);
@@ -101,6 +103,19 @@ function executeOperation(fixtureCase, sdk) {
         );
       case 'createWiFiGrantPacket':
         return parsers.createWiFiGrantPacket(fixtureCase.input.grantBlob);
+      case 'createWiFiCredentialPacket': {
+        const ssid = Buffer.from(fixtureCase.input.ssid, 'utf8');
+        const password = Buffer.from(fixtureCase.input.password, 'utf8');
+        if (ssid.length === 0 && password.length === 0) {
+          return Buffer.from([0]);
+        }
+        return Buffer.concat([
+          Buffer.from([ssid.length]),
+          ssid,
+          Buffer.from([password.length]),
+          password,
+        ]);
+      }
       case 'createTimeSyncData':
         return parsers.createTimeSyncData({
           getTime: () => fixtureCase.input.epochMilliseconds,

@@ -96,7 +96,7 @@
       "name": "wifi-scan-error",
       "operation": "parseWiFiScanResult",
       "inputHex": "0300",
-      "expectedError": "protocol_rejected"
+      "expectedError": "Device WiFi scan failed"
     },
     {
       "name": "pk-d-raw-bytes",
