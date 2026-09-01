@@ -194,25 +194,20 @@ Before tagging, configure the npm trusted publisher for
 `npm publish`. The package has one trusted publisher, so replace the legacy
 React Native repository publisher instead of retaining both.
 
-After the release commit is on `main`, build all three unsigned release
-payloads and bind their candidate inventory to the exact annotated tag. The
-Android Javadoc archive intentionally omits Dokka's nondeterministic aggregate
-`deprecated.html` page so this inventory is stable across clean builders:
+After the release commit is on `main`, wait for its `CI` workflow to complete.
+The `Release candidate inventory` job downloads the Apple, Android, and React
+Native artifacts built on the same runner classes as the tag workflow and
+uploads `release-candidate-<commit>`. Use that artifact's
+`release-candidate-files.json.sha256` value in the annotated tag; do not derive
+the tag hash from locally built payloads. The Android Javadoc archive omits
+Dokka's nondeterministic aggregate `deprecated.html` page so repeated clean CI
+builders produce the same inventory.
 
 ```bash
 VERSION=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml)
 SOURCE_REVISION=$(git rev-parse HEAD)
-tools/apple/package-release.sh
-tools/android/package-release.sh --check
-mkdir -p target/react-native-release
-(cd frameworks/react-native && npx --yes npm@12.0.2 pack \
-  --pack-destination ../../target/react-native-release)
-tools/release/write-candidate-inventory.sh \
-  --source-revision "$SOURCE_REVISION" \
-  --output target/release-candidate-files.json \
-  target/apple-release target/android-release target/react-native-release
-CANDIDATE_INVENTORY_SHA256=$(shasum -a 256 \
-  target/release-candidate-files.json | awk '{print $1}')
+CANDIDATE_INVENTORY_SHA256=$(awk '{print $1}' \
+  /path/to/release-candidate-files.json.sha256)
 git tag -a "v$VERSION" \
   -m "Bota App SDK $VERSION" \
   -m "Source-Revision: $SOURCE_REVISION" \
@@ -220,6 +215,10 @@ git tag -a "v$VERSION" \
 cargo xtask release verify-tag "v$VERSION"
 git push origin "v$VERSION"
 ```
+
+Before tagging, verify the downloaded JSON records `SOURCE_REVISION` and the
+CI workflow succeeded for that exact commit. Local package commands remain
+useful preflight checks, but their output is not release identity.
 
 The tag workflow:
 

@@ -7,6 +7,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  NPM_CLI_VERSION: "12.0.2"
 
 permissions:
   contents: read
@@ -93,6 +94,20 @@ jobs:
       - name: Verify React Native package foundation
         working-directory: frameworks/react-native
         run: npm run verify
+
+      - name: Pack immutable npm candidate
+        working-directory: frameworks/react-native
+        run: |
+          mkdir -p ../../target/react-native-release
+          npx --yes "npm@$NPM_CLI_VERSION" pack --pack-destination ../../target/react-native-release
+
+      - name: Upload React Native candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: react-native-ci-${{ github.sha }}
+          path: target/react-native-release/
+          if-no-files-found: error
+          compression-level: 0
 
   android-native:
     name: Android AAR, React Native, and API 26/35 consumers
@@ -303,3 +318,58 @@ jobs:
 
       - name: Run generated comparison binding
         run: tools/ffi-smoke/run-uniffi-swift-smoke.sh
+
+  release-candidate:
+    name: Release candidate inventory
+    needs: [android-native, apple, react-native]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download Android candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: android-ci-${{ github.sha }}
+          path: target/android-release/
+
+      - name: Download Apple candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: apple-package-${{ github.sha }}
+          path: target/apple-release/
+
+      - name: Download React Native candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: react-native-ci-${{ github.sha }}
+          path: target/react-native-release/
+
+      - name: Write candidate inventory
+        run: |
+          tools/release/write-candidate-inventory.sh \
+            --source-revision "$GITHUB_SHA" \
+            --output target/release-candidate-files.json \
+            target/apple-release target/android-release target/react-native-release
+          sha256sum target/release-candidate-files.json \
+            > target/release-candidate-files.json.sha256
+          {
+            echo '### Annotated tag candidate inventory'
+            echo '```text'
+            cat target/release-candidate-files.json.sha256
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload candidate inventory
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-candidate-${{ github.sha }}
+          path: |
+            target/release-candidate-files.json
+            target/release-candidate-files.json.sha256
+          if-no-files-found: error

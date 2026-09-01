@@ -282,6 +282,25 @@ fn android_ci_builds_once_and_verifies_both_supported_emulator_contracts() {
 }
 
 #[test]
+fn ci_emits_the_exact_release_candidate_inventory_used_for_tagging() {
+    let path = root().join(".github/workflows/ci.yml");
+    let contents = fs::read_to_string(path).unwrap();
+    let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
+
+    assert_eq!(
+        workflow["jobs"]["release-candidate"]["needs"],
+        serde_yaml_ng::from_str::<serde_yaml_ng::Value>("[android-native, apple, react-native]")
+            .unwrap()
+    );
+    assert!(contents.contains("name: react-native-ci-${{ github.sha }}"));
+    assert!(contents.contains("name: android-ci-${{ github.sha }}"));
+    assert!(contents.contains("name: apple-package-${{ github.sha }}"));
+    assert!(contents.contains("tools/release/write-candidate-inventory.sh"));
+    assert!(contents.contains("release-candidate-files.json.sha256"));
+    assert!(contents.contains("name: release-candidate-${{ github.sha }}"));
+}
+
+#[test]
 fn android_license_gate_checks_locked_verified_spdx_dependencies() {
     let path = root().join(".github/workflows/license-gate.yml");
     let contents = fs::read_to_string(path).unwrap();

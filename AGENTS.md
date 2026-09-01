@@ -258,6 +258,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   GitHub Release before upload. A missing public POM is never an idempotency
   signal: resume by the recorded deployment UUID and state, and use the
   protected recovery dispatch after any uncertain initial upload.
+- Create annotated release tags only from the `release-candidate-<commit>`
+  inventory emitted by successful main CI. Local Apple or Android builds may
+  use different host toolchains and are preflight evidence, not release
+  identity.
 - Keep mutating Android release-readiness tests in independent temporary
   fixtures. They run in parallel, so fixture names require an atomic uniqueness
   component in addition to wall-clock time.
