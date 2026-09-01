@@ -7,7 +7,9 @@ use bota_device_sdk_core::{
     },
     error::{ErrorCode, Operation},
     generated::protocol::{
-        ACK_TYPE_ABORT, ACK_TYPE_ACK, ACK_TYPE_NACK, CHAR_RECORDING_TRANSFER, CHAR_TRANSFER_CONTROL,
+        ACK_TYPE_ABORT, ACK_TYPE_ACK, ACK_TYPE_NACK, CHAR_RECORDING_TRANSFER,
+        CHAR_TRANSFER_CONTROL, PACKET_TYPE_E2E_START, PACKET_TYPE_ENCRYPTED_DATA,
+        PACKET_TYPE_ENCRYPTED_EOF,
     },
     model::{DeviceSerialNumber, RecordingSinkId, RecordingUuid},
 };
@@ -134,6 +136,27 @@ fn eof(sequence: u16, checksum: u32) -> Vec<u8> {
     bytes
 }
 
+fn e2e_start(ephemeral_public_key: &[u8; 32], salt: &[u8; 4]) -> Vec<u8> {
+    let mut bytes = vec![PACKET_TYPE_E2E_START];
+    bytes.extend_from_slice(ephemeral_public_key);
+    bytes.extend_from_slice(salt);
+    bytes
+}
+
+fn encrypted_data(sequence: u16, ciphertext_with_tag: &[u8]) -> Vec<u8> {
+    let mut bytes = vec![PACKET_TYPE_ENCRYPTED_DATA];
+    bytes.extend_from_slice(&sequence.to_le_bytes());
+    bytes.extend_from_slice(&(ciphertext_with_tag.len() as u16).to_le_bytes());
+    bytes.extend_from_slice(ciphertext_with_tag);
+    bytes
+}
+
+fn encrypted_eof(sequence: u16) -> Vec<u8> {
+    let mut bytes = vec![PACKET_TYPE_ENCRYPTED_EOF];
+    bytes.extend_from_slice(&sequence.to_le_bytes());
+    bytes
+}
+
 #[test]
 fn transfer_subscribes_before_start_and_appends_before_checkpointing() {
     let mut engine = WorkflowEngine::default();
@@ -217,6 +240,81 @@ fn transfer_subscribes_before_start_and_appends_before_checkpointing() {
             .iter()
             .any(|request| matches!(request.effect, Effect::Ble(BleEffect::Write { .. })))
     );
+}
+
+#[test]
+fn encrypted_transfer_stages_backend_decryption_wire_format() {
+    let mut engine = WorkflowEngine::default();
+    let (subscription_request, _) = start_with_checkpoint(&mut engine, None);
+    let ephemeral_public_key = [0x11; 32];
+    let salt = [0x22; 4];
+
+    let header = engine
+        .dispatch(host(
+            subscription_request,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                value: e2e_start(&ephemeral_public_key, &salt),
+            }),
+        ))
+        .unwrap();
+    let header_request = request_id(&header, |effect| {
+        matches!(
+            effect,
+            Effect::RecordingSink(RecordingSinkEffect::Append { payload, .. })
+                if payload == &[ephemeral_public_key.as_slice(), salt.as_slice()].concat()
+        )
+    });
+    engine
+        .dispatch(host(
+            header_request,
+            HostEventKind::RecordingSinkAppendCompleted { durable_units: 36 },
+        ))
+        .unwrap();
+
+    let ciphertext_with_tag = [0x33; 24];
+    let chunk = engine
+        .dispatch(host(
+            subscription_request,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                value: encrypted_data(0, &ciphertext_with_tag),
+            }),
+        ))
+        .unwrap();
+    let chunk_request = request_id(&chunk, |effect| {
+        matches!(
+            effect,
+            Effect::RecordingSink(RecordingSinkEffect::Append {
+                sequence: 0,
+                payload,
+                ..
+            }) if payload == &[&[0, 8], ciphertext_with_tag.as_slice()].concat()
+        )
+    });
+    engine
+        .dispatch(host(
+            chunk_request,
+            HostEventKind::RecordingSinkAppendCompleted { durable_units: 62 },
+        ))
+        .unwrap();
+
+    let finalizing = engine
+        .dispatch(host(
+            subscription_request,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                value: encrypted_eof(1),
+            }),
+        ))
+        .unwrap();
+    assert!(finalizing.iter().any(|request| matches!(
+        request.effect,
+        Effect::RecordingSink(RecordingSinkEffect::Finalize {
+            expected_crc32: None,
+            ..
+        })
+    )));
 }
 
 #[test]

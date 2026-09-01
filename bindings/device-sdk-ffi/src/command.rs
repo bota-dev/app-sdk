@@ -251,17 +251,16 @@ pub(crate) unsafe fn command_from_packet(
                 field_id::DELETED_RECORDING_COUNT,
             ])?;
             let result_code = fields.optional_u64(field_id::RESULT_CODE)?;
-            let deleted_recording_count =
-                fields.optional_u64(field_id::DELETED_RECORDING_COUNT)?;
+            let deleted_recording_count = fields.optional_u64(field_id::DELETED_RECORDING_COUNT)?;
             let expected_result = match (result_code, deleted_recording_count) {
                 (None, None) => None,
                 (Some(result_code), Some(deleted_recording_count)) => Some(FactoryResetResult {
                     result_code: result_code
                         .try_into()
                         .map_err(|_| invalid("reset result code does not fit in 8 bits"))?,
-                    deleted_recording_count: deleted_recording_count.try_into().map_err(|_| {
-                        invalid("deleted recording count does not fit in 16 bits")
-                    })?,
+                    deleted_recording_count: deleted_recording_count
+                        .try_into()
+                        .map_err(|_| invalid("deleted recording count does not fit in 16 bits"))?,
                 }),
                 _ => {
                     return Err(invalid(

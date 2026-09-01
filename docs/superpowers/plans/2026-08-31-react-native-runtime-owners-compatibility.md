@@ -42,6 +42,10 @@ revision `44ac1221cb71eb01cafcdbfdf7a370847d3a10b4`.
 
 ## Task 2: Restore `RecordingManager`
 
+**Status:** In progress. The shared reducer now stages encrypted batch packets
+in the backend relay wire format; React Native queue and native upload ownership
+remain.
+
 **JavaScript files:**
 
 - Create: `frameworks/react-native/src/managers/RecordingManager.ts`

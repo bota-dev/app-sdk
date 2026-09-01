@@ -6,8 +6,8 @@ use bota_device_sdk_core::{
     error::ErrorCode,
     model::{
         DeviceCandidate, DeviceSerialNumber, FactoryResetCommandId, FactoryResetResult,
-        FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId,
-        RecordingUuid, UploadDestinationId, UploadSessionId,
+        FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId, RecordingUuid,
+        UploadDestinationId, UploadSessionId,
     },
 };
 

@@ -49,6 +49,8 @@ pub(crate) struct RecordingTransferWorkflow {
     subscription_request_id: Option<RequestId>,
     write_request_id: Option<RequestId>,
     checkpoint_request_ids: BTreeSet<RequestId>,
+    encrypted: Option<bool>,
+    e2e_header_received: bool,
     terminal_error: Option<DeviceSdkError>,
 }
 
@@ -78,6 +80,8 @@ impl RecordingTransferWorkflow {
             subscription_request_id: None,
             write_request_id: None,
             checkpoint_request_ids: BTreeSet::new(),
+            encrypted: None,
+            e2e_header_received: false,
             terminal_error: None,
         }
     }
@@ -129,16 +133,16 @@ impl RecordingTransferWorkflow {
 
     fn append(
         &mut self,
-        sequence: u16,
+        sequence: Option<u16>,
         payload: Vec<u8>,
         context: &mut WorkflowContext<'_>,
     ) -> Vec<EffectRequest> {
         self.phase = Phase::Appending;
-        self.pending_sequence = Some(sequence);
+        self.pending_sequence = sequence;
         self.pending_payload_units = payload.len() as u64;
         let request = context.request(Effect::RecordingSink(RecordingSinkEffect::Append {
             sink_id: self.sink_id.clone(),
-            sequence,
+            sequence: sequence.unwrap_or(0),
             payload,
         }));
         self.sink_request_id = Some(request.request_id);
@@ -263,6 +267,33 @@ impl RecordingTransferWorkflow {
         effects
     }
 
+    fn fail_mixed_transfer(&mut self, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
+        self.fail(
+            DeviceSdkError::new(
+                ErrorCode::ProtocolRejected,
+                Operation::TransferRecording,
+                false,
+            )
+            .with_detail("recording transfer mixed plaintext and encrypted packets"),
+            context,
+        )
+    }
+
+    fn fail_malformed_encrypted_transfer(
+        &mut self,
+        context: &mut WorkflowContext<'_>,
+    ) -> Vec<EffectRequest> {
+        self.fail(
+            DeviceSdkError::new(
+                ErrorCode::IntegrityFailed,
+                Operation::TransferRecording,
+                false,
+            )
+            .with_detail("encrypted recording transfer is missing its session header"),
+            context,
+        )
+    }
+
     fn sink_failure(platform_code: Option<i64>) -> DeviceSdkError {
         DeviceSdkError::new(
             ErrorCode::PersistenceFailed,
@@ -356,14 +387,64 @@ impl WorkflowReducer for RecordingTransferWorkflow {
                             self.eof_sequence = Some(expected);
                             return Ok(self.fail_integrity(context));
                         }
-                        Ok(self.append(sequence, data, context))
+                        if self.encrypted == Some(true) {
+                            return Ok(self.fail_mixed_transfer(context));
+                        }
+                        self.encrypted = Some(false);
+                        Ok(self.append(Some(sequence), data, context))
                     }
                     TransferPacket::Eof { sequence, checksum } => {
+                        if self.encrypted == Some(true) {
+                            return Ok(self.fail_mixed_transfer(context));
+                        }
+                        self.encrypted = Some(false);
                         Ok(self.finalize(sequence, Some(checksum), context))
                     }
+                    TransferPacket::E2eStart {
+                        ephemeral_public_key,
+                        salt,
+                    } => {
+                        if self.encrypted == Some(false) {
+                            return Ok(self.fail_mixed_transfer(context));
+                        }
+                        self.encrypted = Some(true);
+                        if self.e2e_header_received {
+                            return Ok(Vec::new());
+                        }
+                        self.e2e_header_received = true;
+                        if self.completed_units > 0 {
+                            return Ok(Vec::new());
+                        }
+                        let mut header = ephemeral_public_key;
+                        header.extend_from_slice(&salt);
+                        Ok(self.append(None, header, context))
+                    }
+                    TransferPacket::EncryptedData { sequence, chunk } => {
+                        if self.encrypted != Some(true) || !self.e2e_header_received {
+                            return Ok(self.fail_malformed_encrypted_transfer(context));
+                        }
+                        let expected = self.last_sequence.map_or(0, |last| last.wrapping_add(1));
+                        if self.last_sequence.is_some_and(|last| sequence <= last) {
+                            return Ok(Vec::new());
+                        }
+                        if sequence != expected || chunk.len() < 16 {
+                            self.eof_sequence = Some(expected);
+                            return Ok(self.fail_integrity(context));
+                        }
+                        let plaintext_length = u16::try_from(chunk.len() - 16)
+                            .expect("BLE encrypted chunk length fits in 16 bits");
+                        let mut framed = Vec::with_capacity(chunk.len() + 2);
+                        framed.extend_from_slice(&plaintext_length.to_be_bytes());
+                        framed.extend_from_slice(&chunk);
+                        Ok(self.append(Some(sequence), framed, context))
+                    }
                     TransferPacket::EncryptedEof { sequence } => {
+                        if self.encrypted != Some(true) || !self.e2e_header_received {
+                            return Ok(self.fail_malformed_encrypted_transfer(context));
+                        }
                         Ok(self.finalize(sequence, None, context))
                     }
+                    TransferPacket::Sha256(_) => Ok(Vec::new()),
                     TransferPacket::Error { code, .. } => Ok(self.fail(
                         DeviceSdkError::new(
                             ErrorCode::ProtocolRejected,
@@ -404,7 +485,9 @@ impl WorkflowReducer for RecordingTransferWorkflow {
                     ));
                 }
                 self.completed_units = durable_units;
-                self.last_sequence = self.pending_sequence.take();
+                if let Some(sequence) = self.pending_sequence.take() {
+                    self.last_sequence = Some(sequence);
+                }
                 self.pending_payload_units = 0;
                 self.phase = Phase::Transferring;
                 Ok(vec![

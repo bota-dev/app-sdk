@@ -468,27 +468,18 @@ impl WorkflowReducer for FactoryResetWorkflow {
                 }
                 let result = parse_factory_reset_result(&value)?;
                 match self.mode.clone() {
-                    Mode::Start { command_id, .. } => Ok(self.persist_result(
-                        DurableFactoryResetResult {
-                            command_id,
-                            result,
-                        },
-                        context,
-                    )),
+                    Mode::Start { command_id, .. } => Ok(self
+                        .persist_result(DurableFactoryResetResult { command_id, result }, context)),
                     Mode::Resume {
                         command_id,
                         expected_result: None,
-                    } => Ok(self.persist_result(
-                        DurableFactoryResetResult { command_id, result },
-                        context,
-                    )),
+                    } => Ok(self
+                        .persist_result(DurableFactoryResetResult { command_id, result }, context)),
                     Mode::Resume {
                         command_id,
                         expected_result: Some(expected),
-                    } if expected == result => Ok(self.persist_result(
-                        DurableFactoryResetResult { command_id, result },
-                        context,
-                    )),
+                    } if expected == result => Ok(self
+                        .persist_result(DurableFactoryResetResult { command_id, result }, context)),
                     Mode::Resume { .. } => Ok(self.fail(
                         DeviceSdkError::new(
                             ErrorCode::ProtocolRejected,

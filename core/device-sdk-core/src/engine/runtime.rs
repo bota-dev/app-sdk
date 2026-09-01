@@ -130,14 +130,12 @@ impl WorkflowEngine {
                 device,
                 command_id,
                 expected_result,
-            } => {
-                ActiveWorkflow::FactoryReset(Box::new(FactoryResetWorkflow::resume(
-                    device,
-                    command_id,
-                    expected_result,
-                    cancellation_id,
-                )))
-            }
+            } => ActiveWorkflow::FactoryReset(Box::new(FactoryResetWorkflow::resume(
+                device,
+                command_id,
+                expected_result,
+                cancellation_id,
+            ))),
             Command::TransferRecording {
                 device,
                 recording,

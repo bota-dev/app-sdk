@@ -19,7 +19,10 @@ Reset success is durably journaled before receipt and replay can resume without
 resending the destructive command. Recording bytes remain in a host-owned sink;
 the core checkpoints only byte and sequence counters, restarts the device stream
 from sequence zero, and confirms device deletion only after the sink has passed
-its durable integrity check. Upload handoff keeps destination data host-owned
+its durable integrity check. Encrypted transfers persist the backend relay wire
+format directly: the session public key and salt precede length-framed
+ciphertext chunks, so plaintext never enters the SDK. Upload handoff keeps
+destination data host-owned
 behind opaque IDs and permits Bluetooth fallback only after a fresh device
 status proves direct-upload ownership is inactive. Firmware update downloads
 into an opaque host blob, streams 500-byte chunks

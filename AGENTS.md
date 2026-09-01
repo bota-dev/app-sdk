@@ -296,6 +296,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   every response/descriptor path, and cancel only SDK-owned OkHttp calls.
 - Recording transfer owns sequence/checkpoint decisions; native hosts own the
   durable sink and validate the final checksum before device deletion.
+  Encrypted batch transfer writes the 32-byte ephemeral public key, 4-byte
+  salt, and two-byte plaintext-length-prefixed ciphertext chunks directly to
+  that sink. Reject mixed plaintext/encrypted sessions and encrypted chunks
+  received before their session header.
 - Android recording, upload-ownership, OTA, and log APIs are cold `Flow`s.
   Keep recording and firmware bytes in native files, return only paths and
   typed progress/ownership/line values, and release the original cancellation

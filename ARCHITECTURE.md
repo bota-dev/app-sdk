@@ -97,6 +97,10 @@ nonce/public-key reads from the native workflow. Upload ownership passes opaque
 recording, upload, and destination identifiers into native code; JavaScript
 receives progress and the reducer's terminal ownership decision but never a
 destination URL or upload credential.
+Batch recording transfer accepts both plaintext packets and the encrypted
+streaming-AEAD packet family. The shared reducer writes encrypted sessions in
+the backend relay format directly into the native sink and rejects mixed or
+headerless encrypted streams before upload ownership can advance.
 Firmware update accepts version, size, CRC32, and a presigned URL; native code
 generates the download registration, owns HTTP and BLE bytes, and emits only
 typed phase and byte progress.
