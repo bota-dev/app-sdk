@@ -126,6 +126,11 @@ the platform hosts own live-transfer ordering, buffers, upload bytes,
 finalization, and cancellation; Codegen carries only low-volume requests and
 progress. `BotaClient` serializes configure and destroy operations and replaces
 its compatibility manager graph as one unit during reconfiguration.
+Local application acceptance uses the packed npm artifact rather than source
+linking so Metro resolves the same files that publication would contain. Demo
+and Bota One both produce release-mode iOS and Android Expo bundles from that
+artifact. This is a mobile build gate only: it does not replace supervised
+physical-device acceptance or preview and production rollout evidence.
 The exported `DeviceManager` compatibility owner preserves the already
 native-backed scan, selected connection, status, settings, logs, WiFi, and
 last-known WiFi cache behavior, including idempotent legacy removal functions.

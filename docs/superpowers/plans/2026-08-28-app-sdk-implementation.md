@@ -933,13 +933,16 @@ upload-ownership, and OTA slices plus device logs through the public Android
 facade, and a checked-in React Native Gradle
 consumer runs Codegen, Kotlin tests,
 lint, and release assembly against the exact packaged AAR. The
-package now matches 79 of 80 frozen exports, including every public type, the
+package now matches all 80 frozen exports, including every public type, the
 pure error, sync-status, and device-log runtime helpers, and the native-backed
-`DeviceManager`, `RecordingManager`, `StreamingSession`, and `OTAManager`. Those owners keep
+`BotaClient`, `DeviceManager`, `RecordingManager`, `StreamingSession`, and
+`OTAManager`. Those owners keep
 recording and live-stream payloads native while exposing only typed metadata
 and progress through Codegen. `DeviceManager` preserves authenticated reset
 recovery across app reinstallation and serializes native reconnect attempts.
-`BotaClient`, app acceptance, and publication gates remain open.
+The packed `1.1.0` npm artifact produces local release-mode iOS and Android
+Expo bundles in Demo and Bota One. Physical application acceptance, preview
+and production rollout, and npm publication remain open.
 High-volume recording and firmware bytes stay native and are rejected from the
 Codegen contract.
 

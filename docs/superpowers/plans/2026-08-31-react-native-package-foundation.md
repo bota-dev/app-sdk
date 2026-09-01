@@ -149,9 +149,10 @@ firmware URL with version, size, and CRC32; native hosts own the download file
 and BLE bytes while Codegen carries only phase and byte progress. Device-log
 packet framing, sequence recovery, and UTF-8 assembly also stay native;
 JavaScript receives only complete sanitized lines and owns idempotent native
-teardown. The package also matches the 75 frozen `0.0.65` exports that do not
-own native workflows,
-with runtime coverage for
-errors, sync-status derivation, and device-log decoding. `BotaClient`,
-`DeviceManager`, `RecordingManager`, `StreamingSession`, `OTAManager`, app
-migration, and npm publication are still open.
+teardown. This foundation originally matched the 75 frozen `0.0.65` exports
+that do not own native workflows, with runtime coverage for errors, sync-status
+derivation, and device-log decoding. Follow-on compatibility plans now restore
+all 80 exports, including `BotaClient`, `DeviceManager`, `RecordingManager`,
+`StreamingSession`, and `OTAManager`. Local packed-artifact iOS and Android
+bundles pass in Demo and Bota One; physical application acceptance, rollout,
+and npm publication remain open.

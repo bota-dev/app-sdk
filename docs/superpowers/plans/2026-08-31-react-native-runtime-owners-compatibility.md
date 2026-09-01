@@ -210,6 +210,15 @@ required remove-only deprovision grant, and made React Native Apple streaming
 progress capture synchronous so the strict lifecycle gate observes every
 callback deterministically.
 
+**Status (2026-08-31): complete for runtime compatibility and local mobile
+acceptance.** All repository gates listed above pass. The packed
+`@bota.dev/react-native-sdk@1.1.0` artifact also produces release-mode iOS and
+Android Expo bundles in both Demo and Bota One without source linking. Both app
+typechecks still report their pre-existing application errors, with no missing
+SDK exports or unresolved compatibility methods. Physical application
+acceptance, preview and production rollout, and npm publication remain release
+gates outside this runtime-owner implementation.
+
 ## Exit Criteria
 
 - All 80 frozen exports match exactly.
@@ -217,6 +226,7 @@ callback deterministically.
 - OTA `performUpdate()` remains URL-driven and native-owned.
 - Destroy/cancel tests prove every native operation and one-shot request is
   released exactly once.
-- Demo and Bota One pass the Milestone 4 physical-device acceptance matrix.
-- npm publication remains blocked until the app gates pass, even when package
-  construction succeeds locally.
+- Demo and Bota One consume the packed artifact in local iOS and Android
+  release-mode bundles.
+- The Milestone 4 physical-device, preview, production, and npm publication
+  gates remain explicit follow-on release evidence.

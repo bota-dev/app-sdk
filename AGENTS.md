@@ -58,7 +58,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - The React Native package matches all 80 frozen `0.0.65` exports. Keep their
   structural contract test exact. `BotaClient` serializes native lifecycle
   ownership and composes one compatibility manager graph per ready lifecycle;
-  application acceptance and publication gates remain separate.
+  application acceptance and publication gates remain separate. Test local
+  consumers from an `npm pack` artifact, not a source symlink: Demo and Bota
+  One must each produce release-mode iOS and Android Expo bundles before
+  preview or production rollout.
 - `RecordingManager` and `StreamingSession` preserve their frozen object model
   while Rust plus the Apple/Android hosts own recording bytes, live-transfer
   buffering, chunk uploads, finalization ordering, and cancellation. Codegen
