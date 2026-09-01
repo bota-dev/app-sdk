@@ -462,7 +462,7 @@ host-material, recording-sink, firmware-blob, secure-storage, and network
 callbacks return through `bota_device_sdk_v1_engine_dispatch`; operation,
 request, and cancellation ownership are checked before the reducer advances.
 The ABI's typed protocol decode/encode entry points delegate status,
-recording-list, transfer, OTA, provisioning,
+recording-list, recording-state/result, recording-control opcodes, transfer, OTA, provisioning,
 connection-settings, and device-log formats to the shared core. Fragmented log
 state is scoped to the engine handle, and unknown wire enum values remain
 numeric fields rather than being discarded.

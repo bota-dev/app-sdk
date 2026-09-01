@@ -120,7 +120,7 @@ The native-boundary spike selected a manually owned C ABI after comparing it
 with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed
 packets. Shared protocol decode/encode entry points cover the frozen status,
-recording, transfer, OTA, provisioning, settings, and log fixtures. The Apple
+recording list and control, transfer, OTA, provisioning, settings, and log fixtures. The Apple
 package is the first public platform distribution; other native facades remain
 unpublished.
 ABI v1 is frozen at the typed public header and verified by standalone C and

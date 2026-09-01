@@ -9,14 +9,15 @@ use bota_device_sdk_core::{
         HeartbeatConnections, IdleTimeout, PowerManagement, RecordingUuid,
     },
     protocol::{
-        AckType, DeviceCommand, DeviceLogDecoder, FirmwareStatus, TransferCommand, TransferPacket,
-        WiFiScanUpdate, encode_ack, encode_bounded_payload, encode_connection_settings,
-        encode_device_command, encode_firmware_data, encode_firmware_upload_start,
-        encode_firmware_upload_verify, encode_firmware_window_ack, encode_ota_status,
-        encode_provisioning_chunks, encode_time_sync, encode_transfer_command,
-        encode_wifi_credentials, encode_wifi_grant, encode_wifi_scan_command, parse_ack,
-        parse_connection_settings, parse_device_status, parse_factory_reset_result,
-        parse_ota_status, parse_recording_list, parse_transfer_packet,
+        AckType, DeviceCommand, DeviceLogDecoder, FirmwareStatus, RecordingControlCommand,
+        TransferCommand, TransferPacket, WiFiScanUpdate, encode_ack, encode_bounded_payload,
+        encode_connection_settings, encode_device_command, encode_firmware_data,
+        encode_firmware_upload_start, encode_firmware_upload_verify, encode_firmware_window_ack,
+        encode_ota_status, encode_provisioning_chunks, encode_recording_control_command,
+        encode_time_sync, encode_transfer_command, encode_wifi_credentials, encode_wifi_grant,
+        encode_wifi_scan_command, parse_ack, parse_connection_settings, parse_device_status,
+        parse_factory_reset_result, parse_ota_status, parse_recording_control_result,
+        parse_recording_list, parse_recording_state, parse_transfer_packet,
         parse_trigger_upload_response, parse_wifi_config_result, parse_wifi_scan_result,
         parse_wifi_status_info,
     },
@@ -259,6 +260,27 @@ pub(crate) unsafe fn decode(
                 Ok(output)
             }
         },
+        packet_kind::PROTOCOL_DECODE_RECORDING_STATE => {
+            let state = parse_recording_state(&value)?;
+            let output = output
+                .with_bool(field_id::RECORDING_ACTIVE, state.active)
+                .with_bool(
+                    field_id::RECORDING_INITIATED_REMOTELY,
+                    state.initiated_remotely,
+                );
+            Ok(match state.recording_uuid {
+                Some(uuid) => output.with_text(field_id::RECORDING_UUID, uuid.to_string()),
+                None => output,
+            })
+        }
+        packet_kind::PROTOCOL_DECODE_RECORDING_CONTROL_RESULT => {
+            let result = parse_recording_control_result(&value)?;
+            let output = output.with_bool(field_id::RECORDING_SUCCESS, result.success);
+            Ok(match result.error {
+                Some(error) => output.with_text(field_id::ERROR_DETAIL, error.as_str()),
+                None => output,
+            })
+        }
         _ => Err(unknown_packet(packet.kind)),
     }
 }
@@ -418,6 +440,15 @@ pub(crate) unsafe fn encode(
                 to_i16(&fields, field_id::OFFSET)?,
             )?
         }
+        packet_kind::PROTOCOL_ENCODE_RECORDING_CONTROL_COMMAND => {
+            fields.validate_allowed(&[field_id::COMMAND])?;
+            let command = match fields.required_u64(field_id::COMMAND)? {
+                1 => RecordingControlCommand::Start,
+                2 => RecordingControlCommand::Stop,
+                _ => return Err(invalid("unknown recording control command")),
+            };
+            encode_recording_control_command(command).to_vec()
+        }
         _ => return Err(unknown_packet(packet.kind)),
     };
 
@@ -573,6 +604,7 @@ fn invalid(detail: impl Into<String>) -> DeviceSdkError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::BotaDeviceSdkFieldViewV1;
 
     fn packet(kind: u32) -> BotaDeviceSdkPacketV1 {
         BotaDeviceSdkPacketV1::new(kind)
@@ -604,6 +636,10 @@ mod tests {
                 .with_bytes(field_id::VALUE, hex("025704426f7461")),
             packet(packet_kind::PROTOCOL_DECODE_WIFI_SCAN)
                 .with_bytes(field_id::VALUE, hex("020104426f74616403")),
+            packet(packet_kind::PROTOCOL_DECODE_RECORDING_STATE)
+                .with_bytes(field_id::VALUE, hex("010100112233445566778899aabbccddeeff")),
+            packet(packet_kind::PROTOCOL_DECODE_RECORDING_CONTROL_RESULT)
+                .with_bytes(field_id::VALUE, hex("000000000004")),
         ];
         let mut logs = DeviceLogDecoder::default();
         for (index, input) in decode_cases.iter().enumerate() {
@@ -657,6 +693,8 @@ mod tests {
             packet(packet_kind::PROTOCOL_ENCODE_TIME_SYNC)
                 .with_u64(field_id::TIMESTAMP, 1_725_000_000_321)
                 .with_i64(field_id::OFFSET, -420),
+            packet(packet_kind::PROTOCOL_ENCODE_RECORDING_CONTROL_COMMAND)
+                .with_u64(field_id::COMMAND, 1),
         ];
         for (index, input) in encode_cases.iter().enumerate() {
             let output = unsafe { encode(&input.view()) };
@@ -684,6 +722,65 @@ mod tests {
         let bytes = fields[0].data;
         let bytes = unsafe { std::slice::from_raw_parts(bytes.data, bytes.len as usize) };
         assert_eq!(bytes, hex("0203010203ff00003c810000"));
+    }
+
+    #[test]
+    fn recording_control_bridge_preserves_state_result_and_command_values() {
+        let state = packet(packet_kind::PROTOCOL_DECODE_RECORDING_STATE)
+            .with_bytes(field_id::VALUE, hex("010100112233445566778899aabbccddeeff"));
+        let mut logs = DeviceLogDecoder::default();
+        let state = unsafe { decode(&state.view(), &mut logs) }.unwrap();
+        let state_fields = packet_fields(&state);
+        assert_eq!(unsigned(&state_fields, field_id::RECORDING_ACTIVE), 1);
+        assert_eq!(
+            unsigned(&state_fields, field_id::RECORDING_INITIATED_REMOTELY),
+            1
+        );
+        assert_eq!(
+            text(&state_fields, field_id::RECORDING_UUID),
+            "00112233-4455-6677-8899-aabbccddeeff"
+        );
+
+        let result = packet(packet_kind::PROTOCOL_DECODE_RECORDING_CONTROL_RESULT)
+            .with_bytes(field_id::VALUE, hex("000000000004"));
+        let result = unsafe { decode(&result.view(), &mut logs) }.unwrap();
+        let result_fields = packet_fields(&result);
+        assert_eq!(unsigned(&result_fields, field_id::RECORDING_SUCCESS), 0);
+        assert_eq!(
+            text(&result_fields, field_id::ERROR_DETAIL),
+            "invalid_grant"
+        );
+
+        let command = packet(packet_kind::PROTOCOL_ENCODE_RECORDING_CONTROL_COMMAND)
+            .with_u64(field_id::COMMAND, 1);
+        let command = unsafe { encode(&command.view()) }.unwrap();
+        assert_eq!(bytes(&packet_fields(&command), field_id::VALUE), [0x10]);
+    }
+
+    fn packet_fields(packet: &BotaDeviceSdkPacketV1) -> Vec<BotaDeviceSdkFieldViewV1> {
+        let view = packet.view();
+        unsafe { std::slice::from_raw_parts(view.fields, view.field_count as usize) }.to_vec()
+    }
+
+    fn unsigned(fields: &[BotaDeviceSdkFieldViewV1], id: u32) -> u64 {
+        fields
+            .iter()
+            .find(|field| field.field_id == id)
+            .unwrap()
+            .unsigned_value
+    }
+
+    fn text(fields: &[BotaDeviceSdkFieldViewV1], id: u32) -> String {
+        String::from_utf8(bytes(fields, id)).unwrap()
+    }
+
+    fn bytes(fields: &[BotaDeviceSdkFieldViewV1], id: u32) -> Vec<u8> {
+        let value = fields
+            .iter()
+            .find(|field| field.field_id == id)
+            .unwrap()
+            .data;
+        unsafe { std::slice::from_raw_parts(value.data, value.len as usize) }.to_vec()
     }
 
     fn hex(value: &str) -> Vec<u8> {

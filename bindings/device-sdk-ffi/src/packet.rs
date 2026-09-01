@@ -106,6 +106,8 @@ pub mod kind {
     pub const PROTOCOL_DECODE_DEVICE_LOGS: u32 = 0x050a;
     pub const PROTOCOL_DECODE_WIFI_STATUS: u32 = 0x050b;
     pub const PROTOCOL_DECODE_WIFI_SCAN: u32 = 0x050c;
+    pub const PROTOCOL_DECODE_RECORDING_STATE: u32 = 0x050d;
+    pub const PROTOCOL_DECODE_RECORDING_CONTROL_RESULT: u32 = 0x050e;
     pub const PROTOCOL_ENCODE_ACK: u32 = 0x0510;
     pub const PROTOCOL_ENCODE_TRANSFER_COMMAND: u32 = 0x0511;
     pub const PROTOCOL_ENCODE_DEVICE_COMMAND: u32 = 0x0512;
@@ -121,6 +123,7 @@ pub mod kind {
     pub const PROTOCOL_ENCODE_PROVISIONING_CHUNKS: u32 = 0x051c;
     pub const PROTOCOL_ENCODE_WIFI_CREDENTIALS: u32 = 0x051d;
     pub const PROTOCOL_ENCODE_TIME_SYNC: u32 = 0x051e;
+    pub const PROTOCOL_ENCODE_RECORDING_CONTROL_COMMAND: u32 = 0x051f;
 }
 
 pub mod field_type {
@@ -251,6 +254,9 @@ pub mod field_id {
     pub const WIFI_IS_CURRENT: u32 = 117;
     pub const WIFI_IS_OPEN: u32 = 118;
     pub const WIFI_PASSWORD: u32 = 119;
+    pub const RECORDING_ACTIVE: u32 = 120;
+    pub const RECORDING_INITIATED_REMOTELY: u32 = 121;
+    pub const RECORDING_SUCCESS: u32 = 122;
 }
 
 #[repr(C)]

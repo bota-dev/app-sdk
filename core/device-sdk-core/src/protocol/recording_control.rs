@@ -24,6 +24,19 @@ pub enum RecordingControlError {
     UnknownError,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RecordingControlCommand {
+    Start,
+    Stop,
+}
+
+pub const fn encode_recording_control_command(command: RecordingControlCommand) -> [u8; 1] {
+    [match command {
+        RecordingControlCommand::Start => protocol::RECORDING_CMD_GRANT_START,
+        RecordingControlCommand::Stop => protocol::RECORDING_CMD_GRANT_STOP,
+    }]
+}
+
 impl RecordingControlError {
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -89,5 +102,22 @@ const fn failure(error: RecordingControlError) -> RecordingControlResult {
     RecordingControlResult {
         success: false,
         error: Some(error),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remote_recording_commands_use_the_frozen_firmware_opcodes() {
+        assert_eq!(
+            encode_recording_control_command(RecordingControlCommand::Start),
+            [0x10]
+        );
+        assert_eq!(
+            encode_recording_control_command(RecordingControlCommand::Stop),
+            [0x11]
+        );
     }
 }
