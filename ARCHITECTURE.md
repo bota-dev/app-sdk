@@ -55,6 +55,15 @@ accepted for immutable published evidence. An artifact is not publishable
 unless it appears in a validated manifest and its version matches
 `sdk-version.toml`.
 
+The React Native package is packed with the exact npm CLI declared by its
+`packageManager` field. The tarball is uploaded as release evidence, included
+in the annotated tag's candidate inventory, and published only from the
+protected `release.yml` environment through npm OIDC trusted publishing. A
+rerun first compares the registry `dist.shasum` with the candidate tarball, so
+an uncertain publish is recoverable without attempting to replace an immutable
+npm version. The npm package trusts `bota-dev/app-sdk`, `release.yml`, and the
+`release` environment; no long-lived npm write token enters GitHub Actions.
+
 ## Migration Rule
 
 The existing React Native SDK at revision `44ac1221cb71` is the initial

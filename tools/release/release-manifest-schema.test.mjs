@@ -24,6 +24,16 @@ const packagePairs = [
   ['electron', '@bota.dev/electron-sdk'],
 ];
 
+test('the synchronized release example includes every publishable facade', () => {
+  assert.deepEqual(
+    v2Example.artifacts.map(({ platform, packageIdentifier }) => [
+      platform,
+      packageIdentifier,
+    ]),
+    packagePairs.slice(0, 3),
+  );
+});
+
 function compileSchema() {
   const ajv = new Ajv2020({
     allErrors: true,

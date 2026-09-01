@@ -175,6 +175,54 @@ fn release_workflow_publishes_and_smokes_the_public_apple_package() {
 }
 
 #[test]
+fn release_workflow_packs_publishes_and_verifies_the_react_native_package() {
+    let path = root().join(".github/workflows/release.yml");
+    let contents = fs::read_to_string(path).unwrap();
+    let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
+
+    let react_native = &workflow["jobs"]["react-native"];
+    assert_eq!(react_native["runs-on"].as_str(), Some("ubuntu-latest"));
+    let react_native_commands = react_native["steps"]
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .filter_map(|step| step["run"].as_str())
+        .collect::<Vec<_>>();
+    assert!(
+        react_native_commands
+            .iter()
+            .any(|command| command == &"npm ci")
+    );
+    assert!(
+        react_native_commands
+            .iter()
+            .any(|command| command == &"npm run verify")
+    );
+    assert!(contents.contains("NPM_CLI_VERSION: \"12.0.2\""));
+    assert!(contents.contains(
+        "npx --yes \"npm@$NPM_CLI_VERSION\" pack --pack-destination ../../target/react-native-release"
+    ));
+    assert!(contents.contains("name: react-native-release-${{ github.ref_name }}"));
+    assert!(contents.contains("path: target/react-native-release/"));
+
+    let publish = &workflow["jobs"]["publish"];
+    assert_eq!(publish["permissions"]["id-token"].as_str(), Some("write"));
+    assert!(contents.contains("needs: [verify, apple, android, react-native]"));
+    assert!(contents.contains("registry-url: https://registry.npmjs.org"));
+    assert!(contents.contains("target/react-native-release"));
+    assert!(
+        contents.contains(
+            "npx --yes \"npm@$NPM_CLI_VERSION\" publish \"$PACKAGE_PATH\" --access public"
+        )
+    );
+    assert!(
+        contents.contains("npx --yes \"npm@$NPM_CLI_VERSION\" view \"$PACKAGE_SPEC\" dist.shasum")
+    );
+    assert!(!contents.contains("NPM_TOKEN"));
+    assert!(!contents.contains("NODE_AUTH_TOKEN"));
+}
+
+#[test]
 fn android_ci_builds_once_and_verifies_both_supported_emulator_contracts() {
     let path = root().join(".github/workflows/ci.yml");
     let contents = fs::read_to_string(path).unwrap();
@@ -288,7 +336,7 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     assert!(contents.contains("central-portal-state.json"));
     assert!(contents.contains("central-bundle-files.json"));
     assert!(contents.contains("central-bundle.zip"));
-    assert!(contents.contains("needs: [verify, apple, android]"));
+    assert!(contents.contains("needs: [verify, apple, android, react-native]"));
     assert!(contents.contains("matrix:\n        api: [26, 35]"));
     assert!(contents.contains("tools/android/test-public-consumer.sh --api ${{ matrix.api }}"));
     assert!(!contents.contains("echo \"published=false\""));

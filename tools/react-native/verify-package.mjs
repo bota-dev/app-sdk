@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const EXPECTED_PACKAGE = '@bota.dev/react-native-sdk';
+const EXPECTED_PACKAGE_MANAGER = 'npm@12.0.2';
 const EXPECTED_REACT_NATIVE_FLOOR = '0.86.3';
 const EXPECTED_NATIVE_MODULE = 'BotaDeviceSDK';
 const EXPECTED_CODEGEN_LIBRARY = 'BotaDeviceSDKSpec';
@@ -50,8 +51,14 @@ export const verifyPackage = ({ workspaceRoot, packageRoot }) => {
       `React Native package name ${packageJson.name ?? '(missing)'} does not match ${EXPECTED_PACKAGE}`
     );
   }
-  if (packageJson.private !== true) {
-    throw new Error('React Native package must remain private until migration gates pass');
+  if (packageJson.private === true) {
+    throw new Error('React Native package must be publishable after migration gates pass');
+  }
+  if (packageJson.publishConfig?.access !== 'public') {
+    throw new Error('React Native publishConfig access must be public');
+  }
+  if (packageJson.packageManager !== EXPECTED_PACKAGE_MANAGER) {
+    throw new Error(`React Native package manager must be ${EXPECTED_PACKAGE_MANAGER}`);
   }
   if (workspacePackage.private !== true) {
     throw new Error('workspace package must remain private');
@@ -102,6 +109,14 @@ export const verifyPackage = ({ workspaceRoot, packageRoot }) => {
   }
   if (!packageJson.files?.includes('BotaDeviceSDK.podspec')) {
     throw new Error('React Native npm files must include BotaDeviceSDK.podspec');
+  }
+  for (const publicFile of ['README.md', 'LICENSE']) {
+    if (!packageJson.files?.includes(publicFile)) {
+      throw new Error(`React Native npm files must include ${publicFile}`);
+    }
+    if (!existsSync(resolve(packageRoot, publicFile))) {
+      throw new Error(`React Native package is missing ${publicFile}`);
+    }
   }
   if (!packageJson.files?.includes(EXPECTED_APPLE_SPM_WORKAROUND)) {
     throw new Error('React Native npm files must include the Apple SPM workaround');

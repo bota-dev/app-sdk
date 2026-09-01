@@ -941,8 +941,11 @@ recording and live-stream payloads native while exposing only typed metadata
 and progress through Codegen. `DeviceManager` preserves authenticated reset
 recovery across app reinstallation and serializes native reconnect attempts.
 The packed `1.1.0` npm artifact produces local release-mode iOS and Android
-Expo bundles in Demo and Bota One. Physical application acceptance, preview
-and production rollout, and npm publication remain open.
+Expo bundles in Demo and Bota One. The synchronized release workflow now packs
+that artifact with a pinned npm CLI, includes it in the candidate inventory,
+publishes through the protected OIDC trusted publisher, and verifies the public
+registry checksum idempotently. Preview and production rollout and the
+`v1.1.0` registry publication remain open.
 High-volume recording and firmware bytes stay native and are rejected from the
 Codegen contract.
 

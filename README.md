@@ -62,10 +62,12 @@ errors, sync-status derivation, device-log decoder, and the native-backed
 `OTAManager`. Recording files
 and live-stream chunks remain native-owned; Codegen carries only upload
 destinations, metadata, state, and progress. It is not an installable
-replacement yet. Local consumer acceptance installs the packed `1.1.0`
+replacement yet. The package is now a public npm release candidate and the
+protected `release.yml` workflow packs, publishes, and verifies its exact
+tarball with npm trusted publishing. Local consumer acceptance installs the packed `1.1.0`
 artifact without a workspace symlink and produces release-mode iOS and Android
 Expo bundles for both Demo and Bota One. Preview and production application
-rollout, physical application acceptance, and npm publication remain open.
+rollout and the `v1.1.0` registry publication remain open.
 The exported `DeviceManager` compatibility owner delegates scan,
 selected connection, status, settings, logs, WiFi/cache behavior, provisioning
 state and key reads, direct provisioning writes, and time sync. Those low-volume

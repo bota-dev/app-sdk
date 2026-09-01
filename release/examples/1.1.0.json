@@ -27,6 +27,15 @@
       "version": "1.1.0",
       "checksumSha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "capabilities": ["android_device_sdk"]
+    },
+    {
+      "platform": "react-native",
+      "packageIdentifier": "@bota.dev/react-native-sdk",
+      "name": "bota.dev-react-native-sdk-1.1.0.tgz",
+      "ecosystem": "npm",
+      "version": "1.1.0",
+      "checksumSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "capabilities": ["react_native_compatibility"]
     }
   ]
 }

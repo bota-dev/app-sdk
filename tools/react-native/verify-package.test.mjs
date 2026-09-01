@@ -10,9 +10,14 @@ const verifier = new URL('./verify-package.mjs', import.meta.url).pathname;
 const validPackage = () => ({
   name: '@bota.dev/react-native-sdk',
   version: '1.0.2',
-  private: true,
+  packageManager: 'npm@12.0.2',
+  publishConfig: {
+    access: 'public',
+  },
   files: [
     'BotaDeviceSDK.podspec',
+    'LICENSE',
+    'README.md',
     'android/',
     'generated/',
     'ios/',
@@ -68,6 +73,8 @@ const runVerifier = (mutate = () => {}) => {
   mkdirSync(androidSourceRoot, { recursive: true });
   writeFileSync(join(packageRoot, 'android', 'build.gradle'), '// fixture\n');
   writeFileSync(join(androidSourceRoot, 'AndroidManifest.xml'), '<manifest />\n');
+  writeFileSync(join(packageRoot, 'LICENSE'), 'MIT License\n');
+  writeFileSync(join(packageRoot, 'README.md'), '# React Native SDK\n');
   writeFileSync(join(root, 'sdk-version.toml'), 'version = "1.0.2"\n');
   writeFileSync(
     join(root, 'package.json'),
@@ -89,20 +96,43 @@ const runVerifier = (mutate = () => {}) => {
 
 const outputOf = (result) => `${result.stdout}${result.stderr}`;
 
-test('accepts the private synchronized React Native package metadata', () => {
+test('accepts the publishable synchronized React Native package metadata', () => {
   const result = runVerifier();
 
   assert.equal(result.status, 0, outputOf(result));
   assert.match(result.stdout, /React Native package metadata verified/);
 });
 
-test('rejects a package that can be published', () => {
+test('rejects a package that remains private after migration gates pass', () => {
   const result = runVerifier((pkg) => {
-    pkg.private = false;
+    pkg.private = true;
   });
 
   assert.notEqual(result.status, 0);
-  assert.match(outputOf(result), /must remain private/);
+  assert.match(outputOf(result), /must be publishable/);
+});
+
+test('rejects a package without public npm access', () => {
+  const missingResult = runVerifier((pkg) => {
+    delete pkg.publishConfig;
+  });
+  const privateResult = runVerifier((pkg) => {
+    pkg.publishConfig.access = 'restricted';
+  });
+
+  assert.notEqual(missingResult.status, 0);
+  assert.match(outputOf(missingResult), /publishConfig access must be public/);
+  assert.notEqual(privateResult.status, 0);
+  assert.match(outputOf(privateResult), /publishConfig access must be public/);
+});
+
+test('rejects npm CLI drift for release packing', () => {
+  const result = runVerifier((pkg) => {
+    pkg.packageManager = 'npm@12.1.0';
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(outputOf(result), /package manager must be npm@12\.0\.2/);
 });
 
 test('rejects a package-name mismatch', () => {
@@ -181,6 +211,20 @@ test('rejects a package that omits the podspec from npm files', () => {
 
   assert.notEqual(result.status, 0);
   assert.match(outputOf(result), /BotaDeviceSDK\.podspec/);
+});
+
+test('rejects a package without public README and license files', () => {
+  const readmeResult = runVerifier((pkg) => {
+    pkg.files = pkg.files.filter((entry) => entry !== 'README.md');
+  });
+  const licenseResult = runVerifier((pkg) => {
+    pkg.files = pkg.files.filter((entry) => entry !== 'LICENSE');
+  });
+
+  assert.notEqual(readmeResult.status, 0);
+  assert.match(outputOf(readmeResult), /README\.md/);
+  assert.notEqual(licenseResult.status, 0);
+  assert.match(outputOf(licenseResult), /LICENSE/);
 });
 
 test('rejects a package that omits the Apple SPM workaround from npm files', () => {
@@ -264,7 +308,7 @@ test('executes validation when the CLI entrypoint is relative', () => {
     `${JSON.stringify({ version: '1.0.2', private: true })}\n`
   );
   const packageJson = validPackage();
-  packageJson.private = false;
+  packageJson.private = true;
   writeFileSync(
     join(packageRoot, 'package.json'),
     `${JSON.stringify(packageJson)}\n`
@@ -283,5 +327,5 @@ test('executes validation when the CLI entrypoint is relative', () => {
   );
 
   assert.notEqual(result.status, 0);
-  assert.match(outputOf(result), /must remain private/);
+  assert.match(outputOf(result), /must be publishable/);
 });

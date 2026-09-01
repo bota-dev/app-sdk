@@ -51,10 +51,12 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - The React Native baseline comparator must route every operation present in
   `protocol/fixtures`; target-core error codes do not replace frozen JavaScript
   parser messages in those comparison expectations.
-- `frameworks/react-native` has its own lockfile, stays private until native,
-  compatibility, app, and release gates pass, and pins React Native `0.86.3`
-  for deterministic Codegen. Its package version still matches
-  `sdk-version.toml`.
+- `frameworks/react-native` has its own lockfile, is publishable only after its
+  native, compatibility, and local app gates pass, and pins React Native
+  `0.86.3` for deterministic Codegen. Its package version still matches
+  `sdk-version.toml`. Pack and publish with the exact npm CLI in
+  `packageManager`; release publication must use the `release.yml` OIDC trusted
+  publisher and must verify the registry `dist.shasum` against the candidate.
 - The React Native package matches all 80 frozen `0.0.65` exports. Keep their
   structural contract test exact. `BotaClient` serializes native lifecycle
   ownership and composes one compatibility manager graph per ready lifecycle;
