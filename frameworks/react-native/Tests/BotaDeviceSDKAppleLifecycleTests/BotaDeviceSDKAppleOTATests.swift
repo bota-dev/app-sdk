@@ -24,7 +24,7 @@ final class BotaDeviceSDKAppleOTATests: XCTestCase {
             crc32: 0x1234_5678,
             url: "https://firmware.bota.dev/update.ufw"
         ) { value in
-            Task { await progress.append(value) }
+            progress.append(value)
         }
 
         let capturedImage = await client.capturedImage()
@@ -33,7 +33,7 @@ final class BotaDeviceSDKAppleOTATests: XCTestCase {
         XCTAssertEqual(image.sizeBytes, 1_024_000)
         XCTAssertEqual(image.crc32, 0x1234_5678)
         XCTAssertEqual(image.request.url?.absoluteString, "https://firmware.bota.dev/update.ufw")
-        let progressSnapshot = await progress.snapshot()
+        let progressSnapshot = progress.snapshot()
         XCTAssertEqual(
             progressSnapshot,
             [
@@ -47,15 +47,20 @@ final class BotaDeviceSDKAppleOTATests: XCTestCase {
     }
 }
 
-private actor FirmwareProgressCapture {
+private final class FirmwareProgressCapture: @unchecked Sendable {
+    private let lock = NSLock()
     private var values: [FirmwareUpdateProgress] = []
 
     func append(_ value: FirmwareUpdateProgress) {
+        lock.lock()
+        defer { lock.unlock() }
         values.append(value)
     }
 
     func snapshot() -> [FirmwareUpdateProgress] {
-        values
+        lock.lock()
+        defer { lock.unlock() }
+        return values
     }
 }
 

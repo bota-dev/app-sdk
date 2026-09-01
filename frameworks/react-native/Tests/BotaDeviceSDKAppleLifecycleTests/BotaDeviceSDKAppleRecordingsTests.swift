@@ -33,7 +33,7 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
             recording: recording,
             sinkID: "sink-1"
         ) { value in
-            Task { await progress.append(value) }
+            progress.append(value)
         }
 
         XCTAssertEqual(result, .init(
@@ -41,7 +41,7 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
             isE2EEncrypted: true,
             contentSHA256Hex: String(repeating: "5a", count: 32)
         ))
-        let progressSnapshot = await progress.snapshot()
+        let progressSnapshot = progress.snapshot()
         XCTAssertEqual(
             progressSnapshot,
             [.init(completedBytes: 24_000, totalBytes: 48_000)]
@@ -80,7 +80,7 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
             uploadID: "upload-1",
             destinationID: "destination-1"
         ) { value in
-            Task { await progress.append(value) }
+            progress.append(value)
         }
 
         XCTAssertEqual(
@@ -91,7 +91,7 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
                 destinationID: "destination-1"
             )
         )
-        let progressSnapshot = await progress.snapshot()
+        let progressSnapshot = progress.snapshot()
         XCTAssertEqual(
             progressSnapshot,
             [.init(completedBytes: 32_000, totalBytes: 48_000)]
@@ -168,15 +168,20 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
     }
 }
 
-private actor RecordingProgressCapture {
+private final class RecordingProgressCapture: @unchecked Sendable {
+    private let lock = NSLock()
     private var values: [RecordingTransferProgress] = []
 
     func append(_ value: RecordingTransferProgress) {
+        lock.lock()
+        defer { lock.unlock() }
         values.append(value)
     }
 
     func snapshot() -> [RecordingTransferProgress] {
-        values
+        lock.lock()
+        defer { lock.unlock() }
+        return values
     }
 }
 
