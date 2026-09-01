@@ -13,8 +13,8 @@ nearby device.
 
 Run the matrix once with a Bota Pin and once with a Bota Note. Use one selected
 device at a time and record its firmware revision, Apple hardware, Apple OS,
-test revision, and result in
-`release/evidence/1.0.0-alpha.1-apple-facade.md`.
+test revision, and result in the current Apple release evidence under
+`release/evidence/`.
 
 Required for every supervised run:
 

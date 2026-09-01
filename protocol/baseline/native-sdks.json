@@ -27,8 +27,8 @@
       "product": "BotaAppleSDK",
       "entryPoint": "BotaDeviceClient",
       "minimumPlatform": "iOS 15 / macOS 13",
-      "status": "automated_verified_physical_pending",
-      "evidence": "release/evidence/1.0.0-alpha.1-apple-facade.md"
+      "status": "published",
+      "evidence": "release/evidence/1.1.0-apple-facade.md"
     }
   },
   "behavioralAuthority": {

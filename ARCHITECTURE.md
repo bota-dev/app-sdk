@@ -651,8 +651,9 @@ when that global gate is absent. Serial identity is verified after connection;
 display names never select a device. Settings, provisioning, recording
 deletion, OTA, and deprovision each require an operation-specific gate, while
 authenticated reset runs separately with a command-bound grant and
-`BOTA_ALLOW_FACTORY_RESET=1`. The accepted status and unrun model matrix live in
-`release/evidence/1.0.0-alpha.1-apple-facade.md`.
+`BOTA_ALLOW_FACTORY_RESET=1`. The accepted status and model matrix live in
+`release/evidence/1.1.0-apple-facade.md`; private device logs and credentials
+remain outside the public repository.
 
 Workflow release evidence lives under `protocol/workflows/`. Its schema
 requires the frozen source anchor, executable Rust test, command, host

@@ -25,7 +25,7 @@
       "implementationStatus": "automated_verified",
       "physicalDeviceStatus": "physical_device_verified",
       "publicationStatus": "published",
-      "evidence": "release/evidence/1.0.0-alpha.1-apple-facade.md",
+      "evidence": "release/evidence/1.1.0-apple-facade.md",
       "models": {
         "bota_pin": "physical_device_verified",
         "bota_note": "physical_device_verified"
