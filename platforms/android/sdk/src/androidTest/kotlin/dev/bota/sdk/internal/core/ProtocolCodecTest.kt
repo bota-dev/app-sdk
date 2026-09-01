@@ -59,7 +59,7 @@ class ProtocolCodecTest {
                 assertTrue("${fixture.getString("name")}: $error", expectsError)
             }
         }
-        assertEquals(33, matched)
+        assertEquals(39, matched)
     }
 
     @Test

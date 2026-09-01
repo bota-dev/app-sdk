@@ -124,8 +124,9 @@ error frees. Those counters are compiled into debug tests only.
 
 Public Kotlin value models preserve unknown wire values and expose stable error
 codes independently of diagnostics. Protocol serialization and parsing remain
-in Rust; Android's mapper only converts typed ABI fields. The 55 canonical
-protocol cases are mirrored into Android test assets and checked byte-for-byte:
+in Rust; Android's mapper only converts typed ABI fields. The 64 canonical
+protocol cases are mirrored into Android test assets; instrumentation exercises
+all 39 applicable decode cases and 24 applicable encode cases byte-for-byte:
 
 ```bash
 npm run sync:android-fixtures
