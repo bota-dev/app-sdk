@@ -39,7 +39,10 @@ public object AndroidConsumer {
             ProvisioningMaterial("endpoint".toByteArray(), "token".toByteArray(), connected.mtu.toULong())
         }
         client.provisioning.writeConnectionSettings(settings, connected)
-        client.provisioning.deprovision(connected)
+        client.provisioning.deprovision(
+            connected,
+            Base64.getEncoder().encodeToString(byteArrayOf(1)),
+        )
         val recordingGrant = Base64.getEncoder().encodeToString(byteArrayOf(1))
         client.controls.requestStartRecording(connected, recordingGrant)
         client.controls.requestStopRecording(connected, recordingGrant)

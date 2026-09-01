@@ -248,6 +248,13 @@ fn android_ci_builds_once_and_verifies_both_supported_emulator_contracts() {
     assert!(emulator.contains("window_animation_scale 0"));
     assert!(contents.contains("tools/android/test-emulator-lane.sh --api 26"));
     assert!(contents.contains("tools/android/test-emulator-lane.sh --api 35"));
+    assert!(contents.contains(
+        "tools/android/test-legacy-consumer.sh --mode source --compile-only"
+    ));
+    assert!(contents.contains(
+        "tools/android/test-legacy-consumer.sh --mode binary --compile-only"
+    ));
+    assert!(contents.contains("tools/android/test-consumer.sh --compile-only"));
     assert!(emulator.contains("dev.bota.sdk.internal.jni.NativeCoreBridgeTest"));
     assert!(emulator.contains("dev.bota.sdk.internal.bluetooth.BluetoothPermissionTest"));
     assert!(emulator.contains("tools/android/test-legacy-consumer.sh"));

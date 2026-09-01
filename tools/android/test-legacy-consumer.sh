@@ -10,16 +10,18 @@ readonly ADB="$ANDROID_SDK/platform-tools/adb"
 api=""
 mode=""
 repository=""
+compile_only=false
 while (($#)); do
   case "$1" in
     --api) api="${2:?--api requires a value}"; shift 2 ;;
     --mode) mode="${2:?--mode requires a value}"; shift 2 ;;
     --repository) repository="${2:?--repository requires a value}"; shift 2 ;;
+    --compile-only) compile_only=true; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
-if [[ -z "$api" || ("$mode" != "source" && "$mode" != "binary") ]]; then
-  echo "Usage: test-legacy-consumer.sh --api API --mode source|binary [--repository PATH]" >&2
+if [[ ("$mode" != "source" && "$mode" != "binary") || ("$compile_only" == false && -z "$api") ]]; then
+  echo "Usage: test-legacy-consumer.sh --mode source|binary [--api API | --compile-only] [--repository PATH]" >&2
   exit 2
 fi
 version="$(awk -F'"' '/^version = / { print $2 }' "$ROOT/sdk-version.toml")"
@@ -39,6 +41,10 @@ fi
 
 "$GRADLEW" -p "$FIXTURE" --refresh-dependencies "${arguments[@]}" \
   :app:assembleDebug :app:assembleDebugAndroidTest >/dev/null
+if [[ "$compile_only" == true ]]; then
+  echo "Legacy Android $mode consumer compiled against Bota Android SDK $version"
+  exit 0
+fi
 
 device="$($ADB devices | awk 'NR > 1 && $2 == "device" { print $1; exit }')"
 if [[ -z "$device" ]]; then

@@ -261,6 +261,9 @@ repository:
 
 ```bash
 tools/android/verify-legacy-api.sh --legacy-path /path/to/pinned/legacy-sdk
+tools/android/test-legacy-consumer.sh --mode source --compile-only --repository target/android-m2
+tools/android/test-legacy-consumer.sh --mode binary --compile-only --repository target/android-m2
+tools/android/test-consumer.sh --compile-only --repository target/android-m2
 tools/android/test-legacy-consumer.sh --api 26 --mode source
 tools/android/test-legacy-consumer.sh --api 26 --mode binary
 tools/android/test-consumer.sh --api 26

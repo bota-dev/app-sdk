@@ -10,16 +10,18 @@ readonly ADB="$ANDROID_SDK/platform-tools/adb"
 api=""
 repository=""
 public_repository=false
+compile_only=false
 while (($#)); do
   case "$1" in
     --api) api="${2:?--api requires a value}"; shift 2 ;;
     --repository) repository="${2:?--repository requires a value}"; shift 2 ;;
     --public) public_repository=true; shift ;;
+    --compile-only) compile_only=true; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
-if [[ -z "$api" ]]; then
-  echo "--api is required" >&2
+if [[ "$compile_only" == false && -z "$api" ]]; then
+  echo "--api is required unless --compile-only is set" >&2
   exit 2
 fi
 if [[ "$public_repository" == true && -n "$repository" ]]; then
@@ -41,6 +43,10 @@ fi
 
 "$GRADLEW" -p "$FIXTURE" --refresh-dependencies "${arguments[@]}" \
   :app:assembleDebug :app:assembleDebugAndroidTest >/dev/null
+if [[ "$compile_only" == true ]]; then
+  echo "Android consumer compiled against Bota Android SDK $version"
+  exit 0
+fi
 
 device="$($ADB devices | awk 'NR > 1 && $2 == "device" { print $1; exit }')"
 if [[ -z "$device" ]]; then

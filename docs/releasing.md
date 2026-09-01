@@ -97,6 +97,9 @@ tools/android/package-release.sh --check
 tools/android/verify-publication.sh target/android-release
 cargo xtask release validate target/android-release/release-manifest.json
 tools/android/install-release-repository.sh target/android-release target/android-m2
+tools/android/test-legacy-consumer.sh --mode source --compile-only --repository target/android-m2
+tools/android/test-legacy-consumer.sh --mode binary --compile-only --repository target/android-m2
+tools/android/test-consumer.sh --compile-only --repository target/android-m2
 ```
 
 `package-release.sh --check` performs two clean builds and rejects any AAR or
@@ -104,7 +107,8 @@ per-ABI native-library digest drift. It invokes only the unsigned local Maven
 publication, proves that no signing task or `.asc` file is present, and emits
 the AAR, POM, Gradle module metadata, sources, Dokka Javadoc, four checksum
 formats for every Maven primary, copied MIT license, SPDX 2.3 SBOM, and native
-manifest version 2.
+manifest version 2. The host-side consumer compile commands catch source and
+binary fixture drift before either emulator lane starts.
 
 The published runtime dependency set is reviewed in
 `protocol/baseline/android-maven-license-policy.json`. The package command and

@@ -234,6 +234,12 @@ jobs:
             :sdk:lintRelease \
             :sdk:assembleDebug \
             :sdk:assembleDebugAndroidTest
+          tools/android/test-legacy-consumer.sh --mode source --compile-only \
+            --repository target/android-m2
+          tools/android/test-legacy-consumer.sh --mode binary --compile-only \
+            --repository target/android-m2
+          tools/android/test-consumer.sh --compile-only \
+            --repository target/android-m2
 
       - name: Test API 26 release consumers
         run: tools/android/test-emulator-lane.sh --api 26

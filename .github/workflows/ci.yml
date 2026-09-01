@@ -159,6 +159,12 @@ jobs:
             :sdk:lintRelease \
             :sdk:assembleDebug \
             :sdk:assembleDebugAndroidTest
+          tools/android/test-legacy-consumer.sh --mode source --compile-only \
+            --repository target/android-m2
+          tools/android/test-legacy-consumer.sh --mode binary --compile-only \
+            --repository target/android-m2
+          tools/android/test-consumer.sh --compile-only \
+            --repository target/android-m2
 
       - name: Inspect packaged native libraries
         run: tools/android/inspect-aar.sh "target/android-release/bota-android-sdk-$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml).aar"
