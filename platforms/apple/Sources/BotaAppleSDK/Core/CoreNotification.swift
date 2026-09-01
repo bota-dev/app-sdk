@@ -10,6 +10,9 @@ enum CoreNotificationKind: Equatable, Sendable {
     case bleFallbackReady
     case firmwareProgress
     case deviceLog
+    case streamingPaused
+    case streamingResumed
+    case streamingCompleted
     case completed
     case cancelled
     case failed
@@ -35,6 +38,9 @@ struct CoreNotification: Equatable, Sendable {
         case UInt32(BOTA_DEVICE_SDK_V1_NOTIFICATION_BLE_FALLBACK_READY): kind = .bleFallbackReady
         case UInt32(BOTA_DEVICE_SDK_V1_NOTIFICATION_FIRMWARE_PROGRESS): kind = .firmwareProgress
         case UInt32(BOTA_DEVICE_SDK_V1_NOTIFICATION_DEVICE_LOG): kind = .deviceLog
+        case 0x040d: kind = .streamingPaused
+        case 0x040e: kind = .streamingResumed
+        case 0x040f: kind = .streamingCompleted
         case UInt32(BOTA_DEVICE_SDK_V1_NOTIFICATION_COMPLETED): kind = .completed
         case UInt32(BOTA_DEVICE_SDK_V1_NOTIFICATION_CANCELLED): kind = .cancelled
         case UInt32(BOTA_DEVICE_SDK_V1_NOTIFICATION_FAILED): kind = .failed

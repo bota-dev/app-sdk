@@ -72,8 +72,18 @@ internal class HostEffectExecutor(
         CoreEffectKind.RecordingSinkTruncate,
         CoreEffectKind.RecordingSinkAppend,
         CoreEffectKind.RecordingSinkFinalize,
-        CoreEffectKind.RecordingSinkDiscard ->
-            route(effect, recordingSink.execute(effect), HostEventKind.RecordingSinkFailed)
+        CoreEffectKind.RecordingSinkDiscard,
+        CoreEffectKind.StreamingSinkAppendPlaintext,
+        CoreEffectKind.StreamingSinkBeginEncrypted,
+        CoreEffectKind.StreamingSinkAppendEncrypted,
+        CoreEffectKind.StreamingSinkFinalize,
+        CoreEffectKind.StreamingSinkDiscard ->
+            route(
+                effect,
+                recordingSink.execute(effect),
+                if (effect.kind.isStreamingSink) HostEventKind.StreamingSinkFailed
+                else HostEventKind.RecordingSinkFailed,
+            )
         CoreEffectKind.FirmwareBlobRead ->
             route(effect, firmwareBlob.execute(effect), HostEventKind.FirmwareBlobFailed)
     }
@@ -225,6 +235,11 @@ private fun allowsMultipleEvents(kind: CoreEffectKind): Boolean = when (kind) {
     CoreEffectKind.RecordingSinkAppend,
     CoreEffectKind.RecordingSinkFinalize,
     CoreEffectKind.RecordingSinkDiscard,
+    CoreEffectKind.StreamingSinkAppendPlaintext,
+    CoreEffectKind.StreamingSinkBeginEncrypted,
+    CoreEffectKind.StreamingSinkAppendEncrypted,
+    CoreEffectKind.StreamingSinkFinalize,
+    CoreEffectKind.StreamingSinkDiscard,
     CoreEffectKind.FirmwareBlobRead -> false
 }
 
@@ -271,5 +286,17 @@ private fun expectedEventKinds(kind: CoreEffectKind): Set<HostEventKind> = when 
         HostEventKind.RecordingSinkFinalized,
         HostEventKind.RecordingSinkIntegrityFailed,
     )
+    CoreEffectKind.StreamingSinkAppendPlaintext,
+    CoreEffectKind.StreamingSinkBeginEncrypted,
+    CoreEffectKind.StreamingSinkAppendEncrypted -> setOf(HostEventKind.StreamingSinkAccepted)
+    CoreEffectKind.StreamingSinkFinalize -> setOf(HostEventKind.StreamingSinkFinalized)
+    CoreEffectKind.StreamingSinkDiscard -> emptySet()
     CoreEffectKind.FirmwareBlobRead -> setOf(HostEventKind.FirmwareChunkRead)
 }
+
+private val CoreEffectKind.isStreamingSink: Boolean
+    get() = this == CoreEffectKind.StreamingSinkAppendPlaintext ||
+        this == CoreEffectKind.StreamingSinkBeginEncrypted ||
+        this == CoreEffectKind.StreamingSinkAppendEncrypted ||
+        this == CoreEffectKind.StreamingSinkFinalize ||
+        this == CoreEffectKind.StreamingSinkDiscard

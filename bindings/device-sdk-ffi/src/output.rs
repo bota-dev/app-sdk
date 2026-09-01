@@ -102,6 +102,21 @@ fn kind(effect: &Effect) -> u32 {
         Effect::RecordingSink(RecordingSinkEffect::Discard { .. }) => {
             packet_kind::HOST_EFFECT_RECORDING_SINK_DISCARD
         }
+        Effect::RecordingSink(RecordingSinkEffect::AppendStreamingPlaintext { .. }) => {
+            packet_kind::HOST_EFFECT_STREAMING_SINK_APPEND_PLAINTEXT
+        }
+        Effect::RecordingSink(RecordingSinkEffect::BeginStreamingEncrypted { .. }) => {
+            packet_kind::HOST_EFFECT_STREAMING_SINK_BEGIN_ENCRYPTED
+        }
+        Effect::RecordingSink(RecordingSinkEffect::AppendStreamingEncrypted { .. }) => {
+            packet_kind::HOST_EFFECT_STREAMING_SINK_APPEND_ENCRYPTED
+        }
+        Effect::RecordingSink(RecordingSinkEffect::FinalizeStreaming { .. }) => {
+            packet_kind::HOST_EFFECT_STREAMING_SINK_FINALIZE
+        }
+        Effect::RecordingSink(RecordingSinkEffect::DiscardStreaming { .. }) => {
+            packet_kind::HOST_EFFECT_STREAMING_SINK_DISCARD
+        }
         Effect::FirmwareBlob(_) => packet_kind::HOST_EFFECT_FIRMWARE_BLOB_READ,
     }
 }
@@ -268,6 +283,43 @@ fn recording_sink(
         RecordingSinkEffect::Discard { sink_id } => {
             packet.with_text(field_id::SINK_ID, sink_id.as_str())
         }
+        RecordingSinkEffect::AppendStreamingPlaintext {
+            sink_id,
+            sequence,
+            payload,
+        } => packet
+            .with_text(field_id::SINK_ID, sink_id.as_str())
+            .with_u64(field_id::SEQUENCE, u64::from(sequence))
+            .with_bytes(field_id::PAYLOAD, payload),
+        RecordingSinkEffect::BeginStreamingEncrypted {
+            sink_id,
+            ephemeral_public_key,
+            salt,
+        } => packet
+            .with_text(field_id::SINK_ID, sink_id.as_str())
+            .with_bytes(field_id::EPHEMERAL_PUBLIC_KEY, ephemeral_public_key)
+            .with_bytes(field_id::SALT, salt),
+        RecordingSinkEffect::AppendStreamingEncrypted {
+            sink_id,
+            sequence,
+            payload,
+        } => packet
+            .with_text(field_id::SINK_ID, sink_id.as_str())
+            .with_u64(field_id::SEQUENCE, u64::from(sequence))
+            .with_bytes(field_id::PAYLOAD, payload),
+        RecordingSinkEffect::FinalizeStreaming {
+            sink_id,
+            encrypted,
+            expected_chunks,
+            total_units,
+        } => packet
+            .with_text(field_id::SINK_ID, sink_id.as_str())
+            .with_bool(field_id::ENCRYPTED, encrypted)
+            .with_u64(field_id::EXPECTED_CHUNKS, u64::from(expected_chunks))
+            .with_u64(field_id::TOTAL_UNITS, total_units),
+        RecordingSinkEffect::DiscardStreaming { sink_id } => {
+            packet.with_text(field_id::SINK_ID, sink_id.as_str())
+        }
     }
 }
 
@@ -310,6 +362,13 @@ fn notification_kind(notification: &WorkflowNotification) -> u32 {
         WorkflowNotification::DeviceLog { .. } => packet_kind::NOTIFICATION_DEVICE_LOG,
         WorkflowNotification::RecordingTransferCompleted { .. } => {
             packet_kind::NOTIFICATION_COMPLETED
+        }
+        WorkflowNotification::StreamingPaused { .. } => {
+            packet_kind::NOTIFICATION_STREAMING_PAUSED
+        }
+        WorkflowNotification::StreamingResumed => packet_kind::NOTIFICATION_STREAMING_RESUMED,
+        WorkflowNotification::StreamingCompleted { .. } => {
+            packet_kind::NOTIFICATION_STREAMING_COMPLETED
         }
         WorkflowNotification::Completed { .. } => packet_kind::NOTIFICATION_COMPLETED,
         WorkflowNotification::Cancelled { .. } => packet_kind::NOTIFICATION_CANCELLED,
@@ -371,6 +430,18 @@ fn notification(
                 None => packet,
             }
         }
+        WorkflowNotification::StreamingPaused { completed_units } => {
+            packet.with_u64(field_id::COMPLETED_UNITS, completed_units)
+        }
+        WorkflowNotification::StreamingResumed => packet,
+        WorkflowNotification::StreamingCompleted {
+            total_units,
+            uploaded_chunks,
+            encrypted,
+        } => packet
+            .with_u64(field_id::TOTAL_UNITS, total_units)
+            .with_u64(field_id::UPLOADED_CHUNKS, u64::from(uploaded_chunks))
+            .with_bool(field_id::ENCRYPTED, encrypted),
         WorkflowNotification::Failed { error } => {
             let mut packet = packet
                 .with_u64(

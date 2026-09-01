@@ -5,6 +5,7 @@ mod factory_reset;
 mod firmware_update;
 mod provisioning;
 mod recording_transfer;
+mod streaming_transfer;
 mod upload_handoff;
 
 pub(crate) use connection::ConnectionWorkflow;
@@ -14,6 +15,7 @@ pub(crate) use factory_reset::FactoryResetWorkflow;
 pub(crate) use firmware_update::FirmwareUpdateWorkflow;
 pub(crate) use provisioning::ProvisioningWorkflow;
 pub(crate) use recording_transfer::RecordingTransferWorkflow;
+pub(crate) use streaming_transfer::StreamingTransferWorkflow;
 pub(crate) use upload_handoff::UploadHandoffWorkflow;
 
 use crate::{

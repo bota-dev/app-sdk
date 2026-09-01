@@ -9,11 +9,18 @@ import dev.bota.sdk.model.ConnectionState
 import dev.bota.sdk.model.DeviceRecording
 import dev.bota.sdk.model.DeviceType
 import dev.bota.sdk.model.RecordingTransferProgress
+import dev.bota.sdk.model.StreamingChunkDestinationProvider
+import dev.bota.sdk.model.StreamingChunkRequest
+import dev.bota.sdk.model.StreamingFinalizeHandler
+import dev.bota.sdk.model.StreamingFinalizeMetadata
+import dev.bota.sdk.model.StreamingRecordingEvent
 import dev.bota.sdk.model.WireValue
 import java.nio.file.Path
 import java.time.Instant
+import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -88,6 +95,43 @@ class BotaDeviceSDKAndroidRecordingsTest {
         )
     }
 
+    @Test
+    fun streamingResolvesOneShotRequestsAndMapsProgress() = runTest {
+        val client = TestAndroidRecordingClient(recording())
+        val recordings = BotaDeviceSDKAndroidRecordings(client)
+        val states = mutableListOf<String>()
+        var sequence: Double? = null
+        var finalizedChunks: Double? = null
+
+        val total = recordings.streamRecording(
+            device = connectedDevice(),
+            recordingUuid = "recording-1",
+            sessionId = UUID.randomUUID().toString(),
+            chunkSizeBytes = 64 * 1_024,
+            flushIntervalMilliseconds = 1_000u,
+            onProgress = { states += it.state },
+            onDestinationRequest = {
+                sequence = it.sequence.toDouble()
+                recordings.resolveStreamingDestination(
+                    it.requestId,
+                    "https://example.test/chunk/1",
+                    "PUT",
+                    "audio/ogg",
+                    null,
+                )
+            },
+            onFinalizeRequest = {
+                finalizedChunks = it.totalChunks.toDouble()
+                recordings.resolveStreamingFinalize(it.requestId)
+            },
+        )
+
+        assertEquals(96uL, total)
+        assertEquals(1.0, sequence)
+        assertEquals(2.0, finalizedChunks)
+        assertEquals(listOf("streaming", "paused", "streaming", "completing"), states)
+    }
+
     private fun connectedDevice(): ConnectedDevice = ConnectedDevice(
         id = "selected",
         serialNumber = "EVFXXW67KP",
@@ -145,6 +189,22 @@ class BotaDeviceSDKAndroidRecordingsTest {
                 ),
             ),
         )
+
+        override fun streamRecording(
+            device: ConnectedDevice,
+            recordingUuid: String,
+            sinkId: String,
+            chunkSizeBytes: Int,
+            flushIntervalMilliseconds: ULong,
+            destinationProvider: StreamingChunkDestinationProvider,
+            finalize: StreamingFinalizeHandler,
+        ): Flow<StreamingRecordingEvent> = flow {
+            destinationProvider.destination(StreamingChunkRequest(1u, false))
+            finalize.finalize(StreamingFinalizeMetadata(2u, 500u, 96u, false))
+            emit(StreamingRecordingEvent.Paused(32u))
+            emit(StreamingRecordingEvent.Resumed)
+            emit(StreamingRecordingEvent.Completed(96u, 2u, false))
+        }
 
         override suspend fun cancelCurrentOperation() {
             cancelled = true

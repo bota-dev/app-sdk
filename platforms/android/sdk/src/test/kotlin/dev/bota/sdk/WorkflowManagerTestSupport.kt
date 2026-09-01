@@ -65,6 +65,8 @@ internal class ManagerRuntimeFixture(
     val actions = mutableListOf<String>()
     val sinkPaths = mutableMapOf<String, Path>()
     val removedSinks = mutableListOf<String>()
+    val streamingSinks = mutableListOf<String>()
+    val removedStreamingSinks = mutableListOf<String>()
     val firmwarePaths = mutableMapOf<ULong, Path>()
     val removedFirmware = mutableListOf<ULong>()
     var recordingList = listOf(recording)
@@ -100,6 +102,8 @@ internal class ManagerRuntimeFixture(
             Path.of("/tmp/bota-test-$sinkId.recording").also { sinkPaths[sinkId] = it }
         },
         unregisterRecordingSink = { sinkId -> removedSinks += sinkId },
+        registerStreamingSink = { sinkId, _, _, _, _ -> streamingSinks += sinkId },
+        unregisterStreamingSink = { sinkId -> removedStreamingSinks += sinkId },
         registerFirmwareDownload = { id, _: Request ->
             Path.of("/tmp/bota-test-$id.firmware").also { firmwarePaths[id] = it }
         },

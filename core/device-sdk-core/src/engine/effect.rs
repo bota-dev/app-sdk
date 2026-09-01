@@ -182,6 +182,30 @@ pub enum RecordingSinkEffect {
     Discard {
         sink_id: RecordingSinkId,
     },
+    AppendStreamingPlaintext {
+        sink_id: RecordingSinkId,
+        sequence: u16,
+        payload: Vec<u8>,
+    },
+    BeginStreamingEncrypted {
+        sink_id: RecordingSinkId,
+        ephemeral_public_key: Vec<u8>,
+        salt: Vec<u8>,
+    },
+    AppendStreamingEncrypted {
+        sink_id: RecordingSinkId,
+        sequence: u16,
+        payload: Vec<u8>,
+    },
+    FinalizeStreaming {
+        sink_id: RecordingSinkId,
+        encrypted: bool,
+        expected_chunks: u32,
+        total_units: u64,
+    },
+    DiscardStreaming {
+        sink_id: RecordingSinkId,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]

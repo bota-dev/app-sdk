@@ -18,6 +18,7 @@ export type {
   BotaDeviceSDKWiFiClient,
   BotaDeviceSDKProvisioningClient,
   BotaDeviceSDKRecordingClient,
+  BotaDeviceSDKStreamingClient,
   BotaDeviceSDKState,
   BotaEventSubscription,
   BotaFactoryResetCompletion,
@@ -111,6 +112,8 @@ export type {
 
 export { DeviceLogDecoder } from './ble/deviceLogs';
 export { DeviceManager } from './managers/DeviceManager';
+export { RecordingManager } from './managers/RecordingManager';
+export { StreamingSession } from './managers/StreamingSession';
 export {
   BotaError,
   BluetoothError,

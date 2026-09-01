@@ -32,6 +32,8 @@ import dev.bota.sdk.model.DeviceRecording
 import dev.bota.sdk.model.RecordingControlResult
 import dev.bota.sdk.model.RecordingState
 import dev.bota.sdk.model.TransferCommand
+import dev.bota.sdk.model.StreamingChunkDestinationProvider
+import dev.bota.sdk.model.StreamingFinalizeHandler
 import dev.bota.sdk.model.WiFiConfigResult
 import dev.bota.sdk.model.WiFiScanUpdate
 import dev.bota.sdk.model.WiFiStatusInfo
@@ -126,6 +128,14 @@ internal class DeviceRuntime(
     val createTransferCommand: (TransferCommand) -> ByteArray = { error("transfer-command encoder unavailable") },
     val registerRecordingSink: (String) -> Path = { error("recording sink unavailable") },
     val unregisterRecordingSink: (String) -> Unit = {},
+    val registerStreamingSink: suspend (
+        String,
+        Int,
+        ULong,
+        StreamingChunkDestinationProvider,
+        StreamingFinalizeHandler,
+    ) -> Unit = { _, _, _, _, _ -> error("streaming sink unavailable") },
+    val unregisterStreamingSink: suspend (String) -> Unit = {},
     val registerFirmwareDownload: (ULong, Request) -> Path = { _, _ -> error("firmware download unavailable") },
     val unregisterFirmwareDownload: (ULong) -> Unit = {},
 ) : AutoCloseable {
@@ -157,7 +167,7 @@ internal class DeviceRuntime(
                 val secureStorage = AndroidKeystoreSecureStorageHost(context, rootDirectory = File(root, "secrets"))
                 val network = OkHttpNetworkHost(networkClient).also { closeActions += it::close }
                 val material = ApplicationMaterialHost().also { closeActions += it::close }
-                val recordingSink = FileRecordingSinkHost().also { closeActions += it::close }
+                val recordingSink = FileRecordingSinkHost(networkClient = networkClient).also { closeActions += it::close }
                 val firmwareBlob = FileFirmwareBlobHost().also { closeActions += it::close }
                 val mapper = CoreModelMapper().also { closeActions += it::close }
                 val host = HostEffectExecutor(
@@ -264,6 +274,8 @@ internal class DeviceRuntime(
                         path
                     },
                     unregisterRecordingSink = recordingSink::unregister,
+                    registerStreamingSink = recordingSink::registerStreaming,
+                    unregisterStreamingSink = recordingSink::unregisterStreaming,
                     registerFirmwareDownload = { downloadId, request ->
                         val path = File(root, "firmware/$downloadId.firmware").toPath()
                         path.parent?.let(Files::createDirectories)

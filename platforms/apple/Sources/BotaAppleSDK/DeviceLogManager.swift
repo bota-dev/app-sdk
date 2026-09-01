@@ -75,7 +75,8 @@ public actor DeviceLogManager {
                     throw facadeCancelled(operation: .readDeviceLogs)
                 case .started, .deviceDiscovered, .connectionEstablished, .progress,
                      .retrying, .deviceUploadPreserved, .bleFallbackReady,
-                     .firmwareProgress, .completed:
+                     .firmwareProgress, .streamingPaused, .streamingResumed,
+                     .streamingCompleted, .completed:
                     break
                 }
             }

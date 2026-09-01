@@ -50,6 +50,16 @@ pub enum HostEventKind {
     RecordingSinkFailed {
         platform_code: Option<i64>,
     },
+    StreamingSinkAccepted {
+        received_units: u64,
+    },
+    StreamingSinkFinalized {
+        uploaded_chunks: u32,
+        total_units: u64,
+    },
+    StreamingSinkFailed {
+        platform_code: Option<i64>,
+    },
     FirmwareChunkRead {
         download_id: u64,
         offset: u64,

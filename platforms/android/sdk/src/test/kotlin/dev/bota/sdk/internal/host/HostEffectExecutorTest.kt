@@ -192,7 +192,7 @@ private fun nativeFields(vararg values: Pair<Int, ULong>) = NativeFields(
 private fun successPayload(kind: CoreEffectKind): CoreHostEventPayload? = when (kind) {
     CoreEffectKind.TimerSchedule -> CoreHostEventPayload(HostEventKind.TimerFired)
     CoreEffectKind.TimerCancel, CoreEffectKind.Progress, CoreEffectKind.BluetoothUnsubscribe,
-    CoreEffectKind.RecordingSinkDiscard -> null
+    CoreEffectKind.RecordingSinkDiscard, CoreEffectKind.StreamingSinkDiscard -> null
     CoreEffectKind.PersistenceLoadCheckpoint -> CoreHostEventPayload(HostEventKind.CheckpointLoaded)
     CoreEffectKind.PersistenceSaveCheckpoint, CoreEffectKind.PersistenceDeleteCheckpoint ->
         CoreHostEventPayload(HostEventKind.CheckpointSaved)
@@ -216,6 +216,10 @@ private fun successPayload(kind: CoreEffectKind): CoreHostEventPayload? = when (
     CoreEffectKind.RecordingSinkTruncate -> CoreHostEventPayload(HostEventKind.RecordingSinkTruncated)
     CoreEffectKind.RecordingSinkAppend -> CoreHostEventPayload(HostEventKind.RecordingSinkAppendCompleted)
     CoreEffectKind.RecordingSinkFinalize -> CoreHostEventPayload(HostEventKind.RecordingSinkFinalized)
+    CoreEffectKind.StreamingSinkAppendPlaintext,
+    CoreEffectKind.StreamingSinkBeginEncrypted,
+    CoreEffectKind.StreamingSinkAppendEncrypted -> CoreHostEventPayload(HostEventKind.StreamingSinkAccepted)
+    CoreEffectKind.StreamingSinkFinalize -> CoreHostEventPayload(HostEventKind.StreamingSinkFinalized)
     CoreEffectKind.FirmwareBlobRead -> CoreHostEventPayload(HostEventKind.FirmwareChunkRead)
 }
 

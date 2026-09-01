@@ -10,18 +10,24 @@ import type { ConnectedDevice, StorageInfo } from '../models/Device';
 import type {
   DeviceRecording,
   SyncProgress,
+  StreamingSyncOptions,
+  StreamingUploadProvider,
   UploadInfo,
   UploadTask,
 } from '../models/Recording';
 import type { RecordingManagerEvents } from '../models/Status';
 import type { UploadInfoProvider } from './types';
-
-type IndexedSyncProgress = SyncProgress & {
-  recordingIndex?: number;
-  totalRecordings?: number;
-};
+import {
+  StreamingSession,
+  setStreamingSessionTerminalHandler,
+} from './StreamingSession';
 
 type DeviceUploadMonitorOutcome = 'completed' | 'failed' | 'detached';
+
+interface TriggerDeviceUploadResponse {
+  accepted: boolean;
+  errorCode?: number;
+}
 
 type ProgressiveOperation<T> = {
   next(): Promise<IteratorResult<BotaRecordingTransferProgress, T>>;
@@ -83,6 +89,7 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
   private initialized = false;
   private paused = false;
   private destroyed = false;
+  private activeStreamingSession: StreamingSession | null = null;
 
   constructor() {
     super();
@@ -250,7 +257,7 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
 
   async triggerDeviceUpload(
     device: ConnectedDevice
-  ): Promise<{ accepted: boolean; errorCode?: number } | null> {
+  ): Promise<TriggerDeviceUploadResponse | null> {
     this.assertReady();
     const result = await this.client.recordings.observeUploadOwnership(device, {
       recordingUuid: '00000000-0000-0000-0000-000000000000',
@@ -265,7 +272,10 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
   async *monitorDeviceUpload(
     device: ConnectedDevice,
     initialPendingCount: number
-  ): AsyncGenerator<IndexedSyncProgress, DeviceUploadMonitorOutcome> {
+  ): AsyncGenerator<
+    SyncProgress & { recordingIndex?: number; totalRecordings?: number },
+    DeviceUploadMonitorOutcome
+  > {
     this.assertReady();
     yield {
       stage: 'device_uploading',
@@ -297,7 +307,9 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
   async *syncAllRecordings(
     device: ConnectedDevice,
     uploadInfoProvider: UploadInfoProvider
-  ): AsyncGenerator<IndexedSyncProgress> {
+  ): AsyncGenerator<
+    SyncProgress & { recordingIndex?: number; totalRecordings?: number }
+  > {
     this.assertReady();
     const recordings = await this.listRecordings(device);
     if (recordings.length === 0) return;
@@ -389,6 +401,39 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
     return this.tasks.map((task) => ({ ...task }));
   }
 
+  startStreamingSync(
+    device: ConnectedDevice,
+    recordingUuid: string,
+    uploadInfoProvider: StreamingUploadProvider,
+    options: StreamingSyncOptions = {}
+  ): StreamingSession {
+    this.assertReady();
+    if (this.activeStreamingSession?.isActive) {
+      throw new Error('A streaming session is already active');
+    }
+    const session = new StreamingSession(
+      null,
+      null,
+      device,
+      recordingUuid,
+      uploadInfoProvider,
+      options.chunkSizeKb,
+      options.flushIntervalMs
+    );
+    this.activeStreamingSession = session;
+    setStreamingSessionTerminalHandler(session, () => {
+      if (this.activeStreamingSession === session) {
+        this.activeStreamingSession = null;
+      }
+    });
+    void session.start().catch(() => undefined);
+    return session;
+  }
+
+  getActiveStreamingSession(): StreamingSession | null {
+    return this.activeStreamingSession;
+  }
+
   async cancelUpload(taskId: string): Promise<void> {
     await this.client.recordings.cancelRecordingUpload(taskId);
     this.tasks = this.tasks.filter((task) => task.id !== taskId);
@@ -443,6 +488,8 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.activeStreamingSession?.abort();
+    this.activeStreamingSession = null;
     void this.client.recordings.destroyCompatibilityOperations().catch(() => undefined);
     this.removeAllListeners();
     this.initialized = false;

@@ -31,6 +31,7 @@ public actor RecordingManager {
     private var runtime: DeviceRuntime?
     private var activeCancellationID: UUID?
     private var activeTask: Task<Void, Never>?
+    private var activeCleanup: (@Sendable () async -> Void)?
     private var transferMetadataBySinkID: [String: RecordingTransferMetadata] = [:]
 
     public init() {}
@@ -41,10 +42,12 @@ public actor RecordingManager {
         activeTask?.cancel()
         if let id = activeCancellationID {
             try? await runtime?.engine.cancel(id)
+            await activeCleanup?()
             await runtime?.operations.end(id)
         }
         activeTask = nil
         activeCancellationID = nil
+        activeCleanup = nil
         transferMetadataBySinkID.removeAll()
         runtime = nil
     }
@@ -124,6 +127,47 @@ public actor RecordingManager {
         transferMetadataBySinkID.removeValue(forKey: sinkID)
     }
 
+    public func streamRecording(
+        _ device: ConnectedDevice,
+        recordingUUID: String,
+        sinkID: String = UUID().uuidString,
+        chunkSizeBytes: Int,
+        flushIntervalMilliseconds: UInt64,
+        destinationProvider: @escaping StreamingChunkDestinationProvider,
+        finalize: @escaping StreamingFinalizeHandler
+    ) async throws -> AsyncThrowingStream<StreamingRecordingEvent, Error> {
+        let runtime = try configuredRuntime()
+        try await runtime.connection.require(device)
+        let command = CoreCommand.streamRecording(
+            serialNumber: device.serialNumber,
+            recordingUUID: recordingUUID,
+            sinkID: sinkID
+        )
+        try await begin(command.cancellationID, operation: .transferRecording, runtime: runtime)
+        do {
+            try await runtime.registerStreamingSink(
+                sinkID,
+                chunkSizeBytes,
+                flushIntervalMilliseconds,
+                destinationProvider,
+                finalize
+            )
+        } catch {
+            await finish(command.cancellationID, runtime: runtime)
+            throw facadePublicError(error)
+        }
+        activeCleanup = { await runtime.unregisterStreamingSink(sinkID) }
+        let pair = AsyncThrowingStream<StreamingRecordingEvent, Error>.makeStream()
+        let task = Task {
+            await self.consumeStreaming(command, runtime: runtime, continuation: pair.continuation)
+        }
+        activeTask = task
+        pair.continuation.onTermination = { @Sendable _ in
+            Task { await self.cancel(command.cancellationID) }
+        }
+        return pair.stream
+    }
+
     public func confirmRecording(
         _ device: ConnectedDevice,
         recordingUUID: String
@@ -201,7 +245,7 @@ public actor RecordingManager {
                     continuation.yield(.completed(try await runtime.recordingFileURL(sinkID)))
                 case .started, .deviceDiscovered, .connectionEstablished, .retrying,
                      .deviceUploadPreserved, .bleFallbackReady, .firmwareProgress,
-                     .deviceLog:
+                     .deviceLog, .streamingPaused, .streamingResumed, .streamingCompleted:
                     break
                 }
             }
@@ -264,7 +308,45 @@ public actor RecordingManager {
                 case .completed:
                     continuation.yield(.result(result))
                 case .started, .deviceDiscovered, .connectionEstablished, .retrying,
-                     .firmwareProgress, .deviceLog:
+                     .firmwareProgress, .deviceLog, .streamingPaused, .streamingResumed,
+                     .streamingCompleted:
+                    break
+                }
+            }
+            await finish(command.cancellationID, runtime: runtime)
+            continuation.finish()
+        } catch {
+            await finish(command.cancellationID, runtime: runtime)
+            continuation.finish(throwing: facadePublicError(error))
+        }
+    }
+
+    private func consumeStreaming(
+        _ command: CoreCommand,
+        runtime: DeviceRuntime,
+        continuation: AsyncThrowingStream<StreamingRecordingEvent, Error>.Continuation
+    ) async {
+        do {
+            let notifications = await runtime.engine.run(command, capabilities: runtime.capabilities)
+            for try await notification in notifications {
+                switch notification.kind {
+                case .streamingPaused:
+                    continuation.yield(.paused(completedBytes: try unsigned(notification, 36)))
+                case .streamingResumed:
+                    continuation.yield(.resumed)
+                case .streamingCompleted:
+                    continuation.yield(.completed(
+                        totalBytes: try unsigned(notification, 15),
+                        uploadedChunks: UInt32(try unsigned(notification, 126)),
+                        isEncrypted: try boolean(notification, 90)
+                    ))
+                case .failed:
+                    throw workflowError(notification)
+                case .cancelled:
+                    throw facadeCancelled(operation: .transferRecording)
+                case .started, .deviceDiscovered, .connectionEstablished, .progress, .retrying,
+                     .deviceUploadPreserved, .bleFallbackReady, .firmwareProgress, .deviceLog,
+                     .completed:
                     break
                 }
             }
@@ -291,8 +373,11 @@ public actor RecordingManager {
 
     private func finish(_ id: UUID, runtime: DeviceRuntime) async {
         guard activeCancellationID == id else { return }
+        let cleanup = activeCleanup
         activeCancellationID = nil
         activeTask = nil
+        activeCleanup = nil
+        await cleanup?()
         await runtime.operations.end(id)
     }
 
@@ -326,6 +411,13 @@ func text(_ notification: CoreNotification, _ id: UInt32) throws -> String {
 func unsigned(_ notification: CoreNotification, _ id: UInt32) throws -> UInt64 {
     for field in notification.packet.fields {
         if case let .unsigned(fieldID, value) = field, fieldID == id { return value }
+    }
+    throw NativeHostError.missingField(id)
+}
+
+func boolean(_ notification: CoreNotification, _ id: UInt32) throws -> Bool {
+    for field in notification.packet.fields {
+        if case let .bool(fieldID, value) = field, fieldID == id { return value }
     }
     throw NativeHostError.missingField(id)
 }

@@ -599,6 +599,98 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
                 }];
 }
 
+- (void)startStreaming:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                request:(JS::NativeBotaDeviceSDK::NativeStreamingStartRequest &)request
+                resolve:(RCTPromiseResolveBlock)resolve
+                 reject:(RCTPromiseRejectBlock)reject
+{
+  __weak BotaDeviceSDK *weakSelf = self;
+  [[BotaDeviceSDKAppleBridge shared]
+      startStreamingWithID:device.id_()
+              serialNumber:device.serialNumber()
+                deviceType:device.deviceType()
+           firmwareVersion:device.firmwareVersion()
+           hardwareRevision:device.hardwareRevision()
+             isProvisioned:device.isProvisioned()
+           connectionState:device.connectionState()
+                       mtu:device.mtu()
+                 sessionID:request.sessionId()
+             recordingUUID:request.recordingUuid()
+               recordingID:request.recordingId()
+            chunkSizeBytes:request.chunkSizeBytes()
+  flushIntervalMilliseconds:request.flushIntervalMs()
+                onProgress:^(NSDictionary *progress) {
+                  [weakSelf emitOnStreamingProgress:progress];
+                }
+      onDestinationRequest:^(NSDictionary *destinationRequest) {
+        [weakSelf emitOnStreamingChunkDestinationRequested:destinationRequest];
+      }
+         onFinalizeRequest:^(NSDictionary *finalizeRequest) {
+           [weakSelf emitOnStreamingFinalizeRequested:finalizeRequest];
+         }
+                completion:^(double totalBytes, NSError *_Nullable error) {
+                  if (error != nil) {
+                    BotaRejectAppleError(error, reject);
+                    return;
+                  }
+                  resolve(@{ @"totalBytes": @(totalBytes) });
+                }];
+}
+
+- (void)abortStreaming:(NSString *)sessionId
+                resolve:(RCTPromiseResolveBlock)resolve
+                 reject:(__unused RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      abortStreamingWithSessionID:sessionId
+                       completion:^{ resolve(nil); }];
+}
+
+- (void)resolveStreamingChunkDestination:(NSString *)requestId
+                              destination:(JS::NativeBotaDeviceSDK::NativeStreamingUploadDestination &)destination
+                                  resolve:(RCTPromiseResolveBlock)resolve
+                                   reject:(__unused RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      resolveStreamingDestinationWithRequestID:requestId
+                                           url:destination.url()
+                                        method:destination.method()
+                                   contentType:destination.contentType()
+                                   bearerToken:destination.bearerToken()
+                                    completion:^{ resolve(nil); }];
+}
+
+- (void)rejectStreamingChunkDestination:(NSString *)requestId
+                                 message:(NSString *)message
+                                 resolve:(RCTPromiseResolveBlock)resolve
+                                  reject:(__unused RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      rejectStreamingDestinationWithRequestID:requestId
+                                       message:message
+                                    completion:^{ resolve(nil); }];
+}
+
+- (void)resolveStreamingFinalize:(NSString *)requestId
+                          resolve:(RCTPromiseResolveBlock)resolve
+                           reject:(__unused RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      resolveStreamingFinalizeWithRequestID:requestId
+                                  completion:^{ resolve(nil); }];
+}
+
+- (void)rejectStreamingFinalize:(NSString *)requestId
+                         message:(NSString *)message
+                         resolve:(RCTPromiseResolveBlock)resolve
+                          reject:(__unused RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      rejectStreamingFinalizeWithRequestID:requestId
+                                   message:message
+                                completion:^{ resolve(nil); }];
+}
+
 - (void)confirmRecording:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
           recordingUuid:(NSString *)recordingUuid
                 resolve:(RCTPromiseResolveBlock)resolve

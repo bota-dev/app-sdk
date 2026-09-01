@@ -37,6 +37,9 @@ internal enum class HostEventKind(val wireValue: Int) {
     NetworkUploadProgress(0x0225),
     NetworkUploadCompleted(0x0226),
     NetworkFailed(0x0227),
+    StreamingSinkAccepted(0x0228),
+    StreamingSinkFinalized(0x0229),
+    StreamingSinkFailed(0x022a),
 }
 
 internal data class CoreHostEvent(

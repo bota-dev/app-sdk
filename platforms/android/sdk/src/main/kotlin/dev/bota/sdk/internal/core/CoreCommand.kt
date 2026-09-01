@@ -166,6 +166,19 @@ internal data class CoreCommand(
             CoreField.Text(17, destinationId),
         )
 
+        fun streamRecording(
+            serialNumber: String,
+            recordingUuid: String,
+            sinkId: String,
+            cancellationId: UUID = UUID.randomUUID(),
+        ) = command(
+            0x010b,
+            cancellationId,
+            CoreField.Text(3, serialNumber),
+            CoreField.Text(13, recordingUuid),
+            CoreField.Text(14, sinkId),
+        )
+
         fun updateFirmware(
             serialNumber: String,
             version: String,

@@ -70,11 +70,13 @@ actor HostEffectExecutor: CoreHost {
                 failureKind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_HOST_MATERIAL_FAILED)
             )
         case .recordingSinkTruncate, .recordingSinkAppend, .recordingSinkFinalize,
-             .recordingSinkDiscard:
+             .recordingSinkDiscard, .streamingSinkAppendPlaintext,
+             .streamingSinkBeginEncrypted, .streamingSinkAppendEncrypted,
+             .streamingSinkFinalize, .streamingSinkDiscard:
             return route(
                 await recordingSink.execute(effect),
                 effect: effect,
-                failureKind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_RECORDING_SINK_FAILED)
+                failureKind: effect.isStreamingSink ? 0x022a : UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_RECORDING_SINK_FAILED)
             )
         case .firmwareBlobRead:
             return route(
@@ -200,7 +202,8 @@ actor HostEffectExecutor: CoreHost {
         switch effect {
         case .timerSchedule:
             return [UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_TIMER_FIRED)]
-        case .timerCancel, .progress, .bluetoothUnsubscribe, .recordingSinkDiscard:
+        case .timerCancel, .progress, .bluetoothUnsubscribe, .recordingSinkDiscard,
+             .streamingSinkDiscard:
             return []
         case .persistenceLoadCheckpoint:
             return [UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_CHECKPOINT_LOADED)]
@@ -259,6 +262,11 @@ actor HostEffectExecutor: CoreHost {
                 UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_RECORDING_SINK_FINALIZED),
                 UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_RECORDING_SINK_INTEGRITY_FAILED),
             ]
+        case .streamingSinkAppendPlaintext, .streamingSinkBeginEncrypted,
+             .streamingSinkAppendEncrypted:
+            return [0x0228]
+        case .streamingSinkFinalize:
+            return [0x0229]
         case .firmwareBlobRead:
             return [UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_FIRMWARE_CHUNK_READ)]
         }
@@ -276,7 +284,10 @@ actor HostEffectExecutor: CoreHost {
              .bluetoothDiscoverServices, .bluetoothDisconnect, .bluetoothRead,
              .bluetoothWrite, .bluetoothUnsubscribe, .progress, .prepareProvisioning,
              .prepareFactoryResetGrant, .recordingSinkTruncate, .recordingSinkAppend,
-             .recordingSinkFinalize, .recordingSinkDiscard, .firmwareBlobRead:
+             .recordingSinkFinalize, .recordingSinkDiscard,
+             .streamingSinkAppendPlaintext, .streamingSinkBeginEncrypted,
+             .streamingSinkAppendEncrypted, .streamingSinkFinalize,
+             .streamingSinkDiscard, .firmwareBlobRead:
             return false
         }
     }
@@ -311,5 +322,18 @@ actor HostEffectExecutor: CoreHost {
             protocolStatus: nil,
             detail: detail
         )
+    }
+}
+
+private extension CoreEffect {
+    var isStreamingSink: Bool {
+        switch self {
+        case .streamingSinkAppendPlaintext, .streamingSinkBeginEncrypted,
+             .streamingSinkAppendEncrypted, .streamingSinkFinalize,
+             .streamingSinkDiscard:
+            true
+        default:
+            false
+        }
     }
 }

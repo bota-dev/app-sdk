@@ -53,6 +53,9 @@ actor CoreBluetoothHost: BluetoothHost {
                      .secureStorageDelete, .networkDownload, .networkUpload, .progress,
                      .prepareProvisioning, .prepareFactoryResetGrant, .recordingSinkTruncate,
                      .recordingSinkAppend, .recordingSinkFinalize, .recordingSinkDiscard,
+                     .streamingSinkAppendPlaintext, .streamingSinkBeginEncrypted,
+                     .streamingSinkAppendEncrypted, .streamingSinkFinalize,
+                     .streamingSinkDiscard,
                      .firmwareBlobRead:
                     throw invalid(effect, "non-Bluetooth effect reached CoreBluetoothHost")
                 }

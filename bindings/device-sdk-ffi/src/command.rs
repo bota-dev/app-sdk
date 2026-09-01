@@ -170,6 +170,20 @@ pub(crate) unsafe fn command_from_packet(
                     .unwrap_or(true),
             })
         }
+        packet_kind::COMMAND_STREAM_RECORDING => {
+            fields.validate_allowed(&[
+                field_id::SERIAL_NUMBER,
+                field_id::RECORDING_UUID,
+                field_id::SINK_ID,
+            ])?;
+            Ok(Command::StreamRecording {
+                device: serial()?,
+                recording: RecordingUuid::from_str(
+                    &fields.required_text(field_id::RECORDING_UUID)?,
+                )?,
+                sink_id: RecordingSinkId::new(fields.required_text(field_id::SINK_ID)?)?,
+            })
+        }
         packet_kind::COMMAND_UPLOAD_RECORDING => {
             fields.validate_allowed(&[
                 field_id::SERIAL_NUMBER,

@@ -26,6 +26,7 @@ internal object HostFieldId {
     const val Payload: Int = 33
     const val CompletedUnits: Int = 36
     const val ExpectedCrc32: Int = 37
+    const val Sequence: Int = 38
     const val Offset: Int = 39
     const val MaximumLength: Int = 40
     const val Nonce: Int = 41
@@ -34,6 +35,12 @@ internal object HostFieldId {
     const val ApiEndpoint: Int = 55
     const val DeviceToken: Int = 56
     const val Mtu: Int = 57
+    const val Encrypted: Int = 90
+    const val EphemeralPublicKey: Int = 93
+    const val Salt: Int = 94
+    const val TotalUnits: Int = 15
+    const val ExpectedChunks: Int = 125
+    const val UploadedChunks: Int = 126
 }
 
 internal fun validOpaqueId(value: String): String {
@@ -42,4 +49,3 @@ internal fun validOpaqueId(value: String): String {
     }
     return value
 }
-

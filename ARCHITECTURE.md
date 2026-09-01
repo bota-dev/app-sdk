@@ -116,12 +116,14 @@ firmware payloads never cross the JavaScript bridge. Future workflow methods
 carry identifiers, progress, errors, and native file paths while native hosts
 own high-volume files and transfer buffers.
 
-The JavaScript compatibility layer now restores 76 of 80 frozen exports. This
+The JavaScript compatibility layer now restores 78 of 80 frozen exports. This
 includes every `0.0.65` public type, the runtime error hierarchy,
-`deriveSyncStatus`, `DeviceLogDecoder`, and `DeviceManager`; a semantic test
-compares each declaration with the frozen contract, and behavior tests cover
-every non-inherited manager method. `BotaClient`, `RecordingManager`,
-`StreamingSession`, and `OTAManager` remain withheld until equivalent
+`deriveSyncStatus`, `DeviceLogDecoder`, `DeviceManager`, `RecordingManager`, and
+`StreamingSession`; a semantic test compares each declaration with the frozen
+contract, and behavior tests cover every non-inherited manager method. Rust and
+the platform hosts own live-transfer ordering, buffers, upload bytes,
+finalization, and cancellation; Codegen carries only low-volume requests and
+progress. `BotaClient` and `OTAManager` remain withheld until equivalent
 native-backed workflow methods exist.
 The exported `DeviceManager` compatibility owner preserves the already
 native-backed scan, selected connection, status, settings, logs, WiFi, and

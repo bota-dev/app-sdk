@@ -132,6 +132,48 @@ final class RecordingManagerTests: XCTestCase {
         )))
     }
 
+    func testStreamingRegistersNativeSinkAndMapsLifecycleNotifications() async throws {
+        let runner = TransferWorkflowRunner { _ in [
+            transferNotification(0x040d, operation: 8, fields: [.unsigned(id: 36, value: 512)]),
+            transferNotification(0x040e, operation: 8),
+            transferNotification(0x040f, operation: 8, fields: [
+                .unsigned(id: 15, value: 1_024),
+                .unsigned(id: 126, value: 2),
+                .bool(id: 90, value: true),
+            ]),
+        ] }
+        let recorder = TransferFacadeRecorder()
+        let manager = RecordingManager()
+        await manager.attach(await transferRuntime(runner: runner, recorder: recorder))
+        let sinkID = UUID().uuidString
+
+        let stream = try await manager.streamRecording(
+            transferDevice(),
+            recordingUUID: "00112233445566778899aabbccddeeff",
+            sinkID: sinkID,
+            chunkSizeBytes: 512,
+            flushIntervalMilliseconds: 1_000,
+            destinationProvider: { _ in
+                .init(url: URL(string: "https://example.test/chunk")!, method: .put, contentType: "audio/ogg")
+            },
+            finalize: { _ in }
+        )
+        var values: [StreamingRecordingEvent] = []
+        for try await value in stream { values.append(value) }
+
+        XCTAssertEqual(values, [
+            .paused(completedBytes: 512),
+            .resumed,
+            .completed(totalBytes: 1_024, uploadedChunks: 2, isEncrypted: true),
+        ])
+        let registrations = await recorder.streamingRegistrations
+        let unregistrations = await recorder.streamingUnregistrations
+        let commands = await runner.commands
+        XCTAssertEqual(registrations, [sinkID])
+        XCTAssertEqual(unregistrations, [sinkID])
+        XCTAssertEqual(commands.first?.kind, 0x010b)
+    }
+
     private static func hex(_ value: String) -> Data {
         Data(stride(from: 0, to: value.count, by: 2).map { offset in
             let start = value.index(value.startIndex, offsetBy: offset)

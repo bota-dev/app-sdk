@@ -33,7 +33,12 @@ internal enum class CoreEffectKind(val wireValue: Int) {
     RecordingSinkAppend(0x0339),
     RecordingSinkFinalize(0x033a),
     RecordingSinkDiscard(0x033b),
+    StreamingSinkAppendPlaintext(0x033c),
+    StreamingSinkBeginEncrypted(0x033d),
+    StreamingSinkAppendEncrypted(0x033e),
+    StreamingSinkFinalize(0x033f),
     FirmwareBlobRead(0x0340),
+    StreamingSinkDiscard(0x0341),
     ;
 
     companion object {

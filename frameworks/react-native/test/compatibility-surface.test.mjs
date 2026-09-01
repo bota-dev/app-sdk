@@ -20,8 +20,6 @@ const baseline = JSON.parse(
 const deferredWorkflowClasses = new Set([
   'BotaClient',
   'OTAManager',
-  'RecordingManager',
-  'StreamingSession',
 ]);
 
 const normalizeLiteralUnionOrder = (value) => {

@@ -37,6 +37,11 @@ pub enum Command {
         total_units: u64,
         confirm_on_completion: bool,
     },
+    StreamRecording {
+        device: DeviceSerialNumber,
+        recording: RecordingUuid,
+        sink_id: RecordingSinkId,
+    },
     UploadRecording {
         device: DeviceSerialNumber,
         recording: RecordingUuid,
@@ -97,7 +102,9 @@ impl Command {
             Self::Connect { .. } | Self::ConnectSelected { .. } => Operation::Connect,
             Self::Reconnect { .. } => Operation::Reconnect,
             Self::Provision { .. } => Operation::Provision,
-            Self::TransferRecording { .. } => Operation::TransferRecording,
+            Self::TransferRecording { .. } | Self::StreamRecording { .. } => {
+                Operation::TransferRecording
+            }
             Self::UploadRecording { .. } => Operation::Upload,
             Self::UpdateFirmware { .. } => Operation::UpdateFirmware,
             Self::ReadDeviceLogs { .. } => Operation::ReadDeviceLogs,
@@ -129,6 +136,7 @@ impl Command {
                 Capability::RecordingSink,
                 Capability::Timer,
             ],
+            Self::StreamRecording { .. } => &[Capability::Ble, Capability::RecordingSink],
             Self::UploadRecording { .. } => {
                 &[Capability::Ble, Capability::Timer, Capability::Progress]
             }

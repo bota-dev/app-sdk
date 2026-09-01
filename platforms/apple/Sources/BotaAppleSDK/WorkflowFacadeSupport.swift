@@ -19,7 +19,8 @@ func awaitWorkflowCompletion(_ command: CoreCommand, runtime: DeviceRuntime) asy
                 throw workflowError(notification)
             case .started, .deviceDiscovered, .connectionEstablished, .progress,
                  .retrying, .deviceUploadPreserved, .bleFallbackReady,
-                 .firmwareProgress, .deviceLog:
+                 .firmwareProgress, .deviceLog, .streamingPaused, .streamingResumed,
+                 .streamingCompleted:
                 break
             }
         }

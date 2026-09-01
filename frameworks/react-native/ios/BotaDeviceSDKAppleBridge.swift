@@ -864,6 +864,123 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
+    @objc(startStreamingWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:sessionID:recordingUUID:recordingID:chunkSizeBytes:flushIntervalMilliseconds:onProgress:onDestinationRequest:onFinalizeRequest:completion:)
+    public func startStreaming(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        sessionID: String,
+        recordingUUID: String,
+        recordingID _: String,
+        chunkSizeBytes: Double,
+        flushIntervalMilliseconds: Double,
+        onProgress: @escaping @Sendable ([String: Any]) -> Void,
+        onDestinationRequest: @escaping @Sendable ([String: Any]) -> Void,
+        onFinalizeRequest: @escaping @Sendable ([String: Any]) -> Void,
+        completion: @escaping @Sendable (Double, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let totalBytes = try await recordings.streamRecording(
+                    Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    ),
+                    recordingUUID: recordingUUID,
+                    sessionID: sessionID,
+                    chunkSizeBytes: Int(try Self.unsignedInteger(chunkSizeBytes)),
+                    flushIntervalMilliseconds: try Self.unsignedInteger(
+                        flushIntervalMilliseconds
+                    ),
+                    onProgress: onProgress,
+                    onDestinationRequest: onDestinationRequest,
+                    onFinalizeRequest: onFinalizeRequest
+                )
+                completion(Double(totalBytes), nil)
+            } catch {
+                completion(0, error as NSError)
+            }
+        }
+    }
+
+    @objc(abortStreamingWithSessionID:completion:)
+    public func abortStreaming(
+        sessionID: String,
+        completion: @escaping @Sendable () -> Void
+    ) {
+        Task {
+            await recordings.abortStreaming(sessionID: sessionID)
+            completion()
+        }
+    }
+
+    @objc(resolveStreamingDestinationWithRequestID:url:method:contentType:bearerToken:completion:)
+    public func resolveStreamingDestination(
+        requestID: String,
+        url: String,
+        method: String,
+        contentType: String,
+        bearerToken: String?,
+        completion: @escaping @Sendable () -> Void
+    ) {
+        Task {
+            await recordings.resolveStreamingDestination(
+                requestID: requestID,
+                url: url,
+                method: method,
+                contentType: contentType,
+                bearerToken: bearerToken
+            )
+            completion()
+        }
+    }
+
+    @objc(rejectStreamingDestinationWithRequestID:message:completion:)
+    public func rejectStreamingDestination(
+        requestID: String,
+        message: String,
+        completion: @escaping @Sendable () -> Void
+    ) {
+        Task {
+            await recordings.rejectStreamingDestination(requestID: requestID, message: message)
+            completion()
+        }
+    }
+
+    @objc(resolveStreamingFinalizeWithRequestID:completion:)
+    public func resolveStreamingFinalize(
+        requestID: String,
+        completion: @escaping @Sendable () -> Void
+    ) {
+        Task {
+            await recordings.resolveStreamingFinalize(requestID: requestID)
+            completion()
+        }
+    }
+
+    @objc(rejectStreamingFinalizeWithRequestID:message:completion:)
+    public func rejectStreamingFinalize(
+        requestID: String,
+        message: String,
+        completion: @escaping @Sendable () -> Void
+    ) {
+        Task {
+            await recordings.rejectStreamingFinalize(requestID: requestID, message: message)
+            completion()
+        }
+    }
+
     @objc(confirmRecordingWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:recordingUUID:completion:)
     public func confirmRecording(
         id: String,

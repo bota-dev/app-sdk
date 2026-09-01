@@ -143,3 +143,69 @@ public enum TransferCommand: Equatable, Sendable {
     case triggerDeviceUpload
     case confirm(recordingUUID: String)
 }
+
+public enum StreamingUploadMethod: String, Equatable, Sendable {
+    case put = "PUT"
+    case post = "POST"
+}
+
+public struct StreamingChunkRequest: Equatable, Sendable {
+    public let sequence: UInt32
+    public let isEncrypted: Bool
+
+    public init(sequence: UInt32, isEncrypted: Bool) {
+        self.sequence = sequence
+        self.isEncrypted = isEncrypted
+    }
+}
+
+public struct StreamingUploadDestination: Equatable, Sendable {
+    public let url: URL
+    public let method: StreamingUploadMethod
+    public let contentType: String
+    public let bearerToken: String?
+
+    public init(
+        url: URL,
+        method: StreamingUploadMethod,
+        contentType: String,
+        bearerToken: String? = nil
+    ) {
+        self.url = url
+        self.method = method
+        self.contentType = contentType
+        self.bearerToken = bearerToken
+    }
+}
+
+public struct StreamingFinalizeMetadata: Equatable, Sendable {
+    public let totalChunks: UInt32
+    public let durationMilliseconds: UInt64
+    public let fileSizeBytes: UInt64
+    public let isEncrypted: Bool
+
+    public init(
+        totalChunks: UInt32,
+        durationMilliseconds: UInt64,
+        fileSizeBytes: UInt64,
+        isEncrypted: Bool
+    ) {
+        self.totalChunks = totalChunks
+        self.durationMilliseconds = durationMilliseconds
+        self.fileSizeBytes = fileSizeBytes
+        self.isEncrypted = isEncrypted
+    }
+}
+
+public typealias StreamingChunkDestinationProvider = @Sendable (
+    StreamingChunkRequest
+) async throws -> StreamingUploadDestination
+public typealias StreamingFinalizeHandler = @Sendable (
+    StreamingFinalizeMetadata
+) async throws -> Void
+
+public enum StreamingRecordingEvent: Equatable, Sendable {
+    case paused(completedBytes: UInt64)
+    case resumed
+    case completed(totalBytes: UInt64, uploadedChunks: UInt32, isEncrypted: Bool)
+}

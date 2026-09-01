@@ -4,7 +4,7 @@ use crate::{
     workflow::{
         ConnectionWorkflow, DeviceLogsWorkflow, DiscoveryWorkflow, FactoryResetWorkflow,
         FirmwareUpdateWorkflow, ProvisioningWorkflow, RecordingTransferWorkflow,
-        UploadHandoffWorkflow, WorkflowContext, WorkflowReducer,
+        StreamingTransferWorkflow, UploadHandoffWorkflow, WorkflowContext, WorkflowReducer,
     },
 };
 
@@ -14,6 +14,7 @@ enum ActiveWorkflow {
     Provisioning(Box<ProvisioningWorkflow>),
     FactoryReset(Box<FactoryResetWorkflow>),
     RecordingTransfer(Box<RecordingTransferWorkflow>),
+    StreamingTransfer(Box<StreamingTransferWorkflow>),
     UploadHandoff(Box<UploadHandoffWorkflow>),
     FirmwareUpdate(Box<FirmwareUpdateWorkflow>),
     DeviceLogs(Box<DeviceLogsWorkflow>),
@@ -27,6 +28,7 @@ impl ActiveWorkflow {
             Self::Provisioning(_) => Operation::Provision,
             Self::FactoryReset(_) => Operation::FactoryReset,
             Self::RecordingTransfer(_) => Operation::TransferRecording,
+            Self::StreamingTransfer(_) => Operation::TransferRecording,
             Self::UploadHandoff(_) => Operation::Upload,
             Self::FirmwareUpdate(_) => Operation::UpdateFirmware,
             Self::DeviceLogs(_) => Operation::ReadDeviceLogs,
@@ -40,6 +42,7 @@ impl ActiveWorkflow {
             Self::Provisioning(workflow) => workflow.cancellation_id(),
             Self::FactoryReset(workflow) => workflow.cancellation_id(),
             Self::RecordingTransfer(workflow) => workflow.cancellation_id(),
+            Self::StreamingTransfer(workflow) => workflow.cancellation_id(),
             Self::UploadHandoff(workflow) => workflow.cancellation_id(),
             Self::FirmwareUpdate(workflow) => workflow.cancellation_id(),
             Self::DeviceLogs(workflow) => workflow.cancellation_id(),
@@ -150,6 +153,16 @@ impl WorkflowEngine {
                 confirm_on_completion,
                 cancellation_id,
             ))),
+            Command::StreamRecording {
+                device,
+                recording,
+                sink_id,
+            } => ActiveWorkflow::StreamingTransfer(Box::new(StreamingTransferWorkflow::new(
+                device,
+                recording,
+                sink_id,
+                cancellation_id,
+            ))),
             Command::UploadRecording {
                 device,
                 recording,
@@ -194,6 +207,7 @@ impl WorkflowEngine {
             Some(ActiveWorkflow::Provisioning(workflow)) => workflow.start(&mut context),
             Some(ActiveWorkflow::FactoryReset(workflow)) => workflow.start(&mut context),
             Some(ActiveWorkflow::RecordingTransfer(workflow)) => workflow.start(&mut context),
+            Some(ActiveWorkflow::StreamingTransfer(workflow)) => workflow.start(&mut context),
             Some(ActiveWorkflow::UploadHandoff(workflow)) => workflow.start(&mut context),
             Some(ActiveWorkflow::FirmwareUpdate(workflow)) => workflow.start(&mut context),
             Some(ActiveWorkflow::DeviceLogs(workflow)) => workflow.start(&mut context),
@@ -232,6 +246,9 @@ impl WorkflowEngine {
             ActiveWorkflow::RecordingTransfer(workflow) => {
                 workflow.dispatch(host_event, &mut context)?
             }
+            ActiveWorkflow::StreamingTransfer(workflow) => {
+                workflow.dispatch(host_event, &mut context)?
+            }
             ActiveWorkflow::UploadHandoff(workflow) => {
                 workflow.dispatch(host_event, &mut context)?
             }
@@ -247,6 +264,7 @@ impl WorkflowEngine {
             ActiveWorkflow::Provisioning(workflow) => workflow.terminal_status(),
             ActiveWorkflow::FactoryReset(workflow) => workflow.terminal_status(),
             ActiveWorkflow::RecordingTransfer(workflow) => workflow.terminal_status(),
+            ActiveWorkflow::StreamingTransfer(workflow) => workflow.terminal_status(),
             ActiveWorkflow::UploadHandoff(workflow) => workflow.terminal_status(),
             ActiveWorkflow::FirmwareUpdate(workflow) => workflow.terminal_status(),
             ActiveWorkflow::DeviceLogs(workflow) => workflow.terminal_status(),
@@ -288,6 +306,7 @@ impl WorkflowEngine {
             ActiveWorkflow::Provisioning(workflow) => workflow.cancel(&mut context),
             ActiveWorkflow::FactoryReset(workflow) => workflow.cancel(&mut context),
             ActiveWorkflow::RecordingTransfer(workflow) => workflow.cancel(&mut context),
+            ActiveWorkflow::StreamingTransfer(workflow) => workflow.cancel(&mut context),
             ActiveWorkflow::UploadHandoff(workflow) => workflow.cancel(&mut context),
             ActiveWorkflow::FirmwareUpdate(workflow) => workflow.cancel(&mut context),
             ActiveWorkflow::DeviceLogs(workflow) => workflow.cancel(&mut context),

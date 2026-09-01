@@ -13,6 +13,10 @@ import type {
   NativeRecordingState,
   NativeRecordingTransferProgress,
   NativeRecordingUploadRequest,
+  NativeStreamingChunkDestinationRequest,
+  NativeStreamingFinalizeRequest,
+  NativeStreamingStartRequest,
+  NativeStreamingUploadDestination,
   NativeProvisioningMaterialRequest,
   NativeUploadOwnershipResult,
   NativeWiFiConfigResult,
@@ -284,6 +288,41 @@ export type BotaDeviceSDKRecordingClient = {
   ): Promise<BotaUploadOwnershipResult>;
 };
 
+export type BotaStreamingProgress = {
+  state: string;
+  bytesReceived: number;
+  chunksUploaded: number;
+};
+
+export type BotaStreamingChunkRequest = {
+  sequence: number;
+  encrypted: boolean;
+};
+
+export type BotaStreamingFinalizeRequest = {
+  totalChunks: number;
+  durationMs: number;
+  fileSizeBytes: number;
+  encrypted: boolean;
+};
+
+export type BotaStreamingUploadDestination = NativeStreamingUploadDestination;
+
+export type BotaDeviceSDKStreamingClient = {
+  startStreaming(
+    device: ConnectedDevice,
+    request: NativeStreamingStartRequest,
+    handlers: {
+      onProgress(progress: BotaStreamingProgress): void;
+      resolveChunkDestination(
+        request: BotaStreamingChunkRequest
+      ): Promise<BotaStreamingUploadDestination>;
+      finalize(request: BotaStreamingFinalizeRequest): Promise<void>;
+    }
+  ): Promise<{ totalBytes: number }>;
+  abortStreaming(sessionId: string): Promise<void>;
+};
+
 export type BotaDeviceSDKDeviceClient = {
   startScan(
     options: ScanOptions | undefined,
@@ -321,6 +360,7 @@ export type BotaDeviceSDKClient = {
   readonly ota: BotaDeviceSDKOTAClient;
   readonly provisioning: BotaDeviceSDKProvisioningClient;
   readonly recordings: BotaDeviceSDKRecordingClient;
+  readonly streaming: BotaDeviceSDKStreamingClient;
   readonly wifi: BotaDeviceSDKWiFiClient;
   configure(configuration?: BotaDeviceSDKConfiguration): Promise<void>;
   destroy(): Promise<void>;
@@ -1038,6 +1078,78 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
   };
 
+  const streaming: BotaDeviceSDKStreamingClient = {
+    async startStreaming(device, request, handlers) {
+      const module = requireNativeModule();
+      const progressSubscription = module.onStreamingProgress((progress) => {
+        if (progress.sessionId !== request.sessionId) return;
+        handlers.onProgress({
+          state: progress.state,
+          bytesReceived: progress.bytesReceived,
+          chunksUploaded: progress.chunksUploaded,
+        });
+      });
+      const destinationSubscription = module.onStreamingChunkDestinationRequested(
+        (nativeRequest: NativeStreamingChunkDestinationRequest) => {
+          if (nativeRequest.sessionId !== request.sessionId) return;
+          void handlers
+            .resolveChunkDestination({
+              sequence: nativeRequest.sequence,
+              encrypted: nativeRequest.encrypted,
+            })
+            .then(
+              (destination) =>
+                module.resolveStreamingChunkDestination(
+                  nativeRequest.requestId,
+                  destination
+                ),
+              (error) =>
+                module.rejectStreamingChunkDestination(
+                  nativeRequest.requestId,
+                  errorMessage(error)
+                )
+            )
+            .catch(() => {});
+        }
+      );
+      const finalizeSubscription = module.onStreamingFinalizeRequested(
+        (nativeRequest: NativeStreamingFinalizeRequest) => {
+          if (nativeRequest.sessionId !== request.sessionId) return;
+          void handlers
+            .finalize({
+              totalChunks: nativeRequest.totalChunks,
+              durationMs: nativeRequest.durationMs,
+              fileSizeBytes: nativeRequest.fileSizeBytes,
+              encrypted: nativeRequest.encrypted,
+            })
+            .then(
+              () => module.resolveStreamingFinalize(nativeRequest.requestId),
+              (error) =>
+                module.rejectStreamingFinalize(
+                  nativeRequest.requestId,
+                  errorMessage(error)
+                )
+            )
+            .catch(() => {});
+        }
+      );
+      try {
+        return await module.startStreaming(
+          toNativeConnectedDevice(device),
+          request
+        );
+      } finally {
+        progressSubscription.remove();
+        destinationSubscription.remove();
+        finalizeSubscription.remove();
+      }
+    },
+
+    async abortStreaming(sessionId) {
+      await requireNativeModule().abortStreaming(sessionId);
+    },
+  };
+
   const logs: BotaDeviceSDKLogClient = {
     async subscribe(device, onLine) {
       const module = requireNativeModule();
@@ -1133,6 +1245,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     ota,
     provisioning,
     recordings,
+    streaming,
     wifi,
 
     async configure(configuration = {}) {

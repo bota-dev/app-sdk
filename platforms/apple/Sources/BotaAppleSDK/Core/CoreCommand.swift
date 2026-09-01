@@ -182,6 +182,23 @@ struct CoreCommand: Equatable, Sendable {
         )
     }
 
+    static func streamRecording(
+        serialNumber: String,
+        recordingUUID: String,
+        sinkID: String,
+        cancellationID: UUID = UUID()
+    ) -> Self {
+        Self(
+            kind: 0x010b,
+            cancellationID: cancellationID,
+            fields: [
+                .text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_SERIAL_NUMBER), value: serialNumber),
+                .text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_RECORDING_UUID), value: recordingUUID),
+                .text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_SINK_ID), value: sinkID),
+            ]
+        )
+    }
+
     static func uploadRecording(
         serialNumber: String,
         recordingUUID: String,

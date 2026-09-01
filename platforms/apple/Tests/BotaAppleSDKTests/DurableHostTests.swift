@@ -178,6 +178,131 @@ final class DurableHostTests: XCTestCase {
         XCTAssertEqual(mismatch.first?.kind, UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_RECORDING_SINK_INTEGRITY_FAILED))
     }
 
+    func testStreamingSinkBuffersPlaintextAndFinalizesAfterNativeUploads() async throws {
+        let uploads = StreamingUploadRecorder()
+        let host = FileRecordingSinkHost(
+            rootDirectory: temporaryDirectory(),
+            streamingUpload: { destination, body in
+                await uploads.upload(destination: destination, body: body)
+            }
+        )
+        let sinkID = UUID().uuidString
+        try await host.registerStreaming(
+            sinkID: sinkID,
+            chunkSizeBytes: 4,
+            flushIntervalMilliseconds: 0,
+            destinationProvider: { request in
+                StreamingUploadDestination(
+                    url: URL(string: "https://example.test/chunk/\(request.sequence)")!,
+                    method: .put,
+                    contentType: "audio/ogg"
+                )
+            },
+            finalize: { metadata in await uploads.finalize(metadata) }
+        )
+
+        let first = try await payloads(host, streamingSinkEffect(
+            0x033c,
+            sinkID: sinkID,
+            sequence: 0,
+            payload: Data([1, 2, 3])
+        ))
+        let second = try await payloads(host, streamingSinkEffect(
+            0x033c,
+            sinkID: sinkID,
+            requestID: 2,
+            sequence: 1,
+            payload: Data([4, 5, 6])
+        ))
+        let finalized = try await payloads(host, streamingSinkEffect(
+            0x033f,
+            sinkID: sinkID,
+            requestID: 3,
+            encrypted: false,
+            expectedChunks: 0,
+            totalUnits: 6
+        ))
+
+        XCTAssertEqual(first.first?.unsigned(UInt32(BOTA_DEVICE_SDK_V1_FIELD_COMPLETED_UNITS)), 3)
+        XCTAssertEqual(second.first?.unsigned(UInt32(BOTA_DEVICE_SDK_V1_FIELD_COMPLETED_UNITS)), 6)
+        let snapshot = await uploads.snapshot()
+        XCTAssertEqual(snapshot.destinations.map(\.sequence), [1, 2])
+        XCTAssertEqual(snapshot.bodies, [Data([1, 2, 3, 4]), Data([5, 6])])
+        XCTAssertEqual(snapshot.finalizations, [
+            StreamingFinalizeMetadata(
+                totalChunks: 2,
+                durationMilliseconds: 0,
+                fileSizeBytes: 6,
+                isEncrypted: false
+            ),
+        ])
+        XCTAssertEqual(finalized.first?.unsigned(126), 2)
+        XCTAssertEqual(finalized.first?.unsigned(UInt32(BOTA_DEVICE_SDK_V1_FIELD_TOTAL_UNITS)), 6)
+    }
+
+    func testStreamingSinkPreservesEncryptedWireSequencesAndHeader() async throws {
+        let uploads = StreamingUploadRecorder()
+        let host = FileRecordingSinkHost(
+            rootDirectory: temporaryDirectory(),
+            streamingUpload: { destination, body in
+                await uploads.upload(destination: destination, body: body)
+            }
+        )
+        let sinkID = UUID().uuidString
+        try await host.registerStreaming(
+            sinkID: sinkID,
+            chunkSizeBytes: 64 * 1024,
+            flushIntervalMilliseconds: 0,
+            destinationProvider: { request in
+                StreamingUploadDestination(
+                    url: URL(string: "https://example.test/relay/\(request.sequence)")!,
+                    method: .post,
+                    contentType: "application/octet-stream",
+                    bearerToken: "token"
+                )
+            },
+            finalize: { metadata in await uploads.finalize(metadata) }
+        )
+        let header = Data(repeating: 0x41, count: 32)
+        let salt = Data(repeating: 0x52, count: 4)
+        _ = try await payloads(host, streamingSinkEffect(
+            0x033d,
+            sinkID: sinkID,
+            ephemeralPublicKey: header,
+            salt: salt
+        ))
+        _ = try await payloads(host, streamingSinkEffect(
+            0x033e,
+            sinkID: sinkID,
+            requestID: 2,
+            sequence: 0,
+            payload: Data(repeating: 0x61, count: 20)
+        ))
+        _ = try await payloads(host, streamingSinkEffect(
+            0x033e,
+            sinkID: sinkID,
+            requestID: 3,
+            sequence: 2,
+            payload: Data(repeating: 0x62, count: 20)
+        ))
+        _ = try await payloads(host, streamingSinkEffect(
+            0x033f,
+            sinkID: sinkID,
+            requestID: 4,
+            encrypted: true,
+            expectedChunks: 3,
+            totalUnits: 8
+        ))
+
+        let snapshot = await uploads.snapshot()
+        XCTAssertEqual(snapshot.destinations.map(\.sequence), [0, 2])
+        XCTAssertEqual(snapshot.bodies.first, header + salt + Data(repeating: 0x61, count: 20))
+        XCTAssertEqual(snapshot.bodies.last, Data(repeating: 0x62, count: 20))
+        XCTAssertEqual(snapshot.finalizations.first?.totalChunks, 3)
+        XCTAssertEqual(snapshot.finalizations.first?.fileSizeBytes, 8)
+        XCTAssertEqual(snapshot.finalizations.first?.isEncrypted, true)
+    }
+
     func testFirmwareBlobReadsOnlyRegisteredBoundedChunks() async throws {
         let root = temporaryDirectory()
         let file = root.appendingPathComponent("firmware.bin")
@@ -260,6 +385,33 @@ final class DurableHostTests: XCTestCase {
 
     private enum SinkEffectKind { case truncate, append, finalize }
 
+    private func streamingSinkEffect(
+        _ kind: UInt32,
+        sinkID: String,
+        requestID: UInt64 = 1,
+        sequence: UInt64? = nil,
+        payload: Data? = nil,
+        ephemeralPublicKey: Data? = nil,
+        salt: Data? = nil,
+        encrypted: Bool? = nil,
+        expectedChunks: UInt64? = nil,
+        totalUnits: UInt64? = nil
+    ) -> CoreEffect {
+        var fields: [CoreField] = [.text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_SINK_ID), value: sinkID)]
+        if let sequence { fields.append(.unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_SEQUENCE), value: sequence)) }
+        if let payload { fields.append(.bytes(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_PAYLOAD), value: payload)) }
+        if let ephemeralPublicKey {
+            fields.append(.bytes(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_EPHEMERAL_PUBLIC_KEY), value: ephemeralPublicKey))
+        }
+        if let salt { fields.append(.bytes(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_SALT), value: salt)) }
+        if let encrypted { fields.append(.bool(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_ENCRYPTED), value: encrypted)) }
+        if let expectedChunks { fields.append(.unsigned(id: 125, value: expectedChunks)) }
+        if let totalUnits {
+            fields.append(.unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_TOTAL_UNITS), value: totalUnits))
+        }
+        return effect(kind, requestID: requestID, fields: fields)
+    }
+
     private func sinkEffect(
         _ kind: SinkEffectKind,
         sinkID: String,
@@ -302,6 +454,30 @@ final class DurableHostTests: XCTestCase {
         var values: [CoreHostEventPayload] = []
         for try await value in stream { values.append(value) }
         return values
+    }
+}
+
+private actor StreamingUploadRecorder {
+    private(set) var destinations: [StreamingChunkRequest] = []
+    private(set) var bodies: [Data] = []
+    private(set) var finalizations: [StreamingFinalizeMetadata] = []
+
+    func upload(destination: StreamingUploadDestination, body: Data) {
+        let sequence = UInt32(destination.url.lastPathComponent)!
+        destinations.append(.init(sequence: sequence, isEncrypted: destination.method == .post))
+        bodies.append(body)
+    }
+
+    func finalize(_ metadata: StreamingFinalizeMetadata) {
+        finalizations.append(metadata)
+    }
+
+    func snapshot() -> (
+        destinations: [StreamingChunkRequest],
+        bodies: [Data],
+        finalizations: [StreamingFinalizeMetadata]
+    ) {
+        (destinations, bodies, finalizations)
     }
 }
 

@@ -39,6 +39,8 @@ actor TransferFacadeRecorder {
     private(set) var unsubscriptions: [String] = []
     private(set) var firmwareRegistrations: [UInt64] = []
     private(set) var firmwareUnregistrations: [UInt64] = []
+    private(set) var streamingRegistrations: [String] = []
+    private(set) var streamingUnregistrations: [String] = []
 
     func write(service: String, characteristic: String, data: Data) {
         writes.append(.init(service: service, characteristic: characteristic, data: data))
@@ -47,6 +49,8 @@ actor TransferFacadeRecorder {
     func unsubscribe(_ characteristic: String) { unsubscriptions.append(characteristic) }
     func registerFirmware(_ id: UInt64) { firmwareRegistrations.append(id) }
     func unregisterFirmware(_ id: UInt64) { firmwareUnregistrations.append(id) }
+    func registerStreaming(_ id: String) { streamingRegistrations.append(id) }
+    func unregisterStreaming(_ id: String) { streamingUnregistrations.append(id) }
 }
 
 func transferRuntime(
@@ -76,6 +80,8 @@ func transferRuntime(
         parseRecordingList: { try mapper.parseRecordingList($0) },
         createTransferCommand: { try mapper.createTransferCommand($0) },
         recordingFileURL: { sinkID in URL(fileURLWithPath: "/tmp/\(sinkID).recording") },
+        registerStreamingSink: { sinkID, _, _, _, _ in await recorder.registerStreaming(sinkID) },
+        unregisterStreamingSink: { sinkID in await recorder.unregisterStreaming(sinkID) },
         registerFirmwareDownload: { id, _, _ in await recorder.registerFirmware(id) },
         unregisterFirmwareDownload: { id in await recorder.unregisterFirmware(id) },
         firmwareFileURL: { id in URL(fileURLWithPath: "/tmp/firmware-\(id).bin") }

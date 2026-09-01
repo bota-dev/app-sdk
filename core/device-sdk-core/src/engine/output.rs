@@ -67,6 +67,15 @@ pub enum WorkflowNotification {
         encrypted: bool,
         sha256: Option<Vec<u8>>,
     },
+    StreamingPaused {
+        completed_units: u64,
+    },
+    StreamingResumed,
+    StreamingCompleted {
+        total_units: u64,
+        uploaded_chunks: u32,
+        encrypted: bool,
+    },
     Completed {
         operation: Operation,
     },

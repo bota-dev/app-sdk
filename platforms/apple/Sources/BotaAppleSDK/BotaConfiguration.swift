@@ -131,6 +131,18 @@ public struct BotaConfiguration: @unchecked Sendable {
                 parseRecordingList: { data in try mapper.parseRecordingList(data) },
                 createTransferCommand: { command in try mapper.createTransferCommand(command) },
                 recordingFileURL: { sinkID in try await recordingSink.fileURL(for: sinkID) },
+                registerStreamingSink: { sinkID, chunkSize, flushInterval, destinationProvider, finalize in
+                    try await recordingSink.registerStreaming(
+                        sinkID: sinkID,
+                        chunkSizeBytes: chunkSize,
+                        flushIntervalMilliseconds: flushInterval,
+                        destinationProvider: destinationProvider,
+                        finalize: finalize
+                    )
+                },
+                unregisterStreamingSink: { sinkID in
+                    await recordingSink.unregisterStreaming(sinkID: sinkID)
+                },
                 registerFirmwareDownload: { id, request, fileURL in
                     try FileManager.default.createDirectory(
                         at: firmwareDirectory,

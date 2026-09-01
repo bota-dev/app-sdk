@@ -117,7 +117,7 @@ public actor OTAManager {
                     throw facadeCancelled(operation: .updateFirmware)
                 case .started, .deviceDiscovered, .connectionEstablished, .progress,
                      .retrying, .deviceUploadPreserved, .bleFallbackReady, .deviceLog,
-                     .completed:
+                     .streamingPaused, .streamingResumed, .streamingCompleted, .completed:
                     break
                 }
             }

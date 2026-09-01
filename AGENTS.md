@@ -55,10 +55,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   compatibility, app, and release gates pass, and pins React Native `0.86.3`
   for deterministic Codegen. Its package version still matches
   `sdk-version.toml`.
-- The React Native package matches 76 of the 80 frozen `0.0.65` exports. Keep
-  their structural contract test exact; `BotaClient`, `RecordingManager`,
-  `StreamingSession`, and `OTAManager` remain deferred until their native
-  workflows and application gates pass.
+- The React Native package matches 78 of the 80 frozen `0.0.65` exports. Keep
+  their structural contract test exact; only `BotaClient` and `OTAManager`
+  remain deferred until their native workflows and application gates pass.
+- `RecordingManager` and `StreamingSession` preserve their frozen object model
+  while Rust plus the Apple/Android hosts own recording bytes, live-transfer
+  buffering, chunk uploads, finalization ordering, and cancellation. Codegen
+  carries only request IDs, destinations, metadata, state, and progress.
 - The root React Native `DeviceManager` compatibility export preserves scan,
   selected-device connection, status, settings, logs, WiFi, cache, serialized
   reconnect, and auto-reconnect behavior over the native facades. Keep its

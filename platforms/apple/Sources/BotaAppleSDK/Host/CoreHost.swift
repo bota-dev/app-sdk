@@ -33,6 +33,11 @@ enum CoreEffect: Equatable, Sendable {
     case recordingSinkAppend(CorePacket)
     case recordingSinkFinalize(CorePacket)
     case recordingSinkDiscard(CorePacket)
+    case streamingSinkAppendPlaintext(CorePacket)
+    case streamingSinkBeginEncrypted(CorePacket)
+    case streamingSinkAppendEncrypted(CorePacket)
+    case streamingSinkFinalize(CorePacket)
+    case streamingSinkDiscard(CorePacket)
     case firmwareBlobRead(CorePacket)
 
     init(packet: CorePacket) throws {
@@ -83,7 +88,12 @@ enum CoreEffect: Equatable, Sendable {
         case UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_RECORDING_SINK_APPEND): self = .recordingSinkAppend(packet)
         case UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_RECORDING_SINK_FINALIZE): self = .recordingSinkFinalize(packet)
         case UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_RECORDING_SINK_DISCARD): self = .recordingSinkDiscard(packet)
+        case 0x033c: self = .streamingSinkAppendPlaintext(packet)
+        case 0x033d: self = .streamingSinkBeginEncrypted(packet)
+        case 0x033e: self = .streamingSinkAppendEncrypted(packet)
+        case 0x033f: self = .streamingSinkFinalize(packet)
         case UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_FIRMWARE_BLOB_READ): self = .firmwareBlobRead(packet)
+        case 0x0341: self = .streamingSinkDiscard(packet)
         default:
             throw CoreError(
                 code: UInt32(BOTA_DEVICE_SDK_V1_ERROR_UNKNOWN_PACKET),
@@ -109,6 +119,9 @@ enum CoreEffect: Equatable, Sendable {
              let .prepareProvisioning(packet), let .prepareFactoryResetGrant(packet),
              let .recordingSinkTruncate(packet), let .recordingSinkAppend(packet),
              let .recordingSinkFinalize(packet), let .recordingSinkDiscard(packet),
+             let .streamingSinkAppendPlaintext(packet), let .streamingSinkBeginEncrypted(packet),
+             let .streamingSinkAppendEncrypted(packet), let .streamingSinkFinalize(packet),
+             let .streamingSinkDiscard(packet),
              let .firmwareBlobRead(packet):
             return packet
         }

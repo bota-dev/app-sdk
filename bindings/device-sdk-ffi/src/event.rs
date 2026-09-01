@@ -179,6 +179,28 @@ pub(crate) unsafe fn host_event_from_packet(
                 platform_code: fields.optional_i64(field_id::PLATFORM_CODE)?,
             }
         }
+        packet_kind::HOST_EVENT_STREAMING_SINK_ACCEPTED => {
+            fields.validate_allowed(&[field_id::COMPLETED_UNITS])?;
+            HostEventKind::StreamingSinkAccepted {
+                received_units: fields.required_u64(field_id::COMPLETED_UNITS)?,
+            }
+        }
+        packet_kind::HOST_EVENT_STREAMING_SINK_FINALIZED => {
+            fields.validate_allowed(&[field_id::UPLOADED_CHUNKS, field_id::TOTAL_UNITS])?;
+            HostEventKind::StreamingSinkFinalized {
+                uploaded_chunks: fields
+                    .required_u64(field_id::UPLOADED_CHUNKS)?
+                    .try_into()
+                    .map_err(|_| invalid("uploaded chunk count does not fit in 32 bits"))?,
+                total_units: fields.required_u64(field_id::TOTAL_UNITS)?,
+            }
+        }
+        packet_kind::HOST_EVENT_STREAMING_SINK_FAILED => {
+            fields.validate_allowed(&[field_id::PLATFORM_CODE])?;
+            HostEventKind::StreamingSinkFailed {
+                platform_code: fields.optional_i64(field_id::PLATFORM_CODE)?,
+            }
+        }
         packet_kind::HOST_EVENT_FIRMWARE_CHUNK_READ => {
             fields.validate_allowed(&[field_id::DOWNLOAD_ID, field_id::OFFSET, field_id::VALUE])?;
             HostEventKind::FirmwareChunkRead {

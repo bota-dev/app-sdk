@@ -56,11 +56,13 @@ device-log, and WiFi slices through `BotaDeviceClient.shared`; a checked-in
 React Native Gradle consumer runs
 Codegen, Kotlin tests, lint, and release assembly against the exact locally
 packaged AAR. The package now
-matches 76 of the 80 frozen `0.0.65` root exports: every public type, the pure
+matches 78 of the 80 frozen `0.0.65` root exports: every public type, the pure
 errors, sync-status derivation, device-log decoder, and the native-backed
-`DeviceManager`. It is not an installable replacement yet: `BotaClient`,
-`RecordingManager`, `StreamingSession`, `OTAManager`, app acceptance, and npm
-publication remain open.
+`DeviceManager`, `RecordingManager`, and `StreamingSession`. Recording files
+and live-stream chunks remain native-owned; Codegen carries only upload
+destinations, metadata, state, and progress. It is not an installable
+replacement yet: `BotaClient`, `OTAManager`, app acceptance, and npm publication
+remain open.
 The exported `DeviceManager` compatibility owner delegates scan,
 selected connection, status, settings, logs, WiFi/cache behavior, provisioning
 state and key reads, direct provisioning writes, and time sync. Those low-volume

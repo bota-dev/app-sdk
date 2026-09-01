@@ -113,6 +113,11 @@ internal class BluetoothGattHost(
             CoreEffectKind.RecordingSinkAppend,
             CoreEffectKind.RecordingSinkFinalize,
             CoreEffectKind.RecordingSinkDiscard,
+            CoreEffectKind.StreamingSinkAppendPlaintext,
+            CoreEffectKind.StreamingSinkBeginEncrypted,
+            CoreEffectKind.StreamingSinkAppendEncrypted,
+            CoreEffectKind.StreamingSinkFinalize,
+            CoreEffectKind.StreamingSinkDiscard,
             CoreEffectKind.FirmwareBlobRead -> invalid("non-Bluetooth effect reached BluetoothGattHost")
         }
     }

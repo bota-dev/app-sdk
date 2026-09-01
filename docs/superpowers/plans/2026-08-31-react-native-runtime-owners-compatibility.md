@@ -42,8 +42,8 @@ revision `44ac1221cb71eb01cafcdbfdf7a370847d3a10b4`.
 
 ## Task 2: Restore `RecordingManager`
 
-**Status:** Complete, with root export intentionally staged with Task 3 because
-the frozen `RecordingManager` surface includes streaming-session methods. The
+**Status:** Complete. The root export was released with Task 3 because the
+frozen `RecordingManager` surface includes streaming-session methods. The
 shared reducer stages encrypted packets in relay wire format, both native hosts
 own file upload and queue persistence, transfer completion reports actual E2E
 and SHA-256 metadata, and device deletion occurs only after upload success.
@@ -95,6 +95,12 @@ swift test -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
 Commit: `feat(react-native): restore RecordingManager compatibility`
 
 ## Task 3: Restore `StreamingSession`
+
+**Status:** Complete. The shared reducer owns deterministic live-transfer
+ordering; Apple and Android own buffers, retries, uploads, finalization, and
+cancellation; the React Native owner preserves the frozen surface and passes
+the generated Apple and Android consumer gates without carrying payload bytes
+through Codegen.
 
 **Core and facade files:**
 

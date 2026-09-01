@@ -239,6 +239,81 @@ internal class BotaDeviceSDKModule(
         }
     }
 
+    override fun startStreaming(
+        device: ReadableMap,
+        request: ReadableMap,
+        promise: Promise,
+    ) {
+        launchValue(promise) {
+            val sessionId = request.getString("sessionId")
+                ?: error("streaming session ID is required")
+            val totalBytes = recordings.streamRecording(
+                device = device.toConnectedDevice(),
+                recordingUuid = request.getString("recordingUuid")
+                    ?: error("streaming recording UUID is required"),
+                sessionId = sessionId,
+                chunkSizeBytes = request.getDouble("chunkSizeBytes").toPositiveInt(),
+                flushIntervalMilliseconds = request
+                    .getDouble("flushIntervalMs")
+                    .toUnsignedInteger(),
+                onProgress = { emitOnStreamingProgress(it.toWritableMap()) },
+                onDestinationRequest = {
+                    emitOnStreamingChunkDestinationRequested(it.toWritableMap())
+                },
+                onFinalizeRequest = { emitOnStreamingFinalizeRequested(it.toWritableMap()) },
+            )
+            Arguments.createMap().apply { putDouble("totalBytes", totalBytes.toDouble()) }
+        }
+    }
+
+    override fun abortStreaming(sessionId: String, promise: Promise) {
+        launch(promise) { recordings.abortStreaming(sessionId) }
+    }
+
+    override fun resolveStreamingChunkDestination(
+        requestId: String,
+        destination: ReadableMap,
+        promise: Promise,
+    ) {
+        launch(promise) {
+            recordings.resolveStreamingDestination(
+                requestId = requestId,
+                url = destination.getString("url") ?: error("streaming destination URL is required"),
+                method = destination.getString("method")
+                    ?: error("streaming destination method is required"),
+                contentType = destination.getString("contentType")
+                    ?: error("streaming destination content type is required"),
+                bearerToken = if (destination.hasKey("bearerToken") &&
+                    !destination.isNull("bearerToken")
+                ) {
+                    destination.getString("bearerToken")
+                } else {
+                    null
+                },
+            )
+        }
+    }
+
+    override fun rejectStreamingChunkDestination(
+        requestId: String,
+        message: String,
+        promise: Promise,
+    ) {
+        launch(promise) { recordings.rejectStreamingDestination(requestId, message) }
+    }
+
+    override fun resolveStreamingFinalize(requestId: String, promise: Promise) {
+        launch(promise) { recordings.resolveStreamingFinalize(requestId) }
+    }
+
+    override fun rejectStreamingFinalize(
+        requestId: String,
+        message: String,
+        promise: Promise,
+    ) {
+        launch(promise) { recordings.rejectStreamingFinalize(requestId, message) }
+    }
+
     override fun confirmRecording(
         device: ReadableMap,
         recordingUuid: String,
@@ -536,6 +611,14 @@ private fun Double.toUnsignedInt(): UInt {
         "value must fit an unsigned 32-bit integer"
     }
     return value.toUInt()
+}
+
+private fun Double.toPositiveInt(): Int {
+    val value = toUnsignedInteger()
+    require(value in 1uL..Int.MAX_VALUE.toULong()) {
+        "value must fit a positive signed 32-bit integer"
+    }
+    return value.toInt()
 }
 
 private fun String.toDeviceApiEnvironment(): DeviceApiEnvironment = when (this) {

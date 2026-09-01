@@ -3,6 +3,10 @@ package dev.bota.sdk
 import dev.bota.sdk.internal.core.CoreField
 import dev.bota.sdk.internal.core.CoreNotificationKind
 import dev.bota.sdk.model.RecordingTransferProgress
+import dev.bota.sdk.model.StreamingUploadDestination
+import dev.bota.sdk.model.StreamingUploadMethod
+import dev.bota.sdk.model.StreamingRecordingEvent
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -118,6 +122,64 @@ class RecordingManagerTest {
             ),
             events,
         )
+        manager.detach()
+    }
+
+    @Test
+    fun streamingRegistersNativeSinkAndMapsLifecycleNotifications() = runTest {
+        val runner = ManagerWorkflowRunner(
+            responses = {
+                listOf(
+                    managerNotification(
+                        CoreNotificationKind.StreamingPaused,
+                        operation = 8,
+                        fields = listOf(CoreField.Unsigned(36, 512u)),
+                    ),
+                    managerNotification(CoreNotificationKind.StreamingResumed, operation = 8),
+                    managerNotification(
+                        CoreNotificationKind.StreamingCompleted,
+                        operation = 8,
+                        fields = listOf(
+                            CoreField.Unsigned(15, 1_024u),
+                            CoreField.Unsigned(126, 2u),
+                            CoreField.BooleanValue(90, true),
+                        ),
+                    ),
+                )
+            },
+        )
+        val fixture = ManagerRuntimeFixture(runner)
+        val manager = RecordingManager()
+        manager.attach(fixture.runtime)
+        val sinkId = UUID.randomUUID().toString()
+
+        val events = manager.streamRecording(
+            fixture.device,
+            recordingUuid = fixture.recording.uuid,
+            sinkId = sinkId,
+            chunkSizeBytes = 512,
+            flushIntervalMilliseconds = 1_000u,
+            destinationProvider = {
+                StreamingUploadDestination(
+                    "https://example.test/chunk",
+                    StreamingUploadMethod.Put,
+                    "audio/ogg",
+                )
+            },
+            finalize = {},
+        ).toList()
+
+        assertEquals(
+            listOf(
+                StreamingRecordingEvent.Paused(512u),
+                StreamingRecordingEvent.Resumed,
+                StreamingRecordingEvent.Completed(1_024u, 2u, true),
+            ),
+            events,
+        )
+        assertEquals(listOf(sinkId), fixture.streamingSinks)
+        assertEquals(listOf(sinkId), fixture.removedStreamingSinks)
+        assertEquals(0x010b, runner.commands.single().kind)
         manager.detach()
     }
 

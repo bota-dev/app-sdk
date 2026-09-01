@@ -13,6 +13,9 @@ import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.model.DeviceRecording
 import dev.bota.sdk.model.RecordingTransferProgress
 import dev.bota.sdk.model.TransferCommand
+import dev.bota.sdk.model.StreamingChunkDestinationProvider
+import dev.bota.sdk.model.StreamingFinalizeHandler
+import dev.bota.sdk.model.StreamingRecordingEvent
 import java.nio.file.Path
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -196,6 +199,91 @@ public class RecordingManager internal constructor() {
 
     public fun transferMetadata(sinkId: String): RecordingTransferMetadata? =
         transferMetadataBySinkId.remove(sinkId)
+
+    public fun streamRecording(
+        device: ConnectedDevice,
+        recordingUuid: String,
+        sinkId: String = UUID.randomUUID().toString(),
+        chunkSizeBytes: Int,
+        flushIntervalMilliseconds: ULong,
+        destinationProvider: StreamingChunkDestinationProvider,
+        finalize: StreamingFinalizeHandler,
+    ): Flow<StreamingRecordingEvent> = callbackFlow {
+        val runtime = state.configuredRuntime()
+        runtime.connection.require(device)
+        val command = CoreCommand.streamRecording(device.serialNumber, recordingUuid, sinkId)
+        state.begin(
+            runtime,
+            command.cancellationId,
+            BotaOperation.TransferRecording,
+            cleanup = { runtime.unregisterStreamingSink(sinkId) },
+        )
+        try {
+            runtime.registerStreamingSink(
+                sinkId,
+                chunkSizeBytes,
+                flushIntervalMilliseconds,
+                destinationProvider,
+                finalize,
+            )
+        } catch (error: Throwable) {
+            val publicError = error.facadePublicError(BotaOperation.TransferRecording)
+            runCleanupAfter(publicError, { state.finish(command.cancellationId) })
+            throw publicError
+        }
+        val managerScope = state.callbackScope()
+        val task = launch(start = CoroutineStart.LAZY) {
+            var failure: Throwable? = null
+            var wasCancelled = false
+            try {
+                runtime.engine.run(command, runtime.capabilities).collect { notification ->
+                    when (notification.kind) {
+                        CoreNotificationKind.StreamingPaused -> send(
+                            StreamingRecordingEvent.Paused(
+                                notification.requiredUnsigned(36, BotaOperation.TransferRecording),
+                            ),
+                        )
+                        CoreNotificationKind.StreamingResumed -> send(StreamingRecordingEvent.Resumed)
+                        CoreNotificationKind.StreamingCompleted -> send(
+                            StreamingRecordingEvent.Completed(
+                                notification.requiredUnsigned(15, BotaOperation.TransferRecording),
+                                notification.requiredUnsigned(126, BotaOperation.TransferRecording).toUInt(),
+                                notification.packet.booleans(90).firstOrNull() ?: false,
+                            ),
+                        )
+                        CoreNotificationKind.Failed -> throw notification.workflowError()
+                        CoreNotificationKind.Cancelled -> throw cancelled(BotaOperation.TransferRecording)
+                        else -> Unit
+                    }
+                }
+            } catch (error: CancellationException) {
+                wasCancelled = true
+                throw error
+            } catch (error: Throwable) {
+                failure = error.facadePublicError(BotaOperation.TransferRecording)
+            } finally {
+                withContext(NonCancellable) {
+                    val cleanupFailure = runCatching {
+                        if (wasCancelled) state.cancel(command.cancellationId, cancelTask = false)
+                        else state.finish(command.cancellationId)
+                    }.exceptionOrNull()?.facadePublicError(BotaOperation.TransferRecording)
+                    val primary = failure
+                    if (primary == null) failure = cleanupFailure else cleanupFailure?.let(primary::addSuppressed)
+                    failure?.let(::close) ?: close()
+                }
+            }
+        }
+        if (!state.setTask(command.cancellationId, task)) {
+            task.cancel()
+            close(cancelled(BotaOperation.TransferRecording))
+        } else {
+            task.start()
+        }
+        awaitClose {
+            task.cancel()
+            managerScope.launch { state.cancel(command.cancellationId, cancelTask = false) }
+        }
+    }
 
     public fun observeUploadOwnership(
         device: ConnectedDevice,

@@ -182,6 +182,48 @@ export type NativeRecordingUploadRequest = {
   relayBearerToken?: string;
 };
 
+export type NativeStreamingStartRequest = {
+  sessionId: string;
+  recordingUuid: string;
+  recordingId: string;
+  chunkSizeBytes: number;
+  flushIntervalMs: number;
+};
+
+export type NativeStreamingProgress = {
+  sessionId: string;
+  state: string;
+  bytesReceived: number;
+  chunksUploaded: number;
+};
+
+export type NativeStreamingChunkDestinationRequest = {
+  requestId: string;
+  sessionId: string;
+  sequence: number;
+  encrypted: boolean;
+};
+
+export type NativeStreamingFinalizeRequest = {
+  requestId: string;
+  sessionId: string;
+  totalChunks: number;
+  durationMs: number;
+  fileSizeBytes: number;
+  encrypted: boolean;
+};
+
+export type NativeStreamingUploadDestination = {
+  url: string;
+  method: string;
+  contentType: string;
+  bearerToken?: string;
+};
+
+export type NativeStreamingResult = {
+  totalBytes: number;
+};
+
 export type NativeRecordingControlResult = {
   success: boolean;
   error?: string;
@@ -258,6 +300,9 @@ export interface Spec extends TurboModule {
   readonly onFactoryResetResultPersistenceRequested: EventEmitter<NativeFactoryResetPersistenceRequest>;
   readonly onRecordingTransferProgress: EventEmitter<NativeRecordingTransferProgress>;
   readonly onRecordingUploadProgress: EventEmitter<NativeRecordingUploadProgress>;
+  readonly onStreamingProgress: EventEmitter<NativeStreamingProgress>;
+  readonly onStreamingChunkDestinationRequested: EventEmitter<NativeStreamingChunkDestinationRequest>;
+  readonly onStreamingFinalizeRequested: EventEmitter<NativeStreamingFinalizeRequest>;
   readonly onUploadOwnershipProgress: EventEmitter<NativeRecordingTransferProgress>;
   readonly onFirmwareUpdateProgress: EventEmitter<NativeFirmwareUpdateProgress>;
   readonly onDeviceLog: EventEmitter<NativeDeviceLogLine>;
@@ -387,6 +432,24 @@ export interface Spec extends TurboModule {
   loadCompatibilityUploadQueue: () => Promise<string>;
   saveCompatibilityUploadQueue: (serializedTasks: string) => Promise<void>;
   stopAllRecordingOperations: () => Promise<void>;
+  startStreaming: (
+    device: NativeConnectedDevice,
+    request: NativeStreamingStartRequest
+  ) => Promise<NativeStreamingResult>;
+  abortStreaming: (sessionId: string) => Promise<void>;
+  resolveStreamingChunkDestination: (
+    requestId: string,
+    destination: NativeStreamingUploadDestination
+  ) => Promise<void>;
+  rejectStreamingChunkDestination: (
+    requestId: string,
+    message: string
+  ) => Promise<void>;
+  resolveStreamingFinalize: (requestId: string) => Promise<void>;
+  rejectStreamingFinalize: (
+    requestId: string,
+    message: string
+  ) => Promise<void>;
   updateFirmware: (
     device: NativeConnectedDevice,
     image: NativeFirmwareImage

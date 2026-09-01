@@ -88,6 +88,14 @@ struct DeviceRuntime: Sendable {
     let parseRecordingList: @Sendable (Data) throws -> [DeviceRecording]
     let createTransferCommand: @Sendable (TransferCommand) throws -> Data
     let recordingFileURL: @Sendable (String) async throws -> URL
+    let registerStreamingSink: @Sendable (
+        String,
+        Int,
+        UInt64,
+        @escaping StreamingChunkDestinationProvider,
+        @escaping StreamingFinalizeHandler
+    ) async throws -> Void
+    let unregisterStreamingSink: @Sendable (String) async -> Void
     let registerFirmwareDownload: @Sendable (UInt64, URLRequest, URL) async throws -> Void
     let unregisterFirmwareDownload: @Sendable (UInt64) async -> Void
     let firmwareFileURL: @Sendable (UInt64) -> URL
@@ -180,6 +188,16 @@ struct DeviceRuntime: Sendable {
         recordingFileURL: @escaping @Sendable (String) async throws -> URL = { _ in
             throw NativeHostError.missingResource("recording sink")
         },
+        registerStreamingSink: @escaping @Sendable (
+            String,
+            Int,
+            UInt64,
+            @escaping StreamingChunkDestinationProvider,
+            @escaping StreamingFinalizeHandler
+        ) async throws -> Void = { _, _, _, _, _ in
+            throw NativeHostError.missingResource("streaming sink")
+        },
+        unregisterStreamingSink: @escaping @Sendable (String) async -> Void = { _ in },
         registerFirmwareDownload: @escaping @Sendable (UInt64, URLRequest, URL) async throws -> Void = { _, _, _ in
             throw NativeHostError.missingResource("firmware download")
         },
@@ -229,6 +247,8 @@ struct DeviceRuntime: Sendable {
         self.parseRecordingList = parseRecordingList
         self.createTransferCommand = createTransferCommand
         self.recordingFileURL = recordingFileURL
+        self.registerStreamingSink = registerStreamingSink
+        self.unregisterStreamingSink = unregisterStreamingSink
         self.registerFirmwareDownload = registerFirmwareDownload
         self.unregisterFirmwareDownload = unregisterFirmwareDownload
         self.firmwareFileURL = firmwareFileURL
@@ -317,7 +337,8 @@ public actor DeviceManager {
                         throw Self.publicError(notification)
                     case .started, .connectionEstablished, .progress, .retrying,
                          .deviceUploadPreserved, .bleFallbackReady, .firmwareProgress,
-                         .deviceLog, .completed, .cancelled:
+                         .deviceLog, .streamingPaused, .streamingResumed, .streamingCompleted,
+                         .completed, .cancelled:
                         break
                     }
                 }
@@ -486,7 +507,8 @@ public actor DeviceManager {
                     throw Self.publicError(notification)
                 case .started, .deviceDiscovered, .progress, .retrying,
                      .deviceUploadPreserved, .bleFallbackReady, .firmwareProgress,
-                     .deviceLog, .completed, .cancelled:
+                     .deviceLog, .streamingPaused, .streamingResumed, .streamingCompleted,
+                     .completed, .cancelled:
                     break
                 }
             }

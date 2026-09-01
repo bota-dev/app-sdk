@@ -123,3 +123,45 @@ public sealed interface TransferCommand {
 
     public companion object
 }
+
+public enum class StreamingUploadMethod(public val wireValue: String) {
+    Put("PUT"),
+    Post("POST"),
+}
+
+public data class StreamingChunkRequest(
+    public val sequence: UInt,
+    public val isEncrypted: Boolean,
+)
+
+public data class StreamingUploadDestination(
+    public val url: String,
+    public val method: StreamingUploadMethod,
+    public val contentType: String,
+    public val bearerToken: String? = null,
+)
+
+public data class StreamingFinalizeMetadata(
+    public val totalChunks: UInt,
+    public val durationMilliseconds: ULong,
+    public val fileSizeBytes: ULong,
+    public val isEncrypted: Boolean,
+)
+
+public fun interface StreamingChunkDestinationProvider {
+    public suspend fun destination(request: StreamingChunkRequest): StreamingUploadDestination
+}
+
+public fun interface StreamingFinalizeHandler {
+    public suspend fun finalize(metadata: StreamingFinalizeMetadata)
+}
+
+public sealed interface StreamingRecordingEvent {
+    public data class Paused(public val completedBytes: ULong) : StreamingRecordingEvent
+    public data object Resumed : StreamingRecordingEvent
+    public data class Completed(
+        public val totalBytes: ULong,
+        public val uploadedChunks: UInt,
+        public val isEncrypted: Boolean,
+    ) : StreamingRecordingEvent
+}

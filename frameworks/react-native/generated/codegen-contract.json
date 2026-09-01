@@ -1057,6 +1057,204 @@
               }
             ]
           },
+          "NativeStreamingChunkDestinationRequest": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "requestId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "sessionId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "sequence",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "encrypted",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeStreamingFinalizeRequest": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "requestId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "sessionId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "totalChunks",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "durationMs",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "fileSizeBytes",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "encrypted",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeStreamingProgress": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "sessionId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "state",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "bytesReceived",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "chunksUploaded",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeStreamingResult": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "totalBytes",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeStreamingStartRequest": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "sessionId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "recordingUuid",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "recordingId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "chunkSizeBytes",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "flushIntervalMs",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeStreamingUploadDestination": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "url",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "method",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "contentType",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "bearerToken",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
           "NativeUploadOwnershipRequest": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -1301,6 +1499,39 @@
                 "typeAnnotation": {
                   "type": "TypeAliasTypeAnnotation",
                   "name": "NativeRecordingUploadProgress"
+                }
+              }
+            },
+            {
+              "name": "onStreamingProgress",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeStreamingProgress"
+                }
+              }
+            },
+            {
+              "name": "onStreamingChunkDestinationRequested",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeStreamingChunkDestinationRequest"
+                }
+              }
+            },
+            {
+              "name": "onStreamingFinalizeRequested",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeStreamingFinalizeRequest"
                 }
               }
             },
@@ -2608,6 +2839,170 @@
               }
             },
             {
+              "name": "startStreaming",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeStreamingResult"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "request",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeStreamingStartRequest"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "abortStreaming",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "sessionId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "resolveStreamingChunkDestination",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "destination",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeStreamingUploadDestination"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "rejectStreamingChunkDestination",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "message",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "resolveStreamingFinalize",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "rejectStreamingFinalize",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "message",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
               "name": "updateFirmware",
               "optional": false,
               "typeAnnotation": {
@@ -2679,11 +3074,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "9b14f3aa4a81610683ee7040f2c22bf3fb30c5205d28a0256cd4453e31a56006"
+        "sha256": "738a1fedfcfc798cab9bcd5ca73038639b3dd08c1c18ac0ebf22772cb24fffa9"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "96a574ed72b4385057be819b9d1aba8726377a7ed5325c084e80f7a5ba4362df"
+        "sha256": "12dcc03931b4abc64a3668cd15ae6c0a015069d765de7cc46fa1dab30dd47002"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -2695,23 +3090,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "91683d13d6c697a33b487ceba4a14d4efcff43f80afa71fb5955d482c092e9cd"
+        "sha256": "9b5275b50beaf12ec0dda3a8b86f681ca44a417ebd7889d644f978e512bad8af"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "f46f8fda72b01b3eb1142380c28abe7b7ec59b9638e4b8e3d8bebbcf61956fce"
+        "sha256": "860b850ba788c185a28bbf4d7dd2dc0dcd645f6f9baa2205f3f37290f8425c0f"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "96315a41797b84b6189f5079bb20c01c8a8599870cd16dc4a0d3ce9d293c00d4"
+        "sha256": "7fd8805da8c658c68a2e619cb4a89f32b1fbd505f35ba3fe9b459e70ba712106"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "91683d13d6c697a33b487ceba4a14d4efcff43f80afa71fb5955d482c092e9cd"
+        "sha256": "9b5275b50beaf12ec0dda3a8b86f681ca44a417ebd7889d644f978e512bad8af"
       }
     ]
   },
-  "contractDigest": "470f66b3a7fed80a8801c166639fa9b7a6d08d82cb1f20c511d11c7b90fe324d"
+  "contractDigest": "7be60f817857b0cc9f264a0e0c416d2f674d94345ec931f3bda8db1515d46741"
 }
