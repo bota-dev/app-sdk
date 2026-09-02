@@ -24,6 +24,9 @@ private normative design before merge.
   symbols retain their established `device-sdk` names.
 - Firmware, Demo, Bota One, Portal, and backend services remain in their own
   repositories.
+- Remote actions preserve one backend command identity across every transport.
+  The SDK relays opaque exact-action authority and device receipt/result
+  evidence; it does not create a second transport-local command identity.
 
 ## Repository Shape
 

@@ -24,6 +24,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - The Bota workspace normally checks it out at `../react-native-sdk`.
 - Capture reference behavior in language-neutral fixtures and compare bytes;
   do not silently reinterpret protocol behavior.
+- The target remote-control contract uses one durable, exact `command_id`
+  across App/BLE and direct delivery. The released recording-scope Grant plus
+  start/stop opcodes is compatibility behavior, not proof of command-bound
+  device receipt or completion; see the private Remote Device Control design.
 - The semantic TypeScript authority is
   `protocol/baseline/react-native-public-api-0.0.65.json`. A replacement must
   match its exported symbols and reachable public members, including inherited
