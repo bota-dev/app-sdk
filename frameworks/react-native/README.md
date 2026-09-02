@@ -22,6 +22,23 @@ npx pod-install
 Rebuild the native iOS and Android applications after installation. An Expo Go
 runtime cannot load this native module; use a development or production build.
 
+Expo prebuild and EAS projects must set the Android minimum SDK explicitly. Add
+the Expo-compatible `expo-build-properties` package and configure it in the app
+config:
+
+```ts
+plugins: [
+  [
+    'expo-build-properties',
+    {
+      android: {
+        minSdkVersion: 26,
+      },
+    },
+  ],
+],
+```
+
 ## Configure
 
 ```ts
