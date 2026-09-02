@@ -356,10 +356,14 @@ set governed by `android-maven-license-policy.json`; package verification
 requires the Gradle module, reviewed policy, and SPDX licenses to agree. Tag
 workflows bind the independently rebuilt Apple and Android payloads to an
 annotated-tag candidate-inventory digest. The protected job signs Android only
-in memory, uploads a deterministic 30-file Central bundle, and durably records
+in memory, preserves the first signed 30-file Central bundle, and durably records
 the deployment UUID before polling. `PENDING`, `VALIDATING`, `VALIDATED`, and
 `PUBLISHING` resume from that record; an uncertain initial upload stops until
-an explicit protected recovery supplies the matching Portal UUID. Publication
+an explicit protected recovery supplies the matching Portal UUID. Detached PGP
+signatures include a creation time, so reruns never replace the preserved ZIP.
+A confirmed `FAILED` deployment can be superseded only after the protected
+recovery verifies its UUID and deployment name, then uploads those same
+preserved bytes as a fresh deployment. Publication
 is claimed only after the complete public Maven directory matches the signed
 inventory and unrelated API 26 and API 35 consumers run it.
 

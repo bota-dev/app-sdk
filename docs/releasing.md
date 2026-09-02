@@ -259,14 +259,32 @@ PGP material, normalizes it to the exact 30-file Portal tree, and persists the
 bundle, inventory, and `central-portal-state.json` on a draft GitHub Release
 before upload. The initial HTTP 201 deployment UUID is fsynced before polling.
 An uncertain upload outcome stops automatic retries; use the protected
-`workflow_dispatch` recovery with exact `refs/tags/v1.1.0` and the Portal UUID.
-Recovery downloads the preserved bytes and never rebuilds, re-signs, or
-re-uploads them.
+`workflow_dispatch` recovery with exact `refs/tags/v1.1.0`, the Portal UUID,
+the original tag workflow `releaseRunId`, and
+`centralRecoveryMode=resume-uncertain`. That mode downloads the preserved bytes
+and never rebuilds, re-signs, or re-uploads them.
+
+Detached PGP signatures include their creation time, so rerunning the tag job
+must not replace the preserved Central ZIP with newly signed bytes. If Central
+returns a confirmed `FAILED` deployment, first fix the reported external
+validation cause, then dispatch `centralRecoveryMode=retry-failed` with that
+failed UUID. The protected job verifies the old deployment is `FAILED` and has
+the preserved deployment name, recreates `READY` state from the archived ZIP
+and inventory, and uploads those exact bytes as a fresh deployment. The new
+state records `retryOfDeploymentId` for auditability.
+
+Both recovery modes download the original run's Apple, Android, and React
+Native artifacts and compare a newly generated candidate inventory with the
+one preserved on the draft release. After Central and its public inventory
+pass, the recovery job publishes or verifies the exact npm tarball, publishes
+the existing GitHub Release assets, and enables the same public SwiftPM plus
+API 26/API 35 Maven consumer jobs as the tag workflow.
 
 Central states resume as follows: `PENDING` and `VALIDATING` poll,
 `VALIDATED` publishes once, `PUBLISHING` polls, `PUBLISHED` verifies the public
 repository, and `FAILED` stops with sanitized errors. A missing public POM is
-not evidence that another upload is safe. After `PUBLISHED`, every public
+not evidence that another upload is safe; only the explicit failed-deployment
+path may create a replacement upload. After `PUBLISHED`, every public
 Maven file must match the signed inventory before the API 26 and API 35 public
 consumer lanes run.
 

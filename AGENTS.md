@@ -258,6 +258,15 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   GitHub Release before upload. A missing public POM is never an idempotency
   signal: resume by the recorded deployment UUID and state, and use the
   protected recovery dispatch after any uncertain initial upload.
+- PGP signatures include their creation time, so a protected rerun must not
+  rebuild or replace the preserved Central ZIP. Uncertain deployments resume
+  by UUID without another upload. A confirmed `FAILED` deployment may be
+  superseded only through `centralRecoveryMode=retry-failed`, which verifies
+  the failed UUID and re-uploads the exact preserved ZIP under a fresh state
+  record containing `retryOfDeploymentId`. Recovery also requires the original
+  tag workflow `releaseRunId`; it downloads all three platform artifacts,
+  matches their candidate inventory, then completes npm, the GitHub Release,
+  and the public Apple and Android consumer gates.
 - Create annotated release tags only from the `release-candidate-<commit>`
   inventory emitted by successful main CI. Local Apple or Android builds may
   use different host toolchains and are preflight evidence, not release

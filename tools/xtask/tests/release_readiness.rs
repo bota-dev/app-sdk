@@ -357,6 +357,8 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     assert!(contents.contains("workflow_dispatch:"));
     assert!(contents.contains("releaseRef:"));
     assert!(contents.contains("centralDeploymentId:"));
+    assert!(contents.contains("centralRecoveryMode:"));
+    assert!(contents.contains("releaseRunId:"));
     assert!(contents.contains("environment: release"));
     assert!(contents.contains("MAVEN_CENTRAL_USERNAME"));
     assert!(contents.contains("MAVEN_CENTRAL_PASSWORD"));
@@ -367,7 +369,13 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     assert!(contents.contains("central-portal.mjs prepare"));
     assert!(contents.contains("central-portal.mjs upload-or-resume"));
     assert!(contents.contains("central-portal.mjs recover-and-resume"));
+    assert!(contents.contains("central-portal.mjs retry-failed"));
     assert!(contents.contains("central-portal.mjs verify-published"));
+    assert!(contents.contains("unzip -q target/android-release/central-bundle.zip"));
+    assert!(contents.contains("run-id: ${{ inputs.releaseRunId }}"));
+    assert!(contents.contains("gh release edit v1.1.0 --draft=false"));
+    assert!(contents.contains("needs: [publish, recover-central]"));
+    assert!(contents.contains("github.event_name == 'workflow_dispatch'"));
     assert!(contents.contains("central-portal-state.json"));
     assert!(contents.contains("central-bundle-files.json"));
     assert!(contents.contains("central-bundle.zip"));

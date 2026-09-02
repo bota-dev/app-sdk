@@ -225,6 +225,38 @@ export async function recoverDeployment({
   return resumeDeployment({ statePath, portal, pollIntervalMs, maxPolls, now, ...(sleep ? { sleep } : {}) });
 }
 
+export async function retryFailedDeployment({
+  statePath,
+  failedDeploymentId,
+  portal,
+  bundlePath,
+  pollIntervalMs = 5_000,
+  maxPolls = 180,
+  now = () => new Date(),
+  sleep,
+}) {
+  requireMatch('failedDeploymentId', failedDeploymentId, UUID);
+  let state = await loadDeploymentState(statePath);
+  if (state.deploymentState !== 'READY' || state.deploymentId !== null) {
+    throw new Error('failed-deployment retry requires freshly prepared READY state');
+  }
+  const failed = await portal.status(failedDeploymentId);
+  requirePortalIdentity(failed, state, true);
+  if (failed.deploymentState !== 'FAILED') {
+    throw new Error(`Central deployment ${failedDeploymentId} is not FAILED`);
+  }
+  state = await transition(statePath, state, { retryOfDeploymentId: failedDeploymentId }, now);
+  return resumeDeployment({
+    statePath,
+    portal,
+    bundlePath,
+    pollIntervalMs,
+    maxPolls,
+    now,
+    ...(sleep ? { sleep } : {}),
+  });
+}
+
 export async function verifyArchivedBundle({ inventoryPath, bundlePath }) {
   const inventory = JSON.parse(await readFile(inventoryPath, 'utf8'));
   validateInventory(inventory);
@@ -325,6 +357,9 @@ function validateDeploymentState(state) {
   if (typeof state.updatedAt !== 'string' || Number.isNaN(Date.parse(state.updatedAt))) {
     throw new Error('updatedAt is invalid');
   }
+  if (state.retryOfDeploymentId !== undefined) {
+    requireMatch('retryOfDeploymentId', state.retryOfDeploymentId, UUID);
+  }
 }
 
 function validateInventory(inventory, expectedRevision) {
@@ -424,8 +459,8 @@ function parseArguments(argv) {
 
 async function main() {
   const { command, options } = parseArguments(process.argv.slice(2));
-  if (!['prepare', 'upload-or-resume', 'recover-and-resume', 'verify-published'].includes(command)) {
-    throw new Error('usage: central-portal.mjs <prepare|upload-or-resume|recover-and-resume|verify-published> [options]');
+  if (!['prepare', 'upload-or-resume', 'recover-and-resume', 'retry-failed', 'verify-published'].includes(command)) {
+    throw new Error('usage: central-portal.mjs <prepare|upload-or-resume|recover-and-resume|retry-failed|verify-published> [options]');
   }
   if (command === 'prepare') {
     await verifyCentralBundle({ repository: options.repository, inventory: options.inventory, zip: options.bundle });
@@ -450,7 +485,7 @@ async function main() {
     username: process.env.MAVEN_CENTRAL_USERNAME,
     password: process.env.MAVEN_CENTRAL_PASSWORD,
   });
-  if (command === 'recover-and-resume') {
+  if (command === 'recover-and-resume' || command === 'retry-failed') {
     if (options['release-ref'] !== `refs/tags/v${VERSION}`) throw new Error('releaseRef is invalid');
     await verifyArchivedBundle({ inventoryPath: options.inventory, bundlePath: options.bundle });
     const state = await loadDeploymentState(options.state);
@@ -458,7 +493,16 @@ async function main() {
     validateInventory(inventory, state.sourceRevision);
     if (digest(await readFile(options.bundle)) !== state.bundleSha256) throw new Error('bundleSha256 is invalid');
     if (digest(await readFile(options.inventory)) !== state.inventorySha256) throw new Error('inventorySha256 is invalid');
-    await recoverDeployment({ statePath: options.state, deploymentId: options['deployment-id'], portal });
+    if (command === 'retry-failed') {
+      await retryFailedDeployment({
+        statePath: options.state,
+        failedDeploymentId: options['failed-deployment-id'],
+        portal,
+        bundlePath: options.bundle,
+      });
+    } else {
+      await recoverDeployment({ statePath: options.state, deploymentId: options['deployment-id'], portal });
+    }
     return;
   }
   const state = await loadDeploymentState(options.state);

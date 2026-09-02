@@ -134,8 +134,10 @@ legacy migration, and unrelated Maven consumer lanes. The reviewed Maven
 dependency policy is checked against both Gradle module metadata and the SPDX
 SBOM. The protected `v1.1.0` release job signs only in memory, persists the
 Central deployment UUID and state before polling, supports explicit recovery
-without rebuilding or re-uploading, and byte-verifies the complete public
-Maven directory before enabling API 26 and API 35 consumer smoke tests.
+without rebuilding or re-signing, and byte-verifies the complete public Maven
+directory before enabling API 26 and API 35 consumer smoke tests. Uncertain
+deployments resume by UUID without another upload; confirmed failed deployments
+can be replaced only by uploading the exact preserved signed bundle.
 The native-boundary spike selected a manually owned C ABI after comparing it
 with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed

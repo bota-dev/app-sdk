@@ -10,6 +10,7 @@ import {
   deploymentName,
   loadDeploymentState,
   recoverDeployment,
+  retryFailedDeployment,
   resumeDeployment,
 } from './central-portal.mjs';
 
@@ -171,6 +172,75 @@ test('an uncertain publish is persisted and recovery polls before any retry', as
 
   const recovered = await recoverDeployment({ statePath, deploymentId, portal, pollIntervalMs: 0 });
   assert.equal(recovered.deploymentState, 'PUBLISHED');
+});
+
+test('a failed deployment can be superseded only by uploading the preserved bundle', async (t) => {
+  const { statePath } = await stateFixture(t);
+  const replacementDeploymentId = '87654321-4321-4321-8321-cba987654321';
+  const calls = [];
+  let replacementPolls = 0;
+  const portal = {
+    upload: async () => {
+      calls.push('upload');
+      return replacementDeploymentId;
+    },
+    status: async (id) => {
+      calls.push(`status:${id}`);
+      if (id === deploymentId) {
+        return { deploymentState: 'FAILED', deploymentName: deploymentName(bundleSha256) };
+      }
+      replacementPolls += 1;
+      return {
+        deploymentState: replacementPolls === 1 ? 'VALIDATED' : 'PUBLISHED',
+        deploymentName: deploymentName(bundleSha256),
+      };
+    },
+    publish: async (id) => calls.push(`publish:${id}`),
+  };
+
+  const result = await retryFailedDeployment({
+    statePath,
+    failedDeploymentId: deploymentId,
+    portal,
+    bundlePath: 'preserved-central-bundle.zip',
+    pollIntervalMs: 0,
+  });
+
+  assert.equal(result.deploymentState, 'PUBLISHED');
+  assert.equal(result.deploymentId, replacementDeploymentId);
+  assert.equal(result.retryOfDeploymentId, deploymentId);
+  assert.deepEqual(calls, [
+    `status:${deploymentId}`,
+    'upload',
+    `status:${replacementDeploymentId}`,
+    `publish:${replacementDeploymentId}`,
+    `status:${replacementDeploymentId}`,
+  ]);
+});
+
+test('failed-deployment retry rejects active and identity-mismatched deployments', async (t) => {
+  for (const result of [
+    { deploymentState: 'VALIDATING', deploymentName: deploymentName(bundleSha256) },
+    { deploymentState: 'FAILED', deploymentName: deploymentName('d'.repeat(64)) },
+  ]) {
+    const { statePath } = await stateFixture(t);
+    const portal = {
+      upload: async () => assert.fail('must not upload'),
+      status: async () => result,
+      publish: async () => assert.fail('must not publish'),
+    };
+
+    await assert.rejects(
+      () => retryFailedDeployment({
+        statePath,
+        failedDeploymentId: deploymentId,
+        portal,
+        bundlePath: 'preserved-central-bundle.zip',
+        pollIntervalMs: 0,
+      }),
+      /FAILED|deploymentName/i,
+    );
+  }
 });
 
 test('state loading rejects source, coordinate, version, hash, and UUID drift', async (t) => {
