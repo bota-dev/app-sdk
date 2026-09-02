@@ -5,13 +5,13 @@ a shared Rust protocol and workflow core with platform-native Bluetooth
 transports and idiomatic Apple, Android, React Native, Flutter, Web, and Windows
 facades.
 
-The existing `@bota.dev/react-native-sdk` remains the supported production SDK
-until the replacement passes protocol, workflow, native, application, and
-physical-device parity gates.
+`@bota.dev/react-native-sdk@1.1.0`, `BotaAppleSDK`, and
+`dev.bota:bota-android-sdk:1.1.0` are the first synchronized public App SDK
+release. The former standalone SDK repositories remain migration inputs.
 
 ## Current Status
 
-The App SDK is preparing synchronized native release `1.1.0`: the repository has a generated
+The App SDK has published synchronized release `1.1.0`: the repository has a generated
 protocol manifest, 64 language-neutral compatibility fixtures, bounded Rust
 decoders, byte-exact serializers, stable models/errors, and deterministic
 discovery, connection-recovery, provisioning, authenticated-reset, resumable
@@ -61,13 +61,12 @@ errors, sync-status derivation, device-log decoder, and the native-backed
 `BotaClient`, `DeviceManager`, `RecordingManager`, `StreamingSession`, and
 `OTAManager`. Recording files
 and live-stream chunks remain native-owned; Codegen carries only upload
-destinations, metadata, state, and progress. It is not an installable
-replacement yet. The package is now a public npm release candidate and the
-protected `release.yml` workflow packs, publishes, and verifies its exact
-tarball with npm trusted publishing. Local consumer acceptance installs the packed `1.1.0`
-artifact without a workspace symlink and produces release-mode iOS and Android
-Expo bundles for both Demo and Bota One. Preview and production application
-rollout and the `v1.1.0` registry publication remain open.
+destinations, metadata, state, and progress. The package is published on npm as
+`@bota.dev/react-native-sdk@1.1.0`; the protected `release.yml` workflow packs,
+publishes, and verifies its exact tarball through npm trusted publishing. Local
+consumer acceptance installs that registry artifact without a workspace
+symlink and produces release-mode iOS and Android Expo bundles for both Demo
+and Bota One.
 The exported `DeviceManager` compatibility owner delegates scan,
 selected connection, status, settings, logs, WiFi/cache behavior, provisioning
 state and key reads, direct provisioning writes, and time sync. Those low-volume
@@ -123,11 +122,11 @@ also carries a one-major deprecated
 source, already-compiled bytecode, API 26, and API 35 consumer gates pass. New
 applications resolve only `dev.bota:bota-android-sdk` and must not package the
 old AAR beside it. See [Android SDK migration](docs/migration/android.md).
-The release coordinator has accepted the Apple and Android physical-device
-matrix for the `1.1.0` candidate, and the local React Native Android lifecycle
-consumer passes against the immutable AAR. Maven Central publication and
-remote Android consumer verification remain open until the protected release
-workflow records them.
+The release coordinator accepted the Apple and Android physical-device matrix
+for `1.1.0`. Maven Central deployment
+`6c4384ae-fe6a-4ec4-b9b3-774e437f07f7` is published, and release workflow run
+`33685720066` resolved the immutable AAR from the public repository on Android
+API 26 and API 35.
 Ordinary CI builds one deterministic Android release payload and
 runs that exact AAR through API 26 x86 and API 35 x86_64 instrumentation,
 legacy migration, and unrelated Maven consumer lanes. The reviewed Maven
@@ -143,8 +142,8 @@ with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed
 packets. Shared protocol decode/encode entry points cover the frozen status,
 recording list and control, transfer, OTA, provisioning, settings, and log fixtures. The Apple
-package is the first public platform distribution; other native facades remain
-unpublished.
+package and Android AAR are public platform distributions; the remaining
+planned native facades are not yet published.
 ABI v1 is frozen at the typed public header and verified by standalone C and
 Swift callers. Its exact ownership contract, artifact digests, packet coverage,
 and platform exclusions are recorded in

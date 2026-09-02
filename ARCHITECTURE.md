@@ -83,14 +83,15 @@ identity.
 Protocol parity is necessary but does not satisfy React Native compatibility
 unless the target package also matches this surface digest.
 
-The replacement package begins at `frameworks/react-native` as an independently
-locked npm package. It is deliberately private until both native adapters, the
-frozen 0.0.65 TypeScript surface, application acceptance, and publication gates
-pass. Its initial New Architecture floor is React Native 0.86.3, matching Demo
-and Bota One. The Codegen library is `BotaDeviceSDKSpec` and its native module
-is `BotaDeviceSDK`. JavaScript uses optional TurboModule lookup so importing a
-bundle before the native application is rebuilt does not throw; the first
-native operation instead returns stable `native_module_unavailable`.
+The replacement package lives at `frameworks/react-native` as an independently
+locked npm package and is published as `@bota.dev/react-native-sdk@1.1.0` after
+passing the native adapters, frozen 0.0.65 TypeScript surface, application
+acceptance, and publication gates. Its initial New Architecture floor is React
+Native 0.86.3, matching Demo and Bota One. The Codegen library is
+`BotaDeviceSDKSpec` and its native module is `BotaDeviceSDK`. JavaScript uses
+optional TurboModule lookup so importing a bundle before the native application
+is rebuilt does not throw; the first native operation instead returns stable
+`native_module_unavailable`.
 
 The bridge contract contains configure, destroy, state, capabilities, device
 discovery, selected-device connect, serial-strict reconnect, disconnect, a
@@ -330,9 +331,10 @@ match the Kotlin 2.1 consumer floor; CI verifies that invariant without access
 to the private legacy repository.
 The clean consumer resolves only `dev.bota:bota-android-sdk`; coroutine and
 OkHttp types exposed by the public API are Maven API dependencies. The release
-coordinator accepted the native physical matrix for the synchronized `1.1.0`
-candidate. The local React Native lifecycle consumer now passes against this
-AAR. Maven Central publication and public remote-consumer evidence remain open.
+coordinator accepted the native physical matrix for synchronized `1.1.0`.
+Central deployment `6c4384ae-fe6a-4ec4-b9b3-774e437f07f7` is published, and
+release workflow run `33685720066` resolved and ran the public AAR on Android
+API 26 and API 35.
 
 Android release packaging has separate unsigned and protected graphs. Normal
 builds can publish only to `target/android-m2` and do not register a signing
@@ -497,8 +499,8 @@ engine handles, borrowed inputs, explicitly freed SDK-owned outputs, and stable
 numeric request/cancellation identity. UniFFI `0.32.0` remains a non-shipping
 comparison spike only. The shipping boundary uses versioned typed field-list
 packets; the JSON smoke envelope remains comparison tooling and is not a public
-serialization contract. The Apple facade has been published since `v1.0.0`;
-the remaining planned facades are not yet published. See
+serialization contract. The Apple, Android, and React Native facades are
+published for `v1.1.0`; the remaining planned facades are not yet published. See
 [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md) and the
 [`FFI evaluation`](docs/spikes/ffi-boundary-evaluation.md).
 
@@ -528,9 +530,9 @@ ABI v1 is frozen for facade implementation: existing symbol names, packet-kind
 values, field meanings, ownership rules, and status/error values are additive
 only. The exact tested revision and header digest live in
 `release/evidence/1.0.0-alpha.1-native-abi.md`. This freeze is an interface
-milestone, not an Android support claim. Apple now has an automated facade
-acceptance record, while its supervised physical-device gate and Android's
-native-library AAR, transport, and device gates remain open.
+milestone, not an Android support claim. Apple and Android now have automated
+facade acceptance records, accepted supervised physical-device gates, and
+public remote-consumer evidence for their `1.1.0` packages.
 
 Apple facade development uses `platforms/apple/Package.swift` with a local
 binary target assembled by `tools/apple/build-xcframework.sh` from arm64 iOS,
