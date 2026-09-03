@@ -1,6 +1,6 @@
 # Bota SDK Release Channels Design
 
-**Status:** Approved; implementation pending
+**Status:** Implemented and verified on 2026-09-02
 
 ## Decision
 

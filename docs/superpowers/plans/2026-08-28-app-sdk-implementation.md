@@ -944,8 +944,9 @@ The packed `1.1.0` npm artifact produces local release-mode iOS and Android
 Expo bundles in Demo and Bota One. The synchronized release workflow now packs
 that artifact with a pinned npm CLI, includes it in the candidate inventory,
 publishes through the protected OIDC trusted publisher, and verifies the public
-registry checksum idempotently. Preview and production rollout and the
-`v1.1.0` registry publication remain open.
+registry checksum idempotently. Preview and production rollout completed, the
+immutable `v1.1.0` artifacts are public, and the synchronized line is exposed
+as an explicit beta while the legacy `0.0.x` line retains npm `latest`.
 High-volume recording and firmware bytes stay native and are rejected from the
 Codegen contract.
 
