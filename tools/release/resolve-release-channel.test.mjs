@@ -37,7 +37,19 @@ test('new stable App SDK tags are rejected while beta policy is active', () => {
         mode: 'new',
         policy: testPolicy,
       }),
-    /must contain a prerelease component/,
+    /must match 1\.x\.y-beta\.n/,
+  );
+});
+
+test('new release mode rejects other prerelease channels', () => {
+  assert.throws(
+    () =>
+      resolveReleaseChannel({
+        ref: 'refs/tags/v1.2.0-rc.1',
+        mode: 'new',
+        policy: testPolicy,
+      }),
+    /must match 1\.x\.y-beta\.n/,
   );
 });
 
@@ -49,7 +61,7 @@ test('build metadata is not mistaken for a prerelease component', () => {
         mode: 'new',
         policy: testPolicy,
       }),
-    /must contain a prerelease component/,
+    /must match 1\.x\.y-beta\.n/,
   );
 });
 
@@ -62,6 +74,23 @@ test('historical stable release recovery remains possible', () => {
     }),
     { version: '1.1.0', npmTag: 'beta', githubPrerelease: true },
   );
+});
+
+test('recovery accepts App SDK betas but rejects other stable lines', () => {
+  assert.deepEqual(
+    resolveReleaseChannel({
+      ref: 'refs/tags/v1.2.0-beta.0',
+      mode: 'recovery',
+      policy: testPolicy,
+    }),
+    { version: '1.2.0-beta.0', npmTag: 'beta', githubPrerelease: true },
+  );
+  for (const ref of ['v2.0.0', 'v0.0.66', 'v1.2.0-rc.1']) {
+    assert.throws(
+      () => resolveReleaseChannel({ ref, mode: 'recovery', policy: testPolicy }),
+      /only supports 1\.x\.y-beta\.n or historical 1\.1\.0/,
+    );
+  }
 });
 
 test('only exact release tag refs are accepted', () => {

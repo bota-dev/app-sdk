@@ -3,6 +3,8 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const APP_SDK_BETA = /^1\.(0|[1-9]\d*)\.(0|[1-9]\d*)-beta\.(0|[1-9]\d*)$/;
+const HISTORICAL_STABLE_RECOVERY = '1.1.0';
 const policyUrl = new URL('../../release/channel-policy.json', import.meta.url);
 
 export function parseReleaseRef(ref) {
@@ -30,19 +32,24 @@ export function resolveReleaseChannel({ ref, mode, policy }) {
     policy.schemaVersion !== 1 ||
     policy.appSdkChannel !== 'beta' ||
     policy.npmDistTag !== 'beta' ||
-    policy.githubPrerelease !== true
+    policy.githubPrerelease !== true ||
+    policy.requirePrereleaseForNewTags !== true
   ) {
     throw new Error('unsupported release channel policy');
   }
 
   const version = parseReleaseRef(ref);
-  const versionWithoutBuildMetadata = version.split('+', 1)[0];
+  if (mode === 'new' && !APP_SDK_BETA.test(version)) {
+    throw new Error(`new App SDK version ${version} must match 1.x.y-beta.n`);
+  }
   if (
-    mode === 'new' &&
-    policy.requirePrereleaseForNewTags &&
-    !versionWithoutBuildMetadata.includes('-')
+    mode === 'recovery' &&
+    version !== HISTORICAL_STABLE_RECOVERY &&
+    !APP_SDK_BETA.test(version)
   ) {
-    throw new Error(`new App SDK version ${version} must contain a prerelease component`);
+    throw new Error(
+      `App SDK recovery only supports 1.x.y-beta.n or historical ${HISTORICAL_STABLE_RECOVERY}; got ${version}`,
+    );
   }
 
   return {

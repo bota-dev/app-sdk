@@ -367,6 +367,9 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     assert!(contents.contains("resolve-release-channel.mjs"));
     assert!(contents.contains("--mode new"));
     assert!(contents.contains("--mode recovery"));
+    assert!(contents.contains("cargo build -p xtask"));
+    assert!(contents.contains("git archive \"$RELEASE_TAG\""));
+    assert!(contents.contains("../debug/xtask release verify-tag \"$RELEASE_TAG\""));
     assert!(contents.contains("LATEST_BEFORE"));
     assert!(contents.contains("test \"$LATEST_AFTER\" = \"$LATEST_BEFORE\""));
     assert!(contents.contains("test \"$PUBLISHED_BETA\" = \"$RELEASE_VERSION\""));
@@ -392,6 +395,27 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     assert!(contents.contains("matrix:\n        api: [26, 35]"));
     assert!(contents.contains("tools/android/test-public-consumer.sh --api ${{ matrix.api }}"));
     assert!(!contents.contains("echo \"published=false\""));
+}
+
+#[test]
+fn workflow_dispatch_inputs_are_never_interpolated_into_shell_source() {
+    let contents = fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
+    let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
+    let jobs = workflow["jobs"].as_mapping().unwrap();
+
+    for (job_name, job) in jobs {
+        let Some(steps) = job["steps"].as_sequence() else {
+            continue;
+        };
+        for step in steps {
+            if let Some(command) = step["run"].as_str() {
+                assert!(
+                    !command.contains("${{ inputs."),
+                    "job {job_name:?} interpolates workflow input into shell source: {command}"
+                );
+            }
+        }
+    }
 }
 
 #[test]
