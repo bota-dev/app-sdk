@@ -13,6 +13,7 @@
     "check:licenses": "node scripts/check-licenses.mjs",
     "license-check": "npm run check:licenses",
     "react-native:verify": "node tools/react-native/verify-package.mjs",
+    "release:channel": "node tools/release/resolve-release-channel.mjs",
     "sync:android-fixtures": "node tools/android/sync-protocol-fixtures.mjs --check",
     "sync:android-workflows": "node tools/android/sync-workflow-fixtures.mjs --check",
     "sync:apple-fixtures": "node tools/apple/sync-protocol-fixtures.mjs --check && node tools/apple/sync-workflow-fixtures.mjs --check",
