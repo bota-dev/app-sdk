@@ -17,6 +17,9 @@
 /frameworks/react-native/lib/
 /frameworks/react-native/.build/
 /frameworks/react-native/generated/build/
+/frameworks/flutter/bota_flutter_sdk/.dart_tool/
+/frameworks/flutter/bota_flutter_sdk/build/
+/frameworks/flutter/bota_flutter_sdk/pubspec.lock
 
 # Platform build outputs
 /.build/
