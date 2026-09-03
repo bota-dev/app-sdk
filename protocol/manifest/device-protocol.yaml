@@ -1,5 +1,7 @@
 schemaVersion: 1
 protocolRevision: firmware-8b175a89374c
+contractRevisions:
+  ENCRYPTED_UPLOAD_V2_CONTRACT_REVISION: encrypted-upload-v2-contract-v1
 
 services:
   - name: SERVICE_DEVICE_INFO
@@ -45,6 +47,12 @@ services:
       - { name: CHAR_RECORDING_TRANSFER, uuid: B07A0004-0003-1000-8000-00805F9B34FB }
       - { name: CHAR_TRANSFER_CONTROL, uuid: B07A0004-0004-1000-8000-00805F9B34FB }
       - { name: CHAR_TRANSFER_STATUS, uuid: B07A0004-0005-1000-8000-00805F9B34FB }
+      - { name: CHAR_STORAGE_TRANSFER_CAPABILITIES_V2, uuid: B07A0004-0006-1000-8000-00805F9B34FB, introduced: encrypted-upload-v2-contract-v1 }
+      - { name: CHAR_TRANSFER_SIGNED_BLOB_V2, uuid: B07A0004-0007-1000-8000-00805F9B34FB, introduced: encrypted-upload-v2-contract-v1 }
+      - { name: CHAR_TRANSFER_CONTROL_V2, uuid: B07A0004-0008-1000-8000-00805F9B34FB, introduced: encrypted-upload-v2-contract-v1 }
+      - { name: CHAR_RECORDING_TRANSFER_V2, uuid: B07A0004-0009-1000-8000-00805F9B34FB, introduced: encrypted-upload-v2-contract-v1 }
+      - { name: CHAR_TRANSFER_STATUS_V2, uuid: B07A0004-000A-1000-8000-00805F9B34FB, introduced: encrypted-upload-v2-contract-v1 }
+      - { name: CHAR_RECORDING_LIST_V2, uuid: B07A0004-000B-1000-8000-00805F9B34FB, introduced: encrypted-upload-v2-contract-v1 }
   - name: SERVICE_BOTA_AUTH
     uuid: B07A0005-0000-1000-8000-00805F9B34FB
     characteristics:
@@ -215,9 +223,141 @@ constantGroups:
     BLE_ERROR_STORAGE_KEY_UNAVAILABLE: 20
     BLE_ERROR_TOKEN_INVALID: 32
     BLE_ERROR_TOKEN_EXPIRED: 33
+    BLE_ERROR_ENCRYPTED_UPLOAD_V2_REQUIRED: 34
     BLE_ERROR_NETWORK_ERROR: 48
     BLE_ERROR_UPLOAD_FAILED: 49
     BLE_ERROR_UNKNOWN: 255
+  encrypted_upload_profiles:
+    UPLOAD_PROFILE_LEGACY_PLAIN_V1: 1
+    UPLOAD_PROFILE_LEGACY_P10_RELAY: 2
+    UPLOAD_PROFILE_ENCRYPTED_UPLOAD_V2: 3
+  encrypted_upload_storage_formats:
+    STORAGE_FORMAT_LEGACY_PLAIN: 1
+    STORAGE_FORMAT_BOTA_ENC_V1: 2
+    STORAGE_FORMAT_BOTA_ENC_V2: 3
+  encrypted_upload_policies:
+    ENCRYPTED_UPLOAD_POLICY_LEGACY_ALLOWED: 0
+    ENCRYPTED_UPLOAD_POLICY_V2_PREFERRED: 1
+    ENCRYPTED_UPLOAD_POLICY_V2_REQUIRED: 2
+  encrypted_upload_channels:
+    ENCRYPTED_UPLOAD_CHANNEL_BLE: 1
+    ENCRYPTED_UPLOAD_CHANNEL_WIFI: 2
+    ENCRYPTED_UPLOAD_CHANNEL_CELLULAR: 3
+  encrypted_upload_environments:
+    ENCRYPTED_UPLOAD_ENVIRONMENT_DEVELOPMENT: 0
+    ENCRYPTED_UPLOAD_ENVIRONMENT_GAMMA: 1
+    ENCRYPTED_UPLOAD_ENVIRONMENT_PRODUCTION: 2
+  encrypted_upload_v2_blob_kinds:
+    ENCRYPTED_UPLOAD_V2_BLOB_KIND_AUTHORIZATION: 1
+    ENCRYPTED_UPLOAD_V2_BLOB_KIND_RECEIPT: 2
+  encrypted_upload_v2_blob_messages:
+    ENCRYPTED_UPLOAD_V2_BLOB_BEGIN: 96
+    ENCRYPTED_UPLOAD_V2_BLOB_DATA: 97
+    ENCRYPTED_UPLOAD_V2_BLOB_COMMIT: 98
+    ENCRYPTED_UPLOAD_V2_BLOB_ABORT: 99
+    ENCRYPTED_UPLOAD_V2_BLOB_RESULT: 100
+  encrypted_upload_v2_transfer_messages:
+    ENCRYPTED_UPLOAD_V2_START: 32
+    ENCRYPTED_UPLOAD_V2_WINDOW_ACK: 33
+    ENCRYPTED_UPLOAD_V2_RESUME_REQUEST: 34
+    ENCRYPTED_UPLOAD_V2_CONFIRM: 35
+    ENCRYPTED_UPLOAD_V2_ABORT: 36
+    ENCRYPTED_UPLOAD_V2_LIST: 37
+    ENCRYPTED_UPLOAD_V2_START_ACK: 64
+    ENCRYPTED_UPLOAD_V2_DATA: 65
+    ENCRYPTED_UPLOAD_V2_WINDOW_END: 66
+    ENCRYPTED_UPLOAD_V2_MANIFEST_CHUNK: 67
+    ENCRYPTED_UPLOAD_V2_EOF: 68
+    ENCRYPTED_UPLOAD_V2_RESUME_ACCEPT: 69
+    ENCRYPTED_UPLOAD_V2_RESUME_REJECT: 70
+    ENCRYPTED_UPLOAD_V2_RECORDING_ENTRY: 72
+    ENCRYPTED_UPLOAD_V2_RECORDING_LIST_END: 73
+    ENCRYPTED_UPLOAD_V2_ERROR: 79
+  encrypted_upload_v2_status_phases:
+    ENCRYPTED_UPLOAD_V2_PHASE_IDLE: 0
+    ENCRYPTED_UPLOAD_V2_PHASE_RECEIVING_AUTHORIZATION: 1
+    ENCRYPTED_UPLOAD_V2_PHASE_AUTHORIZED: 2
+    ENCRYPTED_UPLOAD_V2_PHASE_TRANSFERRING: 3
+    ENCRYPTED_UPLOAD_V2_PHASE_WAITING_WINDOW_ACK: 4
+    ENCRYPTED_UPLOAD_V2_PHASE_SENDING_FINAL_EVIDENCE: 5
+    ENCRYPTED_UPLOAD_V2_PHASE_WAITING_BACKEND_COMPLETION: 6
+    ENCRYPTED_UPLOAD_V2_PHASE_RECEIVING_RECEIPT: 7
+    ENCRYPTED_UPLOAD_V2_PHASE_CONFIRMING: 8
+    ENCRYPTED_UPLOAD_V2_PHASE_COMPLETE: 9
+    ENCRYPTED_UPLOAD_V2_PHASE_ERROR: 10
+  encrypted_upload_v2_versions_and_modes:
+    ENCRYPTED_UPLOAD_V2_CAPABILITY_ENCODING_VERSION: 1
+    ENCRYPTED_UPLOAD_V2_TRANSFER_PROFILE_VERSION: 2
+    ENCRYPTED_UPLOAD_V2_DOCUMENT_VERSION: 2
+    ENCRYPTED_UPLOAD_V2_COMPLETION_COMPLETE: 1
+    ENCRYPTED_UPLOAD_V2_MODE_BATCH: 1
+    ENCRYPTED_UPLOAD_V2_MODE_STREAMING: 2
+
+wordConstantGroups:
+  encrypted_upload_v2_suites:
+    ENCRYPTED_UPLOAD_V2_STORAGE_SUITE_CHACHA20_POLY1305_HKDF_SHA256_HMAC_SHA256: 1
+    ENCRYPTED_UPLOAD_V2_LOCAL_WRAP_SUITE_CHACHA20_POLY1305_HKDF_SHA256: 1
+    ENCRYPTED_UPLOAD_V2_AUTH_SUITE_HMAC_SHA256: 1
+    ENCRYPTED_UPLOAD_V2_SIGNATURE_SUITE_P256_SHA256_P1363_LOW_S: 1
+    ENCRYPTED_UPLOAD_V2_HPKE_KEM_X25519_HKDF_SHA256: 32
+    ENCRYPTED_UPLOAD_V2_HPKE_KDF_HKDF_SHA256: 1
+    ENCRYPTED_UPLOAD_V2_HPKE_AEAD_CHACHA20_POLY1305: 3
+  encrypted_upload_v2_results:
+    ENCRYPTED_UPLOAD_V2_RESULT_SUCCESS: 0
+    ENCRYPTED_UPLOAD_V2_RESULT_UNSUPPORTED_VERSION: 1
+    ENCRYPTED_UPLOAD_V2_RESULT_INVALID_LENGTH: 2
+    ENCRYPTED_UPLOAD_V2_RESULT_NONCANONICAL_ENCODING: 3
+    ENCRYPTED_UPLOAD_V2_RESULT_SIGNATURE_INVALID: 4
+    ENCRYPTED_UPLOAD_V2_RESULT_ENVIRONMENT_MISMATCH: 5
+    ENCRYPTED_UPLOAD_V2_RESULT_EXPIRED: 6
+    ENCRYPTED_UPLOAD_V2_RESULT_TIME_UNAVAILABLE: 7
+    ENCRYPTED_UPLOAD_V2_RESULT_IDENTITY_MISMATCH: 8
+    ENCRYPTED_UPLOAD_V2_RESULT_BINDING_GENERATION_MISMATCH: 9
+    ENCRYPTED_UPLOAD_V2_RESULT_RECORDING_IDENTITY_MISMATCH: 10
+    ENCRYPTED_UPLOAD_V2_RESULT_STORAGE_SUITE_UNSUPPORTED: 11
+    ENCRYPTED_UPLOAD_V2_RESULT_DOWNGRADE_PROHIBITED: 12
+    ENCRYPTED_UPLOAD_V2_RESULT_AUTHORIZATION_MISMATCH: 13
+    ENCRYPTED_UPLOAD_V2_RESULT_OWNER_BUSY: 14
+    ENCRYPTED_UPLOAD_V2_RESULT_CHECKPOINT_MISMATCH: 15
+    ENCRYPTED_UPLOAD_V2_RESULT_RECEIPT_MISMATCH: 16
+    ENCRYPTED_UPLOAD_V2_RESULT_MIXED_PROFILE: 17
+    ENCRYPTED_UPLOAD_V2_RESULT_CIPHERTEXT_UNAVAILABLE: 18
+    ENCRYPTED_UPLOAD_V2_RESULT_REPLAY_CONFLICT: 19
+    ENCRYPTED_UPLOAD_V2_RESULT_INTERNAL: 255
+
+dwordConstantGroups:
+  encrypted_upload_v2_capability_flags:
+    ENCRYPTED_UPLOAD_V2_CAP_TRANSFER_FRAMING: 1
+    ENCRYPTED_UPLOAD_V2_CAP_STORAGE: 2
+    ENCRYPTED_UPLOAD_V2_CAP_FULL_RECORDING_IDENTITY: 4
+    ENCRYPTED_UPLOAD_V2_CAP_DURABLE_RESUME: 8
+    ENCRYPTED_UPLOAD_V2_CAP_AUTHENTICATED_MANIFEST: 16
+    ENCRYPTED_UPLOAD_V2_CAP_AUTHENTICATED_RECEIPT: 32
+    ENCRYPTED_UPLOAD_V2_CAP_BATCH: 64
+    ENCRYPTED_UPLOAD_V2_CAP_STREAMING: 128
+
+byteStrings:
+  ENCRYPTED_UPLOAD_V2_STORAGE_MAGIC: 424f5441454e4332
+  ENCRYPTED_UPLOAD_V2_TRAILER_MAGIC: 424f5441454e4432
+  UPLOAD_AUTHORIZATION_V2_MAGIC: 424f544141555432
+  UPLOAD_MANIFEST_V2_MAGIC: 424f54414d4e4632
+  COMPLETION_RECEIPT_V2_MAGIC: 424f544152435054
+
+asciiStrings:
+  ENCRYPTED_UPLOAD_V2_DOMAIN_LOCAL_WRAP: bota/enc-v2/local-wrap/v1
+  ENCRYPTED_UPLOAD_V2_DOMAIN_WRAPPED_KEY_AAD: bota/enc-v2/wrapped-key-aad/v1
+  ENCRYPTED_UPLOAD_V2_DOMAIN_BLOCK_AAD: bota/enc-v2/block-aad/v1
+  ENCRYPTED_UPLOAD_V2_DOMAIN_TRAILER_KEY: bota/enc-v2/trailer-key/v1
+  ENCRYPTED_UPLOAD_V2_DOMAIN_TRAILER_AUTH: bota/enc-v2/trailer-auth/v1
+  ENCRYPTED_UPLOAD_V2_DOMAIN_MANIFEST_KEY: bota/enc-v2/manifest-key/v1
+  ENCRYPTED_UPLOAD_V2_DOMAIN_MANIFEST_AUTH: bota/enc-v2/manifest-auth/v1
+  ENCRYPTED_UPLOAD_V2_DOMAIN_STORAGE_IDENTITY: bota/enc-v2/storage-identity/v1
+  ENCRYPTED_UPLOAD_V2_DOMAIN_UPLOAD_CONTEXT: bota/enc-v2/upload-context/v1
+  ENCRYPTED_UPLOAD_V2_DOMAIN_HPKE_KEY_EXPORT: bota/enc-v2/hpke-key-export/v1
+  ENCRYPTED_UPLOAD_V2_DOMAIN_DEVICE_IDENTITY: bota/enc-v2/device-identity/v1
+  ENCRYPTED_UPLOAD_V2_DOMAIN_TENANT_CONTEXT: bota/enc-v2/tenant-context/v1
+  ENCRYPTED_UPLOAD_V2_DOMAIN_STAGING_OBJECT: bota/enc-v2/staging-object/v1
+  ENCRYPTED_UPLOAD_V2_DOMAIN_PUBLICATION: bota/enc-v2/publication/v1
 
 layouts:
   DEVICE_STATUS:
@@ -307,6 +447,444 @@ layouts:
     fields:
       - { name: command, offset: 0, width: 1, encoding: enum_u8 }
       - { name: crc32, offset: 1, width: 4, encoding: u32_le }
+  ENCRYPTED_UPLOAD_V2_STORAGE_HEADER:
+    minimumLength: 128
+    fixedLength: 128
+    fields:
+      - { name: magic, offset: 0, width: 8, encoding: ascii }
+      - { name: format_version, offset: 8, width: 2, encoding: u16_le }
+      - { name: header_length, offset: 10, width: 2, encoding: u16_le }
+      - { name: flags, offset: 12, width: 4, encoding: bitmask_u32_le }
+      - { name: storage_suite, offset: 16, width: 2, encoding: u16_le }
+      - { name: local_wrap_suite, offset: 18, width: 2, encoding: u16_le }
+      - { name: wrapping_key_version, offset: 20, width: 4, encoding: u32_le }
+      - { name: plaintext_block_size, offset: 24, width: 4, encoding: u32_le }
+      - { name: recording_uuid, offset: 28, width: 16, encoding: uuid }
+      - { name: recording_generation, offset: 44, width: 4, encoding: u32_le }
+      - { name: block_nonce_base, offset: 48, width: 12, encoding: bytes }
+      - { name: local_wrap_nonce, offset: 60, width: 12, encoding: bytes }
+      - { name: wrapped_data_key, offset: 72, width: 32, encoding: bytes }
+      - { name: wrapped_data_key_tag, offset: 104, width: 16, encoding: bytes }
+      - { name: reserved, offset: 120, width: 8, encoding: zero }
+  ENCRYPTED_UPLOAD_V2_STORAGE_BLOCK_HEADER:
+    minimumLength: 4
+    fixedLength: 4
+    fields:
+      - { name: plaintext_length, offset: 0, width: 2, encoding: u16_le }
+      - { name: reserved, offset: 2, width: 2, encoding: zero }
+  ENCRYPTED_UPLOAD_V2_STORAGE_TRAILER:
+    minimumLength: 144
+    fixedLength: 144
+    fields:
+      - { name: magic, offset: 0, width: 8, encoding: ascii }
+      - { name: format_version, offset: 8, width: 2, encoding: u16_le }
+      - { name: trailer_length, offset: 10, width: 2, encoding: u16_le }
+      - { name: completion_state, offset: 12, width: 1, encoding: enum_u8 }
+      - { name: mode, offset: 13, width: 1, encoding: enum_u8 }
+      - { name: completion_reserved, offset: 14, width: 2, encoding: zero }
+      - { name: block_count, offset: 16, width: 4, encoding: u32_le }
+      - { name: plaintext_length, offset: 20, width: 8, encoding: u64_le }
+      - { name: ciphertext_body_length, offset: 28, width: 8, encoding: u64_le }
+      - { name: plaintext_sha256, offset: 36, width: 32, encoding: bytes }
+      - { name: ciphertext_body_sha256, offset: 68, width: 32, encoding: bytes }
+      - { name: auth_reserved, offset: 100, width: 12, encoding: zero }
+      - { name: trailer_tag, offset: 112, width: 32, encoding: bytes }
+  UPLOAD_AUTHORIZATION_V2:
+    minimumLength: 408
+    fixedLength: 408
+    fields:
+      - { name: magic, offset: 0, width: 8, encoding: ascii }
+      - { name: version, offset: 8, width: 2, encoding: u16_le }
+      - { name: total_length, offset: 10, width: 2, encoding: u16_le }
+      - { name: environment, offset: 12, width: 1, encoding: enum_u8 }
+      - { name: required_transport_profile, offset: 13, width: 1, encoding: enum_u8 }
+      - { name: minimum_storage_format, offset: 14, width: 1, encoding: enum_u8 }
+      - { name: effective_policy, offset: 15, width: 1, encoding: enum_u8 }
+      - { name: allowed_channel_mask, offset: 16, width: 1, encoding: bitmask_u8 }
+      - { name: reserved, offset: 17, width: 1, encoding: zero }
+      - { name: storage_suite, offset: 18, width: 2, encoding: u16_le }
+      - { name: hpke_kem_id, offset: 20, width: 2, encoding: u16_le }
+      - { name: hpke_kdf_id, offset: 22, width: 2, encoding: u16_le }
+      - { name: hpke_aead_id, offset: 24, width: 2, encoding: u16_le }
+      - { name: signature_suite, offset: 26, width: 2, encoding: u16_le }
+      - { name: recipient_key_format_version, offset: 28, width: 2, encoding: u16_le }
+      - { name: flags, offset: 30, width: 2, encoding: bitmask_u16_le }
+      - { name: upload_owner_revision, offset: 32, width: 4, encoding: u32_le }
+      - { name: binding_generation, offset: 36, width: 4, encoding: u32_le }
+      - { name: recording_generation, offset: 40, width: 4, encoding: u32_le }
+      - { name: signing_key_id, offset: 44, width: 4, encoding: u32_le }
+      - { name: policy_revision, offset: 48, width: 8, encoding: u64_le }
+      - { name: issued_at, offset: 56, width: 8, encoding: u64_le }
+      - { name: expires_at, offset: 64, width: 8, encoding: u64_le }
+      - { name: minimum_ciphertext_length, offset: 72, width: 8, encoding: u64_le }
+      - { name: maximum_ciphertext_length, offset: 80, width: 8, encoding: u64_le }
+      - { name: upload_session_uuid, offset: 88, width: 16, encoding: uuid }
+      - { name: recipient_key_uuid, offset: 104, width: 16, encoding: uuid }
+      - { name: recording_uuid, offset: 120, width: 16, encoding: uuid }
+      - { name: auth_nonce, offset: 136, width: 16, encoding: bytes }
+      - { name: recipient_public_key, offset: 152, width: 32, encoding: bytes }
+      - { name: tenant_context_digest, offset: 184, width: 32, encoding: bytes }
+      - { name: device_identity_digest, offset: 216, width: 32, encoding: bytes }
+      - { name: configuration_digest, offset: 248, width: 32, encoding: bytes }
+      - { name: staging_object_digest, offset: 280, width: 32, encoding: bytes }
+      - { name: ciphertext_sha256, offset: 312, width: 32, encoding: bytes }
+      - { name: signature, offset: 344, width: 64, encoding: p1363_signature }
+  UPLOAD_MANIFEST_V2:
+    minimumLength: 580
+    fixedLength: 580
+    fields:
+      - { name: magic, offset: 0, width: 8, encoding: ascii }
+      - { name: version, offset: 8, width: 2, encoding: u16_le }
+      - { name: total_length, offset: 10, width: 2, encoding: u16_le }
+      - { name: transport_profile, offset: 12, width: 1, encoding: enum_u8 }
+      - { name: storage_format, offset: 13, width: 1, encoding: enum_u8 }
+      - { name: effective_policy, offset: 14, width: 1, encoding: enum_u8 }
+      - { name: selected_channel, offset: 15, width: 1, encoding: enum_u8 }
+      - { name: storage_suite, offset: 16, width: 2, encoding: u16_le }
+      - { name: hpke_kem_id, offset: 18, width: 2, encoding: u16_le }
+      - { name: hpke_kdf_id, offset: 20, width: 2, encoding: u16_le }
+      - { name: hpke_aead_id, offset: 22, width: 2, encoding: u16_le }
+      - { name: auth_suite, offset: 24, width: 2, encoding: u16_le }
+      - { name: recipient_key_format_version, offset: 26, width: 2, encoding: u16_le }
+      - { name: upload_owner_revision, offset: 28, width: 4, encoding: u32_le }
+      - { name: binding_generation, offset: 32, width: 4, encoding: u32_le }
+      - { name: recording_generation, offset: 36, width: 4, encoding: u32_le }
+      - { name: plaintext_block_size, offset: 40, width: 4, encoding: u32_le }
+      - { name: block_count, offset: 44, width: 4, encoding: u32_le }
+      - { name: flags, offset: 48, width: 4, encoding: bitmask_u32_le }
+      - { name: upload_session_uuid, offset: 52, width: 16, encoding: uuid }
+      - { name: recipient_key_uuid, offset: 68, width: 16, encoding: uuid }
+      - { name: recording_uuid, offset: 84, width: 16, encoding: uuid }
+      - { name: tenant_context_digest, offset: 100, width: 32, encoding: bytes }
+      - { name: device_identity_digest, offset: 132, width: 32, encoding: bytes }
+      - { name: configuration_digest, offset: 164, width: 32, encoding: bytes }
+      - { name: staging_object_digest, offset: 196, width: 32, encoding: bytes }
+      - { name: authorization_sha256, offset: 228, width: 32, encoding: bytes }
+      - { name: ciphertext_length, offset: 260, width: 8, encoding: u64_le }
+      - { name: plaintext_length, offset: 268, width: 8, encoding: u64_le }
+      - { name: ciphertext_sha256, offset: 276, width: 32, encoding: bytes }
+      - { name: plaintext_sha256, offset: 308, width: 32, encoding: bytes }
+      - { name: header_sha256, offset: 340, width: 32, encoding: bytes }
+      - { name: trailer_sha256, offset: 372, width: 32, encoding: bytes }
+      - { name: hpke_encapsulated_key, offset: 404, width: 32, encoding: bytes }
+      - { name: hpke_sealed_key_payload, offset: 436, width: 112, encoding: bytes }
+      - { name: manifest_tag, offset: 548, width: 32, encoding: bytes }
+  COMPLETION_RECEIPT_V2:
+    minimumLength: 336
+    fixedLength: 336
+    fields:
+      - { name: magic, offset: 0, width: 8, encoding: ascii }
+      - { name: version, offset: 8, width: 2, encoding: u16_le }
+      - { name: total_length, offset: 10, width: 2, encoding: u16_le }
+      - { name: environment, offset: 12, width: 1, encoding: enum_u8 }
+      - { name: result, offset: 13, width: 1, encoding: enum_u8 }
+      - { name: transport_profile, offset: 14, width: 1, encoding: enum_u8 }
+      - { name: storage_format, offset: 15, width: 1, encoding: enum_u8 }
+      - { name: upload_owner_revision, offset: 16, width: 4, encoding: u32_le }
+      - { name: binding_generation, offset: 20, width: 4, encoding: u32_le }
+      - { name: recording_generation, offset: 24, width: 4, encoding: u32_le }
+      - { name: signing_key_id, offset: 28, width: 4, encoding: u32_le }
+      - { name: issued_at, offset: 32, width: 8, encoding: u64_le }
+      - { name: expires_at, offset: 40, width: 8, encoding: u64_le }
+      - { name: upload_session_uuid, offset: 48, width: 16, encoding: uuid }
+      - { name: recording_uuid, offset: 64, width: 16, encoding: uuid }
+      - { name: tenant_context_digest, offset: 80, width: 32, encoding: bytes }
+      - { name: device_identity_digest, offset: 112, width: 32, encoding: bytes }
+      - { name: ciphertext_sha256, offset: 144, width: 32, encoding: bytes }
+      - { name: plaintext_sha256, offset: 176, width: 32, encoding: bytes }
+      - { name: publication_identity_digest, offset: 208, width: 32, encoding: bytes }
+      - { name: configuration_digest, offset: 240, width: 32, encoding: bytes }
+      - { name: signature, offset: 272, width: 64, encoding: p1363_signature }
+  ENCRYPTED_UPLOAD_V2_CAPABILITY:
+    minimumLength: 24
+    fixedLength: 24
+    fields:
+      - { name: encoding_version, offset: 0, width: 1, encoding: u8 }
+      - { name: highest_transfer_profile_version, offset: 1, width: 1, encoding: u8 }
+      - { name: value_length, offset: 2, width: 2, encoding: u16_le }
+      - { name: flags, offset: 4, width: 4, encoding: bitmask_u32_le }
+      - { name: maximum_signed_blob_bytes, offset: 8, width: 2, encoding: u16_le }
+      - { name: maximum_manifest_bytes, offset: 10, width: 2, encoding: u16_le }
+      - { name: maximum_data_payload_bytes, offset: 12, width: 2, encoding: u16_le }
+      - { name: maximum_window_packets, offset: 14, width: 2, encoding: u16_le }
+      - { name: checkpoint_interval_blocks, offset: 16, width: 4, encoding: u32_le }
+      - { name: maximum_missing_sequences, offset: 20, width: 2, encoding: u16_le }
+      - { name: reserved, offset: 22, width: 2, encoding: zero }
+  ENCRYPTED_UPLOAD_V2_BLOB_BEGIN:
+    minimumLength: 42
+    fixedLength: 42
+    fields:
+      - { name: code, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: version, offset: 1, width: 1, encoding: u8 }
+      - { name: kind, offset: 2, width: 1, encoding: enum_u8 }
+      - { name: reserved, offset: 3, width: 1, encoding: zero }
+      - { name: write_id, offset: 4, width: 4, encoding: u32_le }
+      - { name: total_length, offset: 8, width: 2, encoding: u16_le }
+      - { name: sha256, offset: 10, width: 32, encoding: bytes }
+  ENCRYPTED_UPLOAD_V2_BLOB_DATA:
+    minimumLength: 12
+    fields:
+      - { name: code, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: version, offset: 1, width: 1, encoding: u8 }
+      - { name: kind, offset: 2, width: 1, encoding: enum_u8 }
+      - { name: reserved, offset: 3, width: 1, encoding: zero }
+      - { name: write_id, offset: 4, width: 4, encoding: u32_le }
+      - { name: offset, offset: 8, width: 2, encoding: u16_le }
+      - { name: chunk_length, offset: 10, width: 2, encoding: u16_le }
+      - { name: chunk, offset: 12, width: 0, encoding: bytes_tail }
+  ENCRYPTED_UPLOAD_V2_BLOB_COMMIT:
+    minimumLength: 8
+    fixedLength: 8
+    fields:
+      - { name: code, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: version, offset: 1, width: 1, encoding: u8 }
+      - { name: kind, offset: 2, width: 1, encoding: enum_u8 }
+      - { name: reserved, offset: 3, width: 1, encoding: zero }
+      - { name: write_id, offset: 4, width: 4, encoding: u32_le }
+  ENCRYPTED_UPLOAD_V2_BLOB_ABORT:
+    minimumLength: 8
+    fixedLength: 8
+    fields:
+      - { name: code, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: version, offset: 1, width: 1, encoding: u8 }
+      - { name: kind, offset: 2, width: 1, encoding: enum_u8 }
+      - { name: reserved, offset: 3, width: 1, encoding: zero }
+      - { name: write_id, offset: 4, width: 4, encoding: u32_le }
+  ENCRYPTED_UPLOAD_V2_BLOB_RESULT:
+    minimumLength: 10
+    fixedLength: 10
+    fields:
+      - { name: code, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: version, offset: 1, width: 1, encoding: u8 }
+      - { name: kind, offset: 2, width: 1, encoding: enum_u8 }
+      - { name: reserved, offset: 3, width: 1, encoding: zero }
+      - { name: write_id, offset: 4, width: 4, encoding: u32_le }
+      - { name: result, offset: 8, width: 2, encoding: u16_le }
+  ENCRYPTED_UPLOAD_V2_COMMON_HEADER:
+    minimumLength: 12
+    fixedLength: 12
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+  ENCRYPTED_UPLOAD_V2_LIST:
+    minimumLength: 16
+    fixedLength: 16
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: request_flags, offset: 12, width: 4, encoding: bitmask_u32_le }
+  ENCRYPTED_UPLOAD_V2_RECORDING_ENTRY:
+    minimumLength: 96
+    fixedLength: 96
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: recording_uuid, offset: 12, width: 16, encoding: uuid }
+      - { name: recording_generation, offset: 28, width: 4, encoding: u32_le }
+      - { name: storage_format, offset: 32, width: 1, encoding: enum_u8 }
+      - { name: completion_state, offset: 33, width: 1, encoding: enum_u8 }
+      - { name: reserved, offset: 34, width: 2, encoding: zero }
+      - { name: started_at, offset: 36, width: 8, encoding: u64_le }
+      - { name: duration_seconds, offset: 44, width: 4, encoding: u32_le }
+      - { name: plaintext_length, offset: 48, width: 8, encoding: u64_le }
+      - { name: ciphertext_length, offset: 56, width: 8, encoding: u64_le }
+      - { name: ciphertext_sha256, offset: 64, width: 32, encoding: bytes }
+  ENCRYPTED_UPLOAD_V2_RECORDING_LIST_END:
+    minimumLength: 52
+    fixedLength: 52
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: entry_count, offset: 12, width: 4, encoding: u32_le }
+      - { name: list_revision, offset: 16, width: 4, encoding: u32_le }
+      - { name: list_sha256, offset: 20, width: 32, encoding: bytes }
+  ENCRYPTED_UPLOAD_V2_START:
+    minimumLength: 128
+    fixedLength: 128
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: upload_session_uuid, offset: 12, width: 16, encoding: uuid }
+      - { name: recording_uuid, offset: 28, width: 16, encoding: uuid }
+      - { name: recording_generation, offset: 44, width: 4, encoding: u32_le }
+      - { name: authorization_sha256, offset: 48, width: 32, encoding: bytes }
+      - { name: checkpoint_revision, offset: 80, width: 4, encoding: u32_le }
+      - { name: next_ciphertext_offset, offset: 84, width: 8, encoding: u64_le }
+      - { name: prefix_sha256, offset: 92, width: 32, encoding: bytes }
+      - { name: window_packets, offset: 124, width: 2, encoding: u16_le }
+      - { name: data_payload_bytes, offset: 126, width: 2, encoding: u16_le }
+  ENCRYPTED_UPLOAD_V2_START_ACK:
+    minimumLength: 140
+    fixedLength: 140
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: upload_session_uuid, offset: 12, width: 16, encoding: uuid }
+      - { name: recording_uuid, offset: 28, width: 16, encoding: uuid }
+      - { name: recording_generation, offset: 44, width: 4, encoding: u32_le }
+      - { name: ciphertext_length, offset: 48, width: 8, encoding: u64_le }
+      - { name: ciphertext_sha256, offset: 56, width: 32, encoding: bytes }
+      - { name: window_packets, offset: 88, width: 2, encoding: u16_le }
+      - { name: data_payload_bytes, offset: 90, width: 2, encoding: u16_le }
+      - { name: checkpoint_interval_blocks, offset: 92, width: 4, encoding: u32_le }
+      - { name: checkpoint_revision, offset: 96, width: 4, encoding: u32_le }
+      - { name: next_ciphertext_offset, offset: 100, width: 8, encoding: u64_le }
+      - { name: prefix_sha256, offset: 108, width: 32, encoding: bytes }
+  ENCRYPTED_UPLOAD_V2_DATA:
+    minimumLength: 28
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: sequence, offset: 12, width: 4, encoding: u32_le }
+      - { name: ciphertext_offset, offset: 16, width: 8, encoding: u64_le }
+      - { name: payload_length, offset: 24, width: 2, encoding: u16_le }
+      - { name: reserved, offset: 26, width: 2, encoding: zero }
+      - { name: payload, offset: 28, width: 0, encoding: bytes_tail }
+  ENCRYPTED_UPLOAD_V2_WINDOW_END:
+    minimumLength: 68
+    fixedLength: 68
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: window_index, offset: 12, width: 4, encoding: u32_le }
+      - { name: first_sequence, offset: 16, width: 4, encoding: u32_le }
+      - { name: last_sequence, offset: 20, width: 4, encoding: u32_le }
+      - { name: next_ciphertext_offset, offset: 24, width: 8, encoding: u64_le }
+      - { name: prefix_sha256, offset: 32, width: 32, encoding: bytes }
+      - { name: checkpoint_revision, offset: 64, width: 4, encoding: u32_le }
+  ENCRYPTED_UPLOAD_V2_WINDOW_ACK:
+    minimumLength: 68
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: window_index, offset: 12, width: 4, encoding: u32_le }
+      - { name: highest_contiguous_sequence, offset: 16, width: 4, encoding: u32_le }
+      - { name: next_ciphertext_offset, offset: 20, width: 8, encoding: u64_le }
+      - { name: prefix_sha256, offset: 28, width: 32, encoding: bytes }
+      - { name: checkpoint_revision, offset: 60, width: 4, encoding: u32_le }
+      - { name: missing_count, offset: 64, width: 2, encoding: u16_le }
+      - { name: reserved, offset: 66, width: 2, encoding: zero }
+      - { name: missing_sequences, offset: 68, width: 0, encoding: u32_le_tail }
+  ENCRYPTED_UPLOAD_V2_MANIFEST_CHUNK:
+    minimumLength: 52
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: total_manifest_length, offset: 12, width: 2, encoding: u16_le }
+      - { name: chunk_offset, offset: 14, width: 2, encoding: u16_le }
+      - { name: chunk_length, offset: 16, width: 2, encoding: u16_le }
+      - { name: reserved, offset: 18, width: 2, encoding: zero }
+      - { name: manifest_sha256, offset: 20, width: 32, encoding: bytes }
+      - { name: chunk, offset: 52, width: 0, encoding: bytes_tail }
+  ENCRYPTED_UPLOAD_V2_EOF:
+    minimumLength: 92
+    fixedLength: 92
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: final_sequence, offset: 12, width: 4, encoding: u32_le }
+      - { name: block_count, offset: 16, width: 4, encoding: u32_le }
+      - { name: ciphertext_length, offset: 20, width: 8, encoding: u64_le }
+      - { name: ciphertext_sha256, offset: 28, width: 32, encoding: bytes }
+      - { name: manifest_sha256, offset: 60, width: 32, encoding: bytes }
+  ENCRYPTED_UPLOAD_V2_RESUME:
+    minimumLength: 96
+    fixedLength: 96
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: upload_session_uuid, offset: 12, width: 16, encoding: uuid }
+      - { name: recording_uuid, offset: 28, width: 16, encoding: uuid }
+      - { name: recording_generation, offset: 44, width: 4, encoding: u32_le }
+      - { name: checkpoint_revision, offset: 48, width: 4, encoding: u32_le }
+      - { name: next_ciphertext_offset, offset: 52, width: 8, encoding: u64_le }
+      - { name: prefix_sha256, offset: 60, width: 32, encoding: bytes }
+      - { name: window_packets, offset: 92, width: 2, encoding: u16_le }
+      - { name: data_payload_bytes, offset: 94, width: 2, encoding: u16_le }
+  ENCRYPTED_UPLOAD_V2_RESUME_REJECT:
+    minimumLength: 60
+    fixedLength: 60
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: reason, offset: 12, width: 2, encoding: u16_le }
+      - { name: reserved, offset: 14, width: 2, encoding: zero }
+      - { name: checkpoint_revision, offset: 16, width: 4, encoding: u32_le }
+      - { name: next_ciphertext_offset, offset: 20, width: 8, encoding: u64_le }
+      - { name: prefix_sha256, offset: 28, width: 32, encoding: bytes }
+  ENCRYPTED_UPLOAD_V2_CONFIRM:
+    minimumLength: 84
+    fixedLength: 84
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: upload_session_uuid, offset: 12, width: 16, encoding: uuid }
+      - { name: recording_uuid, offset: 28, width: 16, encoding: uuid }
+      - { name: recording_generation, offset: 44, width: 4, encoding: u32_le }
+      - { name: owner_revision, offset: 48, width: 4, encoding: u32_le }
+      - { name: receipt_sha256, offset: 52, width: 32, encoding: bytes }
+  ENCRYPTED_UPLOAD_V2_ABORT:
+    minimumLength: 16
+    fixedLength: 16
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: reason, offset: 12, width: 2, encoding: u16_le }
+      - { name: reserved, offset: 14, width: 2, encoding: zero }
+  ENCRYPTED_UPLOAD_V2_ERROR:
+    minimumLength: 20
+    fixedLength: 20
+    fields:
+      - { name: message_type, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: protocol_version, offset: 1, width: 1, encoding: u8 }
+      - { name: flags, offset: 2, width: 2, encoding: bitmask_u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: error, offset: 12, width: 2, encoding: u16_le }
+      - { name: failed_message_type, offset: 14, width: 1, encoding: enum_u8 }
+      - { name: reserved, offset: 15, width: 1, encoding: zero }
+      - { name: checkpoint_revision, offset: 16, width: 4, encoding: u32_le }
+  ENCRYPTED_UPLOAD_V2_STATUS:
+    minimumLength: 24
+    fixedLength: 24
+    fields:
+      - { name: version, offset: 0, width: 1, encoding: u8 }
+      - { name: phase, offset: 1, width: 1, encoding: enum_u8 }
+      - { name: result, offset: 2, width: 2, encoding: u16_le }
+      - { name: session_id, offset: 4, width: 8, encoding: u64_le }
+      - { name: durable_ciphertext_bytes, offset: 12, width: 8, encoding: u64_le }
+      - { name: progress_percent, offset: 20, width: 1, encoding: u8 }
+      - { name: transport_profile, offset: 21, width: 1, encoding: enum_u8 }
+      - { name: reserved, offset: 22, width: 2, encoding: zero }
 
 limits:
   DEFAULT_MTU: 23

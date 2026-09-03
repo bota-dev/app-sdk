@@ -739,9 +739,9 @@ legacy retry when the selected operation was v2.
 
 New firmware rejecting the exact legacy START because `v2_required` is durably
 applied sends the existing legacy ERROR packet shape on
-`CHAR_RECORDING_TRANSFER` with additive legacy error code `0x21`
+`CHAR_RECORDING_TRANSFER` with additive legacy error code `0x22`
 (`ENCRYPTED_UPLOAD_V2_REQUIRED`). It never sends a v2 ERROR to an old
-characteristic. Updated SDKs map `0x21` to a stable non-retryable policy error;
+characteristic. Updated SDKs map `0x22` to a stable non-retryable policy error;
 older SDKs may surface an unknown device error but still receive no new format.
 
 ## SDK Selection and Public Boundary

@@ -15,8 +15,18 @@ const GENERATED_PATH: &str = "core/device-sdk-core/src/generated/protocol.rs";
 struct ProtocolManifest {
     schema_version: u32,
     protocol_revision: String,
+    #[serde(default)]
+    contract_revisions: BTreeMap<String, String>,
     services: Vec<Service>,
     constant_groups: BTreeMap<String, BTreeMap<String, u8>>,
+    #[serde(default)]
+    word_constant_groups: BTreeMap<String, BTreeMap<String, u16>>,
+    #[serde(default)]
+    dword_constant_groups: BTreeMap<String, BTreeMap<String, u32>>,
+    #[serde(default)]
+    byte_strings: BTreeMap<String, String>,
+    #[serde(default)]
+    ascii_strings: BTreeMap<String, String>,
     layouts: BTreeMap<String, Layout>,
     limits: BTreeMap<String, usize>,
 }
@@ -81,6 +91,13 @@ pub fn generated_content(root: &Path) -> Result<String, String> {
     )
     .unwrap();
 
+    for (name, revision) in &manifest.contract_revisions {
+        writeln!(output, "pub const {name}: &str = {revision:?};").unwrap();
+    }
+    if !manifest.contract_revisions.is_empty() {
+        output.push('\n');
+    }
+
     for service in &manifest.services {
         writeln!(
             output,
@@ -110,6 +127,56 @@ pub fn generated_content(root: &Path) -> Result<String, String> {
         output.push('\n');
     }
 
+    for (group, constants) in &manifest.word_constant_groups {
+        writeln!(output, "// {group}").unwrap();
+        for (name, value) in constants {
+            writeln!(output, "pub const {name}: u16 = 0x{value:04X};").unwrap();
+        }
+        output.push('\n');
+    }
+
+    for (group, constants) in &manifest.dword_constant_groups {
+        writeln!(output, "// {group}").unwrap();
+        for (name, value) in constants {
+            if value.is_power_of_two() {
+                writeln!(
+                    output,
+                    "pub const {name}: u32 = 1 << {};",
+                    value.trailing_zeros()
+                )
+                .unwrap();
+            } else {
+                writeln!(output, "pub const {name}: u32 = 0x{value:08X};").unwrap();
+            }
+        }
+        output.push('\n');
+    }
+
+    for (name, value) in &manifest.byte_strings {
+        let bytes = decode_lower_hex(value).expect("validated byte string");
+        writeln!(
+            output,
+            "pub const {name}: &[u8] = {};",
+            rust_byte_string(&bytes)
+        )
+        .unwrap();
+    }
+    if !manifest.byte_strings.is_empty() {
+        output.push('\n');
+    }
+
+    for (name, value) in &manifest.ascii_strings {
+        writeln!(
+            output,
+            "pub const {name}: &[u8] = {};",
+            rust_byte_string(value.as_bytes())
+        )
+        .unwrap();
+    }
+    if !manifest.ascii_strings.is_empty() {
+        output.push('\n');
+    }
+
     for (name, layout) in &manifest.layouts {
         writeln!(
             output,
@@ -120,8 +187,23 @@ pub fn generated_content(root: &Path) -> Result<String, String> {
         if let Some(length) = layout.fixed_length {
             writeln!(output, "pub const {name}_FIXED_LENGTH: usize = {length};").unwrap();
         }
+        for field in &layout.fields {
+            let field_name = field.name.to_ascii_uppercase();
+            writeln!(
+                output,
+                "pub const {name}_{field_name}_OFFSET: usize = {};",
+                field.offset
+            )
+            .unwrap();
+            writeln!(
+                output,
+                "pub const {name}_{field_name}_WIDTH: usize = {};",
+                field.width
+            )
+            .unwrap();
+        }
+        output.push('\n');
     }
-    output.push('\n');
 
     for (name, value) in &manifest.limits {
         writeln!(output, "pub const {name}: usize = {value};").unwrap();
@@ -161,6 +243,13 @@ fn validate(manifest: &ProtocolManifest) -> Result<(), String> {
     }
 
     let mut names = HashSet::new();
+    for (name, revision) in &manifest.contract_revisions {
+        require_constant_name(name)?;
+        require_unique(&mut names, name)?;
+        if revision.is_empty() {
+            return Err(format!("contract revision {name} must not be empty"));
+        }
+    }
     for service in &manifest.services {
         require_constant_name(&service.name)?;
         require_uuid(&service.uuid)?;
@@ -177,27 +266,65 @@ fn validate(manifest: &ProtocolManifest) -> Result<(), String> {
             require_unique(&mut names, name)?;
         }
     }
+    for constants in manifest.word_constant_groups.values() {
+        for name in constants.keys() {
+            require_constant_name(name)?;
+            require_unique(&mut names, name)?;
+        }
+    }
+    for constants in manifest.dword_constant_groups.values() {
+        for name in constants.keys() {
+            require_constant_name(name)?;
+            require_unique(&mut names, name)?;
+        }
+    }
+    for (name, value) in &manifest.byte_strings {
+        require_constant_name(name)?;
+        require_unique(&mut names, name)?;
+        decode_lower_hex(value).map_err(|error| format!("byte string {name} {error}"))?;
+    }
+    for (name, value) in &manifest.ascii_strings {
+        require_constant_name(name)?;
+        require_unique(&mut names, name)?;
+        if !value.is_ascii() || value.contains('\0') {
+            return Err(format!("ASCII string {name} contains invalid bytes"));
+        }
+    }
     for (name, layout) in &manifest.layouts {
         require_constant_name(name)?;
+        require_unique(&mut names, &format!("{name}_MINIMUM_LENGTH"))?;
         if let Some(fixed_length) = layout.fixed_length {
+            require_unique(&mut names, &format!("{name}_FIXED_LENGTH"))?;
             if fixed_length < layout.minimum_length {
                 return Err(format!(
                     "layout {name} fixedLength is smaller than minimumLength"
                 ));
-            }
-            for field in &layout.fields {
-                if field.width > 0 && field.offset + field.width > fixed_length {
-                    return Err(format!(
-                        "layout {name} field {} exceeds fixedLength",
-                        field.name
-                    ));
-                }
             }
         }
         for field in &layout.fields {
             if field.name.is_empty() || field.encoding.is_empty() {
                 return Err(format!("layout {name} has an incomplete field"));
             }
+            let field_end = field
+                .offset
+                .checked_add(field.width)
+                .ok_or_else(|| format!("layout {name} field {} overflows", field.name))?;
+            if let Some(fixed_length) = layout.fixed_length
+                && field.width > 0
+                && field_end > fixed_length
+            {
+                return Err(format!(
+                    "layout {name} field {} exceeds fixedLength",
+                    field.name
+                ));
+            }
+            let field_name = field.name.to_ascii_uppercase();
+            let offset_name = format!("{name}_{field_name}_OFFSET");
+            let width_name = format!("{name}_{field_name}_WIDTH");
+            require_constant_name(&offset_name)?;
+            require_constant_name(&width_name)?;
+            require_unique(&mut names, &offset_name)?;
+            require_unique(&mut names, &width_name)?;
             let _ = field.optional;
         }
     }
@@ -236,4 +363,73 @@ fn require_uuid(uuid: &str) -> Result<(), String> {
         return Err(format!("invalid Bluetooth UUID {uuid}"));
     }
     Ok(())
+}
+
+fn decode_lower_hex(value: &str) -> Result<Vec<u8>, &'static str> {
+    let (pairs, remainder) = value.as_bytes().as_chunks::<2>();
+    if !remainder.is_empty() {
+        return Err("must have even length");
+    }
+    if !value
+        .bytes()
+        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err("must contain lowercase hexadecimal characters only");
+    }
+
+    pairs
+        .iter()
+        .map(|pair| {
+            let high = hex_nibble(pair[0]);
+            let low = hex_nibble(pair[1]);
+            Ok((high << 4) | low)
+        })
+        .collect()
+}
+
+fn hex_nibble(byte: u8) -> u8 {
+    match byte {
+        b'0'..=b'9' => byte - b'0',
+        b'a'..=b'f' => byte - b'a' + 10,
+        _ => unreachable!("validated lowercase hexadecimal nibble"),
+    }
+}
+
+fn rust_byte_string(bytes: &[u8]) -> String {
+    let escaped: String = bytes
+        .iter()
+        .flat_map(|byte| std::ascii::escape_default(*byte))
+        .map(char::from)
+        .collect();
+    format!("b\"{escaped}\"")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ProtocolManifest, validate};
+
+    #[test]
+    fn variable_layout_field_range_overflow_is_rejected() {
+        let source = format!(
+            r#"
+schemaVersion: 1
+protocolRevision: test
+services: []
+constantGroups: {{}}
+layouts:
+  OVERFLOW:
+    minimumLength: 0
+    fields:
+      - {{ name: payload, offset: {}, width: 2, encoding: bytes_tail }}
+limits: {{}}
+"#,
+            usize::MAX
+        );
+        let manifest: ProtocolManifest = serde_yaml_ng::from_str(&source).unwrap();
+
+        assert_eq!(
+            validate(&manifest),
+            Err("layout OVERFLOW field payload overflows".to_owned())
+        );
+    }
 }

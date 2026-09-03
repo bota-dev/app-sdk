@@ -97,6 +97,7 @@ with `cryptography` 50.0.1 for host-only firmware conformance tests.
 - Modify: `app-sdk/tools/xtask/src/protocol.rs`
 - Modify: `app-sdk/tools/xtask/tests/protocol_codegen.rs`
 - Modify: `app-sdk/core/device-sdk-core/src/generated/protocol.rs`
+- Modify: `app-sdk/docs/superpowers/specs/2026-09-03-encrypted-upload-v2-protocol-contract-design.md`
 - Modify: `app-sdk/docs/superpowers/plans/2026-09-03-encrypted-upload-v2-protocol-contract.md`
 
 **Interfaces:**
@@ -109,7 +110,7 @@ with `cryptography` 50.0.1 for host-only firmware conformance tests.
   `"encrypted-upload-v2-contract-v1"`; it does not change released
   `PROTOCOL_REVISION`.
 
-- [ ] **Step 1: Write the generator assertions before changing the manifest**
+- [x] **Step 1: Write the generator assertions before changing the manifest**
 
 Add these assertions to `tools/xtask/tests/protocol_codegen.rs`:
 
@@ -147,7 +148,7 @@ fn generated_encrypted_upload_v2_contract_is_complete() {
 }
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -159,7 +160,7 @@ cargo test -p xtask --test protocol_codegen generated_encrypted_upload_v2_contra
 Expected: FAIL because the contract revision, characteristics, and layouts are
 absent.
 
-- [ ] **Step 3: Add typed manifest sections and validation**
+- [x] **Step 3: Add typed manifest sections and validation**
 
 Extend `ProtocolManifest` and generation with these exact optional maps so
 existing manifests remain source-compatible while the v2 contract can express
@@ -202,7 +203,7 @@ pub const ENCRYPTED_UPLOAD_V2_STORAGE_MAGIC: &[u8] = b"BOTAENC2";
 pub const ENCRYPTED_UPLOAD_V2_START_SESSION_ID_OFFSET: usize = 4;
 ```
 
-- [ ] **Step 4: Add every frozen value to the manifest**
+- [x] **Step 4: Add every frozen value to the manifest**
 
 Keep `protocolRevision: firmware-8b175a89374c`. Add
 `contractRevisions.ENCRYPTED_UPLOAD_V2_CONTRACT_REVISION`, characteristics
@@ -280,7 +281,7 @@ asciiStrings:
 ```
 
 Add these exact `u8` groups and add
-`BLE_ERROR_ENCRYPTED_UPLOAD_V2_REQUIRED: 0x21` to the existing `ble_errors`
+`BLE_ERROR_ENCRYPTED_UPLOAD_V2_REQUIRED: 0x22` to the existing `ble_errors`
 group:
 
 ```yaml
@@ -369,7 +370,7 @@ ENCRYPTED_UPLOAD_V2_BLOB_RESULT 10
 ENCRYPTED_UPLOAD_V2_COMMON_HEADER 12
 ENCRYPTED_UPLOAD_V2_LIST 16
 ENCRYPTED_UPLOAD_V2_RECORDING_ENTRY 96
-ENCRYPTED_UPLOAD_V2_LIST_END 52
+ENCRYPTED_UPLOAD_V2_RECORDING_LIST_END 52
 ENCRYPTED_UPLOAD_V2_START 128
 ENCRYPTED_UPLOAD_V2_START_ACK 140
 ENCRYPTED_UPLOAD_V2_DATA 28+N
@@ -389,7 +390,7 @@ For every manifest field, generate `LAYOUT_NAME_FIELD_NAME_OFFSET` and
 `LAYOUT_NAME_FIELD_NAME_WIDTH`; a width of zero means an explicitly length-delimited
 tail and never an unbounded allocation.
 
-- [ ] **Step 5: Generate and verify the constants**
+- [x] **Step 5: Generate and verify the constants**
 
 Run:
 
@@ -402,7 +403,7 @@ cargo fmt --all -- --check
 
 Expected: all commands PASS and a second generation changes no file.
 
-- [ ] **Step 6: Commit only the manifest/generator slice**
+- [x] **Step 6: Commit only the manifest/generator slice**
 
 Mark Task 1 checked in this plan, then run:
 
@@ -411,6 +412,7 @@ git add protocol/manifest/device-protocol.yaml \
   tools/xtask/src/protocol.rs \
   tools/xtask/tests/protocol_codegen.rs \
   core/device-sdk-core/src/generated/protocol.rs \
+  docs/superpowers/specs/2026-09-03-encrypted-upload-v2-protocol-contract-design.md \
   docs/superpowers/plans/2026-09-03-encrypted-upload-v2-protocol-contract.md
 git diff --cached --check
 git commit -m "feat: freeze encrypted upload v2 wire constants" \
@@ -1737,7 +1739,7 @@ git commit -m "test: add encrypted upload v2 firmware reference" \
 
 In the firmware guide, add the six `0406..040B` target characteristics, all
 message codes, exact lengths/offsets, stable results, capability flags, and the
-legacy `0x21` error. Label them:
+legacy `0x22` error. Label them:
 
 ```text
 Allocated by encrypted-upload-v2-contract-v1; not registered or advertised by
