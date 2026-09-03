@@ -212,7 +212,7 @@ fn release_workflow_packs_publishes_and_verifies_the_react_native_package() {
     assert!(contents.contains("target/react-native-release"));
     assert!(
         contents.contains(
-            "npx --yes \"npm@$NPM_CLI_VERSION\" publish \"$PACKAGE_PATH\" --access public"
+            "npx --yes \"npm@$NPM_CLI_VERSION\" publish \"$PACKAGE_PATH\" --access public --tag \"$NPM_DIST_TAG\""
         )
     );
     assert!(
@@ -364,7 +364,17 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     assert!(contents.contains("MAVEN_CENTRAL_PASSWORD"));
     assert!(contents.contains("SIGNING_IN_MEMORY_KEY"));
     assert!(contents.contains("SIGNING_IN_MEMORY_KEY_PASSWORD"));
-    assert!(contents.contains("central-dev.bota-bota-android-sdk-1.1.0"));
+    assert!(contents.contains("resolve-release-channel.mjs"));
+    assert!(contents.contains("--mode new"));
+    assert!(contents.contains("--mode recovery"));
+    assert!(contents.contains("LATEST_BEFORE"));
+    assert!(contents.contains("test \"$LATEST_AFTER\" = \"$LATEST_BEFORE\""));
+    assert!(contents.contains("test \"$PUBLISHED_BETA\" = \"$RELEASE_VERSION\""));
+    assert!(contents.contains("gh release edit \"$RELEASE_TAG\" --draft=false --prerelease"));
+    assert!(!contents.contains("central-dev.bota-bota-android-sdk-1.1.0"));
+    assert!(!contents.contains("--version 1.1.0"));
+    assert!(!contents.contains("refs/tags/v1.1.0"));
+    assert!(!contents.contains("PACKAGE_SPEC=\"@bota.dev/react-native-sdk@1.1.0\""));
     assert!(contents.contains("stageSignedCentralRawRepository"));
     assert!(contents.contains("central-portal.mjs prepare"));
     assert!(contents.contains("central-portal.mjs upload-or-resume"));
@@ -373,7 +383,6 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     assert!(contents.contains("central-portal.mjs verify-published"));
     assert!(contents.contains("unzip -q target/android-release/central-bundle.zip"));
     assert!(contents.contains("run-id: ${{ inputs.releaseRunId }}"));
-    assert!(contents.contains("gh release edit v1.1.0 --draft=false"));
     assert!(contents.contains("needs: [publish, recover-central]"));
     assert!(contents.contains("github.event_name == 'workflow_dispatch'"));
     assert!(contents.contains("central-portal-state.json"));
@@ -383,6 +392,20 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     assert!(contents.contains("matrix:\n        api: [26, 35]"));
     assert!(contents.contains("tools/android/test-public-consumer.sh --api ${{ matrix.api }}"));
     assert!(!contents.contains("echo \"published=false\""));
+}
+
+#[test]
+fn release_workflow_never_publishes_npm_without_the_beta_tag() {
+    let contents = fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
+    let npm_publish_lines = contents
+        .lines()
+        .filter(|line| line.contains("npm@$NPM_CLI_VERSION") && line.contains(" publish "))
+        .collect::<Vec<_>>();
+
+    assert_eq!(npm_publish_lines.len(), 2);
+    for line in npm_publish_lines {
+        assert!(line.contains("--tag \"$NPM_DIST_TAG\""), "{line}");
+    }
 }
 
 #[test]

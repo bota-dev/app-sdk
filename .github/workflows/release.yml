@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       releaseRef:
-        description: Exact annotated release tag ref, for example refs/tags/v1.1.0
+        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.0
         required: true
         type: string
       centralDeploymentId:
@@ -35,7 +35,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: central-dev.bota-bota-android-sdk-1.1.0
+  group: app-sdk-release-${{ github.event_name == 'push' && github.ref_name || inputs.releaseRef }}
   cancel-in-progress: false
 
 jobs:
@@ -66,6 +66,12 @@ jobs:
 
       - name: Install Node.js dependencies
         run: npm ci
+
+      - name: Resolve beta release channel
+        run: |
+          node tools/release/resolve-release-channel.mjs \
+            --ref "$GITHUB_REF" \
+            --mode new
 
       - name: Verify synchronized release metadata
         run: cargo xtask release verify-tag "$GITHUB_REF_NAME"
@@ -356,6 +362,26 @@ jobs:
       - name: Install repository tooling
         run: npm ci
 
+      - name: Resolve publication channel
+        id: release-channel
+        run: |
+          node tools/release/resolve-release-channel.mjs \
+            --ref "$GITHUB_REF" \
+            --mode new \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Export publication metadata
+        run: |
+          {
+            echo "RELEASE_TAG=$GITHUB_REF_NAME"
+            echo "RELEASE_VERSION=${{ steps.release-channel.outputs.version }}"
+            echo "NPM_DIST_TAG=${{ steps.release-channel.outputs.npm_tag }}"
+            echo "GITHUB_PRERELEASE=${{ steps.release-channel.outputs.github_prerelease }}"
+          } >> "$GITHUB_ENV"
+          test "${{ steps.release-channel.outputs.version }}" = "${GITHUB_REF_NAME#v}"
+          test "${{ steps.release-channel.outputs.npm_tag }}" = beta
+          test "${{ steps.release-channel.outputs.github_prerelease }}" = true
+
       - name: Download Apple release payload
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -408,14 +434,14 @@ jobs:
             --raw-repository target/android-central-raw \
             --portal-repository target/android-central-portal \
             --coordinate dev.bota:bota-android-sdk \
-            --version 1.1.0
+            --version "$RELEASE_VERSION"
           cmp \
-            target/android-central-portal/dev/bota/bota-android-sdk/1.1.0/bota-android-sdk-1.1.0.aar \
-            target/android-release/bota-android-sdk-1.1.0.aar
+            "target/android-central-portal/dev/bota/bota-android-sdk/$RELEASE_VERSION/bota-android-sdk-$RELEASE_VERSION.aar" \
+            "target/android-release/bota-android-sdk-$RELEASE_VERSION.aar"
           node tools/android/build-central-bundle.mjs build \
             --repository target/android-central-portal \
             --coordinate dev.bota:bota-android-sdk \
-            --version 1.1.0 \
+            --version "$RELEASE_VERSION" \
             --source-revision "$(git rev-parse HEAD)" \
             --inventory target/android-release/central-bundle-files.json \
             --output target/android-release/central-bundle.zip
@@ -436,9 +462,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
-              --generate-notes --title "Bota App SDK ${GITHUB_REF_NAME#v}"
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --draft --prerelease --verify-tag \
+              --generate-notes --title "Bota App SDK $RELEASE_VERSION"
           fi
           mkdir -p target/existing-release-assets
           for path in \
@@ -447,15 +473,15 @@ jobs:
             target/release-candidate-files.json
           do
             name="$(basename "$path")"
-            if gh release download "$GITHUB_REF_NAME" --pattern "$name" \
+            if gh release download "$RELEASE_TAG" --pattern "$name" \
               --dir target/existing-release-assets >/dev/null 2>&1
             then
               cmp "$path" "target/existing-release-assets/$name"
             else
-              gh release upload "$GITHUB_REF_NAME" "$path"
+              gh release upload "$RELEASE_TAG" "$path"
             fi
           done
-          gh release upload "$GITHUB_REF_NAME" target/central-portal-state.json --clobber
+          gh release upload "$RELEASE_TAG" target/central-portal-state.json --clobber
 
       - name: Upload or resume Central deployment
         env:
@@ -487,13 +513,15 @@ jobs:
           set -euo pipefail
           PACKAGE_PATH="$(find target/react-native-release -maxdepth 1 -type f -name '*.tgz' -print -quit)"
           test -n "$PACKAGE_PATH"
-          PACKAGE_SPEC="@bota.dev/react-native-sdk@${GITHUB_REF_NAME#v}"
+          PACKAGE_SPEC="@bota.dev/react-native-sdk@$RELEASE_VERSION"
           EXPECTED_SHASUM="$(sha1sum "$PACKAGE_PATH" | awk '{print $1}')"
+          LATEST_BEFORE="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/react-native-sdk dist-tags.latest)"
+          [[ "$LATEST_BEFORE" =~ ^0\.0\.[0-9]+$ ]]
 
           if PUBLISHED_SHASUM="$(npx --yes "npm@$NPM_CLI_VERSION" view "$PACKAGE_SPEC" dist.shasum 2>/dev/null)"; then
             test "$PUBLISHED_SHASUM" = "$EXPECTED_SHASUM"
           else
-            npx --yes "npm@$NPM_CLI_VERSION" publish "$PACKAGE_PATH" --access public
+            npx --yes "npm@$NPM_CLI_VERSION" publish "$PACKAGE_PATH" --access public --tag "$NPM_DIST_TAG"
           fi
 
           PUBLISHED_SHASUM=""
@@ -504,6 +532,10 @@ jobs:
             sleep 10
           done
           test "$PUBLISHED_SHASUM" = "$EXPECTED_SHASUM"
+          LATEST_AFTER="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/react-native-sdk dist-tags.latest)"
+          PUBLISHED_BETA="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/react-native-sdk dist-tags.beta)"
+          test "$LATEST_AFTER" = "$LATEST_BEFORE"
+          test "$PUBLISHED_BETA" = "$RELEASE_VERSION"
 
       - name: Preserve latest Central deployment state
         if: always()
@@ -519,7 +551,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [[ -f target/central-portal-state.json ]]; then
-            gh release upload "$GITHUB_REF_NAME" target/central-portal-state.json --clobber
+            gh release upload "$RELEASE_TAG" target/central-portal-state.json --clobber
           fi
 
       - name: Publish GitHub release
@@ -528,8 +560,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release upload "$GITHUB_REF_NAME" target/apple-release/* target/react-native-release/* --clobber
-          gh release edit "$GITHUB_REF_NAME" --draft=false
+          gh release upload "$RELEASE_TAG" target/apple-release/* target/react-native-release/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease
 
   recover-central:
     name: Recover Central deployment
@@ -544,7 +576,7 @@ jobs:
       - name: Validate recovery inputs
         run: |
           test "$GITHUB_REF" = "refs/heads/main"
-          test "${{ inputs.releaseRef }}" = "refs/tags/v1.1.0"
+          [[ "${{ inputs.releaseRef }}" =~ ^refs/tags/v[^/]+$ ]]
           [[ "${{ inputs.centralDeploymentId }}" =~ ^[0-9a-fA-F-]{36}$ ]]
           [[ "${{ inputs.centralRecoveryMode }}" =~ ^(resume-uncertain|retry-failed)$ ]]
           [[ "${{ inputs.releaseRunId }}" =~ ^[0-9]+$ ]]
@@ -561,38 +593,61 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
-        with:
-          toolchain: 1.98.0
-
       - name: Install repository tooling
         run: npm ci
 
+      - name: Resolve recovery channel
+        id: release-channel
+        run: |
+          node tools/release/resolve-release-channel.mjs \
+            --ref "${{ inputs.releaseRef }}" \
+            --mode recovery \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Export recovery metadata
+        run: |
+          RELEASE_REF="${{ inputs.releaseRef }}"
+          RELEASE_TAG="${RELEASE_REF#refs/tags/}"
+          {
+            echo "RELEASE_REF=$RELEASE_REF"
+            echo "RELEASE_TAG=$RELEASE_TAG"
+            echo "RELEASE_VERSION=${{ steps.release-channel.outputs.version }}"
+            echo "NPM_DIST_TAG=${{ steps.release-channel.outputs.npm_tag }}"
+            echo "GITHUB_PRERELEASE=${{ steps.release-channel.outputs.github_prerelease }}"
+          } >> "$GITHUB_ENV"
+          test "${{ steps.release-channel.outputs.npm_tag }}" = beta
+          test "${{ steps.release-channel.outputs.github_prerelease }}" = true
+
       - name: Verify immutable tag identity
         run: |
-          test "$(git cat-file -t v1.1.0)" = tag
-          git merge-base --is-ancestor "$(git rev-list -n 1 v1.1.0)" HEAD
-          cargo xtask release verify-tag v1.1.0
+          set -euo pipefail
+          test "$(git cat-file -t "$RELEASE_TAG")" = tag
+          SOURCE_REVISION="$(git rev-list -n 1 "$RELEASE_TAG")"
+          git merge-base --is-ancestor "$SOURCE_REVISION" HEAD
+          TAG_VERSION="$(git show "${RELEASE_TAG}:sdk-version.toml" | sed -n 's/^version = "\([^"]*\)"$/\1/p')"
+          TAG_PACKAGE_VERSION="$(git show "${RELEASE_TAG}:frameworks/react-native/package.json" | jq -r .version)"
+          test "$TAG_VERSION" = "$RELEASE_VERSION"
+          test "$TAG_PACKAGE_VERSION" = "$RELEASE_VERSION"
+          echo "SOURCE_REVISION=$SOURCE_REVISION" >> "$GITHUB_ENV"
 
       - name: Download preserved deployment inputs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p target/android-release
-          gh release download v1.1.0 --pattern central-bundle.zip \
+          gh release download "$RELEASE_TAG" --pattern central-bundle.zip \
             --dir target/android-release
-          gh release download v1.1.0 --pattern central-bundle-files.json \
+          gh release download "$RELEASE_TAG" --pattern central-bundle-files.json \
             --dir target/android-release
-          gh release download v1.1.0 --pattern release-candidate-files.json \
+          gh release download "$RELEASE_TAG" --pattern release-candidate-files.json \
             --dir target
-          gh release download v1.1.0 --pattern central-portal-state.json \
+          gh release download "$RELEASE_TAG" --pattern central-portal-state.json \
             --dir target
 
       - name: Download preserved Apple release payload
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: apple-release-v1.1.0
+          name: apple-release-v${{ steps.release-channel.outputs.version }}
           path: target/recovered/apple-release/
           github-token: ${{ github.token }}
           run-id: ${{ inputs.releaseRunId }}
@@ -600,7 +655,7 @@ jobs:
       - name: Download preserved Android release payload
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: android-release-v1.1.0
+          name: android-release-v${{ steps.release-channel.outputs.version }}
           path: target/recovered/android-release/
           github-token: ${{ github.token }}
           run-id: ${{ inputs.releaseRunId }}
@@ -608,14 +663,13 @@ jobs:
       - name: Download preserved React Native release payload
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: react-native-release-v1.1.0
+          name: react-native-release-v${{ steps.release-channel.outputs.version }}
           path: target/recovered/react-native-release/
           github-token: ${{ github.token }}
           run-id: ${{ inputs.releaseRunId }}
 
       - name: Verify preserved source identity
         run: |
-          SOURCE_REVISION="$(git rev-list -n 1 v1.1.0)"
           test "$(jq -r .sourceRevision target/central-portal-state.json)" = "$SOURCE_REVISION"
           test "$(jq -r .sourceRevision target/android-release/central-bundle-files.json)" = "$SOURCE_REVISION"
           tools/release/write-candidate-inventory.sh \
@@ -625,6 +679,10 @@ jobs:
             target/recovered/android-release \
             target/recovered/react-native-release
           cmp target/release-candidate-files.json target/recovered-release-candidate-files.json
+          INVENTORY_SHA256="$(sha256sum target/release-candidate-files.json | awk '{print $1}')"
+          TAG_MESSAGE="$(git for-each-ref --format='%(contents)' "refs/tags/$RELEASE_TAG")"
+          grep -Fx "Source-Revision: $SOURCE_REVISION" <<<"$TAG_MESSAGE"
+          grep -Fx "Candidate-Inventory-SHA256: $INVENTORY_SHA256" <<<"$TAG_MESSAGE"
 
       - name: Prepare preserved bundle for failed-deployment retry
         if: inputs.centralRecoveryMode == 'retry-failed'
@@ -636,7 +694,7 @@ jobs:
             --bundle target/android-release/central-bundle.zip \
             --inventory target/android-release/central-bundle-files.json \
             --state target/central-portal-state.json \
-            --source-revision "$(git rev-list -n 1 v1.1.0)"
+            --source-revision "$SOURCE_REVISION"
 
       - name: Recover and resume exact deployment
         env:
@@ -666,7 +724,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: central-deployment-v1.1.0-recovery
+          name: central-deployment-v${{ steps.release-channel.outputs.version }}-recovery
           path: target/central-portal-state.json
           if-no-files-found: warn
 
@@ -676,7 +734,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [[ -f target/central-portal-state.json ]]; then
-            gh release upload v1.1.0 target/central-portal-state.json --clobber
+            gh release upload "$RELEASE_TAG" target/central-portal-state.json --clobber
           fi
 
       - name: Publish or verify exact npm artifact after recovery
@@ -685,13 +743,15 @@ jobs:
           set -euo pipefail
           PACKAGE_PATH="$(find target/recovered/react-native-release -maxdepth 1 -type f -name '*.tgz' -print -quit)"
           test -n "$PACKAGE_PATH"
-          PACKAGE_SPEC="@bota.dev/react-native-sdk@1.1.0"
+          PACKAGE_SPEC="@bota.dev/react-native-sdk@$RELEASE_VERSION"
           EXPECTED_SHASUM="$(sha1sum "$PACKAGE_PATH" | awk '{print $1}')"
+          LATEST_BEFORE="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/react-native-sdk dist-tags.latest)"
+          [[ "$LATEST_BEFORE" =~ ^0\.0\.[0-9]+$ ]]
 
           if PUBLISHED_SHASUM="$(npx --yes "npm@$NPM_CLI_VERSION" view "$PACKAGE_SPEC" dist.shasum 2>/dev/null)"; then
             test "$PUBLISHED_SHASUM" = "$EXPECTED_SHASUM"
           else
-            npx --yes "npm@$NPM_CLI_VERSION" publish "$PACKAGE_PATH" --access public
+            npx --yes "npm@$NPM_CLI_VERSION" publish "$PACKAGE_PATH" --access public --tag "$NPM_DIST_TAG"
           fi
 
           PUBLISHED_SHASUM=""
@@ -702,16 +762,20 @@ jobs:
             sleep 10
           done
           test "$PUBLISHED_SHASUM" = "$EXPECTED_SHASUM"
+          LATEST_AFTER="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/react-native-sdk dist-tags.latest)"
+          PUBLISHED_BETA="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/react-native-sdk dist-tags.beta)"
+          test "$LATEST_AFTER" = "$LATEST_BEFORE"
+          test "$PUBLISHED_BETA" = "$RELEASE_VERSION"
 
       - name: Publish recovered GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload v1.1.0 \
+          gh release upload "$RELEASE_TAG" \
             target/recovered/apple-release/* \
             target/recovered/react-native-release/* \
             --clobber
-          gh release edit v1.1.0 --draft=false
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease
 
   smoke-public-package:
     name: Smoke public Apple package
@@ -726,11 +790,16 @@ jobs:
     steps:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.releaseRef || github.ref }}
 
       - name: Resolve and compile public package consumer
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          if [[ "$GITHUB_EVENT_NAME" = workflow_dispatch ]]; then VERSION=1.1.0; fi
+          if [[ "$GITHUB_EVENT_NAME" = workflow_dispatch ]]; then
+            RELEASE_REF="${{ inputs.releaseRef }}"
+            VERSION="${RELEASE_REF#refs/tags/v}"
+          fi
           tools/apple/test-remote-consumer.sh "$VERSION"
 
   smoke-public-android:
@@ -750,6 +819,8 @@ jobs:
     steps:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.releaseRef || github.ref }}
 
       - name: Set up JDK 17
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
