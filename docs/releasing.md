@@ -1,7 +1,8 @@
 # Releasing The Bota App SDK
 
-The first public platform artifact is the Apple `BotaAppleSDK` Swift package
-for iOS 15+ and macOS 13+. Consumers add
+The synchronized beta currently publishes the Apple `BotaAppleSDK` Swift
+package for iOS 15+ and macOS 13+, the Android Maven package, and the React
+Native package. Apple consumers add
 `https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
 compiles the Swift facade source and downloads a checksummed
 `BotaDeviceSDKCore.xcframework.zip` from the matching GitHub Release.
@@ -11,14 +12,20 @@ package. It points at the generated XCFramework on disk so facade tests do not
 depend on a published release.
 
 The Android package uses Maven coordinate `dev.bota:bota-android-sdk`. The
-synchronized `1.1.0` release publishes it through the protected Central Portal
-workflow after deterministic packaging and native acceptance gates pass.
+synchronized `1.1.0` beta release publishes it through the protected Central
+Portal workflow after deterministic packaging and native acceptance gates pass.
 
 All artifacts use the exact version in `sdk-version.toml`. Release tags use
 `vVERSION`; the tag, package metadata, public Swift version, compatibility
 matrix, release example, GitHub Release URL, and XCFramework checksum must
 agree. The Apple workflow does not publish the Rust core or FFI crates to
 crates.io.
+
+The synchronized line is beta. New versions must match `1.x.y-beta.n`, npm
+publication must use dist-tag `beta`, and GitHub Releases remain prereleases.
+SwiftPM and Maven Central consumers pin the exact synchronized beta version.
+Historical immutable `1.1.0` is the one recovery exception; do not rename,
+unpublish, or recreate it. The next synchronized release is `1.2.0-beta.0`.
 
 ## Repository Setup
 
@@ -40,6 +47,10 @@ new hardware or firmware requires another lab run.
 
 Start from a clean `main` branch. Update every synchronized version authority
 and commit that version bump before calculating the Apple checksum.
+
+While the beta policy is active, use a version such as `1.2.0-beta.0`. The
+release-channel resolver rejects a new stable tag before any publication work
+starts.
 
 Generate the deterministic archive and write the matching root Swift package:
 
@@ -194,6 +205,10 @@ Before tagging, configure the npm trusted publisher for
 `npm publish`. The package has one trusted publisher, so replace the legacy
 React Native repository publisher instead of retaining both.
 
+This workflow owns npm `beta`; the legacy React Native repository owns npm
+`latest`. Every npm publication command includes `--tag beta`, verifies the
+candidate `dist.shasum`, and proves that `latest` is unchanged.
+
 After the release commit is on `main`, wait for its `CI` workflow to complete.
 The `Release candidate inventory` job downloads the Apple, Android, and React
 Native artifacts built on the same runner classes as the tag workflow and
@@ -236,10 +251,11 @@ install its own Node.js dependencies before running repository tooling.
 4. Rebuilds the deterministic XCFramework and rejects root-package checksum
    drift.
 5. Waits for approval in the protected `release` environment.
-6. Publishes the exact npm tarball through OIDC trusted publishing and verifies
-   the registry `dist.shasum` against the candidate. A rerun verifies an
-   existing version instead of attempting to replace it.
-7. Creates the GitHub Release and uploads every public Apple release file and
+6. Publishes the exact npm tarball to dist-tag `beta` through OIDC trusted
+   publishing, verifies the registry `dist.shasum`, and proves npm `latest` did
+   not move. A rerun verifies an existing version instead of attempting to
+   replace it.
+7. Creates a GitHub prerelease and uploads every public Apple release file and
    the React Native tarball. The Android payload remains an immutable workflow
    artifact downloaded inside the protected job; its flat filenames
    intentionally are not mixed with Apple's colliding `LICENSE` and manifest
@@ -259,8 +275,8 @@ PGP material, normalizes it to the exact 30-file Portal tree, and persists the
 bundle, inventory, and `central-portal-state.json` on a draft GitHub Release
 before upload. The initial HTTP 201 deployment UUID is fsynced before polling.
 An uncertain upload outcome stops automatic retries; use the protected
-`workflow_dispatch` recovery with exact `refs/tags/v1.1.0`, the Portal UUID,
-the original tag workflow `releaseRunId`, and
+`workflow_dispatch` recovery with the exact `refs/tags/v<version>`, the Portal
+UUID, the original tag workflow `releaseRunId`, and
 `centralRecoveryMode=resume-uncertain`. That mode downloads the preserved bytes
 and never rebuilds, re-signs, or re-uploads them.
 
@@ -276,9 +292,12 @@ state records `retryOfDeploymentId` for auditability.
 Both recovery modes download the original run's Apple, Android, and React
 Native artifacts and compare a newly generated candidate inventory with the
 one preserved on the draft release. After Central and its public inventory
-pass, the recovery job publishes or verifies the exact npm tarball, publishes
-the existing GitHub Release assets, and enables the same public SwiftPM plus
-API 26/API 35 Maven consumer jobs as the tag workflow.
+pass, the recovery job publishes or verifies the exact npm tarball under
+`beta`, leaves `latest` unchanged, publishes the existing GitHub prerelease
+assets, and enables the same public SwiftPM plus API 26/API 35 Maven consumer
+jobs as the tag workflow. Recovery resolves metadata from the requested tag;
+new release mode rejects stable tags while historical `v1.1.0` recovery remains
+available.
 
 Central states resume as follows: `PENDING` and `VALIDATING` poll,
 `VALIDATED` publishes once, `PUBLISHING` polls, `PUBLISHED` verifies the public

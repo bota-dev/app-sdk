@@ -7,11 +7,27 @@ facades.
 
 `@bota.dev/react-native-sdk@1.1.0`, `BotaAppleSDK`, and
 `dev.bota:bota-android-sdk:1.1.0` are the first synchronized public App SDK
-release. The former standalone SDK repositories remain migration inputs.
+release. This immutable version is now classified as beta while the production
+React Native maintenance line remains on `0.0.x`. The former standalone SDK
+repositories remain migration inputs.
+
+## Release Channels
+
+The synchronized App SDK is currently a beta. React Native consumers select it
+explicitly through npm `beta`:
+
+```bash
+npm install @bota.dev/react-native-sdk@beta
+```
+
+Apple and Android do not use npm dist-tags, so beta consumers pin the exact
+synchronized version shown in the installation sections below. New synchronized
+releases use `1.x.y-beta.n`; promotion to a stable channel is a separate release
+decision.
 
 ## Current Status
 
-The App SDK has published synchronized release `1.1.0`: the repository has a generated
+The App SDK has published synchronized beta release `1.1.0`: the repository has a generated
 protocol manifest, 64 language-neutral compatibility fixtures, bounded Rust
 decoders, byte-exact serializers, stable models/errors, and deterministic
 discovery, connection-recovery, provisioning, authenticated-reset, resumable
@@ -62,8 +78,9 @@ errors, sync-status derivation, device-log decoder, and the native-backed
 `OTAManager`. Recording files
 and live-stream chunks remain native-owned; Codegen carries only upload
 destinations, metadata, state, and progress. The package is published on npm as
-`@bota.dev/react-native-sdk@1.1.0`; the protected `release.yml` workflow packs,
-publishes, and verifies its exact tarball through npm trusted publishing. Local
+`@bota.dev/react-native-sdk@1.1.0` under the `beta` dist-tag; the protected
+`release.yml` workflow packs, publishes, and verifies its exact tarball through
+npm trusted publishing without moving `latest`. Local
 consumer acceptance installs that registry artifact without a workspace
 symlink and produces release-mode iOS and Android Expo bundles for both Demo
 and Bota One.
@@ -192,12 +209,12 @@ skips before client configuration. The supervised Bota Pin and Bota Note matrix
 is not inferred from CI and remains a human release approval. The root Swift
 package distributes the Apple facade for iOS and macOS while keeping the Rust
 core in a checksummed XCFramework. This release does not replace the production
-React Native package or claim Android, Flutter, Web, or Windows availability.
+React Native maintenance line or claim Flutter, Web, or Windows availability.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and the
 [firmware compatibility matrix](protocol/compatibility/firmware-compatibility.json).
 
-## Apple Installation
+## Apple Beta Installation
 
 In Xcode, choose **File > Add Package Dependencies** and enter:
 
@@ -205,12 +222,12 @@ In Xcode, choose **File > Add Package Dependencies** and enter:
 https://github.com/bota-dev/app-sdk.git
 ```
 
-Select version `1.1.0` or **Up to Next Major Version**, then add the
+Select the exact version `1.1.0`, then add the
 `BotaAppleSDK` product to an iOS 15+ or macOS 13+ target. Swift packages can
 declare the dependency directly:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", from: "1.1.0")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "1.1.0")
 ```
 
 Import and configure the client from application code:
@@ -226,6 +243,14 @@ iOS applications must provide `NSBluetoothAlwaysUsageDescription`. Sandboxed
 macOS applications must enable **App Sandbox > Hardware > Bluetooth**, which
 adds `com.apple.security.device.bluetooth`; macOS applications should also
 provide the Bluetooth usage description shown to users.
+
+## Android Beta Installation
+
+Pin the exact synchronized beta version from Maven Central:
+
+```kotlin
+implementation("dev.bota:bota-android-sdk:1.1.0")
+```
 
 ## Development
 
