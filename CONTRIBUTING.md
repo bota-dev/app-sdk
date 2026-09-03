@@ -27,6 +27,17 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+Flutter changes use the repository-local Flutter `3.47.2` and Dart `3.13.2`
+toolchain. The wrapper downloads and verifies the official archive under
+`target/flutter-sdk`; `BOTA_FLUTTER_HOME` is accepted only when it reports the
+same pinned versions. Use Node `22.23.2` for the package verifier:
+
+```bash
+source "$HOME/.nvm/nvm.sh" && nvm use 22.23.2 >/dev/null
+tools/flutter/run-flutter.sh pub get --directory frameworks/flutter/bota_flutter_sdk
+npm run flutter:verify
+```
+
 React Native Apple changes also require macOS with Xcode 26 and CocoaPods 1.13
 or newer. The repository verification environment is locked by the nested
 Gemfile:

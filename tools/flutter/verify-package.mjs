@@ -49,8 +49,8 @@ const parseScalar = (source, lineNumber) => {
 };
 
 const parsePubspec = (source) => {
-  if (/(^|[\s:[{,])(?:&|\*)[A-Za-z0-9_-]+/m.test(source)) {
-    throw new Error('YAML aliases are not allowed in pubspec.yaml');
+  if (/(^|[\s:[{,])(?:&|\*)(?=\S)/m.test(source)) {
+    throw new Error('YAML anchors or aliases are not allowed in pubspec.yaml');
   }
 
   const root = {};
@@ -172,9 +172,14 @@ export const verifyFlutterPackage = (root) => {
 };
 
 const modulePath = fileURLToPath(import.meta.url);
-if (process.argv[1] && resolve(process.argv[1]) === modulePath) {
+if (
+  process.argv[1] &&
+  realpathSync(resolve(process.argv[1])) === realpathSync(modulePath)
+) {
   try {
-    const result = verifyFlutterPackage(resolve(new URL('../..', import.meta.url).pathname));
+    const result = verifyFlutterPackage(
+      resolve(fileURLToPath(new URL('../..', import.meta.url)))
+    );
     console.log(
       `Flutter package metadata verified: ${result.packageName}@${result.sdkVersion}`
     );

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   chmodSync,
+  copyFileSync,
   mkdtempSync,
   mkdirSync,
   rmSync,
@@ -11,10 +12,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { verifyFlutterPackage } from './verify-package.mjs';
 
-const workspaceRoot = resolve(new URL('../..', import.meta.url).pathname);
+const workspaceRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
 const packageFiles = [
   'LICENSE',
@@ -47,8 +49,8 @@ flutter:
         pluginClass: BotaFlutterSdkPlugin
 `;
 
-const createFixture = () => {
-  const root = mkdtempSync(join(tmpdir(), 'bota-flutter-package-'));
+const createFixture = (prefix = 'bota-flutter-package-') => {
+  const root = mkdtempSync(join(tmpdir(), prefix));
   const packageRoot = join(root, 'frameworks', 'flutter', 'bota_flutter_sdk');
 
   writeFileSync(join(root, 'sdk-version.toml'), 'version = "1.1.0"\n');
@@ -162,7 +164,30 @@ test('rejects YAML aliases in the package manifest', () => {
     'shared: &version 1.1.0\nversion: *version'
   );
 
-  assert.throws(() => verifyFlutterPackage(root), /YAML aliases are not allowed/);
+  assert.throws(
+    () => verifyFlutterPackage(root),
+    /YAML anchors or aliases are not allowed/
+  );
+});
+
+test('rejects punctuation-named YAML anchors and aliases', () => {
+  const anchorFixture = createFixture();
+  replacePubspec(
+    anchorFixture.packageRoot,
+    'version: 1.1.0',
+    'shared: &.shared 1.1.0\nversion: 1.1.0'
+  );
+  const aliasFixture = createFixture();
+  replacePubspec(aliasFixture.packageRoot, 'version: 1.1.0', 'version: *.shared');
+
+  assert.throws(
+    () => verifyFlutterPackage(anchorFixture.root),
+    /YAML anchors or aliases are not allowed/
+  );
+  assert.throws(
+    () => verifyFlutterPackage(aliasFixture.root),
+    /YAML anchors or aliases are not allowed/
+  );
 });
 
 test('rejects package symlinks that escape the package root', () => {
@@ -184,7 +209,15 @@ test('runs package test paths from the Flutter package directory', () => {
   mkdirSync(dirname(flutter), { recursive: true });
   writeFileSync(
     flutter,
-    '#!/usr/bin/env bash\nprintf "cwd=%s\\n" "$PWD"\nprintf "arg=%s\\n" "$@"\n'
+    `#!/usr/bin/env bash
+if [[ "$1" == "--version" && "\${2:-}" == "--machine" ]]; then
+  printf '%s\\n' '${JSON.stringify({ frameworkVersion: '3.47.2', dartSdkVersion: '3.13.2' })}'
+  exit 0
+fi
+printf 'requested-command\\n'
+printf "cwd=%s\\n" "$PWD"
+printf "arg=%s\\n" "$@"
+`
   );
   chmodSync(flutter, 0o755);
 
@@ -207,4 +240,71 @@ test('runs package test paths from the Flutter package directory', () => {
     new RegExp(`cwd=${join(workspaceRoot, 'frameworks/flutter/bota_flutter_sdk')}`)
   );
   assert.match(result.stdout, /arg=test\/package_contract_test\.dart/);
+});
+
+const runWithOverride = ({ dartVersion, frameworkVersion }) => {
+  const flutterHome = mkdtempSync(join(tmpdir(), 'bota-flutter-override-'));
+  const flutter = join(flutterHome, 'bin', 'flutter');
+  mkdirSync(dirname(flutter), { recursive: true });
+  writeFileSync(
+    flutter,
+    `#!/usr/bin/env bash
+if [[ "$1" == "--version" && "\${2:-}" == "--machine" ]]; then
+  printf '%s\\n' '${JSON.stringify({ frameworkVersion, dartSdkVersion: dartVersion })}'
+  exit 0
+fi
+printf 'requested-command\\n'
+`
+  );
+  chmodSync(flutter, 0o755);
+
+  return spawnSync(
+    join(workspaceRoot, 'tools', 'flutter', 'run-flutter.sh'),
+    ['doctor'],
+    {
+      cwd: workspaceRoot,
+      encoding: 'utf8',
+      env: { ...process.env, BOTA_FLUTTER_HOME: flutterHome },
+    }
+  );
+};
+
+test('rejects a BOTA_FLUTTER_HOME with a mismatched Flutter version', () => {
+  const result = runWithOverride({
+    dartVersion: '3.13.2',
+    frameworkVersion: '3.48.0',
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /requires Flutter 3\.47\.2, found 3\.48\.0/);
+  assert.doesNotMatch(result.stdout, /requested-command/);
+});
+
+test('rejects a BOTA_FLUTTER_HOME with a mismatched Dart version', () => {
+  const result = runWithOverride({
+    dartVersion: '3.14.0',
+    frameworkVersion: '3.47.2',
+  });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /requires Dart 3\.13\.2, found 3\.14\.0/);
+  assert.doesNotMatch(result.stdout, /requested-command/);
+});
+
+test('discovers the workspace root when the verifier path contains spaces', () => {
+  const { root } = createFixture('bota flutter package-');
+  const verifier = join(root, 'tools', 'flutter', 'verify-package.mjs');
+  mkdirSync(dirname(verifier), { recursive: true });
+  copyFileSync(
+    join(workspaceRoot, 'tools', 'flutter', 'verify-package.mjs'),
+    verifier
+  );
+
+  const result = spawnSync(process.execPath, [verifier], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+  assert.match(result.stdout, /Flutter package metadata verified/);
 });
