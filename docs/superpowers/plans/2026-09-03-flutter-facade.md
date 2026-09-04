@@ -471,6 +471,7 @@
 **Files:**
 - Create: `frameworks/flutter/bota_flutter_sdk/example/pubspec.yaml`
 - Create: `frameworks/flutter/bota_flutter_sdk/example/lib/main.dart`
+- Create: `frameworks/flutter/bota_flutter_sdk/test/example_device_console_test.dart`
 - Create: `frameworks/flutter/bota_flutter_sdk/example/ios/Runner/Info.plist`
 - Create: `frameworks/flutter/bota_flutter_sdk/example/android/app/src/main/AndroidManifest.xml`
 - Create: `frameworks/flutter/bota_flutter_sdk/test/workflow_conformance_test.dart`
@@ -489,7 +490,7 @@
 
 - [ ] **Step 1: Write failing workflow-conformance and consumer checks**
 
-  Feed every canonical workflow trace through a fake host facade and assert Dart emits the expected typed operation/event/error sequence without reducer logic. `test-consumers.sh` must fail when iOS Bluetooth usage descriptions are missing, Android permissions are missing, or either release build cannot resolve the exact local native artifact.
+  Feed every canonical workflow trace through a fake host facade and assert Dart emits the expected typed operation/event/error sequence without reducer logic. Drive the example's real recording-confirm, disconnect, remove-only, and factory-reset UI handlers against a fake platform and assert successful mutations clear the affected state. `test-consumers.sh` must fail when iOS Bluetooth usage descriptions are missing, Android permissions are missing, or either release build cannot resolve the exact local native artifact.
 
 - [ ] **Step 2: Run conformance tests and verify RED**
 
