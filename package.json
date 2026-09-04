@@ -1,6 +1,6 @@
 {
   "name": "@bota.dev/app-sdk-workspace",
-  "version": "1.1.0",
+  "version": "1.2.0-beta.0",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -24,15 +24,16 @@
     "sync:apple-fixtures": "node tools/apple/sync-protocol-fixtures.mjs --check && node tools/apple/sync-workflow-fixtures.mjs --check",
     "test:android:foundation": "tools/android/test-foundation.sh",
     "test:fixtures": "node --test tools/baseline/*.test.mjs",
-    "test:release": "node --test tools/release/*.test.mjs tools/android/*.test.mjs",
+    "test:release": "node --test tools/release/*.test.mjs tools/android/*.test.mjs tools/flutter/verify-publication.test.mjs",
     "test:react-native": "node --test tools/react-native/*.test.mjs",
-    "test:tooling": "node --test scripts/*.test.mjs tools/baseline/*.test.mjs tools/react-native/*.test.mjs",
+    "test:tooling": "node --test scripts/*.test.mjs tools/baseline/*.test.mjs tools/flutter/verify-package.test.mjs tools/react-native/*.test.mjs",
     "test:workflows": "node tools/baseline/compare-workflows.mjs"
   },
   "devDependencies": {
     "ajv": "8.20.0",
     "fast-xml-parser": "5.11.1",
     "fflate": "0.8.3",
+    "tar": "7.5.22",
     "typescript": "6.0.3"
   }
 }

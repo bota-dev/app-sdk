@@ -38,7 +38,12 @@ Dart commands and Node `22.23.2` for the package verifier:
 source "$HOME/.nvm/nvm.sh" && nvm use 22.23.2 >/dev/null
 tools/flutter/run-flutter.sh pub get --directory frameworks/flutter/bota_flutter_sdk
 npm run flutter:verify
+tools/flutter/package-release.sh --check
 ```
+
+The package-release command performs dry-run and local consumer checks only. It
+preserves deterministic evidence under `target/flutter-release/` and never
+publishes, tags, or creates a release.
 
 The Flutter bridge uses exactly Pigeon `28.0.0`. Regenerate its checked-in
 Dart, Swift, and Kotlin outputs only through the pinned toolchain, then run the
@@ -99,4 +104,5 @@ Never commit local source links as production dependencies. In particular,
 `BOTA_APPLE_SDK_PACKAGE_PATH` is only a source and CI override; the React Native
 pod must resolve the exact matching immutable App SDK tag by default. All
 released artifacts must match `sdk-version.toml` and the signed release
-manifest.
+manifest. Flutter's public Swift package contains no override; its local tests
+patch a disposable copy only.

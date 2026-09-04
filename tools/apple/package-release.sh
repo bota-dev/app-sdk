@@ -17,7 +17,8 @@ case ${1:-} in
         ;;
 esac
 
-if [ -n "$(git -C "$ROOT" status --porcelain --untracked-files=normal)" ]; then
+if [ "$PACKAGE_MANIFEST_MODE" = check ] \
+    && [ -n "$(git -C "$ROOT" status --porcelain --untracked-files=normal)" ]; then
     printf 'Apple release packaging requires a clean source tree\n' >&2
     exit 1
 fi

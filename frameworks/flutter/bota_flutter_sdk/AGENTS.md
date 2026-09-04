@@ -42,9 +42,21 @@ remote substitute.
 ## Apple Build
 
 The Swift Package and CocoaPods integrations compile the same adapter source in
-Swift 5 language mode. They resolve the exact synchronized `BotaAppleSDK`.
-`BOTA_APPLE_SDK_PACKAGE_PATH` is a local verification override, not a published
-application setting.
+Swift 5 language mode. Public metadata resolves the exact synchronized
+`BotaAppleSDK` and contains no local override. Local adapter and consumer tools
+patch only disposable copies of the Swift manifest to use the nested Apple
+source package; never add `BOTA_APPLE_SDK_PACKAGE_PATH` to public package files.
+
+## Release Candidate
+
+`tools/flutter/package-release.sh --check` is the complete local publication
+gate. It verifies synchronized metadata, Pigeon drift, formatting, analysis,
+all Dart tests, hosted dependency licenses, `flutter pub publish --dry-run`,
+and fresh Android and iOS consumers before preserving a deterministic archive,
+normalized inventory, lock, manifest, and evidence under
+`target/flutter-release/`. The archive verifier rejects hidden/local files,
+build outputs, credentials, links, unsafe paths, extras, and checksum drift.
+The command prepares evidence only; it must never publish a package.
 
 ## Example
 
@@ -63,6 +75,7 @@ tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
 tools/flutter/test-android-adapter.sh
 tools/flutter/test-consumers.sh
 npm run flutter:verify
+tools/flutter/package-release.sh --check
 tools/flutter/run-dart.sh format --output=none --set-exit-if-changed \
   frameworks/flutter/bota_flutter_sdk/lib \
   frameworks/flutter/bota_flutter_sdk/test \

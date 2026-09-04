@@ -5,11 +5,12 @@ Flutter applications on iOS 15+ and Android API 26+ by delegating Bluetooth,
 file, network, and workflow ownership to `BotaAppleSDK` and
 `dev.bota:bota-android-sdk`.
 
-The source facade is implemented and passes local release-consumer gates. It
-was not part of the published synchronized `1.1.0` release. The first planned
-pub.dev release is the exact synchronized `1.2.0-beta.0` prerelease; until that
-release exists, consume this package only from an exact source revision for
-development.
+The source facade and deterministic `1.2.0-beta.0` release candidate are
+implemented and pass local publication and release-consumer gates. The package
+was not part of the published synchronized `1.1.0` release, and
+`1.2.0-beta.0` has not been published by this preparation. Until that exact
+prerelease exists on pub.dev, consume this package only from an exact source
+revision for development.
 
 ## Install
 
@@ -269,8 +270,12 @@ From the repository root:
 tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
 tools/flutter/test-consumers.sh
 npm run flutter:verify
+tools/flutter/package-release.sh --check
 ```
 
 The conformance suite discovers all 29 canonical JSON workflow traces and
 checks typed Dart routing through a fake native bridge. Rust remains the only
-workflow reducer.
+workflow reducer. The package-release command additionally preserves the exact
+archive, sorted file inventory, normalized archive digest, dependency lock and
+license evidence, dry-run result, consumer result, and v2 release manifest
+under `target/flutter-release/`; it performs no publication.

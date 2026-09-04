@@ -150,8 +150,30 @@ if ! rg -q "spec.version = \"$sdk_version\"" \
   echo "Local BotaAppleSDK pod does not match $sdk_version" >&2
   exit 1
 fi
-BOTA_APPLE_SDK_PACKAGE_PATH="$apple_package" swift package dump-package \
-  --package-path "$plugin_root/ios/bota_flutter_sdk" \
+local_plugin_root="$consumer_root/local-plugin"
+rsync -a \
+  --exclude .dart_tool \
+  --exclude build \
+  --exclude pubspec.lock \
+  --exclude example/.dart_tool \
+  --exclude example/build \
+  --exclude example/pubspec.lock \
+  "$plugin_root/" "$local_plugin_root/"
+SWIFT_MANIFEST="$local_plugin_root/ios/bota_flutter_sdk/Package.swift" \
+  APPLE_PACKAGE="$apple_package" SDK_VERSION="$sdk_version" node -e '
+    const fs = require("node:fs");
+    const path = process.env.SWIFT_MANIFEST;
+    const source = fs.readFileSync(path, "utf8");
+    const marker = `.package(
+      url: "https://github.com/bota-dev/app-sdk.git",
+      exact: "${process.env.SDK_VERSION}"
+    ),`;
+    const replacement = `.package(name: "BotaAppleSDK", path: ${JSON.stringify(process.env.APPLE_PACKAGE)}),`;
+    if (!source.includes(marker)) throw new Error("public BotaAppleSDK dependency marker changed");
+    fs.writeFileSync(path, source.replace(marker, replacement));
+  '
+swift package dump-package \
+  --package-path "$local_plugin_root/ios/bota_flutter_sdk" \
   >"$consumer_root/flutter-plugin-package.json"
 if ! rg -F -q "$apple_package" "$consumer_root/flutter-plugin-package.json"; then
   echo "Flutter iOS plugin did not resolve the local BotaAppleSDK package" >&2
@@ -184,7 +206,7 @@ cp "$example_root/lib/main.dart" "$consumer/lib/main.dart"
 cp "$info_plist" "$consumer/ios/Runner/Info.plist"
 cp "$android_manifest" "$consumer/android/app/src/main/AndroidManifest.xml"
 
-EXAMPLE_PUBSPEC="$consumer/pubspec.yaml" PLUGIN_ROOT="$plugin_root" node -e '
+EXAMPLE_PUBSPEC="$consumer/pubspec.yaml" PLUGIN_ROOT="$local_plugin_root" node -e '
   const fs = require("node:fs");
   const path = process.env.EXAMPLE_PUBSPEC;
   const source = fs.readFileSync(path, "utf8");
@@ -256,8 +278,7 @@ fi
 
 (
   cd "$consumer"
-  BOTA_APPLE_SDK_PACKAGE_PATH="$apple_package" \
-    "$workspace_root/tools/flutter/run-flutter.sh" build ios \
+  "$workspace_root/tools/flutter/run-flutter.sh" build ios \
     --release --no-codesign --target lib/main.dart
 )
 ios_output="$consumer/build/ios/iphoneos/Runner.app"

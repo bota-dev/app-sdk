@@ -1,19 +1,6 @@
 // swift-tools-version: 6.0
 
-import Foundation
 import PackageDescription
-
-let appleSDKDependency: Package.Dependency
-if let localPath = ProcessInfo.processInfo.environment["BOTA_APPLE_SDK_PACKAGE_PATH"],
-  !localPath.isEmpty
-{
-  appleSDKDependency = .package(name: "BotaAppleSDK", path: localPath)
-} else {
-  appleSDKDependency = .package(
-    url: "https://github.com/bota-dev/app-sdk.git",
-    exact: "1.1.0"
-  )
-}
 
 let package = Package(
   name: "bota_flutter_sdk",
@@ -23,7 +10,10 @@ let package = Package(
   ],
   dependencies: [
     .package(name: "FlutterFramework", path: "../FlutterFramework"),
-    appleSDKDependency,
+    .package(
+      url: "https://github.com/bota-dev/app-sdk.git",
+      exact: "1.2.0-beta.0"
+    ),
   ],
   targets: [
     .target(

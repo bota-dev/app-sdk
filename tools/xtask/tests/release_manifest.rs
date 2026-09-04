@@ -5,7 +5,7 @@ fn root() -> PathBuf {
 }
 
 fn example() -> serde_json::Value {
-    let contents = fs::read_to_string(root().join("release/examples/1.1.0.json")).unwrap();
+    let contents = fs::read_to_string(root().join("release/examples/1.2.0-beta.0.json")).unwrap();
     serde_json::from_str(&contents).unwrap()
 }
 
@@ -26,7 +26,7 @@ fn validate_modified(
 
 #[test]
 fn example_release_manifest_is_valid() {
-    let manifest = root().join("release/examples/1.1.0.json");
+    let manifest = root().join("release/examples/1.2.0-beta.0.json");
 
     let result = xtask::release::validate_manifest(&manifest);
 
@@ -44,7 +44,11 @@ fn published_v1_manifest_remains_valid_independent_of_later_checkout_version() {
             .as_nanos()
     ));
     fs::create_dir_all(&temp_root).unwrap();
-    fs::write(temp_root.join("sdk-version.toml"), "version = \"1.1.0\"\n").unwrap();
+    fs::write(
+        temp_root.join("sdk-version.toml"),
+        "version = \"1.2.0-beta.0\"\n",
+    )
+    .unwrap();
     let manifest = temp_root.join("published-1.0.0-v1.json");
     fs::copy(
         root().join("release/examples/published-1.0.0-v1.json"),
@@ -60,7 +64,7 @@ fn published_v1_manifest_remains_valid_independent_of_later_checkout_version() {
     assert!(
         current_release_result
             .unwrap_err()
-            .contains("sdkVersion 1.0.0 does not match sdk-version.toml 1.1.0")
+            .contains("sdkVersion 1.0.0 does not match sdk-version.toml 1.2.0-beta.0")
     );
 }
 
@@ -125,4 +129,116 @@ fn capabilities_must_be_unique() {
     });
 
     assert!(result.unwrap_err().contains("duplicate capability"));
+}
+
+#[test]
+fn a_manifest_without_the_flutter_capability_does_not_require_flutter() {
+    let manifest = root().join("release/examples/1.1.0.json");
+
+    let result = xtask::release::validate_manifest_format_and_semantics(&manifest);
+
+    assert!(result.is_ok(), "{result:?}");
+}
+
+#[test]
+fn declaring_the_flutter_capability_requires_a_flutter_artifact() {
+    let result = validate_modified("flutter-capability", |manifest| {
+        manifest["artifacts"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|artifact| artifact["platform"] != "flutter");
+        manifest["artifacts"][0]["capabilities"] =
+            serde_json::json!(["apple_device_sdk", "flutter_sdk"]);
+    });
+
+    assert!(
+        result
+            .unwrap_err()
+            .contains("flutter_sdk capability requires exactly one Flutter artifact")
+    );
+}
+
+#[test]
+fn flutter_artifact_binds_source_generator_normalized_checksum_and_inventory() {
+    for (name, mutate, expected) in [
+        (
+            "flutter-source",
+            Box::new(|artifact: &mut serde_json::Value| {
+                artifact["sourceRevision"] = "b".repeat(40).into();
+            }) as Box<dyn Fn(&mut serde_json::Value)>,
+            "sourceRevision must match",
+        ),
+        (
+            "flutter-generator",
+            Box::new(|artifact: &mut serde_json::Value| {
+                artifact["generator"]["version"] = "29.0.0".into();
+            }),
+            "generator",
+        ),
+        (
+            "flutter-normalized-checksum",
+            Box::new(|artifact: &mut serde_json::Value| {
+                artifact["normalizedArchiveSha256"] = "0".repeat(64).into();
+            }),
+            "normalizedArchiveSha256",
+        ),
+        (
+            "flutter-inventory",
+            Box::new(|artifact: &mut serde_json::Value| {
+                artifact["packageInventory"] = serde_json::json!([]);
+            }),
+            "packageInventory",
+        ),
+    ] {
+        let result = validate_modified(name, |manifest| {
+            let artifact = manifest["artifacts"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|artifact| artifact["platform"] == "flutter")
+                .unwrap();
+            mutate(artifact);
+        });
+        assert!(result.unwrap_err().contains(expected), "{name}");
+    }
+}
+
+#[test]
+fn flutter_package_inventory_must_be_sorted_unique_and_safe() {
+    for (name, inventory, expected) in [
+        (
+            "flutter-inventory-sort",
+            serde_json::json!([
+                {"path": "pubspec.yaml", "byteLength": 1, "sha256": "a".repeat(64)},
+                {"path": "LICENSE", "byteLength": 1, "sha256": "b".repeat(64)}
+            ]),
+            "sorted",
+        ),
+        (
+            "flutter-inventory-duplicate",
+            serde_json::json!([
+                {"path": "pubspec.yaml", "byteLength": 1, "sha256": "a".repeat(64)},
+                {"path": "pubspec.yaml", "byteLength": 1, "sha256": "b".repeat(64)}
+            ]),
+            "duplicate",
+        ),
+        (
+            "flutter-inventory-traversal",
+            serde_json::json!([
+                {"path": "../pubspec.yaml", "byteLength": 1, "sha256": "a".repeat(64)}
+            ]),
+            "unsafe",
+        ),
+    ] {
+        let result = validate_modified(name, |manifest| {
+            let artifact = manifest["artifacts"]
+                .as_array_mut()
+                .unwrap()
+                .iter_mut()
+                .find(|artifact| artifact["platform"] == "flutter")
+                .unwrap();
+            artifact["packageInventory"] = inventory;
+        });
+        assert!(result.unwrap_err().contains(expected), "{name}");
+    }
 }

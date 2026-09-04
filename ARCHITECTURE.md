@@ -67,12 +67,13 @@ an uncertain publish is recoverable without attempting to replace an immutable
 npm version. The npm package trusts `bota-dev/app-sdk`, `release.yml`, and the
 `release` environment; no long-lived npm write token enters GitHub Actions.
 
-The Flutter facade is implemented in source but is not part of the immutable
-`1.1.0` public release. Its first planned pub.dev artifact is the synchronized
-`1.2.0-beta.0` prerelease. Flutter publication may proceed only after the exact
-Apple and Android artifacts at that version exist, disposable release
-consumers resolve them, and the package candidate passes dry-run and inventory
-verification.
+The Flutter facade is implemented in source and has a deterministic
+`1.2.0-beta.0` candidate, but it is not part of the immutable `1.1.0` public
+release and has not been published. The candidate binds its exact source
+revision, Pigeon identity, raw and normalized archive digests, and every file's
+digest. Flutter publication may proceed only after the exact Apple and Android
+artifacts at that version exist, clean no-override consumers resolve them, and
+the candidate passes license, dry-run, build, and inventory verification.
 
 ## Migration Rule
 
@@ -513,6 +514,17 @@ serialization contract. The Apple, Android, and React Native facades are
 published for `v1.1.0`; the remaining planned facades are not yet published. See
 [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md) and the
 [`FFI evaluation`](docs/spikes/ffi-boundary-evaluation.md).
+
+The synchronized candidate inventory is produced by main CI and covers Apple,
+Android, React Native, and Flutter release directories from one source
+revision. An annotated tag records that inventory digest. The tag workflow
+downloads the CI inventory, compares its native subset before any publication,
+publishes and verifies the immutable Apple asset and CocoaPod, runs clean public
+SwiftPM, CocoaPods, and Maven consumers, then rebuilds and compares the Flutter
+subset. The first pub.dev version pauses for a protected clean-tag interactive
+bootstrap; later betas wait for the ordered Flutter artifact before invoking
+Dart's OIDC reusable workflow. Public archive normalization and per-file hashes
+must match before synchronized release completion.
 
 The shipping ABI implementation lives in `bindings/device-sdk-ffi` and exports
 only versioned `bota_device_sdk_v1_*` symbols. Its opaque engine lifecycle and

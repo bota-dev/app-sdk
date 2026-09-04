@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0-beta.0 (unpublished candidate)
 
 - Added the initial iOS and Android Flutter facade for discovery, connection,
   status, recording control and batch transfer, provisioning, connection
@@ -13,6 +13,8 @@
   iOS release consumers.
 - Added a device-management example whose backend callbacks fail closed until
   the application supplies request-bound material.
+- Added deterministic package/archive inventory, dependency-license evidence,
+  publication verification, and clean Android/iOS release-consumer gates.
 
-The first planned pub.dev version is `1.2.0-beta.0`. The synchronized `1.1.0`
-release did not publish a Flutter package.
+The synchronized `1.1.0` release did not publish a Flutter package. Preparing
+this changelog entry does not claim that `1.2.0-beta.0` exists on pub.dev.

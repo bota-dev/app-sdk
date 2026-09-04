@@ -84,6 +84,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   fresh release outputs. The `dev.bota` Maven group must be exclusive to the
   fresh local repository. Never weaken the gate to accept stale output or a
   remote native substitute.
+- `tools/flutter/package-release.sh --check` is the non-publishing Flutter
+  release gate. It must preserve only deterministic archive, inventory, lock,
+  license, dry-run, consumer, and manifest evidence under
+  `target/flutter-release`. Public Flutter Apple metadata has no local override;
+  source gates patch only disposable Swift package copies. The archive verifier
+  must reject links, traversal, extras, credentials, generated/build output,
+  and raw, normalized, or per-file checksum drift.
 - React Native compatibility requires the frozen public API surface digest in
   addition to protocol fixtures and workflow traces. Internal legacy modules
   outside `src/index.ts` are not part of that public contract.
@@ -305,13 +312,16 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   superseded only through `centralRecoveryMode=retry-failed`, which verifies
   the failed UUID and re-uploads the exact preserved ZIP under a fresh state
   record containing `retryOfDeploymentId`. Recovery also requires the original
-  tag workflow `releaseRunId`; it downloads all three platform artifacts,
-  matches their candidate inventory, then completes npm, the GitHub Release,
-  and the public Apple and Android consumer gates.
+  tag workflow `releaseRunId`; it downloads all three native platform
+  artifacts, matches their subset of the four-platform candidate inventory,
+  then completes npm, the native-bootstrap GitHub prerelease, and the public
+  Apple and Android consumer gates. Central recovery never rebuilds or publishes
+  Flutter.
 - Create annotated release tags only from the `release-candidate-<commit>`
-  inventory emitted by successful main CI. Local Apple or Android builds may
-  use different host toolchains and are preflight evidence, not release
-  identity.
+  inventory emitted by successful main CI. It binds Apple, Android, React
+  Native, and Flutter candidates. The tag workflow must retrieve that exact CI
+  inventory, compare each rebuilt native and Flutter subset, and preserve its
+  digest. Local builds are preflight evidence, not release identity.
 - Keep mutating Android release-readiness tests in independent temporary
   fixtures. They run in parallel, so fixture names require an atomic uniqueness
   component in addition to wall-clock time.
@@ -482,6 +492,7 @@ tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
 tools/flutter/test-android-adapter.sh
 tools/flutter/test-consumers.sh
 npm run flutter:verify
+tools/flutter/package-release.sh --check
 JAVA_HOME=/path/to/jdk-17 ANDROID_HOME="$HOME/Library/Android/sdk" \
   npm run test:android:foundation
 tools/android/test-package.sh --api 35 \
@@ -527,6 +538,10 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
 - The private React Native foundation is not a release artifact and must not be
   added to a release manifest or published to npm before Milestone 4 exits.
 - Read `docs/releasing.md` before creating or pushing a release tag.
+- Prepared `1.2.0-beta.0` metadata and evidence do not claim publication. The
+  first Flutter publication requires the protected clean-tag interactive
+  bootstrap; later betas use the protected OIDC workflow and verify occupied
+  versions instead of attempting to replace them.
 - The public Apple package is the root `Package.swift`; keep the nested
   `platforms/apple/Package.swift` for local development against the generated
   XCFramework.

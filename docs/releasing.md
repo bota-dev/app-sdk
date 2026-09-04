@@ -1,8 +1,9 @@
 # Releasing The Bota App SDK
 
-The synchronized beta currently publishes the Apple `BotaAppleSDK` Swift
+Published synchronized beta `1.1.0` includes the Apple `BotaAppleSDK` Swift
 package for iOS 15+ and macOS 13+, the Android Maven package, and the React
-Native package. Apple consumers add
+Native package. Prepared `1.2.0-beta.0` metadata additionally includes the
+first Flutter candidate; preparation does not claim publication. Apple consumers add
 `https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
 compiles the Swift facade source and downloads a checksummed
 `BotaDeviceSDKCore.xcframework.zip` from the matching GitHub Release.
@@ -39,8 +40,9 @@ Create a GitHub environment named `release` for `bota-dev/app-sdk`:
 1. Require a reviewer before deployment.
 2. Restrict deployment branches and tags to protected release tags.
 3. Add only `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
-   `SIGNING_IN_MEMORY_KEY`, and `SIGNING_IN_MEMORY_KEY_PASSWORD` as environment
-   secrets. Do not add a crates.io token.
+   `SIGNING_IN_MEMORY_KEY`, `SIGNING_IN_MEMORY_KEY_PASSWORD`, and
+   `COCOAPODS_TRUNK_TOKEN` as environment secrets. Do not add a crates.io or
+   pub.dev token; Flutter's later automated publications use OIDC.
 
 The environment approval is the human boundary for release authorization and
 external hardware acceptance. Automated tests never claim a physical-device
@@ -65,8 +67,9 @@ swift package dump-package
 git diff -- Package.swift
 ```
 
-The preparation mode still requires a clean tree at startup. It builds the
-archive first, computes its SwiftPM checksum, and changes only `Package.swift`.
+The explicit preparation mode builds from the current working snapshot,
+computes its SwiftPM checksum, and changes only `Package.swift`; this permits a
+synchronized version change and its generated checksum to land in one commit.
 Review and commit that manifest. Then rerun the normal check-only mode from the
 new clean commit:
 
@@ -102,6 +105,8 @@ tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
 tools/flutter/test-android-adapter.sh
 tools/flutter/test-consumers.sh
 npm run flutter:verify
+tools/flutter/package-release.sh --check
+node --test tools/flutter/verify-publication.test.mjs tools/release/*.test.mjs
 cargo deny check
 ```
 
@@ -238,9 +243,19 @@ Android artifacts at `1.2.0-beta.0` are public and their no-override consumers
 pass. The protected tag workflow must preserve the exact Flutter candidate,
 run `flutter pub publish --dry-run`, and pause for the initial interactive
 pub.dev bootstrap. Later prereleases use pub.dev's GitHub OIDC workflow. Every
-publication is then downloaded and compared with the candidate inventory and
-SHA-256 before release completion. This release tooling is owned by the next
-milestone; Task 7 consumer evidence alone does not authorize publication.
+publication is then downloaded and compared with the candidate's exact file
+hashes and normalized archive SHA-256 before release completion.
+
+`tools/flutter/package-release.sh --check` writes only deterministic evidence
+to `target/flutter-release/`: the candidate archive, exact package inventory,
+v2 release manifest, dependency lock and graph, hosted-package license hashes,
+normalized dry-run output, and fixed verification record. It rejects unsafe or
+hidden paths, links, credentials, generated/build outputs, local Apple
+overrides, unreviewed extras, and raw, normalized, or per-file checksum drift.
+The checked release example freezes the tooling-generated preparation
+revision; check mode permits only that revision field to differ from a runtime
+candidate, which always records the current Git revision. Do not hand-edit a
+source revision, archive checksum, file inventory, or root Swift checksum.
 
 ## Publish
 
@@ -255,8 +270,8 @@ This workflow owns npm `beta`; the legacy React Native repository owns npm
 candidate `dist.shasum`, and proves that `latest` is unchanged.
 
 After the release commit is on `main`, wait for its `CI` workflow to complete.
-The `Release candidate inventory` job downloads the Apple, Android, and React
-Native artifacts built on the same runner classes as the tag workflow and
+The `Release candidate inventory` job downloads the Apple, Android, React
+Native, and Flutter artifacts built on the same runner classes as the tag workflow and
 uploads `release-candidate-<commit>`. Use that artifact's
 `release-candidate-files.json.sha256` value in the annotated tag; do not derive
 the tag hash from locally built payloads. The Android Javadoc archive omits
@@ -300,15 +315,27 @@ install its own Node.js dependencies before running repository tooling.
    publishing, verifies the registry `dist.shasum`, and proves npm `latest` did
    not move. A rerun verifies an existing version instead of attempting to
    replace it.
-7. Creates a GitHub prerelease and uploads every public Apple release file and
-   the React Native tarball. The Android payload remains an immutable workflow
+7. Opens a native-bootstrap GitHub prerelease and uploads every public Apple
+   release file and the React Native tarball. The Android payload remains an immutable workflow
    artifact downloaded inside the protected job; its flat filenames
    intentionally are not mixed with Apple's colliding `LICENSE` and manifest
    assets.
-8. Creates an unrelated macOS package that resolves the public Git tag and
-   compiles an executable importing only `BotaAppleSDK`. The smoke deliberately
+8. Publishes or verifies the exact `BotaAppleSDK` CocoaPod through a protected
+   reusable workflow, then creates unrelated no-override SwiftPM and CocoaPods
+   consumers. The SwiftPM smoke compiles an executable importing only
+   `BotaAppleSDK`. It deliberately
    does not launch a Bluetooth-capable process on the headless runner. It uses
    one non-batched Swift compiler job to keep memory bounded.
+9. Rebuilds the exact Flutter candidate only after the public Apple and Android
+   consumers pass and compares it to the Flutter subset of the CI inventory
+   named in the annotated tag.
+10. For `1.2.0-beta.0`, pauses at the protected environment and prints the exact
+    clean-tag interactive publish command. For later beta tags, the separate
+    OIDC workflow waits for that ordered candidate artifact before invoking
+    Dart's official reusable publisher.
+11. Downloads the public pub.dev archive, compares its complete normalized
+    inventory and file hashes, preserves public evidence, and only then attaches
+    Flutter artifacts as the completed synchronized prerelease evidence.
 
 Main CI must not resolve the candidate version through the public root package:
 its binary URL is created by this workflow. React Native lifecycle tests use
@@ -334,15 +361,21 @@ the preserved deployment name, recreates `READY` state from the archived ZIP
 and inventory, and uploads those exact bytes as a fresh deployment. The new
 state records `retryOfDeploymentId` for auditability.
 
-Both recovery modes download the original run's Apple, Android, and React
-Native artifacts and compare a newly generated candidate inventory with the
-one preserved on the draft release. After Central and its public inventory
+Both Central recovery modes download the original run's Apple, Android, and
+React Native artifacts and compare their native subset with the four-platform
+candidate inventory preserved on the draft release. They never rebuild or
+publish Flutter. After Central and its public inventory
 pass, the recovery job publishes or verifies the exact npm tarball under
 `beta`, leaves `latest` unchanged, publishes the existing GitHub prerelease
 assets, and enables the same public SwiftPM plus API 26/API 35 Maven consumer
 jobs as the tag workflow. Recovery resolves metadata from the requested tag;
 new release mode rejects stable tags while historical `v1.1.0` recovery remains
 available.
+
+Rerunning an occupied Flutter version does not invoke an interactive or OIDC
+publish command. It downloads the preserved candidate and the existing public
+archive, verifies them, and resumes release completion only when every byte-level
+inventory contract passes.
 
 Central states resume as follows: `PENDING` and `VALIDATING` poll,
 `VALIDATED` publishes once, `PUBLISHING` polls, `PUBLISHED` verifies the public

@@ -20,6 +20,14 @@
 /frameworks/flutter/bota_flutter_sdk/.dart_tool/
 /frameworks/flutter/bota_flutter_sdk/build/
 /frameworks/flutter/bota_flutter_sdk/pubspec.lock
+/frameworks/flutter/bota_flutter_sdk/example/.dart_tool/
+/frameworks/flutter/bota_flutter_sdk/example/.flutter-plugins-dependencies
+/frameworks/flutter/bota_flutter_sdk/example/pubspec.lock
+/frameworks/flutter/bota_flutter_sdk/example/android/local.properties
+/frameworks/flutter/bota_flutter_sdk/example/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+/frameworks/flutter/bota_flutter_sdk/example/ios/Flutter/
+/frameworks/flutter/bota_flutter_sdk/example/ios/Runner/GeneratedPluginRegistrant.h
+/frameworks/flutter/bota_flutter_sdk/example/ios/Runner/GeneratedPluginRegistrant.m
 
 # Platform build outputs
 /.build/

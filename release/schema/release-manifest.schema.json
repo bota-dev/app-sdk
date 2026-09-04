@@ -71,12 +71,47 @@
           "ecosystem": { "type": "string", "minLength": 1 },
           "version": { "$ref": "#/$defs/semanticVersion" },
           "checksumSha256": { "$ref": "#/$defs/sha256" },
+          "sourceRevision": { "$ref": "#/$defs/gitRevision" },
+          "normalizedArchiveSha256": { "$ref": "#/$defs/nonzeroSha256" },
+          "generator": { "$ref": "#/$defs/generator" },
+          "packageInventory": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/$defs/packageInventoryEntry" }
+          },
           "capabilities": {
             "type": "array",
             "items": { "type": "string", "minLength": 1 },
             "uniqueItems": true
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "capabilities": {
+                  "type": "array",
+                  "contains": { "const": "flutter_sdk" }
+                }
+              },
+              "required": ["capabilities"]
+            },
+            "then": {
+              "required": [
+                "platform",
+                "packageIdentifier",
+                "sourceRevision",
+                "normalizedArchiveSha256",
+                "generator",
+                "packageInventory"
+              ],
+              "properties": {
+                "platform": { "const": "flutter" },
+                "packageIdentifier": { "const": "bota_flutter_sdk" }
+              }
+            }
+          }
+        ]
       }
     }
   },
@@ -146,6 +181,29 @@
     "sha256": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
+    },
+    "nonzeroSha256": {
+      "type": "string",
+      "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "const": "pigeon" },
+        "version": { "const": "28.0.0" }
+      }
+    },
+    "packageInventoryEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "byteLength": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
     }
   }
 }

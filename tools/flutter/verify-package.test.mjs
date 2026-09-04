@@ -22,6 +22,7 @@ import { verifyFlutterPackage } from './verify-package.mjs';
 const workspaceRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
 const packageFiles = [
+  '.pubignore',
   'LICENSE',
   'analysis_options.yaml',
   'android/sdk-version.toml',
@@ -39,14 +40,17 @@ const packageFiles = [
 ];
 
 const validPubspec = `name: bota_flutter_sdk
+description: Flutter facade for connecting applications to Bota devices.
 version: 1.1.0
+homepage: https://docs.bota.dev
+repository: https://github.com/bota-dev/app-sdk/tree/main/frameworks/flutter/bota_flutter_sdk
 environment:
   sdk: ">=3.11.0 <4.0.0"
   flutter: ">=3.41.0"
 dependencies:
   flutter:
     sdk: flutter
-  meta: 1.19.0
+  meta: ^1.19.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -78,6 +82,20 @@ const validApplePodspec = `
 spec.version = "1.1.0"
 spec.vendored_frameworks = "Artifacts/BotaDeviceSDKCore.xcframework"
 `;
+const validPubignore = `.dart_tool/
+build/
+pubspec.lock
+example/.dart_tool/
+example/.flutter-plugins-dependencies
+example/pubspec.lock
+example/android/local.properties
+example/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+example/ios/Flutter/Generated.xcconfig
+example/ios/Flutter/ephemeral/
+example/ios/Flutter/flutter_export_environment.sh
+example/ios/Runner/GeneratedPluginRegistrant.h
+example/ios/Runner/GeneratedPluginRegistrant.m
+`;
 
 const createFixture = (prefix = 'bota-flutter-package-') => {
   const root = mkdtempSync(join(tmpdir(), prefix));
@@ -88,6 +106,7 @@ const createFixture = (prefix = 'bota-flutter-package-') => {
     const path = join(packageRoot, file);
     mkdirSync(dirname(path), { recursive: true });
     let contents = 'fixture\n';
+    if (file === '.pubignore') contents = validPubignore;
     if (file === 'android/sdk-version.toml') contents = 'version = "1.1.0"\n';
     if (file === 'pubspec.yaml') contents = validPubspec;
     if (file === 'ios/bota_flutter_sdk.podspec') contents = validPluginPodspec;
@@ -217,13 +236,56 @@ test('rejects Apple package version and language-mode drift', () => {
   );
 });
 
-test('rejects a missing generated-code meta dependency', () => {
+test('rejects a published Swift package with a local Apple dependency override', () => {
   const { packageRoot, root } = createFixture();
-  replacePubspec(packageRoot, '  meta: 1.19.0\n', '');
+  writeFileSync(
+    join(packageRoot, 'ios/bota_flutter_sdk/Package.swift'),
+    `import Foundation
+${validSwiftPackage}
+let localPath = ProcessInfo.processInfo.environment["BOTA_APPLE_SDK_PACKAGE_PATH"]
+`,
+  );
 
   assert.throws(
     () => verifyFlutterPackage(root),
-    /meta version must be exactly 1\.19\.0/,
+    /must not contain a local BotaAppleSDK override/,
+  );
+});
+
+test('rejects a pubignore that can package generated consumer files', () => {
+  const { packageRoot, root } = createFixture();
+  writeFileSync(
+    join(packageRoot, '.pubignore'),
+    validPubignore.replace('example/android/local.properties\n', ''),
+  );
+
+  assert.throws(
+    () => verifyFlutterPackage(root),
+    /pubignore must exclude example\/android\/local\.properties/,
+  );
+});
+
+test('rejects missing public package metadata', () => {
+  const { packageRoot, root } = createFixture();
+  replacePubspec(
+    packageRoot,
+    'description: Flutter facade for connecting applications to Bota devices.\n',
+    '',
+  );
+
+  assert.throws(
+    () => verifyFlutterPackage(root),
+    /description is required/,
+  );
+});
+
+test('rejects a missing generated-code meta dependency', () => {
+  const { packageRoot, root } = createFixture();
+  replacePubspec(packageRoot, '  meta: ^1.19.0\n', '');
+
+  assert.throws(
+    () => verifyFlutterPackage(root),
+    /meta constraint must be \^1\.19\.0/,
   );
 });
 

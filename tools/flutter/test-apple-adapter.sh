@@ -153,6 +153,7 @@ swift test \
 
 create_flutter_consumer() {
   local destination="$1"
+  local dependency_root="${2:-$plugin_root}"
   "$workspace_root/tools/flutter/run-flutter.sh" create \
     --platforms=ios \
     --org=dev.bota \
@@ -160,7 +161,7 @@ create_flutter_consumer() {
     "$destination" >/dev/null
   "$workspace_root/tools/flutter/run-flutter.sh" pub add \
     --directory="$destination" \
-    "bota_flutter_sdk@{path: $plugin_root}" >/dev/null
+    "bota_flutter_sdk@{path: $dependency_root}" >/dev/null
 }
 
 cocoapods_consumer="$consumer_root/cocoapods-consumer"
@@ -211,10 +212,33 @@ EOF
 )
 
 swiftpm_consumer="$consumer_root/swiftpm-consumer"
-create_flutter_consumer "$swiftpm_consumer"
+local_plugin_root="$consumer_root/local-plugin"
+rsync -a \
+  --exclude .dart_tool \
+  --exclude build \
+  --exclude pubspec.lock \
+  --exclude example/.dart_tool \
+  --exclude example/build \
+  --exclude example/pubspec.lock \
+  "$plugin_root/" "$local_plugin_root/"
+SWIFT_MANIFEST="$local_plugin_root/ios/bota_flutter_sdk/Package.swift" \
+  APPLE_PACKAGE="$workspace_root/platforms/apple" \
+  SDK_VERSION="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' "$workspace_root/sdk-version.toml")" \
+  node -e '
+    const fs = require("node:fs");
+    const path = process.env.SWIFT_MANIFEST;
+    const source = fs.readFileSync(path, "utf8");
+    const marker = `.package(
+      url: "https://github.com/bota-dev/app-sdk.git",
+      exact: "${process.env.SDK_VERSION}"
+    ),`;
+    const replacement = `.package(name: "BotaAppleSDK", path: ${JSON.stringify(process.env.APPLE_PACKAGE)}),`;
+    if (!source.includes(marker)) throw new Error("public BotaAppleSDK dependency marker changed");
+    fs.writeFileSync(path, source.replace(marker, replacement));
+  '
+create_flutter_consumer "$swiftpm_consumer" "$local_plugin_root"
 (
   cd "$swiftpm_consumer"
-  BOTA_APPLE_SDK_PACKAGE_PATH="$workspace_root/platforms/apple" \
-    "$workspace_root/tools/flutter/run-flutter.sh" build ios \
-      --debug --simulator --no-codesign
+  "$workspace_root/tools/flutter/run-flutter.sh" build ios \
+    --debug --simulator --no-codesign
 )

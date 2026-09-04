@@ -25,11 +25,10 @@ synchronized version shown in the installation sections below. New synchronized
 releases use `1.x.y-beta.n`; promotion to a stable channel is a separate release
 decision.
 
-The Flutter facade is implemented in source and passes local release-consumer
-gates, but it was not included in published version `1.1.0`. Its first planned
-pub.dev release is the synchronized `1.2.0-beta.0` prerelease. Flutter
-applications must not infer package availability from the Apple, Android, or
-React Native release alone.
+The Flutter facade and deterministic synchronized `1.2.0-beta.0` candidate are
+implemented and pass local publication and release-consumer gates, but no
+Flutter version has been published yet. Flutter applications must not infer
+pub.dev availability from the Apple, Android, or React Native release alone.
 
 ## Current Status
 
@@ -97,7 +96,9 @@ without implementing another reducer. A compact device-management example and
 fresh generated consumers build release-mode Android and iOS applications
 against exact local native artifacts. Backend callbacks fail closed until an
 application supplies request-bound provisioning, reset, persistence, firmware,
-WiFi, and upload integration. Flutter publication remains a later release gate.
+WiFi, and upload integration. Release tooling now preserves a deterministic
+archive, complete normalized inventory, lock and license evidence, and dry-run
+result; protected publication remains a separate external release action.
 The exported `DeviceManager` compatibility owner delegates scan,
 selected connection, status, settings, logs, WiFi/cache behavior, provisioning
 state and key reads, direct provisioning writes, and time sync. Those low-volume
@@ -270,15 +271,16 @@ implementation("dev.bota:bota-android-sdk:1.1.0")
 
 ## Flutter Beta Candidate
 
-The Flutter facade supports iOS 15+ and Android API 26+. It is currently a
-source candidate rather than a published `1.1.0` package. See the
+The Flutter facade supports iOS 15+ and Android API 26+. The synchronized
+`1.2.0-beta.0` source and deterministic archive candidate are prepared, but
+the package is not published. See the
 [Flutter integration guide](frameworks/flutter/bota_flutter_sdk/README.md) for
 exact-version installation, permissions, backend callbacks, serial-strict
 reconnect, retained encrypted batch handoff, WiFi, OTA, remove-only
 deprovision, authenticated reset, and unsupported targets.
 
 The first planned pub.dev release is `1.2.0-beta.0`; applications must opt into
-that exact prerelease after its synchronized native artifacts and package
+that exact prerelease only after pub.dev publication and public archive
 verification complete.
 
 ## Development
@@ -336,6 +338,7 @@ tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
 tools/flutter/test-android-adapter.sh
 tools/flutter/test-consumers.sh
 npm run flutter:verify
+tools/flutter/package-release.sh --check
 ```
 
 The React Native API check expects `npm ci` to have installed the reference SDK

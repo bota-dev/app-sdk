@@ -1,0 +1,75 @@
+name: Publish Apple CocoaPod
+
+on:
+  workflow_call:
+    secrets:
+      COCOAPODS_TRUNK_TOKEN:
+        required: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  publish:
+    name: Publish and verify BotaAppleSDK
+    runs-on: macos-15
+    environment: release
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Download immutable Apple payload
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: apple-release-${{ github.ref_name }}
+          path: target/apple-release/
+
+      - name: Verify tag, asset, root manifest, and podspec
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          test "$GITHUB_REF" = "refs/tags/v$VERSION"
+          test "$(git cat-file -t "$GITHUB_REF_NAME")" = tag
+          test "$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml)" = "$VERSION"
+          test "$(sed -n 's/.*spec.version = "\([^"]*\)".*/\1/p' platforms/apple/BotaAppleSDK.podspec)" = "$VERSION"
+          (
+            cd target/apple-release
+            shasum -a 256 -c BotaDeviceSDKCore.xcframework.zip.sha256
+          )
+          CHECKSUM="$(cat target/apple-release/BotaDeviceSDKCore.xcframework.swiftpm-checksum)"
+          test "$CHECKSUM" = "$(swift package compute-checksum target/apple-release/BotaDeviceSDKCore.xcframework.zip)"
+          grep -F "releases/download/v$VERSION/BotaDeviceSDKCore.xcframework.zip" Package.swift
+          grep -F "checksum: \"$CHECKSUM\"" Package.swift
+
+      - name: Install exact CocoaPods client
+        run: gem install --no-document cocoapods -v 1.16.2
+
+      - name: Publish absent pod and verify public metadata
+        env:
+          COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          existing="$(mktemp)"
+          if pod spec cat BotaAppleSDK --version="$VERSION" >"$existing" 2>/dev/null; then
+            test "$(jq -r .version "$existing")" = "$VERSION"
+            test "$(jq -r .source.tag "$existing")" = "v$VERSION"
+          else
+            test -n "$COCOAPODS_TRUNK_TOKEN"
+            pod trunk push platforms/apple/BotaAppleSDK.podspec
+          fi
+          for attempt in {1..30}; do
+            if pod spec cat BotaAppleSDK --version="$VERSION" >"$existing" 2>/dev/null; then
+              break
+            fi
+            sleep 10
+          done
+          test "$(jq -r .version "$existing")" = "$VERSION"
+          test "$(jq -r .source.tag "$existing")" = "v$VERSION"

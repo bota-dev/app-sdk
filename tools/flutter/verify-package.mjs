@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 const PACKAGE_PATH = 'frameworks/flutter/bota_flutter_sdk';
 const REQUIRED_FILES = [
+  '.pubignore',
   'LICENSE',
   'analysis_options.yaml',
   'android/sdk-version.toml',
@@ -26,6 +27,21 @@ const REQUIRED_FILES = [
   'pubspec.yaml',
   'test/bridge_contract_test.dart',
   'test/package_contract_test.dart',
+];
+const REQUIRED_PUBIGNORE_PATHS = [
+  '.dart_tool/',
+  'build/',
+  'pubspec.lock',
+  'example/.dart_tool/',
+  'example/.flutter-plugins-dependencies',
+  'example/pubspec.lock',
+  'example/android/local.properties',
+  'example/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java',
+  'example/ios/Flutter/Generated.xcconfig',
+  'example/ios/Flutter/ephemeral/',
+  'example/ios/Flutter/flutter_export_environment.sh',
+  'example/ios/Runner/GeneratedPluginRegistrant.h',
+  'example/ios/Runner/GeneratedPluginRegistrant.m',
 ];
 const EXPECTED_DART_CONSTRAINT = '>=3.11.0 <4.0.0';
 const EXPECTED_FLUTTER_CONSTRAINT = '>=3.41.0';
@@ -61,7 +77,7 @@ const parseScalar = (source, lineNumber) => {
   return source;
 };
 
-const parsePubspec = (source) => {
+export const parsePubspec = (source) => {
   if (/(^|[\s:[{,])(?:&|\*)(?=\S)/m.test(source)) {
     throw new Error('YAML anchors or aliases are not allowed in pubspec.yaml');
   }
@@ -144,6 +160,10 @@ export const verifyFlutterPackage = (root) => {
     resolve(packageRoot, 'android/sdk-version.toml')
   );
   const pubspec = parsePubspec(readFileSync(resolve(packageRoot, 'pubspec.yaml'), 'utf8'));
+  const pubignore = readFileSync(resolve(packageRoot, '.pubignore'), 'utf8')
+    .replaceAll('\r\n', '\n')
+    .split('\n')
+    .filter((line) => line.length > 0 && !line.startsWith('#'));
   const applePodspec = resolve(workspaceRoot, 'platforms/apple/BotaAppleSDK.podspec');
   if (!existsSync(applePodspec)) {
     throw new Error('Flutter package is missing platforms/apple/BotaAppleSDK.podspec');
@@ -161,6 +181,17 @@ export const verifyFlutterPackage = (root) => {
   expectEqual(pubspec.name, 'bota_flutter_sdk', (actual) =>
     `Flutter package name ${actual ?? '(missing)'} does not match bota_flutter_sdk`
   );
+  if (typeof pubspec.description !== 'string' || pubspec.description.length < 10) {
+    throw new Error('Flutter package description is required');
+  }
+  expectEqual(pubspec.homepage, 'https://docs.bota.dev', () =>
+    'Flutter package homepage must be https://docs.bota.dev'
+  );
+  expectEqual(
+    pubspec.repository,
+    'https://github.com/bota-dev/app-sdk/tree/main/frameworks/flutter/bota_flutter_sdk',
+    () => 'Flutter package repository must identify its monorepo directory'
+  );
   expectEqual(pubspec.version, sdkVersion, (actual) =>
     `Flutter package version ${actual ?? '(missing)'} does not match ${sdkVersion}`
   );
@@ -176,8 +207,8 @@ export const verifyFlutterPackage = (root) => {
   expectEqual(pubspec.dependencies?.flutter?.sdk, 'flutter', () =>
     'Flutter SDK dependency is required'
   );
-  expectEqual(pubspec.dependencies?.meta, '1.19.0', () =>
-    'meta version must be exactly 1.19.0'
+  expectEqual(pubspec.dependencies?.meta, '^1.19.0', () =>
+    'meta constraint must be ^1.19.0'
   );
   expectEqual(pubspec.dev_dependencies?.flutter_test?.sdk, 'flutter', () =>
     'Flutter test SDK dependency is required'
@@ -220,11 +251,19 @@ export const verifyFlutterPackage = (root) => {
   if (pluginPodspec.includes('spm_dependency')) {
     throw new Error('Flutter CocoaPods metadata must not depend on an optional SPM helper');
   }
+  if (swiftPackage.includes('BOTA_APPLE_SDK_PACKAGE_PATH')) {
+    throw new Error('Flutter Swift package must not contain a local BotaAppleSDK override');
+  }
   expectMatch(
     swiftPackage,
     /\.package\(name:\s*["']FlutterFramework["'],\s*path:\s*["']\.\.\/FlutterFramework["']\)/,
     'Flutter Swift package must depend on ../FlutterFramework'
   );
+  for (const path of REQUIRED_PUBIGNORE_PATHS) {
+    if (!pubignore.includes(path)) {
+      throw new Error(`Flutter pubignore must exclude ${path}`);
+    }
+  }
   expectMatch(
     swiftPackage,
     new RegExp(`exact:\\s*["']${sdkVersion.replaceAll('.', '\\.')}["']`),

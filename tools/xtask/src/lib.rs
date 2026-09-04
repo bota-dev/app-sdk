@@ -6,7 +6,11 @@ pub mod release {
     use semver::Version;
     use serde::Deserialize;
     use sha2::{Digest, Sha256};
-    use std::{collections::HashSet, fs, path::Path};
+    use std::{
+        collections::{HashMap, HashSet},
+        fs,
+        path::Path,
+    };
 
     const APP_SDK_PACKAGES: &[(&str, &str)] = &[
         ("apple", "BotaAppleSDK"),
@@ -59,7 +63,26 @@ pub mod release {
         ecosystem: String,
         version: String,
         checksum_sha256: String,
+        source_revision: Option<String>,
+        normalized_archive_sha256: Option<String>,
+        generator: Option<Generator>,
+        package_inventory: Option<Vec<PackageInventoryEntry>>,
         capabilities: Vec<String>,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct Generator {
+        name: String,
+        version: String,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase", deny_unknown_fields)]
+    struct PackageInventoryEntry {
+        path: String,
+        byte_length: u64,
+        sha256: String,
     }
 
     #[derive(Deserialize)]
@@ -83,6 +106,17 @@ pub mod release {
     struct PackageJson {
         version: String,
         private: bool,
+    }
+
+    #[derive(Deserialize)]
+    struct PackageVersion {
+        version: String,
+    }
+
+    #[derive(Deserialize)]
+    struct PackageLock {
+        version: String,
+        packages: HashMap<String, PackageVersion>,
     }
 
     #[derive(Deserialize)]
@@ -139,6 +173,70 @@ pub mod release {
             return Err("workspace package.json must remain private".to_owned());
         }
         require_version("package.json", &package_json.version, &expected.version)?;
+        require_package_lock_version(
+            &root.join("package-lock.json"),
+            "workspace package-lock.json",
+            &expected.version,
+        )?;
+
+        let react_native: PackageVersion =
+            parse_json_file(&root.join("frameworks/react-native/package.json"))?;
+        require_version(
+            "React Native package.json",
+            &react_native.version,
+            &expected.version,
+        )?;
+        require_package_lock_version(
+            &root.join("frameworks/react-native/package-lock.json"),
+            "React Native package-lock.json",
+            &expected.version,
+        )?;
+
+        let flutter_pubspec_contents =
+            fs::read_to_string(root.join("frameworks/flutter/bota_flutter_sdk/pubspec.yaml"))
+                .map_err(|error| format!("cannot read Flutter pubspec.yaml: {error}"))?;
+        let flutter_pubspec: PackageVersion = serde_yaml_ng::from_str(&flutter_pubspec_contents)
+            .map_err(|error| format!("invalid Flutter pubspec.yaml: {error}"))?;
+        require_version(
+            "Flutter pubspec.yaml",
+            &flutter_pubspec.version,
+            &expected.version,
+        )?;
+
+        let flutter_swift_package = fs::read_to_string(
+            root.join("frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Package.swift"),
+        )
+        .map_err(|error| format!("cannot read Flutter Package.swift: {error}"))?;
+        let flutter_apple_version = unique_quoted_assignment(
+            &flutter_swift_package,
+            "exact: \"",
+            "Flutter Package.swift exact Apple version",
+        )?;
+        require_version(
+            "Flutter Package.swift exact Apple version",
+            &flutter_apple_version,
+            &expected.version,
+        )?;
+
+        let android_properties =
+            fs::read_to_string(root.join("platforms/android/gradle.properties"))
+                .map_err(|error| format!("cannot read Android gradle.properties: {error}"))?;
+        let android_version = unique_gradle_property(&android_properties, "VERSION_NAME")?;
+        require_version("Android Gradle project", android_version, &expected.version)?;
+
+        let apple_podspec =
+            fs::read_to_string(root.join("platforms/apple/BotaAppleSDK.podspec"))
+                .map_err(|error| format!("cannot read BotaAppleSDK.podspec: {error}"))?;
+        let apple_pod_version = unique_quoted_assignment(
+            &apple_podspec,
+            "spec.version = \"",
+            "BotaAppleSDK pod version",
+        )?;
+        require_version(
+            "BotaAppleSDK pod version",
+            &apple_pod_version,
+            &expected.version,
+        )?;
 
         let core_path = root.join("core/device-sdk-core/Cargo.toml");
         let core: CargoManifest = parse_toml_file(&core_path)?;
@@ -169,6 +267,44 @@ pub mod release {
             version: expected.version,
             crate_name: core.package.name,
         })
+    }
+
+    fn require_package_lock_version(
+        path: &Path,
+        label: &str,
+        expected: &str,
+    ) -> Result<(), String> {
+        let lock: PackageLock = parse_json_file(path)?;
+        require_version(label, &lock.version, expected)?;
+        let root_package = lock
+            .packages
+            .get("")
+            .ok_or_else(|| format!("{label} is missing its root package"))?;
+        require_version(
+            &format!("{label} root package"),
+            &root_package.version,
+            expected,
+        )
+    }
+
+    fn unique_quoted_assignment(
+        contents: &str,
+        prefix: &str,
+        label: &str,
+    ) -> Result<String, String> {
+        let values = contents
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix(prefix))
+            .map(|value| {
+                value
+                    .strip_suffix('"')
+                    .ok_or_else(|| format!("{label} must end with a double quote"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if values.len() != 1 {
+            return Err(format!("{label} must appear exactly once"));
+        }
+        Ok(values[0].to_owned())
     }
 
     pub fn verify_android_build(root: &Path) -> Result<(), String> {
@@ -396,6 +532,20 @@ pub mod release {
         if manifest.artifacts.is_empty() {
             return Err("artifacts must not be empty".to_owned());
         }
+        let declares_flutter = manifest.artifacts.iter().any(|artifact| {
+            artifact
+                .capabilities
+                .iter()
+                .any(|value| value == "flutter_sdk")
+        });
+        let flutter_artifacts = manifest
+            .artifacts
+            .iter()
+            .filter(|artifact| artifact.platform.as_deref() == Some("flutter"))
+            .collect::<Vec<_>>();
+        if declares_flutter && flutter_artifacts.len() != 1 {
+            return Err("flutter_sdk capability requires exactly one Flutter artifact".to_owned());
+        }
         for artifact in &manifest.artifacts {
             if manifest.manifest_version == 2 {
                 let platform = artifact
@@ -440,7 +590,91 @@ pub mod release {
             }
         }
 
+        if declares_flutter {
+            validate_flutter_artifact(flutter_artifacts[0], manifest)?;
+        }
+
         Ok(())
+    }
+
+    fn validate_flutter_artifact(
+        artifact: &Artifact,
+        manifest: &ReleaseManifest,
+    ) -> Result<(), String> {
+        if artifact.package_identifier.as_deref() != Some("bota_flutter_sdk") {
+            return Err("Flutter packageIdentifier must be bota_flutter_sdk".to_owned());
+        }
+        if !artifact
+            .capabilities
+            .iter()
+            .any(|value| value == "flutter_sdk")
+        {
+            return Err("Flutter artifact must declare flutter_sdk capability".to_owned());
+        }
+        let source_revision = artifact
+            .source_revision
+            .as_deref()
+            .ok_or_else(|| "Flutter artifact is missing sourceRevision".to_owned())?;
+        require_lower_hex("Flutter sourceRevision", source_revision, 40)?;
+        if source_revision != manifest.source_revision {
+            return Err("Flutter sourceRevision must match release sourceRevision".to_owned());
+        }
+        let generator = artifact
+            .generator
+            .as_ref()
+            .ok_or_else(|| "Flutter artifact is missing generator".to_owned())?;
+        if generator.name != "pigeon" || generator.version != "28.0.0" {
+            return Err("Flutter generator must be pigeon 28.0.0".to_owned());
+        }
+        let normalized = artifact
+            .normalized_archive_sha256
+            .as_deref()
+            .ok_or_else(|| "Flutter artifact is missing normalizedArchiveSha256".to_owned())?;
+        require_lower_hex("Flutter normalizedArchiveSha256", normalized, 64)?;
+        if normalized.bytes().all(|byte| byte == b'0') {
+            return Err("Flutter normalizedArchiveSha256 must not be zero".to_owned());
+        }
+        let inventory = artifact
+            .package_inventory
+            .as_ref()
+            .ok_or_else(|| "Flutter artifact is missing packageInventory".to_owned())?;
+        if inventory.is_empty() {
+            return Err("Flutter packageInventory must not be empty".to_owned());
+        }
+        let mut previous: Option<&str> = None;
+        for file in inventory {
+            if !safe_package_path(&file.path) {
+                return Err(format!(
+                    "Flutter packageInventory contains unsafe path {}",
+                    file.path
+                ));
+            }
+            if let Some(previous) = previous {
+                if file.path == previous {
+                    return Err(format!(
+                        "Flutter packageInventory contains duplicate path {}",
+                        file.path
+                    ));
+                }
+                if file.path.as_str() < previous {
+                    return Err("Flutter packageInventory must be sorted".to_owned());
+                }
+            }
+            previous = Some(&file.path);
+            let _ = file.byte_length;
+            require_lower_hex("Flutter packageInventory sha256", &file.sha256, 64)?;
+        }
+        Ok(())
+    }
+
+    fn safe_package_path(path: &str) -> bool {
+        !path.is_empty()
+            && !path.starts_with('/')
+            && !path.contains('\\')
+            && !path.as_bytes().contains(&0)
+            && !path
+                .split('/')
+                .any(|part| part.is_empty() || part == "." || part == "..")
     }
 
     fn repository_root(path: &Path) -> Result<&Path, String> {
