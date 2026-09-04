@@ -598,9 +598,13 @@ registration and late delegate callbacks cannot resume cancelled callers. A
 cancelled characteristic key rejects new requests until an unambiguous stale
 callback is discarded or disconnect clears its quarantine. When that
 characteristic also carries notifications, callbacks continue to the live
-subscriber and cannot clear read quarantine. The per-peripheral serialization
-gate removes cancelled waiters without releasing the current holder or letting
-cancelled work enter the driver.
+subscriber and cannot clear read quarantine. Cancellation removes and
+quarantines a registered request on the CoreBluetooth queue before changing its
+continuation state, eliminating the dequeue-to-resolution gap. The
+per-peripheral serialization gate has an explicit pre-registration granted
+state, so handoff cannot discard a waiter during its executor hop; cancellation
+after handoff is observed by the serialized operation and releases that exact
+ownership without entering the driver.
 
 Apple native services keep operating-system resources behind opaque ABI IDs.
 `FilePersistenceHost` atomically replaces the workflow checkpoint and retains

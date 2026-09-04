@@ -76,6 +76,7 @@ actor NativeLeaseCoordinator {
   }
 
   private let client: any NativeLeaseClientProtocol
+  private let beforeOperationAcquisition: (@Sendable () async -> Void)?
   private var leases: [String: NativeLeaseConfiguration] = [:]
   private var pendingLeases: [String: NativeLeaseConfiguration] = [:]
   private var activeConfiguration: NativeLeaseConfiguration?
@@ -83,8 +84,12 @@ actor NativeLeaseCoordinator {
   private var destroying: DestroyTask?
   private var operations: [NativeOperationCategory: OperationOwner] = [:]
 
-  init(client: any NativeLeaseClientProtocol) {
+  init(
+    client: any NativeLeaseClientProtocol,
+    beforeOperationAcquisition: (@Sendable () async -> Void)? = nil
+  ) {
     self.client = client
+    self.beforeOperationAcquisition = beforeOperationAcquisition
   }
 
   var leaseCount: Int { leases.count }
@@ -173,7 +178,8 @@ actor NativeLeaseCoordinator {
     engineID: String,
     category: NativeOperationCategory,
     operationID: String
-  ) throws {
+  ) async throws {
+    if let beforeOperationAcquisition { await beforeOperationAcquisition() }
     guard operations[category] == nil else { throw NativeLeaseError.operationInProgress }
     operations[category] = OperationOwner(
       engineID: engineID,

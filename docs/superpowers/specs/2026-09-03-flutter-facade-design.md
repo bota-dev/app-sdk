@@ -174,15 +174,18 @@ cancellation poisons that category until terminal unwind or final shared-client
 destruction proves cleanup, preventing another engine from acquiring or
 cancelling shared native work. Direct CoreBluetooth reads and writes are task
 cancellation-aware from the per-peripheral gate through the driver callback:
-cancellation removes and resumes the exact waiter or continuation without
-releasing another holder. The characteristic key remains quarantined until an
+pre-registration grant preserves gate ownership, and cancellation removes a
+registered callback on the CoreBluetooth queue before changing request state.
+Both resume the exact waiter or continuation without releasing another holder.
+The characteristic key remains quarantined until an
 unambiguous stale delegate callback is discarded or disconnect proves it cannot
 arrive. Notifications on the same characteristic continue to their subscriber
 and cannot clear that read boundary. Native stream startup is registered before
-it can suspend; detach and public cancellation retain ownership while cancelling
-and awaiting the exact start task, then stop native work after startup unwinds.
-A terminal Flutter stream collector is not native-terminal proof when its
-corresponding stop throws.
+coordinator acquisition; detach and public cancellation cancel and await that
+exact task. Failure before a stream is returned is terminal without native stop,
+while a returned stream requires successful stop or final shared-client
+destruction. Startup-task or Flutter collector completion is not native-terminal
+proof when the corresponding stop throws.
 
 ## Data And Security Ownership
 

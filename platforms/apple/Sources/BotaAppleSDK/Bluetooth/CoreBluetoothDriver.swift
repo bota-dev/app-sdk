@@ -27,8 +27,8 @@ final class CoreBluetoothPendingRequest<Value: Sendable>: @unchecked Sendable {
                 if install(continuation) { start() }
             }
         } onCancel: {
+            onCancel()
             if self.beginCancellation() {
-                onCancel()
                 self.finishCancellation()
             }
         }

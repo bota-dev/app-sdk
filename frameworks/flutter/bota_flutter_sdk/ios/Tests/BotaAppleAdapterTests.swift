@@ -551,7 +551,7 @@ final class BotaAppleAdapterTests: XCTestCase {
     let scanStartReturnedStream = await native.scanStartReturnedStream
     XCTAssertFalse(scanStartReturnedStream)
     let detachCancellationCount = await native.deviceCancellationCount
-    XCTAssertEqual(detachCancellationCount, 1)
+    XCTAssertEqual(detachCancellationCount, 0)
     _ = try await adapterB.readDeviceStatus(operationId: id(109))
   }
 
@@ -594,6 +594,147 @@ final class BotaAppleAdapterTests: XCTestCase {
     XCTAssertFalse(scanNativeActive)
     XCTAssertEqual(cancellationCount, 1)
     _ = try await adapterB.readDeviceStatus(operationId: id(114))
+  }
+
+  func testDetachCancelsStartupTrackedBeforeCoordinatorAcquisition() async throws {
+    let native = AdapterTestClient()
+    let barrier = OperationAcquisitionBarrier()
+    let leases = NativeLeaseCoordinator(
+      client: native,
+      beforeOperationAcquisition: { await barrier.wait() }
+    )
+    let adapter = makeAdapter(native: native, leases: leases, engineID: "pre-acquire-detach")
+    try await configure(adapter, operationID: id(115))
+    let start = Task {
+      try await adapter.startSubscription(
+        subscriptionId: id(116),
+        request: BotaScanSubscriptionMessage(timeoutMillis: 10_000, allowDuplicates: false)
+      )
+    }
+    await barrier.waitUntilEntered()
+
+    let detach = Task { await adapter.detach() }
+    await barrier.open()
+    await detach.value
+    do {
+      try await start.value
+      XCTFail("detached pre-acquisition startup must fail")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "engine_detached")
+    }
+    let detachStartedNativeStream = await native.scanStartReturnedStream
+    XCTAssertFalse(detachStartedNativeStream)
+  }
+
+  func testPublicCancelSeesStartupTrackedBeforeCoordinatorAcquisition() async throws {
+    let native = AdapterTestClient()
+    let barrier = OperationAcquisitionBarrier()
+    let leases = NativeLeaseCoordinator(
+      client: native,
+      beforeOperationAcquisition: { await barrier.wait() }
+    )
+    let adapter = makeAdapter(native: native, leases: leases, engineID: "pre-acquire-cancel")
+    try await configure(adapter, operationID: id(117))
+    let subscriptionID = id(118)
+    let start = Task {
+      try await adapter.startSubscription(
+        subscriptionId: subscriptionID,
+        request: BotaScanSubscriptionMessage(timeoutMillis: 10_000, allowDuplicates: false)
+      )
+    }
+    await barrier.waitUntilEntered()
+
+    let cancel = Task { try await adapter.cancelSubscription(subscriptionId: subscriptionID) }
+    await barrier.open()
+    try await cancel.value
+    do {
+      try await start.value
+      XCTFail("cancelled pre-acquisition startup must fail")
+    } catch {}
+    let cancelStartedNativeStream = await native.scanStartReturnedStream
+    XCTAssertFalse(cancelStartedNativeStream)
+  }
+
+  func testPublicCancellationPoisonsLateStartedStreamWhenPostStartStopThrows() async throws {
+    let native = AdapterTestClient(
+      failDeviceCancellation: true,
+      suspendScanStart: true,
+      ignoreScanStartCancellation: true
+    )
+    let leases = NativeLeaseCoordinator(client: native)
+    let adapterA = makeAdapter(native: native, leases: leases, engineID: "late-cancel-owner")
+    let adapterB = makeAdapter(native: native, leases: leases, engineID: "late-cancel-other")
+    try await configure(adapterA, operationID: id(119))
+    try await configure(adapterB, operationID: id(120))
+    let subscriptionID = id(121)
+    let start = Task {
+      try await adapterA.startSubscription(
+        subscriptionId: subscriptionID,
+        request: BotaScanSubscriptionMessage(timeoutMillis: 10_000, allowDuplicates: false)
+      )
+    }
+    await native.waitUntilScanStartSuspended()
+    let cancel = Task { try await adapterA.cancelSubscription(subscriptionId: subscriptionID) }
+    await native.waitUntilScanStartCancellationObserved()
+    await native.resumeScanStart()
+    do { try await cancel.value } catch {}
+    do { try await start.value } catch {}
+    let nativeActive = await native.scanNativeActive
+    XCTAssertTrue(nativeActive)
+
+    do {
+      _ = try await adapterB.readDeviceStatus(operationId: id(122))
+      XCTFail("late native stream must keep failed cancellation ownership poisoned")
+    } catch let error as PigeonError { XCTAssertEqual(error.code, "operation_in_progress") }
+    do {
+      try await adapterB.cancelDeviceOperation(operationId: id(123))
+      XCTFail("another engine must not cancel poisoned startup")
+    } catch let error as PigeonError { XCTAssertEqual(error.code, "operation_not_owned") }
+
+    await adapterA.detach()
+    await adapterB.detach()
+    let adapterC = makeAdapter(native: native, leases: leases, engineID: "late-cancel-recovery")
+    try await configure(adapterC, operationID: id(124))
+    _ = try await adapterC.readDeviceStatus(operationId: id(125))
+  }
+
+  func testDetachPoisonsLateStartedStreamWhenPostStartStopThrows() async throws {
+    let native = AdapterTestClient(
+      failDeviceCancellation: true,
+      suspendScanStart: true,
+      ignoreScanStartCancellation: true
+    )
+    let leases = NativeLeaseCoordinator(client: native)
+    let adapterA = makeAdapter(native: native, leases: leases, engineID: "late-detach-owner")
+    let adapterB = makeAdapter(native: native, leases: leases, engineID: "late-detach-other")
+    try await configure(adapterA, operationID: id(126))
+    try await configure(adapterB, operationID: id(127))
+    let start = Task {
+      try await adapterA.startSubscription(
+        subscriptionId: id(128),
+        request: BotaScanSubscriptionMessage(timeoutMillis: 10_000, allowDuplicates: false)
+      )
+    }
+    await native.waitUntilScanStartSuspended()
+    let detach = Task { await adapterA.detach() }
+    await native.waitUntilScanStartCancellationObserved()
+    await native.resumeScanStart()
+    await detach.value
+    do { try await start.value } catch {}
+
+    do {
+      _ = try await adapterB.readDeviceStatus(operationId: id(129))
+      XCTFail("detach must preserve poison for a late native stream")
+    } catch let error as PigeonError { XCTAssertEqual(error.code, "operation_in_progress") }
+    do {
+      try await adapterB.cancelDeviceOperation(operationId: id(130))
+      XCTFail("another engine must not cancel detached poisoned startup")
+    } catch let error as PigeonError { XCTAssertEqual(error.code, "operation_not_owned") }
+
+    await adapterB.detach()
+    let adapterC = makeAdapter(native: native, leases: leases, engineID: "late-detach-recovery")
+    try await configure(adapterC, operationID: id(131))
+    _ = try await adapterC.readDeviceStatus(operationId: id(132))
   }
 
   func testTerminalStreamCleanupRetainsOwnershipAndOwnerlessCancelIsNoOp() async throws {
@@ -1143,6 +1284,25 @@ private final class AdapterTestFlutterApi: BotaFlutterApiProtocol, @unchecked Se
 
 private enum AdapterCancellationFailure: Error {
   case expected
+}
+
+private actor OperationAcquisitionBarrier {
+  private var entered = false
+  private var continuation: CheckedContinuation<Void, Never>?
+
+  func wait() async {
+    entered = true
+    await withCheckedContinuation { continuation = $0 }
+  }
+
+  func waitUntilEntered() async {
+    while !entered { await Task.yield() }
+  }
+
+  func open() {
+    continuation?.resume()
+    continuation = nil
+  }
 }
 
 private actor AdapterTestClient: BotaAppleClientProtocol {

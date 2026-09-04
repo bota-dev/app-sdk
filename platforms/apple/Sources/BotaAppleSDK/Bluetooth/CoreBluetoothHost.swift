@@ -378,9 +378,10 @@ actor PeripheralOperationGate {
     }
 }
 
-private final class PeripheralOperationWaiter: @unchecked Sendable {
+final class PeripheralOperationWaiter: @unchecked Sendable {
     private enum State {
         case awaitingContinuation
+        case granted
         case suspended(CheckedContinuation<Void, Error>)
         case cancelled
         case finished
@@ -398,6 +399,10 @@ private final class PeripheralOperationWaiter: @unchecked Sendable {
                 case .awaitingContinuation:
                     state = .suspended(continuation)
                     lock.unlock()
+                case .granted:
+                    state = .finished
+                    lock.unlock()
+                    continuation.resume()
                 case .cancelled:
                     state = .finished
                     lock.unlock()
@@ -415,14 +420,20 @@ private final class PeripheralOperationWaiter: @unchecked Sendable {
     @discardableResult
     func grant() -> Bool {
         lock.lock()
-        guard case .suspended(let continuation) = state else {
+        switch state {
+        case .awaitingContinuation:
+            state = .granted
+            lock.unlock()
+            return true
+        case .suspended(let continuation):
+            state = .finished
+            lock.unlock()
+            continuation.resume()
+            return true
+        case .granted, .cancelled, .finished:
             lock.unlock()
             return false
         }
-        state = .finished
-        lock.unlock()
-        continuation.resume()
-        return true
     }
 
     private func cancel() {
@@ -435,7 +446,7 @@ private final class PeripheralOperationWaiter: @unchecked Sendable {
             state = .finished
             lock.unlock()
             continuation.resume(throwing: CancellationError())
-        case .cancelled, .finished:
+        case .granted, .cancelled, .finished:
             lock.unlock()
         }
     }

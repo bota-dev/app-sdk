@@ -388,15 +388,17 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   result. Resume only the receipt workflow and reject a stale generation before
   starting Rust. Remove-only deprovision must never call factory reset.
 - Direct Apple BLE reads/writes and reducer workflows share one facade operation
-  coordinator. Per-peripheral gate waiters and CoreBluetooth continuations must
-  terminate exactly once on task cancellation without releasing another task's
-  gate ownership. Failed native cancellation retains category ownership until
+  coordinator. Per-peripheral gate waiters support grant before continuation
+  registration, and CoreBluetooth cancellation removes queued callbacks before
+  changing request state; both terminate exactly once without releasing another
+  task's gate ownership or swallowing a notification. Failed native cancellation retains category ownership until
   the original operation ends or shared-client destruction proves cleanup. A
   cancelled read characteristic stays quarantined while notifications remain
   active; notifications continue to their subscriber, and only an unambiguous
   stale response or disconnect clears the read boundary. Track native stream
-  startup before awaiting it, then cancel and await that exact task before the
-  post-start stop can prove cleanup. Stream collector completion is not
+  startup before coordinator acquisition, then cancel and await that exact task before the
+  post-start stop can prove cleanup. A failed startup with no stream is terminal,
+  but a returned stream requires successful stop or final client destruction. Stream collector completion is not
   native-terminal proof when the corresponding stop throws.
 - Apple recording, upload-ownership, OTA, and device-log APIs expose typed
   streams and native file URLs plus bounded transfer-completion metadata only.

@@ -833,24 +833,30 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     subscriptionId: String,
     request: BotaSubscriptionRequestMessage
   ) async throws {
-    var owner: SubscriptionOwner?
-    var didReserve = false
     do {
       try reserveSubscription(subscriptionId)
-      didReserve = true
-      owner = try subscriptionOwner(request)
-      if let category = owner?.category {
-        try await leaseCoordinator.beginOperation(
-          engineID: engineID,
-          category: category,
-          operationID: subscriptionId
-        )
-      }
-      guard let owner else {
-        throw bridgeError("unsupported_subscription", "subscription kind is not supported")
-      }
+      let owner = try subscriptionOwner(request)
       let startTask = Task { @MainActor [weak self] () throws -> SubscriptionConsumer in
         guard let self else { throw CancellationError() }
+        try Task.checkCancellation()
+        if let category = owner.category {
+          try await self.leaseCoordinator.beginOperation(
+            engineID: self.engineID,
+            category: category,
+            operationID: subscriptionId
+          )
+          do {
+            try Task.checkCancellation()
+            return try await self.prepareSubscription(subscriptionId, request: request)
+          } catch {
+            await self.leaseCoordinator.finishOperation(
+              engineID: self.engineID,
+              category: category,
+              operationID: subscriptionId
+            )
+            throw error
+          }
+        }
         try Task.checkCancellation()
         return try await self.prepareSubscription(subscriptionId, request: request)
       }
@@ -867,18 +873,9 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
       }
       try install(subscriptionId, owner: owner, consume: consume)
     } catch {
-      if didReserve {
-        startingSubscriptions.removeValue(forKey: subscriptionId)
-        startingSubscriptionIDs.remove(subscriptionId)
-        finishIdentifier(subscriptionId)
-        if let category = owner?.category {
-          await leaseCoordinator.finishOperation(
-            engineID: engineID,
-            category: category,
-            operationID: subscriptionId
-          )
-        }
-      }
+      startingSubscriptions.removeValue(forKey: subscriptionId)
+      startingSubscriptionIDs.remove(subscriptionId)
+      finishIdentifier(subscriptionId)
       let mapped =
         detached || destroying
         ? bridgeError("engine_detached", "engine is detached")
@@ -891,30 +888,19 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     do {
       try validateID(subscriptionId)
       if let starting = startingSubscriptions[subscriptionId] {
+        starting.task.cancel()
+        let startResult = await starting.task.result
+        guard case .success = startResult else { return }
         if let category = starting.owner.category {
           try await leaseCoordinator.cancelOperation(
             engineID: engineID,
             category: category
           ) { [weak self] in
             guard let self else { return }
-            starting.task.cancel()
-            _ = await starting.task.result
-            var stopError: Error?
-            do {
-              try await self.stop(starting.owner)
-            } catch {
-              stopError = error
-            }
-            if let stopError { throw stopError }
+            try await self.stop(starting.owner)
           }
-          await leaseCoordinator.finishOperation(
-            engineID: engineID,
-            category: category,
-            operationID: subscriptionId
-          )
         } else {
-          starting.task.cancel()
-          _ = await starting.task.result
+          try await stop(starting.owner)
         }
         return
       }
@@ -1351,6 +1337,7 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     let starting = startingSubscriptions
     let activeSubscriptions = subscriptions
     subscriptions.removeAll()
+    for subscription in starting.values { subscription.task.cancel() }
     let startingByCategory = Dictionary(
       uniqueKeysWithValues: starting.values.compactMap { subscription in
         subscription.owner.category.map { ($0, subscription) }
@@ -1360,15 +1347,11 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     ) { [weak self] category in
       guard let self else { return }
       if let subscription = startingByCategory[category] {
-        subscription.task.cancel()
-        _ = await subscription.task.result
+        guard case .success = await subscription.task.result else { return }
       }
       try await self.stop(category)
     }
     for operation in operations.values { operation.task.cancel() }
-    for subscription in starting.values where subscription.owner.category == nil {
-      subscription.task.cancel()
-    }
     for subscription in activeSubscriptions.values { subscription.task.cancel() }
     await leaseCoordinator.waitForOperationCancellations(
       engineID: engineID,
@@ -1377,7 +1360,7 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     for operation in operations.values { _ = await operation.task.value }
     for subscription in starting.values { _ = await subscription.task.result }
     for subscription in activeSubscriptions.values { await subscription.task.value }
-    let terminalOperationIDs = Set(operations.keys).union(starting.keys)
+    let terminalOperationIDs = Set(operations.keys)
     await leaseCoordinator.finishCancelledOperations(
       engineID: engineID,
       operations: ownedOperations,

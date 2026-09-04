@@ -4,6 +4,25 @@ import XCTest
 @testable import BotaAppleSDK
 
 final class CoreBluetoothDriverCancellationTests: XCTestCase {
+  func testGateGrantBeforeContinuationRegistrationTransfersOwnership() async throws {
+    let waiter = PeripheralOperationWaiter()
+    XCTAssertTrue(waiter.grant())
+    try await waiter.value()
+    XCTAssertFalse(waiter.grant())
+  }
+
+  func testCancellationAfterPreRegistrationGrantDoesNotRevokeTransferredOwnership() async {
+    let waiter = PeripheralOperationWaiter()
+    XCTAssertTrue(waiter.grant())
+    let task = Task {
+      try await waiter.value()
+      try Task.checkCancellation()
+    }
+    task.cancel()
+    await assertCancelled(task)
+    XCTAssertFalse(waiter.grant())
+  }
+
   func testCancelledQueuedReadAndWriteDoNotEnterOrReleasePeripheralGate() async throws {
     let gate = PeripheralOperationGate()
     let entries = GateEntryRecorder()
@@ -173,6 +192,30 @@ final class CoreBluetoothDriverCancellationTests: XCTestCase {
     XCTAssertFalse(cancelled.succeed(Data([0x01])))
   }
 
+  func testCancellationRemovesAndQuarantinesBeforeRequestStateCanRejectCallback() async throws {
+    let request = CoreBluetoothPendingRequest<Data>()
+    let arbitration = CancellationArbitrationRecorder()
+    let callbacks = PendingCallbacksBox()
+    XCTAssertTrue(callbacks.install(request, for: "status"))
+    let task = Task {
+      try await request.value(start: {}) {
+        arbitration.record(requestCannotReceiveCallback: request.cannotReceiveCallback)
+        XCTAssertTrue(callbacks.cancel(request.id))
+      }
+    }
+    try await waitUntil { request.isPending }
+
+    task.cancel()
+    await assertCancelled(task)
+
+    XCTAssertEqual(arbitration.requestWasTerminalDuringRemoval, false)
+    if case .unowned = callbacks.take(for: "status", hasActiveSubscription: true) {
+    } else {
+      XCTFail("notification must remain routed while cancellation quarantine is active")
+    }
+    XCTAssertFalse(callbacks.install(CoreBluetoothPendingRequest<Data>(), for: "status"))
+  }
+
   func testDisconnectClearsCancelledCharacteristicQuarantine() {
     var callbacks = CoreBluetoothPendingCallbacks<String, Data>()
     let cancelled = CoreBluetoothPendingRequest<Data>()
@@ -228,6 +271,35 @@ private final class GateEntryRecorder: @unchecked Sendable {
 
   var values: [String] { lock.withLock { storedValues } }
   func record(_ value: String) { lock.withLock { storedValues.append(value) } }
+}
+
+private final class CancellationArbitrationRecorder: @unchecked Sendable {
+  private let lock = NSLock()
+  private var storedRequestWasTerminal: Bool?
+
+  var requestWasTerminalDuringRemoval: Bool? { lock.withLock { storedRequestWasTerminal } }
+  func record(requestCannotReceiveCallback: Bool) {
+    lock.withLock { storedRequestWasTerminal = requestCannotReceiveCallback }
+  }
+}
+
+private final class PendingCallbacksBox: @unchecked Sendable {
+  private let lock = NSLock()
+  private var callbacks = CoreBluetoothPendingCallbacks<String, Data>()
+
+  func install(_ request: CoreBluetoothPendingRequest<Data>, for key: String) -> Bool {
+    lock.withLock { callbacks.install(request, for: key) }
+  }
+
+  func cancel(_ requestID: UUID) -> Bool {
+    lock.withLock { callbacks.cancel(requestID) }
+  }
+
+  func take(for key: String, hasActiveSubscription: Bool)
+    -> CoreBluetoothPendingCallbacks<String, Data>.Resolution
+  {
+    lock.withLock { callbacks.take(for: key, hasActiveSubscription: hasActiveSubscription) }
+  }
 }
 
 private actor RegistrationGate {
