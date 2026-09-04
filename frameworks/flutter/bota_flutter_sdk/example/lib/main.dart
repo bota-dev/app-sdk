@@ -49,14 +49,29 @@ final class BotaExampleApp extends StatelessWidget {
 }
 
 final class DeviceConsoleScreen extends StatefulWidget {
-  const DeviceConsoleScreen({super.key});
+  const DeviceConsoleScreen({
+    super.key,
+    this.client,
+    this.uploadEncryptedBatch = _uploadEncryptedBatch,
+    this.deprovisionGrant = _deprovisionGrantUnavailable,
+    this.factoryResetCommand = _factoryResetCommandUnavailable,
+  });
+
+  final BotaDeviceClient? client;
+  final Future<void> Function(
+    String localPath,
+    BotaRecordingTransferMetadata? metadata,
+  )
+  uploadEncryptedBatch;
+  final Future<String> Function() deprovisionGrant;
+  final Future<BotaFactoryResetCommand> Function() factoryResetCommand;
 
   @override
   State<DeviceConsoleScreen> createState() => _DeviceConsoleScreenState();
 }
 
 final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
-  final BotaDeviceClient _client = BotaDeviceClient();
+  late final BotaDeviceClient _client = widget.client ?? BotaDeviceClient();
   final TextEditingController _serialController = TextEditingController();
   final TextEditingController _ssidController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -284,7 +299,7 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
         (throw StateError('Native transfer ended without a file path'));
     final BotaRecordingTransferMetadata? metadata = await _client.recordings
         .takeTransferMetadata(sinkId);
-    await _uploadEncryptedBatch(completedPath, metadata);
+    await widget.uploadEncryptedBatch(completedPath, metadata);
     await _client.recordings.confirm(device, recording.recordingId);
     if (mounted) {
       setState(() {
@@ -346,7 +361,7 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
     }
     await _run('Removing pairing', () async {
       final BotaConnectedDevice device = _requireDevice();
-      final String grantBlob = await _deprovisionGrantUnavailable();
+      final String grantBlob = await widget.deprovisionGrant();
       final BotaDeprovisionResult result = await _client.provisioning
           .deprovision(device, grantBlob: grantBlob);
       if (!result.success) throw StateError('Device rejected removal');
@@ -368,8 +383,8 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
       return;
     }
     await _run('Factory reset', () async {
-      final BotaFactoryResetCommand command =
-          await _factoryResetCommandUnavailable();
+      final BotaFactoryResetCommand command = await widget
+          .factoryResetCommand();
       final BotaFactoryResetCompletion result = await _client.factoryReset
           .reset(_requireDevice(), command);
       if (mounted) {
@@ -433,6 +448,7 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
             icon: const Icon(Icons.radar),
           ),
           IconButton(
+            key: const ValueKey<String>('device-console-disconnect'),
             tooltip: 'Disconnect',
             onPressed: _canRun && device != null ? _disconnect : null,
             icon: const Icon(Icons.link_off),
@@ -466,6 +482,7 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
             ),
             const _SectionHeading('Connection'),
             TextField(
+              key: const ValueKey<String>('device-console-serial'),
               controller: _serialController,
               enabled: _canRun,
               autocorrect: false,
@@ -481,6 +498,7 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
               runSpacing: 8,
               children: <Widget>[
                 FilledButton.icon(
+                  key: const ValueKey<String>('device-console-scan'),
                   onPressed: _canRun ? _scan : null,
                   icon: const Icon(Icons.radar),
                   label: const Text('Scan'),
@@ -505,6 +523,9 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
                       '${result.deviceType ?? 'unknown'}  ${result.rssi} dBm',
                     ),
                     trailing: IconButton(
+                      key: ValueKey<String>(
+                        'device-console-connect-${result.id}',
+                      ),
                       tooltip: 'Connect to ${result.name ?? 'device'}',
                       onPressed: _canRun ? () => _connect(result) : null,
                       icon: const Icon(Icons.link),
@@ -519,6 +540,7 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
               const Text('No device connected')
             else ...<Widget>[
               Text(
+                key: const ValueKey<String>('device-console-connected-serial'),
                 device.serialNumber,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
@@ -529,11 +551,13 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
                 runSpacing: 8,
                 children: <Widget>[
                   FilledButton.tonalIcon(
+                    key: const ValueKey<String>('device-console-status'),
                     onPressed: _canRun ? _readStatus : null,
                     icon: const Icon(Icons.monitor_heart_outlined),
                     label: const Text('Read status'),
                   ),
                   FilledButton.tonalIcon(
+                    key: const ValueKey<String>('device-console-recordings'),
                     onPressed: _canRun ? _listRecordings : null,
                     icon: const Icon(Icons.library_music_outlined),
                     label: const Text('Recordings'),
@@ -566,6 +590,9 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
               for (final BotaDeviceRecording recording
                   in _recordings) ...<Widget>[
                 Card(
+                  key: ValueKey<String>(
+                    'device-console-recording-${recording.recordingId}',
+                  ),
                   child: ListTile(
                     dense: true,
                     leading: const Icon(Icons.graphic_eq),
@@ -574,6 +601,9 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
                       '${recording.fileSizeBytes} bytes  ${recording.codec}',
                     ),
                     trailing: IconButton(
+                      key: ValueKey<String>(
+                        'device-console-sync-${recording.recordingId}',
+                      ),
                       tooltip: 'Transfer for encrypted upload',
                       onPressed: _canRun
                           ? () => _syncRecording(recording)
@@ -610,6 +640,7 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
             Align(
               alignment: Alignment.centerLeft,
               child: FilledButton.icon(
+                key: const ValueKey<String>('device-console-wifi'),
                 onPressed: _canRun && device != null ? _configureWifi : null,
                 icon: const Icon(Icons.wifi_tethering),
                 label: const Text('Configure WiFi'),
@@ -621,21 +652,25 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
               runSpacing: 8,
               children: <Widget>[
                 OutlinedButton.icon(
+                  key: const ValueKey<String>('device-console-provision'),
                   onPressed: _canRun && device != null ? _provision : null,
                   icon: const Icon(Icons.key_outlined),
                   label: const Text('Provision'),
                 ),
                 OutlinedButton.icon(
+                  key: const ValueKey<String>('device-console-ota'),
                   onPressed: _canRun && device != null ? _startOta : null,
                   icon: const Icon(Icons.system_update_alt),
                   label: const Text('Update firmware'),
                 ),
                 OutlinedButton.icon(
+                  key: const ValueKey<String>('device-console-remove-only'),
                   onPressed: _canRun && device != null ? _removeOnly : null,
                   icon: const Icon(Icons.person_remove_outlined),
                   label: const Text('Remove pairing'),
                 ),
                 FilledButton.icon(
+                  key: const ValueKey<String>('device-console-factory-reset'),
                   style: FilledButton.styleFrom(
                     backgroundColor: Theme.of(context).colorScheme.error,
                   ),
