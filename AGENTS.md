@@ -53,6 +53,12 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   late events and callback responses, and makes destroy terminal and
   idempotent. Dart only maps typed Pigeon values; native facades retain every
   Bluetooth and workflow owner.
+- The Flutter Android plugin uses the application context and one engine-owned
+  `SupervisorJob` on `Dispatchers.Main.immediate`. Its process-wide coordinator
+  owns native categories by engine, retains poison after failed native stop,
+  and releases ownership only on actual terminal cleanup or final shared-client
+  destruction. Keep discovered and connected device handles engine-local. Run
+  `tools/flutter/test-android-adapter.sh` after changing this bridge.
 - React Native compatibility requires the frozen public API surface digest in
   addition to protocol fixtures and workflow traces. Internal legacy modules
   outside `src/index.ts` are not part of that public contract.

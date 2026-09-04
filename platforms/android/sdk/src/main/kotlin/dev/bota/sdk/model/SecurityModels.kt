@@ -48,8 +48,12 @@ public class FactoryResetGrantRequest(
 }
 
 public data class FactoryResetPersistenceResult(
+    public val commandId: String,
+    public val bindingGeneration: ULong,
     public val localRecordingsDeleted: UShort,
-)
+) {
+    public constructor(localRecordingsDeleted: UShort) : this("", 0u, localRecordingsDeleted)
+}
 
 public data class FactoryResetCompletion(
     public val commandId: String,

@@ -3,6 +3,7 @@ package dev.bota.sdk
 import dev.bota.sdk.internal.host.PersistedFactoryResetResult
 import dev.bota.sdk.model.DeviceConnectionSettings
 import dev.bota.sdk.model.FactoryResetCompletion
+import dev.bota.sdk.model.FactoryResetPersistenceResult
 import kotlinx.coroutines.async
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.test.runTest
@@ -82,6 +83,30 @@ class FactoryResetManagerTest {
         assertNull(command.fields.firstOrNull { it.id == 25 })
         assertNull(command.textField(23))
         assertEquals(FactoryResetCompletion("reset-after-reinstall", 0u), completion)
+        manager.detach()
+    }
+
+    @Test
+    fun persistenceCallbackIncludesExactCommandAndBindingGeneration() = runTest {
+        val fixture = SecureRuntimeFixture()
+        val manager = FactoryResetManager()
+        fixture.connect()
+        manager.attach(fixture.runtime)
+        var persisted: FactoryResetPersistenceResult? = null
+        fixture.onResetResultPersisterRegistered = { commandId, persister ->
+            persister(PersistedFactoryResetResult(commandId, 0u, 7u, 9u))
+        }
+
+        manager.factoryReset(
+            fixture.device,
+            commandId = "reset-command-1",
+            bindingGeneration = 9u,
+            persistResult = { persisted = it },
+        ) { byteArrayOf(1) }
+
+        assertEquals("reset-command-1", persisted?.commandId)
+        assertEquals(9uL, persisted?.bindingGeneration)
+        assertEquals(7u.toUShort(), persisted?.localRecordingsDeleted)
         manager.detach()
     }
 

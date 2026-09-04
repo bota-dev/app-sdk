@@ -565,6 +565,24 @@ Swift does not contain a second wire parser.
 The Apple and Android fixture runners both execute all 39 frozen decode cases,
 including recording state and command-result compatibility.
 
+The Flutter Android plugin delegates every generated Pigeon host operation,
+stream, and callback to `BotaDeviceClient.shared`; it does not duplicate native
+Bluetooth or workflow behavior. Each engine owns a `SupervisorJob` on the
+Android main dispatcher plus private discovered/connected handle registries.
+A process-wide coordinator serializes shared-client configuration and owns each
+native operation category by engine. One-shot and stream-start work is
+registered before suspension, and detach rejects callbacks once, cancels and
+awaits its work, and clears only that engine's registries. Failed native stop
+keeps the category unavailable until native terminal cleanup or destruction of
+the final shared-client lease; collector completion and a returned but
+uninstalled `Flow` are not cleanup evidence.
+
+The Android plugin build reads the exact version from `sdk-version.toml`,
+rejects a different Gradle override, requires API 26 or newer, and resolves
+`dev.bota:bota-android-sdk:<version>`. Local adapter tests publish the same
+native Android artifact into the repository test Maven directory before
+compiling the plugin.
+
 `CoreEngineActor` is the single Swift workflow executor. It submits all ten
 typed command shapes to Rust, drains notifications and host effects in order,
 dispatches correlated host completions before polling again, and keeps the

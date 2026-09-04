@@ -316,6 +316,10 @@ internal class SecureRuntimeFixture(
     val encodedDeviceCommands = mutableListOf<UByte>()
     val provisioningProviders = mutableMapOf<String, suspend (ProvisioningMaterialRequest) -> ProvisioningMaterial>()
     val resetProviders = mutableMapOf<String, suspend (String, ByteArray) -> ByteArray>()
+    val resetResultPersisters =
+        mutableMapOf<String, suspend (PersistedFactoryResetResult) -> Unit>()
+    var onResetResultPersisterRegistered:
+        (suspend (String, suspend (PersistedFactoryResetResult) -> Unit) -> Unit)? = null
     val unregisteredMaterial = mutableListOf<String>()
     val resetGenerations = mutableMapOf<String, ULong>()
     val registeredGenerations = mutableListOf<Pair<String, ULong>>()
@@ -395,6 +399,13 @@ internal class SecureRuntimeFixture(
         unregisterFactoryResetGeneration = { commandId ->
             resetGenerations.remove(commandId)
             unregisteredGenerations += commandId
+        },
+        registerFactoryResetResultPersister = { commandId, persister ->
+            resetResultPersisters[commandId] = persister
+            onResetResultPersisterRegistered?.invoke(commandId, persister)
+        },
+        unregisterFactoryResetResultPersister = { commandId ->
+            resetResultPersisters.remove(commandId)
         },
         loadPendingFactoryReset = { this.pendingReset },
     )
