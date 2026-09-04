@@ -39,6 +39,18 @@ enum CoreEffect: Equatable, Sendable {
     case streamingSinkFinalize(CorePacket)
     case streamingSinkDiscard(CorePacket)
     case firmwareBlobRead(CorePacket)
+    case encryptedUploadV2LoadCheckpoint(CorePacket)
+    case encryptedUploadV2DeleteCheckpoint(CorePacket)
+    case encryptedUploadV2TruncateSink(CorePacket)
+    case encryptedUploadV2PrepareSession(CorePacket)
+    case encryptedUploadV2StartTransfer(CorePacket)
+    case encryptedUploadV2RepairWindow(CorePacket)
+    case encryptedUploadV2SaveCheckpoint(CorePacket)
+    case encryptedUploadV2AcknowledgeWindow(CorePacket)
+    case encryptedUploadV2StageArtifacts(CorePacket)
+    case encryptedUploadV2AwaitReceipt(CorePacket)
+    case encryptedUploadV2ConfirmWithReceipt(CorePacket)
+    case encryptedUploadV2Abort(CorePacket)
 
     init(packet: CorePacket) throws {
         let rawByteCount = packet.fields.reduce(into: 0) { count, field in
@@ -94,6 +106,30 @@ enum CoreEffect: Equatable, Sendable {
         case 0x033f: self = .streamingSinkFinalize(packet)
         case UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_FIRMWARE_BLOB_READ): self = .firmwareBlobRead(packet)
         case 0x0341: self = .streamingSinkDiscard(packet)
+        case EncryptedUploadV2Abi.effectLoadCheckpoint:
+            self = .encryptedUploadV2LoadCheckpoint(packet)
+        case EncryptedUploadV2Abi.effectDeleteCheckpoint:
+            self = .encryptedUploadV2DeleteCheckpoint(packet)
+        case EncryptedUploadV2Abi.effectTruncateSink:
+            self = .encryptedUploadV2TruncateSink(packet)
+        case EncryptedUploadV2Abi.effectPrepareSession:
+            self = .encryptedUploadV2PrepareSession(packet)
+        case EncryptedUploadV2Abi.effectStartTransfer:
+            self = .encryptedUploadV2StartTransfer(packet)
+        case EncryptedUploadV2Abi.effectRepairWindow:
+            self = .encryptedUploadV2RepairWindow(packet)
+        case EncryptedUploadV2Abi.effectSaveCheckpoint:
+            self = .encryptedUploadV2SaveCheckpoint(packet)
+        case EncryptedUploadV2Abi.effectAcknowledgeWindow:
+            self = .encryptedUploadV2AcknowledgeWindow(packet)
+        case EncryptedUploadV2Abi.effectStageArtifacts:
+            self = .encryptedUploadV2StageArtifacts(packet)
+        case EncryptedUploadV2Abi.effectAwaitReceipt:
+            self = .encryptedUploadV2AwaitReceipt(packet)
+        case EncryptedUploadV2Abi.effectConfirmWithReceipt:
+            self = .encryptedUploadV2ConfirmWithReceipt(packet)
+        case EncryptedUploadV2Abi.effectAbort:
+            self = .encryptedUploadV2Abort(packet)
         default:
             throw CoreError(
                 code: UInt32(BOTA_DEVICE_SDK_V1_ERROR_UNKNOWN_PACKET),
@@ -122,7 +158,19 @@ enum CoreEffect: Equatable, Sendable {
              let .streamingSinkAppendPlaintext(packet), let .streamingSinkBeginEncrypted(packet),
              let .streamingSinkAppendEncrypted(packet), let .streamingSinkFinalize(packet),
              let .streamingSinkDiscard(packet),
-             let .firmwareBlobRead(packet):
+             let .firmwareBlobRead(packet),
+             let .encryptedUploadV2LoadCheckpoint(packet),
+             let .encryptedUploadV2DeleteCheckpoint(packet),
+             let .encryptedUploadV2TruncateSink(packet),
+             let .encryptedUploadV2PrepareSession(packet),
+             let .encryptedUploadV2StartTransfer(packet),
+             let .encryptedUploadV2RepairWindow(packet),
+             let .encryptedUploadV2SaveCheckpoint(packet),
+             let .encryptedUploadV2AcknowledgeWindow(packet),
+             let .encryptedUploadV2StageArtifacts(packet),
+             let .encryptedUploadV2AwaitReceipt(packet),
+             let .encryptedUploadV2ConfirmWithReceipt(packet),
+             let .encryptedUploadV2Abort(packet):
             return packet
         }
     }

@@ -338,7 +338,7 @@ public actor DeviceManager {
                     case .started, .connectionEstablished, .progress, .retrying,
                          .deviceUploadPreserved, .bleFallbackReady, .firmwareProgress,
                          .deviceLog, .streamingPaused, .streamingResumed, .streamingCompleted,
-                         .completed, .cancelled:
+                         .encryptedUploadV2Staged, .completed, .cancelled:
                         break
                     }
                 }
@@ -508,7 +508,7 @@ public actor DeviceManager {
                 case .started, .deviceDiscovered, .progress, .retrying,
                      .deviceUploadPreserved, .bleFallbackReady, .firmwareProgress,
                      .deviceLog, .streamingPaused, .streamingResumed, .streamingCompleted,
-                     .completed, .cancelled:
+                     .encryptedUploadV2Staged, .completed, .cancelled:
                     break
                 }
             }

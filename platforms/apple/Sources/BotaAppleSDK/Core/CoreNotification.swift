@@ -13,6 +13,7 @@ enum CoreNotificationKind: Equatable, Sendable {
     case streamingPaused
     case streamingResumed
     case streamingCompleted
+    case encryptedUploadV2Staged
     case completed
     case cancelled
     case failed
@@ -41,6 +42,8 @@ struct CoreNotification: Equatable, Sendable {
         case 0x040d: kind = .streamingPaused
         case 0x040e: kind = .streamingResumed
         case 0x040f: kind = .streamingCompleted
+        case EncryptedUploadV2Abi.notificationStaged:
+            kind = .encryptedUploadV2Staged
         case UInt32(BOTA_DEVICE_SDK_V1_NOTIFICATION_COMPLETED): kind = .completed
         case UInt32(BOTA_DEVICE_SDK_V1_NOTIFICATION_CANCELLED): kind = .cancelled
         case UInt32(BOTA_DEVICE_SDK_V1_NOTIFICATION_FAILED): kind = .failed

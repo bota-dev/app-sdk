@@ -186,6 +186,10 @@ runtimes can consume the same trace.
 
 ### Task 4: Implement Apple native transfer, staging, and recovery
 
+- [x] Add the internal opaque v2 command mapper, exhaustive twelve-effect host
+  boundary, typed failure mapping, staged-notification mapping, and a real C ABI
+  engine-loop test. The default production port remains unavailable, so this
+  checkpoint alone is not runtime support.
 - [ ] Add an in-memory application provider registry keyed by opaque material
   ID; unregister it on every terminal path.
 - [ ] Read capabilities fresh, run selection before START, and implement signed

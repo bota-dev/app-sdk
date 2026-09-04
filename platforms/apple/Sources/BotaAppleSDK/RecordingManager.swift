@@ -245,7 +245,8 @@ public actor RecordingManager {
                     continuation.yield(.completed(try await runtime.recordingFileURL(sinkID)))
                 case .started, .deviceDiscovered, .connectionEstablished, .retrying,
                      .deviceUploadPreserved, .bleFallbackReady, .firmwareProgress,
-                     .deviceLog, .streamingPaused, .streamingResumed, .streamingCompleted:
+                     .deviceLog, .streamingPaused, .streamingResumed, .streamingCompleted,
+                     .encryptedUploadV2Staged:
                     break
                 }
             }
@@ -309,7 +310,7 @@ public actor RecordingManager {
                     continuation.yield(.result(result))
                 case .started, .deviceDiscovered, .connectionEstablished, .retrying,
                      .firmwareProgress, .deviceLog, .streamingPaused, .streamingResumed,
-                     .streamingCompleted:
+                     .streamingCompleted, .encryptedUploadV2Staged:
                     break
                 }
             }
@@ -346,7 +347,7 @@ public actor RecordingManager {
                     throw facadeCancelled(operation: .transferRecording)
                 case .started, .deviceDiscovered, .connectionEstablished, .progress, .retrying,
                      .deviceUploadPreserved, .bleFallbackReady, .firmwareProgress, .deviceLog,
-                     .completed:
+                     .encryptedUploadV2Staged, .completed:
                     break
                 }
             }

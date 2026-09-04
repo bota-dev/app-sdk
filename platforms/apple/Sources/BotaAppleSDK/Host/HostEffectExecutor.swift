@@ -10,6 +10,7 @@ actor HostEffectExecutor: CoreHost {
     private let material: any MaterialHost
     private let recordingSink: any RecordingSinkHost
     private let firmwareBlob: any FirmwareBlobHost
+    private let encryptedUploadV2: any EncryptedUploadV2Host
     private let progress: ProgressHandler
     private var tasks: [CoreCancellationID: [UInt64: Task<Void, Never>]] = [:]
     private var timers: [UInt64: (cancellationID: CoreCancellationID, requestID: UInt64)] = [:]
@@ -21,6 +22,7 @@ actor HostEffectExecutor: CoreHost {
         material: any MaterialHost,
         recordingSink: any RecordingSinkHost,
         firmwareBlob: any FirmwareBlobHost,
+        encryptedUploadV2: any EncryptedUploadV2Host = UnavailableEncryptedUploadV2Host(),
         progress: @escaping ProgressHandler = { _, _ in }
     ) {
         self.bluetooth = bluetooth
@@ -29,6 +31,7 @@ actor HostEffectExecutor: CoreHost {
         self.material = material
         self.recordingSink = recordingSink
         self.firmwareBlob = firmwareBlob
+        self.encryptedUploadV2 = encryptedUploadV2
         self.progress = progress
     }
 
@@ -83,6 +86,17 @@ actor HostEffectExecutor: CoreHost {
                 await firmwareBlob.execute(effect),
                 effect: effect,
                 failureKind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_FIRMWARE_BLOB_FAILED)
+            )
+        case .encryptedUploadV2LoadCheckpoint, .encryptedUploadV2DeleteCheckpoint,
+             .encryptedUploadV2TruncateSink, .encryptedUploadV2PrepareSession,
+             .encryptedUploadV2StartTransfer, .encryptedUploadV2RepairWindow,
+             .encryptedUploadV2SaveCheckpoint, .encryptedUploadV2AcknowledgeWindow,
+             .encryptedUploadV2StageArtifacts, .encryptedUploadV2AwaitReceipt,
+             .encryptedUploadV2ConfirmWithReceipt, .encryptedUploadV2Abort:
+            return route(
+                await encryptedUploadV2.execute(effect),
+                effect: effect,
+                failureKind: EncryptedUploadV2Abi.eventFailed
             )
         }
     }
@@ -182,6 +196,9 @@ actor HostEffectExecutor: CoreHost {
     }
 
     private func failureEvent(effect: CoreEffect, kind: UInt32, error: Error) -> CoreHostEvent {
+        if kind == EncryptedUploadV2Abi.eventFailed {
+            return encryptedUploadV2FailureEvent(effect: effect, error: error)
+        }
         let platformCode = Int64((error as NSError).code)
         var fields: [CoreField] = []
         if kind == UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_NETWORK_FAILED) {
@@ -196,6 +213,28 @@ actor HostEffectExecutor: CoreHost {
             fields.append(.signed(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_PLATFORM_CODE), value: platformCode))
         }
         return CoreHostEvent(effect: effect, kind: kind, fields: fields)
+    }
+
+    private func encryptedUploadV2FailureEvent(effect: CoreEffect, error: Error) -> CoreHostEvent {
+        let failure = error as? EncryptedUploadV2HostFailure
+        var fields: [CoreField] = [
+            .unsigned(
+                id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_ERROR_CODE),
+                value: UInt64(failure?.errorCode ?? UInt32(BOTA_DEVICE_SDK_V1_ERROR_INTERNAL))
+            ),
+            .bool(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_RETRYABLE), value: failure?.retryable ?? false),
+        ]
+        if let status = failure?.protocolStatus {
+            fields.append(.unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_PROTOCOL_STATUS), value: UInt64(status)))
+        }
+        if let detail = failure?.detail {
+            fields.append(.text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_ERROR_DETAIL), value: detail))
+        }
+        return CoreHostEvent(
+            effect: effect,
+            kind: EncryptedUploadV2Abi.eventFailed,
+            fields: fields
+        )
     }
 
     private func expectedEventKinds(for effect: CoreEffect) -> Set<UInt32> {
@@ -269,12 +308,41 @@ actor HostEffectExecutor: CoreHost {
             return [0x0229]
         case .firmwareBlobRead:
             return [UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_FIRMWARE_CHUNK_READ)]
+        case .encryptedUploadV2LoadCheckpoint:
+            return [EncryptedUploadV2Abi.eventCheckpointLoaded]
+        case .encryptedUploadV2DeleteCheckpoint, .encryptedUploadV2Abort:
+            return []
+        case .encryptedUploadV2TruncateSink:
+            return [EncryptedUploadV2Abi.eventSinkTruncated]
+        case .encryptedUploadV2PrepareSession:
+            return [EncryptedUploadV2Abi.eventSessionPrepared]
+        case .encryptedUploadV2StartTransfer:
+            return [
+                EncryptedUploadV2Abi.eventTransferStarted,
+                EncryptedUploadV2Abi.eventResumeRejected,
+                EncryptedUploadV2Abi.eventWindowStaged,
+                EncryptedUploadV2Abi.eventTransferCompleted,
+                EncryptedUploadV2Abi.eventMixedProfile,
+            ]
+        case .encryptedUploadV2RepairWindow:
+            return [EncryptedUploadV2Abi.eventWindowStaged]
+        case .encryptedUploadV2SaveCheckpoint:
+            return [EncryptedUploadV2Abi.eventCheckpointSaved]
+        case .encryptedUploadV2AcknowledgeWindow:
+            return [EncryptedUploadV2Abi.eventWindowAcknowledged]
+        case .encryptedUploadV2StageArtifacts:
+            return [EncryptedUploadV2Abi.eventArtifactsStaged]
+        case .encryptedUploadV2AwaitReceipt:
+            return [EncryptedUploadV2Abi.eventReceiptAccepted]
+        case .encryptedUploadV2ConfirmWithReceipt:
+            return [EncryptedUploadV2Abi.eventRecordingConfirmed]
         }
     }
 
     private func allowsMultipleEvents(_ effect: CoreEffect) -> Bool {
         switch effect {
-        case .bluetoothStartScan, .bluetoothSubscribe, .networkDownload, .networkUpload:
+        case .bluetoothStartScan, .bluetoothSubscribe, .networkDownload, .networkUpload,
+             .encryptedUploadV2StartTransfer:
             return true
         case .timerSchedule, .timerCancel, .persistenceLoadCheckpoint,
              .persistenceSaveCheckpoint, .persistenceDeleteCheckpoint,
@@ -287,7 +355,13 @@ actor HostEffectExecutor: CoreHost {
              .recordingSinkFinalize, .recordingSinkDiscard,
              .streamingSinkAppendPlaintext, .streamingSinkBeginEncrypted,
              .streamingSinkAppendEncrypted, .streamingSinkFinalize,
-             .streamingSinkDiscard, .firmwareBlobRead:
+             .streamingSinkDiscard, .firmwareBlobRead,
+             .encryptedUploadV2LoadCheckpoint, .encryptedUploadV2DeleteCheckpoint,
+             .encryptedUploadV2TruncateSink, .encryptedUploadV2PrepareSession,
+             .encryptedUploadV2RepairWindow, .encryptedUploadV2SaveCheckpoint,
+             .encryptedUploadV2AcknowledgeWindow, .encryptedUploadV2StageArtifacts,
+             .encryptedUploadV2AwaitReceipt, .encryptedUploadV2ConfirmWithReceipt,
+             .encryptedUploadV2Abort:
             return false
         }
     }

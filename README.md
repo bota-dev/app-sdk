@@ -163,9 +163,12 @@ package and Android AAR are public platform distributions; the remaining
 planned native facades are not yet published.
 Encrypted Upload v2 has an additive, contract-only engine/ABI surface for
 profile-gated session coordination, opaque checkpoint metadata, staging
-evidence, and receipt-gated confirmation. Current Apple, Android, and React
-Native hosts do not execute or expose that workflow, so runtime compatibility
-metadata remains disabled.
+evidence, and receipt-gated confirmation. Apple now maps its opaque command and
+all twelve effects through a dedicated internal host boundary and recognizes
+typed failures plus the staged notification; the production host still fails
+closed as unavailable and no public manager exposes the workflow. Android and
+React Native have no runtime host. Runtime compatibility metadata therefore
+remains disabled.
 ABI v1 is frozen at the typed public header and verified by standalone C and
 Swift callers. Its exact ownership contract, artifact digests, packet coverage,
 and platform exclusions are recorded in
@@ -177,8 +180,9 @@ tested against the shared Rust implementation, including unknown wire values
 and Bota Note connection normalization. A serialized Swift actor now drives the
 real Rust workflow engine, preserves request/cancellation correlation, and
 checks all 29 canonical workflow traces from generated SwiftPM resources. Its
-host executor exhaustively routes all 30 ABI effect kinds through narrow native
-ports, bounds raw payloads, and isolates cancelled or late completions.
+host executor exhaustively routes the released effects plus all twelve additive
+Encrypted Upload v2 effects through narrow native ports, bounds raw payloads,
+and isolates cancelled or late completions.
 A concrete CoreBluetooth driver now owns Apple delegate state on one serial
 queue, while an actor host merges system-connected peripherals, deduplicates
 scan results, serializes operations per peripheral, and preempts background

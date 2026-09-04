@@ -182,6 +182,88 @@ struct CoreCommand: Equatable, Sendable {
         )
     }
 
+    static func transferEncryptedRecording(
+        _ request: EncryptedUploadV2CommandRequest,
+        cancellationID: UUID = UUID()
+    ) -> Self {
+        Self(
+            kind: EncryptedUploadV2Abi.commandTransferEncryptedRecording,
+            cancellationID: cancellationID,
+            fields: [
+                .text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_SERIAL_NUMBER), value: request.serialNumber),
+                .text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_RECORDING_UUID), value: request.recordingUUID),
+                .unsigned(
+                    id: EncryptedUploadV2Abi.fieldRecordingGeneration,
+                    value: UInt64(request.recordingGeneration)
+                ),
+                .unsigned(id: EncryptedUploadV2Abi.fieldStorageFormat, value: UInt64(request.storageFormat)),
+                .bytes(
+                    id: EncryptedUploadV2Abi.fieldUploadSessionUUID,
+                    value: bytes(of: request.uploadSessionID)
+                ),
+                .unsigned(
+                    id: EncryptedUploadV2Abi.fieldOwnerRevision,
+                    value: UInt64(request.ownerRevision)
+                ),
+                .unsigned(
+                    id: EncryptedUploadV2Abi.fieldTransportSessionID,
+                    value: request.transportSessionID
+                ),
+                .text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_MATERIAL_ID), value: request.materialID),
+                .text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_SINK_ID), value: request.sinkID),
+                .unsigned(id: EncryptedUploadV2Abi.fieldUploadProfile, value: request.profile.rawValue),
+                .unsigned(
+                    id: EncryptedUploadV2Abi.fieldUploadSecurityPolicy,
+                    value: request.securityPolicy.rawValue
+                ),
+                .unsigned(
+                    id: EncryptedUploadV2Abi.fieldCapabilityFlags,
+                    value: UInt64(request.capabilities.flags)
+                ),
+                .unsigned(
+                    id: EncryptedUploadV2Abi.fieldMaximumSignedBlobBytes,
+                    value: UInt64(request.capabilities.maximumSignedBlobBytes)
+                ),
+                .unsigned(
+                    id: EncryptedUploadV2Abi.fieldMaximumManifestBytes,
+                    value: UInt64(request.capabilities.maximumManifestBytes)
+                ),
+                .unsigned(
+                    id: EncryptedUploadV2Abi.fieldMaximumDataPayloadBytes,
+                    value: UInt64(request.capabilities.maximumDataPayloadBytes)
+                ),
+                .unsigned(
+                    id: EncryptedUploadV2Abi.fieldMaximumWindowPackets,
+                    value: UInt64(request.capabilities.maximumWindowPackets)
+                ),
+                .unsigned(
+                    id: EncryptedUploadV2Abi.fieldCheckpointInterval,
+                    value: UInt64(request.capabilities.durableCheckpointIntervalBlocks)
+                ),
+                .unsigned(
+                    id: EncryptedUploadV2Abi.fieldMaximumMissingSequences,
+                    value: UInt64(request.capabilities.maximumMissingSequences)
+                ),
+                .unsigned(
+                    id: EncryptedUploadV2Abi.fieldWindowPackets,
+                    value: UInt64(request.windowPackets)
+                ),
+                .unsigned(
+                    id: EncryptedUploadV2Abi.fieldDataPayloadBytes,
+                    value: UInt64(request.dataPayloadBytes)
+                ),
+                .unsigned(
+                    id: EncryptedUploadV2Abi.fieldCiphertextLength,
+                    value: request.ciphertextLength
+                ),
+                .bytes(
+                    id: EncryptedUploadV2Abi.fieldCiphertextSHA256,
+                    value: request.ciphertextSHA256
+                ),
+            ]
+        )
+    }
+
     static func streamRecording(
         serialNumber: String,
         recordingUUID: String,
@@ -300,6 +382,11 @@ struct CoreCommand: Equatable, Sendable {
             ]
         )
     }
+}
+
+private func bytes(of uuid: UUID) -> Data {
+    var bytes = uuid.uuid
+    return withUnsafeBytes(of: &bytes) { Data($0) }
 }
 
 extension CoreCommand {

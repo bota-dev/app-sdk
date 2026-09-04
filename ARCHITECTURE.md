@@ -133,9 +133,13 @@ Encrypted Upload v2 is currently a contract-only capability: the canonical
 vectors and Rust codecs exist, and Apple/Android can inspect normalized framing
 metadata internally. The Rust workflow engine and additive C ABI now also
 model v2 session ownership, durable checkpoint ordering, opaque native staging,
-and receipt-gated confirmation. No Apple/Android host executes those effects
-yet, React Native exposes no v2 workflow or bulk bytes, and compatibility
-metadata keeps runtime support and firmware advertisement false.
+and receipt-gated confirmation. Apple now has an internal command mapper and an
+exhaustive twelve-effect host port with typed failure and staged-notification
+routing; the production configuration intentionally installs an unavailable
+port until native BLE, sink, provider, staging, and recovery work lands. Android
+still has no equivalent host, React Native exposes no v2 workflow or bulk
+bytes, and compatibility metadata keeps runtime support and firmware
+advertisement false.
 The core now also exposes a side-effect-free three-profile selection validator:
 it requires every batch capability bit, usable advertised bounds, and an
 immutable recording generation in `bota_enc_v2` storage before accepting v2;
@@ -147,8 +151,8 @@ released APIs. A byte-free batch-v2 coordinator now drives the shipping reducer
 and additive ABI contract: it persists each complete window before ACK,
 truncates resume state to the last proven offset, exposes staging evidence,
 and cannot emit CONFIRM until a native host reports receipt acceptance. It has
-no legacy-fallback action. Native-host and public-facade integration are still
-absent.
+no legacy-fallback action. Apple host-boundary integration is present, but its
+runtime implementation and public-facade integration are still absent.
 
 The JavaScript compatibility layer now restores all 80 frozen exports. This
 includes every `0.0.65` public type, the runtime error hierarchy,
@@ -285,9 +289,11 @@ or starting a workflow. Its separate deterministic batch coordinator defines
 mixed-profile failure, proven-checkpoint resume, staging, and receipt-gated
 CONFIRM without carrying ciphertext or cryptographic documents. Native hosts
 will stream opaque canonical ciphertext and the opaque upload manifest to
-staging after the coordinator is integrated with the engine and ABI. That
-runtime target is not implemented and does not change the current completion
-metadata contract.
+staging after their transport implementations are complete. Apple can now
+drive the integrated engine/ABI through a dedicated internal host port, but its
+default port fails closed with `feature_unavailable`; no ciphertext transfer or
+staging occurs. That runtime target is not implemented and does not change the
+current completion metadata contract.
 
 The React Native device-log broker subscribes to the public native log stream
 before starting delivery. Apple and Android retain packet decoding and emit
