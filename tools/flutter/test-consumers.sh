@@ -32,8 +32,25 @@ export BOTA_FLUTTER_HOME="$flutter_home"
 test_tmp_root="$(cd "${BOTA_TEST_TMPDIR:-/tmp}" && pwd -P)"
 consumer_root="$(mktemp -d "$test_tmp_root/bota-flutter-consumers.XXXXXX")"
 consumer="$consumer_root/example"
+consumer_gradle_home="$consumer_root/gradle-home"
 cleanup() {
-  find "$consumer_root" -depth -delete
+  local status=$?
+  trap - EXIT
+  if [[ -x "$consumer/android/gradlew" && -d "$consumer_gradle_home" ]]; then
+    GRADLE_USER_HOME="$consumer_gradle_home" \
+      "$consumer/android/gradlew" -p "$consumer/android" --stop \
+      >/dev/null 2>&1 || true
+  fi
+  if ! find "$consumer_root" -depth -delete; then
+    status=1
+  fi
+  if [[ -e "$consumer_root" ]]; then
+    echo "Flutter consumer temporary root remains: $consumer_root" >&2
+    status=1
+  else
+    printf 'Flutter consumer temporary root removed: %s\n' "$consumer_root"
+  fi
+  exit "$status"
 }
 trap cleanup EXIT
 
@@ -119,6 +136,56 @@ if rg -n '\b(debugPrint|print|log)\s*\(' "$example_root/lib/main.dart" >/dev/nul
   echo "Flutter example must not log callback material, grants, or credentials" >&2
   exit 1
 fi
+
+EXAMPLE_MAIN="$example_root/lib/main.dart" node - <<'NODE'
+const fs = require("node:fs");
+const source = fs.readFileSync(process.env.EXAMPLE_MAIN, "utf8");
+
+function method(name, nextName) {
+  const start = source.indexOf(name);
+  const end = source.indexOf(nextName, start + name.length);
+  if (start < 0 || end < 0) {
+    throw new Error(`Flutter example state contract cannot locate ${name}`);
+  }
+  return source.slice(start, end);
+}
+
+const sync = method("Future<void> _syncRecording", "Future<void> _provision");
+const confirm = sync.indexOf("_client.recordings.confirm");
+const remove = sync.indexOf("value.recordingId != recording.recordingId");
+if (confirm < 0 || remove < confirm) {
+  throw new Error("Successful recording confirmation must prune local UI state");
+}
+
+const disconnect = method("Future<void> _disconnect", "Future<void> _readStatus");
+if (!disconnect.includes("_clearDeviceState();")) {
+  throw new Error("Ordinary disconnect must use the shared device-state reset");
+}
+
+for (const [name, next] of [
+  ["Future<void> _removeOnly", "Future<void> _factoryReset"],
+  ["Future<void> _factoryReset", "void _clearDeviceState"],
+]) {
+  const body = method(name, next);
+  if (!body.includes("_clearDeviceState(clearReconnectTargets: true);")) {
+    throw new Error(`${name} must clear connected and reconnectable UI state`);
+  }
+}
+
+const clearState = method("void _clearDeviceState", "BotaConnectedDevice _requireDevice");
+for (const field of [
+  "_connected = null;",
+  "_status = null;",
+  "_recordings = <BotaDeviceRecording>[];",
+  "_firmwareProgress = null;",
+  "_discovered = <BotaDiscoveredDevice>[];",
+  "_serialController.clear();",
+]) {
+  if (!clearState.includes(field)) {
+    throw new Error(`Flutter example state reset is missing ${field}`);
+  }
+}
+NODE
 
 node "$workspace_root/tools/flutter/verify-package.mjs"
 npm --prefix "$workspace_root" run flutter:generate:check
@@ -216,15 +283,17 @@ perl -0pi -e \
 
 (
   cd "$consumer"
-  GRADLE_USER_HOME="$consumer_root/gradle-home" \
+  GRADLE_OPTS="${GRADLE_OPTS:-} -Dorg.gradle.daemon=false" \
+    GRADLE_USER_HOME="$consumer_gradle_home" \
     "$workspace_root/tools/flutter/run-flutter.sh" build apk \
     --release --target lib/main.dart
 )
 android_output="$consumer/build/app/outputs/flutter-apk/app-release.apk"
 require_file "$android_output"
 
-GRADLE_USER_HOME="$consumer_root/gradle-home" \
+GRADLE_USER_HOME="$consumer_gradle_home" \
   "$consumer/android/gradlew" -p "$consumer/android" \
+  --no-daemon \
   :app:dependencyInsight \
   --configuration releaseRuntimeClasspath \
   --dependency dev.bota:bota-android-sdk \

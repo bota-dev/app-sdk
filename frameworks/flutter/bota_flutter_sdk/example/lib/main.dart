@@ -225,9 +225,7 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
     await _client.devices.disconnect();
     if (mounted) {
       setState(() {
-        _connected = null;
-        _status = null;
-        _recordings = <BotaDeviceRecording>[];
+        _clearDeviceState();
       });
     }
     return 'Disconnected';
@@ -288,6 +286,16 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
         .takeTransferMetadata(sinkId);
     await _uploadEncryptedBatch(completedPath, metadata);
     await _client.recordings.confirm(device, recording.recordingId);
+    if (mounted) {
+      setState(() {
+        _recordings = _recordings
+            .where(
+              (BotaDeviceRecording value) =>
+                  value.recordingId != recording.recordingId,
+            )
+            .toList(growable: false);
+      });
+    }
     return 'Upload confirmed; device copy removed';
   });
 
@@ -342,6 +350,11 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
       final BotaDeprovisionResult result = await _client.provisioning
           .deprovision(device, grantBlob: grantBlob);
       if (!result.success) throw StateError('Device rejected removal');
+      if (mounted) {
+        setState(() {
+          _clearDeviceState(clearReconnectTargets: true);
+        });
+      }
       return 'Pairing removed; recordings retained';
     });
   }
@@ -359,8 +372,24 @@ final class _DeviceConsoleScreenState extends State<DeviceConsoleScreen> {
           await _factoryResetCommandUnavailable();
       final BotaFactoryResetCompletion result = await _client.factoryReset
           .reset(_requireDevice(), command);
+      if (mounted) {
+        setState(() {
+          _clearDeviceState(clearReconnectTargets: true);
+        });
+      }
       return 'Reset acknowledged for generation ${result.bindingGeneration}';
     });
+  }
+
+  void _clearDeviceState({bool clearReconnectTargets = false}) {
+    _connected = null;
+    _status = null;
+    _recordings = <BotaDeviceRecording>[];
+    _firmwareProgress = null;
+    if (clearReconnectTargets) {
+      _discovered = <BotaDiscoveredDevice>[];
+      _serialController.clear();
+    }
   }
 
   BotaConnectedDevice _requireDevice() =>
