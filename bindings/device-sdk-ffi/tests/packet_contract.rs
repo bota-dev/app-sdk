@@ -56,6 +56,10 @@ fn encrypted_upload_v2_contract_inspection_allocations_are_additive() {
         packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB,
         0x0523
     );
+    assert_eq!(
+        packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER,
+        0x0524
+    );
 
     let fields = [
         field_id::MESSAGE_TYPE,
@@ -115,6 +119,7 @@ fn encrypted_upload_v2_contract_inspection_allocations_are_additive() {
         "BOTA_DEVICE_SDK_V1_PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB = 0x0521",
         "BOTA_DEVICE_SDK_V1_PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_TRANSFER_OR_STATUS = 0x0522",
         "BOTA_DEVICE_SDK_V1_PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB = 0x0523",
+        "BOTA_DEVICE_SDK_V1_PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER = 0x0524",
         "BOTA_DEVICE_SDK_V1_FIELD_MESSAGE_TYPE = 127",
         "BOTA_DEVICE_SDK_V1_FIELD_DURABLE_CIPHERTEXT_BYTES = 164",
         "BOTA_DEVICE_SDK_V1_FIELD_MAX_WINDOW_PACKETS = 170",

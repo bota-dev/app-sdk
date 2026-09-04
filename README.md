@@ -175,7 +175,12 @@ perform an uncached `0406` capability read through the shared Rust decoder,
 returning the exact bytes, digest, and typed bounds internally. The production
 ABI also provides additive packet kind `0x0523` so native facades can encode
 authenticated signed-blob frames through the shared Rust codec instead of
-reconstructing them. Apple's internal writer now serializes ownership, chunks
+reconstructing them. Additive kind `0x0524` does the same for app-originated
+LIST, START, WINDOW_ACK, RESUME_REQUEST, CONFIRM, and ABORT frames, while
+rejecting device-originated transfer messages. Its normalized ABI keeps
+upload-session UUIDs as 16-byte values and missing sequences as one packed
+little-endian u32 byte field in both directions. Apple's internal writer now
+serializes ownership, chunks
 against the current CoreBluetooth write-with-response limit capped at 512
 bytes, subscribes before BEGIN, checks cancellation between writes, and starts
 the exact-matching RESULT timeout after COMMIT. Its ABORT/unsubscribe cleanup

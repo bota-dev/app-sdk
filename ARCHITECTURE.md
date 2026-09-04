@@ -146,7 +146,13 @@ selection read fetches `0406` again, delegates exact 24-byte decoding to Rust,
 and returns the raw-value SHA-256 plus typed bounds; it has no firmware/model
 inference or cache. The additive `0x0523` ABI encoder also delegates outbound
 signed-blob BEGIN/DATA/COMMIT/ABORT bytes to the Rust codec, keeping
-authorization and receipt framing out of platform implementations. Apple's
+authorization and receipt framing out of platform implementations. Additive
+kind `0x0524` delegates app-originated LIST, START, WINDOW_ACK, RESUME_REQUEST,
+CONFIRM, and ABORT transfer encoding to the same codec; device-originated
+transfer messages are rejected. Both directions represent upload-session UUIDs
+as exact 16-byte fields and missing sequences as one packed little-endian u32
+byte field; decoded CONFIRM exposes `owner_revision` under its dedicated field.
+Apple's
 serialized signed-blob writer uses the current CoreBluetooth
 write-with-response limit capped at 512 bytes, subscribes to `0407` before
 BEGIN, checks cancellation between writes, starts its RESULT timeout only after

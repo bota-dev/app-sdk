@@ -4,25 +4,28 @@ use crate::{
 };
 use bota_device_sdk_core::{
     error::{DeviceSdkError, ErrorCode, Operation},
+    generated::protocol as wire,
     model::{
         DeviceConnectionSettings, DeviceFlags, DeviceModel, EnabledConnections,
         HeartbeatConnections, IdleTimeout, PowerManagement, RecordingUuid,
     },
     protocol::{
-        AckType, CommonHeaderV2, DeviceCommand, DeviceLogDecoder, EncryptedUploadV2SignedBlob,
-        EncryptedUploadV2Transfer, FirmwareStatus, RecordingControlCommand, TransferCommand,
-        TransferPacket, WiFiScanUpdate, decode_encrypted_upload_v2_capabilities,
+        AckType, CommonHeaderV2, ConfirmV2, DeviceCommand, DeviceLogDecoder,
+        EncryptedUploadV2SignedBlob, EncryptedUploadV2Transfer, FirmwareStatus,
+        RecordingControlCommand, ResumeV2, StartV2, TransferCommand, TransferPacket,
+        WiFiScanUpdate, WindowAckV2, decode_encrypted_upload_v2_capabilities,
         decode_encrypted_upload_v2_signed_blob, decode_encrypted_upload_v2_status,
         decode_encrypted_upload_v2_transfer, encode_ack, encode_bounded_payload,
         encode_connection_settings, encode_device_command, encode_encrypted_upload_v2_signed_blob,
-        encode_firmware_data, encode_firmware_upload_start, encode_firmware_upload_verify,
-        encode_firmware_window_ack, encode_ota_status, encode_provisioning_chunks,
-        encode_recording_control_command, encode_time_sync, encode_transfer_command,
-        encode_wifi_credentials, encode_wifi_grant, encode_wifi_scan_command, parse_ack,
-        parse_connection_settings, parse_device_status, parse_factory_reset_result,
-        parse_ota_status, parse_recording_control_result, parse_recording_list,
-        parse_recording_state, parse_transfer_packet, parse_trigger_upload_response,
-        parse_wifi_config_result, parse_wifi_scan_result, parse_wifi_status_info,
+        encode_encrypted_upload_v2_transfer, encode_firmware_data, encode_firmware_upload_start,
+        encode_firmware_upload_verify, encode_firmware_window_ack, encode_ota_status,
+        encode_provisioning_chunks, encode_recording_control_command, encode_time_sync,
+        encode_transfer_command, encode_wifi_credentials, encode_wifi_grant,
+        encode_wifi_scan_command, parse_ack, parse_connection_settings, parse_device_status,
+        parse_factory_reset_result, parse_ota_status, parse_recording_control_result,
+        parse_recording_list, parse_recording_state, parse_transfer_packet,
+        parse_trigger_upload_response, parse_wifi_config_result, parse_wifi_scan_result,
+        parse_wifi_status_info,
     },
 };
 
@@ -514,10 +517,164 @@ pub(crate) unsafe fn encode(
         packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB => {
             encode_encrypted_upload_v2_signed_blob_packet(&fields)?
         }
+        packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER => {
+            encode_encrypted_upload_v2_transfer_packet(&fields)?
+        }
         _ => return Err(unknown_packet(packet.kind)),
     };
 
     Ok(BotaDeviceSdkPacketV1::new(packet.kind).with_bytes(field_id::VALUE, bytes))
+}
+
+fn encode_encrypted_upload_v2_transfer_packet(
+    fields: &PacketFields<'_>,
+) -> Result<Vec<u8>, DeviceSdkError> {
+    let message_type = to_u8(fields, field_id::MESSAGE_TYPE)?;
+    let common = CommonHeaderV2 {
+        message_type,
+        flags: 0,
+        transport_session_id: fields.required_u64(field_id::TRANSPORT_SESSION_ID)?,
+    };
+
+    match message_type {
+        wire::ENCRYPTED_UPLOAD_V2_LIST => {
+            fields.validate_allowed(&[field_id::MESSAGE_TYPE, field_id::TRANSPORT_SESSION_ID])?;
+            encode_encrypted_upload_v2_transfer(&EncryptedUploadV2Transfer::List(common))
+        }
+        wire::ENCRYPTED_UPLOAD_V2_START => {
+            fields.validate_allowed(&[
+                field_id::MESSAGE_TYPE,
+                field_id::TRANSPORT_SESSION_ID,
+                field_id::UPLOAD_SESSION_UUID,
+                field_id::RECORDING_UUID,
+                field_id::RECORDING_GENERATION,
+                field_id::AUTHORIZATION_SHA256,
+                field_id::CHECKPOINT_REVISION,
+                field_id::OFFSET,
+                field_id::PREFIX_SHA256,
+                field_id::WINDOW_PACKETS,
+                field_id::DATA_PAYLOAD_BYTES,
+            ])?;
+            let recording = recording(fields)?;
+            encode_encrypted_upload_v2_transfer(&EncryptedUploadV2Transfer::Start(StartV2 {
+                common,
+                upload_session_uuid: fields.required_fixed_bytes(field_id::UPLOAD_SESSION_UUID)?,
+                recording_uuid: *recording.as_bytes(),
+                recording_generation: to_u32(fields, field_id::RECORDING_GENERATION)?,
+                authorization_sha256: fields
+                    .required_fixed_bytes(field_id::AUTHORIZATION_SHA256)?,
+                checkpoint_revision: to_u32(fields, field_id::CHECKPOINT_REVISION)?,
+                next_ciphertext_offset: fields.required_u64(field_id::OFFSET)?,
+                prefix_sha256: fields.required_fixed_bytes(field_id::PREFIX_SHA256)?,
+                window_packets: to_u16(fields, field_id::WINDOW_PACKETS)?,
+                data_payload_bytes: to_u16(fields, field_id::DATA_PAYLOAD_BYTES)?,
+            }))
+        }
+        wire::ENCRYPTED_UPLOAD_V2_WINDOW_ACK => {
+            fields.validate_allowed(&[
+                field_id::MESSAGE_TYPE,
+                field_id::TRANSPORT_SESSION_ID,
+                field_id::WINDOW_INDEX,
+                field_id::SEQUENCE,
+                field_id::OFFSET,
+                field_id::PREFIX_SHA256,
+                field_id::CHECKPOINT_REVISION,
+                field_id::MISSING_SEQUENCE,
+            ])?;
+            let missing_sequences = fields
+                .optional_bytes(field_id::MISSING_SEQUENCE)?
+                .map(|bytes| decode_missing_sequences(&bytes))
+                .transpose()?
+                .unwrap_or_default();
+            encode_encrypted_upload_v2_transfer(&EncryptedUploadV2Transfer::WindowAck(
+                WindowAckV2 {
+                    common,
+                    window_index: to_u32(fields, field_id::WINDOW_INDEX)?,
+                    highest_contiguous_sequence: to_u32(fields, field_id::SEQUENCE)?,
+                    next_ciphertext_offset: fields.required_u64(field_id::OFFSET)?,
+                    prefix_sha256: fields.required_fixed_bytes(field_id::PREFIX_SHA256)?,
+                    checkpoint_revision: to_u32(fields, field_id::CHECKPOINT_REVISION)?,
+                    missing_sequences,
+                },
+            ))
+        }
+        wire::ENCRYPTED_UPLOAD_V2_RESUME_REQUEST => {
+            fields.validate_allowed(&[
+                field_id::MESSAGE_TYPE,
+                field_id::TRANSPORT_SESSION_ID,
+                field_id::UPLOAD_SESSION_UUID,
+                field_id::RECORDING_UUID,
+                field_id::RECORDING_GENERATION,
+                field_id::CHECKPOINT_REVISION,
+                field_id::OFFSET,
+                field_id::PREFIX_SHA256,
+                field_id::WINDOW_PACKETS,
+                field_id::DATA_PAYLOAD_BYTES,
+            ])?;
+            let recording = recording(fields)?;
+            encode_encrypted_upload_v2_transfer(&EncryptedUploadV2Transfer::ResumeRequest(
+                ResumeV2 {
+                    common,
+                    upload_session_uuid: fields
+                        .required_fixed_bytes(field_id::UPLOAD_SESSION_UUID)?,
+                    recording_uuid: *recording.as_bytes(),
+                    recording_generation: to_u32(fields, field_id::RECORDING_GENERATION)?,
+                    checkpoint_revision: to_u32(fields, field_id::CHECKPOINT_REVISION)?,
+                    next_ciphertext_offset: fields.required_u64(field_id::OFFSET)?,
+                    prefix_sha256: fields.required_fixed_bytes(field_id::PREFIX_SHA256)?,
+                    window_packets: to_u16(fields, field_id::WINDOW_PACKETS)?,
+                    data_payload_bytes: to_u16(fields, field_id::DATA_PAYLOAD_BYTES)?,
+                },
+            ))
+        }
+        wire::ENCRYPTED_UPLOAD_V2_CONFIRM => {
+            fields.validate_allowed(&[
+                field_id::MESSAGE_TYPE,
+                field_id::TRANSPORT_SESSION_ID,
+                field_id::UPLOAD_SESSION_UUID,
+                field_id::RECORDING_UUID,
+                field_id::RECORDING_GENERATION,
+                field_id::OWNER_REVISION,
+                field_id::RECEIPT_SHA256,
+            ])?;
+            let recording = recording(fields)?;
+            encode_encrypted_upload_v2_transfer(&EncryptedUploadV2Transfer::Confirm(ConfirmV2 {
+                common,
+                upload_session_uuid: fields.required_fixed_bytes(field_id::UPLOAD_SESSION_UUID)?,
+                recording_uuid: *recording.as_bytes(),
+                recording_generation: to_u32(fields, field_id::RECORDING_GENERATION)?,
+                owner_revision: to_u32(fields, field_id::OWNER_REVISION)?,
+                receipt_sha256: fields.required_fixed_bytes(field_id::RECEIPT_SHA256)?,
+            }))
+        }
+        wire::ENCRYPTED_UPLOAD_V2_ABORT => {
+            fields.validate_allowed(&[
+                field_id::MESSAGE_TYPE,
+                field_id::TRANSPORT_SESSION_ID,
+                field_id::DETAIL_CODE,
+            ])?;
+            encode_encrypted_upload_v2_transfer(&EncryptedUploadV2Transfer::Abort {
+                common,
+                reason: to_u16(fields, field_id::DETAIL_CODE)?,
+            })
+        }
+        _ => Err(invalid(
+            "unsupported encrypted upload v2 app transfer message type for encoding",
+        )),
+    }
+}
+
+fn decode_missing_sequences(bytes: &[u8]) -> Result<Vec<u32>, DeviceSdkError> {
+    let (sequences, remainder) = bytes.as_chunks::<4>();
+    if !remainder.is_empty() {
+        return Err(invalid(
+            "missing-sequence byte field length must be a multiple of four",
+        ));
+    }
+    Ok(sequences
+        .iter()
+        .map(|sequence| u32::from_le_bytes(*sequence))
+        .collect())
 }
 
 fn encode_encrypted_upload_v2_signed_blob_packet(
@@ -677,9 +834,9 @@ fn decode_encrypted_upload_v2_transfer_packet(
             .with_u64(field_id::LIST_REVISION, u64::from(list_revision))
             .with_bytes(field_id::CONTENT_SHA256, list_sha256.to_vec()),
         EncryptedUploadV2Transfer::Start(value) => encrypted_v2_common(output, value.common)
-            .with_text(
+            .with_bytes(
                 field_id::UPLOAD_SESSION_UUID,
-                uuid_text(&value.upload_session_uuid),
+                value.upload_session_uuid.to_vec(),
             )
             .with_text(field_id::RECORDING_UUID, uuid_text(&value.recording_uuid))
             .with_u64(
@@ -702,9 +859,9 @@ fn decode_encrypted_upload_v2_transfer_packet(
                 u64::from(value.data_payload_bytes),
             ),
         EncryptedUploadV2Transfer::StartAck(value) => encrypted_v2_common(output, value.common)
-            .with_text(
+            .with_bytes(
                 field_id::UPLOAD_SESSION_UUID,
-                uuid_text(&value.upload_session_uuid),
+                value.upload_session_uuid.to_vec(),
             )
             .with_text(field_id::RECORDING_UUID, uuid_text(&value.recording_uuid))
             .with_u64(
@@ -751,24 +908,22 @@ fn decode_encrypted_upload_v2_transfer_packet(
                 field_id::CHECKPOINT_REVISION,
                 u64::from(value.checkpoint_revision),
             ),
-        EncryptedUploadV2Transfer::WindowAck(value) => {
-            let mut output = encrypted_v2_common(output, value.common)
-                .with_u64(field_id::WINDOW_INDEX, u64::from(value.window_index))
-                .with_u64(
-                    field_id::SEQUENCE,
-                    u64::from(value.highest_contiguous_sequence),
-                )
-                .with_u64(field_id::OFFSET, value.next_ciphertext_offset)
-                .with_bytes(field_id::PREFIX_SHA256, value.prefix_sha256.to_vec())
-                .with_u64(
-                    field_id::CHECKPOINT_REVISION,
-                    u64::from(value.checkpoint_revision),
-                );
-            for sequence in value.missing_sequences {
-                output = output.with_u64(field_id::MISSING_SEQUENCE, u64::from(sequence));
-            }
-            output
-        }
+        EncryptedUploadV2Transfer::WindowAck(value) => encrypted_v2_common(output, value.common)
+            .with_u64(field_id::WINDOW_INDEX, u64::from(value.window_index))
+            .with_u64(
+                field_id::SEQUENCE,
+                u64::from(value.highest_contiguous_sequence),
+            )
+            .with_u64(field_id::OFFSET, value.next_ciphertext_offset)
+            .with_bytes(field_id::PREFIX_SHA256, value.prefix_sha256.to_vec())
+            .with_u64(
+                field_id::CHECKPOINT_REVISION,
+                u64::from(value.checkpoint_revision),
+            )
+            .with_bytes(
+                field_id::MISSING_SEQUENCE,
+                pack_missing_sequences(&value.missing_sequences),
+            ),
         EncryptedUploadV2Transfer::ManifestChunk(value) => {
             encrypted_v2_common(output, value.common)
                 .with_u64(
@@ -792,9 +947,9 @@ fn decode_encrypted_upload_v2_transfer_packet(
         EncryptedUploadV2Transfer::ResumeRequest(value)
         | EncryptedUploadV2Transfer::ResumeAccept(value) => {
             encrypted_v2_common(output, value.common)
-                .with_text(
+                .with_bytes(
                     field_id::UPLOAD_SESSION_UUID,
-                    uuid_text(&value.upload_session_uuid),
+                    value.upload_session_uuid.to_vec(),
                 )
                 .with_text(field_id::RECORDING_UUID, uuid_text(&value.recording_uuid))
                 .with_u64(
@@ -822,16 +977,16 @@ fn decode_encrypted_upload_v2_transfer_packet(
             .with_u64(field_id::OFFSET, value.next_ciphertext_offset)
             .with_bytes(field_id::PREFIX_SHA256, value.prefix_sha256.to_vec()),
         EncryptedUploadV2Transfer::Confirm(value) => encrypted_v2_common(output, value.common)
-            .with_text(
+            .with_bytes(
                 field_id::UPLOAD_SESSION_UUID,
-                uuid_text(&value.upload_session_uuid),
+                value.upload_session_uuid.to_vec(),
             )
             .with_text(field_id::RECORDING_UUID, uuid_text(&value.recording_uuid))
             .with_u64(
                 field_id::RECORDING_GENERATION,
                 u64::from(value.recording_generation),
             )
-            .with_u64(field_id::WRITE_ID, u64::from(value.owner_revision))
+            .with_u64(field_id::OWNER_REVISION, u64::from(value.owner_revision))
             .with_bytes(field_id::RECEIPT_SHA256, value.receipt_sha256.to_vec()),
         EncryptedUploadV2Transfer::Abort { common, reason } => {
             encrypted_v2_common(output, common).with_u64(field_id::DETAIL_CODE, u64::from(reason))
@@ -882,6 +1037,13 @@ fn uuid_text(bytes: &[u8; 16]) -> String {
         byte(14),
         byte(15),
     )
+}
+
+fn pack_missing_sequences(sequences: &[u32]) -> Vec<u8> {
+    sequences
+        .iter()
+        .flat_map(|sequence| sequence.to_le_bytes())
+        .collect()
 }
 
 fn validate_packet(packet: &BotaDeviceSdkPacketViewV1) -> Result<(), DeviceSdkError> {
@@ -1136,6 +1298,9 @@ mod tests {
                 .with_u64(field_id::MESSAGE_TYPE, 0x62)
                 .with_u64(field_id::BLOB_KIND, 1)
                 .with_u64(field_id::WRITE_ID, 0x0102_0304),
+            packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER)
+                .with_u64(field_id::MESSAGE_TYPE, 0x25)
+                .with_u64(field_id::TRANSPORT_SESSION_ID, 1),
         ];
         for (index, input) in encode_cases.iter().enumerate() {
             let output = unsafe { encode(&input.view()) };
@@ -1207,6 +1372,140 @@ mod tests {
     }
 
     #[test]
+    fn encrypted_upload_v2_transfer_encode_uses_the_core_codec_for_app_messages() {
+        let session_id = 0x0000_1122_3344_5566;
+        let upload_session_uuid = hex("101112131415161718191a1b1c1d1e1f");
+        let recording_uuid = "00112233-4455-6677-8899-aabbccddeeff";
+        let prefix = hex("e0e680b4ac7b3043263cd19a217ccd180508e9467006f75d86ed717814770c77");
+        let cases = [
+            (
+                packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER)
+                    .with_u64(field_id::MESSAGE_TYPE, 0x25)
+                    .with_u64(field_id::TRANSPORT_SESSION_ID, session_id),
+                "25020000665544332211000000000000".to_owned(),
+            ),
+            (
+                packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER)
+                    .with_u64(field_id::MESSAGE_TYPE, 0x20)
+                    .with_u64(field_id::TRANSPORT_SESSION_ID, session_id)
+                    .with_bytes(field_id::UPLOAD_SESSION_UUID, upload_session_uuid.clone())
+                    .with_text(field_id::RECORDING_UUID, recording_uuid)
+                    .with_u64(field_id::RECORDING_GENERATION, 9)
+                    .with_bytes(
+                        field_id::AUTHORIZATION_SHA256,
+                        hex("d1d0f59c9251cb91f193aeca65c0340dce4bfc536faaba3f24dc89fa24d9eb44"),
+                    )
+                    .with_u64(field_id::CHECKPOINT_REVISION, 0)
+                    .with_u64(field_id::OFFSET, 0)
+                    .with_bytes(
+                        field_id::PREFIX_SHA256,
+                        hex("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+                    )
+                    .with_u64(field_id::WINDOW_PACKETS, 16)
+                    .with_u64(field_id::DATA_PAYLOAD_BYTES, 244),
+                "200200006655443322110000101112131415161718191a1b1c1d1e1f00112233445566778899aabbccddeeff09000000d1d0f59c9251cb91f193aeca65c0340dce4bfc536faaba3f24dc89fa24d9eb44000000000000000000000000e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b8551000f400".to_owned(),
+            ),
+            (
+                packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER)
+                    .with_u64(field_id::MESSAGE_TYPE, 0x21)
+                    .with_u64(field_id::TRANSPORT_SESSION_ID, session_id)
+                    .with_u64(field_id::WINDOW_INDEX, 2)
+                    .with_u64(field_id::SEQUENCE, 12)
+                    .with_u64(field_id::OFFSET, 48)
+                    .with_bytes(field_id::PREFIX_SHA256, prefix.clone())
+                    .with_u64(field_id::CHECKPOINT_REVISION, 3)
+                    .with_bytes(field_id::MISSING_SEQUENCE, hex("0d0000000f000000")),
+                "210200006655443322110000020000000c0000003000000000000000e0e680b4ac7b3043263cd19a217ccd180508e9467006f75d86ed717814770c7703000000020000000d0000000f000000".to_owned(),
+            ),
+            (
+                packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER)
+                    .with_u64(field_id::MESSAGE_TYPE, 0x22)
+                    .with_u64(field_id::TRANSPORT_SESSION_ID, session_id)
+                    .with_bytes(field_id::UPLOAD_SESSION_UUID, upload_session_uuid.clone())
+                    .with_text(field_id::RECORDING_UUID, recording_uuid)
+                    .with_u64(field_id::RECORDING_GENERATION, 9)
+                    .with_u64(field_id::CHECKPOINT_REVISION, 3)
+                    .with_u64(field_id::OFFSET, 64)
+                    .with_bytes(field_id::PREFIX_SHA256, prefix.clone())
+                    .with_u64(field_id::WINDOW_PACKETS, 16)
+                    .with_u64(field_id::DATA_PAYLOAD_BYTES, 244),
+                "220200006655443322110000101112131415161718191a1b1c1d1e1f00112233445566778899aabbccddeeff09000000030000004000000000000000e0e680b4ac7b3043263cd19a217ccd180508e9467006f75d86ed717814770c771000f400".to_owned(),
+            ),
+            (
+                packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER)
+                    .with_u64(field_id::MESSAGE_TYPE, 0x23)
+                    .with_u64(field_id::TRANSPORT_SESSION_ID, session_id)
+                    .with_bytes(field_id::UPLOAD_SESSION_UUID, upload_session_uuid)
+                    .with_text(field_id::RECORDING_UUID, recording_uuid)
+                    .with_u64(field_id::RECORDING_GENERATION, 9)
+                    .with_u64(field_id::OWNER_REVISION, 3)
+                    .with_bytes(
+                        field_id::RECEIPT_SHA256,
+                        hex("f8acd46a795a3f1cc599a8284d0f65543bb5b986fe721d735c6139ec028c20fc"),
+                    ),
+                "230200006655443322110000101112131415161718191a1b1c1d1e1f00112233445566778899aabbccddeeff0900000003000000f8acd46a795a3f1cc599a8284d0f65543bb5b986fe721d735c6139ec028c20fc".to_owned(),
+            ),
+            (
+                packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER)
+                    .with_u64(field_id::MESSAGE_TYPE, 0x24)
+                    .with_u64(field_id::TRANSPORT_SESSION_ID, session_id)
+                    .with_u64(field_id::DETAIL_CODE, 0x0e),
+                "2402000066554433221100000e000000".to_owned(),
+            ),
+        ];
+
+        for (input, expected) in cases {
+            let output = unsafe { encode(&input.view()) }.unwrap();
+            let fields = packet_fields(&output);
+            assert_eq!(bytes(&fields, field_id::VALUE), hex(&expected));
+        }
+    }
+
+    #[test]
+    fn encrypted_upload_v2_transfer_encode_rejects_non_app_and_noncanonical_input() {
+        let device_data = packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER)
+            .with_u64(field_id::MESSAGE_TYPE, 0x41)
+            .with_u64(field_id::TRANSPORT_SESSION_ID, 7);
+        assert!(unsafe { encode(&device_data.view()) }.is_err());
+
+        let malformed_missing = packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER)
+            .with_u64(field_id::MESSAGE_TYPE, 0x21)
+            .with_u64(field_id::TRANSPORT_SESSION_ID, 7)
+            .with_u64(field_id::WINDOW_INDEX, 2)
+            .with_u64(field_id::SEQUENCE, 12)
+            .with_u64(field_id::OFFSET, 48)
+            .with_bytes(field_id::PREFIX_SHA256, vec![0x11; 32])
+            .with_u64(field_id::CHECKPOINT_REVISION, 3)
+            .with_bytes(field_id::MISSING_SEQUENCE, vec![0x0d]);
+        assert!(unsafe { encode(&malformed_missing.view()) }.is_err());
+
+        let confirm = |input: BotaDeviceSdkPacketV1| {
+            input
+                .with_u64(field_id::MESSAGE_TYPE, 0x23)
+                .with_u64(field_id::TRANSPORT_SESSION_ID, 7)
+                .with_text(
+                    field_id::RECORDING_UUID,
+                    "00112233-4455-6677-8899-aabbccddeeff",
+                )
+                .with_u64(field_id::RECORDING_GENERATION, 9)
+                .with_u64(field_id::OWNER_REVISION, 3)
+                .with_bytes(field_id::RECEIPT_SHA256, vec![0x22; 32])
+        };
+        let text_upload_session = confirm(
+            packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER).with_text(
+                field_id::UPLOAD_SESSION_UUID,
+                "10111213-1415-1617-1819-1a1b1c1d1e1f",
+            ),
+        );
+        assert!(unsafe { encode(&text_upload_session.view()) }.is_err());
+        let short_upload_session = confirm(
+            packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER)
+                .with_bytes(field_id::UPLOAD_SESSION_UUID, vec![0x10; 15]),
+        );
+        assert!(unsafe { encode(&short_upload_session.view()) }.is_err());
+    }
+
+    #[test]
     fn encrypted_upload_v2_decode_exposes_only_normalized_framing_metadata() {
         let mut logs = DeviceLogDecoder::default();
         let capability = packet(packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_CAPABILITY)
@@ -1260,6 +1559,26 @@ mod tests {
             "00112233-4455-6677-8899-aabbccddeeff"
         );
         assert_eq!(bytes(&fields, field_id::AUTHORIZATION_SHA256), [0x77; 32]);
+        let upload_session = fields
+            .iter()
+            .find(|field| field.field_id == field_id::UPLOAD_SESSION_UUID)
+            .unwrap();
+        assert_eq!(upload_session.field_type, crate::field_type::BYTES);
+        assert_eq!(bytes(&fields, field_id::UPLOAD_SESSION_UUID), [0x10; 16]);
+
+        let confirm = packet(packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_TRANSFER_OR_STATUS)
+            .with_bytes(
+                field_id::VALUE,
+                hex("230200006655443322110000101112131415161718191a1b1c1d1e1f00112233445566778899aabbccddeeff0900000003000000f8acd46a795a3f1cc599a8284d0f65543bb5b986fe721d735c6139ec028c20fc"),
+            );
+        let confirm = unsafe { decode(&confirm.view(), &mut logs) }.unwrap();
+        let fields = packet_fields(&confirm);
+        assert_eq!(unsigned(&fields, field_id::OWNER_REVISION), 3);
+        assert!(
+            fields
+                .iter()
+                .all(|field| field.field_id != field_id::WRITE_ID)
+        );
 
         let status = packet(packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_TRANSFER_OR_STATUS)
             .with_bytes(
@@ -1273,6 +1592,77 @@ mod tests {
         assert_eq!(unsigned(&fields, field_id::DETAIL_CODE), 15);
         assert_eq!(unsigned(&fields, field_id::DURABLE_CIPHERTEXT_BYTES), 64);
         assert_eq!(unsigned(&fields, field_id::PROGRESS_PERCENT), 37);
+    }
+
+    #[test]
+    fn encrypted_upload_v2_window_ack_decode_encode_preserves_packed_missing_sequences() {
+        let prefix = "e0e680b4ac7b3043263cd19a217ccd180508e9467006f75d86ed717814770c77";
+        let cases = [
+            (
+                format!(
+                    "21020000665544332211000002000000100000004000000000000000{prefix}0400000000000000"
+                ),
+                Vec::new(),
+            ),
+            (
+                format!(
+                    "210200006655443322110000020000000c0000003000000000000000{prefix}03000000010000000d000000"
+                ),
+                hex("0d000000"),
+            ),
+            (
+                format!(
+                    "210200006655443322110000020000000c0000003000000000000000{prefix}03000000020000000d0000000f000000"
+                ),
+                hex("0d0000000f000000"),
+            ),
+        ];
+        let mut logs = DeviceLogDecoder::default();
+
+        for (wire, expected_missing) in cases {
+            let decoded =
+                packet(packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_TRANSFER_OR_STATUS)
+                    .with_bytes(field_id::VALUE, hex(&wire));
+            let decoded = unsafe { decode(&decoded.view(), &mut logs) }.unwrap();
+            let fields = packet_fields(&decoded);
+            let missing = fields
+                .iter()
+                .filter(|field| field.field_id == field_id::MISSING_SEQUENCE)
+                .collect::<Vec<_>>();
+            assert_eq!(missing.len(), 1);
+            assert_eq!(missing[0].field_type, crate::field_type::BYTES);
+            assert_eq!(bytes(&fields, field_id::MISSING_SEQUENCE), expected_missing);
+
+            let encoded = packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER)
+                .with_u64(
+                    field_id::MESSAGE_TYPE,
+                    unsigned(&fields, field_id::MESSAGE_TYPE),
+                )
+                .with_u64(
+                    field_id::TRANSPORT_SESSION_ID,
+                    unsigned(&fields, field_id::TRANSPORT_SESSION_ID),
+                )
+                .with_u64(
+                    field_id::WINDOW_INDEX,
+                    unsigned(&fields, field_id::WINDOW_INDEX),
+                )
+                .with_u64(field_id::SEQUENCE, unsigned(&fields, field_id::SEQUENCE))
+                .with_u64(field_id::OFFSET, unsigned(&fields, field_id::OFFSET))
+                .with_bytes(
+                    field_id::PREFIX_SHA256,
+                    bytes(&fields, field_id::PREFIX_SHA256),
+                )
+                .with_u64(
+                    field_id::CHECKPOINT_REVISION,
+                    unsigned(&fields, field_id::CHECKPOINT_REVISION),
+                )
+                .with_bytes(
+                    field_id::MISSING_SEQUENCE,
+                    bytes(&fields, field_id::MISSING_SEQUENCE),
+                );
+            let encoded = unsafe { encode(&encoded.view()) }.unwrap();
+            assert_eq!(bytes(&packet_fields(&encoded), field_id::VALUE), hex(&wire));
+        }
     }
 
     #[test]
@@ -1368,6 +1758,9 @@ mod tests {
             .find(|field| field.field_id == id)
             .unwrap()
             .data;
+        if value.len == 0 {
+            return Vec::new();
+        }
         unsafe { std::slice::from_raw_parts(value.data, value.len as usize) }.to_vec()
     }
 

@@ -69,7 +69,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   bounds. It does not infer support from firmware or model strings. Outbound
   authorization and receipt blob frames must use the shared Rust encoder via
   additive ABI packet kind `0x0523`; platform facades must not reconstruct
-  those authenticated frames. Apple's internal
+  those authenticated frames. Additive kind `0x0524` similarly encodes only
+  app-originated v2 LIST, START, WINDOW_ACK, RESUME_REQUEST, CONFIRM, and ABORT
+  transfer frames. Transfer decode/encode keeps upload-session UUIDs as exact
+  16-byte fields, missing sequences as one packed little-endian u32 byte field,
+  and CONFIRM `owner_revision` under its dedicated field. Apple's internal
   `EncryptedUploadV2SignedBlobWriter` permits one owner, queries the actual
   write-with-response limit capped at the 512-byte protocol maximum, subscribes
   to `0407` before BEGIN, checks cancellation between writes, and starts the
