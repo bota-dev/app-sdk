@@ -140,11 +140,15 @@ The registry keeps authorization, manifest, receipt, and staging credentials
 out of Rust and persistent state; validates exact document sizes, evidence, and
 bodyless HTTPS PUT requests; and removes providers before terminal cancellation
 callbacks run. Registration generations also reject callbacks that complete
-after removal or replacement. The production configuration intentionally
-installs an unavailable port until native BLE, sink, staging, recovery, and
-manager wiring land. Android still has no equivalent host, React Native exposes
-no v2 workflow or bulk bytes, and compatibility metadata keeps runtime support
-and firmware advertisement false.
+after removal or replacement. Apple also pins the separate `0406..040B`
+characteristic allocation and configures a fresh capability reader. Each
+selection read fetches `0406` again, delegates exact 24-byte decoding to Rust,
+and returns the raw-value SHA-256 plus typed bounds; it has no firmware/model
+inference or cache. The production configuration intentionally installs an
+unavailable transfer port until native BLE messaging, sink, staging, recovery,
+and manager wiring land. Android still has no equivalent host, React Native
+exposes no v2 workflow or bulk bytes, and compatibility metadata keeps runtime
+support and firmware advertisement false.
 The core now also exposes a side-effect-free three-profile selection validator:
 it requires every batch capability bit, usable advertised bounds, and an
 immutable recording generation in `bota_enc_v2` storage before accepting v2;

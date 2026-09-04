@@ -13,6 +13,16 @@ public struct BotaConfiguration: @unchecked Sendable {
             let root = configuredDirectory ?? Self.defaultApplicationSupportDirectory()
             let bluetooth = CoreBluetoothHost(driver: CoreBluetoothDriver())
             let mapper = try CoreModelMapper()
+            let encryptedUploadV2Capabilities = EncryptedUploadV2CapabilityReader(
+                read: { peripheralID, serviceUUID, characteristicUUID in
+                    try await bluetooth.read(
+                        peripheralID: peripheralID,
+                        serviceUUID: serviceUUID,
+                        characteristicUUID: characteristicUUID
+                    )
+                },
+                decode: { try mapper.decodeEncryptedUploadV2Capabilities($0) }
+            )
             let connection = DeviceConnectionRegistry()
             let persistence = FilePersistenceHost(
                 rootDirectory: root.appendingPathComponent("State", isDirectory: true)
@@ -102,6 +112,9 @@ public struct BotaConfiguration: @unchecked Sendable {
                         serviceUUID: serviceUUID,
                         characteristicUUID: characteristicUUID
                     )
+                },
+                readEncryptedUploadV2Capabilities: { peripheralID in
+                    try await encryptedUploadV2Capabilities.readFresh(peripheralID: peripheralID)
                 },
                 parseRecordingState: { try mapper.parseRecordingState($0) },
                 parseRecordingControlResult: { try mapper.parseRecordingControlResult($0) },

@@ -170,7 +170,10 @@ opaque-ID provider registry for application-supplied authorization, staging
 requests, manifest submission, finalization, and receipt retrieval. It rejects
 wrong document sizes, non-HTTPS or body-bearing staging requests, duplicate
 registrations, and removes material on every modeled terminal outcome. The
-production host still fails closed as unavailable and no public manager exposes
+Apple runtime pins the separate `0406..040B` characteristic allocation and can
+perform an uncached `0406` capability read through the shared Rust decoder,
+returning the exact bytes, digest, and typed bounds internally. The production
+transfer host still fails closed as unavailable and no public manager exposes
 the workflow. Android and React Native have no runtime host. Runtime
 compatibility metadata therefore remains disabled.
 ABI v1 is frozen at the typed public header and verified by standalone C and

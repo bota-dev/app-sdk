@@ -468,6 +468,29 @@ final class CoreModelMapper: @unchecked Sendable {
         )
     }
 
+    func decodeEncryptedUploadV2Capabilities(
+        _ data: Data
+    ) throws -> EncryptedUploadV2CapabilitiesValue {
+        let fields = try decode(BotaPrivateProtocol.decodeEncryptedUploadV2Capability, data)
+        return EncryptedUploadV2CapabilitiesValue(
+            flags: try fields.requiredUInt32(BotaPrivateProtocol.capabilityFlags),
+            maximumSignedBlobBytes: try fields.requiredUInt16(
+                BotaPrivateProtocol.maximumSignedBlobBytes
+            ),
+            maximumManifestBytes: try fields.requiredUInt16(
+                BotaPrivateProtocol.maximumManifestBytes
+            ),
+            maximumDataPayloadBytes: try fields.requiredUInt16(BotaPrivateProtocol.dataPayloadBytes),
+            maximumWindowPackets: try fields.requiredUInt16(BotaPrivateProtocol.windowPackets),
+            durableCheckpointIntervalBlocks: try fields.requiredUInt32(
+                BotaPrivateProtocol.checkpointInterval
+            ),
+            maximumMissingSequences: try fields.requiredUInt16(
+                BotaPrivateProtocol.maximumMissingSequences
+            )
+        )
+    }
+
     private func decode(_ kind: UInt32, _ data: Data) throws -> PacketFields {
         do {
             let packet = try client.protocolDecode(Self.protocolPacket(kind: kind, fields: [
@@ -648,7 +671,13 @@ private enum BotaPrivateProtocol {
     static let recordingGeneration: UInt32 = 129
     static let ciphertextLength: UInt32 = 130
     static let plaintextLength: UInt32 = 131
+    static let windowPackets: UInt32 = 134
+    static let dataPayloadBytes: UInt32 = 135
     static let capabilityFlags: UInt32 = 137
+    static let maximumSignedBlobBytes: UInt32 = 138
+    static let maximumManifestBytes: UInt32 = 139
+    static let checkpointInterval: UInt32 = 140
+    static let maximumMissingSequences: UInt32 = 141
     static let manifestSHA256: UInt32 = 142
     static let prefixSHA256: UInt32 = 143
     static let ciphertextSHA256: UInt32 = 144

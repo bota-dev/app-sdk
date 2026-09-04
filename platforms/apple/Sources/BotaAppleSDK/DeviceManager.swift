@@ -70,6 +70,7 @@ struct DeviceRuntime: Sendable {
     let directWrite: @Sendable (String, String, String, Data) async throws -> Void
     let directSubscribe: @Sendable (String, String, String) async throws -> AsyncThrowingStream<Data, Error>
     let directUnsubscribe: @Sendable (String, String, String) async throws -> Void
+    let readEncryptedUploadV2Capabilities: @Sendable (String) async throws -> EncryptedUploadV2CapabilitySnapshot
     let delay: @Sendable (UInt64) async throws -> Void
     let parseRecordingState: @Sendable (Data) throws -> RecordingState
     let parseRecordingControlResult: @Sendable (Data) throws -> RecordingControlResult
@@ -134,6 +135,10 @@ struct DeviceRuntime: Sendable {
             throw NativeHostError.missingResource("direct device subscription")
         },
         directUnsubscribe: @escaping @Sendable (String, String, String) async throws -> Void = { _, _, _ in },
+        readEncryptedUploadV2Capabilities: @escaping @Sendable
+            (String) async throws -> EncryptedUploadV2CapabilitySnapshot = { _ in
+            throw NativeHostError.missingResource("encrypted upload v2 capabilities")
+        },
         delay: @escaping @Sendable (UInt64) async throws -> Void = { milliseconds in
             try await Task.sleep(nanoseconds: milliseconds * 1_000_000)
         },
@@ -229,6 +234,7 @@ struct DeviceRuntime: Sendable {
         self.directWrite = directWrite
         self.directSubscribe = directSubscribe
         self.directUnsubscribe = directUnsubscribe
+        self.readEncryptedUploadV2Capabilities = readEncryptedUploadV2Capabilities
         self.delay = delay
         self.parseRecordingState = parseRecordingState
         self.parseRecordingControlResult = parseRecordingControlResult

@@ -63,6 +63,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   validates the exact 408/580/336-byte opaque documents, bodyless HTTPS staging
   requests, digest evidence, redacted descriptions, duplicate registration,
   stale post-terminal callbacks, and remove-before-cancel terminal cleanup. The
+  configured Apple runtime also exposes an internal
+  `EncryptedUploadV2CapabilityReader`: every call reads `0406` again, decodes
+  the exact 24-byte value through Rust, and returns its SHA-256 with the typed
+  bounds. It does not infer support from firmware or model strings. The
   configured port still returns `feature_unavailable`; no Apple/Android native
   transfer or released manager implements the workflow, so keep runtime
   metadata false.

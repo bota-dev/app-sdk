@@ -197,6 +197,10 @@ runtimes can consume the same trace.
 - [ ] Read capabilities fresh, run selection before START, and implement signed
   blob, START/ACK, DATA/window repair, manifest, EOF, receipt, and CONFIRM on the
   dedicated characteristics.
+  - [x] Pin Apple's `0406..040B` UUIDs and configure an uncached `0406` read
+    whose exact 24 bytes are decoded by Rust and SHA-256-bound for the provider.
+  - [ ] Wire the resulting snapshot through application selection before START,
+    then implement the dedicated signed-blob and transfer message lifecycle.
 - [ ] Stream ciphertext to a bounded native file and staging request without a
   plaintext copy or bridge payload.
 - [ ] Persist and recover only mutually proven checkpoint metadata.
