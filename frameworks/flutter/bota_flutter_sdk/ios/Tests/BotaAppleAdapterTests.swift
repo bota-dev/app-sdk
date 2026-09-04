@@ -508,6 +508,94 @@ final class BotaAppleAdapterTests: XCTestCase {
     XCTAssertEqual(ownerCancellationCount, 1)
   }
 
+  func testDetachRetainsOwnershipUntilSuspendedSubscriptionStartUnwinds() async throws {
+    let native = AdapterTestClient(failDeviceCancellation: true, suspendScanStart: true)
+    let leases = NativeLeaseCoordinator(client: native)
+    let adapterA = makeAdapter(native: native, leases: leases, engineID: "starting-owner")
+    let adapterB = makeAdapter(native: native, leases: leases, engineID: "starting-other")
+    try await configure(adapterA, operationID: id(104))
+    try await configure(adapterB, operationID: id(105))
+    let subscriptionID = id(106)
+    let start = Task {
+      try await adapterA.startSubscription(
+        subscriptionId: subscriptionID,
+        request: BotaScanSubscriptionMessage(timeoutMillis: 10_000, allowDuplicates: false)
+      )
+    }
+    await native.waitUntilScanStartSuspended()
+
+    let detach = Task { await adapterA.detach() }
+    await native.waitUntilScanStartCancellationObserved()
+
+    do {
+      _ = try await adapterB.readDeviceStatus(operationId: id(107))
+      XCTFail("subscription start must retain category ownership during unwind")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "operation_in_progress")
+    }
+    do {
+      try await adapterB.cancelDeviceOperation(operationId: id(108))
+      XCTFail("another engine must not cancel a starting subscription")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "operation_not_owned")
+    }
+
+    await native.resumeScanStart()
+    await detach.value
+    do {
+      try await start.value
+      XCTFail("detached subscription start must fail")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "engine_detached")
+    }
+    let scanStartReturnedStream = await native.scanStartReturnedStream
+    XCTAssertFalse(scanStartReturnedStream)
+    let detachCancellationCount = await native.deviceCancellationCount
+    XCTAssertEqual(detachCancellationCount, 1)
+    _ = try await adapterB.readDeviceStatus(operationId: id(109))
+  }
+
+  func testPublicCancellationAwaitsSuspendedSubscriptionStartBeforeReleasingOwnership() async throws
+  {
+    let native = AdapterTestClient(suspendScanStart: true, ignoreScanStartCancellation: true)
+    let leases = NativeLeaseCoordinator(client: native)
+    let adapterA = makeAdapter(native: native, leases: leases, engineID: "cancel-start-owner")
+    let adapterB = makeAdapter(native: native, leases: leases, engineID: "cancel-start-other")
+    try await configure(adapterA, operationID: id(110))
+    try await configure(adapterB, operationID: id(111))
+    let subscriptionID = id(112)
+    let start = Task {
+      try await adapterA.startSubscription(
+        subscriptionId: subscriptionID,
+        request: BotaScanSubscriptionMessage(timeoutMillis: 10_000, allowDuplicates: false)
+      )
+    }
+    await native.waitUntilScanStartSuspended()
+
+    let cancel = Task { try await adapterA.cancelSubscription(subscriptionId: subscriptionID) }
+    await native.waitUntilScanStartCancellationObserved()
+    do {
+      _ = try await adapterB.readDeviceStatus(operationId: id(113))
+      XCTFail("public cancellation must retain ownership until start unwinds")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "operation_in_progress")
+    }
+
+    await native.resumeScanStart()
+    try await cancel.value
+    do {
+      try await start.value
+      XCTFail("cancelled subscription start must fail")
+    } catch {}
+    let scanStartReturnedStream = await native.scanStartReturnedStream
+    let scanNativeActive = await native.scanNativeActive
+    let cancellationCount = await native.deviceCancellationCount
+    XCTAssertTrue(scanStartReturnedStream)
+    XCTAssertFalse(scanNativeActive)
+    XCTAssertEqual(cancellationCount, 1)
+    _ = try await adapterB.readDeviceStatus(operationId: id(114))
+  }
+
   func testTerminalStreamCleanupRetainsOwnershipAndOwnerlessCancelIsNoOp() async throws {
     let native = AdapterTestClient(holdTerminalScanCleanup: true)
     let flutterA = AdapterTestFlutterApi()
@@ -1075,6 +1163,8 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
   private let failDeviceCancellation: Bool
   private let delayProvisioningProviderUntilCancellation: Bool
   private let holdTerminalScanCleanup: Bool
+  private let suspendScanStart: Bool
+  private let ignoreScanStartCancellation: Bool
   private var configureStarted = false
   private var configureContinuation: CheckedContinuation<Void, Never>?
   private var readStatusStarted = false
@@ -1088,6 +1178,11 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
   private var scanContinuation: AsyncThrowingStream<DiscoveredDevice, Error>.Continuation?
   private var terminalScanCleanupContinuation: CheckedContinuation<Void, Never>?
   private var terminalScanCleanupReleased = false
+  private var scanStartSuspended = false
+  private var scanStartCancellationObserved = false
+  private(set) var scanStartReturnedStream = false
+  private(set) var scanNativeActive = false
+  private var scanStartContinuation: CheckedContinuation<Void, Never>?
 
   init(
     useHangingScan: Bool = false,
@@ -1095,7 +1190,9 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
     suspendReadStatus: Bool = false,
     failDeviceCancellation: Bool = false,
     delayProvisioningProviderUntilCancellation: Bool = false,
-    holdTerminalScanCleanup: Bool = false
+    holdTerminalScanCleanup: Bool = false,
+    suspendScanStart: Bool = false,
+    ignoreScanStartCancellation: Bool = false
   ) {
     self.useHangingScan = useHangingScan
     self.suspendConfigure = suspendConfigure
@@ -1104,6 +1201,8 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
     self.delayProvisioningProviderUntilCancellation =
       delayProvisioningProviderUntilCancellation
     self.holdTerminalScanCleanup = holdTerminalScanCleanup
+    self.suspendScanStart = suspendScanStart
+    self.ignoreScanStartCancellation = ignoreScanStartCancellation
   }
 
   func setReadStatusError(_ error: Error) { readStatusError = error }
@@ -1175,6 +1274,7 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
     deviceCancellationCount += 1
     invocations.append("cancelDeviceOperation")
     if failDeviceCancellation { throw AdapterCancellationFailure.expected }
+    scanNativeActive = false
     if holdTerminalScanCleanup, !terminalScanCleanupReleased {
       await withCheckedContinuation { terminalScanCleanupContinuation = $0 }
     }
@@ -1337,6 +1437,17 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
     -> AsyncThrowingStream<DiscoveredDevice, Error>
   {
     invocations.append("scanStream")
+    if suspendScanStart {
+      scanStartSuspended = true
+      await withTaskCancellationHandler {
+        await withCheckedContinuation { scanStartContinuation = $0 }
+      } onCancel: {
+        Task { await self.recordScanStartCancellation() }
+      }
+      if !ignoreScanStartCancellation { try Task.checkCancellation() }
+      scanStartReturnedStream = true
+      scanNativeActive = true
+    }
     if useHangingScan { return AsyncThrowingStream { _ in } }
     if holdTerminalScanCleanup {
       let pair = AsyncThrowingStream<DiscoveredDevice, Error>.makeStream()
@@ -1344,6 +1455,17 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
       return pair.stream
     }
     return throwingStream(discovered())
+  }
+  func waitUntilScanStartSuspended() async {
+    while !scanStartSuspended { await Task.yield() }
+  }
+  func waitUntilScanStartCancellationObserved() async {
+    while !scanStartCancellationObserved { await Task.yield() }
+  }
+  private func recordScanStartCancellation() { scanStartCancellationObserved = true }
+  func resumeScanStart() {
+    scanStartContinuation?.resume()
+    scanStartContinuation = nil
   }
   func finishScanPublicStream() {
     scanContinuation?.finish()

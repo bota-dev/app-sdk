@@ -41,6 +41,15 @@ final class CoreBluetoothPendingRequest<Value: Sendable>: @unchecked Sendable {
         return false
     }
 
+    var cannotReceiveCallback: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        switch state {
+        case .cancellationRequested, .cancellationReady, .finished: return true
+        case .awaitingContinuation, .suspended: return false
+        }
+    }
+
     @discardableResult
     func succeed(_ value: sending Value) -> Bool {
         guard let continuation = takeContinuation() else { return false }
@@ -158,8 +167,16 @@ struct CoreBluetoothPendingCallbacks<Key: Hashable, Value: Sendable> {
         return removed
     }
 
-    mutating func take(for key: Key) -> Resolution {
-        if quarantinedKeys.remove(key) != nil { return .ignored }
+    mutating func take(for key: Key, hasActiveSubscription: Bool = false) -> Resolution {
+        if let request = requests[key], request.cannotReceiveCallback {
+            requests.removeValue(forKey: key)
+            quarantinedKeys.insert(key)
+        }
+        if quarantinedKeys.contains(key) {
+            guard !hasActiveSubscription else { return .unowned }
+            quarantinedKeys.remove(key)
+            return .ignored
+        }
         guard let request = requests.removeValue(forKey: key) else { return .unowned }
         return .pending(request)
     }
@@ -584,7 +601,7 @@ extension CoreBluetoothDriver: CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         let key = CharacteristicKey(peripheralID: peripheral.identifier, characteristicUUID: characteristic.uuid)
-        switch readCallbacks.take(for: key) {
+        switch readCallbacks.take(for: key, hasActiveSubscription: subscriptions[key] != nil) {
         case .ignored:
             return
         case .pending(let request):

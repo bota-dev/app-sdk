@@ -595,8 +595,12 @@ down the half-open link before releasing radio ownership. Display names are
 never used as device identity. Direct read/write continuations use an exact-once
 cancellation state machine so task cancellation wins safely before or after
 registration and late delegate callbacks cannot resume cancelled callers. A
-cancelled characteristic key rejects new requests until the stale callback is
-discarded or disconnect clears its quarantine.
+cancelled characteristic key rejects new requests until an unambiguous stale
+callback is discarded or disconnect clears its quarantine. When that
+characteristic also carries notifications, callbacks continue to the live
+subscriber and cannot clear read quarantine. The per-peripheral serialization
+gate removes cancelled waiters without releasing the current holder or letting
+cancelled work enter the driver.
 
 Apple native services keep operating-system resources behind opaque ABI IDs.
 `FilePersistenceHost` atomically replaces the workflow checkpoint and retains

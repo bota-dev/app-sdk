@@ -282,8 +282,9 @@ actor CoreBluetoothHost: BluetoothHost {
         _ peripheralID: String,
         operation: @Sendable () async throws -> T
     ) async throws -> T {
-        await operationGate.acquire(peripheralID)
+        try await operationGate.acquire(peripheralID)
         do {
+            try Task.checkCancellation()
             let value = try await operation()
             await operationGate.release(peripheralID)
             return value
@@ -337,25 +338,105 @@ actor CoreBluetoothHost: BluetoothHost {
     }
 }
 
-private actor PeripheralOperationGate {
+actor PeripheralOperationGate {
     private var busy: Set<String> = []
-    private var waiters: [String: [CheckedContinuation<Void, Never>]] = [:]
+    private var waiters: [String: [PeripheralOperationWaiter]] = [:]
 
-    func acquire(_ peripheralID: String) async {
+    func acquire(_ peripheralID: String) async throws {
+        try Task.checkCancellation()
         guard busy.contains(peripheralID) else {
             busy.insert(peripheralID)
             return
         }
-        await withCheckedContinuation { waiters[peripheralID, default: []].append($0) }
+        let waiter = PeripheralOperationWaiter()
+        waiters[peripheralID, default: []].append(waiter)
+        do {
+            try await waiter.value()
+        } catch {
+            remove(waiter.id, from: peripheralID)
+            throw error
+        }
     }
 
     func release(_ peripheralID: String) {
-        if var queued = waiters[peripheralID], !queued.isEmpty {
+        while var queued = waiters[peripheralID], !queued.isEmpty {
             let next = queued.removeFirst()
             waiters[peripheralID] = queued.isEmpty ? nil : queued
-            next.resume()
-        } else {
-            busy.remove(peripheralID)
+            if next.grant() { return }
+        }
+        busy.remove(peripheralID)
+    }
+
+    func isBusy(_ peripheralID: String) -> Bool { busy.contains(peripheralID) }
+
+    func waiterCount(for peripheralID: String) -> Int { waiters[peripheralID]?.count ?? 0 }
+
+    private func remove(_ waiterID: UUID, from peripheralID: String) {
+        guard var queued = waiters[peripheralID] else { return }
+        queued.removeAll { $0.id == waiterID }
+        waiters[peripheralID] = queued.isEmpty ? nil : queued
+    }
+}
+
+private final class PeripheralOperationWaiter: @unchecked Sendable {
+    private enum State {
+        case awaitingContinuation
+        case suspended(CheckedContinuation<Void, Error>)
+        case cancelled
+        case finished
+    }
+
+    let id = UUID()
+    private let lock = NSLock()
+    private var state: State = .awaitingContinuation
+
+    func value() async throws {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                lock.lock()
+                switch state {
+                case .awaitingContinuation:
+                    state = .suspended(continuation)
+                    lock.unlock()
+                case .cancelled:
+                    state = .finished
+                    lock.unlock()
+                    continuation.resume(throwing: CancellationError())
+                case .suspended, .finished:
+                    lock.unlock()
+                    preconditionFailure("peripheral gate waiter installed more than once")
+                }
+            }
+        } onCancel: {
+            self.cancel()
+        }
+    }
+
+    @discardableResult
+    func grant() -> Bool {
+        lock.lock()
+        guard case .suspended(let continuation) = state else {
+            lock.unlock()
+            return false
+        }
+        state = .finished
+        lock.unlock()
+        continuation.resume()
+        return true
+    }
+
+    private func cancel() {
+        lock.lock()
+        switch state {
+        case .awaitingContinuation:
+            state = .cancelled
+            lock.unlock()
+        case .suspended(let continuation):
+            state = .finished
+            lock.unlock()
+            continuation.resume(throwing: CancellationError())
+        case .cancelled, .finished:
+            lock.unlock()
         }
     }
 }

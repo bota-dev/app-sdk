@@ -4,6 +4,49 @@ import XCTest
 @testable import BotaAppleSDK
 
 final class CoreBluetoothDriverCancellationTests: XCTestCase {
+  func testCancelledQueuedReadAndWriteDoNotEnterOrReleasePeripheralGate() async throws {
+    let gate = PeripheralOperationGate()
+    let entries = GateEntryRecorder()
+    try await gate.acquire("peripheral")
+
+    let read = Task<Void, Error> {
+      try await gate.acquire("peripheral")
+      entries.record("read")
+      await gate.release("peripheral")
+    }
+    let write = Task<Void, Error> {
+      try await gate.acquire("peripheral")
+      entries.record("write")
+      await gate.release("peripheral")
+    }
+    try await waitUntil { await gate.waiterCount(for: "peripheral") == 2 }
+
+    read.cancel()
+    write.cancel()
+
+    await assertCancelled(read)
+    await assertCancelled(write)
+    XCTAssertEqual(entries.values, [])
+    let busyAfterCancellation = await gate.isBusy("peripheral")
+    let waitersAfterCancellation = await gate.waiterCount(for: "peripheral")
+    XCTAssertTrue(busyAfterCancellation)
+    XCTAssertEqual(waitersAfterCancellation, 0)
+
+    let live = Task<Void, Error> {
+      try await gate.acquire("peripheral")
+      entries.record("live")
+      await gate.release("peripheral")
+    }
+    try await waitUntil { await gate.waiterCount(for: "peripheral") == 1 }
+    XCTAssertEqual(entries.values, [])
+
+    await gate.release("peripheral")
+    try await live.value
+    XCTAssertEqual(entries.values, ["live"])
+    let busyAfterRelease = await gate.isBusy("peripheral")
+    XCTAssertFalse(busyAfterRelease)
+  }
+
   func testCancelledReadResumesExactlyOnceAndIgnoresLateCallback() async throws {
     let request = CoreBluetoothPendingRequest<Data>()
     let callbacks = CallbackRecorder()
@@ -70,7 +113,7 @@ final class CoreBluetoothDriverCancellationTests: XCTestCase {
     XCTAssertFalse(request.succeed(Data([0x01])))
   }
 
-  func testCancelledCharacteristicStaysQuarantinedUntilLateCallbackArrives() {
+  func testCancelledCharacteristicStaysQuarantinedUntilUnambiguousLateCallbackArrives() {
     var callbacks = CoreBluetoothPendingCallbacks<String, Data>()
     let cancelled = CoreBluetoothPendingRequest<Data>()
     let replacement = CoreBluetoothPendingRequest<Data>()
@@ -78,16 +121,56 @@ final class CoreBluetoothDriverCancellationTests: XCTestCase {
     XCTAssertTrue(callbacks.cancel(cancelled.id))
     XCTAssertFalse(callbacks.install(replacement, for: "status"))
 
-    if case .ignored = callbacks.take(for: "status") {
+    if case .ignored = callbacks.take(for: "status", hasActiveSubscription: false) {
     } else {
       XCTFail("the cancelled request's late callback must be ignored")
     }
     XCTAssertTrue(callbacks.install(replacement, for: "status"))
-    if case .pending(let request) = callbacks.take(for: "status") {
+    if case .pending(let request) = callbacks.take(for: "status", hasActiveSubscription: false) {
       XCTAssertEqual(request.id, replacement.id)
     } else {
       XCTFail("reuse is safe only after the stale callback clears quarantine")
     }
+  }
+
+  func testLiveNotificationDoesNotClearCancelledReadQuarantine() {
+    var callbacks = CoreBluetoothPendingCallbacks<String, Data>()
+    let cancelled = CoreBluetoothPendingRequest<Data>()
+    let replacement = CoreBluetoothPendingRequest<Data>()
+    XCTAssertTrue(callbacks.install(cancelled, for: "status"))
+    XCTAssertTrue(callbacks.cancel(cancelled.id))
+
+    if case .unowned = callbacks.take(for: "status", hasActiveSubscription: true) {
+    } else {
+      XCTFail("a live notification must remain owned by the subscription")
+    }
+    XCTAssertFalse(callbacks.install(replacement, for: "status"))
+
+    if case .ignored = callbacks.take(for: "status", hasActiveSubscription: false) {
+    } else {
+      XCTFail("only an unambiguous callback may clear read quarantine")
+    }
+    XCTAssertTrue(callbacks.install(replacement, for: "status"))
+  }
+
+  func testNotificationDuringCancellationRegistrationRaceIsNotSwallowed() async throws {
+    var callbacks = CoreBluetoothPendingCallbacks<String, Data>()
+    let cancelled = CoreBluetoothPendingRequest<Data>()
+    let replacement = CoreBluetoothPendingRequest<Data>()
+    XCTAssertTrue(callbacks.install(cancelled, for: "status"))
+    let task = Task {
+      try await cancelled.value(start: {}, onCancel: {})
+    }
+    try await waitUntil { cancelled.isPending }
+    task.cancel()
+    await assertCancelled(task)
+
+    if case .unowned = callbacks.take(for: "status", hasActiveSubscription: true) {
+    } else {
+      XCTFail("the notification must flow while cancellation is being removed")
+    }
+    XCTAssertFalse(callbacks.install(replacement, for: "status"))
+    XCTAssertFalse(cancelled.succeed(Data([0x01])))
   }
 
   func testDisconnectClearsCancelledCharacteristicQuarantine() {
@@ -103,12 +186,22 @@ final class CoreBluetoothDriverCancellationTests: XCTestCase {
 
   private func waitUntil(
     timeoutNanoseconds: UInt64 = 500_000_000,
-    condition: @escaping @Sendable () -> Bool
+    condition: @escaping @Sendable () async -> Bool
   ) async throws {
     let deadline = ContinuousClock.now + .nanoseconds(Int64(timeoutNanoseconds))
-    while !condition() {
+    while !(await condition()) {
       if ContinuousClock.now >= deadline { throw CancellationTestError.timedOut }
       await Task.yield()
+    }
+  }
+
+  private func assertCancelled<T>(_ task: Task<T, Error>) async {
+    do {
+      _ = try await task.value
+      XCTFail("task should be cancelled")
+    } catch is CancellationError {
+    } catch {
+      XCTFail("unexpected error: \(error)")
     }
   }
 }
@@ -127,6 +220,14 @@ private final class CallbackRecorder: @unchecked Sendable {
 
   func recordStart() { lock.withLock { starts += 1 } }
   func recordCancellation() { lock.withLock { cancellations += 1 } }
+}
+
+private final class GateEntryRecorder: @unchecked Sendable {
+  private let lock = NSLock()
+  private var storedValues: [String] = []
+
+  var values: [String] { lock.withLock { storedValues } }
+  func record(_ value: String) { lock.withLock { storedValues.append(value) } }
 }
 
 private actor RegistrationGate {

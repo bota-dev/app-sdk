@@ -388,6 +388,13 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     let task: Task<Void, Never>
   }
 
+  private typealias SubscriptionConsumer = @Sendable () async -> Void
+
+  private struct StartingSubscription: Sendable {
+    let owner: SubscriptionOwner
+    let task: Task<SubscriptionConsumer, Error>
+  }
+
   private enum OperationOutcome: @unchecked Sendable {
     case success(Any)
     case failure(Error)
@@ -409,6 +416,7 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
   private var activeIdentifiers: Set<String> = []
   private var consumedIdentifiers: Set<String> = []
   private var startingSubscriptionIDs: Set<String> = []
+  private var startingSubscriptions: [String: StartingSubscription] = [:]
   private var subscriptions: [String: Subscription] = [:]
   private var inFlightOperations: [String: InFlightOperation] = [:]
   private var pendingCallbackCancellations: [String: @Sendable () -> Void] = [:]
@@ -838,74 +846,29 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
           operationID: subscriptionId
         )
       }
-      switch request {
-      case let request as BotaScanSubscriptionMessage:
-        let stream = try await client.scanStream(
-          timeoutMilliseconds: BotaAppleMapper.uint64(request.timeoutMillis),
-          allowDuplicates: request.allowDuplicates
-        )
-        try install(subscriptionId, owner: .deviceOperation) {
-          await self.consumeScan(subscriptionId, stream: stream)
-        }
-      case is BotaConnectionSubscriptionMessage:
-        let stream = await client.connectionStream()
-        try install(subscriptionId, owner: .connection) {
-          await self.consumeConnection(subscriptionId, stream: stream)
-        }
-      case is BotaDeviceStatusSubscriptionMessage:
-        let stream = try await client.deviceStatusStream()
-        try install(subscriptionId, owner: .deviceStatus) {
-          await self.consumeStatus(subscriptionId, stream: stream)
-        }
-      case let request as BotaRecordingStateSubscriptionMessage:
-        let stream = try await client.recordingStateStream(try device(request.device))
-        try install(subscriptionId, owner: .recordingState) {
-          await self.consumeRecordingState(subscriptionId, stream: stream)
-        }
-      case let request as BotaRecordingSyncSubscriptionMessage:
-        let stream = try await client.recordingSyncStream(
-          try device(request.device),
-          recording: try BotaAppleMapper.recording(request.recording),
-          sinkID: request.sinkId,
-          confirmOnCompletion: request.confirmOnCompletion
-        )
-        try install(subscriptionId, owner: .recordingOperation) {
-          await self.consumeRecordingSync(subscriptionId, stream: stream)
-        }
-      case let request as BotaUploadOwnershipSubscriptionMessage:
-        let stream = try await client.uploadOwnershipStream(
-          try device(request.device),
-          recordingUUID: request.recordingId,
-          uploadID: request.uploadId,
-          destinationID: request.destinationId
-        )
-        try install(subscriptionId, owner: .recordingOperation) {
-          await self.consumeUploadOwnership(subscriptionId, stream: stream)
-        }
-      case let request as BotaFirmwareUpdateSubscriptionMessage:
-        try requireCallback(\.hasFirmwareCallback, name: "firmware")
-        let stream = try await client.firmwareStream(
-          try device(request.device),
-          image: try await firmwareImage(request.image)
-        )
-        try install(subscriptionId, owner: .ota) {
-          await self.consumeFirmware(subscriptionId, stream: stream)
-        }
-      case let request as BotaLogSubscriptionMessage:
-        let stream = try await client.logStream(try device(request.device))
-        try install(subscriptionId, owner: .logs) {
-          await self.consumeLogs(subscriptionId, stream: stream)
-        }
-      case let request as BotaWifiStatusSubscriptionMessage:
-        let stream = try await client.wifiStatusStream(try device(request.device))
-        try install(subscriptionId, owner: .wifi) {
-          await self.consumeWifi(subscriptionId, stream: stream)
-        }
-      default:
+      guard let owner else {
         throw bridgeError("unsupported_subscription", "subscription kind is not supported")
       }
+      let startTask = Task { @MainActor [weak self] () throws -> SubscriptionConsumer in
+        guard let self else { throw CancellationError() }
+        try Task.checkCancellation()
+        return try await self.prepareSubscription(subscriptionId, request: request)
+      }
+      startingSubscriptions[subscriptionId] = StartingSubscription(owner: owner, task: startTask)
+      let consume = try await startTask.value
+      guard !startTask.isCancelled else {
+        if detached || destroying {
+          throw bridgeError("engine_detached", "engine is detached")
+        }
+        throw bridgeError("cancelled", "subscription start was cancelled")
+      }
+      guard startingSubscriptions.removeValue(forKey: subscriptionId) != nil else {
+        throw bridgeError("engine_detached", "engine is detached")
+      }
+      try install(subscriptionId, owner: owner, consume: consume)
     } catch {
       if didReserve {
+        startingSubscriptions.removeValue(forKey: subscriptionId)
         startingSubscriptionIDs.remove(subscriptionId)
         finishIdentifier(subscriptionId)
         if let category = owner?.category {
@@ -916,13 +879,45 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
           )
         }
       }
-      throw BotaAppleMapper.pigeonError(mapLeaseError(error))
+      let mapped =
+        detached || destroying
+        ? bridgeError("engine_detached", "engine is detached")
+        : mapLeaseError(error)
+      throw BotaAppleMapper.pigeonError(mapped)
     }
   }
 
   func cancelSubscription(subscriptionId: String) async throws {
     do {
       try validateID(subscriptionId)
+      if let starting = startingSubscriptions[subscriptionId] {
+        if let category = starting.owner.category {
+          try await leaseCoordinator.cancelOperation(
+            engineID: engineID,
+            category: category
+          ) { [weak self] in
+            guard let self else { return }
+            starting.task.cancel()
+            _ = await starting.task.result
+            var stopError: Error?
+            do {
+              try await self.stop(starting.owner)
+            } catch {
+              stopError = error
+            }
+            if let stopError { throw stopError }
+          }
+          await leaseCoordinator.finishOperation(
+            engineID: engineID,
+            category: category,
+            operationID: subscriptionId
+          )
+        } else {
+          starting.task.cancel()
+          _ = await starting.task.result
+        }
+        return
+      }
       guard let subscription = subscriptions.removeValue(forKey: subscriptionId) else {
         throw bridgeError("subscription_not_found", "subscription is not active")
       }
@@ -1096,6 +1091,60 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
   private func reserveSubscription(_ id: String) throws {
     try beginIdentifier(id, requiresConfiguration: true)
     startingSubscriptionIDs.insert(id)
+  }
+
+  private func prepareSubscription(
+    _ id: String,
+    request: BotaSubscriptionRequestMessage
+  ) async throws -> SubscriptionConsumer {
+    switch request {
+    case let request as BotaScanSubscriptionMessage:
+      let stream = try await client.scanStream(
+        timeoutMilliseconds: BotaAppleMapper.uint64(request.timeoutMillis),
+        allowDuplicates: request.allowDuplicates
+      )
+      return { await self.consumeScan(id, stream: stream) }
+    case is BotaConnectionSubscriptionMessage:
+      let stream = await client.connectionStream()
+      return { await self.consumeConnection(id, stream: stream) }
+    case is BotaDeviceStatusSubscriptionMessage:
+      let stream = try await client.deviceStatusStream()
+      return { await self.consumeStatus(id, stream: stream) }
+    case let request as BotaRecordingStateSubscriptionMessage:
+      let stream = try await client.recordingStateStream(try device(request.device))
+      return { await self.consumeRecordingState(id, stream: stream) }
+    case let request as BotaRecordingSyncSubscriptionMessage:
+      let stream = try await client.recordingSyncStream(
+        try device(request.device),
+        recording: try BotaAppleMapper.recording(request.recording),
+        sinkID: request.sinkId,
+        confirmOnCompletion: request.confirmOnCompletion
+      )
+      return { await self.consumeRecordingSync(id, stream: stream) }
+    case let request as BotaUploadOwnershipSubscriptionMessage:
+      let stream = try await client.uploadOwnershipStream(
+        try device(request.device),
+        recordingUUID: request.recordingId,
+        uploadID: request.uploadId,
+        destinationID: request.destinationId
+      )
+      return { await self.consumeUploadOwnership(id, stream: stream) }
+    case let request as BotaFirmwareUpdateSubscriptionMessage:
+      try requireCallback(\.hasFirmwareCallback, name: "firmware")
+      let stream = try await client.firmwareStream(
+        try device(request.device),
+        image: try await firmwareImage(request.image)
+      )
+      return { await self.consumeFirmware(id, stream: stream) }
+    case let request as BotaLogSubscriptionMessage:
+      let stream = try await client.logStream(try device(request.device))
+      return { await self.consumeLogs(id, stream: stream) }
+    case let request as BotaWifiStatusSubscriptionMessage:
+      let stream = try await client.wifiStatusStream(try device(request.device))
+      return { await self.consumeWifi(id, stream: stream) }
+    default:
+      throw bridgeError("unsupported_subscription", "subscription kind is not supported")
+    }
   }
 
   private func install(
@@ -1299,23 +1348,36 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     await Task.yield()
 
     let operations = inFlightOperations
+    let starting = startingSubscriptions
     let activeSubscriptions = subscriptions
     subscriptions.removeAll()
+    let startingByCategory = Dictionary(
+      uniqueKeysWithValues: starting.values.compactMap { subscription in
+        subscription.owner.category.map { ($0, subscription) }
+      })
     let ownedOperations = await leaseCoordinator.beginCancellingOperations(
       engineID: engineID
     ) { [weak self] category in
       guard let self else { return }
+      if let subscription = startingByCategory[category] {
+        subscription.task.cancel()
+        _ = await subscription.task.result
+      }
       try await self.stop(category)
     }
     for operation in operations.values { operation.task.cancel() }
+    for subscription in starting.values where subscription.owner.category == nil {
+      subscription.task.cancel()
+    }
     for subscription in activeSubscriptions.values { subscription.task.cancel() }
     await leaseCoordinator.waitForOperationCancellations(
       engineID: engineID,
       operations: ownedOperations
     )
     for operation in operations.values { _ = await operation.task.value }
+    for subscription in starting.values { _ = await subscription.task.result }
     for subscription in activeSubscriptions.values { await subscription.task.value }
-    let terminalOperationIDs = Set(operations.keys)
+    let terminalOperationIDs = Set(operations.keys).union(starting.keys)
     await leaseCoordinator.finishCancelledOperations(
       engineID: engineID,
       operations: ownedOperations,
@@ -1326,6 +1388,7 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
       finishIdentifier(id)
     }
     for id in activeSubscriptions.keys { finishIdentifier(id) }
+    startingSubscriptions.removeAll()
     for id in startingSubscriptionIDs { finishIdentifier(id) }
     startingSubscriptionIDs.removeAll()
     connectedDevices.removeAll()
