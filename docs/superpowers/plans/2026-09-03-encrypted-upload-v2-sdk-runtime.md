@@ -143,26 +143,30 @@ logs and persistent queue serialization.
 - [x] Keep the coordinator disconnected from `WorkflowEngine`, ABI, native
   hosts, and released managers until Task 2B and Task 3 are complete.
 
-### Task 2B: Integrate the coordinator with the workflow engine and traces
+### Task 2B: Integrate the coordinator with the workflow engine
 
 **Files:**
 
 - Create: `core/device-sdk-core/tests/encrypted_upload_v2_workflow.rs`
-- Create: `protocol/workflows/encrypted-upload-v2.json`
 - Modify: `core/device-sdk-core/src/engine/{command,effect,event,output,runtime}.rs`
-- Modify: `protocol/workflows/schema.json`
 
-- [ ] Test the correlated engine adapter for fresh transfer, window repair,
+- [x] Test the correlated engine adapter for fresh transfer, window repair,
   proven-checkpoint resume, rejected
   resume, staging/finalization/receipt failure, cancellation, mixed profile,
   stale callback, second owner, and no-downgrade behavior.
-- [ ] Add one v2 command carrying only profile/policy, recording/session IDs,
+- [x] Add one v2 command carrying only profile/policy, recording/session IDs,
   negotiated bounds, and opaque host registration IDs.
-- [ ] Model native sink/staging and application-material work as correlated host
+- [x] Model native sink/staging and application-material work as correlated host
   effects; DATA and cryptographic document bytes never enter checkpoints or
   public notifications.
-- [ ] Emit terminal staging evidence before waiting for the application-owned
+- [x] Emit terminal staging evidence before waiting for the application-owned
   finalization result and receipt.
+
+The existing `protocol/workflows/schema.json` is deliberately tied to the
+released `@bota.dev/react-native-sdk` `0.0.65` baseline. A v2 cross-SDK trace
+would falsely claim that baseline implements this workflow, so the v2 trace is
+deferred to Task 8 after the maintenance SDK has a real source test and both
+runtimes can consume the same trace.
 
 ### Task 3: Extend frozen ABI v1 additively
 
@@ -173,10 +177,11 @@ logs and persistent queue serialization.
 - Modify: `bindings/device-sdk-ffi/tests/**`
 - Modify: native ABI evidence and digest records
 
-- [ ] Allocate additive command, effect, event, notification, field, and error
-  constants without changing any existing numeric value.
-- [ ] Reject duplicate/unknown fields and sensitive bytes at the ABI boundary.
-- [ ] Prove C and Swift smoke consumers compile and existing ABI fixtures remain
+- [x] Allocate additive command, effect, event, notification, and field
+  constants without changing any existing numeric value; reuse the existing
+  stable error vocabulary.
+- [x] Reject duplicate/unknown fields and sensitive bytes at the ABI boundary.
+- [x] Prove C and Swift smoke consumers compile and existing ABI fixtures remain
   byte-identical.
 
 ### Task 4: Implement Apple native transfer, staging, and recovery

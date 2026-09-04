@@ -28,6 +28,18 @@ fn packet_kind_ranges_and_first_command_values_are_stable() {
 
 #[test]
 fn encrypted_upload_v2_contract_inspection_allocations_are_additive() {
+    assert_eq!(packet_kind::COMMAND_TRANSFER_ENCRYPTED_RECORDING, 0x010c);
+    assert_eq!(
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_CHECKPOINT_LOADED,
+        0x022b
+    );
+    assert_eq!(packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_FAILED, 0x0238);
+    assert_eq!(
+        packet_kind::HOST_EFFECT_ENCRYPTED_UPLOAD_V2_LOAD_CHECKPOINT,
+        0x0342
+    );
+    assert_eq!(packet_kind::HOST_EFFECT_ENCRYPTED_UPLOAD_V2_ABORT, 0x034d);
+    assert_eq!(packet_kind::NOTIFICATION_ENCRYPTED_UPLOAD_V2_STAGED, 0x0410);
     assert_eq!(
         packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_CAPABILITY,
         0x0520
@@ -82,14 +94,25 @@ fn encrypted_upload_v2_contract_inspection_allocations_are_additive() {
         field_id::DURABLE_CIPHERTEXT_BYTES,
     ];
     assert_eq!(fields, std::array::from_fn(|index| 127 + index as u32));
+    assert_eq!(field_id::OWNER_REVISION, 165);
+    assert_eq!(field_id::UPLOAD_PROFILE, 166);
+    assert_eq!(field_id::UPLOAD_SECURITY_POLICY, 167);
+    assert_eq!(field_id::MANIFEST_LENGTH, 168);
+    assert_eq!(field_id::MAX_DATA_PAYLOAD_BYTES, 169);
+    assert_eq!(field_id::MAX_WINDOW_PACKETS, 170);
 
     let header = include_str!("../include/bota_device_sdk.h");
     for expected in [
+        "BOTA_DEVICE_SDK_V1_COMMAND_TRANSFER_ENCRYPTED_RECORDING = 0x010C",
+        "BOTA_DEVICE_SDK_V1_HOST_EVENT_ENCRYPTED_UPLOAD_V2_FAILED = 0x0238",
+        "BOTA_DEVICE_SDK_V1_HOST_EFFECT_ENCRYPTED_UPLOAD_V2_ABORT = 0x034D",
+        "BOTA_DEVICE_SDK_V1_NOTIFICATION_ENCRYPTED_UPLOAD_V2_STAGED = 0x0410",
         "BOTA_DEVICE_SDK_V1_PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_CAPABILITY = 0x0520",
         "BOTA_DEVICE_SDK_V1_PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB = 0x0521",
         "BOTA_DEVICE_SDK_V1_PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_TRANSFER_OR_STATUS = 0x0522",
         "BOTA_DEVICE_SDK_V1_FIELD_MESSAGE_TYPE = 127",
         "BOTA_DEVICE_SDK_V1_FIELD_DURABLE_CIPHERTEXT_BYTES = 164",
+        "BOTA_DEVICE_SDK_V1_FIELD_MAX_WINDOW_PACKETS = 170",
     ] {
         assert!(
             header.contains(expected),

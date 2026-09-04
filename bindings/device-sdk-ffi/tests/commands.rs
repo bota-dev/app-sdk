@@ -57,6 +57,28 @@ fn every_workflow_command_starts_through_the_native_entry_point() {
             .with_text(field_id::RECORDING_UUID, RECORDING)
             .with_text(field_id::SINK_ID, "sink-1")
             .with_u64(field_id::TOTAL_UNITS, 128),
+        serial_command(packet_kind::COMMAND_TRANSFER_ENCRYPTED_RECORDING)
+            .with_text(field_id::RECORDING_UUID, RECORDING)
+            .with_u64(field_id::RECORDING_GENERATION, 9)
+            .with_u64(field_id::STORAGE_FORMAT, 3)
+            .with_bytes(field_id::UPLOAD_SESSION_UUID, vec![0x11; 16])
+            .with_u64(field_id::OWNER_REVISION, 3)
+            .with_u64(field_id::TRANSPORT_SESSION_ID, 0x1122_3344_5566)
+            .with_text(field_id::MATERIAL_ID, "v2-material-1")
+            .with_text(field_id::SINK_ID, "v2-sink-1")
+            .with_u64(field_id::UPLOAD_PROFILE, 3)
+            .with_u64(field_id::UPLOAD_SECURITY_POLICY, 2)
+            .with_u64(field_id::CAPABILITY_FLAGS, 0x7f)
+            .with_u64(field_id::MAX_SIGNED_BLOB_BYTES, 1024)
+            .with_u64(field_id::MAX_MANIFEST_BYTES, 1024)
+            .with_u64(field_id::MAX_DATA_PAYLOAD_BYTES, 244)
+            .with_u64(field_id::MAX_WINDOW_PACKETS, 16)
+            .with_u64(field_id::CHECKPOINT_INTERVAL, 8)
+            .with_u64(field_id::MAX_MISSING_SEQUENCES, 16)
+            .with_u64(field_id::WINDOW_PACKETS, 16)
+            .with_u64(field_id::DATA_PAYLOAD_BYTES, 244)
+            .with_u64(field_id::CIPHERTEXT_LENGTH, 330)
+            .with_bytes(field_id::CIPHERTEXT_SHA256, vec![0x33; 32]),
         serial_command(packet_kind::COMMAND_UPLOAD_RECORDING)
             .with_text(field_id::RECORDING_UUID, RECORDING)
             .with_text(field_id::UPLOAD_ID, "upload-1")
@@ -129,6 +151,8 @@ fn invalid_command_inputs_fail_without_bypassing_core_validation() {
     let partial_reset_result = serial_command(packet_kind::COMMAND_RESUME_FACTORY_RESET)
         .with_text(field_id::COMMAND_ID, "reset-1")
         .with_u64(field_id::RESULT_CODE, 0);
+    let v2_sensitive_payload = serial_command(packet_kind::COMMAND_TRANSFER_ENCRYPTED_RECORDING)
+        .with_bytes(field_id::PAYLOAD, vec![0x41; 32]);
 
     for command in [
         invalid_serial,
@@ -140,6 +164,7 @@ fn invalid_command_inputs_fail_without_bypassing_core_validation() {
         mistyped_field,
         unknown_field,
         partial_reset_result,
+        v2_sensitive_payload,
     ] {
         assert_eq!(
             start(&command, all_capabilities()),

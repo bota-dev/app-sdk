@@ -4,11 +4,15 @@ use bota_device_sdk_core::{
         HostEventKind, RequestId, WorkflowEngine, WorkflowNotification, WorkflowStatus,
     },
     error::ErrorCode,
+    generated::protocol,
     model::{
         DeviceCandidate, DeviceSerialNumber, FactoryResetCommandId, FactoryResetResult,
-        FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId, RecordingUuid,
-        UploadDestinationId, UploadSessionId,
+        FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId, RecordingUploadProfile,
+        RecordingUuid, UploadDestinationId, UploadProfileSelection, UploadSecurityPolicy,
+        UploadSessionId,
     },
+    protocol::EncryptedUploadV2Capabilities,
+    workflow::EncryptedUploadV2BatchRequest,
 };
 
 const CANCELLATION: CancellationId = CancellationId::from_bytes([0x31; 16]);
@@ -76,6 +80,39 @@ fn commands() -> Vec<(&'static str, Command)> {
                 sink_id: RecordingSinkId::new("recording-sink-1").unwrap(),
                 total_units: 1_024,
                 confirm_on_completion: true,
+            },
+        ),
+        (
+            "encrypted upload v2 transfer",
+            Command::TransferEncryptedRecording {
+                request: EncryptedUploadV2BatchRequest {
+                    device: device(),
+                    recording: RecordingUuid::from_bytes([0x33; 16]),
+                    recording_generation: 9,
+                    storage_format: protocol::STORAGE_FORMAT_BOTA_ENC_V2,
+                    upload_session_uuid: [0x44; 16],
+                    owner_revision: 3,
+                    transport_session_id: 0x1122_3344_5566,
+                    material_id: HostMaterialId::new("v2-material-1").unwrap(),
+                    sink_id: RecordingSinkId::new("v2-sink-1").unwrap(),
+                    selection: UploadProfileSelection {
+                        policy: UploadSecurityPolicy::V2Preferred,
+                        profile: RecordingUploadProfile::EncryptedUploadV2,
+                    },
+                    capabilities: EncryptedUploadV2Capabilities {
+                        flags: 0x7f,
+                        maximum_signed_blob_bytes: 1024,
+                        maximum_manifest_bytes: 1024,
+                        maximum_data_payload_bytes: 244,
+                        maximum_window_packets: 16,
+                        durable_checkpoint_interval_blocks: 8,
+                        maximum_missing_sequences: 16,
+                    },
+                    window_packets: 16,
+                    data_payload_bytes: 244,
+                    ciphertext_length: 330,
+                    ciphertext_sha256: [0x55; 32],
+                },
             },
         ),
         (

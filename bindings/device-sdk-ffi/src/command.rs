@@ -7,9 +7,12 @@ use bota_device_sdk_core::{
     error::{DeviceSdkError, ErrorCode, Operation},
     model::{
         DeviceCandidate, DeviceSerialNumber, FactoryResetCommandId, FactoryResetResult,
-        FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId, RecordingUuid,
-        UploadDestinationId, UploadSessionId,
+        FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId, RecordingUploadProfile,
+        RecordingUuid, UploadDestinationId, UploadProfileSelection, UploadSecurityPolicy,
+        UploadSessionId,
     },
+    protocol::EncryptedUploadV2Capabilities,
+    workflow::EncryptedUploadV2BatchRequest,
 };
 use std::{collections::BTreeSet, str::FromStr};
 
@@ -170,6 +173,85 @@ pub(crate) unsafe fn command_from_packet(
                     .unwrap_or(true),
             })
         }
+        packet_kind::COMMAND_TRANSFER_ENCRYPTED_RECORDING => {
+            fields.validate_allowed(&[
+                field_id::SERIAL_NUMBER,
+                field_id::RECORDING_UUID,
+                field_id::RECORDING_GENERATION,
+                field_id::STORAGE_FORMAT,
+                field_id::UPLOAD_SESSION_UUID,
+                field_id::OWNER_REVISION,
+                field_id::TRANSPORT_SESSION_ID,
+                field_id::MATERIAL_ID,
+                field_id::SINK_ID,
+                field_id::UPLOAD_PROFILE,
+                field_id::UPLOAD_SECURITY_POLICY,
+                field_id::CAPABILITY_FLAGS,
+                field_id::MAX_SIGNED_BLOB_BYTES,
+                field_id::MAX_MANIFEST_BYTES,
+                field_id::MAX_DATA_PAYLOAD_BYTES,
+                field_id::MAX_WINDOW_PACKETS,
+                field_id::DATA_PAYLOAD_BYTES,
+                field_id::WINDOW_PACKETS,
+                field_id::CHECKPOINT_INTERVAL,
+                field_id::MAX_MISSING_SEQUENCES,
+                field_id::CIPHERTEXT_LENGTH,
+                field_id::CIPHERTEXT_SHA256,
+            ])?;
+            Ok(Command::TransferEncryptedRecording {
+                request: EncryptedUploadV2BatchRequest {
+                    device: serial()?,
+                    recording: RecordingUuid::from_str(
+                        &fields.required_text(field_id::RECORDING_UUID)?,
+                    )?,
+                    recording_generation: required_u32(&fields, field_id::RECORDING_GENERATION)?,
+                    storage_format: required_u8(&fields, field_id::STORAGE_FORMAT)?,
+                    upload_session_uuid: fields
+                        .required_fixed_bytes(field_id::UPLOAD_SESSION_UUID)?,
+                    owner_revision: required_u32(&fields, field_id::OWNER_REVISION)?,
+                    transport_session_id: fields.required_u64(field_id::TRANSPORT_SESSION_ID)?,
+                    material_id: HostMaterialId::new(fields.required_text(field_id::MATERIAL_ID)?)?,
+                    sink_id: RecordingSinkId::new(fields.required_text(field_id::SINK_ID)?)?,
+                    selection: UploadProfileSelection {
+                        profile: upload_profile(fields.required_u64(field_id::UPLOAD_PROFILE)?)?,
+                        policy: upload_policy(
+                            fields.required_u64(field_id::UPLOAD_SECURITY_POLICY)?,
+                        )?,
+                    },
+                    capabilities: EncryptedUploadV2Capabilities {
+                        flags: required_u32(&fields, field_id::CAPABILITY_FLAGS)?,
+                        maximum_signed_blob_bytes: required_u16(
+                            &fields,
+                            field_id::MAX_SIGNED_BLOB_BYTES,
+                        )?,
+                        maximum_manifest_bytes: required_u16(
+                            &fields,
+                            field_id::MAX_MANIFEST_BYTES,
+                        )?,
+                        maximum_data_payload_bytes: required_u16(
+                            &fields,
+                            field_id::MAX_DATA_PAYLOAD_BYTES,
+                        )?,
+                        maximum_window_packets: required_u16(
+                            &fields,
+                            field_id::MAX_WINDOW_PACKETS,
+                        )?,
+                        durable_checkpoint_interval_blocks: required_u32(
+                            &fields,
+                            field_id::CHECKPOINT_INTERVAL,
+                        )?,
+                        maximum_missing_sequences: required_u16(
+                            &fields,
+                            field_id::MAX_MISSING_SEQUENCES,
+                        )?,
+                    },
+                    window_packets: required_u16(&fields, field_id::WINDOW_PACKETS)?,
+                    data_payload_bytes: required_u16(&fields, field_id::DATA_PAYLOAD_BYTES)?,
+                    ciphertext_length: fields.required_u64(field_id::CIPHERTEXT_LENGTH)?,
+                    ciphertext_sha256: fields.required_fixed_bytes(field_id::CIPHERTEXT_SHA256)?,
+                },
+            })
+        }
         packet_kind::COMMAND_STREAM_RECORDING => {
             fields.validate_allowed(&[
                 field_id::SERIAL_NUMBER,
@@ -301,6 +383,45 @@ pub(crate) unsafe fn command_from_packet(
     }
 }
 
+fn required_u8(fields: &PacketFields<'_>, id: u32) -> Result<u8, DeviceSdkError> {
+    fields
+        .required_u64(id)?
+        .try_into()
+        .map_err(|_| invalid(format!("field {id} does not fit in 8 bits")))
+}
+
+fn required_u16(fields: &PacketFields<'_>, id: u32) -> Result<u16, DeviceSdkError> {
+    fields
+        .required_u64(id)?
+        .try_into()
+        .map_err(|_| invalid(format!("field {id} does not fit in 16 bits")))
+}
+
+fn required_u32(fields: &PacketFields<'_>, id: u32) -> Result<u32, DeviceSdkError> {
+    fields
+        .required_u64(id)?
+        .try_into()
+        .map_err(|_| invalid(format!("field {id} does not fit in 32 bits")))
+}
+
+fn upload_profile(value: u64) -> Result<RecordingUploadProfile, DeviceSdkError> {
+    match value {
+        1 => Ok(RecordingUploadProfile::LegacyPlainV1),
+        2 => Ok(RecordingUploadProfile::LegacyP10Relay),
+        3 => Ok(RecordingUploadProfile::EncryptedUploadV2),
+        _ => Err(invalid("upload profile is invalid")),
+    }
+}
+
+fn upload_policy(value: u64) -> Result<UploadSecurityPolicy, DeviceSdkError> {
+    match value {
+        1 => Ok(UploadSecurityPolicy::LegacyAllowed),
+        2 => Ok(UploadSecurityPolicy::V2Preferred),
+        3 => Ok(UploadSecurityPolicy::V2Required),
+        _ => Err(invalid("upload security policy is invalid")),
+    }
+}
+
 pub(crate) struct PacketFields<'a> {
     fields: &'a [BotaDeviceSdkFieldViewV1],
 }
@@ -397,6 +518,20 @@ impl<'a> PacketFields<'a> {
     pub(crate) fn required_bytes(&self, id: u32) -> Result<Vec<u8>, DeviceSdkError> {
         self.optional_bytes(id)?
             .ok_or_else(|| missing(id, field_type::BYTES))
+    }
+
+    pub(crate) fn required_fixed_bytes<const N: usize>(
+        &self,
+        id: u32,
+    ) -> Result<[u8; N], DeviceSdkError> {
+        self.required_bytes(id)?
+            .try_into()
+            .map_err(|value: Vec<u8>| {
+                invalid(format!(
+                    "field {id} must contain exactly {N} bytes, got {}",
+                    value.len()
+                ))
+            })
     }
 
     pub(crate) fn optional_bytes(&self, id: u32) -> Result<Option<Vec<u8>>, DeviceSdkError> {

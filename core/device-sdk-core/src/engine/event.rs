@@ -1,5 +1,6 @@
 use crate::engine::{CancellationId, RequestId, WorkflowCheckpoint};
 use crate::model::{DeviceCandidate, ProvisioningMaterial};
+use crate::workflow::{EncryptedUploadV2Checkpoint, EncryptedUploadV2TransferEvidence};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -76,6 +77,7 @@ pub enum HostEventKind {
         key: String,
     },
     Network(NetworkEvent),
+    EncryptedUploadV2(EncryptedUploadV2HostEvent),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -132,5 +134,34 @@ pub enum NetworkEvent {
     Failed {
         transfer_id: u64,
         status_code: Option<u16>,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum EncryptedUploadV2HostEvent {
+    CheckpointLoaded(Option<EncryptedUploadV2Checkpoint>),
+    SinkTruncated,
+    SessionPrepared {
+        authorization_sha256: [u8; 32],
+    },
+    TransferStarted,
+    ResumeRejected,
+    WindowStaged {
+        checkpoint: EncryptedUploadV2Checkpoint,
+        missing_sequences: Vec<u32>,
+    },
+    CheckpointSaved,
+    WindowAcknowledged {
+        checkpoint: EncryptedUploadV2Checkpoint,
+    },
+    TransferCompleted(EncryptedUploadV2TransferEvidence),
+    ArtifactsStaged,
+    CompletionReceiptAccepted {
+        receipt_sha256: [u8; 32],
+    },
+    RecordingConfirmed,
+    MixedProfile,
+    Failed {
+        error: crate::error::DeviceSdkError,
     },
 }

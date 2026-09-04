@@ -6,6 +6,7 @@ use crate::{
         FirmwareImage, HostMaterialId, ReconnectHint, RecordingSinkId, RecordingUuid,
         UploadDestinationId, UploadSessionId,
     },
+    workflow::EncryptedUploadV2BatchRequest,
 };
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +37,9 @@ pub enum Command {
         sink_id: RecordingSinkId,
         total_units: u64,
         confirm_on_completion: bool,
+    },
+    TransferEncryptedRecording {
+        request: EncryptedUploadV2BatchRequest,
     },
     StreamRecording {
         device: DeviceSerialNumber,
@@ -102,9 +106,9 @@ impl Command {
             Self::Connect { .. } | Self::ConnectSelected { .. } => Operation::Connect,
             Self::Reconnect { .. } => Operation::Reconnect,
             Self::Provision { .. } => Operation::Provision,
-            Self::TransferRecording { .. } | Self::StreamRecording { .. } => {
-                Operation::TransferRecording
-            }
+            Self::TransferRecording { .. }
+            | Self::TransferEncryptedRecording { .. }
+            | Self::StreamRecording { .. } => Operation::TransferRecording,
             Self::UploadRecording { .. } => Operation::Upload,
             Self::UpdateFirmware { .. } => Operation::UpdateFirmware,
             Self::ReadDeviceLogs { .. } => Operation::ReadDeviceLogs,
@@ -135,6 +139,14 @@ impl Command {
                 Capability::Progress,
                 Capability::RecordingSink,
                 Capability::Timer,
+            ],
+            Self::TransferEncryptedRecording { .. } => &[
+                Capability::Ble,
+                Capability::Persistence,
+                Capability::Progress,
+                Capability::HostMaterial,
+                Capability::RecordingSink,
+                Capability::NetworkTransfer,
             ],
             Self::StreamRecording { .. } => &[Capability::Ble, Capability::RecordingSink],
             Self::UploadRecording { .. } => {

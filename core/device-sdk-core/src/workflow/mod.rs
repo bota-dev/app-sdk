@@ -12,6 +12,7 @@ mod upload_handoff;
 pub(crate) use connection::ConnectionWorkflow;
 pub(crate) use device_logs::DeviceLogsWorkflow;
 pub(crate) use discovery::DiscoveryWorkflow;
+pub(crate) use encrypted_upload_v2::EncryptedUploadV2Workflow;
 pub use encrypted_upload_v2::{
     EncryptedUploadV2Action, EncryptedUploadV2BatchCoordinator, EncryptedUploadV2BatchEvent,
     EncryptedUploadV2BatchRequest, EncryptedUploadV2BatchStatus, EncryptedUploadV2Checkpoint,

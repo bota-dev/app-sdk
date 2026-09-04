@@ -2,11 +2,12 @@ use crate::{
     error::{DeviceSdkError, ErrorCode, Operation},
     generated::protocol,
 };
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::cursor::Cursor;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EncryptedUploadV2Capabilities {
     pub flags: u32,
     pub maximum_signed_blob_bytes: u16,

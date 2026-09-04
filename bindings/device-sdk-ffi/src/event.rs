@@ -2,9 +2,12 @@ use crate::{
     ABI_VERSION, BotaDeviceSdkPacketViewV1, command::PacketFields, field_id, output, packet_kind,
 };
 use bota_device_sdk_core::{
-    engine::{BleEvent, HostEvent, HostEventKind, NetworkEvent, RequestId},
+    engine::{
+        BleEvent, EncryptedUploadV2HostEvent, HostEvent, HostEventKind, NetworkEvent, RequestId,
+    },
     error::{DeviceSdkError, ErrorCode, Operation},
     model::{DeviceCandidate, ProvisioningMaterial},
+    workflow::EncryptedUploadV2TransferEvidence,
 };
 
 pub(crate) unsafe fn host_event_from_packet(
@@ -275,6 +278,106 @@ pub(crate) unsafe fn host_event_from_packet(
                 status_code: optional_u16(&fields, field_id::STATUS_CODE)?,
             })
         }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_CHECKPOINT_LOADED => {
+            fields.validate_allowed(&[field_id::CHECKPOINT])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::CheckpointLoaded(
+                fields
+                    .optional_bytes(field_id::CHECKPOINT)?
+                    .as_deref()
+                    .map(output::decode_encrypted_upload_v2_checkpoint)
+                    .transpose()?,
+            ))
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_SINK_TRUNCATED => {
+            fields.validate_allowed(&[])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::SinkTruncated)
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_SESSION_PREPARED => {
+            fields.validate_allowed(&[field_id::AUTHORIZATION_SHA256])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::SessionPrepared {
+                authorization_sha256: fields
+                    .required_fixed_bytes(field_id::AUTHORIZATION_SHA256)?,
+            })
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_TRANSFER_STARTED => {
+            fields.validate_allowed(&[])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::TransferStarted)
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_RESUME_REJECTED => {
+            fields.validate_allowed(&[])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::ResumeRejected)
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_WINDOW_STAGED => {
+            fields.validate_allowed(&[field_id::CHECKPOINT, field_id::MISSING_SEQUENCE])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::WindowStaged {
+                checkpoint: output::decode_encrypted_upload_v2_checkpoint(
+                    &fields.required_bytes(field_id::CHECKPOINT)?,
+                )?,
+                missing_sequences: fields
+                    .optional_bytes(field_id::MISSING_SEQUENCE)?
+                    .map(|bytes| decode_missing_sequences(&bytes))
+                    .transpose()?
+                    .unwrap_or_default(),
+            })
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_CHECKPOINT_SAVED => {
+            fields.validate_allowed(&[])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::CheckpointSaved)
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_WINDOW_ACKNOWLEDGED => {
+            fields.validate_allowed(&[field_id::CHECKPOINT])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::WindowAcknowledged {
+                checkpoint: output::decode_encrypted_upload_v2_checkpoint(
+                    &fields.required_bytes(field_id::CHECKPOINT)?,
+                )?,
+            })
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_TRANSFER_COMPLETED => {
+            fields.validate_allowed(&encrypted_upload_v2_evidence_field_ids())?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::TransferCompleted(
+                encrypted_upload_v2_evidence(&fields)?,
+            ))
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_ARTIFACTS_STAGED => {
+            fields.validate_allowed(&[])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::ArtifactsStaged)
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_RECEIPT_ACCEPTED => {
+            fields.validate_allowed(&[field_id::RECEIPT_SHA256])?;
+            HostEventKind::EncryptedUploadV2(
+                EncryptedUploadV2HostEvent::CompletionReceiptAccepted {
+                    receipt_sha256: fields.required_fixed_bytes(field_id::RECEIPT_SHA256)?,
+                },
+            )
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_RECORDING_CONFIRMED => {
+            fields.validate_allowed(&[])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::RecordingConfirmed)
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_MIXED_PROFILE => {
+            fields.validate_allowed(&[])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::MixedProfile)
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_FAILED => {
+            fields.validate_allowed(&[
+                field_id::ERROR_CODE,
+                field_id::RETRYABLE,
+                field_id::PROTOCOL_STATUS,
+                field_id::ERROR_DETAIL,
+            ])?;
+            let mut error = DeviceSdkError::new(
+                error_code(fields.required_u64(field_id::ERROR_CODE)?)?,
+                Operation::TransferRecording,
+                fields.required_bool(field_id::RETRYABLE)?,
+            );
+            if let Some(status) = optional_u16(&fields, field_id::PROTOCOL_STATUS)? {
+                error = error.with_protocol_status(status);
+            }
+            if let Some(detail) = fields.optional_text(field_id::ERROR_DETAIL)? {
+                error = error.with_detail(detail);
+            }
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::Failed { error })
+        }
         _ => {
             return Err(
                 DeviceSdkError::new(ErrorCode::UnknownPacket, Operation::Decode, false)
@@ -313,6 +416,74 @@ fn optional_u16(fields: &PacketFields<'_>, id: u32) -> Result<Option<u16>, Devic
                 .map_err(|_| invalid(format!("field {id} does not fit in 16 bits")))
         })
         .transpose()
+}
+
+const fn encrypted_upload_v2_evidence_field_ids() -> [u32; 5] {
+    [
+        field_id::CIPHERTEXT_LENGTH,
+        field_id::CIPHERTEXT_SHA256,
+        field_id::MANIFEST_LENGTH,
+        field_id::MANIFEST_SHA256,
+        field_id::BLOCK_COUNT,
+    ]
+}
+
+fn encrypted_upload_v2_evidence(
+    fields: &PacketFields<'_>,
+) -> Result<EncryptedUploadV2TransferEvidence, DeviceSdkError> {
+    Ok(EncryptedUploadV2TransferEvidence {
+        ciphertext_length: fields.required_u64(field_id::CIPHERTEXT_LENGTH)?,
+        ciphertext_sha256: fields.required_fixed_bytes(field_id::CIPHERTEXT_SHA256)?,
+        manifest_length: fields
+            .required_u64(field_id::MANIFEST_LENGTH)?
+            .try_into()
+            .map_err(|_| invalid("manifest length does not fit in 16 bits"))?,
+        manifest_sha256: fields.required_fixed_bytes(field_id::MANIFEST_SHA256)?,
+        block_count: fields
+            .required_u64(field_id::BLOCK_COUNT)?
+            .try_into()
+            .map_err(|_| invalid("block count does not fit in 32 bits"))?,
+    })
+}
+
+fn decode_missing_sequences(bytes: &[u8]) -> Result<Vec<u32>, DeviceSdkError> {
+    let (sequences, remainder) = bytes.as_chunks::<4>();
+    if !remainder.is_empty() {
+        return Err(invalid(
+            "missing-sequence byte field length must be a multiple of four",
+        ));
+    }
+    Ok(sequences
+        .iter()
+        .map(|sequence| u32::from_le_bytes(*sequence))
+        .collect())
+}
+
+fn error_code(value: u64) -> Result<ErrorCode, DeviceSdkError> {
+    match value {
+        1 => Ok(ErrorCode::InvalidInput),
+        2 => Ok(ErrorCode::TruncatedPacket),
+        3 => Ok(ErrorCode::UnknownPacket),
+        4 => Ok(ErrorCode::PayloadTooLarge),
+        5 => Ok(ErrorCode::UnsupportedCapability),
+        6 => Ok(ErrorCode::UnsupportedOperation),
+        7 => Ok(ErrorCode::FeatureUnavailable),
+        8 => Ok(ErrorCode::OperationInProgress),
+        9 => Ok(ErrorCode::UnexpectedEvent),
+        10 => Ok(ErrorCode::DeviceNotFound),
+        11 => Ok(ErrorCode::IdentityMismatch),
+        12 => Ok(ErrorCode::ConnectionFailed),
+        13 => Ok(ErrorCode::PersistenceFailed),
+        14 => Ok(ErrorCode::NotConnected),
+        15 => Ok(ErrorCode::Timeout),
+        16 => Ok(ErrorCode::Cancelled),
+        17 => Ok(ErrorCode::ProtocolRejected),
+        18 => Ok(ErrorCode::IntegrityFailed),
+        19 => Ok(ErrorCode::UploadOwnershipUnknown),
+        20 => Ok(ErrorCode::DownloadFailed),
+        21 => Ok(ErrorCode::Internal),
+        _ => Err(invalid("error code is invalid")),
+    }
 }
 
 fn invalid(detail: impl Into<String>) -> DeviceSdkError {

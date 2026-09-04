@@ -76,6 +76,14 @@ pub enum WorkflowNotification {
         uploaded_chunks: u32,
         encrypted: bool,
     },
+    EncryptedUploadV2Staged {
+        upload_session_uuid: [u8; 16],
+        owner_revision: u32,
+        ciphertext_length: u64,
+        ciphertext_sha256: [u8; 32],
+        manifest_length: u16,
+        manifest_sha256: [u8; 32],
+    },
     Completed {
         operation: Operation,
     },

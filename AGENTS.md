@@ -54,9 +54,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - `core/device-sdk-core/src/model/upload_profile.rs` is a side-effect-free
   policy/capability validator only. Its presence does not authorize a v2 START
   or change `runtimeWorkflow`; historical P10 requires an observed header.
-- `core/device-sdk-core/src/workflow/encrypted_upload_v2.rs` currently freezes
-  byte-free target sequencing only. It is not connected to `WorkflowEngine`,
-  the ABI, native hosts, or released managers; keep runtime metadata false.
+- `core/device-sdk-core/src/workflow/encrypted_upload_v2.rs` now drives the
+  contract-only `WorkflowEngine` and additive C ABI v1 packet surface. It emits
+  byte-free native effects, versioned opaque checkpoint metadata, staging
+  evidence, and receipt-gated confirmation. Apple/Android hosts and released
+  managers still do not implement those effects; keep runtime metadata false.
 - React Native compatibility requires the frozen public API surface digest in
   addition to protocol fixtures and workflow traces. Internal legacy modules
   outside `src/index.ts` are not part of that public contract.

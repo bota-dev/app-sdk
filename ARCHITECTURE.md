@@ -131,21 +131,24 @@ own high-volume files and transfer buffers.
 
 Encrypted Upload v2 is currently a contract-only capability: the canonical
 vectors and Rust codecs exist, and Apple/Android can inspect normalized framing
-metadata internally. React Native exposes no v2 workflow or bulk bytes, and
-compatibility metadata keeps runtime support and firmware advertisement false.
+metadata internally. The Rust workflow engine and additive C ABI now also
+model v2 session ownership, durable checkpoint ordering, opaque native staging,
+and receipt-gated confirmation. No Apple/Android host executes those effects
+yet, React Native exposes no v2 workflow or bulk bytes, and compatibility
+metadata keeps runtime support and firmware advertisement false.
 The core now also exposes a side-effect-free three-profile selection validator:
 it requires every batch capability bit, usable advertised bounds, and an
 immutable recording generation in `bota_enc_v2` storage before accepting v2;
 rejects either legacy
 profile under `v2_required`; and accepts historical P10 only after its header
 was observed. This validator emits no BLE, file, network, delete, or fallback
-effect. Provider integration, transfer orchestration, staging, completion, and
-receipt-gated deletion are not implemented by released APIs. A byte-free
-batch-v2 coordinator now freezes their target ordering separately from the
-shipping `WorkflowEngine`: it persists each complete window before ACK,
+effect. Provider integration and native transfer/staging remain absent from
+released APIs. A byte-free batch-v2 coordinator now drives the shipping reducer
+and additive ABI contract: it persists each complete window before ACK,
 truncates resume state to the last proven offset, exposes staging evidence,
 and cannot emit CONFIRM until a native host reports receipt acceptance. It has
-no legacy-fallback action. Engine/ABI/native-host integration is still absent.
+no legacy-fallback action. Native-host and public-facade integration are still
+absent.
 
 The JavaScript compatibility layer now restores all 80 frozen exports. This
 includes every `0.0.65` public type, the runtime error hierarchy,
@@ -539,15 +542,18 @@ published for `v1.1.0`; the remaining planned facades are not yet published. See
 
 The shipping ABI implementation lives in `bindings/device-sdk-ffi` and exports
 only versioned `bota_device_sdk_v1_*` symbols. Its opaque engine lifecycle and
-structured error ownership are frozen. All ten core workflow commands enter
-through `bota_device_sdk_v1_engine_start`, use stable numeric field and
+structured error ownership are frozen. All released core workflow commands,
+plus the contract-only Encrypted Upload v2 command, enter through
+`bota_device_sdk_v1_engine_start`, use stable numeric field and
 capability IDs, reject unknown or duplicate fields, and retain the core's model
 validation. Every current host effect and workflow notification leaves through
 the ordered `bota_device_sdk_v1_engine_poll_output` queue as one explicitly
 freed packet. Durable checkpoints are versioned opaque bytes to native storage,
 not platform-visible reducer models. All current BLE, timer, persistence,
 host-material, recording-sink, firmware-blob, secure-storage, and network
-callbacks return through `bota_device_sdk_v1_engine_dispatch`; operation,
+callbacks return through `bota_device_sdk_v1_engine_dispatch`; the additive v2
+surface carries only identifiers, bounds, opaque registration IDs, checkpoint
+metadata, and digests—not ciphertext or cryptographic documents. Operation,
 request, and cancellation ownership are checked before the reducer advances.
 The ABI's typed protocol decode/encode entry points delegate status,
 recording-list, recording-state/result, recording-control opcodes, transfer, OTA, provisioning,

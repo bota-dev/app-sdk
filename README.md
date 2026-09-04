@@ -161,6 +161,11 @@ packets. Shared protocol decode/encode entry points cover the frozen status,
 recording list and control, transfer, OTA, provisioning, settings, and log fixtures. The Apple
 package and Android AAR are public platform distributions; the remaining
 planned native facades are not yet published.
+Encrypted Upload v2 has an additive, contract-only engine/ABI surface for
+profile-gated session coordination, opaque checkpoint metadata, staging
+evidence, and receipt-gated confirmation. Current Apple, Android, and React
+Native hosts do not execute or expose that workflow, so runtime compatibility
+metadata remains disabled.
 ABI v1 is frozen at the typed public header and verified by standalone C and
 Swift callers. Its exact ownership contract, artifact digests, packet coverage,
 and platform exclusions are recorded in
