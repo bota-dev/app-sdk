@@ -144,7 +144,10 @@ after removal or replacement. Apple also pins the separate `0406..040B`
 characteristic allocation and configures a fresh capability reader. Each
 selection read fetches `0406` again, delegates exact 24-byte decoding to Rust,
 and returns the raw-value SHA-256 plus typed bounds; it has no firmware/model
-inference or cache. The production configuration intentionally installs an
+inference or cache. The additive `0x0523` ABI encoder also delegates outbound
+signed-blob BEGIN/DATA/COMMIT/ABORT bytes to the Rust codec, keeping
+authorization and receipt framing out of platform implementations. The
+production configuration intentionally installs an
 unavailable transfer port until native BLE messaging, sink, staging, recovery,
 and manager wiring land. Android still has no equivalent host, React Native
 exposes no v2 workflow or bulk bytes, and compatibility metadata keeps runtime

@@ -14,15 +14,15 @@ use bota_device_sdk_core::{
         TransferPacket, WiFiScanUpdate, decode_encrypted_upload_v2_capabilities,
         decode_encrypted_upload_v2_signed_blob, decode_encrypted_upload_v2_status,
         decode_encrypted_upload_v2_transfer, encode_ack, encode_bounded_payload,
-        encode_connection_settings, encode_device_command, encode_firmware_data,
-        encode_firmware_upload_start, encode_firmware_upload_verify, encode_firmware_window_ack,
-        encode_ota_status, encode_provisioning_chunks, encode_recording_control_command,
-        encode_time_sync, encode_transfer_command, encode_wifi_credentials, encode_wifi_grant,
-        encode_wifi_scan_command, parse_ack, parse_connection_settings, parse_device_status,
-        parse_factory_reset_result, parse_ota_status, parse_recording_control_result,
-        parse_recording_list, parse_recording_state, parse_transfer_packet,
-        parse_trigger_upload_response, parse_wifi_config_result, parse_wifi_scan_result,
-        parse_wifi_status_info,
+        encode_connection_settings, encode_device_command, encode_encrypted_upload_v2_signed_blob,
+        encode_firmware_data, encode_firmware_upload_start, encode_firmware_upload_verify,
+        encode_firmware_window_ack, encode_ota_status, encode_provisioning_chunks,
+        encode_recording_control_command, encode_time_sync, encode_transfer_command,
+        encode_wifi_credentials, encode_wifi_grant, encode_wifi_scan_command, parse_ack,
+        parse_connection_settings, parse_device_status, parse_factory_reset_result,
+        parse_ota_status, parse_recording_control_result, parse_recording_list,
+        parse_recording_state, parse_transfer_packet, parse_trigger_upload_response,
+        parse_wifi_config_result, parse_wifi_scan_result, parse_wifi_status_info,
     },
 };
 
@@ -511,10 +511,78 @@ pub(crate) unsafe fn encode(
             };
             encode_recording_control_command(command).to_vec()
         }
+        packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB => {
+            encode_encrypted_upload_v2_signed_blob_packet(&fields)?
+        }
         _ => return Err(unknown_packet(packet.kind)),
     };
 
     Ok(BotaDeviceSdkPacketV1::new(packet.kind).with_bytes(field_id::VALUE, bytes))
+}
+
+fn encode_encrypted_upload_v2_signed_blob_packet(
+    fields: &PacketFields<'_>,
+) -> Result<Vec<u8>, DeviceSdkError> {
+    let message_type = to_u8(fields, field_id::MESSAGE_TYPE)?;
+    let kind = to_u8(fields, field_id::BLOB_KIND)?;
+    let write_id = to_u32(fields, field_id::WRITE_ID)?;
+
+    match message_type {
+        0x60 => {
+            fields.validate_allowed(&[
+                field_id::MESSAGE_TYPE,
+                field_id::BLOB_KIND,
+                field_id::WRITE_ID,
+                field_id::BODY_LENGTH,
+                field_id::CONTENT_SHA256,
+            ])?;
+            encode_encrypted_upload_v2_signed_blob(&EncryptedUploadV2SignedBlob::Begin {
+                kind,
+                write_id,
+                total_length: to_u16(fields, field_id::BODY_LENGTH)?,
+                sha256: fields.required_fixed_bytes(field_id::CONTENT_SHA256)?,
+            })
+        }
+        0x61 => {
+            fields.validate_allowed(&[
+                field_id::MESSAGE_TYPE,
+                field_id::BLOB_KIND,
+                field_id::WRITE_ID,
+                field_id::OFFSET,
+                field_id::VALUE,
+            ])?;
+            let data = fields.required_bytes(field_id::VALUE)?;
+            encode_encrypted_upload_v2_signed_blob(&EncryptedUploadV2SignedBlob::Data {
+                kind,
+                write_id,
+                offset: to_u16(fields, field_id::OFFSET)?,
+                data: &data,
+            })
+        }
+        0x62 => {
+            fields.validate_allowed(&[
+                field_id::MESSAGE_TYPE,
+                field_id::BLOB_KIND,
+                field_id::WRITE_ID,
+            ])?;
+            encode_encrypted_upload_v2_signed_blob(&EncryptedUploadV2SignedBlob::Commit {
+                kind,
+                write_id,
+            })
+        }
+        0x63 => {
+            fields.validate_allowed(&[
+                field_id::MESSAGE_TYPE,
+                field_id::BLOB_KIND,
+                field_id::WRITE_ID,
+            ])?;
+            encode_encrypted_upload_v2_signed_blob(&EncryptedUploadV2SignedBlob::Abort {
+                kind,
+                write_id,
+            })
+        }
+        _ => Err(invalid("unsupported signed blob message type for encoding")),
+    }
 }
 
 fn decode_encrypted_upload_v2_signed_blob_packet(
@@ -1064,12 +1132,78 @@ mod tests {
                 .with_i64(field_id::OFFSET, -420),
             packet(packet_kind::PROTOCOL_ENCODE_RECORDING_CONTROL_COMMAND)
                 .with_u64(field_id::COMMAND, 1),
+            packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB)
+                .with_u64(field_id::MESSAGE_TYPE, 0x62)
+                .with_u64(field_id::BLOB_KIND, 1)
+                .with_u64(field_id::WRITE_ID, 0x0102_0304),
         ];
         for (index, input) in encode_cases.iter().enumerate() {
             let output = unsafe { encode(&input.view()) };
             assert!(output.is_ok(), "encode case {index}");
             assert_eq!(output.unwrap().view().kind, input.view().kind);
         }
+    }
+
+    #[test]
+    fn encrypted_upload_v2_signed_blob_encode_uses_the_core_codec() {
+        let cases = [
+            (
+                packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB)
+                    .with_u64(field_id::MESSAGE_TYPE, 0x60)
+                    .with_u64(field_id::BLOB_KIND, 1)
+                    .with_u64(field_id::WRITE_ID, 0x0102_0304)
+                    .with_u64(field_id::BODY_LENGTH, 408)
+                    .with_bytes(field_id::CONTENT_SHA256, vec![0x11; 32]),
+                format!("60020100040302019801{}", "11".repeat(32)),
+            ),
+            (
+                packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB)
+                    .with_u64(field_id::MESSAGE_TYPE, 0x61)
+                    .with_u64(field_id::BLOB_KIND, 1)
+                    .with_u64(field_id::WRITE_ID, 0x0102_0304)
+                    .with_u64(field_id::OFFSET, 7)
+                    .with_bytes(field_id::VALUE, vec![0xaa, 0xbb]),
+                "610201000403020107000200aabb".to_owned(),
+            ),
+            (
+                packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB)
+                    .with_u64(field_id::MESSAGE_TYPE, 0x62)
+                    .with_u64(field_id::BLOB_KIND, 1)
+                    .with_u64(field_id::WRITE_ID, 0x0102_0304),
+                "6202010004030201".to_owned(),
+            ),
+            (
+                packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB)
+                    .with_u64(field_id::MESSAGE_TYPE, 0x63)
+                    .with_u64(field_id::BLOB_KIND, 2)
+                    .with_u64(field_id::WRITE_ID, 0x0102_0304),
+                "6302020004030201".to_owned(),
+            ),
+        ];
+
+        for (input, expected) in cases {
+            let output = unsafe { encode(&input.view()) }.unwrap();
+            let fields = packet_fields(&output);
+            assert_eq!(bytes(&fields, field_id::VALUE), hex(&expected));
+        }
+    }
+
+    #[test]
+    fn encrypted_upload_v2_signed_blob_encode_rejects_noncanonical_input() {
+        let wrong_length = packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB)
+            .with_u64(field_id::MESSAGE_TYPE, 0x60)
+            .with_u64(field_id::BLOB_KIND, 1)
+            .with_u64(field_id::WRITE_ID, 1)
+            .with_u64(field_id::BODY_LENGTH, 407)
+            .with_bytes(field_id::CONTENT_SHA256, vec![0x11; 32]);
+        assert!(unsafe { encode(&wrong_length.view()) }.is_err());
+
+        let unexpected = packet(packet_kind::PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB)
+            .with_u64(field_id::MESSAGE_TYPE, 0x62)
+            .with_u64(field_id::BLOB_KIND, 1)
+            .with_u64(field_id::WRITE_ID, 1)
+            .with_bytes(field_id::VALUE, vec![0xaa]);
+        assert!(unsafe { encode(&unexpected.view()) }.is_err());
     }
 
     #[test]

@@ -931,7 +931,8 @@ git log -1 --format=%H -- protocol/vectors/encrypted-upload-v2.json
 **Interfaces:**
 - Consumes: Task 2 Rust codecs and Task 3 vector bundle.
 - Produces additive ABI packet kinds `0x0520..0x0522` for capability,
-  signed-blob, and transfer/status framing inspection. Existing
+  signed-blob, and transfer/status framing inspection. Runtime work later
+  appended `0x0523` for canonical signed-blob encoding. Existing
   `0x0501..0x051F` values do not move; storage objects and signed-document
   internals are never exposed through the native SDK ABI.
 - Produces a current ABI-header digest lock for Apple artifact builds. The
@@ -948,6 +949,7 @@ Add header/ABI assertions for these exact packet kinds:
 0x0520 DECODE_ENCRYPTED_UPLOAD_V2_CAPABILITY
 0x0521 DECODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB
 0x0522 DECODE_ENCRYPTED_UPLOAD_V2_TRANSFER_OR_STATUS
+0x0523 ENCODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB (later additive runtime extension)
 ```
 
 Append field IDs `127..164` in this exact order. The originally proposed

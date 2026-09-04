@@ -66,8 +66,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   configured Apple runtime also exposes an internal
   `EncryptedUploadV2CapabilityReader`: every call reads `0406` again, decodes
   the exact 24-byte value through Rust, and returns its SHA-256 with the typed
-  bounds. It does not infer support from firmware or model strings. The
-  configured port still returns `feature_unavailable`; no Apple/Android native
+  bounds. It does not infer support from firmware or model strings. Outbound
+  authorization and receipt blob frames must use the shared Rust encoder via
+  additive ABI packet kind `0x0523`; platform facades must not reconstruct
+  those authenticated frames. The configured port still returns
+  `feature_unavailable`; no Apple/Android native
   transfer or released manager implements the workflow, so keep runtime
   metadata false.
 - React Native compatibility requires the frozen public API surface digest in

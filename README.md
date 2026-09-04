@@ -173,7 +173,10 @@ registrations, and removes material on every modeled terminal outcome. The
 Apple runtime pins the separate `0406..040B` characteristic allocation and can
 perform an uncached `0406` capability read through the shared Rust decoder,
 returning the exact bytes, digest, and typed bounds internally. The production
-transfer host still fails closed as unavailable and no public manager exposes
+ABI also provides additive packet kind `0x0523` so native facades can encode
+authenticated signed-blob frames through the shared Rust codec instead of
+reconstructing them. The production transfer host still fails closed as
+unavailable and no public manager exposes
 the workflow. Android and React Native have no runtime host. Runtime
 compatibility metadata therefore remains disabled.
 ABI v1 is frozen at the typed public header and verified by standalone C and
