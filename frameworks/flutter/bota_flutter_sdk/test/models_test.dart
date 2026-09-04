@@ -126,6 +126,47 @@ void main() {
       expect(first.hashCode, second.hashCode);
       expect(firstCallbacks, secondCallbacks);
     });
+
+    test(
+      'upload destinations hash separately allocated headers by content',
+      () {
+        final first = BotaUploadDestination(
+          requestId: 'request',
+          url: Uri.parse('https://upload.example/recording'),
+          headers: {
+            'Authorization': 'Bearer token',
+            'Content-Type': 'audio/ogg',
+          },
+        );
+        final second = BotaUploadDestination(
+          requestId: 'request',
+          url: Uri.parse('https://upload.example/recording'),
+          headers: {
+            'Content-Type': 'audio/ogg',
+            'Authorization': 'Bearer token',
+          },
+        );
+
+        expect(first, second);
+        expect(first.hashCode, second.hashCode);
+      },
+    );
+
+    test('firmware sources hash separately allocated headers by content', () {
+      final first = BotaFirmwareSource(
+        requestId: 'request',
+        url: Uri.parse('https://download.example/firmware'),
+        headers: {'Authorization': 'Bearer token', 'Accept': 'application/bin'},
+      );
+      final second = BotaFirmwareSource(
+        requestId: 'request',
+        url: Uri.parse('https://download.example/firmware'),
+        headers: {'Accept': 'application/bin', 'Authorization': 'Bearer token'},
+      );
+
+      expect(first, second);
+      expect(first.hashCode, second.hashCode);
+    });
   });
 
   group('byte-list ownership', () {

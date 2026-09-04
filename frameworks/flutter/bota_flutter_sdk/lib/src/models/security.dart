@@ -284,12 +284,8 @@ final class BotaUploadDestination {
       method == other.method &&
       mapEquals(headers, other.headers);
   @override
-  int get hashCode => Object.hash(
-    requestId,
-    url,
-    method,
-    Object.hashAllUnordered(headers.entries),
-  );
+  int get hashCode =>
+      Object.hash(requestId, url, method, _headersHash(headers));
 }
 
 final class BotaFirmwareRequest {
@@ -338,9 +334,12 @@ final class BotaFirmwareSource {
       url == other.url &&
       mapEquals(headers, other.headers);
   @override
-  int get hashCode =>
-      Object.hash(requestId, url, Object.hashAllUnordered(headers.entries));
+  int get hashCode => Object.hash(requestId, url, _headersHash(headers));
 }
+
+int _headersHash(Map<String, String> headers) => Object.hashAllUnordered(
+  headers.entries.map((entry) => Object.hash(entry.key, entry.value)),
+);
 
 typedef BotaProvisioningMaterialCallback =
     Future<BotaProvisioningMaterial> Function(

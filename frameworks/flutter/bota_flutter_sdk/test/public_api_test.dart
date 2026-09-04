@@ -8,12 +8,23 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('the public barrel uses only explicit documented exports', () {
     final barrel = File('lib/bota_flutter_sdk.dart').readAsStringSync();
+    final exportDirectives = RegExp(
+      r"export\s+'[^']+'[\s\S]*?;",
+    ).allMatches(barrel).toList();
+    final shownExports = RegExp(
+      r"export\s+'[^']+'\s+show\s+([\s\S]*?);",
+    ).allMatches(barrel).toList();
+    final parsedSymbols = shownExports
+        .expand(
+          (directive) =>
+              directive.group(1)!.split(',').map((symbol) => symbol.trim()),
+        )
+        .where((symbol) => symbol.isNotEmpty)
+        .toList();
 
-    expect(barrel, isNot(contains("export 'src/platform.dart'")));
-    expect(barrel, isNot(contains(' hide ')));
-    expect(RegExp(r"export '.*';").allMatches(barrel), isEmpty);
-    expect(barrel, matches(RegExp(r"export 'src/client.dart'\s+show")));
-    expect(barrel, matches(RegExp(r"export 'src/managers.dart'\s+show")));
+    expect(shownExports, hasLength(exportDirectives.length));
+    expect(parsedSymbols.toSet(), _documentedBarrelExports);
+    expect(parsedSymbols, hasLength(_documentedBarrelExports.length));
   });
 
   test('first beta capabilities contain supported operations only', () {
@@ -57,27 +68,173 @@ void main() {
   test('managers are typed delegates over BotaPlatform', () async {
     final platform = _FakePlatform();
     final client = BotaDeviceClient.forTesting(platform);
-    const connected = BotaConnectedDevice(
-      id: 'device',
-      serialNumber: 'serial',
-      deviceType: BotaDeviceType.botaPin,
-      firmwareVersion: '1.0.0',
-      isProvisioned: true,
-      connectionState: BotaConnectionState.connected,
-      mtu: 256,
-    );
 
-    await client.controls.startRecording(connected, requestId: 'request');
-    await client.recordings.confirm(connected, 'recording');
+    await client.recordings.confirm(_connectedDevice, 'recording');
+
+    expect(platform.calls, ['confirm:recording']);
+  });
+
+  test('recording controls route start and stop independently', () async {
+    final platform = _FakePlatform();
+    final controls = BotaDeviceClient.forTesting(platform).controls;
+
+    await controls.startRecording(_connectedDevice, requestId: 'start-request');
+    await controls.stopRecording(_connectedDevice, requestId: 'stop-request');
+
+    expect(platform.calls, [
+      'startRecording:start-request',
+      'stopRecording:stop-request',
+    ]);
+  });
+
+  test(
+    'factory reset routes reset and unjournaled resume independently',
+    () async {
+      final platform = _FakePlatform();
+      final factoryReset = BotaDeviceClient.forTesting(platform).factoryReset;
+      const reset = BotaFactoryResetCommand(
+        commandId: 'reset-command',
+        bindingGeneration: 1,
+      );
+      const resume = BotaFactoryResetCommand(
+        commandId: 'resume-command',
+        bindingGeneration: 2,
+      );
+
+      expect(
+        await factoryReset.reset(_connectedDevice, reset),
+        const BotaFactoryResetCompletion(
+          commandId: 'reset-command',
+          bindingGeneration: 1,
+        ),
+      );
+      expect(
+        await factoryReset.resumeUnjournaled(_connectedDevice, resume),
+        const BotaFactoryResetCompletion(
+          commandId: 'resume-command',
+          bindingGeneration: 2,
+        ),
+      );
+
+      expect(platform.calls, [
+        'reset:reset-command',
+        'resumeUnjournaled:resume-command',
+      ]);
+    },
+  );
+
+  test('manager cancellation methods route to their native owners', () async {
+    final platform = _FakePlatform();
+    final client = BotaDeviceClient.forTesting(platform);
+
+    await client.devices.cancelCurrentOperation();
+    await client.provisioning.cancelCurrentOperation();
+    await client.factoryReset.cancelCurrentOperation();
+    await client.recordings.cancelCurrentOperation();
+    await client.ota.cancelCurrentOperation();
     await client.wifi.cancelCurrentOperation();
 
     expect(platform.calls, [
-      'startRecording:request',
-      'confirm:recording',
+      'cancelDevice',
+      'cancelProvisioning',
+      'cancelFactoryReset',
+      'cancelRecording',
+      'cancelOta',
       'cancelWifi',
     ]);
   });
 }
+
+const _connectedDevice = BotaConnectedDevice(
+  id: 'device',
+  serialNumber: 'serial',
+  deviceType: BotaDeviceType.botaPin,
+  firmwareVersion: '1.0.0',
+  isProvisioned: true,
+  connectionState: BotaConnectionState.connected,
+  mtu: 256,
+);
+
+const _documentedBarrelExports = <String>{
+  'BotaApplicationCallbacks',
+  'BotaAudioCodec',
+  'BotaBluetoothFallback',
+  'BotaCapabilities',
+  'BotaCapability',
+  'BotaConfiguration',
+  'BotaConnectedDevice',
+  'BotaConnectionSettings',
+  'BotaConnectionState',
+  'BotaConnectionType',
+  'BotaControlManager',
+  'BotaDeprovisionResult',
+  'BotaDeviceClient',
+  'BotaDeviceFlags',
+  'BotaDeviceLogLine',
+  'BotaDeviceManager',
+  'BotaDeviceRecording',
+  'BotaDeviceState',
+  'BotaDeviceStatus',
+  'BotaDeviceType',
+  'BotaDeviceUploadCompleted',
+  'BotaDeviceUploadPreserved',
+  'BotaDiscoveredDevice',
+  'BotaEnabledConnections',
+  'BotaErrorCode',
+  'BotaFactoryResetCommand',
+  'BotaFactoryResetCompletion',
+  'BotaFactoryResetGrant',
+  'BotaFactoryResetGrantCallback',
+  'BotaFactoryResetGrantRequest',
+  'BotaFactoryResetManager',
+  'BotaFactoryResetResultAcknowledgement',
+  'BotaFactoryResetResultCallback',
+  'BotaFactoryResetResultRequest',
+  'BotaFirmwareCallback',
+  'BotaFirmwareImage',
+  'BotaFirmwarePhase',
+  'BotaFirmwareProgress',
+  'BotaFirmwareRequest',
+  'BotaFirmwareSource',
+  'BotaHttpMethod',
+  'BotaLogManager',
+  'BotaLteState',
+  'BotaModemInfo',
+  'BotaOperation',
+  'BotaOtaManager',
+  'BotaPairingState',
+  'BotaPowerManagement',
+  'BotaProvisioningFailure',
+  'BotaProvisioningManager',
+  'BotaProvisioningMaterial',
+  'BotaProvisioningMaterialCallback',
+  'BotaProvisioningMaterialRequest',
+  'BotaReconnectHint',
+  'BotaRecordingInitiator',
+  'BotaRecordingManager',
+  'BotaRecordingState',
+  'BotaRecordingSyncCompleted',
+  'BotaRecordingSyncEvent',
+  'BotaRecordingSyncProgress',
+  'BotaRecordingTransferMetadata',
+  'BotaRecordingTransferProgress',
+  'BotaSdkException',
+  'BotaUploadDestination',
+  'BotaUploadDestinationCallback',
+  'BotaUploadDestinationRequest',
+  'BotaUploadOwnershipEvent',
+  'BotaUploadOwnershipProgress',
+  'BotaUploadOwnershipResolved',
+  'BotaUploadOwnershipResult',
+  'BotaWifiConfigResult',
+  'BotaWifiCredentials',
+  'BotaWifiManager',
+  'BotaWifiNetwork',
+  'BotaWifiRadioState',
+  'BotaWifiScanResult',
+  'BotaWifiState',
+  'BotaWifiStatus',
+};
 
 final class _FakePlatform implements BotaPlatform {
   final List<String> calls = [];
@@ -122,7 +279,9 @@ final class _FakePlatform implements BotaPlatform {
   Stream<BotaDeviceStatus> get status => const Stream.empty();
 
   @override
-  Future<void> cancelDeviceOperation() async {}
+  Future<void> cancelDeviceOperation() async {
+    calls.add('cancelDevice');
+  }
 
   @override
   Future<void> startRecording(
@@ -136,7 +295,9 @@ final class _FakePlatform implements BotaPlatform {
   Future<void> stopRecording(
     BotaConnectedDevice device, {
     String? requestId,
-  }) async {}
+  }) async {
+    calls.add('stopRecording:$requestId');
+  }
 
   @override
   Future<BotaRecordingState> readRecordingState(BotaConnectedDevice device) =>
@@ -170,13 +331,21 @@ final class _FakePlatform implements BotaPlatform {
   }) => throw UnimplementedError();
 
   @override
-  Future<void> cancelProvisioningOperation() async {}
+  Future<void> cancelProvisioningOperation() async {
+    calls.add('cancelProvisioning');
+  }
 
   @override
   Future<BotaFactoryResetCompletion> reset(
     BotaConnectedDevice device,
     BotaFactoryResetCommand command,
-  ) => throw UnimplementedError();
+  ) async {
+    calls.add('reset:${command.commandId}');
+    return BotaFactoryResetCompletion(
+      commandId: command.commandId,
+      bindingGeneration: command.bindingGeneration,
+    );
+  }
 
   @override
   Future<BotaFactoryResetCompletion?> resumePending() async => null;
@@ -185,10 +354,18 @@ final class _FakePlatform implements BotaPlatform {
   Future<BotaFactoryResetCompletion> resumeUnjournaled(
     BotaConnectedDevice device,
     BotaFactoryResetCommand command,
-  ) => throw UnimplementedError();
+  ) async {
+    calls.add('resumeUnjournaled:${command.commandId}');
+    return BotaFactoryResetCompletion(
+      commandId: command.commandId,
+      bindingGeneration: command.bindingGeneration,
+    );
+  }
 
   @override
-  Future<void> cancelFactoryResetOperation() async {}
+  Future<void> cancelFactoryResetOperation() async {
+    calls.add('cancelFactoryReset');
+  }
 
   @override
   Future<List<BotaDeviceRecording>> listRecordings(
@@ -225,7 +402,9 @@ final class _FakePlatform implements BotaPlatform {
   }) => const Stream.empty();
 
   @override
-  Future<void> cancelRecordingOperation() async {}
+  Future<void> cancelRecordingOperation() async {
+    calls.add('cancelRecording');
+  }
 
   @override
   Stream<BotaFirmwareProgress> updateFirmware(
@@ -234,7 +413,9 @@ final class _FakePlatform implements BotaPlatform {
   ) => const Stream.empty();
 
   @override
-  Future<void> cancelOtaOperation() async {}
+  Future<void> cancelOtaOperation() async {
+    calls.add('cancelOta');
+  }
 
   @override
   Stream<BotaDeviceLogLine> streamLogs(BotaConnectedDevice device) =>
