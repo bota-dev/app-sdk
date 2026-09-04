@@ -7,6 +7,25 @@ import Foundation
   import FlutterMacOS
 #endif
 
+private final class PendingFlutterCallback<Value>: @unchecked Sendable {
+  private let lock = NSLock()
+  private var continuation: CheckedContinuation<Value, Error>?
+
+  func install(_ continuation: CheckedContinuation<Value, Error>) {
+    lock.lock()
+    self.continuation = continuation
+    lock.unlock()
+  }
+
+  func resume(with result: Result<Value, Error>) {
+    lock.lock()
+    let continuation = self.continuation
+    self.continuation = nil
+    lock.unlock()
+    continuation?.resume(with: result)
+  }
+}
+
 protocol BotaAppleClientProtocol: NativeLeaseClientProtocol {
   func connect(_ device: DiscoveredDevice, serialNumber: String?) async throws -> ConnectedDevice
   func reconnect(serialNumber: String, hint: DeviceReconnectHint) async throws -> ConnectedDevice
@@ -340,7 +359,8 @@ final class BotaAppleNativeClient: BotaAppleClientProtocol, @unchecked Sendable 
   }
 }
 
-actor BotaAppleAdapter: BotaHostApi {
+@MainActor
+final class BotaAppleAdapter: @preconcurrency BotaHostApi {
   private enum SubscriptionOwner {
     case deviceOperation
     case connection
@@ -350,6 +370,17 @@ actor BotaAppleAdapter: BotaHostApi {
     case ota
     case logs
     case wifi
+
+    var category: NativeOperationCategory? {
+      switch self {
+      case .deviceOperation: return .device
+      case .recordingOperation: return .recording
+      case .ota: return .ota
+      case .logs: return .logs
+      case .wifi: return .wifi
+      case .connection, .deviceStatus, .recordingState: return nil
+      }
+    }
   }
 
   private struct Subscription {
@@ -365,14 +396,11 @@ actor BotaAppleAdapter: BotaHostApi {
   private var configuration: BotaConfigurationMessage?
   private var discoveredDevices: [String: DiscoveredDevice] = [:]
   private var connectedDevices: [String: ConnectedDevice] = [:]
-  private var currentDeviceID: String?
-  private var resetGenerations: [String: UInt64] = [:]
-  private var resetCommands: [String: String] = [:]
-  private var activeOperationIDs: Set<String> = []
-  private var consumedOperationIDs: Set<String> = []
+  private var activeIdentifiers: Set<String> = []
+  private var consumedIdentifiers: Set<String> = []
   private var startingSubscriptionIDs: Set<String> = []
   private var subscriptions: [String: Subscription] = [:]
-  private var consumedSubscriptionIDs: Set<String> = []
+  private var pendingCallbackCancellations: [String: @Sendable () -> Void] = [:]
   private var detached = false
 
   init(
@@ -393,8 +421,8 @@ actor BotaAppleAdapter: BotaHostApi {
 
   func configure(operationId: String, configuration: BotaConfigurationMessage) async throws {
     do {
-      try beginOperation(operationId, requiresConfiguration: false)
-      defer { finishOperation(operationId) }
+      try beginIdentifier(operationId, requiresConfiguration: false)
+      defer { finishIdentifier(operationId) }
       guard !detached else { throw bridgeError("engine_detached", "engine is detached") }
       let namespace = configuration.applicationSupportNamespace
       guard !namespace.isEmpty,
@@ -409,14 +437,16 @@ actor BotaAppleAdapter: BotaHostApi {
         hasProvisioningMaterialCallback: configuration.hasProvisioningMaterialCallback,
         hasFactoryResetGrantCallback: configuration.hasFactoryResetGrantCallback,
         hasFactoryResetResultCallback: configuration.hasFactoryResetResultCallback,
-        hasUploadDestinationCallback: configuration.hasUploadDestinationCallback,
         hasFirmwareCallback: configuration.hasFirmwareCallback
       )
       do {
         try await leaseCoordinator.acquire(engineID: engineID, configuration: lease)
       } catch NativeLeaseError.configurationConflict {
         throw bridgeError("configuration_conflict", "native client is configured differently")
+      } catch NativeLeaseError.acquisitionCancelled {
+        throw bridgeError("engine_detached", "engine is detached")
       }
+      try requireAttached()
       self.configuration = configuration
     } catch {
       throw BotaAppleMapper.pigeonError(error)
@@ -425,14 +455,7 @@ actor BotaAppleAdapter: BotaHostApi {
 
   func destroy(operationId: String) async throws {
     try await perform(operationId) {
-      await self.cancelAllSubscriptions()
-      self.discoveredDevices.removeAll()
-      self.connectedDevices.removeAll()
-      self.currentDeviceID = nil
-      self.resetGenerations.removeAll()
-      self.resetCommands.removeAll()
-      self.configuration = nil
-      await self.leaseCoordinator.release(engineID: self.engineID)
+      await self.releaseEngine()
     }
   }
 
@@ -441,11 +464,12 @@ actor BotaAppleAdapter: BotaHostApi {
     device: BotaDiscoveredDeviceMessage,
     serialNumber: String?
   ) async throws -> BotaConnectedDeviceMessage {
-    try await perform(operationId) {
-      let native =
-        try self.discoveredDevices[device.id]
-        ?? BotaAppleMapper.discoveredDevice(device)
+    try await perform(operationId, category: .device) {
+      guard let native = self.discoveredDevices[device.id] else {
+        throw self.bridgeError("device_not_found", "device was not discovered by this engine")
+      }
       let connected = try await self.client.connect(native, serialNumber: serialNumber)
+      try self.requireAttached()
       self.store(connected)
       return try BotaAppleMapper.connectedDevice(connected)
     }
@@ -456,57 +480,61 @@ actor BotaAppleAdapter: BotaHostApi {
     serialNumber: String,
     hint: BotaReconnectHintMessage
   ) async throws -> BotaConnectedDeviceMessage {
-    try await perform(operationId) {
+    try await perform(operationId, category: .device) {
       let connected = try await self.client.reconnect(
         serialNumber: serialNumber,
         hint: try BotaAppleMapper.reconnectHint(hint)
       )
+      try self.requireAttached()
       self.store(connected)
       return try BotaAppleMapper.connectedDevice(connected)
     }
   }
 
   func disconnect(operationId: String) async throws {
-    try await perform(operationId) {
+    try await perform(operationId, category: .device) {
       try await self.client.disconnect()
+      try self.requireAttached()
       self.connectedDevices.removeAll()
-      self.currentDeviceID = nil
     }
   }
 
   func readDeviceStatus(operationId: String) async throws -> BotaDeviceStatusMessage {
-    try await perform(operationId) {
+    try await perform(operationId, category: .device) {
       try BotaAppleMapper.deviceStatus(try await self.client.readDeviceStatus())
     }
   }
 
   func cancelDeviceOperation(operationId: String) async throws {
-    try await perform(operationId) { try await self.client.cancelDeviceOperation() }
+    let client = self.client
+    try await cancel(operationId, category: .device) {
+      try await client.cancelDeviceOperation()
+    }
   }
 
   func startRecording(
     operationId: String,
     device: BotaDeviceReferenceMessage,
-    requestId: String?
+    grantBlob: String
   ) async throws {
-    try await perform(operationId) {
-      guard let requestId, !requestId.isEmpty else {
+    try await perform(operationId, category: .recording) {
+      guard !grantBlob.isEmpty else {
         throw self.bridgeError("invalid_request", "recording grant is required")
       }
-      try await self.client.startRecording(try self.device(device), grantBlob: requestId)
+      try await self.client.startRecording(try self.device(device), grantBlob: grantBlob)
     }
   }
 
   func stopRecording(
     operationId: String,
     device: BotaDeviceReferenceMessage,
-    requestId: String?
+    grantBlob: String
   ) async throws {
-    try await perform(operationId) {
-      guard let requestId, !requestId.isEmpty else {
+    try await perform(operationId, category: .recording) {
+      guard !grantBlob.isEmpty else {
         throw self.bridgeError("invalid_request", "recording grant is required")
       }
-      try await self.client.stopRecording(try self.device(device), grantBlob: requestId)
+      try await self.client.stopRecording(try self.device(device), grantBlob: grantBlob)
     }
   }
 
@@ -514,7 +542,7 @@ actor BotaAppleAdapter: BotaHostApi {
     operationId: String,
     device: BotaDeviceReferenceMessage
   ) async throws -> BotaRecordingStateMessage {
-    try await perform(operationId) {
+    try await perform(operationId, category: .recording) {
       BotaAppleMapper.recordingState(
         try await self.client.readRecordingState(try self.device(device))
       )
@@ -523,14 +551,13 @@ actor BotaAppleAdapter: BotaHostApi {
 
   func provision(
     operationId: String,
-    device: BotaDeviceReferenceMessage,
-    materialId: String
+    device: BotaDeviceReferenceMessage
   ) async throws {
-    try await perform(operationId) {
+    try await perform(operationId, category: .provisioning) {
       try self.requireCallback(\.hasProvisioningMaterialCallback, name: "provisioning material")
       try await self.client.provision(
         try self.device(device),
-        materialID: materialId
+        materialID: self.callbackID()
       ) { [weak self] request in
         guard let self else { throw CancellationError() }
         return try await self.provisioningMaterial(request)
@@ -542,7 +569,7 @@ actor BotaAppleAdapter: BotaHostApi {
     operationId: String,
     device: BotaDeviceReferenceMessage
   ) async throws -> BotaConnectionSettingsMessage {
-    try await perform(operationId) {
+    try await perform(operationId, category: .provisioning) {
       try BotaAppleMapper.connectionSettings(
         try await self.client.readConnectionSettings(try self.device(device))
       )
@@ -554,7 +581,7 @@ actor BotaAppleAdapter: BotaHostApi {
     device: BotaDeviceReferenceMessage,
     settings: BotaConnectionSettingsMessage
   ) async throws {
-    try await perform(operationId) {
+    try await perform(operationId, category: .provisioning) {
       try await self.client.writeConnectionSettings(
         try BotaAppleMapper.connectionSettings(settings),
         to: try self.device(device)
@@ -565,17 +592,23 @@ actor BotaAppleAdapter: BotaHostApi {
   func deprovision(
     operationId: String,
     device: BotaDeviceReferenceMessage,
-    materialId: String
+    grantBlob: String
   ) async throws -> BotaDeprovisionResultMessage {
-    try await perform(operationId) {
-      BotaAppleMapper.deprovisionResult(
-        try await self.client.deprovision(try self.device(device), grantBlob: materialId)
+    try await perform(operationId, category: .provisioning) {
+      guard !grantBlob.isEmpty else {
+        throw self.bridgeError("invalid_request", "deprovision grant is required")
+      }
+      return BotaAppleMapper.deprovisionResult(
+        try await self.client.deprovision(try self.device(device), grantBlob: grantBlob)
       )
     }
   }
 
   func cancelProvisioningOperation(operationId: String) async throws {
-    try await perform(operationId) { try await self.client.cancelProvisioningOperation() }
+    let client = self.client
+    try await cancel(operationId, category: .provisioning) {
+      try await client.cancelProvisioningOperation()
+    }
   }
 
   func factoryReset(
@@ -583,13 +616,11 @@ actor BotaAppleAdapter: BotaHostApi {
     device: BotaDeviceReferenceMessage,
     command: BotaFactoryResetCommandMessage
   ) async throws -> BotaFactoryResetCompletionMessage {
-    try await perform(operationId) {
+    try await perform(operationId, category: .factoryReset) {
       try self.requireCallback(\.hasFactoryResetGrantCallback, name: "factory reset grant")
       try self.requireCallback(\.hasFactoryResetResultCallback, name: "factory reset result")
       let nativeDevice = try self.device(device)
       let generation = try BotaAppleMapper.uint64(command.bindingGeneration)
-      self.resetGenerations[nativeDevice.id] = generation
-      self.resetCommands[nativeDevice.id] = command.commandId
       let completion = try await self.client.factoryReset(
         nativeDevice,
         commandID: command.commandId,
@@ -597,11 +628,7 @@ actor BotaAppleAdapter: BotaHostApi {
         bindingGeneration: generation,
         persistResult: { [weak self] result in
           guard let self else { throw CancellationError() }
-          try await self.persistReset(
-            commandID: command.commandId,
-            bindingGeneration: generation,
-            result: result
-          )
+          try await self.persistReset(result)
         },
         using: { [weak self] request in
           guard let self else { throw CancellationError() }
@@ -613,27 +640,20 @@ actor BotaAppleAdapter: BotaHostApi {
   }
 
   func resumePendingFactoryReset(
-    operationId: String
+    operationId: String,
+    device: BotaDeviceReferenceMessage,
+    currentBindingGeneration: Int64
   ) async throws -> BotaFactoryResetCompletionMessage? {
-    try await perform(operationId) {
+    try await perform(operationId, category: .factoryReset) {
       try self.requireCallback(\.hasFactoryResetResultCallback, name: "factory reset result")
-      guard let deviceID = self.currentDeviceID,
-        let nativeDevice = self.connectedDevices[deviceID],
-        let generation = self.resetGenerations[deviceID],
-        let commandID = self.resetCommands[deviceID]
-      else {
-        throw self.bridgeError("factory_reset_context_missing", "no reset context is available")
-      }
+      let nativeDevice = try self.device(device)
+      let generation = try BotaAppleMapper.uint64(currentBindingGeneration)
       let completion = try await self.client.resumePendingFactoryReset(
         nativeDevice,
         currentBindingGeneration: generation
       ) { [weak self] result in
         guard let self else { throw CancellationError() }
-        try await self.persistReset(
-          commandID: commandID,
-          bindingGeneration: generation,
-          result: result
-        )
+        try await self.persistReset(result)
       }
       return try completion.map(BotaAppleMapper.factoryResetCompletion)
     }
@@ -644,37 +664,34 @@ actor BotaAppleAdapter: BotaHostApi {
     device: BotaDeviceReferenceMessage,
     command: BotaFactoryResetCommandMessage
   ) async throws -> BotaFactoryResetCompletionMessage {
-    try await perform(operationId) {
+    try await perform(operationId, category: .factoryReset) {
       try self.requireCallback(\.hasFactoryResetResultCallback, name: "factory reset result")
       let nativeDevice = try self.device(device)
       let generation = try BotaAppleMapper.uint64(command.bindingGeneration)
-      self.resetGenerations[nativeDevice.id] = generation
-      self.resetCommands[nativeDevice.id] = command.commandId
       let completion = try await self.client.resumeUnjournaledFactoryReset(
         nativeDevice,
         commandID: command.commandId,
         bindingGeneration: generation
       ) { [weak self] result in
         guard let self else { throw CancellationError() }
-        try await self.persistReset(
-          commandID: command.commandId,
-          bindingGeneration: generation,
-          result: result
-        )
+        try await self.persistReset(result)
       }
       return try BotaAppleMapper.factoryResetCompletion(completion)
     }
   }
 
   func cancelFactoryResetOperation(operationId: String) async throws {
-    try await perform(operationId) { try await self.client.cancelFactoryResetOperation() }
+    let client = self.client
+    try await cancel(operationId, category: .factoryReset) {
+      try await client.cancelFactoryResetOperation()
+    }
   }
 
   func listRecordings(
     operationId: String,
     device: BotaDeviceReferenceMessage
   ) async throws -> [BotaDeviceRecordingMessage] {
-    try await perform(operationId) {
+    try await perform(operationId, category: .recording) {
       try await self.client.listRecordings(try self.device(device)).map(BotaAppleMapper.recording)
     }
   }
@@ -683,7 +700,7 @@ actor BotaAppleAdapter: BotaHostApi {
     operationId: String,
     sinkId: String
   ) async throws -> BotaRecordingTransferMetadataMessage? {
-    try await perform(operationId) {
+    try await perform(operationId, category: .recording) {
       await self.client.takeTransferMetadata(sinkID: sinkId).map(BotaAppleMapper.transferMetadata)
     }
   }
@@ -693,7 +710,7 @@ actor BotaAppleAdapter: BotaHostApi {
     device: BotaDeviceReferenceMessage,
     recordingId: String
   ) async throws {
-    try await perform(operationId) {
+    try await perform(operationId, category: .recording) {
       try await self.client.confirmRecording(
         try self.device(device),
         recordingUUID: recordingId
@@ -702,30 +719,42 @@ actor BotaAppleAdapter: BotaHostApi {
   }
 
   func cancelRecordingOperation(operationId: String) async throws {
-    try await perform(operationId) { try await self.client.cancelRecordingOperation() }
+    let client = self.client
+    try await cancel(operationId, category: .recording) {
+      try await client.cancelRecordingOperation()
+    }
   }
 
   func cancelOtaOperation(operationId: String) async throws {
-    try await perform(operationId) { try await self.client.cancelOtaOperation() }
+    let client = self.client
+    try await cancel(operationId, category: .ota) {
+      try await client.cancelOtaOperation()
+    }
   }
 
   func stopLogs(operationId: String) async throws {
-    try await perform(operationId) { try await self.client.stopLogs() }
+    let client = self.client
+    try await cancel(operationId, category: .logs) {
+      try await client.stopLogs()
+    }
   }
 
   func configureWifi(
     operationId: String,
     device: BotaDeviceReferenceMessage,
     credentials: BotaWifiCredentialsMessage,
-    materialId: String
+    grantBlob: String
   ) async throws -> BotaWifiConfigResultMessage {
-    try await perform(operationId) {
-      BotaAppleMapper.wifiConfigResult(
+    try await perform(operationId, category: .wifi) {
+      guard !grantBlob.isEmpty else {
+        throw self.bridgeError("invalid_request", "WiFi grant is required")
+      }
+      return BotaAppleMapper.wifiConfigResult(
         try await self.client.configureWifi(
           try self.device(device),
           ssid: credentials.ssid,
           password: credentials.password,
-          grantBlob: materialId
+          grantBlob: grantBlob
         )
       )
     }
@@ -735,7 +764,7 @@ actor BotaAppleAdapter: BotaHostApi {
     operationId: String,
     device: BotaDeviceReferenceMessage
   ) async throws -> BotaWifiConfigResultMessage {
-    try await perform(operationId) {
+    try await perform(operationId, category: .wifi) {
       BotaAppleMapper.wifiConfigResult(
         try await self.client.disconnectWifi(try self.device(device))
       )
@@ -746,7 +775,7 @@ actor BotaAppleAdapter: BotaHostApi {
     operationId: String,
     device: BotaDeviceReferenceMessage
   ) async throws -> BotaWifiStatusMessage {
-    try await perform(operationId) {
+    try await perform(operationId, category: .wifi) {
       BotaAppleMapper.wifiStatus(
         try await self.client.readWifiStatus(try self.device(device))
       )
@@ -757,43 +786,57 @@ actor BotaAppleAdapter: BotaHostApi {
     operationId: String,
     device: BotaDeviceReferenceMessage
   ) async throws -> BotaWifiScanResultMessage {
-    try await perform(operationId) {
+    try await perform(operationId, category: .wifi) {
       BotaAppleMapper.wifiScan(try await self.client.scanWifi(try self.device(device)))
     }
   }
 
   func cancelWifiOperation(operationId: String) async throws {
-    try await perform(operationId) { await self.client.cancelWifiOperation() }
+    let client = self.client
+    try await cancel(operationId, category: .wifi) {
+      await client.cancelWifiOperation()
+    }
   }
 
   func startSubscription(
     subscriptionId: String,
     request: BotaSubscriptionRequestMessage
   ) async throws {
+    var owner: SubscriptionOwner?
+    var didReserve = false
     do {
       try reserveSubscription(subscriptionId)
+      didReserve = true
+      owner = try subscriptionOwner(request)
+      if let category = owner?.category {
+        try await leaseCoordinator.beginOperation(
+          engineID: engineID,
+          category: category,
+          operationID: subscriptionId
+        )
+      }
       switch request {
       case let request as BotaScanSubscriptionMessage:
         let stream = try await client.scanStream(
           timeoutMilliseconds: BotaAppleMapper.uint64(request.timeoutMillis),
           allowDuplicates: request.allowDuplicates
         )
-        install(subscriptionId, owner: .deviceOperation) {
+        try install(subscriptionId, owner: .deviceOperation) {
           await self.consumeScan(subscriptionId, stream: stream)
         }
       case is BotaConnectionSubscriptionMessage:
         let stream = await client.connectionStream()
-        install(subscriptionId, owner: .connection) {
+        try install(subscriptionId, owner: .connection) {
           await self.consumeConnection(subscriptionId, stream: stream)
         }
       case is BotaDeviceStatusSubscriptionMessage:
         let stream = try await client.deviceStatusStream()
-        install(subscriptionId, owner: .deviceStatus) {
+        try install(subscriptionId, owner: .deviceStatus) {
           await self.consumeStatus(subscriptionId, stream: stream)
         }
       case let request as BotaRecordingStateSubscriptionMessage:
         let stream = try await client.recordingStateStream(try device(request.device))
-        install(subscriptionId, owner: .recordingState) {
+        try install(subscriptionId, owner: .recordingState) {
           await self.consumeRecordingState(subscriptionId, stream: stream)
         }
       case let request as BotaRecordingSyncSubscriptionMessage:
@@ -803,7 +846,7 @@ actor BotaAppleAdapter: BotaHostApi {
           sinkID: request.sinkId,
           confirmOnCompletion: request.confirmOnCompletion
         )
-        install(subscriptionId, owner: .recordingOperation) {
+        try install(subscriptionId, owner: .recordingOperation) {
           await self.consumeRecordingSync(subscriptionId, stream: stream)
         }
       case let request as BotaUploadOwnershipSubscriptionMessage:
@@ -813,7 +856,7 @@ actor BotaAppleAdapter: BotaHostApi {
           uploadID: request.uploadId,
           destinationID: request.destinationId
         )
-        install(subscriptionId, owner: .recordingOperation) {
+        try install(subscriptionId, owner: .recordingOperation) {
           await self.consumeUploadOwnership(subscriptionId, stream: stream)
         }
       case let request as BotaFirmwareUpdateSubscriptionMessage:
@@ -822,26 +865,35 @@ actor BotaAppleAdapter: BotaHostApi {
           try device(request.device),
           image: try await firmwareImage(request.image)
         )
-        install(subscriptionId, owner: .ota) {
+        try install(subscriptionId, owner: .ota) {
           await self.consumeFirmware(subscriptionId, stream: stream)
         }
       case let request as BotaLogSubscriptionMessage:
         let stream = try await client.logStream(try device(request.device))
-        install(subscriptionId, owner: .logs) {
+        try install(subscriptionId, owner: .logs) {
           await self.consumeLogs(subscriptionId, stream: stream)
         }
       case let request as BotaWifiStatusSubscriptionMessage:
         let stream = try await client.wifiStatusStream(try device(request.device))
-        install(subscriptionId, owner: .wifi) {
+        try install(subscriptionId, owner: .wifi) {
           await self.consumeWifi(subscriptionId, stream: stream)
         }
       default:
         throw bridgeError("unsupported_subscription", "subscription kind is not supported")
       }
     } catch {
-      startingSubscriptionIDs.remove(subscriptionId)
-      consumedSubscriptionIDs.insert(subscriptionId)
-      throw BotaAppleMapper.pigeonError(error)
+      if didReserve {
+        startingSubscriptionIDs.remove(subscriptionId)
+        finishIdentifier(subscriptionId)
+        if let category = owner?.category {
+          await leaseCoordinator.finishOperation(
+            engineID: engineID,
+            category: category,
+            operationID: subscriptionId
+          )
+        }
+      }
+      throw BotaAppleMapper.pigeonError(mapLeaseError(error))
     }
   }
 
@@ -851,58 +903,111 @@ actor BotaAppleAdapter: BotaHostApi {
       guard let subscription = subscriptions.removeValue(forKey: subscriptionId) else {
         throw bridgeError("subscription_not_found", "subscription is not active")
       }
-      consumedSubscriptionIDs.insert(subscriptionId)
+      finishIdentifier(subscriptionId)
       subscription.task.cancel()
-      try await stop(subscription.owner)
+      if let category = subscription.owner.category {
+        try await leaseCoordinator.cancelOperation(
+          engineID: engineID,
+          category: category
+        ) { [weak self] in
+          guard let self else { return }
+          try await self.stop(subscription.owner)
+        }
+      } else {
+        try await stop(subscription.owner)
+      }
     } catch {
-      throw BotaAppleMapper.pigeonError(error)
+      throw BotaAppleMapper.pigeonError(mapLeaseError(error))
     }
   }
 
   func detach() async {
     guard !detached else { return }
     detached = true
-    await cancelAllSubscriptions()
-    connectedDevices.removeAll()
-    discoveredDevices.removeAll()
-    currentDeviceID = nil
-    resetGenerations.removeAll()
-    resetCommands.removeAll()
-    configuration = nil
-    await leaseCoordinator.release(engineID: engineID)
+    await releaseEngine()
   }
 
   private func perform<T>(
     _ operationID: String,
+    category: NativeOperationCategory? = nil,
     _ body: () async throws -> T
   ) async throws -> T {
+    var ownsNativeOperation = false
+    var didBeginIdentifier = false
     do {
-      try beginOperation(operationID, requiresConfiguration: true)
-      defer { finishOperation(operationID) }
-      return try await body()
+      try beginIdentifier(operationID, requiresConfiguration: true)
+      didBeginIdentifier = true
+      if let category {
+        try await leaseCoordinator.beginOperation(
+          engineID: engineID,
+          category: category,
+          operationID: operationID
+        )
+        ownsNativeOperation = true
+      }
+      let result = try await body()
+      try requireAttached()
+      if let category, ownsNativeOperation {
+        await leaseCoordinator.finishOperation(
+          engineID: engineID,
+          category: category,
+          operationID: operationID
+        )
+      }
+      if didBeginIdentifier { finishIdentifier(operationID) }
+      return result
     } catch {
-      throw BotaAppleMapper.pigeonError(error)
+      if let category, ownsNativeOperation {
+        await leaseCoordinator.finishOperation(
+          engineID: engineID,
+          category: category,
+          operationID: operationID
+        )
+      }
+      if didBeginIdentifier { finishIdentifier(operationID) }
+      throw BotaAppleMapper.pigeonError(mapLeaseError(error))
     }
   }
 
-  private func beginOperation(_ id: String, requiresConfiguration: Bool) throws {
+  private func cancel(
+    _ operationID: String,
+    category: NativeOperationCategory,
+    body: @escaping @Sendable () async throws -> Void
+  ) async throws {
+    var didBeginIdentifier = false
+    do {
+      try beginIdentifier(operationID, requiresConfiguration: true)
+      didBeginIdentifier = true
+      try await leaseCoordinator.cancelOperation(
+        engineID: engineID,
+        category: category,
+        cancellation: body
+      )
+      try requireAttached()
+      if didBeginIdentifier { finishIdentifier(operationID) }
+    } catch {
+      if didBeginIdentifier { finishIdentifier(operationID) }
+      throw BotaAppleMapper.pigeonError(mapLeaseError(error))
+    }
+  }
+
+  private func beginIdentifier(_ id: String, requiresConfiguration: Bool) throws {
     try validateID(id)
-    guard !activeOperationIDs.contains(id), !consumedOperationIDs.contains(id) else {
-      throw BotaAppleMapper.pigeonError(
-        bridgeError("duplicate_operation_id", "operation ID was reused"))
+    guard !activeIdentifiers.contains(id), !consumedIdentifiers.contains(id) else {
+      throw bridgeError("duplicate_identifier", "operation or subscription ID was reused")
     }
     if requiresConfiguration, configuration == nil {
-      throw BotaAppleMapper.pigeonError(bridgeError("not_configured", "adapter is not configured"))
+      throw bridgeError("not_configured", "adapter is not configured")
     }
     guard !detached else {
-      throw BotaAppleMapper.pigeonError(bridgeError("engine_detached", "engine is detached"))
+      throw bridgeError("engine_detached", "engine is detached")
     }
-    activeOperationIDs.insert(id)
+    activeIdentifiers.insert(id)
   }
 
-  private func finishOperation(_ id: String) {
-    activeOperationIDs.remove(id)
-    consumedOperationIDs.insert(id)
+  private func finishIdentifier(_ id: String) {
+    guard activeIdentifiers.remove(id) != nil else { return }
+    consumedIdentifiers.insert(id)
   }
 
   private func validateID(_ id: String) throws {
@@ -914,15 +1019,7 @@ actor BotaAppleAdapter: BotaHostApi {
   }
 
   private func reserveSubscription(_ id: String) throws {
-    try validateID(id)
-    guard configuration != nil else {
-      throw bridgeError("not_configured", "adapter is not configured")
-    }
-    guard !detached else { throw bridgeError("engine_detached", "engine is detached") }
-    guard subscriptions[id] == nil,
-      !startingSubscriptionIDs.contains(id),
-      !consumedSubscriptionIDs.contains(id)
-    else { throw bridgeError("duplicate_subscription_id", "subscription ID was reused") }
+    try beginIdentifier(id, requiresConfiguration: true)
     startingSubscriptionIDs.insert(id)
   }
 
@@ -930,15 +1027,27 @@ actor BotaAppleAdapter: BotaHostApi {
     _ id: String,
     owner: SubscriptionOwner,
     consume: @escaping @Sendable () async -> Void
-  ) {
+  ) throws {
+    try requireAttached()
+    guard startingSubscriptionIDs.contains(id) else {
+      throw bridgeError("engine_detached", "engine is detached")
+    }
     let task = Task { await consume() }
     subscriptions[id] = Subscription(owner: owner, task: task)
     startingSubscriptionIDs.remove(id)
   }
 
   private func completeSubscription(_ id: String) async {
-    guard subscriptions.removeValue(forKey: id) != nil else { return }
-    consumedSubscriptionIDs.insert(id)
+    guard let subscription = subscriptions.removeValue(forKey: id) else { return }
+    finishIdentifier(id)
+    if let category = subscription.owner.category {
+      await leaseCoordinator.finishOperation(
+        engineID: engineID,
+        category: category,
+        operationID: id
+      )
+    }
+    guard !detached else { return }
     await emit(id, BotaSubscriptionCompleteEventMessage())
   }
 
@@ -949,6 +1058,7 @@ actor BotaAppleAdapter: BotaHostApi {
   }
 
   private func emit(_ id: String, _ payload: BotaEventPayloadMessage) async {
+    guard !detached else { return }
     try? await flutterApi.onEvent(event: BotaEventMessage(subscriptionId: id, payload: payload))
   }
 
@@ -958,6 +1068,7 @@ actor BotaAppleAdapter: BotaHostApi {
   ) async {
     do {
       for try await value in stream {
+        guard !detached, subscriptions[id] != nil else { return }
         discoveredDevices[value.id] = value
         await emit(
           id, BotaDiscoveredDeviceEventMessage(device: try BotaAppleMapper.discoveredDevice(value)))
@@ -969,12 +1080,12 @@ actor BotaAppleAdapter: BotaHostApi {
 
   private func consumeConnection(_ id: String, stream: AsyncStream<ConnectedDevice?>) async {
     for await value in stream {
+      guard !detached, subscriptions[id] != nil else { return }
       do {
         if let value {
           store(value)
         } else {
           connectedDevices.removeAll()
-          currentDeviceID = nil
         }
         await emit(
           id,
@@ -1073,7 +1184,10 @@ actor BotaAppleAdapter: BotaHostApi {
     map: (Element) throws -> BotaEventPayloadMessage
   ) async {
     do {
-      for try await value in stream { await emit(id, try map(value)) }
+      for try await value in stream {
+        guard !detached, subscriptions[id] != nil else { return }
+        await emit(id, try map(value))
+      }
       await completeSubscription(id)
     } catch is CancellationError {
     } catch { await failSubscription(id, error: error) }
@@ -1082,12 +1196,37 @@ actor BotaAppleAdapter: BotaHostApi {
   private func cancelAllSubscriptions() async {
     let active = subscriptions
     subscriptions.removeAll()
-    startingSubscriptionIDs.removeAll()
     for (id, subscription) in active {
-      consumedSubscriptionIDs.insert(id)
+      finishIdentifier(id)
       subscription.task.cancel()
-      try? await stop(subscription.owner)
+      if let category = subscription.owner.category {
+        try? await leaseCoordinator.cancelOperation(
+          engineID: engineID,
+          category: category
+        ) { [weak self] in
+          guard let self else { return }
+          try await self.stop(subscription.owner)
+        }
+      } else {
+        try? await stop(subscription.owner)
+      }
     }
+  }
+
+  private func releaseEngine() async {
+    rejectPendingCallbacks()
+    await Task.yield()
+    await cancelAllSubscriptions()
+    await leaseCoordinator.cancelOperations(engineID: engineID) { [weak self] category in
+      guard let self else { return }
+      try? await self.stop(category)
+    }
+    for id in startingSubscriptionIDs { finishIdentifier(id) }
+    startingSubscriptionIDs.removeAll()
+    connectedDevices.removeAll()
+    discoveredDevices.removeAll()
+    configuration = nil
+    await leaseCoordinator.release(engineID: engineID)
   }
 
   private func stop(_ owner: SubscriptionOwner) async throws {
@@ -1101,9 +1240,56 @@ actor BotaAppleAdapter: BotaHostApi {
     }
   }
 
+  private func stop(_ category: NativeOperationCategory) async throws {
+    switch category {
+    case .device: try await client.cancelDeviceOperation()
+    case .provisioning: try await client.cancelProvisioningOperation()
+    case .factoryReset: try await client.cancelFactoryResetOperation()
+    case .recording: try await client.cancelRecordingOperation()
+    case .ota: try await client.cancelOtaOperation()
+    case .logs: try await client.stopLogs()
+    case .wifi: await client.cancelWifiOperation()
+    }
+  }
+
+  private func subscriptionOwner(
+    _ request: BotaSubscriptionRequestMessage
+  ) throws -> SubscriptionOwner {
+    switch request {
+    case is BotaScanSubscriptionMessage: return .deviceOperation
+    case is BotaConnectionSubscriptionMessage: return .connection
+    case is BotaDeviceStatusSubscriptionMessage: return .deviceStatus
+    case is BotaRecordingStateSubscriptionMessage: return .recordingState
+    case is BotaRecordingSyncSubscriptionMessage,
+      is BotaUploadOwnershipSubscriptionMessage:
+      return .recordingOperation
+    case is BotaFirmwareUpdateSubscriptionMessage: return .ota
+    case is BotaLogSubscriptionMessage: return .logs
+    case is BotaWifiStatusSubscriptionMessage: return .wifi
+    default: throw bridgeError("unsupported_subscription", "subscription kind is not supported")
+    }
+  }
+
   private func store(_ device: ConnectedDevice) {
     connectedDevices[device.id] = device
-    currentDeviceID = device.id
+  }
+
+  private func requireAttached() throws {
+    guard !detached else { throw bridgeError("engine_detached", "engine is detached") }
+  }
+
+  private func mapLeaseError(_ error: Error) -> Error {
+    guard let error = error as? NativeLeaseError else { return error }
+    switch error {
+    case .configurationConflict:
+      return bridgeError("configuration_conflict", "native client is configured differently")
+    case .acquisitionCancelled:
+      return bridgeError("engine_detached", "engine is detached")
+    case .operationInProgress:
+      return bridgeError("operation_in_progress", "another engine owns this native operation")
+    case .operationNotOwned:
+      return bridgeError("operation_not_owned", "native operation belongs to another engine")
+    }
   }
 
   private func device(_ reference: BotaDeviceReferenceMessage) throws -> ConnectedDevice {
@@ -1132,7 +1318,9 @@ actor BotaAppleAdapter: BotaHostApi {
         serialNumber: request.serialNumber,
         nonce: FlutterStandardTypedData(bytes: request.nonce),
         devicePublicKey: FlutterStandardTypedData(bytes: request.devicePublicKey)
-      ))
+      ),
+      id: id
+    )
     guard response.requestId == id else { throw callbackIDMismatch() }
     guard let response = response as? BotaProvisioningMaterialResponseMessage else {
       throw callbackKindMismatch()
@@ -1153,7 +1341,9 @@ actor BotaAppleAdapter: BotaHostApi {
         nonce: FlutterStandardTypedData(bytes: request.nonce),
         commandId: request.commandID,
         bindingGeneration: try BotaAppleMapper.int64(request.bindingGeneration)
-      ))
+      ),
+      id: id
+    )
     guard response.requestId == id else { throw callbackIDMismatch() }
     guard let response = response as? BotaFactoryResetGrantResponseMessage else {
       throw callbackKindMismatch()
@@ -1170,7 +1360,9 @@ actor BotaAppleAdapter: BotaHostApi {
         version: image.version,
         sizeBytes: image.sizeBytes,
         crc32: image.crc32
-      ))
+      ),
+      id: id
+    )
     guard response.requestId == id else { throw callbackIDMismatch() }
     guard let url = URL(string: response.url), url.scheme != nil else {
       throw bridgeError("invalid_callback_response", "firmware URL is invalid")
@@ -1186,88 +1378,83 @@ actor BotaAppleAdapter: BotaHostApi {
     )
   }
 
-  func requestUploadDestination(
-    destinationID: String,
-    recordingID: String,
-    uploadID: String
-  ) async throws -> URLRequest {
-    try requireCallback(\.hasUploadDestinationCallback, name: "upload destination")
-    let id = callbackID()
-    let response = try await requestUploadDestinationMessage(
-      BotaUploadDestinationRequestMessage(
-        requestId: id,
-        destinationId: destinationID,
-        recordingId: recordingID,
-        uploadId: uploadID
-      ))
-    guard response.requestId == id else { throw callbackIDMismatch() }
-    guard let url = URL(string: response.url), url.scheme != nil else {
-      throw bridgeError("invalid_callback_response", "upload URL is invalid")
-    }
-    var request = URLRequest(url: url)
-    switch response.method {
-    case .get: request.httpMethod = "GET"
-    case .put: request.httpMethod = "PUT"
-    case .post: request.httpMethod = "POST"
-    }
-    for (name, value) in response.headers { request.setValue(value, forHTTPHeaderField: name) }
-    return request
-  }
-
-  private func persistReset(
-    commandID: String,
-    bindingGeneration: UInt64,
-    result: FactoryResetPersistenceResult
-  ) async throws {
+  private func persistReset(_ result: FactoryResetPersistenceResult) async throws {
     let id = callbackID()
     let response = try await persistFactoryResetResult(
       BotaFactoryResetResultRequestMessage(
         requestId: id,
-        commandId: commandID,
-        bindingGeneration: try BotaAppleMapper.int64(bindingGeneration),
+        commandId: result.commandID,
+        bindingGeneration: try BotaAppleMapper.int64(result.bindingGeneration),
         localRecordingsDeleted: Int64(result.localRecordingsDeleted)
-      ))
+      ),
+      id: id
+    )
     guard response.requestId == id else { throw callbackIDMismatch() }
   }
 
   private func requestMaterial(
-    _ request: BotaMaterialRequestMessage
+    _ request: BotaMaterialRequestMessage,
+    id: String
   ) async throws -> BotaMaterialResponseMessage {
-    try await withCheckedThrowingContinuation { continuation in
+    let pending = PendingFlutterCallback<BotaMaterialResponseMessage>()
+    pendingCallbackCancellations[id] = {
+      pending.resume(with: .failure(BotaBridgeError(
+        code: "engine_detached",
+        detail: "engine is detached"
+      )))
+    }
+    defer { pendingCallbackCancellations.removeValue(forKey: id) }
+    return try await withCheckedThrowingContinuation { continuation in
+      pending.install(continuation)
       flutterApi.requestMaterial(request: request) { result in
-        continuation.resume(with: result.mapError { $0 as Error })
+        pending.resume(with: result.mapError { $0 as Error })
       }
     }
   }
 
-  private func requestFirmware(_ request: BotaFirmwareRequestMessage) async throws
+  private func requestFirmware(_ request: BotaFirmwareRequestMessage, id: String) async throws
     -> BotaFirmwareSourceMessage
   {
-    try await withCheckedThrowingContinuation { continuation in
-      flutterApi.requestFirmware(request: request) { result in
-        continuation.resume(with: result.mapError { $0 as Error })
-      }
+    let pending = PendingFlutterCallback<BotaFirmwareSourceMessage>()
+    pendingCallbackCancellations[id] = {
+      pending.resume(with: .failure(BotaBridgeError(
+        code: "engine_detached",
+        detail: "engine is detached"
+      )))
     }
-  }
-
-  private func requestUploadDestinationMessage(
-    _ request: BotaUploadDestinationRequestMessage
-  ) async throws -> BotaUploadDestinationMessage {
-    try await withCheckedThrowingContinuation { continuation in
-      flutterApi.requestUploadDestination(request: request) { result in
-        continuation.resume(with: result.mapError { $0 as Error })
+    defer { pendingCallbackCancellations.removeValue(forKey: id) }
+    return try await withCheckedThrowingContinuation { continuation in
+      pending.install(continuation)
+      flutterApi.requestFirmware(request: request) { result in
+        pending.resume(with: result.mapError { $0 as Error })
       }
     }
   }
 
   private func persistFactoryResetResult(
-    _ request: BotaFactoryResetResultRequestMessage
+    _ request: BotaFactoryResetResultRequestMessage,
+    id: String
   ) async throws -> BotaFactoryResetResultAcknowledgementMessage {
-    try await withCheckedThrowingContinuation { continuation in
+    let pending = PendingFlutterCallback<BotaFactoryResetResultAcknowledgementMessage>()
+    pendingCallbackCancellations[id] = {
+      pending.resume(with: .failure(BotaBridgeError(
+        code: "engine_detached",
+        detail: "engine is detached"
+      )))
+    }
+    defer { pendingCallbackCancellations.removeValue(forKey: id) }
+    return try await withCheckedThrowingContinuation { continuation in
+      pending.install(continuation)
       flutterApi.persistFactoryResetResult(request: request) { result in
-        continuation.resume(with: result.mapError { $0 as Error })
+        pending.resume(with: result.mapError { $0 as Error })
       }
     }
+  }
+
+  private func rejectPendingCallbacks() {
+    let cancellations = pendingCallbackCancellations.values
+    pendingCallbackCancellations.removeAll()
+    for cancel in cancellations { cancel() }
   }
 
   private func callbackID() -> String {

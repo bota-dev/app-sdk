@@ -11,8 +11,6 @@ enum BotaConnectionStateMessage {
   disconnecting,
 }
 
-enum BotaHttpMethodMessage { get, put, post }
-
 enum BotaUploadOwnershipResultKindMessage {
   deviceUploadCompleted,
   deviceUploadPreserved,
@@ -109,7 +107,6 @@ class BotaConfigurationMessage {
     required this.hasProvisioningMaterialCallback,
     required this.hasFactoryResetGrantCallback,
     required this.hasFactoryResetResultCallback,
-    required this.hasUploadDestinationCallback,
     required this.hasFirmwareCallback,
   });
 
@@ -117,7 +114,6 @@ class BotaConfigurationMessage {
   bool hasProvisioningMaterialCallback;
   bool hasFactoryResetGrantCallback;
   bool hasFactoryResetResultCallback;
-  bool hasUploadDestinationCallback;
   bool hasFirmwareCallback;
 }
 
@@ -576,34 +572,6 @@ class BotaFirmwareSourceMessage {
   Map<String, String> headers;
 }
 
-class BotaUploadDestinationRequestMessage {
-  BotaUploadDestinationRequestMessage({
-    required this.requestId,
-    required this.destinationId,
-    required this.recordingId,
-    required this.uploadId,
-  });
-
-  String requestId;
-  String destinationId;
-  String recordingId;
-  String uploadId;
-}
-
-class BotaUploadDestinationMessage {
-  BotaUploadDestinationMessage({
-    required this.requestId,
-    required this.url,
-    required this.method,
-    required this.headers,
-  });
-
-  String requestId;
-  String url;
-  BotaHttpMethodMessage method;
-  Map<String, String> headers;
-}
-
 class BotaFactoryResetResultRequestMessage {
   BotaFactoryResetResultRequestMessage({
     required this.requestId,
@@ -825,14 +793,14 @@ abstract class BotaHostApi {
   void startRecording(
     String operationId,
     BotaDeviceReferenceMessage device,
-    String? requestId,
+    String grantBlob,
   );
 
   @async
   void stopRecording(
     String operationId,
     BotaDeviceReferenceMessage device,
-    String? requestId,
+    String grantBlob,
   );
 
   @async
@@ -842,11 +810,7 @@ abstract class BotaHostApi {
   );
 
   @async
-  void provision(
-    String operationId,
-    BotaDeviceReferenceMessage device,
-    String materialId,
-  );
+  void provision(String operationId, BotaDeviceReferenceMessage device);
 
   @async
   BotaConnectionSettingsMessage readConnectionSettings(
@@ -865,7 +829,7 @@ abstract class BotaHostApi {
   BotaDeprovisionResultMessage deprovision(
     String operationId,
     BotaDeviceReferenceMessage device,
-    String materialId,
+    String grantBlob,
   );
 
   @async
@@ -881,6 +845,8 @@ abstract class BotaHostApi {
   @async
   BotaFactoryResetCompletionMessage? resumePendingFactoryReset(
     String operationId,
+    BotaDeviceReferenceMessage device,
+    int currentBindingGeneration,
   );
 
   @async
@@ -926,7 +892,7 @@ abstract class BotaHostApi {
     String operationId,
     BotaDeviceReferenceMessage device,
     BotaWifiCredentialsMessage credentials,
-    String materialId,
+    String grantBlob,
   );
 
   @async
@@ -971,11 +937,6 @@ abstract class BotaFlutterApi {
 
   @asyncCallback
   BotaFirmwareSourceMessage requestFirmware(BotaFirmwareRequestMessage request);
-
-  @asyncCallback
-  BotaUploadDestinationMessage requestUploadDestination(
-    BotaUploadDestinationRequestMessage request,
-  );
 
   @asyncCallback
   BotaFactoryResetResultAcknowledgementMessage persistFactoryResetResult(

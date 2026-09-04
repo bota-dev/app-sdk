@@ -90,18 +90,18 @@ final class InMemoryBotaHostApi extends BotaHostApi {
   Future<void> startRecording(
     String operationId,
     BotaDeviceReferenceMessage device,
-    String? requestId,
+    String grantBlob,
   ) async {
-    _record('startRecording', operationId, <Object?>[device, requestId]);
+    _record('startRecording', operationId, <Object>[device, grantBlob]);
   }
 
   @override
   Future<void> stopRecording(
     String operationId,
     BotaDeviceReferenceMessage device,
-    String? requestId,
+    String grantBlob,
   ) async {
-    _record('stopRecording', operationId, <Object?>[device, requestId]);
+    _record('stopRecording', operationId, <Object>[device, grantBlob]);
   }
 
   @override
@@ -117,9 +117,8 @@ final class InMemoryBotaHostApi extends BotaHostApi {
   Future<void> provision(
     String operationId,
     BotaDeviceReferenceMessage device,
-    String materialId,
   ) async {
-    _record('provision', operationId, <Object>[device, materialId]);
+    _record('provision', operationId, device);
   }
 
   @override
@@ -144,9 +143,9 @@ final class InMemoryBotaHostApi extends BotaHostApi {
   Future<BotaDeprovisionResultMessage> deprovision(
     String operationId,
     BotaDeviceReferenceMessage device,
-    String materialId,
+    String grantBlob,
   ) async {
-    _record('deprovision', operationId, <Object>[device, materialId]);
+    _record('deprovision', operationId, <Object>[device, grantBlob]);
     return BotaDeprovisionResultMessage(success: true);
   }
 
@@ -171,11 +170,16 @@ final class InMemoryBotaHostApi extends BotaHostApi {
   @override
   Future<BotaFactoryResetCompletionMessage?> resumePendingFactoryReset(
     String operationId,
+    BotaDeviceReferenceMessage device,
+    int currentBindingGeneration,
   ) async {
-    _record('resumePendingFactoryReset', operationId);
+    _record('resumePendingFactoryReset', operationId, <Object>[
+      device,
+      currentBindingGeneration,
+    ]);
     return BotaFactoryResetCompletionMessage(
       commandId: 'pending-command',
-      bindingGeneration: 4,
+      bindingGeneration: currentBindingGeneration,
     );
   }
 
@@ -250,12 +254,12 @@ final class InMemoryBotaHostApi extends BotaHostApi {
     String operationId,
     BotaDeviceReferenceMessage device,
     BotaWifiCredentialsMessage credentials,
-    String materialId,
+    String grantBlob,
   ) async {
     _record('configureWifi', operationId, <Object>[
       device,
       credentials,
-      materialId,
+      grantBlob,
     ]);
     return BotaWifiConfigResultMessage(name: 'success');
   }

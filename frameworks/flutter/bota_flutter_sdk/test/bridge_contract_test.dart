@@ -94,15 +94,48 @@ void main() {
       'onEvent',
       'requestMaterial',
       'requestFirmware',
-      'requestUploadDestination',
       'persistFactoryResetResult',
     });
     expect(_asyncMethods(body, '@asyncCallback'), <String>{
       'requestMaterial',
       'requestFirmware',
-      'requestUploadDestination',
       'persistFactoryResetResult',
     });
+    expect(schema, isNot(contains('BotaUploadDestination')));
+    expect(schema, isNot(contains('hasUploadDestinationCallback')));
+    expect(schema, isNot(contains('BotaHttpMethodMessage')));
+  });
+
+  test('grant and durable-resume routes expose their binding arguments', () {
+    final String host = _classBody(schema, 'BotaHostApi');
+
+    expect(
+      _methodDeclaration(host, 'startRecording'),
+      contains('String grantBlob'),
+    );
+    expect(
+      _methodDeclaration(host, 'stopRecording'),
+      contains('String grantBlob'),
+    );
+    expect(
+      _methodDeclaration(host, 'provision'),
+      isNot(contains('materialId')),
+    );
+    expect(
+      _methodDeclaration(host, 'deprovision'),
+      contains('String grantBlob'),
+    );
+    expect(
+      _methodDeclaration(host, 'resumePendingFactoryReset'),
+      allOf(
+        contains('BotaDeviceReferenceMessage device'),
+        contains('int currentBindingGeneration'),
+      ),
+    );
+    expect(
+      _methodDeclaration(host, 'configureWifi'),
+      contains('String grantBlob'),
+    );
   });
 
   test('open enum values remain typed by their public domain', () {
@@ -234,6 +267,13 @@ String _methodReturnType(String body, String method) {
     '([\\w<>,?]+)\\s+${RegExp.escape(method)}\\s*\\(',
   ).firstMatch(body)!;
   return match.group(1)!;
+}
+
+String _methodDeclaration(String body, String method) {
+  final RegExpMatch match = RegExp(
+    '[\\w<>,? ]+\\s+${RegExp.escape(method)}\\s*\\([\\s\\S]*?\\);',
+  ).firstMatch(body)!;
+  return match.group(0)!;
 }
 
 List<String> _eventSafetyViolations(String source) {

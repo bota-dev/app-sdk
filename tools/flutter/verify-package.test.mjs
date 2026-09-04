@@ -25,7 +25,9 @@ const packageFiles = [
   'LICENSE',
   'analysis_options.yaml',
   'android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt',
-  'ios/Classes/BotaApi.g.swift',
+  'ios/bota_flutter_sdk.podspec',
+  'ios/bota_flutter_sdk/Package.swift',
+  'ios/bota_flutter_sdk/Sources/bota_flutter_sdk/BotaApi.g.swift',
   'lib/bota_flutter_sdk.dart',
   'lib/src/generated/bota_api.g.dart',
   'pigeon_options.yaml',
@@ -59,6 +61,23 @@ flutter:
         pluginClass: BotaFlutterSdkPlugin
 `;
 
+const validPluginPodspec = `
+version = package.fetch("version")
+spec.swift_version = "5.0"
+spec.source_files = "bota_flutter_sdk/Sources/bota_flutter_sdk/**/*.swift"
+spec.dependency "BotaAppleSDK", version
+`;
+const validSwiftPackage = `
+.library(name: "bota-flutter-sdk", targets: ["bota_flutter_sdk"])
+.package(name: "FlutterFramework", path: "../FlutterFramework")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "1.1.0")
+swiftLanguageModes: [.v5]
+`;
+const validApplePodspec = `
+spec.version = "1.1.0"
+spec.vendored_frameworks = "Artifacts/BotaDeviceSDKCore.xcframework"
+`;
+
 const createFixture = (prefix = 'bota-flutter-package-') => {
   const root = mkdtempSync(join(tmpdir(), prefix));
   const packageRoot = join(root, 'frameworks', 'flutter', 'bota_flutter_sdk');
@@ -67,8 +86,15 @@ const createFixture = (prefix = 'bota-flutter-package-') => {
   for (const file of packageFiles) {
     const path = join(packageRoot, file);
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, file === 'pubspec.yaml' ? validPubspec : 'fixture\n');
+    let contents = 'fixture\n';
+    if (file === 'pubspec.yaml') contents = validPubspec;
+    if (file === 'ios/bota_flutter_sdk.podspec') contents = validPluginPodspec;
+    if (file === 'ios/bota_flutter_sdk/Package.swift') contents = validSwiftPackage;
+    writeFileSync(path, contents);
   }
+  const applePodspec = join(root, 'platforms', 'apple', 'BotaAppleSDK.podspec');
+  mkdirSync(dirname(applePodspec), { recursive: true });
+  writeFileSync(applePodspec, validApplePodspec);
 
   return { packageRoot, root };
 };
@@ -151,6 +177,28 @@ test('rejects a non-exact Pigeon development dependency', () => {
   assert.throws(
     () => verifyFlutterPackage(root),
     /Pigeon version must be exactly 28\.0\.0/
+  );
+});
+
+test('rejects Apple package version and language-mode drift', () => {
+  const packageFixture = createFixture();
+  writeFileSync(
+    join(packageFixture.packageRoot, 'ios/bota_flutter_sdk/Package.swift'),
+    validSwiftPackage.replace('exact: "1.1.0"', 'exact: "1.0.0"')
+  );
+  const podFixture = createFixture();
+  writeFileSync(
+    join(podFixture.packageRoot, 'ios/bota_flutter_sdk.podspec'),
+    validPluginPodspec.replace('"5.0"', '"6.0"')
+  );
+
+  assert.throws(
+    () => verifyFlutterPackage(packageFixture.root),
+    /pin BotaAppleSDK exactly to 1\.1\.0/
+  );
+  assert.throws(
+    () => verifyFlutterPackage(podFixture.root),
+    /compile in Swift 5 language mode/
   );
 });
 

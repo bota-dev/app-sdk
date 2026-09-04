@@ -4,9 +4,9 @@
 
 **Goal:** Ship the public `bota_flutter_sdk` beta for Flutter iOS and Android applications while preserving the native Bota App SDK facades as the Bluetooth and workflow owners.
 
-**Architecture:** A single Flutter plugin exposes immutable Dart models and manager APIs. Pigeon generates one versioned Dart/Swift/Kotlin bridge; the host adapters map bounded values to `BotaAppleSDK` and `dev.bota:bota-android-sdk`, while recording bodies, firmware bodies, Bluetooth objects, and secrets remain native. Per-engine registries and a process-wide lease coordinator make configure, streams, callbacks, detach, and destroy deterministic.
+**Architecture:** A single Flutter plugin exposes immutable Dart models and manager APIs. Pigeon generates one versioned Dart/Swift/Kotlin bridge; the host adapters map bounded values to `BotaAppleSDK` and `dev.bota:bota-android-sdk`, while recording bodies, firmware bodies, Bluetooth objects, and device-private material remain native. Per-engine registries and a process-wide lease coordinator make configure, streams, callbacks, detach, and destroy deterministic.
 
-**Tech Stack:** Flutter 3.47.2, Dart 3.13.2, Pigeon 28.0.0, Swift 6, BotaAppleSDK, Kotlin 2.2, Android API 26, Gradle, Node.js 22 release tooling, GitHub Actions, pub.dev OIDC.
+**Tech Stack:** Flutter 3.47.2, Dart 3.13.2, Pigeon 28.0.0, Swift 6 toolchain with the generated Flutter bridge compiled in Swift 5 language mode, BotaAppleSDK, Kotlin 2.2, Android API 26, Gradle, Node.js 22 release tooling, GitHub Actions, pub.dev OIDC.
 
 **Spec:** `docs/superpowers/specs/2026-09-03-flutter-facade-design.md`
 
@@ -18,7 +18,7 @@
 - The first synchronized Flutter release is `1.2.0-beta.0`; every platform version comes from `sdk-version.toml`.
 - Flutter supports iOS and Android only in this slice; live audio streaming is excluded and must not be advertised.
 - Dart never implements BLE, reducers, encryption, persistence, firmware download, or recording byte transfer.
-- Recording and firmware bodies, raw BLE packets, credentials, grants, and native Bluetooth objects never cross a Flutter channel.
+- Recording and firmware bodies, raw BLE packets, device-private material, and native Bluetooth objects never cross a Flutter channel. Application-supplied WiFi credentials and one-shot provisioning/reset material may cross request-bound commands or callbacks; they never appear in stream events, logs, or plugin persistence.
 - Generated Pigeon Dart, Swift, and Kotlin files are checked in and regenerated in CI; generated files are never edited manually.
 - Every behavior change follows red-green-refactor. Generated code and static package configuration are generated from reviewed source and verified by drift/package tests.
 - Every commit includes `Co-Authored-By: OpenAI Codex <noreply@openai.com>`.
@@ -164,23 +164,23 @@
   }
 
   abstract interface class BotaControlManager {
-    Future<void> startRecording(BotaConnectedDevice device, {String? requestId});
-    Future<void> stopRecording(BotaConnectedDevice device, {String? requestId});
+    Future<void> startRecording(BotaConnectedDevice device, {required String grantBlob});
+    Future<void> stopRecording(BotaConnectedDevice device, {required String grantBlob});
     Future<BotaRecordingState> readRecordingState(BotaConnectedDevice device);
     Stream<BotaRecordingState> recordingState(BotaConnectedDevice device);
   }
 
   abstract interface class BotaProvisioningManager {
-    Future<void> provision(BotaConnectedDevice device, {required String materialId});
+    Future<void> provision(BotaConnectedDevice device);
     Future<BotaConnectionSettings> readConnectionSettings(BotaConnectedDevice device);
     Future<void> writeConnectionSettings(BotaConnectedDevice device, BotaConnectionSettings settings);
-    Future<BotaDeprovisionResult> deprovision(BotaConnectedDevice device, {required String materialId});
+    Future<BotaDeprovisionResult> deprovision(BotaConnectedDevice device, {required String grantBlob});
     Future<void> cancelCurrentOperation();
   }
 
   abstract interface class BotaFactoryResetManager {
     Future<BotaFactoryResetCompletion> reset(BotaConnectedDevice device, BotaFactoryResetCommand command);
-    Future<BotaFactoryResetCompletion?> resumePending();
+    Future<BotaFactoryResetCompletion?> resumePending(BotaConnectedDevice device, {required int currentBindingGeneration});
     Future<BotaFactoryResetCompletion> resumeUnjournaled(BotaConnectedDevice device, BotaFactoryResetCommand command);
     Future<void> cancelCurrentOperation();
   }
@@ -205,7 +205,7 @@
   }
 
   abstract interface class BotaWifiManager {
-    Future<BotaWifiConfigResult> configure(BotaConnectedDevice device, BotaWifiCredentials credentials, {required String materialId});
+    Future<BotaWifiConfigResult> configure(BotaConnectedDevice device, BotaWifiCredentials credentials, {required String grantBlob});
     Future<BotaWifiConfigResult> disconnect(BotaConnectedDevice device);
     Future<BotaWifiStatus> readStatus(BotaConnectedDevice device);
     Stream<BotaWifiStatus> status(BotaConnectedDevice device);
@@ -214,7 +214,7 @@
   }
   ```
 
-  `BotaConfiguration` contains an application-support namespace plus `BotaApplicationCallbacks` for provisioning material, reset grants/results, upload destinations, and firmware requests. Callback request/response values are immutable and request-bound. `BotaPlatform` repeats these method shapes internally so the public managers remain trivial typed delegates; Task 4 supplies the channel implementation while tests use an in-memory fake.
+  `BotaConfiguration` contains an application-support namespace plus `BotaApplicationCallbacks` for provisioning material, reset grants/results, and firmware requests. Callback request/response values are immutable and request-bound. Batch-upload destinations remain application-owned after the SDK returns a completed native file path; the beta has no unused upload-destination callback. `BotaPlatform` repeats these method shapes internally so the public managers remain trivial typed delegates; Task 4 supplies the channel implementation while tests use an in-memory fake.
 
   `BotaSdkException` contains `code`, `operation`, `retryable`, optional `protocolStatus`, and `detail`; `toString()` redacts material and never includes callback payload bytes.
 
@@ -242,7 +242,7 @@
 - Create: `frameworks/flutter/bota_flutter_sdk/pigeons/bota_api.dart`
 - Create: `frameworks/flutter/bota_flutter_sdk/pigeon_options.yaml`
 - Generate: `frameworks/flutter/bota_flutter_sdk/lib/src/generated/bota_api.g.dart`
-- Generate: `frameworks/flutter/bota_flutter_sdk/ios/Classes/BotaApi.g.swift`
+- Generate: `frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Sources/bota_flutter_sdk/BotaApi.g.swift`
 - Generate: `frameworks/flutter/bota_flutter_sdk/android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt`
 - Create: `frameworks/flutter/bota_flutter_sdk/test/bridge_contract_test.dart`
 - Create: `tools/flutter/generate-pigeon.sh`
@@ -271,7 +271,7 @@
 
   Use typed enums/classes for bounded device, settings, recording, OTA, WiFi, error, progress, callback-request, and callback-result values. Host methods accept an operation ID plus typed arguments and return typed values or `void`; stream starts return no body and emit `BotaEventMessage` through `BotaFlutterApi.onEvent`. Application callback requests use `BotaFlutterApi.requestMaterial`, `requestFirmware`, `requestUploadDestination`, and `persistFactoryResetResult` and return request-bound typed responses.
 
-  `generate-pigeon.sh` runs the exact locked dependency, writes all three targets, and normalizes generator paths. `verify-pigeon.mjs` generates into a temporary directory and byte-compares every expected output.
+  `generate-pigeon.sh` runs the exact locked dependency, writes all three targets, and normalizes generator paths. `verify-pigeon.mjs` generates into a temporary directory and byte-compares every expected output. The frozen bridge includes three reachable application callbacks: provisioning/reset material, firmware source, and factory-reset result persistence.
 
 - [ ] **Step 4: Generate and verify GREEN**
 
@@ -287,7 +287,7 @@
 - [ ] **Step 5: Commit the bridge contract**
 
   ```bash
-  git add frameworks/flutter/bota_flutter_sdk/pigeons frameworks/flutter/bota_flutter_sdk/pigeon_options.yaml frameworks/flutter/bota_flutter_sdk/lib/src/generated frameworks/flutter/bota_flutter_sdk/ios/Classes/BotaApi.g.swift frameworks/flutter/bota_flutter_sdk/android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt tools/flutter
+  git add frameworks/flutter/bota_flutter_sdk/pigeons frameworks/flutter/bota_flutter_sdk/pigeon_options.yaml frameworks/flutter/bota_flutter_sdk/lib/src/generated frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Sources/bota_flutter_sdk/BotaApi.g.swift frameworks/flutter/bota_flutter_sdk/android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt tools/flutter
   git commit -m "feat(flutter): add typed native bridge" \
     -m "Co-Authored-By: OpenAI Codex <noreply@openai.com>"
   ```
@@ -351,10 +351,11 @@
 
 **Files:**
 - Create: `frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk.podspec`
-- Create: `frameworks/flutter/bota_flutter_sdk/ios/Classes/BotaFlutterSdkPlugin.swift`
-- Create: `frameworks/flutter/bota_flutter_sdk/ios/Classes/BotaAppleAdapter.swift`
-- Create: `frameworks/flutter/bota_flutter_sdk/ios/Classes/BotaAppleMapper.swift`
-- Create: `frameworks/flutter/bota_flutter_sdk/ios/Classes/NativeLeaseCoordinator.swift`
+- Create: `frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Package.swift`
+- Create: `frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Sources/bota_flutter_sdk/BotaFlutterSdkPlugin.swift`
+- Create: `frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Sources/bota_flutter_sdk/BotaAppleAdapter.swift`
+- Create: `frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Sources/bota_flutter_sdk/BotaAppleMapper.swift`
+- Create: `frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Sources/bota_flutter_sdk/NativeLeaseCoordinator.swift`
 - Create: `frameworks/flutter/bota_flutter_sdk/ios/Tests/BotaAppleAdapterTests.swift`
 - Create: `frameworks/flutter/bota_flutter_sdk/ios/Tests/NativeLeaseCoordinatorTests.swift`
 - Create: `tools/flutter/test-apple-adapter.sh`
@@ -380,7 +381,7 @@
 
   Register the generated setup on each `FlutterPluginRegistrar`. The adapter validates operation IDs before touching native state, maps to native value types explicitly, stores connected/discovered handles only in a per-engine registry, and consumes native `AsyncStream`/`AsyncThrowingStream` values in owned tasks. Cancellation removes the task before invoking the corresponding native cancellation/stop method. Callback closures invoke the generated Flutter API and validate the response ID/kind before returning native bytes or URL requests. No callback value is logged.
 
-  The podspec uses iOS 15, Swift 6, Flutter, and the exact synchronized `BotaAppleSDK` Swift package dependency using CocoaPods `spm_dependency`; local test tooling resolves `platforms/apple` without changing published metadata.
+  Flutter Swift Package Manager integration resolves the exact synchronized Git tag and `BotaAppleSDK` product. CocoaPods depends fail-closed on the exact synchronized `BotaAppleSDK` pod; the native Apple package therefore supplies and tests its own podspec instead of relying on a React-Native-only `spm_dependency` helper. Both integrations compile the same adapter source. The generated Flutter bridge uses Swift 5 language mode under the pinned Swift 6 toolchain because Pigeon 28 generated code is not Swift 6 sendability-clean; the native `BotaAppleSDK` remains Swift 6.
 
 - [ ] **Step 4: Run Apple adapter and package tests**
 

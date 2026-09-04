@@ -79,6 +79,8 @@ The package uses:
 - Flutter SDK `>=3.41.0` for consumers;
 - Flutter `3.47.2` with Dart `3.13.2` in CI;
 - Pigeon `28.0.0`, pinned exactly as a development dependency;
+- the Swift 6 toolchain, with the Pigeon-generated Flutter bridge compiled in
+  Swift 5 language mode until the pinned generator is sendability-clean;
 - iOS 15 as the Apple deployment floor; and
 - Android API 26 as the Android minimum SDK.
 
@@ -113,8 +115,9 @@ branch on those fields, not platform exception text.
 
 `BotaDeviceClient.configure` accepts asynchronous application callbacks for
 provisioning material, command-bound reset grants, durable reset-result
-persistence, and application-authorized upload/download destinations. The
-plugin never calls Bota backend APIs itself.
+persistence, and application-authorized firmware sources. Batch-upload
+destinations remain application-owned after the SDK returns a completed native
+file path. The plugin never calls Bota backend APIs itself.
 
 ## Bridge Contract
 
@@ -130,7 +133,7 @@ Only bounded values cross the channel:
   status fields;
 - provisioning/reset material encoded by the application and decoded into
   bytes only by the native facade;
-- presigned URL request metadata registered natively under an opaque ID;
+- firmware-download request metadata registered natively under an opaque ID;
 - native file paths after a completed retained recording transfer; and
 - complete sanitized device-log lines.
 
@@ -143,10 +146,11 @@ private material, and native Bluetooth objects never cross the Dart bridge.
 
 The Swift plugin imports `BotaAppleSDK`, translates Pigeon values explicitly,
 and delegates every operation to `BotaDeviceClient`. Local CI resolves the
-nested source package; published Flutter packages resolve the exact synchronized
-Git tag and `BotaAppleSDK` product. The plugin supports both Flutter's CocoaPods
-integration and Swift Package Manager integration, with one shared Swift
-adapter implementation.
+nested source package. Published Flutter Swift Package Manager consumers resolve
+the exact synchronized Git tag and `BotaAppleSDK` product; CocoaPods consumers
+resolve the exact synchronized `BotaAppleSDK` pod. The plugin supports both
+Flutter integrations with one shared Swift adapter implementation and fails
+closed when the matching native dependency cannot be resolved.
 
 ### Android
 

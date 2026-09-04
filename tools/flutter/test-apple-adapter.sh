@@ -4,22 +4,36 @@ set -euo pipefail
 
 workspace_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 plugin_root="$workspace_root/frameworks/flutter/bota_flutter_sdk"
+required_cocoapods_version="1.16.2"
+homebrew_pod=""
+if [[ -x /opt/homebrew/opt/ruby/bin/ruby ]]; then
+  export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
+  homebrew_pod="$(/opt/homebrew/opt/ruby/bin/ruby -e 'print Gem.bindir')/pod"
+fi
 test_tmp_root="$(cd "${BOTA_TEST_TMPDIR:-/tmp}" && pwd -P)"
 consumer_root="$(mktemp -d "$test_tmp_root/bota-flutter-apple-tests.XXXXXX")"
-swift_language_mode="${BOTA_FLUTTER_SWIFT_LANGUAGE_MODE:-v5}"
-
-case "$swift_language_mode" in
-  v5|v6) ;;
-  *)
-    printf 'Unsupported BOTA_FLUTTER_SWIFT_LANGUAGE_MODE: %s\n' "$swift_language_mode" >&2
-    exit 2
-    ;;
-esac
-
 cleanup() {
   find "$consumer_root" -depth -delete
 }
 trap cleanup EXIT
+
+pod_binary=""
+for candidate in \
+  "${POD_BINARY:-}" \
+  "$homebrew_pod" \
+  "$(command -v pod || true)"
+do
+  if [[ -n "$candidate" && -x "$candidate" ]] \
+    && [[ "$($candidate --version 2>/dev/null)" == "$required_cocoapods_version" ]]; then
+    pod_binary="$candidate"
+    break
+  fi
+done
+if [[ -z "$pod_binary" ]]; then
+  echo "CocoaPods $required_cocoapods_version is required" >&2
+  exit 1
+fi
+export PATH="$(dirname "$pod_binary"):$PATH"
 
 "$workspace_root/tools/apple/build-xcframework.sh"
 
@@ -28,7 +42,7 @@ mkdir -p \
   "$consumer_root/Sources/FlutterMacOS" \
   "$consumer_root/Tests/BotaFlutterSdkTests"
 
-find "$plugin_root/ios/Classes" -maxdepth 1 -name '*.swift' \
+find "$plugin_root/ios/bota_flutter_sdk/Sources/bota_flutter_sdk" -maxdepth 1 -name '*.swift' \
   -exec cp '{}' "$consumer_root/Sources/BotaFlutterSdk/" ';'
 find "$plugin_root/ios/Tests" -maxdepth 1 -name '*.swift' \
   -exec cp '{}' "$consumer_root/Tests/BotaFlutterSdkTests/" ';'
@@ -47,14 +61,20 @@ let package = Package(
         .target(name: "FlutterMacOS"),
         .target(
             name: "BotaFlutterSdk",
-            dependencies: ["FlutterMacOS", .product(name: "BotaAppleSDK", package: "apple")]
+            dependencies: ["FlutterMacOS", .product(name: "BotaAppleSDK", package: "apple")],
+            swiftSettings: [
+                .unsafeFlags(["-strict-concurrency=complete"]),
+            ]
         ),
         .testTarget(
             name: "BotaFlutterSdkTests",
-            dependencies: ["BotaFlutterSdk", .product(name: "BotaAppleSDK", package: "apple")]
+            dependencies: ["BotaFlutterSdk", .product(name: "BotaAppleSDK", package: "apple")],
+            swiftSettings: [
+                .unsafeFlags(["-strict-concurrency=complete", "-warnings-as-errors"]),
+            ]
         ),
     ],
-    swiftLanguageModes: [.$swift_language_mode]
+    swiftLanguageModes: [.v5]
 )
 EOF
 
@@ -130,3 +150,71 @@ EOF
 swift test \
   --package-path "$consumer_root" \
   --scratch-path "$workspace_root/target/flutter-apple-swiftpm"
+
+create_flutter_consumer() {
+  local destination="$1"
+  "$workspace_root/tools/flutter/run-flutter.sh" create \
+    --platforms=ios \
+    --org=dev.bota \
+    --project-name=bota_flutter_consumer \
+    "$destination" >/dev/null
+  "$workspace_root/tools/flutter/run-flutter.sh" pub add \
+    --directory="$destination" \
+    "bota_flutter_sdk@{path: $plugin_root}" >/dev/null
+}
+
+cocoapods_consumer="$consumer_root/cocoapods-consumer"
+create_flutter_consumer "$cocoapods_consumer"
+ruby -0pi -e \
+  'sub(/^flutter:\n/, "flutter:\n  config:\n    enable-swift-package-manager: false\n")' \
+  "$cocoapods_consumer/pubspec.yaml"
+cat >"$cocoapods_consumer/ios/Podfile" <<EOF
+platform :ios, '15.0'
+
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  settings = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  File.foreach(settings) do |line|
+    match = line.match(/FLUTTER_ROOT=(.*)/)
+    return match[1].strip if match
+  end
+  raise "FLUTTER_ROOT is missing from #{settings}"
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+  pod 'BotaAppleSDK', :path => '$workspace_root/platforms/apple'
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+  end
+end
+EOF
+(
+  cd "$cocoapods_consumer"
+  "$workspace_root/tools/flutter/run-flutter.sh" build ios \
+    --debug --simulator --no-codesign
+)
+
+swiftpm_consumer="$consumer_root/swiftpm-consumer"
+create_flutter_consumer "$swiftpm_consumer"
+(
+  cd "$swiftpm_consumer"
+  BOTA_APPLE_SDK_PACKAGE_PATH="$workspace_root/platforms/apple" \
+    "$workspace_root/tools/flutter/run-flutter.sh" build ios \
+      --debug --simulator --no-codesign
+)

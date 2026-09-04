@@ -5,7 +5,7 @@ import XCTest
 @MainActor
 final class NativeLeaseCoordinatorTests: XCTestCase {
   func testEquivalentConfigurationCoalescesAcrossEngines() async throws {
-    let client = LeaseTestClient()
+    let client = LeaseTestClient(suspendConfigure: true)
     let coordinator = NativeLeaseCoordinator(client: client)
     let configuration = leaseConfiguration(namespace: "shared")
 
@@ -13,10 +13,12 @@ final class NativeLeaseCoordinatorTests: XCTestCase {
       engineID: "engine-a",
       configuration: configuration
     )
+    await client.waitUntilConfigureStarted()
     async let second: Void = coordinator.acquire(
       engineID: "engine-b",
       configuration: configuration
     )
+    await client.resumeConfigure()
     try await first
     try await second
 
@@ -24,6 +26,32 @@ final class NativeLeaseCoordinatorTests: XCTestCase {
     let leaseCount = await coordinator.leaseCount
     XCTAssertEqual(configureCount, 1)
     XCTAssertEqual(leaseCount, 2)
+  }
+
+  func testReleaseDuringSuspendedConfigureCannotInstallDetachedLease() async throws {
+    let client = LeaseTestClient(suspendConfigure: true)
+    let coordinator = NativeLeaseCoordinator(client: client)
+    let acquire = Task {
+      try await coordinator.acquire(
+        engineID: "engine-a",
+        configuration: leaseConfiguration(namespace: "shared")
+      )
+    }
+    await client.waitUntilConfigureStarted()
+
+    await coordinator.release(engineID: "engine-a")
+    await client.resumeConfigure()
+
+    do {
+      try await acquire.value
+      XCTFail("expected detached acquisition to be cancelled")
+    } catch let error as NativeLeaseError {
+      XCTAssertEqual(error, .acquisitionCancelled)
+    }
+    let leaseCount = await coordinator.leaseCount
+    let destroyCount = await client.destroyCount
+    XCTAssertEqual(leaseCount, 0)
+    XCTAssertEqual(destroyCount, 1)
   }
 
   func testConflictingConfigurationFailsWithoutReconfiguringClient() async throws {
@@ -78,7 +106,6 @@ final class NativeLeaseCoordinatorTests: XCTestCase {
       hasProvisioningMaterialCallback: true,
       hasFactoryResetGrantCallback: true,
       hasFactoryResetResultCallback: true,
-      hasUploadDestinationCallback: true,
       hasFirmwareCallback: true
     )
   }
@@ -87,7 +114,29 @@ final class NativeLeaseCoordinatorTests: XCTestCase {
 private actor LeaseTestClient: NativeLeaseClientProtocol {
   private(set) var configureCount = 0
   private(set) var destroyCount = 0
+  private let suspendConfigure: Bool
+  private var configureStarted = false
+  private var configureContinuation: CheckedContinuation<Void, Never>?
 
-  func configure(applicationSupportDirectory: URL) async throws { configureCount += 1 }
+  init(suspendConfigure: Bool = false) {
+    self.suspendConfigure = suspendConfigure
+  }
+
+  func configure(applicationSupportDirectory: URL) async throws {
+    configureCount += 1
+    configureStarted = true
+    guard suspendConfigure else { return }
+    await withCheckedContinuation { configureContinuation = $0 }
+  }
+
+  func waitUntilConfigureStarted() async {
+    while !configureStarted { await Task.yield() }
+  }
+
+  func resumeConfigure() {
+    configureContinuation?.resume()
+    configureContinuation = nil
+  }
+
   func destroy() async { destroyCount += 1 }
 }

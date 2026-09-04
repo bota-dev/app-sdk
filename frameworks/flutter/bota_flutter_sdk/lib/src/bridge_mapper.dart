@@ -22,8 +22,6 @@ abstract final class BridgeMapper {
         configuration.callbacks.factoryResetGrant != null,
     hasFactoryResetResultCallback:
         configuration.callbacks.persistFactoryResetResult != null,
-    hasUploadDestinationCallback:
-        configuration.callbacks.uploadDestination != null,
     hasFirmwareCallback: configuration.callbacks.firmware != null,
   );
 
@@ -445,28 +443,6 @@ abstract final class BridgeMapper {
         url: source.url.toString(),
         headers: Map<String, String>.of(source.headers),
       );
-
-  static BotaUploadDestinationRequest uploadDestinationRequest(
-    BotaUploadDestinationRequestMessage request,
-  ) => BotaUploadDestinationRequest(
-    requestId: request.requestId,
-    destinationId: request.destinationId,
-    recordingId: request.recordingId,
-    uploadId: request.uploadId,
-  );
-
-  static BotaUploadDestinationMessage uploadDestination(
-    BotaUploadDestination destination,
-  ) => BotaUploadDestinationMessage(
-    requestId: destination.requestId,
-    url: destination.url.toString(),
-    method: switch (destination.method) {
-      BotaHttpMethod.get => BotaHttpMethodMessage.get,
-      BotaHttpMethod.put => BotaHttpMethodMessage.put,
-      BotaHttpMethod.post => BotaHttpMethodMessage.post,
-    },
-    headers: Map<String, String>.of(destination.headers),
-  );
 
   static BotaFactoryResetResultRequest factoryResetResultRequest(
     BotaFactoryResetResultRequestMessage request,

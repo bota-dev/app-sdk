@@ -17,9 +17,17 @@ public struct FactoryResetGrantRequest: Sendable {
 public typealias FactoryResetGrantProvider = @Sendable (FactoryResetGrantRequest) async throws -> Data
 
 public struct FactoryResetPersistenceResult: Equatable, Sendable {
+    public let commandID: String
+    public let bindingGeneration: UInt64
     public let localRecordingsDeleted: UInt16
 
-    public init(localRecordingsDeleted: UInt16) {
+    public init(
+        commandID: String,
+        bindingGeneration: UInt64,
+        localRecordingsDeleted: UInt16
+    ) {
+        self.commandID = commandID
+        self.bindingGeneration = bindingGeneration
         self.localRecordingsDeleted = localRecordingsDeleted
     }
 }
@@ -68,7 +76,11 @@ public actor FactoryResetManager {
         await runtime.registerFactoryResetGeneration(commandID, bindingGeneration)
         if let persistResult {
             await runtime.registerFactoryResetResultPersister(commandID) { result in
-                try await persistResult(try Self.persistenceResult(result))
+                try await persistResult(try Self.persistenceResult(
+                    result,
+                    commandID: commandID,
+                    bindingGeneration: bindingGeneration
+                ))
             }
         }
         await runtime.registerFactoryReset(grantID) { request in
@@ -128,7 +140,11 @@ public actor FactoryResetManager {
         await runtime.registerFactoryResetGeneration(saved.commandID, currentBindingGeneration)
         if let persistResult {
             await runtime.registerFactoryResetResultPersister(saved.commandID) { result in
-                try await persistResult(try Self.persistenceResult(result))
+                try await persistResult(try Self.persistenceResult(
+                    result,
+                    commandID: saved.commandID,
+                    bindingGeneration: currentBindingGeneration
+                ))
             }
         }
         do {
@@ -165,7 +181,11 @@ public actor FactoryResetManager {
         try await runtime.connection.require(device)
         await runtime.registerFactoryResetGeneration(commandID, bindingGeneration)
         await runtime.registerFactoryResetResultPersister(commandID) { result in
-            try await persistResult(try Self.persistenceResult(result))
+            try await persistResult(try Self.persistenceResult(
+                result,
+                commandID: commandID,
+                bindingGeneration: bindingGeneration
+            ))
         }
         do {
             try await run(
@@ -223,7 +243,9 @@ public actor FactoryResetManager {
     }
 
     private static func persistenceResult(
-        _ result: PersistedFactoryResetResult
+        _ result: PersistedFactoryResetResult,
+        commandID: String,
+        bindingGeneration: UInt64
     ) throws -> FactoryResetPersistenceResult {
         guard result.resultCode == 0,
               let deleted = UInt16(exactly: result.deletedRecordingCount)
@@ -235,7 +257,11 @@ public actor FactoryResetManager {
                 detail: "factory-reset persistence result is out of range"
             )
         }
-        return .init(localRecordingsDeleted: deleted)
+        return .init(
+            commandID: commandID,
+            bindingGeneration: bindingGeneration,
+            localRecordingsDeleted: deleted
+        )
     }
 
     private func configuredRuntime() throws -> DeviceRuntime {

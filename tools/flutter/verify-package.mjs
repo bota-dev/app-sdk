@@ -15,7 +15,9 @@ const REQUIRED_FILES = [
   'LICENSE',
   'analysis_options.yaml',
   'android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt',
-  'ios/Classes/BotaApi.g.swift',
+  'ios/bota_flutter_sdk.podspec',
+  'ios/bota_flutter_sdk/Package.swift',
+  'ios/bota_flutter_sdk/Sources/bota_flutter_sdk/BotaApi.g.swift',
   'lib/bota_flutter_sdk.dart',
   'lib/src/generated/bota_api.g.dart',
   'pigeon_options.yaml',
@@ -26,6 +28,10 @@ const REQUIRED_FILES = [
 ];
 const EXPECTED_DART_CONSTRAINT = '>=3.11.0 <4.0.0';
 const EXPECTED_FLUTTER_CONSTRAINT = '>=3.41.0';
+
+const expectMatch = (source, pattern, message) => {
+  if (!pattern.test(source)) throw new Error(message);
+};
 
 const readSdkVersion = (path) => {
   const source = readFileSync(path, 'utf8');
@@ -134,6 +140,19 @@ export const verifyFlutterPackage = (root) => {
 
   const sdkVersion = readSdkVersion(resolve(workspaceRoot, 'sdk-version.toml'));
   const pubspec = parsePubspec(readFileSync(resolve(packageRoot, 'pubspec.yaml'), 'utf8'));
+  const applePodspec = resolve(workspaceRoot, 'platforms/apple/BotaAppleSDK.podspec');
+  if (!existsSync(applePodspec)) {
+    throw new Error('Flutter package is missing platforms/apple/BotaAppleSDK.podspec');
+  }
+  const pluginPodspec = readFileSync(
+    resolve(packageRoot, 'ios/bota_flutter_sdk.podspec'),
+    'utf8'
+  );
+  const swiftPackage = readFileSync(
+    resolve(packageRoot, 'ios/bota_flutter_sdk/Package.swift'),
+    'utf8'
+  );
+  const nativePodspec = readFileSync(applePodspec, 'utf8');
 
   expectEqual(pubspec.name, 'bota_flutter_sdk', (actual) =>
     `Flutter package name ${actual ?? '(missing)'} does not match bota_flutter_sdk`
@@ -174,6 +193,55 @@ export const verifyFlutterPackage = (root) => {
   );
   expectEqual(platforms.ios?.pluginClass, 'BotaFlutterSdkPlugin', () =>
     'Flutter iOS plugin class must be BotaFlutterSdkPlugin'
+  );
+
+  expectMatch(
+    pluginPodspec,
+    /spec\.swift_version\s*=\s*["']5\.0["']/,
+    'Flutter Apple bridge must compile in Swift 5 language mode'
+  );
+  expectMatch(
+    pluginPodspec,
+    /spec\.dependency\s+["']BotaAppleSDK["']\s*,\s*version/,
+    'Flutter CocoaPods metadata must depend on the synchronized BotaAppleSDK version'
+  );
+  expectMatch(
+    pluginPodspec,
+    /bota_flutter_sdk\/Sources\/bota_flutter_sdk\/\*\*\/\*\.swift/,
+    'Flutter CocoaPods metadata must compile the shared Swift source layout'
+  );
+  if (pluginPodspec.includes('spm_dependency')) {
+    throw new Error('Flutter CocoaPods metadata must not depend on an optional SPM helper');
+  }
+  expectMatch(
+    swiftPackage,
+    /\.package\(name:\s*["']FlutterFramework["'],\s*path:\s*["']\.\.\/FlutterFramework["']\)/,
+    'Flutter Swift package must depend on ../FlutterFramework'
+  );
+  expectMatch(
+    swiftPackage,
+    new RegExp(`exact:\\s*["']${sdkVersion.replaceAll('.', '\\.')}["']`),
+    `Flutter Swift package must pin BotaAppleSDK exactly to ${sdkVersion}`
+  );
+  expectMatch(
+    swiftPackage,
+    /swiftLanguageModes:\s*\[\.v5\]/,
+    'Flutter Swift package must select Swift 5 language mode'
+  );
+  expectMatch(
+    swiftPackage,
+    /\.library\(name:\s*["']bota-flutter-sdk["']/,
+    'Flutter Swift package product must use Flutter\'s derived library name'
+  );
+  expectMatch(
+    nativePodspec,
+    new RegExp(`spec\\.version\\s*=\\s*["']${sdkVersion.replaceAll('.', '\\.')}["']`),
+    `BotaAppleSDK pod version must match ${sdkVersion}`
+  );
+  expectMatch(
+    nativePodspec,
+    /spec\.vendored_frameworks\s*=/,
+    'BotaAppleSDK pod must include the native XCFramework'
   );
 
   return { packageName: pubspec.name, sdkVersion };

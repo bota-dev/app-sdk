@@ -289,26 +289,28 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
   @override
   Future<void> startRecording(
     BotaConnectedDevice device, {
-    String? requestId,
+    required String grantBlob,
   }) => _runVoid(
     BotaOperation.encode,
     (String operationId) => _hostApi.startRecording(
       operationId,
       BridgeMapper.deviceReference(device),
-      requestId,
+      grantBlob,
     ),
   );
 
   @override
-  Future<void> stopRecording(BotaConnectedDevice device, {String? requestId}) =>
-      _runVoid(
-        BotaOperation.encode,
-        (String operationId) => _hostApi.stopRecording(
-          operationId,
-          BridgeMapper.deviceReference(device),
-          requestId,
-        ),
-      );
+  Future<void> stopRecording(
+    BotaConnectedDevice device, {
+    required String grantBlob,
+  }) => _runVoid(
+    BotaOperation.encode,
+    (String operationId) => _hostApi.stopRecording(
+      operationId,
+      BridgeMapper.deviceReference(device),
+      grantBlob,
+    ),
+  );
 
   @override
   Future<BotaRecordingState> readRecordingState(BotaConnectedDevice device) =>
@@ -338,16 +340,10 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
       );
 
   @override
-  Future<void> provision(
-    BotaConnectedDevice device, {
-    required String materialId,
-  }) => _runVoid(
+  Future<void> provision(BotaConnectedDevice device) => _runVoid(
     BotaOperation.provision,
-    (String operationId) => _hostApi.provision(
-      operationId,
-      BridgeMapper.deviceReference(device),
-      materialId,
-    ),
+    (String operationId) =>
+        _hostApi.provision(operationId, BridgeMapper.deviceReference(device)),
   );
 
   @override
@@ -379,14 +375,14 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
   @override
   Future<BotaDeprovisionResult> deprovision(
     BotaConnectedDevice device, {
-    required String materialId,
+    required String grantBlob,
   }) => _runOperation<BotaDeprovisionResult>(
     BotaOperation.provision,
     (String operationId) async => BridgeMapper.deprovisionResult(
       await _hostApi.deprovision(
         operationId,
         BridgeMapper.deviceReference(device),
-        materialId,
+        grantBlob,
       ),
     ),
   );
@@ -411,16 +407,22 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
   );
 
   @override
-  Future<BotaFactoryResetCompletion?> resumePending() =>
-      _runOperation<BotaFactoryResetCompletion?>(BotaOperation.factoryReset, (
-        String operationId,
-      ) async {
-        final BotaFactoryResetCompletionMessage? completion = await _hostApi
-            .resumePendingFactoryReset(operationId);
-        return completion == null
-            ? null
-            : BridgeMapper.factoryResetCompletion(completion);
-      });
+  Future<BotaFactoryResetCompletion?> resumePending(
+    BotaConnectedDevice device, {
+    required int currentBindingGeneration,
+  }) => _runOperation<BotaFactoryResetCompletion?>(BotaOperation.factoryReset, (
+    String operationId,
+  ) async {
+    final BotaFactoryResetCompletionMessage? completion = await _hostApi
+        .resumePendingFactoryReset(
+          operationId,
+          BridgeMapper.deviceReference(device),
+          currentBindingGeneration,
+        );
+    return completion == null
+        ? null
+        : BridgeMapper.factoryResetCompletion(completion);
+  });
 
   @override
   Future<BotaFactoryResetCompletion> resumeUnjournaled(
@@ -577,7 +579,7 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
   Future<BotaWifiConfigResult> configureWifi(
     BotaConnectedDevice device,
     BotaWifiCredentials credentials, {
-    required String materialId,
+    required String grantBlob,
   }) => _runOperation<BotaWifiConfigResult>(
     BotaOperation.provision,
     (String operationId) async => BridgeMapper.wifiConfigResult(
@@ -585,7 +587,7 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
         operationId,
         BridgeMapper.deviceReference(device),
         BridgeMapper.wifiCredentials(credentials),
-        materialId,
+        grantBlob,
       ),
     ),
   );
@@ -782,24 +784,6 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
   }
 
   @override
-  Future<BotaUploadDestinationMessage> requestUploadDestination(
-    BotaUploadDestinationRequestMessage request,
-  ) {
-    final BotaUploadDestinationCallback? callback =
-        _applicationCallbacks?.uploadDestination;
-    if (callback == null) {
-      return Future<BotaUploadDestinationMessage>.error(_callbackUnavailable());
-    }
-    return _runCallback<BotaUploadDestination, BotaUploadDestinationMessage>(
-      requestId: request.requestId,
-      kind: _CallbackKind.uploadDestination,
-      invoke: () => callback(BridgeMapper.uploadDestinationRequest(request)),
-      responseId: (BotaUploadDestination value) => value.requestId,
-      map: BridgeMapper.uploadDestination,
-    );
-  }
-
-  @override
   Future<BotaFactoryResetResultAcknowledgementMessage>
   persistFactoryResetResult(BotaFactoryResetResultRequestMessage request) {
     final BotaFactoryResetResultCallback? callback =
@@ -978,7 +962,6 @@ enum _CallbackKind {
   provisioningMaterial,
   factoryResetGrant,
   factoryResetResult,
-  uploadDestination,
   firmware,
 }
 

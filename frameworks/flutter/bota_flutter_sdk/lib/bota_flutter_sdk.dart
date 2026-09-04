@@ -62,14 +62,10 @@ export 'src/models/security.dart'
         BotaFirmwareCallback,
         BotaFirmwareRequest,
         BotaFirmwareSource,
-        BotaHttpMethod,
         BotaProvisioningFailure,
         BotaProvisioningMaterial,
         BotaProvisioningMaterialCallback,
-        BotaProvisioningMaterialRequest,
-        BotaUploadDestination,
-        BotaUploadDestinationCallback,
-        BotaUploadDestinationRequest;
+        BotaProvisioningMaterialRequest;
 export 'src/models/settings.dart'
     show
         BotaConnectionSettings,

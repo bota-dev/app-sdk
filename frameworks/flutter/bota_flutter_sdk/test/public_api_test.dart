@@ -78,13 +78,25 @@ void main() {
     final platform = _FakePlatform();
     final controls = BotaDeviceClient.forTesting(platform).controls;
 
-    await controls.startRecording(_connectedDevice, requestId: 'start-request');
-    await controls.stopRecording(_connectedDevice, requestId: 'stop-request');
+    await controls.startRecording(_connectedDevice, grantBlob: 'start-grant');
+    await controls.stopRecording(_connectedDevice, grantBlob: 'stop-grant');
 
     expect(platform.calls, [
-      'startRecording:start-request',
-      'stopRecording:stop-request',
+      'startRecording:start-grant',
+      'stopRecording:stop-grant',
     ]);
+  });
+
+  test('durable reset resume forwards device and binding generation', () async {
+    final platform = _FakePlatform();
+    final factoryReset = BotaDeviceClient.forTesting(platform).factoryReset;
+
+    await factoryReset.resumePending(
+      _connectedDevice,
+      currentBindingGeneration: 17,
+    );
+
+    expect(platform.calls, ['resumePending:device:17']);
   });
 
   test(
@@ -196,7 +208,6 @@ const _documentedBarrelExports = <String>{
   'BotaFirmwareProgress',
   'BotaFirmwareRequest',
   'BotaFirmwareSource',
-  'BotaHttpMethod',
   'BotaLogManager',
   'BotaLteState',
   'BotaModemInfo',
@@ -219,9 +230,6 @@ const _documentedBarrelExports = <String>{
   'BotaRecordingTransferMetadata',
   'BotaRecordingTransferProgress',
   'BotaSdkException',
-  'BotaUploadDestination',
-  'BotaUploadDestinationCallback',
-  'BotaUploadDestinationRequest',
   'BotaUploadOwnershipEvent',
   'BotaUploadOwnershipProgress',
   'BotaUploadOwnershipResolved',
@@ -286,17 +294,17 @@ final class _FakePlatform implements BotaPlatform {
   @override
   Future<void> startRecording(
     BotaConnectedDevice device, {
-    String? requestId,
+    required String grantBlob,
   }) async {
-    calls.add('startRecording:$requestId');
+    calls.add('startRecording:$grantBlob');
   }
 
   @override
   Future<void> stopRecording(
     BotaConnectedDevice device, {
-    String? requestId,
+    required String grantBlob,
   }) async {
-    calls.add('stopRecording:$requestId');
+    calls.add('stopRecording:$grantBlob');
   }
 
   @override
@@ -308,10 +316,7 @@ final class _FakePlatform implements BotaPlatform {
       const Stream.empty();
 
   @override
-  Future<void> provision(
-    BotaConnectedDevice device, {
-    required String materialId,
-  }) async {}
+  Future<void> provision(BotaConnectedDevice device) async {}
 
   @override
   Future<BotaConnectionSettings> readConnectionSettings(
@@ -327,7 +332,7 @@ final class _FakePlatform implements BotaPlatform {
   @override
   Future<BotaDeprovisionResult> deprovision(
     BotaConnectedDevice device, {
-    required String materialId,
+    required String grantBlob,
   }) => throw UnimplementedError();
 
   @override
@@ -348,7 +353,13 @@ final class _FakePlatform implements BotaPlatform {
   }
 
   @override
-  Future<BotaFactoryResetCompletion?> resumePending() async => null;
+  Future<BotaFactoryResetCompletion?> resumePending(
+    BotaConnectedDevice device, {
+    required int currentBindingGeneration,
+  }) async {
+    calls.add('resumePending:${device.id}:$currentBindingGeneration');
+    return null;
+  }
 
   @override
   Future<BotaFactoryResetCompletion> resumeUnjournaled(
@@ -428,7 +439,7 @@ final class _FakePlatform implements BotaPlatform {
   Future<BotaWifiConfigResult> configureWifi(
     BotaConnectedDevice device,
     BotaWifiCredentials credentials, {
-    required String materialId,
+    required String grantBlob,
   }) => throw UnimplementedError();
 
   @override

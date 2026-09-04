@@ -276,16 +276,19 @@ void main() {
       await client.devices.disconnect();
       expect(await client.devices.readStatus(), isA<BotaDeviceStatus>());
       await client.devices.cancelCurrentOperation();
-      await client.controls.startRecording(connectedDevice, requestId: 'start');
-      await client.controls.stopRecording(connectedDevice, requestId: 'stop');
+      await client.controls.startRecording(
+        connectedDevice,
+        grantBlob: 'start-grant',
+      );
+      await client.controls.stopRecording(
+        connectedDevice,
+        grantBlob: 'stop-grant',
+      );
       expect(
         await client.controls.readRecordingState(connectedDevice),
         isA<BotaRecordingState>(),
       );
-      await client.provisioning.provision(
-        connectedDevice,
-        materialId: 'material',
-      );
+      await client.provisioning.provision(connectedDevice);
       final BotaConnectionSettings settings = await client.provisioning
           .readConnectionSettings(connectedDevice);
       await client.provisioning.writeConnectionSettings(
@@ -295,13 +298,16 @@ void main() {
       expect(
         await client.provisioning.deprovision(
           connectedDevice,
-          materialId: 'deprovision-material',
+          grantBlob: 'deprovision-grant',
         ),
         const BotaDeprovisionResult(success: true),
       );
       await client.provisioning.cancelCurrentOperation();
       await client.factoryReset.reset(connectedDevice, resetCommand);
-      await client.factoryReset.resumePending();
+      await client.factoryReset.resumePending(
+        connectedDevice,
+        currentBindingGeneration: 4,
+      );
       await client.factoryReset.resumeUnjournaled(
         connectedDevice,
         resetCommand,
@@ -323,7 +329,7 @@ void main() {
         await client.wifi.configure(
           connectedDevice,
           wifiCredentials,
-          materialId: 'wifi-material',
+          grantBlob: 'wifi-grant',
         ),
         BotaWifiConfigResult.success,
       );

@@ -118,12 +118,6 @@ enum BotaConnectionStateMessage {
   disconnecting,
 }
 
-enum BotaHttpMethodMessage {
-  get,
-  put,
-  post,
-}
-
 enum BotaUploadOwnershipResultKindMessage {
   deviceUploadCompleted,
   deviceUploadPreserved,
@@ -836,7 +830,6 @@ class BotaConfigurationMessage {
     required this.hasProvisioningMaterialCallback,
     required this.hasFactoryResetGrantCallback,
     required this.hasFactoryResetResultCallback,
-    required this.hasUploadDestinationCallback,
     required this.hasFirmwareCallback,
   });
 
@@ -848,8 +841,6 @@ class BotaConfigurationMessage {
 
   bool hasFactoryResetResultCallback;
 
-  bool hasUploadDestinationCallback;
-
   bool hasFirmwareCallback;
 
   List<Object?> _toList() {
@@ -858,7 +849,6 @@ class BotaConfigurationMessage {
       hasProvisioningMaterialCallback,
       hasFactoryResetGrantCallback,
       hasFactoryResetResultCallback,
-      hasUploadDestinationCallback,
       hasFirmwareCallback,
     ];
   }
@@ -873,8 +863,7 @@ class BotaConfigurationMessage {
       hasProvisioningMaterialCallback: result[1]! as bool,
       hasFactoryResetGrantCallback: result[2]! as bool,
       hasFactoryResetResultCallback: result[3]! as bool,
-      hasUploadDestinationCallback: result[4]! as bool,
-      hasFirmwareCallback: result[5]! as bool,
+      hasFirmwareCallback: result[4]! as bool,
     );
   }
 
@@ -887,7 +876,7 @@ class BotaConfigurationMessage {
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(applicationSupportNamespace, other.applicationSupportNamespace) && _deepEquals(hasProvisioningMaterialCallback, other.hasProvisioningMaterialCallback) && _deepEquals(hasFactoryResetGrantCallback, other.hasFactoryResetGrantCallback) && _deepEquals(hasFactoryResetResultCallback, other.hasFactoryResetResultCallback) && _deepEquals(hasUploadDestinationCallback, other.hasUploadDestinationCallback) && _deepEquals(hasFirmwareCallback, other.hasFirmwareCallback);
+    return _deepEquals(applicationSupportNamespace, other.applicationSupportNamespace) && _deepEquals(hasProvisioningMaterialCallback, other.hasProvisioningMaterialCallback) && _deepEquals(hasFactoryResetGrantCallback, other.hasFactoryResetGrantCallback) && _deepEquals(hasFactoryResetResultCallback, other.hasFactoryResetResultCallback) && _deepEquals(hasFirmwareCallback, other.hasFirmwareCallback);
   }
 
   @override
@@ -896,7 +885,7 @@ class BotaConfigurationMessage {
 
   @override
   String toString() {
-    return 'BotaConfigurationMessage(applicationSupportNamespace: $applicationSupportNamespace, hasProvisioningMaterialCallback: $hasProvisioningMaterialCallback, hasFactoryResetGrantCallback: $hasFactoryResetGrantCallback, hasFactoryResetResultCallback: $hasFactoryResetResultCallback, hasUploadDestinationCallback: $hasUploadDestinationCallback, hasFirmwareCallback: $hasFirmwareCallback)';
+    return 'BotaConfigurationMessage(applicationSupportNamespace: $applicationSupportNamespace, hasProvisioningMaterialCallback: $hasProvisioningMaterialCallback, hasFactoryResetGrantCallback: $hasFactoryResetGrantCallback, hasFactoryResetResultCallback: $hasFactoryResetResultCallback, hasFirmwareCallback: $hasFirmwareCallback)';
   }
 }
 
@@ -2871,126 +2860,6 @@ class BotaFirmwareSourceMessage {
   }
 }
 
-class BotaUploadDestinationRequestMessage {
-  BotaUploadDestinationRequestMessage({
-    required this.requestId,
-    required this.destinationId,
-    required this.recordingId,
-    required this.uploadId,
-  });
-
-  String requestId;
-
-  String destinationId;
-
-  String recordingId;
-
-  String uploadId;
-
-  List<Object?> _toList() {
-    return <Object?>[
-      requestId,
-      destinationId,
-      recordingId,
-      uploadId,
-    ];
-  }
-
-  Object encode() {
-    return _toList();  }
-
-  static BotaUploadDestinationRequestMessage decode(Object result) {
-    result as List<Object?>;
-    return BotaUploadDestinationRequestMessage(
-      requestId: result[0]! as String,
-      destinationId: result[1]! as String,
-      recordingId: result[2]! as String,
-      uploadId: result[3]! as String,
-    );
-  }
-
-  @override
-  // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  bool operator ==(Object other) {
-    if (other is! BotaUploadDestinationRequestMessage || other.runtimeType != runtimeType) {
-      return false;
-    }
-    if (identical(this, other)) {
-      return true;
-    }
-    return _deepEquals(requestId, other.requestId) && _deepEquals(destinationId, other.destinationId) && _deepEquals(recordingId, other.recordingId) && _deepEquals(uploadId, other.uploadId);
-  }
-
-  @override
-  // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
-
-  @override
-  String toString() {
-    return 'BotaUploadDestinationRequestMessage(requestId: $requestId, destinationId: $destinationId, recordingId: $recordingId, uploadId: $uploadId)';
-  }
-}
-
-class BotaUploadDestinationMessage {
-  BotaUploadDestinationMessage({
-    required this.requestId,
-    required this.url,
-    required this.method,
-    required this.headers,
-  });
-
-  String requestId;
-
-  String url;
-
-  BotaHttpMethodMessage method;
-
-  Map<String, String> headers;
-
-  List<Object?> _toList() {
-    return <Object?>[
-      requestId,
-      url,
-      method,
-      headers,
-    ];
-  }
-
-  Object encode() {
-    return _toList();  }
-
-  static BotaUploadDestinationMessage decode(Object result) {
-    result as List<Object?>;
-    return BotaUploadDestinationMessage(
-      requestId: result[0]! as String,
-      url: result[1]! as String,
-      method: result[2]! as BotaHttpMethodMessage,
-      headers: (result[3]! as Map<Object?, Object?>).cast<String, String>(),
-    );
-  }
-
-  @override
-  // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  bool operator ==(Object other) {
-    if (other is! BotaUploadDestinationMessage || other.runtimeType != runtimeType) {
-      return false;
-    }
-    if (identical(this, other)) {
-      return true;
-    }
-    return _deepEquals(requestId, other.requestId) && _deepEquals(url, other.url) && _deepEquals(method, other.method) && _deepEquals(headers, other.headers);
-  }
-
-  @override
-  // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => _deepHash(<Object?>[runtimeType, ..._toList()]);
-
-  @override
-  String toString() {
-    return 'BotaUploadDestinationMessage(requestId: $requestId, url: $url, method: $method, headers: $headers)';
-  }
-}
-
 class BotaFactoryResetResultRequestMessage {
   BotaFactoryResetResultRequestMessage({
     required this.requestId,
@@ -4166,233 +4035,224 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is BotaConnectionStateMessage) {
       buffer.putUint8(129);
       writeValue(buffer, value.index);
-    }    else if (value is BotaHttpMethodMessage) {
+    }    else if (value is BotaUploadOwnershipResultKindMessage) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    }    else if (value is BotaUploadOwnershipResultKindMessage) {
-      buffer.putUint8(131);
-      writeValue(buffer, value.index);
     }    else if (value is BotaDeviceTypeMessage) {
-      buffer.putUint8(132);
+      buffer.putUint8(131);
       writeValue(buffer, value.encode());
     }    else if (value is BotaPairingStateMessage) {
-      buffer.putUint8(133);
+      buffer.putUint8(132);
       writeValue(buffer, value.encode());
     }    else if (value is BotaDeviceStateValueMessage) {
-      buffer.putUint8(134);
+      buffer.putUint8(133);
       writeValue(buffer, value.encode());
     }    else if (value is BotaLteStateMessage) {
-      buffer.putUint8(135);
+      buffer.putUint8(134);
       writeValue(buffer, value.encode());
     }    else if (value is BotaWifiRadioStateMessage) {
-      buffer.putUint8(136);
+      buffer.putUint8(135);
       writeValue(buffer, value.encode());
     }    else if (value is BotaConnectionTypeMessage) {
-      buffer.putUint8(137);
+      buffer.putUint8(136);
       writeValue(buffer, value.encode());
     }    else if (value is BotaAudioCodecMessage) {
-      buffer.putUint8(138);
+      buffer.putUint8(137);
       writeValue(buffer, value.encode());
     }    else if (value is BotaRecordingInitiatorMessage) {
-      buffer.putUint8(139);
+      buffer.putUint8(138);
       writeValue(buffer, value.encode());
     }    else if (value is BotaFirmwarePhaseMessage) {
-      buffer.putUint8(140);
+      buffer.putUint8(139);
       writeValue(buffer, value.encode());
     }    else if (value is BotaWifiConfigResultMessage) {
-      buffer.putUint8(141);
+      buffer.putUint8(140);
       writeValue(buffer, value.encode());
     }    else if (value is BotaWifiStateMessage) {
-      buffer.putUint8(142);
+      buffer.putUint8(141);
       writeValue(buffer, value.encode());
     }    else if (value is BotaProvisioningFailureMessage) {
-      buffer.putUint8(143);
+      buffer.putUint8(142);
       writeValue(buffer, value.encode());
     }    else if (value is BotaErrorCodeMessage) {
-      buffer.putUint8(144);
+      buffer.putUint8(143);
       writeValue(buffer, value.encode());
     }    else if (value is BotaOperationMessage) {
-      buffer.putUint8(145);
+      buffer.putUint8(144);
       writeValue(buffer, value.encode());
     }    else if (value is BotaConfigurationMessage) {
-      buffer.putUint8(146);
+      buffer.putUint8(145);
       writeValue(buffer, value.encode());
     }    else if (value is BotaDeviceReferenceMessage) {
-      buffer.putUint8(147);
+      buffer.putUint8(146);
       writeValue(buffer, value.encode());
     }    else if (value is BotaDiscoveredDeviceMessage) {
-      buffer.putUint8(148);
+      buffer.putUint8(147);
       writeValue(buffer, value.encode());
     }    else if (value is BotaConnectedDeviceMessage) {
-      buffer.putUint8(149);
+      buffer.putUint8(148);
       writeValue(buffer, value.encode());
     }    else if (value is BotaReconnectHintMessage) {
-      buffer.putUint8(150);
+      buffer.putUint8(149);
       writeValue(buffer, value.encode());
     }    else if (value is BotaDeviceFlagsMessage) {
-      buffer.putUint8(151);
+      buffer.putUint8(150);
       writeValue(buffer, value.encode());
     }    else if (value is BotaModemInfoMessage) {
-      buffer.putUint8(152);
+      buffer.putUint8(151);
       writeValue(buffer, value.encode());
     }    else if (value is BotaDeviceStatusMessage) {
-      buffer.putUint8(153);
+      buffer.putUint8(152);
       writeValue(buffer, value.encode());
     }    else if (value is BotaEnabledConnectionsMessage) {
-      buffer.putUint8(154);
+      buffer.putUint8(153);
       writeValue(buffer, value.encode());
     }    else if (value is BotaPowerManagementMessage) {
-      buffer.putUint8(155);
+      buffer.putUint8(154);
       writeValue(buffer, value.encode());
     }    else if (value is BotaConnectionSettingsMessage) {
-      buffer.putUint8(156);
+      buffer.putUint8(155);
       writeValue(buffer, value.encode());
     }    else if (value is BotaDeviceRecordingMessage) {
-      buffer.putUint8(157);
+      buffer.putUint8(156);
       writeValue(buffer, value.encode());
     }    else if (value is BotaRecordingStateMessage) {
-      buffer.putUint8(158);
+      buffer.putUint8(157);
       writeValue(buffer, value.encode());
     }    else if (value is BotaRecordingTransferProgressMessage) {
-      buffer.putUint8(159);
+      buffer.putUint8(158);
       writeValue(buffer, value.encode());
     }    else if (value is BotaRecordingTransferMetadataMessage) {
-      buffer.putUint8(160);
+      buffer.putUint8(159);
       writeValue(buffer, value.encode());
     }    else if (value is BotaUploadOwnershipResultMessage) {
-      buffer.putUint8(161);
+      buffer.putUint8(160);
       writeValue(buffer, value.encode());
     }    else if (value is BotaFirmwareImageMessage) {
-      buffer.putUint8(162);
+      buffer.putUint8(161);
       writeValue(buffer, value.encode());
     }    else if (value is BotaFirmwareProgressMessage) {
-      buffer.putUint8(163);
+      buffer.putUint8(162);
       writeValue(buffer, value.encode());
     }    else if (value is BotaDeviceLogLineMessage) {
-      buffer.putUint8(164);
+      buffer.putUint8(163);
       writeValue(buffer, value.encode());
     }    else if (value is BotaWifiCredentialsMessage) {
-      buffer.putUint8(165);
+      buffer.putUint8(164);
       writeValue(buffer, value.encode());
     }    else if (value is BotaWifiStatusMessage) {
-      buffer.putUint8(166);
+      buffer.putUint8(165);
       writeValue(buffer, value.encode());
     }    else if (value is BotaWifiNetworkMessage) {
-      buffer.putUint8(167);
+      buffer.putUint8(166);
       writeValue(buffer, value.encode());
     }    else if (value is BotaWifiScanResultMessage) {
-      buffer.putUint8(168);
+      buffer.putUint8(167);
       writeValue(buffer, value.encode());
     }    else if (value is BotaDeprovisionResultMessage) {
-      buffer.putUint8(169);
+      buffer.putUint8(168);
       writeValue(buffer, value.encode());
     }    else if (value is BotaFactoryResetCommandMessage) {
-      buffer.putUint8(170);
+      buffer.putUint8(169);
       writeValue(buffer, value.encode());
     }    else if (value is BotaFactoryResetCompletionMessage) {
-      buffer.putUint8(171);
+      buffer.putUint8(170);
       writeValue(buffer, value.encode());
     }    else if (value is BotaErrorMessage) {
-      buffer.putUint8(172);
+      buffer.putUint8(171);
       writeValue(buffer, value.encode());
     }    else if (value is BotaProvisioningMaterialRequestMessage) {
-      buffer.putUint8(173);
+      buffer.putUint8(172);
       writeValue(buffer, value.encode());
     }    else if (value is BotaFactoryResetGrantRequestMessage) {
-      buffer.putUint8(174);
+      buffer.putUint8(173);
       writeValue(buffer, value.encode());
     }    else if (value is BotaProvisioningMaterialResponseMessage) {
-      buffer.putUint8(175);
+      buffer.putUint8(174);
       writeValue(buffer, value.encode());
     }    else if (value is BotaFactoryResetGrantResponseMessage) {
-      buffer.putUint8(176);
+      buffer.putUint8(175);
       writeValue(buffer, value.encode());
     }    else if (value is BotaFirmwareRequestMessage) {
-      buffer.putUint8(177);
+      buffer.putUint8(176);
       writeValue(buffer, value.encode());
     }    else if (value is BotaFirmwareSourceMessage) {
-      buffer.putUint8(178);
-      writeValue(buffer, value.encode());
-    }    else if (value is BotaUploadDestinationRequestMessage) {
-      buffer.putUint8(179);
-      writeValue(buffer, value.encode());
-    }    else if (value is BotaUploadDestinationMessage) {
-      buffer.putUint8(180);
+      buffer.putUint8(177);
       writeValue(buffer, value.encode());
     }    else if (value is BotaFactoryResetResultRequestMessage) {
-      buffer.putUint8(181);
+      buffer.putUint8(178);
       writeValue(buffer, value.encode());
     }    else if (value is BotaFactoryResetResultAcknowledgementMessage) {
-      buffer.putUint8(182);
+      buffer.putUint8(179);
       writeValue(buffer, value.encode());
     }    else if (value is BotaScanSubscriptionMessage) {
-      buffer.putUint8(183);
+      buffer.putUint8(180);
       writeValue(buffer, value.encode());
     }    else if (value is BotaConnectionSubscriptionMessage) {
-      buffer.putUint8(184);
+      buffer.putUint8(181);
       writeValue(buffer, value.encode());
     }    else if (value is BotaDeviceStatusSubscriptionMessage) {
-      buffer.putUint8(185);
+      buffer.putUint8(182);
       writeValue(buffer, value.encode());
     }    else if (value is BotaRecordingStateSubscriptionMessage) {
-      buffer.putUint8(186);
+      buffer.putUint8(183);
       writeValue(buffer, value.encode());
     }    else if (value is BotaRecordingSyncSubscriptionMessage) {
-      buffer.putUint8(187);
+      buffer.putUint8(184);
       writeValue(buffer, value.encode());
     }    else if (value is BotaUploadOwnershipSubscriptionMessage) {
-      buffer.putUint8(188);
+      buffer.putUint8(185);
       writeValue(buffer, value.encode());
     }    else if (value is BotaFirmwareUpdateSubscriptionMessage) {
-      buffer.putUint8(189);
+      buffer.putUint8(186);
       writeValue(buffer, value.encode());
     }    else if (value is BotaLogSubscriptionMessage) {
-      buffer.putUint8(190);
+      buffer.putUint8(187);
       writeValue(buffer, value.encode());
     }    else if (value is BotaWifiStatusSubscriptionMessage) {
-      buffer.putUint8(191);
+      buffer.putUint8(188);
       writeValue(buffer, value.encode());
     }    else if (value is BotaDiscoveredDeviceEventMessage) {
-      buffer.putUint8(192);
+      buffer.putUint8(189);
       writeValue(buffer, value.encode());
     }    else if (value is BotaConnectionEventMessage) {
-      buffer.putUint8(193);
+      buffer.putUint8(190);
       writeValue(buffer, value.encode());
     }    else if (value is BotaDeviceStatusEventMessage) {
-      buffer.putUint8(194);
+      buffer.putUint8(191);
       writeValue(buffer, value.encode());
     }    else if (value is BotaRecordingStateEventMessage) {
-      buffer.putUint8(195);
+      buffer.putUint8(192);
       writeValue(buffer, value.encode());
     }    else if (value is BotaRecordingSyncProgressEventMessage) {
-      buffer.putUint8(196);
+      buffer.putUint8(193);
       writeValue(buffer, value.encode());
     }    else if (value is BotaRecordingSyncCompletedEventMessage) {
-      buffer.putUint8(197);
+      buffer.putUint8(194);
       writeValue(buffer, value.encode());
     }    else if (value is BotaUploadOwnershipProgressEventMessage) {
-      buffer.putUint8(198);
+      buffer.putUint8(195);
       writeValue(buffer, value.encode());
     }    else if (value is BotaUploadOwnershipResolvedEventMessage) {
-      buffer.putUint8(199);
+      buffer.putUint8(196);
       writeValue(buffer, value.encode());
     }    else if (value is BotaFirmwareProgressEventMessage) {
-      buffer.putUint8(200);
+      buffer.putUint8(197);
       writeValue(buffer, value.encode());
     }    else if (value is BotaDeviceLogEventMessage) {
-      buffer.putUint8(201);
+      buffer.putUint8(198);
       writeValue(buffer, value.encode());
     }    else if (value is BotaWifiStatusEventMessage) {
-      buffer.putUint8(202);
+      buffer.putUint8(199);
       writeValue(buffer, value.encode());
     }    else if (value is BotaSubscriptionErrorEventMessage) {
-      buffer.putUint8(203);
+      buffer.putUint8(200);
       writeValue(buffer, value.encode());
     }    else if (value is BotaSubscriptionCompleteEventMessage) {
-      buffer.putUint8(204);
+      buffer.putUint8(201);
       writeValue(buffer, value.encode());
     }    else if (value is BotaEventMessage) {
-      buffer.putUint8(205);
+      buffer.putUint8(202);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -4407,157 +4267,150 @@ class _PigeonCodec extends StandardMessageCodec {
         return value == null ? null : BotaConnectionStateMessage.values[value];
       case 130:
         final value = readValue(buffer) as int?;
-        return value == null ? null : BotaHttpMethodMessage.values[value];
-      case 131:
-        final value = readValue(buffer) as int?;
         return value == null ? null : BotaUploadOwnershipResultKindMessage.values[value];
-      case 132:
+      case 131:
         return BotaDeviceTypeMessage.decode(readValue(buffer)!);
-      case 133:
+      case 132:
         return BotaPairingStateMessage.decode(readValue(buffer)!);
-      case 134:
+      case 133:
         return BotaDeviceStateValueMessage.decode(readValue(buffer)!);
-      case 135:
+      case 134:
         return BotaLteStateMessage.decode(readValue(buffer)!);
-      case 136:
+      case 135:
         return BotaWifiRadioStateMessage.decode(readValue(buffer)!);
-      case 137:
+      case 136:
         return BotaConnectionTypeMessage.decode(readValue(buffer)!);
-      case 138:
+      case 137:
         return BotaAudioCodecMessage.decode(readValue(buffer)!);
-      case 139:
+      case 138:
         return BotaRecordingInitiatorMessage.decode(readValue(buffer)!);
-      case 140:
+      case 139:
         return BotaFirmwarePhaseMessage.decode(readValue(buffer)!);
-      case 141:
+      case 140:
         return BotaWifiConfigResultMessage.decode(readValue(buffer)!);
-      case 142:
+      case 141:
         return BotaWifiStateMessage.decode(readValue(buffer)!);
-      case 143:
+      case 142:
         return BotaProvisioningFailureMessage.decode(readValue(buffer)!);
-      case 144:
+      case 143:
         return BotaErrorCodeMessage.decode(readValue(buffer)!);
-      case 145:
+      case 144:
         return BotaOperationMessage.decode(readValue(buffer)!);
-      case 146:
+      case 145:
         return BotaConfigurationMessage.decode(readValue(buffer)!);
-      case 147:
+      case 146:
         return BotaDeviceReferenceMessage.decode(readValue(buffer)!);
-      case 148:
+      case 147:
         return BotaDiscoveredDeviceMessage.decode(readValue(buffer)!);
-      case 149:
+      case 148:
         return BotaConnectedDeviceMessage.decode(readValue(buffer)!);
-      case 150:
+      case 149:
         return BotaReconnectHintMessage.decode(readValue(buffer)!);
-      case 151:
+      case 150:
         return BotaDeviceFlagsMessage.decode(readValue(buffer)!);
-      case 152:
+      case 151:
         return BotaModemInfoMessage.decode(readValue(buffer)!);
-      case 153:
+      case 152:
         return BotaDeviceStatusMessage.decode(readValue(buffer)!);
-      case 154:
+      case 153:
         return BotaEnabledConnectionsMessage.decode(readValue(buffer)!);
-      case 155:
+      case 154:
         return BotaPowerManagementMessage.decode(readValue(buffer)!);
-      case 156:
+      case 155:
         return BotaConnectionSettingsMessage.decode(readValue(buffer)!);
-      case 157:
+      case 156:
         return BotaDeviceRecordingMessage.decode(readValue(buffer)!);
-      case 158:
+      case 157:
         return BotaRecordingStateMessage.decode(readValue(buffer)!);
-      case 159:
+      case 158:
         return BotaRecordingTransferProgressMessage.decode(readValue(buffer)!);
-      case 160:
+      case 159:
         return BotaRecordingTransferMetadataMessage.decode(readValue(buffer)!);
-      case 161:
+      case 160:
         return BotaUploadOwnershipResultMessage.decode(readValue(buffer)!);
-      case 162:
+      case 161:
         return BotaFirmwareImageMessage.decode(readValue(buffer)!);
-      case 163:
+      case 162:
         return BotaFirmwareProgressMessage.decode(readValue(buffer)!);
-      case 164:
+      case 163:
         return BotaDeviceLogLineMessage.decode(readValue(buffer)!);
-      case 165:
+      case 164:
         return BotaWifiCredentialsMessage.decode(readValue(buffer)!);
-      case 166:
+      case 165:
         return BotaWifiStatusMessage.decode(readValue(buffer)!);
-      case 167:
+      case 166:
         return BotaWifiNetworkMessage.decode(readValue(buffer)!);
-      case 168:
+      case 167:
         return BotaWifiScanResultMessage.decode(readValue(buffer)!);
-      case 169:
+      case 168:
         return BotaDeprovisionResultMessage.decode(readValue(buffer)!);
-      case 170:
+      case 169:
         return BotaFactoryResetCommandMessage.decode(readValue(buffer)!);
-      case 171:
+      case 170:
         return BotaFactoryResetCompletionMessage.decode(readValue(buffer)!);
-      case 172:
+      case 171:
         return BotaErrorMessage.decode(readValue(buffer)!);
-      case 173:
+      case 172:
         return BotaProvisioningMaterialRequestMessage.decode(readValue(buffer)!);
-      case 174:
+      case 173:
         return BotaFactoryResetGrantRequestMessage.decode(readValue(buffer)!);
-      case 175:
+      case 174:
         return BotaProvisioningMaterialResponseMessage.decode(readValue(buffer)!);
-      case 176:
+      case 175:
         return BotaFactoryResetGrantResponseMessage.decode(readValue(buffer)!);
-      case 177:
+      case 176:
         return BotaFirmwareRequestMessage.decode(readValue(buffer)!);
-      case 178:
+      case 177:
         return BotaFirmwareSourceMessage.decode(readValue(buffer)!);
-      case 179:
-        return BotaUploadDestinationRequestMessage.decode(readValue(buffer)!);
-      case 180:
-        return BotaUploadDestinationMessage.decode(readValue(buffer)!);
-      case 181:
+      case 178:
         return BotaFactoryResetResultRequestMessage.decode(readValue(buffer)!);
-      case 182:
+      case 179:
         return BotaFactoryResetResultAcknowledgementMessage.decode(readValue(buffer)!);
-      case 183:
+      case 180:
         return BotaScanSubscriptionMessage.decode(readValue(buffer)!);
-      case 184:
+      case 181:
         return BotaConnectionSubscriptionMessage.decode(readValue(buffer)!);
-      case 185:
+      case 182:
         return BotaDeviceStatusSubscriptionMessage.decode(readValue(buffer)!);
-      case 186:
+      case 183:
         return BotaRecordingStateSubscriptionMessage.decode(readValue(buffer)!);
-      case 187:
+      case 184:
         return BotaRecordingSyncSubscriptionMessage.decode(readValue(buffer)!);
-      case 188:
+      case 185:
         return BotaUploadOwnershipSubscriptionMessage.decode(readValue(buffer)!);
-      case 189:
+      case 186:
         return BotaFirmwareUpdateSubscriptionMessage.decode(readValue(buffer)!);
-      case 190:
+      case 187:
         return BotaLogSubscriptionMessage.decode(readValue(buffer)!);
-      case 191:
+      case 188:
         return BotaWifiStatusSubscriptionMessage.decode(readValue(buffer)!);
-      case 192:
+      case 189:
         return BotaDiscoveredDeviceEventMessage.decode(readValue(buffer)!);
-      case 193:
+      case 190:
         return BotaConnectionEventMessage.decode(readValue(buffer)!);
-      case 194:
+      case 191:
         return BotaDeviceStatusEventMessage.decode(readValue(buffer)!);
-      case 195:
+      case 192:
         return BotaRecordingStateEventMessage.decode(readValue(buffer)!);
-      case 196:
+      case 193:
         return BotaRecordingSyncProgressEventMessage.decode(readValue(buffer)!);
-      case 197:
+      case 194:
         return BotaRecordingSyncCompletedEventMessage.decode(readValue(buffer)!);
-      case 198:
+      case 195:
         return BotaUploadOwnershipProgressEventMessage.decode(readValue(buffer)!);
-      case 199:
+      case 196:
         return BotaUploadOwnershipResolvedEventMessage.decode(readValue(buffer)!);
-      case 200:
+      case 197:
         return BotaFirmwareProgressEventMessage.decode(readValue(buffer)!);
-      case 201:
+      case 198:
         return BotaDeviceLogEventMessage.decode(readValue(buffer)!);
-      case 202:
+      case 199:
         return BotaWifiStatusEventMessage.decode(readValue(buffer)!);
-      case 203:
+      case 200:
         return BotaSubscriptionErrorEventMessage.decode(readValue(buffer)!);
-      case 204:
+      case 201:
         return BotaSubscriptionCompleteEventMessage.decode(readValue(buffer)!);
-      case 205:
+      case 202:
         return BotaEventMessage.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -4707,14 +4560,14 @@ class BotaHostApi {
     ;
   }
 
-  Future<void> startRecording(String operationId, BotaDeviceReferenceMessage device, String? requestId) async {
+  Future<void> startRecording(String operationId, BotaDeviceReferenceMessage device, String grantBlob) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaHostApi.startRecording$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[operationId, device, requestId]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[operationId, device, grantBlob]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
@@ -4725,14 +4578,14 @@ class BotaHostApi {
     ;
   }
 
-  Future<void> stopRecording(String operationId, BotaDeviceReferenceMessage device, String? requestId) async {
+  Future<void> stopRecording(String operationId, BotaDeviceReferenceMessage device, String grantBlob) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaHostApi.stopRecording$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[operationId, device, requestId]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[operationId, device, grantBlob]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
@@ -4762,14 +4615,14 @@ class BotaHostApi {
     return pigeonVar_replyValue! as BotaRecordingStateMessage;
   }
 
-  Future<void> provision(String operationId, BotaDeviceReferenceMessage device, String materialId) async {
+  Future<void> provision(String operationId, BotaDeviceReferenceMessage device) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaHostApi.provision$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[operationId, device, materialId]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[operationId, device]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     _extractReplyValueOrThrow(
@@ -4817,14 +4670,14 @@ class BotaHostApi {
     ;
   }
 
-  Future<BotaDeprovisionResultMessage> deprovision(String operationId, BotaDeviceReferenceMessage device, String materialId) async {
+  Future<BotaDeprovisionResultMessage> deprovision(String operationId, BotaDeviceReferenceMessage device, String grantBlob) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaHostApi.deprovision$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[operationId, device, materialId]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[operationId, device, grantBlob]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
@@ -4873,14 +4726,14 @@ class BotaHostApi {
     return pigeonVar_replyValue! as BotaFactoryResetCompletionMessage;
   }
 
-  Future<BotaFactoryResetCompletionMessage?> resumePendingFactoryReset(String operationId) async {
+  Future<BotaFactoryResetCompletionMessage?> resumePendingFactoryReset(String operationId, BotaDeviceReferenceMessage device, int currentBindingGeneration) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaHostApi.resumePendingFactoryReset$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[operationId]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[operationId, device, currentBindingGeneration]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
@@ -5039,14 +4892,14 @@ class BotaHostApi {
     ;
   }
 
-  Future<BotaWifiConfigResultMessage> configureWifi(String operationId, BotaDeviceReferenceMessage device, BotaWifiCredentialsMessage credentials, String materialId) async {
+  Future<BotaWifiConfigResultMessage> configureWifi(String operationId, BotaDeviceReferenceMessage device, BotaWifiCredentialsMessage credentials, String grantBlob) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.bota_flutter_sdk.BotaHostApi.configureWifi$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[operationId, device, credentials, materialId]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[operationId, device, credentials, grantBlob]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
 
     final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
@@ -5179,8 +5032,6 @@ abstract class BotaFlutterApi {
 
   Future<BotaFirmwareSourceMessage> requestFirmware(BotaFirmwareRequestMessage request);
 
-  Future<BotaUploadDestinationMessage> requestUploadDestination(BotaUploadDestinationRequestMessage request);
-
   Future<BotaFactoryResetResultAcknowledgementMessage> persistFactoryResetResult(BotaFactoryResetResultRequestMessage request);
 
   static void setUp(BotaFlutterApi? api, {BinaryMessenger? binaryMessenger, String messageChannelSuffix = '',}) {
@@ -5239,27 +5090,6 @@ abstract class BotaFlutterApi {
           final BotaFirmwareRequestMessage arg_request = args[0]! as BotaFirmwareRequestMessage;
           try {
             final BotaFirmwareSourceMessage output = await api.requestFirmware(arg_request);
-            return wrapResponse(result: output);
-          } on PlatformException catch (e) {
-            return wrapResponse(error: e);
-          }          catch (e) {
-            return wrapResponse(error: PlatformException(code: 'error', message: e.toString()));
-          }
-        });
-      }
-    }
-    {
-      final pigeonVar_channel = BasicMessageChannel<Object?>(
-          'dev.flutter.pigeon.bota_flutter_sdk.BotaFlutterApi.requestUploadDestination$messageChannelSuffix', pigeonChannelCodec,
-          binaryMessenger: binaryMessenger);
-      if (api == null) {
-        pigeonVar_channel.setMessageHandler(null);
-      } else {
-        pigeonVar_channel.setMessageHandler((Object? message) async {
-          final List<Object?> args = message! as List<Object?>;
-          final BotaUploadDestinationRequestMessage arg_request = args[0]! as BotaUploadDestinationRequestMessage;
-          try {
-            final BotaUploadDestinationMessage output = await api.requestUploadDestination(arg_request);
             return wrapResponse(result: output);
           } on PlatformException catch (e) {
             return wrapResponse(error: e);

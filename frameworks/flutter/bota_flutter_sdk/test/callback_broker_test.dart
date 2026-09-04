@@ -44,15 +44,6 @@ void main() {
                   requestId: request.requestId,
                 );
               },
-          uploadDestination: (BotaUploadDestinationRequest request) async {
-            expect(request.requestId, uploadId);
-            return BotaUploadDestination(
-              requestId: request.requestId,
-              url: Uri.parse('https://upload.example.test/recording'),
-              method: BotaHttpMethod.post,
-              headers: const <String, String>{'x-bota': 'upload'},
-            );
-          },
           firmware: (BotaFirmwareRequest request) async {
             expect(request.requestId, firmwareId);
             return BotaFirmwareSource(
@@ -92,15 +83,6 @@ void main() {
         crc32: 1234,
       ),
     );
-    final BotaUploadDestinationMessage upload = await platform
-        .requestUploadDestination(
-          BotaUploadDestinationRequestMessage(
-            requestId: uploadId,
-            destinationId: 'destination',
-            recordingId: 'recording',
-            uploadId: 'upload',
-          ),
-        );
     final BotaFactoryResetResultAcknowledgementMessage result = await platform
         .persistFactoryResetResult(
           BotaFactoryResetResultRequestMessage(
@@ -136,8 +118,6 @@ void main() {
     );
     expect(firmware.requestId, firmwareId);
     expect(firmware.url, 'https://download.example.test/firmware');
-    expect(upload.requestId, uploadId);
-    expect(upload.method, BotaHttpMethodMessage.post);
     expect(result.requestId, resetResultId);
 
     await client.destroy();
@@ -478,5 +458,4 @@ Future<Object> _captureError(Future<Object?> future) async {
 const String provisioningId = '00000000000000000000000000000001';
 const String resetId = '00000000000000000000000000000002';
 const String firmwareId = '00000000000000000000000000000003';
-const String uploadId = '00000000000000000000000000000004';
 const String resetResultId = '00000000000000000000000000000005';

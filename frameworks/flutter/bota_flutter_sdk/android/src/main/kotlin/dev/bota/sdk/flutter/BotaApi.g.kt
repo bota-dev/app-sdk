@@ -218,18 +218,6 @@ enum class BotaConnectionStateMessage(val raw: Int) {
   }
 }
 
-enum class BotaHttpMethodMessage(val raw: Int) {
-  GET(0),
-  PUT(1),
-  POST(2);
-
-  companion object {
-    fun ofRaw(raw: Int): BotaHttpMethodMessage? {
-      return values().firstOrNull { it.raw == raw }
-    }
-  }
-}
-
 enum class BotaUploadOwnershipResultKindMessage(val raw: Int) {
   DEVICE_UPLOAD_COMPLETED(0),
   DEVICE_UPLOAD_PRESERVED(1),
@@ -822,7 +810,6 @@ data class BotaConfigurationMessage (
   val hasProvisioningMaterialCallback: Boolean,
   val hasFactoryResetGrantCallback: Boolean,
   val hasFactoryResetResultCallback: Boolean,
-  val hasUploadDestinationCallback: Boolean,
   val hasFirmwareCallback: Boolean
 )
  {
@@ -832,9 +819,8 @@ data class BotaConfigurationMessage (
       val hasProvisioningMaterialCallback = pigeonVar_list[1] as Boolean
       val hasFactoryResetGrantCallback = pigeonVar_list[2] as Boolean
       val hasFactoryResetResultCallback = pigeonVar_list[3] as Boolean
-      val hasUploadDestinationCallback = pigeonVar_list[4] as Boolean
-      val hasFirmwareCallback = pigeonVar_list[5] as Boolean
-      return BotaConfigurationMessage(applicationSupportNamespace, hasProvisioningMaterialCallback, hasFactoryResetGrantCallback, hasFactoryResetResultCallback, hasUploadDestinationCallback, hasFirmwareCallback)
+      val hasFirmwareCallback = pigeonVar_list[4] as Boolean
+      return BotaConfigurationMessage(applicationSupportNamespace, hasProvisioningMaterialCallback, hasFactoryResetGrantCallback, hasFactoryResetResultCallback, hasFirmwareCallback)
     }
   }
   fun toList(): List<Any?> {
@@ -843,7 +829,6 @@ data class BotaConfigurationMessage (
       hasProvisioningMaterialCallback,
       hasFactoryResetGrantCallback,
       hasFactoryResetResultCallback,
-      hasUploadDestinationCallback,
       hasFirmwareCallback,
     )
   }
@@ -855,7 +840,7 @@ data class BotaConfigurationMessage (
       return true
     }
     val other = other as BotaConfigurationMessage
-    return BotaApiPigeonUtils.deepEquals(this.applicationSupportNamespace, other.applicationSupportNamespace) && BotaApiPigeonUtils.deepEquals(this.hasProvisioningMaterialCallback, other.hasProvisioningMaterialCallback) && BotaApiPigeonUtils.deepEquals(this.hasFactoryResetGrantCallback, other.hasFactoryResetGrantCallback) && BotaApiPigeonUtils.deepEquals(this.hasFactoryResetResultCallback, other.hasFactoryResetResultCallback) && BotaApiPigeonUtils.deepEquals(this.hasUploadDestinationCallback, other.hasUploadDestinationCallback) && BotaApiPigeonUtils.deepEquals(this.hasFirmwareCallback, other.hasFirmwareCallback)
+    return BotaApiPigeonUtils.deepEquals(this.applicationSupportNamespace, other.applicationSupportNamespace) && BotaApiPigeonUtils.deepEquals(this.hasProvisioningMaterialCallback, other.hasProvisioningMaterialCallback) && BotaApiPigeonUtils.deepEquals(this.hasFactoryResetGrantCallback, other.hasFactoryResetGrantCallback) && BotaApiPigeonUtils.deepEquals(this.hasFactoryResetResultCallback, other.hasFactoryResetResultCallback) && BotaApiPigeonUtils.deepEquals(this.hasFirmwareCallback, other.hasFirmwareCallback)
   }
 
   override fun hashCode(): Int {
@@ -864,12 +849,11 @@ data class BotaConfigurationMessage (
     result = 31 * result + BotaApiPigeonUtils.deepHash(this.hasProvisioningMaterialCallback)
     result = 31 * result + BotaApiPigeonUtils.deepHash(this.hasFactoryResetGrantCallback)
     result = 31 * result + BotaApiPigeonUtils.deepHash(this.hasFactoryResetResultCallback)
-    result = 31 * result + BotaApiPigeonUtils.deepHash(this.hasUploadDestinationCallback)
     result = 31 * result + BotaApiPigeonUtils.deepHash(this.hasFirmwareCallback)
     return result
   }
   override fun toString(): String {
-    return "BotaConfigurationMessage(applicationSupportNamespace=$applicationSupportNamespace, hasProvisioningMaterialCallback=$hasProvisioningMaterialCallback, hasFactoryResetGrantCallback=$hasFactoryResetGrantCallback, hasFactoryResetResultCallback=$hasFactoryResetResultCallback, hasUploadDestinationCallback=$hasUploadDestinationCallback, hasFirmwareCallback=$hasFirmwareCallback)"
+    return "BotaConfigurationMessage(applicationSupportNamespace=$applicationSupportNamespace, hasProvisioningMaterialCallback=$hasProvisioningMaterialCallback, hasFactoryResetGrantCallback=$hasFactoryResetGrantCallback, hasFactoryResetResultCallback=$hasFactoryResetResultCallback, hasFirmwareCallback=$hasFirmwareCallback)"
   }
 }
 
@@ -2488,104 +2472,6 @@ data class BotaFirmwareSourceMessage (
 }
 
 /** Generated class from Pigeon that represents data sent in messages. */
-data class BotaUploadDestinationRequestMessage (
-  val requestId: String,
-  val destinationId: String,
-  val recordingId: String,
-  val uploadId: String
-)
- {
-  companion object {
-    fun fromList(pigeonVar_list: List<Any?>): BotaUploadDestinationRequestMessage {
-      val requestId = pigeonVar_list[0] as String
-      val destinationId = pigeonVar_list[1] as String
-      val recordingId = pigeonVar_list[2] as String
-      val uploadId = pigeonVar_list[3] as String
-      return BotaUploadDestinationRequestMessage(requestId, destinationId, recordingId, uploadId)
-    }
-  }
-  fun toList(): List<Any?> {
-    return listOf(
-      requestId,
-      destinationId,
-      recordingId,
-      uploadId,
-    )
-  }
-  override fun equals(other: Any?): Boolean {
-    if (other == null || other.javaClass != javaClass) {
-      return false
-    }
-    if (this === other) {
-      return true
-    }
-    val other = other as BotaUploadDestinationRequestMessage
-    return BotaApiPigeonUtils.deepEquals(this.requestId, other.requestId) && BotaApiPigeonUtils.deepEquals(this.destinationId, other.destinationId) && BotaApiPigeonUtils.deepEquals(this.recordingId, other.recordingId) && BotaApiPigeonUtils.deepEquals(this.uploadId, other.uploadId)
-  }
-
-  override fun hashCode(): Int {
-    var result = javaClass.hashCode()
-    result = 31 * result + BotaApiPigeonUtils.deepHash(this.requestId)
-    result = 31 * result + BotaApiPigeonUtils.deepHash(this.destinationId)
-    result = 31 * result + BotaApiPigeonUtils.deepHash(this.recordingId)
-    result = 31 * result + BotaApiPigeonUtils.deepHash(this.uploadId)
-    return result
-  }
-  override fun toString(): String {
-    return "BotaUploadDestinationRequestMessage(requestId=$requestId, destinationId=$destinationId, recordingId=$recordingId, uploadId=$uploadId)"
-  }
-}
-
-/** Generated class from Pigeon that represents data sent in messages. */
-data class BotaUploadDestinationMessage (
-  val requestId: String,
-  val url: String,
-  val method: BotaHttpMethodMessage,
-  val headers: Map<String, String>
-)
- {
-  companion object {
-    fun fromList(pigeonVar_list: List<Any?>): BotaUploadDestinationMessage {
-      val requestId = pigeonVar_list[0] as String
-      val url = pigeonVar_list[1] as String
-      val method = pigeonVar_list[2] as BotaHttpMethodMessage
-      val headers = pigeonVar_list[3] as Map<String, String>
-      return BotaUploadDestinationMessage(requestId, url, method, headers)
-    }
-  }
-  fun toList(): List<Any?> {
-    return listOf(
-      requestId,
-      url,
-      method,
-      headers,
-    )
-  }
-  override fun equals(other: Any?): Boolean {
-    if (other == null || other.javaClass != javaClass) {
-      return false
-    }
-    if (this === other) {
-      return true
-    }
-    val other = other as BotaUploadDestinationMessage
-    return BotaApiPigeonUtils.deepEquals(this.requestId, other.requestId) && BotaApiPigeonUtils.deepEquals(this.url, other.url) && BotaApiPigeonUtils.deepEquals(this.method, other.method) && BotaApiPigeonUtils.deepEquals(this.headers, other.headers)
-  }
-
-  override fun hashCode(): Int {
-    var result = javaClass.hashCode()
-    result = 31 * result + BotaApiPigeonUtils.deepHash(this.requestId)
-    result = 31 * result + BotaApiPigeonUtils.deepHash(this.url)
-    result = 31 * result + BotaApiPigeonUtils.deepHash(this.method)
-    result = 31 * result + BotaApiPigeonUtils.deepHash(this.headers)
-    return result
-  }
-  override fun toString(): String {
-    return "BotaUploadDestinationMessage(requestId=$requestId, url=$url, method=$method, headers=$headers)"
-  }
-}
-
-/** Generated class from Pigeon that represents data sent in messages. */
 data class BotaFactoryResetResultRequestMessage (
   val requestId: String,
   val commandId: String,
@@ -3556,380 +3442,365 @@ private open class BotaApiPigeonCodec : StandardMessageCodec() {
       }
       130.toByte() -> {
         return (readValue(buffer) as Long?)?.let {
-          BotaHttpMethodMessage.ofRaw(it.toInt())
-        }
-      }
-      131.toByte() -> {
-        return (readValue(buffer) as Long?)?.let {
           BotaUploadOwnershipResultKindMessage.ofRaw(it.toInt())
         }
       }
-      132.toByte() -> {
+      131.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaDeviceTypeMessage.fromList(it)
         }
       }
-      133.toByte() -> {
+      132.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaPairingStateMessage.fromList(it)
         }
       }
-      134.toByte() -> {
+      133.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaDeviceStateValueMessage.fromList(it)
         }
       }
-      135.toByte() -> {
+      134.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaLteStateMessage.fromList(it)
         }
       }
-      136.toByte() -> {
+      135.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaWifiRadioStateMessage.fromList(it)
         }
       }
-      137.toByte() -> {
+      136.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaConnectionTypeMessage.fromList(it)
         }
       }
-      138.toByte() -> {
+      137.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaAudioCodecMessage.fromList(it)
         }
       }
-      139.toByte() -> {
+      138.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaRecordingInitiatorMessage.fromList(it)
         }
       }
-      140.toByte() -> {
+      139.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaFirmwarePhaseMessage.fromList(it)
         }
       }
-      141.toByte() -> {
+      140.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaWifiConfigResultMessage.fromList(it)
         }
       }
-      142.toByte() -> {
+      141.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaWifiStateMessage.fromList(it)
         }
       }
-      143.toByte() -> {
+      142.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaProvisioningFailureMessage.fromList(it)
         }
       }
-      144.toByte() -> {
+      143.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaErrorCodeMessage.fromList(it)
         }
       }
-      145.toByte() -> {
+      144.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaOperationMessage.fromList(it)
         }
       }
-      146.toByte() -> {
+      145.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaConfigurationMessage.fromList(it)
         }
       }
-      147.toByte() -> {
+      146.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaDeviceReferenceMessage.fromList(it)
         }
       }
-      148.toByte() -> {
+      147.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaDiscoveredDeviceMessage.fromList(it)
         }
       }
-      149.toByte() -> {
+      148.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaConnectedDeviceMessage.fromList(it)
         }
       }
-      150.toByte() -> {
+      149.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaReconnectHintMessage.fromList(it)
         }
       }
-      151.toByte() -> {
+      150.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaDeviceFlagsMessage.fromList(it)
         }
       }
-      152.toByte() -> {
+      151.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaModemInfoMessage.fromList(it)
         }
       }
-      153.toByte() -> {
+      152.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaDeviceStatusMessage.fromList(it)
         }
       }
-      154.toByte() -> {
+      153.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaEnabledConnectionsMessage.fromList(it)
         }
       }
-      155.toByte() -> {
+      154.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaPowerManagementMessage.fromList(it)
         }
       }
-      156.toByte() -> {
+      155.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaConnectionSettingsMessage.fromList(it)
         }
       }
-      157.toByte() -> {
+      156.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaDeviceRecordingMessage.fromList(it)
         }
       }
-      158.toByte() -> {
+      157.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaRecordingStateMessage.fromList(it)
         }
       }
-      159.toByte() -> {
+      158.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaRecordingTransferProgressMessage.fromList(it)
         }
       }
-      160.toByte() -> {
+      159.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaRecordingTransferMetadataMessage.fromList(it)
         }
       }
-      161.toByte() -> {
+      160.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaUploadOwnershipResultMessage.fromList(it)
         }
       }
-      162.toByte() -> {
+      161.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaFirmwareImageMessage.fromList(it)
         }
       }
-      163.toByte() -> {
+      162.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaFirmwareProgressMessage.fromList(it)
         }
       }
-      164.toByte() -> {
+      163.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaDeviceLogLineMessage.fromList(it)
         }
       }
-      165.toByte() -> {
+      164.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaWifiCredentialsMessage.fromList(it)
         }
       }
-      166.toByte() -> {
+      165.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaWifiStatusMessage.fromList(it)
         }
       }
-      167.toByte() -> {
+      166.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaWifiNetworkMessage.fromList(it)
         }
       }
-      168.toByte() -> {
+      167.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaWifiScanResultMessage.fromList(it)
         }
       }
-      169.toByte() -> {
+      168.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaDeprovisionResultMessage.fromList(it)
         }
       }
-      170.toByte() -> {
+      169.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaFactoryResetCommandMessage.fromList(it)
         }
       }
-      171.toByte() -> {
+      170.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaFactoryResetCompletionMessage.fromList(it)
         }
       }
-      172.toByte() -> {
+      171.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaErrorMessage.fromList(it)
         }
       }
-      173.toByte() -> {
+      172.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaProvisioningMaterialRequestMessage.fromList(it)
         }
       }
-      174.toByte() -> {
+      173.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaFactoryResetGrantRequestMessage.fromList(it)
         }
       }
-      175.toByte() -> {
+      174.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaProvisioningMaterialResponseMessage.fromList(it)
         }
       }
-      176.toByte() -> {
+      175.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaFactoryResetGrantResponseMessage.fromList(it)
         }
       }
-      177.toByte() -> {
+      176.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaFirmwareRequestMessage.fromList(it)
         }
       }
-      178.toByte() -> {
+      177.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaFirmwareSourceMessage.fromList(it)
         }
       }
-      179.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let {
-          BotaUploadDestinationRequestMessage.fromList(it)
-        }
-      }
-      180.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let {
-          BotaUploadDestinationMessage.fromList(it)
-        }
-      }
-      181.toByte() -> {
+      178.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaFactoryResetResultRequestMessage.fromList(it)
         }
       }
-      182.toByte() -> {
+      179.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaFactoryResetResultAcknowledgementMessage.fromList(it)
         }
       }
-      183.toByte() -> {
+      180.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaScanSubscriptionMessage.fromList(it)
         }
       }
-      184.toByte() -> {
+      181.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaConnectionSubscriptionMessage.fromList(it)
         }
       }
-      185.toByte() -> {
+      182.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaDeviceStatusSubscriptionMessage.fromList(it)
         }
       }
-      186.toByte() -> {
+      183.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaRecordingStateSubscriptionMessage.fromList(it)
         }
       }
-      187.toByte() -> {
+      184.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaRecordingSyncSubscriptionMessage.fromList(it)
         }
       }
-      188.toByte() -> {
+      185.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaUploadOwnershipSubscriptionMessage.fromList(it)
         }
       }
-      189.toByte() -> {
+      186.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaFirmwareUpdateSubscriptionMessage.fromList(it)
         }
       }
-      190.toByte() -> {
+      187.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaLogSubscriptionMessage.fromList(it)
         }
       }
-      191.toByte() -> {
+      188.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaWifiStatusSubscriptionMessage.fromList(it)
         }
       }
-      192.toByte() -> {
+      189.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaDiscoveredDeviceEventMessage.fromList(it)
         }
       }
-      193.toByte() -> {
+      190.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaConnectionEventMessage.fromList(it)
         }
       }
-      194.toByte() -> {
+      191.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaDeviceStatusEventMessage.fromList(it)
         }
       }
-      195.toByte() -> {
+      192.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaRecordingStateEventMessage.fromList(it)
         }
       }
-      196.toByte() -> {
+      193.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaRecordingSyncProgressEventMessage.fromList(it)
         }
       }
-      197.toByte() -> {
+      194.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaRecordingSyncCompletedEventMessage.fromList(it)
         }
       }
-      198.toByte() -> {
+      195.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaUploadOwnershipProgressEventMessage.fromList(it)
         }
       }
-      199.toByte() -> {
+      196.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaUploadOwnershipResolvedEventMessage.fromList(it)
         }
       }
-      200.toByte() -> {
+      197.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaFirmwareProgressEventMessage.fromList(it)
         }
       }
-      201.toByte() -> {
+      198.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaDeviceLogEventMessage.fromList(it)
         }
       }
-      202.toByte() -> {
+      199.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaWifiStatusEventMessage.fromList(it)
         }
       }
-      203.toByte() -> {
+      200.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaSubscriptionErrorEventMessage.fromList(it)
         }
       }
-      204.toByte() -> {
+      201.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaSubscriptionCompleteEventMessage.fromList(it)
         }
       }
-      205.toByte() -> {
+      202.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           BotaEventMessage.fromList(it)
         }
@@ -3943,308 +3814,296 @@ private open class BotaApiPigeonCodec : StandardMessageCodec() {
         stream.write(129)
         writeValue(stream, value.raw.toLong())
       }
-      is BotaHttpMethodMessage -> {
+      is BotaUploadOwnershipResultKindMessage -> {
         stream.write(130)
         writeValue(stream, value.raw.toLong())
       }
-      is BotaUploadOwnershipResultKindMessage -> {
-        stream.write(131)
-        writeValue(stream, value.raw.toLong())
-      }
       is BotaDeviceTypeMessage -> {
-        stream.write(132)
+        stream.write(131)
         writeValue(stream, value.toList())
       }
       is BotaPairingStateMessage -> {
-        stream.write(133)
+        stream.write(132)
         writeValue(stream, value.toList())
       }
       is BotaDeviceStateValueMessage -> {
-        stream.write(134)
+        stream.write(133)
         writeValue(stream, value.toList())
       }
       is BotaLteStateMessage -> {
-        stream.write(135)
+        stream.write(134)
         writeValue(stream, value.toList())
       }
       is BotaWifiRadioStateMessage -> {
-        stream.write(136)
+        stream.write(135)
         writeValue(stream, value.toList())
       }
       is BotaConnectionTypeMessage -> {
-        stream.write(137)
+        stream.write(136)
         writeValue(stream, value.toList())
       }
       is BotaAudioCodecMessage -> {
-        stream.write(138)
+        stream.write(137)
         writeValue(stream, value.toList())
       }
       is BotaRecordingInitiatorMessage -> {
-        stream.write(139)
+        stream.write(138)
         writeValue(stream, value.toList())
       }
       is BotaFirmwarePhaseMessage -> {
-        stream.write(140)
+        stream.write(139)
         writeValue(stream, value.toList())
       }
       is BotaWifiConfigResultMessage -> {
-        stream.write(141)
+        stream.write(140)
         writeValue(stream, value.toList())
       }
       is BotaWifiStateMessage -> {
-        stream.write(142)
+        stream.write(141)
         writeValue(stream, value.toList())
       }
       is BotaProvisioningFailureMessage -> {
-        stream.write(143)
+        stream.write(142)
         writeValue(stream, value.toList())
       }
       is BotaErrorCodeMessage -> {
-        stream.write(144)
+        stream.write(143)
         writeValue(stream, value.toList())
       }
       is BotaOperationMessage -> {
-        stream.write(145)
+        stream.write(144)
         writeValue(stream, value.toList())
       }
       is BotaConfigurationMessage -> {
-        stream.write(146)
+        stream.write(145)
         writeValue(stream, value.toList())
       }
       is BotaDeviceReferenceMessage -> {
-        stream.write(147)
+        stream.write(146)
         writeValue(stream, value.toList())
       }
       is BotaDiscoveredDeviceMessage -> {
-        stream.write(148)
+        stream.write(147)
         writeValue(stream, value.toList())
       }
       is BotaConnectedDeviceMessage -> {
-        stream.write(149)
+        stream.write(148)
         writeValue(stream, value.toList())
       }
       is BotaReconnectHintMessage -> {
-        stream.write(150)
+        stream.write(149)
         writeValue(stream, value.toList())
       }
       is BotaDeviceFlagsMessage -> {
-        stream.write(151)
+        stream.write(150)
         writeValue(stream, value.toList())
       }
       is BotaModemInfoMessage -> {
-        stream.write(152)
+        stream.write(151)
         writeValue(stream, value.toList())
       }
       is BotaDeviceStatusMessage -> {
-        stream.write(153)
+        stream.write(152)
         writeValue(stream, value.toList())
       }
       is BotaEnabledConnectionsMessage -> {
-        stream.write(154)
+        stream.write(153)
         writeValue(stream, value.toList())
       }
       is BotaPowerManagementMessage -> {
-        stream.write(155)
+        stream.write(154)
         writeValue(stream, value.toList())
       }
       is BotaConnectionSettingsMessage -> {
-        stream.write(156)
+        stream.write(155)
         writeValue(stream, value.toList())
       }
       is BotaDeviceRecordingMessage -> {
-        stream.write(157)
+        stream.write(156)
         writeValue(stream, value.toList())
       }
       is BotaRecordingStateMessage -> {
-        stream.write(158)
+        stream.write(157)
         writeValue(stream, value.toList())
       }
       is BotaRecordingTransferProgressMessage -> {
-        stream.write(159)
+        stream.write(158)
         writeValue(stream, value.toList())
       }
       is BotaRecordingTransferMetadataMessage -> {
-        stream.write(160)
+        stream.write(159)
         writeValue(stream, value.toList())
       }
       is BotaUploadOwnershipResultMessage -> {
-        stream.write(161)
+        stream.write(160)
         writeValue(stream, value.toList())
       }
       is BotaFirmwareImageMessage -> {
-        stream.write(162)
+        stream.write(161)
         writeValue(stream, value.toList())
       }
       is BotaFirmwareProgressMessage -> {
-        stream.write(163)
+        stream.write(162)
         writeValue(stream, value.toList())
       }
       is BotaDeviceLogLineMessage -> {
-        stream.write(164)
+        stream.write(163)
         writeValue(stream, value.toList())
       }
       is BotaWifiCredentialsMessage -> {
-        stream.write(165)
+        stream.write(164)
         writeValue(stream, value.toList())
       }
       is BotaWifiStatusMessage -> {
-        stream.write(166)
+        stream.write(165)
         writeValue(stream, value.toList())
       }
       is BotaWifiNetworkMessage -> {
-        stream.write(167)
+        stream.write(166)
         writeValue(stream, value.toList())
       }
       is BotaWifiScanResultMessage -> {
-        stream.write(168)
+        stream.write(167)
         writeValue(stream, value.toList())
       }
       is BotaDeprovisionResultMessage -> {
-        stream.write(169)
+        stream.write(168)
         writeValue(stream, value.toList())
       }
       is BotaFactoryResetCommandMessage -> {
-        stream.write(170)
+        stream.write(169)
         writeValue(stream, value.toList())
       }
       is BotaFactoryResetCompletionMessage -> {
-        stream.write(171)
+        stream.write(170)
         writeValue(stream, value.toList())
       }
       is BotaErrorMessage -> {
-        stream.write(172)
+        stream.write(171)
         writeValue(stream, value.toList())
       }
       is BotaProvisioningMaterialRequestMessage -> {
-        stream.write(173)
+        stream.write(172)
         writeValue(stream, value.toList())
       }
       is BotaFactoryResetGrantRequestMessage -> {
-        stream.write(174)
+        stream.write(173)
         writeValue(stream, value.toList())
       }
       is BotaProvisioningMaterialResponseMessage -> {
-        stream.write(175)
+        stream.write(174)
         writeValue(stream, value.toList())
       }
       is BotaFactoryResetGrantResponseMessage -> {
-        stream.write(176)
+        stream.write(175)
         writeValue(stream, value.toList())
       }
       is BotaFirmwareRequestMessage -> {
-        stream.write(177)
+        stream.write(176)
         writeValue(stream, value.toList())
       }
       is BotaFirmwareSourceMessage -> {
-        stream.write(178)
-        writeValue(stream, value.toList())
-      }
-      is BotaUploadDestinationRequestMessage -> {
-        stream.write(179)
-        writeValue(stream, value.toList())
-      }
-      is BotaUploadDestinationMessage -> {
-        stream.write(180)
+        stream.write(177)
         writeValue(stream, value.toList())
       }
       is BotaFactoryResetResultRequestMessage -> {
-        stream.write(181)
+        stream.write(178)
         writeValue(stream, value.toList())
       }
       is BotaFactoryResetResultAcknowledgementMessage -> {
-        stream.write(182)
+        stream.write(179)
         writeValue(stream, value.toList())
       }
       is BotaScanSubscriptionMessage -> {
-        stream.write(183)
+        stream.write(180)
         writeValue(stream, value.toList())
       }
       is BotaConnectionSubscriptionMessage -> {
-        stream.write(184)
+        stream.write(181)
         writeValue(stream, value.toList())
       }
       is BotaDeviceStatusSubscriptionMessage -> {
-        stream.write(185)
+        stream.write(182)
         writeValue(stream, value.toList())
       }
       is BotaRecordingStateSubscriptionMessage -> {
-        stream.write(186)
+        stream.write(183)
         writeValue(stream, value.toList())
       }
       is BotaRecordingSyncSubscriptionMessage -> {
-        stream.write(187)
+        stream.write(184)
         writeValue(stream, value.toList())
       }
       is BotaUploadOwnershipSubscriptionMessage -> {
-        stream.write(188)
+        stream.write(185)
         writeValue(stream, value.toList())
       }
       is BotaFirmwareUpdateSubscriptionMessage -> {
-        stream.write(189)
+        stream.write(186)
         writeValue(stream, value.toList())
       }
       is BotaLogSubscriptionMessage -> {
-        stream.write(190)
+        stream.write(187)
         writeValue(stream, value.toList())
       }
       is BotaWifiStatusSubscriptionMessage -> {
-        stream.write(191)
+        stream.write(188)
         writeValue(stream, value.toList())
       }
       is BotaDiscoveredDeviceEventMessage -> {
-        stream.write(192)
+        stream.write(189)
         writeValue(stream, value.toList())
       }
       is BotaConnectionEventMessage -> {
-        stream.write(193)
+        stream.write(190)
         writeValue(stream, value.toList())
       }
       is BotaDeviceStatusEventMessage -> {
-        stream.write(194)
+        stream.write(191)
         writeValue(stream, value.toList())
       }
       is BotaRecordingStateEventMessage -> {
-        stream.write(195)
+        stream.write(192)
         writeValue(stream, value.toList())
       }
       is BotaRecordingSyncProgressEventMessage -> {
-        stream.write(196)
+        stream.write(193)
         writeValue(stream, value.toList())
       }
       is BotaRecordingSyncCompletedEventMessage -> {
-        stream.write(197)
+        stream.write(194)
         writeValue(stream, value.toList())
       }
       is BotaUploadOwnershipProgressEventMessage -> {
-        stream.write(198)
+        stream.write(195)
         writeValue(stream, value.toList())
       }
       is BotaUploadOwnershipResolvedEventMessage -> {
-        stream.write(199)
+        stream.write(196)
         writeValue(stream, value.toList())
       }
       is BotaFirmwareProgressEventMessage -> {
-        stream.write(200)
+        stream.write(197)
         writeValue(stream, value.toList())
       }
       is BotaDeviceLogEventMessage -> {
-        stream.write(201)
+        stream.write(198)
         writeValue(stream, value.toList())
       }
       is BotaWifiStatusEventMessage -> {
-        stream.write(202)
+        stream.write(199)
         writeValue(stream, value.toList())
       }
       is BotaSubscriptionErrorEventMessage -> {
-        stream.write(203)
+        stream.write(200)
         writeValue(stream, value.toList())
       }
       is BotaSubscriptionCompleteEventMessage -> {
-        stream.write(204)
+        stream.write(201)
         writeValue(stream, value.toList())
       }
       is BotaEventMessage -> {
-        stream.write(205)
+        stream.write(202)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -4262,16 +4121,16 @@ interface BotaHostApi {
   suspend fun disconnect(operationId: String)
   suspend fun readDeviceStatus(operationId: String): BotaDeviceStatusMessage
   suspend fun cancelDeviceOperation(operationId: String)
-  suspend fun startRecording(operationId: String, device: BotaDeviceReferenceMessage, requestId: String?)
-  suspend fun stopRecording(operationId: String, device: BotaDeviceReferenceMessage, requestId: String?)
+  suspend fun startRecording(operationId: String, device: BotaDeviceReferenceMessage, grantBlob: String)
+  suspend fun stopRecording(operationId: String, device: BotaDeviceReferenceMessage, grantBlob: String)
   suspend fun readRecordingState(operationId: String, device: BotaDeviceReferenceMessage): BotaRecordingStateMessage
-  suspend fun provision(operationId: String, device: BotaDeviceReferenceMessage, materialId: String)
+  suspend fun provision(operationId: String, device: BotaDeviceReferenceMessage)
   suspend fun readConnectionSettings(operationId: String, device: BotaDeviceReferenceMessage): BotaConnectionSettingsMessage
   suspend fun writeConnectionSettings(operationId: String, device: BotaDeviceReferenceMessage, settings: BotaConnectionSettingsMessage)
-  suspend fun deprovision(operationId: String, device: BotaDeviceReferenceMessage, materialId: String): BotaDeprovisionResultMessage
+  suspend fun deprovision(operationId: String, device: BotaDeviceReferenceMessage, grantBlob: String): BotaDeprovisionResultMessage
   suspend fun cancelProvisioningOperation(operationId: String)
   suspend fun factoryReset(operationId: String, device: BotaDeviceReferenceMessage, command: BotaFactoryResetCommandMessage): BotaFactoryResetCompletionMessage
-  suspend fun resumePendingFactoryReset(operationId: String): BotaFactoryResetCompletionMessage?
+  suspend fun resumePendingFactoryReset(operationId: String, device: BotaDeviceReferenceMessage, currentBindingGeneration: Long): BotaFactoryResetCompletionMessage?
   suspend fun resumeUnjournaledFactoryReset(operationId: String, device: BotaDeviceReferenceMessage, command: BotaFactoryResetCommandMessage): BotaFactoryResetCompletionMessage
   suspend fun cancelFactoryResetOperation(operationId: String)
   suspend fun listRecordings(operationId: String, device: BotaDeviceReferenceMessage): List<BotaDeviceRecordingMessage>
@@ -4280,7 +4139,7 @@ interface BotaHostApi {
   suspend fun cancelRecordingOperation(operationId: String)
   suspend fun cancelOtaOperation(operationId: String)
   suspend fun stopLogs(operationId: String)
-  suspend fun configureWifi(operationId: String, device: BotaDeviceReferenceMessage, credentials: BotaWifiCredentialsMessage, materialId: String): BotaWifiConfigResultMessage
+  suspend fun configureWifi(operationId: String, device: BotaDeviceReferenceMessage, credentials: BotaWifiCredentialsMessage, grantBlob: String): BotaWifiConfigResultMessage
   suspend fun disconnectWifi(operationId: String, device: BotaDeviceReferenceMessage): BotaWifiConfigResultMessage
   suspend fun readWifiStatus(operationId: String, device: BotaDeviceReferenceMessage): BotaWifiStatusMessage
   suspend fun scanWifi(operationId: String, device: BotaDeviceReferenceMessage): BotaWifiScanResultMessage
@@ -4446,10 +4305,10 @@ interface BotaHostApi {
             val args = message as List<Any?>
             val operationIdArg = args[0] as String
             val deviceArg = args[1] as BotaDeviceReferenceMessage
-            val requestIdArg = args[2] as String?
+            val grantBlobArg = args[2] as String
             CoroutineScope(Dispatchers.Main).launch {
               val wrapped: List<Any?> = try {
-                api.startRecording(operationIdArg, deviceArg, requestIdArg)
+                api.startRecording(operationIdArg, deviceArg, grantBlobArg)
                 listOf(null)
               } catch (exception: Throwable) {
                 BotaApiPigeonUtils.wrapError(exception)
@@ -4468,10 +4327,10 @@ interface BotaHostApi {
             val args = message as List<Any?>
             val operationIdArg = args[0] as String
             val deviceArg = args[1] as BotaDeviceReferenceMessage
-            val requestIdArg = args[2] as String?
+            val grantBlobArg = args[2] as String
             CoroutineScope(Dispatchers.Main).launch {
               val wrapped: List<Any?> = try {
-                api.stopRecording(operationIdArg, deviceArg, requestIdArg)
+                api.stopRecording(operationIdArg, deviceArg, grantBlobArg)
                 listOf(null)
               } catch (exception: Throwable) {
                 BotaApiPigeonUtils.wrapError(exception)
@@ -4510,10 +4369,9 @@ interface BotaHostApi {
             val args = message as List<Any?>
             val operationIdArg = args[0] as String
             val deviceArg = args[1] as BotaDeviceReferenceMessage
-            val materialIdArg = args[2] as String
             CoroutineScope(Dispatchers.Main).launch {
               val wrapped: List<Any?> = try {
-                api.provision(operationIdArg, deviceArg, materialIdArg)
+                api.provision(operationIdArg, deviceArg)
                 listOf(null)
               } catch (exception: Throwable) {
                 BotaApiPigeonUtils.wrapError(exception)
@@ -4574,10 +4432,10 @@ interface BotaHostApi {
             val args = message as List<Any?>
             val operationIdArg = args[0] as String
             val deviceArg = args[1] as BotaDeviceReferenceMessage
-            val materialIdArg = args[2] as String
+            val grantBlobArg = args[2] as String
             CoroutineScope(Dispatchers.Main).launch {
               val wrapped: List<Any?> = try {
-                listOf(api.deprovision(operationIdArg, deviceArg, materialIdArg))
+                listOf(api.deprovision(operationIdArg, deviceArg, grantBlobArg))
               } catch (exception: Throwable) {
                 BotaApiPigeonUtils.wrapError(exception)
               }
@@ -4635,9 +4493,11 @@ interface BotaHostApi {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
             val operationIdArg = args[0] as String
+            val deviceArg = args[1] as BotaDeviceReferenceMessage
+            val currentBindingGenerationArg = args[2] as Long
             CoroutineScope(Dispatchers.Main).launch {
               val wrapped: List<Any?> = try {
-                listOf(api.resumePendingFactoryReset(operationIdArg))
+                listOf(api.resumePendingFactoryReset(operationIdArg, deviceArg, currentBindingGenerationArg))
               } catch (exception: Throwable) {
                 BotaApiPigeonUtils.wrapError(exception)
               }
@@ -4819,10 +4679,10 @@ interface BotaHostApi {
             val operationIdArg = args[0] as String
             val deviceArg = args[1] as BotaDeviceReferenceMessage
             val credentialsArg = args[2] as BotaWifiCredentialsMessage
-            val materialIdArg = args[3] as String
+            val grantBlobArg = args[3] as String
             CoroutineScope(Dispatchers.Main).launch {
               val wrapped: List<Any?> = try {
-                listOf(api.configureWifi(operationIdArg, deviceArg, credentialsArg, materialIdArg))
+                listOf(api.configureWifi(operationIdArg, deviceArg, credentialsArg, grantBlobArg))
               } catch (exception: Throwable) {
                 BotaApiPigeonUtils.wrapError(exception)
               }
@@ -5017,26 +4877,6 @@ class BotaFlutterApi(private val binaryMessenger: BinaryMessenger, private val m
           callback(Result.failure(FlutterError("null-error", "Flutter api returned null value for non-null return value.", "")))
         } else {
           val output = it[0] as BotaFirmwareSourceMessage
-          callback(Result.success(output))
-        }
-      } else {
-        callback(Result.failure(BotaApiPigeonUtils.createConnectionError(channelName)))
-      } 
-    }
-  }
-  fun requestUploadDestination(requestArg: BotaUploadDestinationRequestMessage, callback: (Result<BotaUploadDestinationMessage>) -> Unit)
-{
-    val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
-    val channelName = "dev.flutter.pigeon.bota_flutter_sdk.BotaFlutterApi.requestUploadDestination$separatedMessageChannelSuffix"
-    val channel = BasicMessageChannel<Any?>(binaryMessenger, channelName, codec)
-    channel.send(listOf(requestArg)) {
-      if (it is List<*>) {
-        if (it.size > 1) {
-          callback(Result.failure(FlutterError(it[0] as String, it[1] as String, it[2] as String?)))
-        } else if (it[0] == null) {
-          callback(Result.failure(FlutterError("null-error", "Flutter api returned null value for non-null return value.", "")))
-        } else {
-          val output = it[0] as BotaUploadDestinationMessage
           callback(Result.success(output))
         }
       } else {

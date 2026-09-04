@@ -6,7 +6,8 @@ import Foundation
   import FlutterMacOS
 #endif
 
-public final class BotaFlutterSdkPlugin: NSObject, FlutterPlugin {
+@MainActor
+public final class BotaFlutterSdkPlugin: NSObject, @preconcurrency FlutterPlugin {
   private let messenger: FlutterBinaryMessenger
   private let adapter: BotaAppleAdapter
 
@@ -40,6 +41,7 @@ public final class BotaFlutterSdkPlugin: NSObject, FlutterPlugin {
 
   public func detachFromEngine(for registrar: FlutterPluginRegistrar) {
     BotaHostApiSetup.setUp(binaryMessenger: messenger, api: nil)
-    Task { await adapter.detach() }
+    let adapter = adapter
+    Task { @MainActor in await adapter.detach() }
   }
 }

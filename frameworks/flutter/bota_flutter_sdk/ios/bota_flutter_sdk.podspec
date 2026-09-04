@@ -16,29 +16,13 @@ Pod::Spec.new do |spec|
     tag: "v#{version}",
   }
   spec.platform = :ios, "15.0"
-  spec.swift_version = "6.0"
-  spec.source_files = "Classes/**/*.swift"
+  spec.cocoapods_version = ">= 1.13"
+  spec.swift_version = "5.0"
+  spec.source_files = "bota_flutter_sdk/Sources/bota_flutter_sdk/**/*.swift"
   spec.dependency "Flutter"
+  spec.dependency "BotaAppleSDK", version
   spec.pod_target_xcconfig = {
     "DEFINES_MODULE" => "YES",
     "SWIFT_STRICT_CONCURRENCY" => "complete",
-    "SWIFT_TREAT_WARNINGS_AS_ERRORS" => "YES",
   }
-
-  if respond_to?(:spm_dependency, true)
-    local_path = ENV["BOTA_APPLE_SDK_PACKAGE_PATH"]
-    source = local_path.nil? || local_path.empty? \
-      ? "https://github.com/bota-dev/app-sdk.git" \
-      : File.expand_path(local_path)
-    requirement = local_path.nil? || local_path.empty? \
-      ? { kind: "exactVersion", version: version } \
-      : {}
-
-    spm_dependency(
-      spec,
-      url: source,
-      requirement: requirement,
-      products: ["BotaAppleSDK"],
-    )
-  end
 end

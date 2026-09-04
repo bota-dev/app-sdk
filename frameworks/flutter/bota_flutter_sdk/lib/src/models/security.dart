@@ -236,58 +236,6 @@ final class BotaFactoryResetCompletion {
   int get hashCode => Object.hash(commandId, bindingGeneration);
 }
 
-enum BotaHttpMethod { get, put, post }
-
-final class BotaUploadDestinationRequest {
-  const BotaUploadDestinationRequest({
-    required this.requestId,
-    required this.destinationId,
-    required this.recordingId,
-    required this.uploadId,
-  });
-
-  final String requestId;
-  final String destinationId;
-  final String recordingId;
-  final String uploadId;
-
-  @override
-  bool operator ==(Object other) =>
-      other is BotaUploadDestinationRequest &&
-      requestId == other.requestId &&
-      destinationId == other.destinationId &&
-      recordingId == other.recordingId &&
-      uploadId == other.uploadId;
-  @override
-  int get hashCode =>
-      Object.hash(requestId, destinationId, recordingId, uploadId);
-}
-
-final class BotaUploadDestination {
-  BotaUploadDestination({
-    required this.requestId,
-    required this.url,
-    this.method = BotaHttpMethod.put,
-    Map<String, String> headers = const {},
-  }) : headers = Map<String, String>.unmodifiable(headers);
-
-  final String requestId;
-  final Uri url;
-  final BotaHttpMethod method;
-  final Map<String, String> headers;
-
-  @override
-  bool operator ==(Object other) =>
-      other is BotaUploadDestination &&
-      requestId == other.requestId &&
-      url == other.url &&
-      method == other.method &&
-      mapEquals(headers, other.headers);
-  @override
-  int get hashCode =>
-      Object.hash(requestId, url, method, _headersHash(headers));
-}
-
 final class BotaFirmwareRequest {
   const BotaFirmwareRequest({
     required this.requestId,
@@ -353,10 +301,6 @@ typedef BotaFactoryResetResultCallback =
     Future<BotaFactoryResetResultAcknowledgement> Function(
       BotaFactoryResetResultRequest request,
     );
-typedef BotaUploadDestinationCallback =
-    Future<BotaUploadDestination> Function(
-      BotaUploadDestinationRequest request,
-    );
 typedef BotaFirmwareCallback =
     Future<BotaFirmwareSource> Function(BotaFirmwareRequest request);
 
@@ -365,14 +309,12 @@ final class BotaApplicationCallbacks {
     this.provisioningMaterial,
     this.factoryResetGrant,
     this.persistFactoryResetResult,
-    this.uploadDestination,
     this.firmware,
   });
 
   final BotaProvisioningMaterialCallback? provisioningMaterial;
   final BotaFactoryResetGrantCallback? factoryResetGrant;
   final BotaFactoryResetResultCallback? persistFactoryResetResult;
-  final BotaUploadDestinationCallback? uploadDestination;
   final BotaFirmwareCallback? firmware;
 
   @override
@@ -381,7 +323,6 @@ final class BotaApplicationCallbacks {
       provisioningMaterial == other.provisioningMaterial &&
       factoryResetGrant == other.factoryResetGrant &&
       persistFactoryResetResult == other.persistFactoryResetResult &&
-      uploadDestination == other.uploadDestination &&
       firmware == other.firmware;
 
   @override
@@ -389,7 +330,6 @@ final class BotaApplicationCallbacks {
     provisioningMaterial,
     factoryResetGrant,
     persistFactoryResetResult,
-    uploadDestination,
     firmware,
   );
 }

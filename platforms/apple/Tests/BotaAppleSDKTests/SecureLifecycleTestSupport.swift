@@ -53,6 +53,8 @@ actor SecureLifecycleRecorder {
     private(set) var unsubscribedCharacteristics: [String] = []
     private var notifications: [String: [Data]] = [:]
     private(set) var resetProvider: FactoryResetMaterialProvider?
+    private(set) var resetResultPersister:
+        (@Sendable (PersistedFactoryResetResult) async throws -> Void)?
     var pendingReset: PersistedFactoryResetResult?
 
     func recordWrite(_ write: Write) { writes.append(write) }
@@ -77,6 +79,11 @@ actor SecureLifecycleRecorder {
         resetProvider = provider
     }
     func unregister(_ id: String) { unregisteredIDs.append(id) }
+    func registerResetResultPersister(
+        _ persister: @escaping @Sendable (PersistedFactoryResetResult) async throws -> Void
+    ) {
+        resetResultPersister = persister
+    }
     func loadPendingReset() -> PersistedFactoryResetResult? { pendingReset }
     func setPendingReset(_ result: PersistedFactoryResetResult?) { pendingReset = result }
 }
@@ -136,6 +143,9 @@ func secureRuntime(
         registerFactoryReset: { id, provider in await recorder.registerReset(id, provider: provider) },
         unregisterMaterial: { id in await recorder.unregister(id) },
         registerFactoryResetGeneration: { _, _ in },
+        registerFactoryResetResultPersister: { _, persister in
+            await recorder.registerResetResultPersister(persister)
+        },
         loadPendingFactoryReset: { await recorder.loadPendingReset() }
     )
 }

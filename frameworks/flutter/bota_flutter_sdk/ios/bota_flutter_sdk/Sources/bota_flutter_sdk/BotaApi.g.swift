@@ -199,12 +199,6 @@ enum BotaConnectionStateMessage: Int, CaseIterable {
   case disconnecting = 5
 }
 
-enum BotaHttpMethodMessage: Int, CaseIterable {
-  case get = 0
-  case put = 1
-  case post = 2
-}
-
 enum BotaUploadOwnershipResultKindMessage: Int, CaseIterable {
   case deviceUploadCompleted = 0
   case deviceUploadPreserved = 1
@@ -777,7 +771,6 @@ struct BotaConfigurationMessage: Hashable, CustomStringConvertible {
   var hasProvisioningMaterialCallback: Bool
   var hasFactoryResetGrantCallback: Bool
   var hasFactoryResetResultCallback: Bool
-  var hasUploadDestinationCallback: Bool
   var hasFirmwareCallback: Bool
 
 
@@ -787,15 +780,13 @@ struct BotaConfigurationMessage: Hashable, CustomStringConvertible {
     let hasProvisioningMaterialCallback = pigeonVar_list[1] as! Bool
     let hasFactoryResetGrantCallback = pigeonVar_list[2] as! Bool
     let hasFactoryResetResultCallback = pigeonVar_list[3] as! Bool
-    let hasUploadDestinationCallback = pigeonVar_list[4] as! Bool
-    let hasFirmwareCallback = pigeonVar_list[5] as! Bool
+    let hasFirmwareCallback = pigeonVar_list[4] as! Bool
 
     return BotaConfigurationMessage(
       applicationSupportNamespace: applicationSupportNamespace,
       hasProvisioningMaterialCallback: hasProvisioningMaterialCallback,
       hasFactoryResetGrantCallback: hasFactoryResetGrantCallback,
       hasFactoryResetResultCallback: hasFactoryResetResultCallback,
-      hasUploadDestinationCallback: hasUploadDestinationCallback,
       hasFirmwareCallback: hasFirmwareCallback
     )
   }
@@ -805,7 +796,6 @@ struct BotaConfigurationMessage: Hashable, CustomStringConvertible {
       hasProvisioningMaterialCallback,
       hasFactoryResetGrantCallback,
       hasFactoryResetResultCallback,
-      hasUploadDestinationCallback,
       hasFirmwareCallback,
     ]
   }
@@ -813,7 +803,7 @@ struct BotaConfigurationMessage: Hashable, CustomStringConvertible {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return BotaApiPigeonInternal.deepEquals(lhs.applicationSupportNamespace, rhs.applicationSupportNamespace) && BotaApiPigeonInternal.deepEquals(lhs.hasProvisioningMaterialCallback, rhs.hasProvisioningMaterialCallback) && BotaApiPigeonInternal.deepEquals(lhs.hasFactoryResetGrantCallback, rhs.hasFactoryResetGrantCallback) && BotaApiPigeonInternal.deepEquals(lhs.hasFactoryResetResultCallback, rhs.hasFactoryResetResultCallback) && BotaApiPigeonInternal.deepEquals(lhs.hasUploadDestinationCallback, rhs.hasUploadDestinationCallback) && BotaApiPigeonInternal.deepEquals(lhs.hasFirmwareCallback, rhs.hasFirmwareCallback)
+    return BotaApiPigeonInternal.deepEquals(lhs.applicationSupportNamespace, rhs.applicationSupportNamespace) && BotaApiPigeonInternal.deepEquals(lhs.hasProvisioningMaterialCallback, rhs.hasProvisioningMaterialCallback) && BotaApiPigeonInternal.deepEquals(lhs.hasFactoryResetGrantCallback, rhs.hasFactoryResetGrantCallback) && BotaApiPigeonInternal.deepEquals(lhs.hasFactoryResetResultCallback, rhs.hasFactoryResetResultCallback) && BotaApiPigeonInternal.deepEquals(lhs.hasFirmwareCallback, rhs.hasFirmwareCallback)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -822,12 +812,11 @@ struct BotaConfigurationMessage: Hashable, CustomStringConvertible {
     BotaApiPigeonInternal.deepHash(value: hasProvisioningMaterialCallback, hasher: &hasher)
     BotaApiPigeonInternal.deepHash(value: hasFactoryResetGrantCallback, hasher: &hasher)
     BotaApiPigeonInternal.deepHash(value: hasFactoryResetResultCallback, hasher: &hasher)
-    BotaApiPigeonInternal.deepHash(value: hasUploadDestinationCallback, hasher: &hasher)
     BotaApiPigeonInternal.deepHash(value: hasFirmwareCallback, hasher: &hasher)
   }
 
   public var description: String {
-    return "BotaConfigurationMessage(applicationSupportNamespace: \(String(describing: applicationSupportNamespace)), hasProvisioningMaterialCallback: \(String(describing: hasProvisioningMaterialCallback)), hasFactoryResetGrantCallback: \(String(describing: hasFactoryResetGrantCallback)), hasFactoryResetResultCallback: \(String(describing: hasFactoryResetResultCallback)), hasUploadDestinationCallback: \(String(describing: hasUploadDestinationCallback)), hasFirmwareCallback: \(String(describing: hasFirmwareCallback)))"
+    return "BotaConfigurationMessage(applicationSupportNamespace: \(String(describing: applicationSupportNamespace)), hasProvisioningMaterialCallback: \(String(describing: hasProvisioningMaterialCallback)), hasFactoryResetGrantCallback: \(String(describing: hasFactoryResetGrantCallback)), hasFactoryResetResultCallback: \(String(describing: hasFactoryResetResultCallback)), hasFirmwareCallback: \(String(describing: hasFirmwareCallback)))"
   }
 }
 
@@ -2489,106 +2478,6 @@ struct BotaFirmwareSourceMessage: Hashable, CustomStringConvertible {
 }
 
 /// Generated class from Pigeon that represents data sent in messages.
-struct BotaUploadDestinationRequestMessage: Hashable, CustomStringConvertible {
-  var requestId: String
-  var destinationId: String
-  var recordingId: String
-  var uploadId: String
-
-
-  // swift-format-ignore: AlwaysUseLowerCamelCase
-  static func fromList(_ pigeonVar_list: [Any?]) -> BotaUploadDestinationRequestMessage? {
-    let requestId = pigeonVar_list[0] as! String
-    let destinationId = pigeonVar_list[1] as! String
-    let recordingId = pigeonVar_list[2] as! String
-    let uploadId = pigeonVar_list[3] as! String
-
-    return BotaUploadDestinationRequestMessage(
-      requestId: requestId,
-      destinationId: destinationId,
-      recordingId: recordingId,
-      uploadId: uploadId
-    )
-  }
-  func toList() -> [Any?] {
-    return [
-      requestId,
-      destinationId,
-      recordingId,
-      uploadId,
-    ]
-  }
-  static func == (lhs: BotaUploadDestinationRequestMessage, rhs: BotaUploadDestinationRequestMessage) -> Bool {
-    if Swift.type(of: lhs) != Swift.type(of: rhs) {
-      return false
-    }
-    return BotaApiPigeonInternal.deepEquals(lhs.requestId, rhs.requestId) && BotaApiPigeonInternal.deepEquals(lhs.destinationId, rhs.destinationId) && BotaApiPigeonInternal.deepEquals(lhs.recordingId, rhs.recordingId) && BotaApiPigeonInternal.deepEquals(lhs.uploadId, rhs.uploadId)
-  }
-
-  func hash(into hasher: inout Hasher) {
-    hasher.combine("BotaUploadDestinationRequestMessage")
-    BotaApiPigeonInternal.deepHash(value: requestId, hasher: &hasher)
-    BotaApiPigeonInternal.deepHash(value: destinationId, hasher: &hasher)
-    BotaApiPigeonInternal.deepHash(value: recordingId, hasher: &hasher)
-    BotaApiPigeonInternal.deepHash(value: uploadId, hasher: &hasher)
-  }
-
-  public var description: String {
-    return "BotaUploadDestinationRequestMessage(requestId: \(String(describing: requestId)), destinationId: \(String(describing: destinationId)), recordingId: \(String(describing: recordingId)), uploadId: \(String(describing: uploadId)))"
-  }
-}
-
-/// Generated class from Pigeon that represents data sent in messages.
-struct BotaUploadDestinationMessage: Hashable, CustomStringConvertible {
-  var requestId: String
-  var url: String
-  var method: BotaHttpMethodMessage
-  var headers: [String: String]
-
-
-  // swift-format-ignore: AlwaysUseLowerCamelCase
-  static func fromList(_ pigeonVar_list: [Any?]) -> BotaUploadDestinationMessage? {
-    let requestId = pigeonVar_list[0] as! String
-    let url = pigeonVar_list[1] as! String
-    let method = pigeonVar_list[2] as! BotaHttpMethodMessage
-    let headers = pigeonVar_list[3] as! [String: String]
-
-    return BotaUploadDestinationMessage(
-      requestId: requestId,
-      url: url,
-      method: method,
-      headers: headers
-    )
-  }
-  func toList() -> [Any?] {
-    return [
-      requestId,
-      url,
-      method,
-      headers,
-    ]
-  }
-  static func == (lhs: BotaUploadDestinationMessage, rhs: BotaUploadDestinationMessage) -> Bool {
-    if Swift.type(of: lhs) != Swift.type(of: rhs) {
-      return false
-    }
-    return BotaApiPigeonInternal.deepEquals(lhs.requestId, rhs.requestId) && BotaApiPigeonInternal.deepEquals(lhs.url, rhs.url) && BotaApiPigeonInternal.deepEquals(lhs.method, rhs.method) && BotaApiPigeonInternal.deepEquals(lhs.headers, rhs.headers)
-  }
-
-  func hash(into hasher: inout Hasher) {
-    hasher.combine("BotaUploadDestinationMessage")
-    BotaApiPigeonInternal.deepHash(value: requestId, hasher: &hasher)
-    BotaApiPigeonInternal.deepHash(value: url, hasher: &hasher)
-    BotaApiPigeonInternal.deepHash(value: method, hasher: &hasher)
-    BotaApiPigeonInternal.deepHash(value: headers, hasher: &hasher)
-  }
-
-  public var description: String {
-    return "BotaUploadDestinationMessage(requestId: \(String(describing: requestId)), url: \(String(describing: url)), method: \(String(describing: method)), headers: \(String(describing: headers)))"
-  }
-}
-
-/// Generated class from Pigeon that represents data sent in messages.
 struct BotaFactoryResetResultRequestMessage: Hashable, CustomStringConvertible {
   var requestId: String
   var commandId: String
@@ -3532,162 +3421,152 @@ private class BotaApiPigeonCodecReader: FlutterStandardReader {
     case 130:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return BotaHttpMethodMessage(rawValue: enumResultAsInt)
-      }
-      return nil
-    case 131:
-      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
-      if let enumResultAsInt = enumResultAsInt {
         return BotaUploadOwnershipResultKindMessage(rawValue: enumResultAsInt)
       }
       return nil
-    case 132:
+    case 131:
       return BotaDeviceTypeMessage.fromList(self.readValue() as! [Any?])
-    case 133:
+    case 132:
       return BotaPairingStateMessage.fromList(self.readValue() as! [Any?])
-    case 134:
+    case 133:
       return BotaDeviceStateValueMessage.fromList(self.readValue() as! [Any?])
-    case 135:
+    case 134:
       return BotaLteStateMessage.fromList(self.readValue() as! [Any?])
-    case 136:
+    case 135:
       return BotaWifiRadioStateMessage.fromList(self.readValue() as! [Any?])
-    case 137:
+    case 136:
       return BotaConnectionTypeMessage.fromList(self.readValue() as! [Any?])
-    case 138:
+    case 137:
       return BotaAudioCodecMessage.fromList(self.readValue() as! [Any?])
-    case 139:
+    case 138:
       return BotaRecordingInitiatorMessage.fromList(self.readValue() as! [Any?])
-    case 140:
+    case 139:
       return BotaFirmwarePhaseMessage.fromList(self.readValue() as! [Any?])
-    case 141:
+    case 140:
       return BotaWifiConfigResultMessage.fromList(self.readValue() as! [Any?])
-    case 142:
+    case 141:
       return BotaWifiStateMessage.fromList(self.readValue() as! [Any?])
-    case 143:
+    case 142:
       return BotaProvisioningFailureMessage.fromList(self.readValue() as! [Any?])
-    case 144:
+    case 143:
       return BotaErrorCodeMessage.fromList(self.readValue() as! [Any?])
-    case 145:
+    case 144:
       return BotaOperationMessage.fromList(self.readValue() as! [Any?])
-    case 146:
+    case 145:
       return BotaConfigurationMessage.fromList(self.readValue() as! [Any?])
-    case 147:
+    case 146:
       return BotaDeviceReferenceMessage.fromList(self.readValue() as! [Any?])
-    case 148:
+    case 147:
       return BotaDiscoveredDeviceMessage.fromList(self.readValue() as! [Any?])
-    case 149:
+    case 148:
       return BotaConnectedDeviceMessage.fromList(self.readValue() as! [Any?])
-    case 150:
+    case 149:
       return BotaReconnectHintMessage.fromList(self.readValue() as! [Any?])
-    case 151:
+    case 150:
       return BotaDeviceFlagsMessage.fromList(self.readValue() as! [Any?])
-    case 152:
+    case 151:
       return BotaModemInfoMessage.fromList(self.readValue() as! [Any?])
-    case 153:
+    case 152:
       return BotaDeviceStatusMessage.fromList(self.readValue() as! [Any?])
-    case 154:
+    case 153:
       return BotaEnabledConnectionsMessage.fromList(self.readValue() as! [Any?])
-    case 155:
+    case 154:
       return BotaPowerManagementMessage.fromList(self.readValue() as! [Any?])
-    case 156:
+    case 155:
       return BotaConnectionSettingsMessage.fromList(self.readValue() as! [Any?])
-    case 157:
+    case 156:
       return BotaDeviceRecordingMessage.fromList(self.readValue() as! [Any?])
-    case 158:
+    case 157:
       return BotaRecordingStateMessage.fromList(self.readValue() as! [Any?])
-    case 159:
+    case 158:
       return BotaRecordingTransferProgressMessage.fromList(self.readValue() as! [Any?])
-    case 160:
+    case 159:
       return BotaRecordingTransferMetadataMessage.fromList(self.readValue() as! [Any?])
-    case 161:
+    case 160:
       return BotaUploadOwnershipResultMessage.fromList(self.readValue() as! [Any?])
-    case 162:
+    case 161:
       return BotaFirmwareImageMessage.fromList(self.readValue() as! [Any?])
-    case 163:
+    case 162:
       return BotaFirmwareProgressMessage.fromList(self.readValue() as! [Any?])
-    case 164:
+    case 163:
       return BotaDeviceLogLineMessage.fromList(self.readValue() as! [Any?])
-    case 165:
+    case 164:
       return BotaWifiCredentialsMessage.fromList(self.readValue() as! [Any?])
-    case 166:
+    case 165:
       return BotaWifiStatusMessage.fromList(self.readValue() as! [Any?])
-    case 167:
+    case 166:
       return BotaWifiNetworkMessage.fromList(self.readValue() as! [Any?])
-    case 168:
+    case 167:
       return BotaWifiScanResultMessage.fromList(self.readValue() as! [Any?])
-    case 169:
+    case 168:
       return BotaDeprovisionResultMessage.fromList(self.readValue() as! [Any?])
-    case 170:
+    case 169:
       return BotaFactoryResetCommandMessage.fromList(self.readValue() as! [Any?])
-    case 171:
+    case 170:
       return BotaFactoryResetCompletionMessage.fromList(self.readValue() as! [Any?])
-    case 172:
+    case 171:
       return BotaErrorMessage.fromList(self.readValue() as! [Any?])
-    case 173:
+    case 172:
       return BotaProvisioningMaterialRequestMessage.fromList(self.readValue() as! [Any?])
-    case 174:
+    case 173:
       return BotaFactoryResetGrantRequestMessage.fromList(self.readValue() as! [Any?])
-    case 175:
+    case 174:
       return BotaProvisioningMaterialResponseMessage.fromList(self.readValue() as! [Any?])
-    case 176:
+    case 175:
       return BotaFactoryResetGrantResponseMessage.fromList(self.readValue() as! [Any?])
-    case 177:
+    case 176:
       return BotaFirmwareRequestMessage.fromList(self.readValue() as! [Any?])
-    case 178:
+    case 177:
       return BotaFirmwareSourceMessage.fromList(self.readValue() as! [Any?])
-    case 179:
-      return BotaUploadDestinationRequestMessage.fromList(self.readValue() as! [Any?])
-    case 180:
-      return BotaUploadDestinationMessage.fromList(self.readValue() as! [Any?])
-    case 181:
+    case 178:
       return BotaFactoryResetResultRequestMessage.fromList(self.readValue() as! [Any?])
-    case 182:
+    case 179:
       return BotaFactoryResetResultAcknowledgementMessage.fromList(self.readValue() as! [Any?])
-    case 183:
+    case 180:
       return BotaScanSubscriptionMessage.fromList(self.readValue() as! [Any?])
-    case 184:
+    case 181:
       return BotaConnectionSubscriptionMessage.fromList(self.readValue() as! [Any?])
-    case 185:
+    case 182:
       return BotaDeviceStatusSubscriptionMessage.fromList(self.readValue() as! [Any?])
-    case 186:
+    case 183:
       return BotaRecordingStateSubscriptionMessage.fromList(self.readValue() as! [Any?])
-    case 187:
+    case 184:
       return BotaRecordingSyncSubscriptionMessage.fromList(self.readValue() as! [Any?])
-    case 188:
+    case 185:
       return BotaUploadOwnershipSubscriptionMessage.fromList(self.readValue() as! [Any?])
-    case 189:
+    case 186:
       return BotaFirmwareUpdateSubscriptionMessage.fromList(self.readValue() as! [Any?])
-    case 190:
+    case 187:
       return BotaLogSubscriptionMessage.fromList(self.readValue() as! [Any?])
-    case 191:
+    case 188:
       return BotaWifiStatusSubscriptionMessage.fromList(self.readValue() as! [Any?])
-    case 192:
+    case 189:
       return BotaDiscoveredDeviceEventMessage.fromList(self.readValue() as! [Any?])
-    case 193:
+    case 190:
       return BotaConnectionEventMessage.fromList(self.readValue() as! [Any?])
-    case 194:
+    case 191:
       return BotaDeviceStatusEventMessage.fromList(self.readValue() as! [Any?])
-    case 195:
+    case 192:
       return BotaRecordingStateEventMessage.fromList(self.readValue() as! [Any?])
-    case 196:
+    case 193:
       return BotaRecordingSyncProgressEventMessage.fromList(self.readValue() as! [Any?])
-    case 197:
+    case 194:
       return BotaRecordingSyncCompletedEventMessage.fromList(self.readValue() as! [Any?])
-    case 198:
+    case 195:
       return BotaUploadOwnershipProgressEventMessage.fromList(self.readValue() as! [Any?])
-    case 199:
+    case 196:
       return BotaUploadOwnershipResolvedEventMessage.fromList(self.readValue() as! [Any?])
-    case 200:
+    case 197:
       return BotaFirmwareProgressEventMessage.fromList(self.readValue() as! [Any?])
-    case 201:
+    case 198:
       return BotaDeviceLogEventMessage.fromList(self.readValue() as! [Any?])
-    case 202:
+    case 199:
       return BotaWifiStatusEventMessage.fromList(self.readValue() as! [Any?])
-    case 203:
+    case 200:
       return BotaSubscriptionErrorEventMessage.fromList(self.readValue() as! [Any?])
-    case 204:
+    case 201:
       return BotaSubscriptionCompleteEventMessage.fromList(self.readValue() as! [Any?])
-    case 205:
+    case 202:
       return BotaEventMessage.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -3700,233 +3579,224 @@ private class BotaApiPigeonCodecWriter: FlutterStandardWriter {
     if let value = value as? BotaConnectionStateMessage {
       super.writeByte(129)
       super.writeValue(value.rawValue)
-    } else if let value = value as? BotaHttpMethodMessage {
+    } else if let value = value as? BotaUploadOwnershipResultKindMessage {
       super.writeByte(130)
       super.writeValue(value.rawValue)
-    } else if let value = value as? BotaUploadOwnershipResultKindMessage {
-      super.writeByte(131)
-      super.writeValue(value.rawValue)
     } else if let value = value as? BotaDeviceTypeMessage {
-      super.writeByte(132)
+      super.writeByte(131)
       super.writeValue(value.toList())
     } else if let value = value as? BotaPairingStateMessage {
-      super.writeByte(133)
+      super.writeByte(132)
       super.writeValue(value.toList())
     } else if let value = value as? BotaDeviceStateValueMessage {
-      super.writeByte(134)
+      super.writeByte(133)
       super.writeValue(value.toList())
     } else if let value = value as? BotaLteStateMessage {
-      super.writeByte(135)
+      super.writeByte(134)
       super.writeValue(value.toList())
     } else if let value = value as? BotaWifiRadioStateMessage {
-      super.writeByte(136)
+      super.writeByte(135)
       super.writeValue(value.toList())
     } else if let value = value as? BotaConnectionTypeMessage {
-      super.writeByte(137)
+      super.writeByte(136)
       super.writeValue(value.toList())
     } else if let value = value as? BotaAudioCodecMessage {
-      super.writeByte(138)
+      super.writeByte(137)
       super.writeValue(value.toList())
     } else if let value = value as? BotaRecordingInitiatorMessage {
-      super.writeByte(139)
+      super.writeByte(138)
       super.writeValue(value.toList())
     } else if let value = value as? BotaFirmwarePhaseMessage {
-      super.writeByte(140)
+      super.writeByte(139)
       super.writeValue(value.toList())
     } else if let value = value as? BotaWifiConfigResultMessage {
-      super.writeByte(141)
+      super.writeByte(140)
       super.writeValue(value.toList())
     } else if let value = value as? BotaWifiStateMessage {
-      super.writeByte(142)
+      super.writeByte(141)
       super.writeValue(value.toList())
     } else if let value = value as? BotaProvisioningFailureMessage {
-      super.writeByte(143)
+      super.writeByte(142)
       super.writeValue(value.toList())
     } else if let value = value as? BotaErrorCodeMessage {
-      super.writeByte(144)
+      super.writeByte(143)
       super.writeValue(value.toList())
     } else if let value = value as? BotaOperationMessage {
-      super.writeByte(145)
+      super.writeByte(144)
       super.writeValue(value.toList())
     } else if let value = value as? BotaConfigurationMessage {
-      super.writeByte(146)
+      super.writeByte(145)
       super.writeValue(value.toList())
     } else if let value = value as? BotaDeviceReferenceMessage {
-      super.writeByte(147)
+      super.writeByte(146)
       super.writeValue(value.toList())
     } else if let value = value as? BotaDiscoveredDeviceMessage {
-      super.writeByte(148)
+      super.writeByte(147)
       super.writeValue(value.toList())
     } else if let value = value as? BotaConnectedDeviceMessage {
-      super.writeByte(149)
+      super.writeByte(148)
       super.writeValue(value.toList())
     } else if let value = value as? BotaReconnectHintMessage {
-      super.writeByte(150)
+      super.writeByte(149)
       super.writeValue(value.toList())
     } else if let value = value as? BotaDeviceFlagsMessage {
-      super.writeByte(151)
+      super.writeByte(150)
       super.writeValue(value.toList())
     } else if let value = value as? BotaModemInfoMessage {
-      super.writeByte(152)
+      super.writeByte(151)
       super.writeValue(value.toList())
     } else if let value = value as? BotaDeviceStatusMessage {
-      super.writeByte(153)
+      super.writeByte(152)
       super.writeValue(value.toList())
     } else if let value = value as? BotaEnabledConnectionsMessage {
-      super.writeByte(154)
+      super.writeByte(153)
       super.writeValue(value.toList())
     } else if let value = value as? BotaPowerManagementMessage {
-      super.writeByte(155)
+      super.writeByte(154)
       super.writeValue(value.toList())
     } else if let value = value as? BotaConnectionSettingsMessage {
-      super.writeByte(156)
+      super.writeByte(155)
       super.writeValue(value.toList())
     } else if let value = value as? BotaDeviceRecordingMessage {
-      super.writeByte(157)
+      super.writeByte(156)
       super.writeValue(value.toList())
     } else if let value = value as? BotaRecordingStateMessage {
-      super.writeByte(158)
+      super.writeByte(157)
       super.writeValue(value.toList())
     } else if let value = value as? BotaRecordingTransferProgressMessage {
-      super.writeByte(159)
+      super.writeByte(158)
       super.writeValue(value.toList())
     } else if let value = value as? BotaRecordingTransferMetadataMessage {
-      super.writeByte(160)
+      super.writeByte(159)
       super.writeValue(value.toList())
     } else if let value = value as? BotaUploadOwnershipResultMessage {
-      super.writeByte(161)
+      super.writeByte(160)
       super.writeValue(value.toList())
     } else if let value = value as? BotaFirmwareImageMessage {
-      super.writeByte(162)
+      super.writeByte(161)
       super.writeValue(value.toList())
     } else if let value = value as? BotaFirmwareProgressMessage {
-      super.writeByte(163)
+      super.writeByte(162)
       super.writeValue(value.toList())
     } else if let value = value as? BotaDeviceLogLineMessage {
-      super.writeByte(164)
+      super.writeByte(163)
       super.writeValue(value.toList())
     } else if let value = value as? BotaWifiCredentialsMessage {
-      super.writeByte(165)
+      super.writeByte(164)
       super.writeValue(value.toList())
     } else if let value = value as? BotaWifiStatusMessage {
-      super.writeByte(166)
+      super.writeByte(165)
       super.writeValue(value.toList())
     } else if let value = value as? BotaWifiNetworkMessage {
-      super.writeByte(167)
+      super.writeByte(166)
       super.writeValue(value.toList())
     } else if let value = value as? BotaWifiScanResultMessage {
-      super.writeByte(168)
+      super.writeByte(167)
       super.writeValue(value.toList())
     } else if let value = value as? BotaDeprovisionResultMessage {
-      super.writeByte(169)
+      super.writeByte(168)
       super.writeValue(value.toList())
     } else if let value = value as? BotaFactoryResetCommandMessage {
-      super.writeByte(170)
+      super.writeByte(169)
       super.writeValue(value.toList())
     } else if let value = value as? BotaFactoryResetCompletionMessage {
-      super.writeByte(171)
+      super.writeByte(170)
       super.writeValue(value.toList())
     } else if let value = value as? BotaErrorMessage {
-      super.writeByte(172)
+      super.writeByte(171)
       super.writeValue(value.toList())
     } else if let value = value as? BotaProvisioningMaterialRequestMessage {
-      super.writeByte(173)
+      super.writeByte(172)
       super.writeValue(value.toList())
     } else if let value = value as? BotaFactoryResetGrantRequestMessage {
-      super.writeByte(174)
+      super.writeByte(173)
       super.writeValue(value.toList())
     } else if let value = value as? BotaProvisioningMaterialResponseMessage {
-      super.writeByte(175)
+      super.writeByte(174)
       super.writeValue(value.toList())
     } else if let value = value as? BotaFactoryResetGrantResponseMessage {
-      super.writeByte(176)
+      super.writeByte(175)
       super.writeValue(value.toList())
     } else if let value = value as? BotaFirmwareRequestMessage {
-      super.writeByte(177)
+      super.writeByte(176)
       super.writeValue(value.toList())
     } else if let value = value as? BotaFirmwareSourceMessage {
-      super.writeByte(178)
-      super.writeValue(value.toList())
-    } else if let value = value as? BotaUploadDestinationRequestMessage {
-      super.writeByte(179)
-      super.writeValue(value.toList())
-    } else if let value = value as? BotaUploadDestinationMessage {
-      super.writeByte(180)
+      super.writeByte(177)
       super.writeValue(value.toList())
     } else if let value = value as? BotaFactoryResetResultRequestMessage {
-      super.writeByte(181)
+      super.writeByte(178)
       super.writeValue(value.toList())
     } else if let value = value as? BotaFactoryResetResultAcknowledgementMessage {
-      super.writeByte(182)
+      super.writeByte(179)
       super.writeValue(value.toList())
     } else if let value = value as? BotaScanSubscriptionMessage {
-      super.writeByte(183)
+      super.writeByte(180)
       super.writeValue(value.toList())
     } else if let value = value as? BotaConnectionSubscriptionMessage {
-      super.writeByte(184)
+      super.writeByte(181)
       super.writeValue(value.toList())
     } else if let value = value as? BotaDeviceStatusSubscriptionMessage {
-      super.writeByte(185)
+      super.writeByte(182)
       super.writeValue(value.toList())
     } else if let value = value as? BotaRecordingStateSubscriptionMessage {
-      super.writeByte(186)
+      super.writeByte(183)
       super.writeValue(value.toList())
     } else if let value = value as? BotaRecordingSyncSubscriptionMessage {
-      super.writeByte(187)
+      super.writeByte(184)
       super.writeValue(value.toList())
     } else if let value = value as? BotaUploadOwnershipSubscriptionMessage {
-      super.writeByte(188)
+      super.writeByte(185)
       super.writeValue(value.toList())
     } else if let value = value as? BotaFirmwareUpdateSubscriptionMessage {
-      super.writeByte(189)
+      super.writeByte(186)
       super.writeValue(value.toList())
     } else if let value = value as? BotaLogSubscriptionMessage {
-      super.writeByte(190)
+      super.writeByte(187)
       super.writeValue(value.toList())
     } else if let value = value as? BotaWifiStatusSubscriptionMessage {
-      super.writeByte(191)
+      super.writeByte(188)
       super.writeValue(value.toList())
     } else if let value = value as? BotaDiscoveredDeviceEventMessage {
-      super.writeByte(192)
+      super.writeByte(189)
       super.writeValue(value.toList())
     } else if let value = value as? BotaConnectionEventMessage {
-      super.writeByte(193)
+      super.writeByte(190)
       super.writeValue(value.toList())
     } else if let value = value as? BotaDeviceStatusEventMessage {
-      super.writeByte(194)
+      super.writeByte(191)
       super.writeValue(value.toList())
     } else if let value = value as? BotaRecordingStateEventMessage {
-      super.writeByte(195)
+      super.writeByte(192)
       super.writeValue(value.toList())
     } else if let value = value as? BotaRecordingSyncProgressEventMessage {
-      super.writeByte(196)
+      super.writeByte(193)
       super.writeValue(value.toList())
     } else if let value = value as? BotaRecordingSyncCompletedEventMessage {
-      super.writeByte(197)
+      super.writeByte(194)
       super.writeValue(value.toList())
     } else if let value = value as? BotaUploadOwnershipProgressEventMessage {
-      super.writeByte(198)
+      super.writeByte(195)
       super.writeValue(value.toList())
     } else if let value = value as? BotaUploadOwnershipResolvedEventMessage {
-      super.writeByte(199)
+      super.writeByte(196)
       super.writeValue(value.toList())
     } else if let value = value as? BotaFirmwareProgressEventMessage {
-      super.writeByte(200)
+      super.writeByte(197)
       super.writeValue(value.toList())
     } else if let value = value as? BotaDeviceLogEventMessage {
-      super.writeByte(201)
+      super.writeByte(198)
       super.writeValue(value.toList())
     } else if let value = value as? BotaWifiStatusEventMessage {
-      super.writeByte(202)
+      super.writeByte(199)
       super.writeValue(value.toList())
     } else if let value = value as? BotaSubscriptionErrorEventMessage {
-      super.writeByte(203)
+      super.writeByte(200)
       super.writeValue(value.toList())
     } else if let value = value as? BotaSubscriptionCompleteEventMessage {
-      super.writeByte(204)
+      super.writeByte(201)
       super.writeValue(value.toList())
     } else if let value = value as? BotaEventMessage {
-      super.writeByte(205)
+      super.writeByte(202)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -3958,16 +3828,16 @@ protocol BotaHostApi {
   func disconnect(operationId: String) async throws
   func readDeviceStatus(operationId: String) async throws -> BotaDeviceStatusMessage
   func cancelDeviceOperation(operationId: String) async throws
-  func startRecording(operationId: String, device: BotaDeviceReferenceMessage, requestId: String?) async throws
-  func stopRecording(operationId: String, device: BotaDeviceReferenceMessage, requestId: String?) async throws
+  func startRecording(operationId: String, device: BotaDeviceReferenceMessage, grantBlob: String) async throws
+  func stopRecording(operationId: String, device: BotaDeviceReferenceMessage, grantBlob: String) async throws
   func readRecordingState(operationId: String, device: BotaDeviceReferenceMessage) async throws -> BotaRecordingStateMessage
-  func provision(operationId: String, device: BotaDeviceReferenceMessage, materialId: String) async throws
+  func provision(operationId: String, device: BotaDeviceReferenceMessage) async throws
   func readConnectionSettings(operationId: String, device: BotaDeviceReferenceMessage) async throws -> BotaConnectionSettingsMessage
   func writeConnectionSettings(operationId: String, device: BotaDeviceReferenceMessage, settings: BotaConnectionSettingsMessage) async throws
-  func deprovision(operationId: String, device: BotaDeviceReferenceMessage, materialId: String) async throws -> BotaDeprovisionResultMessage
+  func deprovision(operationId: String, device: BotaDeviceReferenceMessage, grantBlob: String) async throws -> BotaDeprovisionResultMessage
   func cancelProvisioningOperation(operationId: String) async throws
   func factoryReset(operationId: String, device: BotaDeviceReferenceMessage, command: BotaFactoryResetCommandMessage) async throws -> BotaFactoryResetCompletionMessage
-  func resumePendingFactoryReset(operationId: String) async throws -> BotaFactoryResetCompletionMessage?
+  func resumePendingFactoryReset(operationId: String, device: BotaDeviceReferenceMessage, currentBindingGeneration: Int64) async throws -> BotaFactoryResetCompletionMessage?
   func resumeUnjournaledFactoryReset(operationId: String, device: BotaDeviceReferenceMessage, command: BotaFactoryResetCommandMessage) async throws -> BotaFactoryResetCompletionMessage
   func cancelFactoryResetOperation(operationId: String) async throws
   func listRecordings(operationId: String, device: BotaDeviceReferenceMessage) async throws -> [BotaDeviceRecordingMessage]
@@ -3976,7 +3846,7 @@ protocol BotaHostApi {
   func cancelRecordingOperation(operationId: String) async throws
   func cancelOtaOperation(operationId: String) async throws
   func stopLogs(operationId: String) async throws
-  func configureWifi(operationId: String, device: BotaDeviceReferenceMessage, credentials: BotaWifiCredentialsMessage, materialId: String) async throws -> BotaWifiConfigResultMessage
+  func configureWifi(operationId: String, device: BotaDeviceReferenceMessage, credentials: BotaWifiCredentialsMessage, grantBlob: String) async throws -> BotaWifiConfigResultMessage
   func disconnectWifi(operationId: String, device: BotaDeviceReferenceMessage) async throws -> BotaWifiConfigResultMessage
   func readWifiStatus(operationId: String, device: BotaDeviceReferenceMessage) async throws -> BotaWifiStatusMessage
   func scanWifi(operationId: String, device: BotaDeviceReferenceMessage) async throws -> BotaWifiScanResultMessage
@@ -4121,10 +3991,10 @@ class BotaHostApiSetup {
         let args = message as! [Any?]
         let operationIdArg = args[0] as! String
         let deviceArg = args[1] as! BotaDeviceReferenceMessage
-        let requestIdArg: String? = nilOrValue(args[2])
+        let grantBlobArg = args[2] as! String
         Task { @MainActor in
           do {
-            try await api.startRecording(operationId: operationIdArg, device: deviceArg, requestId: requestIdArg)
+            try await api.startRecording(operationId: operationIdArg, device: deviceArg, grantBlob: grantBlobArg)
             reply(wrapResult(nil))
           } catch {
             reply(wrapError(error))
@@ -4140,10 +4010,10 @@ class BotaHostApiSetup {
         let args = message as! [Any?]
         let operationIdArg = args[0] as! String
         let deviceArg = args[1] as! BotaDeviceReferenceMessage
-        let requestIdArg: String? = nilOrValue(args[2])
+        let grantBlobArg = args[2] as! String
         Task { @MainActor in
           do {
-            try await api.stopRecording(operationId: operationIdArg, device: deviceArg, requestId: requestIdArg)
+            try await api.stopRecording(operationId: operationIdArg, device: deviceArg, grantBlob: grantBlobArg)
             reply(wrapResult(nil))
           } catch {
             reply(wrapError(error))
@@ -4177,10 +4047,9 @@ class BotaHostApiSetup {
         let args = message as! [Any?]
         let operationIdArg = args[0] as! String
         let deviceArg = args[1] as! BotaDeviceReferenceMessage
-        let materialIdArg = args[2] as! String
         Task { @MainActor in
           do {
-            try await api.provision(operationId: operationIdArg, device: deviceArg, materialId: materialIdArg)
+            try await api.provision(operationId: operationIdArg, device: deviceArg)
             reply(wrapResult(nil))
           } catch {
             reply(wrapError(error))
@@ -4233,10 +4102,10 @@ class BotaHostApiSetup {
         let args = message as! [Any?]
         let operationIdArg = args[0] as! String
         let deviceArg = args[1] as! BotaDeviceReferenceMessage
-        let materialIdArg = args[2] as! String
+        let grantBlobArg = args[2] as! String
         Task { @MainActor in
           do {
-            let result = try await api.deprovision(operationId: operationIdArg, device: deviceArg, materialId: materialIdArg)
+            let result = try await api.deprovision(operationId: operationIdArg, device: deviceArg, grantBlob: grantBlobArg)
             reply(wrapResult(result))
           } catch {
             reply(wrapError(error))
@@ -4287,9 +4156,11 @@ class BotaHostApiSetup {
       resumePendingFactoryResetChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let operationIdArg = args[0] as! String
+        let deviceArg = args[1] as! BotaDeviceReferenceMessage
+        let currentBindingGenerationArg = args[2] as! Int64
         Task { @MainActor in
           do {
-            let result = try await api.resumePendingFactoryReset(operationId: operationIdArg)
+            let result = try await api.resumePendingFactoryReset(operationId: operationIdArg, device: deviceArg, currentBindingGeneration: currentBindingGenerationArg)
             reply(wrapResult(result))
           } catch {
             reply(wrapError(error))
@@ -4448,10 +4319,10 @@ class BotaHostApiSetup {
         let operationIdArg = args[0] as! String
         let deviceArg = args[1] as! BotaDeviceReferenceMessage
         let credentialsArg = args[2] as! BotaWifiCredentialsMessage
-        let materialIdArg = args[3] as! String
+        let grantBlobArg = args[3] as! String
         Task { @MainActor in
           do {
-            let result = try await api.configureWifi(operationId: operationIdArg, device: deviceArg, credentials: credentialsArg, materialId: materialIdArg)
+            let result = try await api.configureWifi(operationId: operationIdArg, device: deviceArg, credentials: credentialsArg, grantBlob: grantBlobArg)
             reply(wrapResult(result))
           } catch {
             reply(wrapError(error))
@@ -4575,7 +4446,6 @@ protocol BotaFlutterApiProtocol {
   func onEvent(event eventArg: BotaEventMessage) async throws
   func requestMaterial(request requestArg: BotaMaterialRequestMessage, completion: @escaping (Result<BotaMaterialResponseMessage, PigeonError>) -> Void)
   func requestFirmware(request requestArg: BotaFirmwareRequestMessage, completion: @escaping (Result<BotaFirmwareSourceMessage, PigeonError>) -> Void)
-  func requestUploadDestination(request requestArg: BotaUploadDestinationRequestMessage, completion: @escaping (Result<BotaUploadDestinationMessage, PigeonError>) -> Void)
   func persistFactoryResetResult(request requestArg: BotaFactoryResetResultRequestMessage, completion: @escaping (Result<BotaFactoryResetResultAcknowledgementMessage, PigeonError>) -> Void)
 }
 class BotaFlutterApi: BotaFlutterApiProtocol {
@@ -4646,27 +4516,6 @@ class BotaFlutterApi: BotaFlutterApiProtocol {
         completion(.failure(PigeonError(code: "null-error", message: "Flutter api returned null value for non-null return value.", details: "")))
       } else {
         let result = listResponse[0] as! BotaFirmwareSourceMessage
-        completion(.success(result))
-      }
-    }
-  }
-  func requestUploadDestination(request requestArg: BotaUploadDestinationRequestMessage, completion: @escaping (Result<BotaUploadDestinationMessage, PigeonError>) -> Void) {
-    let channelName: String = "dev.flutter.pigeon.bota_flutter_sdk.BotaFlutterApi.requestUploadDestination\(messageChannelSuffix)"
-    let channel = FlutterBasicMessageChannel(name: channelName, binaryMessenger: binaryMessenger, codec: codec)
-    channel.sendMessage([requestArg] as [Any?]) { response in
-      guard let listResponse = response as? [Any?] else {
-        completion(.failure(createConnectionError(withChannelName: channelName)))
-        return
-      }
-      if listResponse.count > 1 {
-        let code: String = listResponse[0] as! String
-        let message: String? = nilOrValue(listResponse[1])
-        let details: String? = nilOrValue(listResponse[2])
-        completion(.failure(PigeonError(code: code, message: message, details: details)))
-      } else if listResponse[0] == nil {
-        completion(.failure(PigeonError(code: "null-error", message: "Flutter api returned null value for non-null return value.", details: "")))
-      } else {
-        let result = listResponse[0] as! BotaUploadDestinationMessage
         completion(.success(result))
       }
     }

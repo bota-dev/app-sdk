@@ -46,12 +46,28 @@ final class FactoryResetManagerTests: XCTestCase {
         let manager = FactoryResetManager()
         await manager.attach(await secureRuntime(runner: runner, recorder: recorder))
 
+        let persisted = FactoryResetPersistenceRecorder()
         let completion = try await manager.resumePendingFactoryReset(
             secureDevice(),
-            currentBindingGeneration: 9
+            currentBindingGeneration: 9,
+            persistResult: { await persisted.record($0) }
         )
 
+        let recordedPersister = await recorder.resetResultPersister
+        let persister = try XCTUnwrap(recordedPersister)
+        try await persister(.init(
+            commandID: "reset-command-1",
+            resultCode: 0,
+            deletedRecordingCount: 7,
+            bindingGeneration: 9
+        ))
+
         XCTAssertEqual(completion, .init(commandID: "reset-command-1", bindingGeneration: 9))
+        let recordedResult = await persisted.result
+        let persistenceResult = try XCTUnwrap(recordedResult)
+        XCTAssertEqual(persistenceResult.commandID, "reset-command-1")
+        XCTAssertEqual(persistenceResult.bindingGeneration, 9)
+        XCTAssertEqual(persistenceResult.localRecordingsDeleted, 7)
         let commands = await runner.commands
         let command = try XCTUnwrap(commands.first)
         XCTAssertEqual(command.kind, UInt32(BOTA_DEVICE_SDK_V1_COMMAND_RESUME_FACTORY_RESET))
@@ -113,5 +129,13 @@ final class FactoryResetManagerTests: XCTestCase {
 
         let commands = await runner.commands
         XCTAssertTrue(commands.isEmpty)
+    }
+}
+
+private actor FactoryResetPersistenceRecorder {
+    private(set) var result: FactoryResetPersistenceResult?
+
+    func record(_ result: FactoryResetPersistenceResult) {
+        self.result = result
     }
 }

@@ -31,6 +31,8 @@ final class BotaAppleAdapterTests: XCTestCase {
     let flutter = AdapterTestFlutterApi()
     let adapter = makeAdapter(native: native, flutter: flutter)
     try await configure(adapter)
+    try await discover(adapter, flutter: flutter, subscriptionID: id(32))
+    flutter.clearEvents()
 
     let connected = try await adapter.connect(
       operationId: id(2),
@@ -54,12 +56,12 @@ final class BotaAppleAdapterTests: XCTestCase {
     try await adapter.startRecording(
       operationId: id(8),
       device: deviceReference(),
-      requestId: "c3RhcnQtZ3JhbnQ="
+      grantBlob: "c3RhcnQtZ3JhbnQ="
     )
     try await adapter.stopRecording(
       operationId: id(9),
       device: deviceReference(),
-      requestId: "c3RvcC1ncmFudA=="
+      grantBlob: "c3RvcC1ncmFudA=="
     )
     _ = try await adapter.readRecordingState(
       operationId: id(10),
@@ -67,8 +69,7 @@ final class BotaAppleAdapterTests: XCTestCase {
     )
     try await adapter.provision(
       operationId: id(11),
-      device: deviceReference(),
-      materialId: id(101)
+      device: deviceReference()
     )
     _ = try await adapter.readConnectionSettings(
       operationId: id(12),
@@ -82,7 +83,7 @@ final class BotaAppleAdapterTests: XCTestCase {
     _ = try await adapter.deprovision(
       operationId: id(14),
       device: deviceReference(),
-      materialId: "ZGVwcm92aXNpb24tZ3JhbnQ="
+      grantBlob: "ZGVwcm92aXNpb24tZ3JhbnQ="
     )
     try await adapter.cancelProvisioningOperation(operationId: id(15))
     _ = try await adapter.factoryReset(
@@ -90,7 +91,11 @@ final class BotaAppleAdapterTests: XCTestCase {
       device: deviceReference(),
       command: resetCommand()
     )
-    _ = try await adapter.resumePendingFactoryReset(operationId: id(17))
+    _ = try await adapter.resumePendingFactoryReset(
+      operationId: id(17),
+      device: deviceReference(),
+      currentBindingGeneration: 4
+    )
     _ = try await adapter.resumeUnjournaledFactoryReset(
       operationId: id(18),
       device: deviceReference(),
@@ -114,7 +119,7 @@ final class BotaAppleAdapterTests: XCTestCase {
       operationId: id(26),
       device: deviceReference(),
       credentials: BotaWifiCredentialsMessage(ssid: "Bota", password: "secret"),
-      materialId: "d2lmaS1ncmFudA=="
+      grantBlob: "d2lmaS1ncmFudA=="
     )
     _ = try await adapter.disconnectWifi(
       operationId: id(27),
@@ -135,7 +140,7 @@ final class BotaAppleAdapterTests: XCTestCase {
     XCTAssertEqual(
       Set(invocations),
       Set([
-        "configure", "connect", "reconnect", "disconnect", "readDeviceStatus",
+        "configure", "scanStream", "connect", "reconnect", "disconnect", "readDeviceStatus",
         "cancelDeviceOperation", "startRecording", "stopRecording", "readRecordingState",
         "provision", "readConnectionSettings", "writeConnectionSettings", "deprovision",
         "cancelProvisioningOperation", "factoryReset", "resumePendingFactoryReset",
@@ -147,7 +152,18 @@ final class BotaAppleAdapterTests: XCTestCase {
       ])
     )
     XCTAssertEqual(flutter.materialKinds, ["provisioning", "factoryReset"])
-    XCTAssertEqual(flutter.persistedResetCommands, ["command-1", "command-1", "command-2"])
+    XCTAssertEqual(flutter.persistedResetCommands, ["command-1", "durable-command", "command-2"])
+    let startRecordingGrant = await native.startRecordingGrant
+    let stopRecordingGrant = await native.stopRecordingGrant
+    let deprovisionGrant = await native.deprovisionGrant
+    let wifiGrant = await native.wifiGrant
+    let recordedMaterialID = await native.provisioningMaterialID
+    XCTAssertEqual(startRecordingGrant, "c3RhcnQtZ3JhbnQ=")
+    XCTAssertEqual(stopRecordingGrant, "c3RvcC1ncmFudA==")
+    XCTAssertEqual(deprovisionGrant, "ZGVwcm92aXNpb24tZ3JhbnQ=")
+    XCTAssertEqual(wifiGrant, "d2lmaS1ncmFudA==")
+    let materialID = try XCTUnwrap(recordedMaterialID)
+    XCTAssertTrue(materialID.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil)
   }
 
   func testAllNativeStreamKindsEmitMappedEvents() async throws {
@@ -155,6 +171,8 @@ final class BotaAppleAdapterTests: XCTestCase {
     let flutter = AdapterTestFlutterApi()
     let adapter = makeAdapter(native: native, flutter: flutter)
     try await configure(adapter)
+    try await discover(adapter, flutter: flutter, subscriptionID: id(40))
+    flutter.clearEvents()
     _ = try await adapter.connect(
       operationId: id(2),
       device: discoveredMessage(),
@@ -191,17 +209,23 @@ final class BotaAppleAdapterTests: XCTestCase {
       BotaWifiStatusSubscriptionMessage(device: deviceReference()),
     ]
 
+    var expectedEventCount = 0
     for (offset, request) in requests.enumerated() {
       try await adapter.startSubscription(subscriptionId: id(50 + offset), request: request)
+      expectedEventCount += offset == 4 || offset == 5 ? 3 : 2
+      try await eventually { flutter.events.count == expectedEventCount }
     }
 
-    try await eventually { flutter.events.count == requests.count * 2 }
     XCTAssertEqual(Set(flutter.events.map(\.subscriptionId)).count, requests.count)
     XCTAssertEqual(flutter.callbackKinds, ["firmware"])
     let invocations = await native.invocations
-    XCTAssertTrue(invocations.contains("scanStream"))
-    XCTAssertTrue(invocations.contains("firmwareStream"))
-    XCTAssertTrue(invocations.contains("recordingSyncStream"))
+    XCTAssertTrue(
+      Set([
+        "scanStream", "connectionStream", "deviceStatusStream", "recordingStateStream",
+        "recordingSyncStream", "uploadOwnershipStream", "firmwareStream", "logStream",
+        "wifiStatusStream",
+      ]).isSubset(of: Set(invocations))
+    )
   }
 
   func testCancellationRemovesSubscriptionBeforeStoppingNativeOwner() async throws {
@@ -216,10 +240,184 @@ final class BotaAppleAdapterTests: XCTestCase {
 
     try await adapter.cancelSubscription(subscriptionId: subscriptionID)
 
-    let activeSubscriptionCount = await adapter.activeSubscriptionCount
+    let activeSubscriptionCount = adapter.activeSubscriptionCount
     let cancellationCount = await native.deviceCancellationCount
     XCTAssertEqual(activeSubscriptionCount, 0)
     XCTAssertEqual(cancellationCount, 1)
+  }
+
+  func testManualConnectRequiresThisEnginesDiscoveredHandle() async throws {
+    let native = AdapterTestClient()
+    let adapter = makeAdapter(native: native)
+    try await configure(adapter)
+
+    do {
+      _ = try await adapter.connect(
+        operationId: id(71),
+        device: discoveredMessage(),
+        serialNumber: "BP-001"
+      )
+      XCTFail("expected undiscovered handle rejection")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "device_not_found")
+    }
+
+    let invocations = await native.invocations
+    XCTAssertFalse(invocations.contains("connect"))
+  }
+
+  func testOperationAndSubscriptionIDsShareTombstones() async throws {
+    let native = AdapterTestClient()
+    let adapter = makeAdapter(native: native)
+    try await configure(adapter)
+
+    let subscriptionID = id(72)
+    try await adapter.startSubscription(
+      subscriptionId: subscriptionID,
+      request: BotaConnectionSubscriptionMessage()
+    )
+    try await eventually { adapter.activeSubscriptionCount == 0 }
+    do {
+      _ = try await adapter.readDeviceStatus(operationId: subscriptionID)
+      XCTFail("expected subscription-to-operation reuse rejection")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "duplicate_identifier")
+    }
+
+    let operationID = id(73)
+    _ = try await adapter.readDeviceStatus(operationId: operationID)
+    do {
+      try await adapter.startSubscription(
+        subscriptionId: operationID,
+        request: BotaConnectionSubscriptionMessage()
+      )
+      XCTFail("expected operation-to-subscription reuse rejection")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "duplicate_identifier")
+    }
+  }
+
+  func testDetachDuringConfigureCannotRestoreLeaseOrConfiguration() async throws {
+    let native = AdapterTestClient(suspendConfigure: true)
+    let leases = NativeLeaseCoordinator(client: native)
+    let adapter = makeAdapter(native: native, leases: leases)
+    let configure = Task {
+      try await adapter.configure(operationId: id(74), configuration: configurationMessage())
+    }
+    await native.waitUntilConfigureStarted()
+
+    await adapter.detach()
+    await native.resumeConfigure()
+
+    do {
+      try await configure.value
+      XCTFail("expected detached configure to fail")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "engine_detached")
+    }
+    let leaseCount = await leases.leaseCount
+    let destroyCount = await native.destroyCount
+    XCTAssertEqual(leaseCount, 0)
+    XCTAssertEqual(destroyCount, 1)
+  }
+
+  func testDetachRejectsSuspendedCallbackAndOneShotWork() async throws {
+    let callbackNative = AdapterTestClient()
+    let flutter = AdapterTestFlutterApi(responseMode: .suspendedMaterial)
+    let callbackAdapter = makeAdapter(
+      native: callbackNative,
+      flutter: flutter,
+      engineID: "callback-engine"
+    )
+    try await configure(callbackAdapter)
+    _ = try await callbackAdapter.reconnect(
+      operationId: id(75), serialNumber: "BP-001", hint: reconnectHint())
+    let provision = Task {
+      try await callbackAdapter.provision(
+        operationId: self.id(76),
+        device: self.deviceReference()
+      )
+    }
+    await flutter.waitUntilMaterialRequested()
+    await callbackAdapter.detach()
+    flutter.resumeSuspendedMaterial()
+    do {
+      try await provision.value
+      XCTFail("expected detached callback operation to fail")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "engine_detached")
+    }
+    let cancellationObservedPendingProvider =
+      await callbackNative.provisioningCancellationObservedPendingProvider
+    XCTAssertFalse(cancellationObservedPendingProvider)
+
+    let oneShotNative = AdapterTestClient(suspendReadStatus: true)
+    let oneShotAdapter = makeAdapter(native: oneShotNative, engineID: "one-shot-engine")
+    try await configure(oneShotAdapter, operationID: id(77))
+    let status = Task { try await oneShotAdapter.readDeviceStatus(operationId: self.id(78)) }
+    await oneShotNative.waitUntilReadStatusStarted()
+    await oneShotAdapter.detach()
+    await oneShotNative.resumeReadStatus()
+    do {
+      _ = try await status.value
+      XCTFail("expected detached one-shot operation to fail")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "engine_detached")
+    }
+  }
+
+  func testAnotherEngineCannotCancelOwnedNativeWork() async throws {
+    let native = AdapterTestClient(useHangingScan: true)
+    let leases = NativeLeaseCoordinator(client: native)
+    let adapterA = makeAdapter(native: native, leases: leases, engineID: "owner")
+    let adapterB = makeAdapter(native: native, leases: leases, engineID: "other")
+    try await configure(adapterA, operationID: id(79))
+    try await configure(adapterB, operationID: id(80))
+    let subscriptionID = id(81)
+    try await adapterA.startSubscription(
+      subscriptionId: subscriptionID,
+      request: BotaScanSubscriptionMessage(timeoutMillis: 10_000, allowDuplicates: false)
+    )
+
+    do {
+      try await adapterB.cancelDeviceOperation(operationId: id(82))
+      XCTFail("expected cross-engine cancellation rejection")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "operation_not_owned")
+    }
+    let crossEngineCancellationCount = await native.deviceCancellationCount
+    XCTAssertEqual(crossEngineCancellationCount, 0)
+
+    try await adapterA.cancelSubscription(subscriptionId: subscriptionID)
+    let ownerCancellationCount = await native.deviceCancellationCount
+    XCTAssertEqual(ownerCancellationCount, 1)
+  }
+
+  func testDurableResetResumeUsesOnlyCurrentDeviceAndGenerationAfterRestart() async throws {
+    let native = AdapterTestClient()
+    let first = makeAdapter(native: native, engineID: "first-lifecycle")
+    try await configure(first)
+    _ = try await first.reconnect(
+      operationId: id(83), serialNumber: "BP-001", hint: reconnectHint())
+    await first.detach()
+
+    let flutter = AdapterTestFlutterApi()
+    let second = makeAdapter(native: native, flutter: flutter, engineID: "second-lifecycle")
+    try await configure(second, operationID: id(84))
+    _ = try await second.reconnect(
+      operationId: id(85), serialNumber: "BP-001", hint: reconnectHint())
+
+    let completion = try await second.resumePendingFactoryReset(
+      operationId: id(86),
+      device: deviceReference(),
+      currentBindingGeneration: 23
+    )
+
+    XCTAssertEqual(completion?.commandId, "durable-command")
+    XCTAssertEqual(completion?.bindingGeneration, 23)
+    let resumeBindingGeneration = await native.resumeBindingGeneration
+    XCTAssertEqual(resumeBindingGeneration, 23)
+    XCTAssertEqual(flutter.persistedResetCommands, ["durable-command"])
   }
 
   func testDetachReleasesOnlyItsEngineWork() async throws {
@@ -334,31 +532,16 @@ final class BotaAppleAdapterTests: XCTestCase {
     }
   }
 
-  func testUploadDestinationCallbackMapsRequestWithoutPayloadBytes() async throws {
-    let native = AdapterTestClient()
-    let flutter = AdapterTestFlutterApi()
-    let adapter = makeAdapter(native: native, flutter: flutter)
-    try await configure(adapter)
-
-    let request = try await adapter.requestUploadDestination(
-      destinationID: "destination-1",
-      recordingID: "recording-1",
-      uploadID: "upload-1"
-    )
-
-    XCTAssertEqual(request.url?.absoluteString, "https://example.com/upload")
-    XCTAssertEqual(request.httpMethod, "PUT")
-    XCTAssertEqual(flutter.callbackKinds, ["upload"])
-  }
-
   func testCallbackResponseIDAndKindAreValidated() async throws {
     let native = AdapterTestClient()
+    let wrongIDFlutter = AdapterTestFlutterApi(responseMode: .wrongID)
     let wrongID = makeAdapter(
       native: native,
-      flutter: AdapterTestFlutterApi(responseMode: .wrongID),
+      flutter: wrongIDFlutter,
       engineID: "wrong-id"
     )
     try await configure(wrongID)
+    try await discover(wrongID, flutter: wrongIDFlutter, subscriptionID: id(96))
     _ = try await wrongID.connect(
       operationId: id(91),
       device: discoveredMessage(),
@@ -367,20 +550,21 @@ final class BotaAppleAdapterTests: XCTestCase {
     do {
       try await wrongID.provision(
         operationId: id(92),
-        device: deviceReference(),
-        materialId: id(191)
+        device: deviceReference()
       )
       XCTFail("expected callback ID rejection")
     } catch let error as PigeonError {
       XCTAssertEqual(error.code, "callback_id_mismatch")
     }
 
+    let wrongKindFlutter = AdapterTestFlutterApi(responseMode: .wrongMaterialKind)
     let wrongKind = makeAdapter(
       native: AdapterTestClient(),
-      flutter: AdapterTestFlutterApi(responseMode: .wrongMaterialKind),
+      flutter: wrongKindFlutter,
       engineID: "wrong-kind"
     )
     try await configure(wrongKind, operationID: id(93))
+    try await discover(wrongKind, flutter: wrongKindFlutter, subscriptionID: id(97))
     _ = try await wrongKind.connect(
       operationId: id(94),
       device: discoveredMessage(),
@@ -389,8 +573,7 @@ final class BotaAppleAdapterTests: XCTestCase {
     do {
       try await wrongKind.provision(
         operationId: id(95),
-        device: deviceReference(),
-        materialId: id(195)
+        device: deviceReference()
       )
       XCTFail("expected callback kind rejection")
     } catch let error as PigeonError {
@@ -431,7 +614,6 @@ final class BotaAppleAdapterTests: XCTestCase {
       hasProvisioningMaterialCallback: true,
       hasFactoryResetGrantCallback: true,
       hasFactoryResetResultCallback: true,
-      hasUploadDestinationCallback: true,
       hasFirmwareCallback: true
     )
   }
@@ -495,12 +677,25 @@ final class BotaAppleAdapterTests: XCTestCase {
 
   private func id(_ value: Int) -> String { String(format: "%032x", value) }
 
+  private func discover(
+    _ adapter: BotaAppleAdapter,
+    flutter: AdapterTestFlutterApi,
+    subscriptionID: String
+  ) async throws {
+    let initialEventCount = flutter.events.count
+    try await adapter.startSubscription(
+      subscriptionId: subscriptionID,
+      request: BotaScanSubscriptionMessage(timeoutMillis: 1_000, allowDuplicates: false)
+    )
+    try await eventually { flutter.events.count >= initialEventCount + 2 }
+  }
+
   private func eventually(
     timeoutNanoseconds: UInt64 = 2_000_000_000,
-    _ predicate: @escaping () -> Bool
+    _ predicate: @escaping () async -> Bool
   ) async throws {
     let start = ContinuousClock.now
-    while !predicate() {
+    while !(await predicate()) {
       if ContinuousClock.now - start > .nanoseconds(Int64(timeoutNanoseconds)) {
         XCTFail("condition did not become true")
         return
@@ -515,6 +710,7 @@ private final class AdapterTestFlutterApi: BotaFlutterApiProtocol, @unchecked Se
     case valid
     case wrongID
     case wrongMaterialKind
+    case suspendedMaterial
   }
 
   private let lock = NSLock()
@@ -523,11 +719,35 @@ private final class AdapterTestFlutterApi: BotaFlutterApiProtocol, @unchecked Se
   private var storedMaterialKinds: [String] = []
   private var storedCallbackKinds: [String] = []
   private var storedPersistedResetCommands: [String] = []
+  private var suspendedMaterialCompletion:
+    ((Result<BotaMaterialResponseMessage, PigeonError>) -> Void)?
 
   var events: [BotaEventMessage] { lock.withLock { storedEvents } }
   var materialKinds: [String] { lock.withLock { storedMaterialKinds } }
   var callbackKinds: [String] { lock.withLock { storedCallbackKinds } }
   var persistedResetCommands: [String] { lock.withLock { storedPersistedResetCommands } }
+
+  func clearEvents() { lock.withLock { storedEvents.removeAll() } }
+
+  func waitUntilMaterialRequested() async {
+    while lock.withLock({ suspendedMaterialCompletion == nil }) { await Task.yield() }
+  }
+
+  func resumeSuspendedMaterial() {
+    let completion = lock.withLock {
+      let completion = suspendedMaterialCompletion
+      suspendedMaterialCompletion = nil
+      return completion
+    }
+    completion?(
+      .success(
+        BotaProvisioningMaterialResponseMessage(
+          requestId: String(repeating: "f", count: 32),
+          apiEndpoint: .init(bytes: Data("https://api.bota.dev".utf8)),
+          deviceToken: .init(bytes: Data("token".utf8)),
+          mtu: 247
+        )))
+  }
 
   init(responseMode: ResponseMode = .valid) {
     self.responseMode = responseMode
@@ -544,6 +764,10 @@ private final class AdapterTestFlutterApi: BotaFlutterApiProtocol, @unchecked Se
     switch request {
     case let request as BotaProvisioningMaterialRequestMessage:
       lock.withLock { storedMaterialKinds.append("provisioning") }
+      if responseMode == .suspendedMaterial {
+        lock.withLock { suspendedMaterialCompletion = completion }
+        return
+      }
       if responseMode == .wrongMaterialKind {
         completion(
           .success(
@@ -594,21 +818,6 @@ private final class AdapterTestFlutterApi: BotaFlutterApiProtocol, @unchecked Se
         )))
   }
 
-  func requestUploadDestination(
-    request: BotaUploadDestinationRequestMessage,
-    completion: @escaping (Result<BotaUploadDestinationMessage, PigeonError>) -> Void
-  ) {
-    lock.withLock { storedCallbackKinds.append("upload") }
-    completion(
-      .success(
-        BotaUploadDestinationMessage(
-          requestId: responseID(request.requestId),
-          url: "https://example.com/upload",
-          method: .put,
-          headers: [:]
-        )))
-  }
-
   func persistFactoryResetResult(
     request: BotaFactoryResetResultRequestMessage,
     completion:
@@ -631,13 +840,48 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
   private(set) var invocations: [String] = []
   private(set) var destroyCount = 0
   private(set) var deviceCancellationCount = 0
+  private(set) var startRecordingGrant: String?
+  private(set) var stopRecordingGrant: String?
+  private(set) var provisioningMaterialID: String?
+  private(set) var provisioningCancellationObservedPendingProvider = false
+  private(set) var deprovisionGrant: String?
+  private(set) var wifiGrant: String?
+  private(set) var resumeBindingGeneration: UInt64?
   private var readStatusError: Error?
   private let useHangingScan: Bool
+  private let suspendConfigure: Bool
+  private let suspendReadStatus: Bool
+  private var configureStarted = false
+  private var configureContinuation: CheckedContinuation<Void, Never>?
+  private var readStatusStarted = false
+  private var readStatusContinuation: CheckedContinuation<Void, Never>?
+  private var provisioningProviderPending = false
 
-  init(useHangingScan: Bool = false) { self.useHangingScan = useHangingScan }
+  init(
+    useHangingScan: Bool = false,
+    suspendConfigure: Bool = false,
+    suspendReadStatus: Bool = false
+  ) {
+    self.useHangingScan = useHangingScan
+    self.suspendConfigure = suspendConfigure
+    self.suspendReadStatus = suspendReadStatus
+  }
 
   func setReadStatusError(_ error: Error) { readStatusError = error }
-  func configure(applicationSupportDirectory: URL) async throws { invocations.append("configure") }
+  func configure(applicationSupportDirectory: URL) async throws {
+    invocations.append("configure")
+    configureStarted = true
+    if suspendConfigure {
+      await withCheckedContinuation { configureContinuation = $0 }
+    }
+  }
+  func waitUntilConfigureStarted() async {
+    while !configureStarted { await Task.yield() }
+  }
+  func resumeConfigure() {
+    configureContinuation?.resume()
+    configureContinuation = nil
+  }
   func destroy() async {
     destroyCount += 1
     invocations.append("destroy")
@@ -656,17 +900,30 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
   func disconnect() async throws { invocations.append("disconnect") }
   func readDeviceStatus() async throws -> DeviceStatus {
     invocations.append("readDeviceStatus")
+    readStatusStarted = true
+    if suspendReadStatus {
+      await withCheckedContinuation { readStatusContinuation = $0 }
+    }
     if let readStatusError { throw readStatusError }
     return status()
+  }
+  func waitUntilReadStatusStarted() async {
+    while !readStatusStarted { await Task.yield() }
+  }
+  func resumeReadStatus() {
+    readStatusContinuation?.resume()
+    readStatusContinuation = nil
   }
   func cancelDeviceOperation() async throws {
     deviceCancellationCount += 1
     invocations.append("cancelDeviceOperation")
   }
   func startRecording(_ device: ConnectedDevice, grantBlob: String) async throws {
+    startRecordingGrant = grantBlob
     invocations.append("startRecording")
   }
   func stopRecording(_ device: ConnectedDevice, grantBlob: String) async throws {
+    stopRecordingGrant = grantBlob
     invocations.append("stopRecording")
   }
   func readRecordingState(_ device: ConnectedDevice) async throws -> RecordingState {
@@ -678,7 +935,10 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
     materialID: String,
     using provider: @escaping ProvisioningMaterialProvider
   ) async throws {
+    provisioningMaterialID = materialID
     invocations.append("provision")
+    provisioningProviderPending = true
+    defer { provisioningProviderPending = false }
     _ = try await provider(
       ProvisioningMaterialRequest(
         serialNumber: device.serialNumber,
@@ -696,10 +956,12 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
     invocations.append("writeConnectionSettings")
   }
   func deprovision(_ device: ConnectedDevice, grantBlob: String) async throws -> DeprovisionResult {
+    deprovisionGrant = grantBlob
     invocations.append("deprovision")
     return DeprovisionResult(success: true)
   }
   func cancelProvisioningOperation() async throws {
+    provisioningCancellationObservedPendingProvider = provisioningProviderPending
     invocations.append("cancelProvisioningOperation")
   }
   func factoryReset(
@@ -718,7 +980,12 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
         commandID: commandID,
         bindingGeneration: bindingGeneration
       ))
-    try await persistResult(.init(localRecordingsDeleted: 2))
+    try await persistResult(
+      .init(
+        commandID: commandID,
+        bindingGeneration: bindingGeneration,
+        localRecordingsDeleted: 2
+      ))
     return FactoryResetCompletion(commandID: commandID, bindingGeneration: bindingGeneration)
   }
   func resumePendingFactoryReset(
@@ -727,9 +994,15 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
     persistResult: @escaping FactoryResetResultPersister
   ) async throws -> FactoryResetCompletion? {
     invocations.append("resumePendingFactoryReset")
-    try await persistResult(.init(localRecordingsDeleted: 2))
+    resumeBindingGeneration = currentBindingGeneration
+    try await persistResult(
+      .init(
+        commandID: "durable-command",
+        bindingGeneration: currentBindingGeneration,
+        localRecordingsDeleted: 2
+      ))
     return FactoryResetCompletion(
-      commandID: "command-1", bindingGeneration: currentBindingGeneration)
+      commandID: "durable-command", bindingGeneration: currentBindingGeneration)
   }
   func resumeUnjournaledFactoryReset(
     _ device: ConnectedDevice,
@@ -738,7 +1011,12 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
     persistResult: @escaping FactoryResetResultPersister
   ) async throws -> FactoryResetCompletion {
     invocations.append("resumeUnjournaledFactoryReset")
-    try await persistResult(.init(localRecordingsDeleted: 2))
+    try await persistResult(
+      .init(
+        commandID: commandID,
+        bindingGeneration: bindingGeneration,
+        localRecordingsDeleted: 2
+      ))
     return FactoryResetCompletion(commandID: commandID, bindingGeneration: bindingGeneration)
   }
   func cancelFactoryResetOperation() async throws {
@@ -764,6 +1042,7 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
     password: String,
     grantBlob: String
   ) async throws -> WiFiConfigResult {
+    wifiGrant = grantBlob
     invocations.append("configureWifi")
     return .success
   }

@@ -27,17 +27,20 @@ abstract interface class BotaDeviceManager {
 }
 
 abstract interface class BotaControlManager {
-  Future<void> startRecording(BotaConnectedDevice device, {String? requestId});
-  Future<void> stopRecording(BotaConnectedDevice device, {String? requestId});
+  Future<void> startRecording(
+    BotaConnectedDevice device, {
+    required String grantBlob,
+  });
+  Future<void> stopRecording(
+    BotaConnectedDevice device, {
+    required String grantBlob,
+  });
   Future<BotaRecordingState> readRecordingState(BotaConnectedDevice device);
   Stream<BotaRecordingState> recordingState(BotaConnectedDevice device);
 }
 
 abstract interface class BotaProvisioningManager {
-  Future<void> provision(
-    BotaConnectedDevice device, {
-    required String materialId,
-  });
+  Future<void> provision(BotaConnectedDevice device);
   Future<BotaConnectionSettings> readConnectionSettings(
     BotaConnectedDevice device,
   );
@@ -47,7 +50,7 @@ abstract interface class BotaProvisioningManager {
   );
   Future<BotaDeprovisionResult> deprovision(
     BotaConnectedDevice device, {
-    required String materialId,
+    required String grantBlob,
   });
   Future<void> cancelCurrentOperation();
 }
@@ -57,7 +60,10 @@ abstract interface class BotaFactoryResetManager {
     BotaConnectedDevice device,
     BotaFactoryResetCommand command,
   );
-  Future<BotaFactoryResetCompletion?> resumePending();
+  Future<BotaFactoryResetCompletion?> resumePending(
+    BotaConnectedDevice device, {
+    required int currentBindingGeneration,
+  });
   Future<BotaFactoryResetCompletion> resumeUnjournaled(
     BotaConnectedDevice device,
     BotaFactoryResetCommand command,
@@ -101,7 +107,7 @@ abstract interface class BotaWifiManager {
   Future<BotaWifiConfigResult> configure(
     BotaConnectedDevice device,
     BotaWifiCredentials credentials, {
-    required String materialId,
+    required String grantBlob,
   });
   Future<BotaWifiConfigResult> disconnect(BotaConnectedDevice device);
   Future<BotaWifiStatus> readStatus(BotaConnectedDevice device);
@@ -170,11 +176,13 @@ final class _ControlManager implements BotaControlManager {
   @override
   Future<void> startRecording(
     BotaConnectedDevice device, {
-    String? requestId,
-  }) => _platform.startRecording(device, requestId: requestId);
+    required String grantBlob,
+  }) => _platform.startRecording(device, grantBlob: grantBlob);
   @override
-  Future<void> stopRecording(BotaConnectedDevice device, {String? requestId}) =>
-      _platform.stopRecording(device, requestId: requestId);
+  Future<void> stopRecording(
+    BotaConnectedDevice device, {
+    required String grantBlob,
+  }) => _platform.stopRecording(device, grantBlob: grantBlob);
   @override
   Future<BotaRecordingState> readRecordingState(BotaConnectedDevice device) =>
       _platform.readRecordingState(device);
@@ -188,10 +196,8 @@ final class _ProvisioningManager implements BotaProvisioningManager {
   final BotaPlatform _platform;
 
   @override
-  Future<void> provision(
-    BotaConnectedDevice device, {
-    required String materialId,
-  }) => _platform.provision(device, materialId: materialId);
+  Future<void> provision(BotaConnectedDevice device) =>
+      _platform.provision(device);
   @override
   Future<BotaConnectionSettings> readConnectionSettings(
     BotaConnectedDevice device,
@@ -204,8 +210,8 @@ final class _ProvisioningManager implements BotaProvisioningManager {
   @override
   Future<BotaDeprovisionResult> deprovision(
     BotaConnectedDevice device, {
-    required String materialId,
-  }) => _platform.deprovision(device, materialId: materialId);
+    required String grantBlob,
+  }) => _platform.deprovision(device, grantBlob: grantBlob);
   @override
   Future<void> cancelCurrentOperation() =>
       _platform.cancelProvisioningOperation();
@@ -221,8 +227,13 @@ final class _FactoryResetManager implements BotaFactoryResetManager {
     BotaFactoryResetCommand command,
   ) => _platform.reset(device, command);
   @override
-  Future<BotaFactoryResetCompletion?> resumePending() =>
-      _platform.resumePending();
+  Future<BotaFactoryResetCompletion?> resumePending(
+    BotaConnectedDevice device, {
+    required int currentBindingGeneration,
+  }) => _platform.resumePending(
+    device,
+    currentBindingGeneration: currentBindingGeneration,
+  );
   @override
   Future<BotaFactoryResetCompletion> resumeUnjournaled(
     BotaConnectedDevice device,
@@ -306,8 +317,8 @@ final class _WifiManager implements BotaWifiManager {
   Future<BotaWifiConfigResult> configure(
     BotaConnectedDevice device,
     BotaWifiCredentials credentials, {
-    required String materialId,
-  }) => _platform.configureWifi(device, credentials, materialId: materialId);
+    required String grantBlob,
+  }) => _platform.configureWifi(device, credentials, grantBlob: grantBlob);
   @override
   Future<BotaWifiConfigResult> disconnect(BotaConnectedDevice device) =>
       _platform.disconnectWifi(device);

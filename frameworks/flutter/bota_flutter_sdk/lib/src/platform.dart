@@ -31,15 +31,18 @@ abstract interface class BotaPlatform {
   Stream<BotaDeviceStatus> get status;
   Future<void> cancelDeviceOperation();
 
-  Future<void> startRecording(BotaConnectedDevice device, {String? requestId});
-  Future<void> stopRecording(BotaConnectedDevice device, {String? requestId});
+  Future<void> startRecording(
+    BotaConnectedDevice device, {
+    required String grantBlob,
+  });
+  Future<void> stopRecording(
+    BotaConnectedDevice device, {
+    required String grantBlob,
+  });
   Future<BotaRecordingState> readRecordingState(BotaConnectedDevice device);
   Stream<BotaRecordingState> recordingState(BotaConnectedDevice device);
 
-  Future<void> provision(
-    BotaConnectedDevice device, {
-    required String materialId,
-  });
+  Future<void> provision(BotaConnectedDevice device);
   Future<BotaConnectionSettings> readConnectionSettings(
     BotaConnectedDevice device,
   );
@@ -49,7 +52,7 @@ abstract interface class BotaPlatform {
   );
   Future<BotaDeprovisionResult> deprovision(
     BotaConnectedDevice device, {
-    required String materialId,
+    required String grantBlob,
   });
   Future<void> cancelProvisioningOperation();
 
@@ -57,7 +60,10 @@ abstract interface class BotaPlatform {
     BotaConnectedDevice device,
     BotaFactoryResetCommand command,
   );
-  Future<BotaFactoryResetCompletion?> resumePending();
+  Future<BotaFactoryResetCompletion?> resumePending(
+    BotaConnectedDevice device, {
+    required int currentBindingGeneration,
+  });
   Future<BotaFactoryResetCompletion> resumeUnjournaled(
     BotaConnectedDevice device,
     BotaFactoryResetCommand command,
@@ -93,7 +99,7 @@ abstract interface class BotaPlatform {
   Future<BotaWifiConfigResult> configureWifi(
     BotaConnectedDevice device,
     BotaWifiCredentials credentials, {
-    required String materialId,
+    required String grantBlob,
   });
   Future<BotaWifiConfigResult> disconnectWifi(BotaConnectedDevice device);
   Future<BotaWifiStatus> readWifiStatus(BotaConnectedDevice device);
