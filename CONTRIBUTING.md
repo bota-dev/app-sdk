@@ -30,12 +30,23 @@ cargo test --workspace
 Flutter changes use the repository-local Flutter `3.47.2` and Dart `3.13.2`
 toolchain. The wrapper downloads and verifies the official archive under
 `target/flutter-sdk`; `BOTA_FLUTTER_HOME` is accepted only when it reports the
-same pinned versions. Use Node `22.23.2` for the package verifier:
+same pinned versions. A successful bootstrap removes the downloaded archive
+after extraction and verification. Use `tools/flutter/run-dart.sh` for direct
+Dart commands and Node `22.23.2` for the package verifier:
 
 ```bash
 source "$HOME/.nvm/nvm.sh" && nvm use 22.23.2 >/dev/null
 tools/flutter/run-flutter.sh pub get --directory frameworks/flutter/bota_flutter_sdk
 npm run flutter:verify
+```
+
+The Flutter bridge uses exactly Pigeon `28.0.0`. Regenerate its checked-in
+Dart, Swift, and Kotlin outputs only through the pinned toolchain, then run the
+drift gate:
+
+```bash
+tools/flutter/generate-pigeon.sh
+npm run flutter:generate:check
 ```
 
 React Native Apple changes also require macOS with Xcode 26 and CocoaPods 1.13

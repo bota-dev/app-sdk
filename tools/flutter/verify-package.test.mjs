@@ -2,12 +2,15 @@ import assert from 'node:assert/strict';
 import {
   chmodSync,
   copyFileSync,
+  createReadStream,
+  existsSync,
   mkdtempSync,
   mkdirSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -21,8 +24,14 @@ const workspaceRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const packageFiles = [
   'LICENSE',
   'analysis_options.yaml',
+  'android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt',
+  'ios/Classes/BotaApi.g.swift',
   'lib/bota_flutter_sdk.dart',
+  'lib/src/generated/bota_api.g.dart',
+  'pigeon_options.yaml',
+  'pigeons/bota_api.dart',
   'pubspec.yaml',
+  'test/bridge_contract_test.dart',
   'test/package_contract_test.dart',
 ];
 
@@ -34,6 +43,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  meta: 1.19.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -141,6 +151,16 @@ test('rejects a non-exact Pigeon development dependency', () => {
   assert.throws(
     () => verifyFlutterPackage(root),
     /Pigeon version must be exactly 28\.0\.0/
+  );
+});
+
+test('rejects a missing generated-code meta dependency', () => {
+  const { packageRoot, root } = createFixture();
+  replacePubspec(packageRoot, '  meta: 1.19.0\n', '');
+
+  assert.throws(
+    () => verifyFlutterPackage(root),
+    /meta version must be exactly 1\.19\.0/,
   );
 });
 
@@ -307,4 +327,170 @@ test('discovers the workspace root when the verifier path contains spaces', () =
 
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
   assert.match(result.stdout, /Flutter package metadata verified/);
+});
+
+const createFakeFlutterHome = ({
+  dartVersion = '3.13.2',
+  frameworkVersion = '3.47.2',
+} = {}) => {
+  const flutterHome = mkdtempSync(join(tmpdir(), 'bota-dart-runner-'));
+  const bin = join(flutterHome, 'bin');
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(
+    join(bin, 'flutter'),
+    `#!/usr/bin/env bash
+if [[ "$1" == "--version" && "\${2:-}" == "--machine" ]]; then
+  printf '%s\\n' '${JSON.stringify({ frameworkVersion, dartSdkVersion: dartVersion })}'
+  exit 0
+fi
+printf 'unexpected-flutter-dispatch\\n'
+`,
+  );
+  writeFileSync(
+    join(bin, 'dart'),
+    `#!/usr/bin/env bash
+printf 'dart-command\\n'
+printf 'cwd=%s\\n' "$PWD"
+printf 'arg=%s\\n' "$@"
+`,
+  );
+  chmodSync(join(bin, 'flutter'), 0o755);
+  chmodSync(join(bin, 'dart'), 0o755);
+  return flutterHome;
+};
+
+test('run-dart validates the pinned SDK and dispatches the Dart executable', () => {
+  const flutterHome = createFakeFlutterHome();
+  const result = spawnSync(
+    join(workspaceRoot, 'tools', 'flutter', 'run-dart.sh'),
+    ['format', '--output=none', 'lib'],
+    {
+      cwd: workspaceRoot,
+      encoding: 'utf8',
+      env: { ...process.env, BOTA_FLUTTER_HOME: flutterHome },
+    },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /dart-command/);
+  assert.match(result.stdout, /arg=format/);
+  assert.doesNotMatch(result.stdout, /unexpected-flutter-dispatch/);
+});
+
+test('run-dart rejects SDK version drift before Dart dispatch', () => {
+  for (const versions of [
+    { dartVersion: '3.14.0', frameworkVersion: '3.47.2' },
+    { dartVersion: '3.13.2', frameworkVersion: '3.48.0' },
+  ]) {
+    const result = spawnSync(
+      join(workspaceRoot, 'tools', 'flutter', 'run-dart.sh'),
+      ['format', 'lib'],
+      {
+        cwd: workspaceRoot,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          BOTA_FLUTTER_HOME: createFakeFlutterHome(versions),
+        },
+      },
+    );
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Bota Flutter toolchain requires/);
+    assert.doesNotMatch(result.stdout, /dart-command/);
+  }
+});
+
+const sha256 = (path) => new Promise((resolveHash, reject) => {
+  const hash = createHash('sha256');
+  createReadStream(path)
+    .on('error', reject)
+    .on('data', (chunk) => hash.update(chunk))
+    .on('end', () => resolveHash(hash.digest('hex')));
+});
+
+const currentFlutterPlatform = () => {
+  if (process.platform === 'darwin' && process.arch === 'arm64') return 'darwin-arm64';
+  if (process.platform === 'darwin' && process.arch === 'x64') return 'darwin-x64';
+  if (process.platform === 'linux' && process.arch === 'x64') return 'linux-x64';
+  throw new Error(`unsupported test host: ${process.platform}-${process.arch}`);
+};
+
+const createBootstrapFixture = async ({ validArchive }) => {
+  const root = mkdtempSync(join(tmpdir(), 'bota-flutter-bootstrap-'));
+  const tools = join(root, 'tools', 'flutter');
+  const downloads = join(root, 'source');
+  const archiveName = 'flutter_test.tar.xz';
+  const sourceArchive = join(downloads, archiveName);
+  mkdirSync(tools, { recursive: true });
+  mkdirSync(downloads, { recursive: true });
+  copyFileSync(join(workspaceRoot, 'tools', 'flutter', 'run-flutter.sh'), join(tools, 'run-flutter.sh'));
+  chmodSync(join(tools, 'run-flutter.sh'), 0o755);
+
+  if (validArchive) {
+    const payload = join(root, 'payload');
+    const flutter = join(payload, 'flutter', 'bin', 'flutter');
+    mkdirSync(dirname(flutter), { recursive: true });
+    writeFileSync(
+      flutter,
+      `#!/usr/bin/env bash
+if [[ "$1" == "--version" && "\${2:-}" == "--machine" ]]; then
+  printf '%s\\n' '${JSON.stringify({ frameworkVersion: '3.47.2', dartSdkVersion: '3.13.2' })}'
+  exit 0
+fi
+printf 'bootstrapped-command\\n'
+`,
+    );
+    chmodSync(flutter, 0o755);
+    const tar = spawnSync('tar', ['-cJf', sourceArchive, '-C', payload, 'flutter'], {
+      encoding: 'utf8',
+    });
+    assert.equal(tar.status, 0, tar.stderr);
+  } else {
+    writeFileSync(sourceArchive, 'verified but not an archive\n');
+  }
+
+  const digest = await sha256(sourceArchive);
+  const platform = currentFlutterPlatform();
+  writeFileSync(
+    join(tools, 'flutter-version.json'),
+    `${JSON.stringify({
+      version: '3.47.2',
+      dartVersion: '3.13.2',
+      baseUrl: `file://${downloads}`,
+      archives: { [platform]: { path: archiveName, sha256: digest } },
+    })}\n`,
+  );
+  return {
+    archive: join(root, 'target', 'flutter-sdk', 'downloads', archiveName),
+    root,
+    script: join(tools, 'run-flutter.sh'),
+  };
+};
+
+test('bootstrap removes the archive only after successful extraction', async () => {
+  const success = await createBootstrapFixture({ validArchive: true });
+  const successEnv = { ...process.env };
+  delete successEnv.BOTA_FLUTTER_HOME;
+  const successResult = spawnSync(success.script, ['doctor'], {
+    cwd: success.root,
+    encoding: 'utf8',
+    env: successEnv,
+  });
+
+  assert.equal(successResult.status, 0, successResult.stderr);
+  assert.match(successResult.stdout, /bootstrapped-command/);
+  assert.equal(existsSync(success.archive), false);
+
+  const failure = await createBootstrapFixture({ validArchive: false });
+  const failureEnv = { ...process.env };
+  delete failureEnv.BOTA_FLUTTER_HOME;
+  const failureResult = spawnSync(failure.script, ['doctor'], {
+    cwd: failure.root,
+    encoding: 'utf8',
+    env: failureEnv,
+  });
+
+  assert.notEqual(failureResult.status, 0);
+  assert.equal(existsSync(failure.archive), true);
 });

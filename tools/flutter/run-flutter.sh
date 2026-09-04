@@ -105,6 +105,11 @@ else
     mkdir -p "$(dirname "$SDK_HOME")"
     mv "$TEMP_EXTRACT/flutter" "$SDK_HOME"
     rm -rf "$TEMP_EXTRACT"
+    if [[ ! -x "$FLUTTER" ]]; then
+      printf 'extracted Flutter SDK does not contain bin/flutter: %s\n' "$SDK_HOME" >&2
+      exit 1
+    fi
+    rm -f "$ARCHIVE"
     trap - EXIT
   fi
 fi
@@ -139,6 +144,15 @@ if [[ "$ACTUAL_DART_VERSION" != "$DART_VERSION" ]]; then
   printf 'Bota Flutter toolchain requires Dart %s, found %s\n' \
     "$DART_VERSION" "$ACTUAL_DART_VERSION" >&2
   exit 1
+fi
+
+if [[ "${BOTA_FLUTTER_DISPATCH_DART:-}" == "1" ]]; then
+  DART="$(dirname "$FLUTTER")/dart"
+  [[ -x "$DART" ]] || {
+    printf 'validated Flutter SDK does not contain bin/dart: %s\n' "$DART" >&2
+    exit 1
+  }
+  exec "$DART" "$@"
 fi
 
 exec "$FLUTTER" "$@"

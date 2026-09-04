@@ -14,8 +14,14 @@ const PACKAGE_PATH = 'frameworks/flutter/bota_flutter_sdk';
 const REQUIRED_FILES = [
   'LICENSE',
   'analysis_options.yaml',
+  'android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt',
+  'ios/Classes/BotaApi.g.swift',
   'lib/bota_flutter_sdk.dart',
+  'lib/src/generated/bota_api.g.dart',
+  'pigeon_options.yaml',
+  'pigeons/bota_api.dart',
   'pubspec.yaml',
+  'test/bridge_contract_test.dart',
   'test/package_contract_test.dart',
 ];
 const EXPECTED_DART_CONSTRAINT = '>=3.11.0 <4.0.0';
@@ -144,6 +150,9 @@ export const verifyFlutterPackage = (root) => {
   expectEqual(pubspec.dependencies?.flutter?.sdk, 'flutter', () =>
     'Flutter SDK dependency is required'
   );
+  expectEqual(pubspec.dependencies?.meta, '1.19.0', () =>
+    'meta version must be exactly 1.19.0'
+  );
   expectEqual(pubspec.dev_dependencies?.flutter_test?.sdk, 'flutter', () =>
     'Flutter test SDK dependency is required'
   );
@@ -153,7 +162,6 @@ export const verifyFlutterPackage = (root) => {
   expectEqual(pubspec.dev_dependencies?.pigeon, '28.0.0', () =>
     'Pigeon version must be exactly 28.0.0'
   );
-
   const platforms = pubspec.flutter?.plugin?.platforms;
   if (!platforms || Object.keys(platforms).sort().join(',') !== 'android,ios') {
     throw new Error('Flutter plugin platforms must contain exactly android and ios');

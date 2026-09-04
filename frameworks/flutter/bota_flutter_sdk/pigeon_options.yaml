@@ -1,0 +1,8 @@
+{
+  "input": "pigeons/bota_api.dart",
+  "dart_out": "lib/src/generated/bota_api.g.dart",
+  "swift_out": "ios/Classes/BotaApi.g.swift",
+  "kotlin_out": "android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt",
+  "kotlin_package": "dev.bota.sdk.flutter",
+  "dart_package_name": "bota_flutter_sdk"
+}

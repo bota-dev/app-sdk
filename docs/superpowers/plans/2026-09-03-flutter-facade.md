@@ -222,7 +222,7 @@
 
   ```bash
   tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
-  tools/flutter/run-flutter.sh dart format --output=none --set-exit-if-changed frameworks/flutter/bota_flutter_sdk/lib frameworks/flutter/bota_flutter_sdk/test
+  tools/flutter/run-dart.sh format --output=none --set-exit-if-changed frameworks/flutter/bota_flutter_sdk/lib frameworks/flutter/bota_flutter_sdk/test
   tools/flutter/run-flutter.sh analyze frameworks/flutter/bota_flutter_sdk
   ```
 
@@ -333,7 +333,7 @@
   ```bash
   tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
   tools/flutter/run-flutter.sh analyze frameworks/flutter/bota_flutter_sdk
-  tools/flutter/run-flutter.sh dart format --output=none --set-exit-if-changed frameworks/flutter/bota_flutter_sdk/lib frameworks/flutter/bota_flutter_sdk/test
+  tools/flutter/run-dart.sh format --output=none --set-exit-if-changed frameworks/flutter/bota_flutter_sdk/lib frameworks/flutter/bota_flutter_sdk/test
   ```
 
   Expected: PASS with no leaks reported by the lifecycle tests.
