@@ -111,6 +111,20 @@ class FactoryResetManagerTest {
     }
 
     @Test
+    fun persistenceResultPreservesLegacyDataClassShapeAndRejectsMissingMetadata() {
+        val result = FactoryResetPersistenceResult(7u)
+        val (localRecordingsDeleted) = result
+        val copied = result.copy(localRecordingsDeleted = 8u)
+
+        assertEquals(7u.toUShort(), localRecordingsDeleted)
+        assertEquals(FactoryResetPersistenceResult(8u), copied)
+        assertTrue(runCatching { result.commandId }.exceptionOrNull() is IllegalStateException)
+        assertTrue(runCatching { result.bindingGeneration }.exceptionOrNull() is IllegalStateException)
+        assertTrue(runCatching { copied.commandId }.exceptionOrNull() is IllegalStateException)
+        assertTrue(runCatching { copied.bindingGeneration }.exceptionOrNull() is IllegalStateException)
+    }
+
+    @Test
     fun staleBindingGenerationFailsBeforeRustStarts() = runTest {
         val fixture = SecureRuntimeFixture(
             pendingReset = PersistedFactoryResetResult("old-reset", 0u, 7u, 8u),

@@ -24,6 +24,7 @@ const workspaceRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const packageFiles = [
   'LICENSE',
   'analysis_options.yaml',
+  'android/sdk-version.toml',
   'android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt',
   'ios/bota_flutter_sdk.podspec',
   'ios/bota_flutter_sdk/Package.swift',
@@ -87,6 +88,7 @@ const createFixture = (prefix = 'bota-flutter-package-') => {
     const path = join(packageRoot, file);
     mkdirSync(dirname(path), { recursive: true });
     let contents = 'fixture\n';
+    if (file === 'android/sdk-version.toml') contents = 'version = "1.1.0"\n';
     if (file === 'pubspec.yaml') contents = validPubspec;
     if (file === 'ios/bota_flutter_sdk.podspec') contents = validPluginPodspec;
     if (file === 'ios/bota_flutter_sdk/Package.swift') contents = validSwiftPackage;
@@ -129,6 +131,19 @@ test('rejects Flutter package version drift from sdk-version.toml', () => {
   assert.throws(
     () => verifyFlutterPackage(root),
     /package version 1\.0\.0 does not match 1\.1\.0/
+  );
+});
+
+test('rejects packaged Android version drift from sdk-version.toml', () => {
+  const { packageRoot, root } = createFixture();
+  writeFileSync(
+    join(packageRoot, 'android', 'sdk-version.toml'),
+    'version = "1.0.0"\n'
+  );
+
+  assert.throws(
+    () => verifyFlutterPackage(root),
+    /packaged Android SDK version 1\.0\.0 does not match 1\.1\.0/
   );
 });
 

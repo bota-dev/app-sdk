@@ -14,6 +14,7 @@ const PACKAGE_PATH = 'frameworks/flutter/bota_flutter_sdk';
 const REQUIRED_FILES = [
   'LICENSE',
   'analysis_options.yaml',
+  'android/sdk-version.toml',
   'android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt',
   'ios/bota_flutter_sdk.podspec',
   'ios/bota_flutter_sdk/Package.swift',
@@ -139,6 +140,9 @@ export const verifyFlutterPackage = (root) => {
   verifySymlinks(packageRoot);
 
   const sdkVersion = readSdkVersion(resolve(workspaceRoot, 'sdk-version.toml'));
+  const packagedAndroidSdkVersion = readSdkVersion(
+    resolve(packageRoot, 'android/sdk-version.toml')
+  );
   const pubspec = parsePubspec(readFileSync(resolve(packageRoot, 'pubspec.yaml'), 'utf8'));
   const applePodspec = resolve(workspaceRoot, 'platforms/apple/BotaAppleSDK.podspec');
   if (!existsSync(applePodspec)) {
@@ -159,6 +163,9 @@ export const verifyFlutterPackage = (root) => {
   );
   expectEqual(pubspec.version, sdkVersion, (actual) =>
     `Flutter package version ${actual ?? '(missing)'} does not match ${sdkVersion}`
+  );
+  expectEqual(packagedAndroidSdkVersion, sdkVersion, (actual) =>
+    `Flutter packaged Android SDK version ${actual ?? '(missing)'} does not match ${sdkVersion}`
   );
   expectEqual(pubspec.environment?.sdk, EXPECTED_DART_CONSTRAINT, () =>
     `Dart SDK constraint must be ${EXPECTED_DART_CONSTRAINT}`

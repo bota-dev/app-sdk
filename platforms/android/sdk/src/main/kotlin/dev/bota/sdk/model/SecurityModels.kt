@@ -48,11 +48,32 @@ public class FactoryResetGrantRequest(
 }
 
 public data class FactoryResetPersistenceResult(
-    public val commandId: String,
-    public val bindingGeneration: ULong,
     public val localRecordingsDeleted: UShort,
 ) {
-    public constructor(localRecordingsDeleted: UShort) : this("", 0u, localRecordingsDeleted)
+    private data class Metadata(
+        val commandId: String,
+        val bindingGeneration: ULong,
+    )
+
+    private var metadata: Metadata? = null
+
+    public constructor(
+        commandId: String,
+        bindingGeneration: ULong,
+        localRecordingsDeleted: UShort,
+    ) : this(localRecordingsDeleted) {
+        metadata = Metadata(commandId, bindingGeneration)
+    }
+
+    public val commandId: String
+        get() = requireMetadata().commandId
+
+    public val bindingGeneration: ULong
+        get() = requireMetadata().bindingGeneration
+
+    private fun requireMetadata(): Metadata = checkNotNull(metadata) {
+        "factory-reset persistence metadata is unavailable"
+    }
 }
 
 public data class FactoryResetCompletion(

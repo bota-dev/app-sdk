@@ -125,6 +125,14 @@ pub mod release {
                 expected.version
             ));
         }
+        let flutter_android: SdkVersion = parse_toml_file(
+            &root.join("frameworks/flutter/bota_flutter_sdk/android/sdk-version.toml"),
+        )?;
+        require_version(
+            "Flutter packaged Android SDK",
+            &flutter_android.version,
+            &expected.version,
+        )?;
 
         let package_json: PackageJson = parse_json_file(&root.join("package.json"))?;
         if !package_json.private {

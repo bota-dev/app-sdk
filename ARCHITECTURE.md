@@ -577,11 +577,14 @@ keeps the category unavailable until native terminal cleanup or destruction of
 the final shared-client lease; collector completion and a returned but
 uninstalled `Flow` are not cleanup evidence.
 
-The Android plugin build reads the exact version from `sdk-version.toml`,
-rejects a different Gradle override, requires API 26 or newer, and resolves
-`dev.bota:bota-android-sdk:<version>`. Local adapter tests publish the same
-native Android artifact into the repository test Maven directory before
-compiling the plugin.
+The Android plugin build reads the exact version from its packaged
+`android/sdk-version.toml`, resolved from the plugin project rather than the
+consumer build root. Package verification requires that copy to match the root
+`sdk-version.toml`; the build rejects a different Gradle override, requires API
+26 or newer, and resolves `dev.bota:bota-android-sdk:<version>`. Local adapter
+tests publish the same native Android artifact into the repository test Maven
+directory and configure the plugin from a temporary consumer root before
+compiling it.
 
 `CoreEngineActor` is the single Swift workflow executor. It submits all ten
 typed command shapes to Rust, drains notifications and host effects in order,

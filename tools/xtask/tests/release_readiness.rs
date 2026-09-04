@@ -66,7 +66,7 @@ fn android_build_fixture() -> PathBuf {
 }
 
 #[test]
-fn version_tag_and_publishable_metadata_are_synchronized() {
+fn version_tag_publishable_metadata_and_flutter_android_package_are_synchronized() {
     let release = xtask::release::verify_release(&root(), "v1.1.0").unwrap();
 
     assert_eq!(release.version, "1.1.0");

@@ -4,7 +4,7 @@ plugins {
 }
 
 fun requiredSdkVersion(): String {
-    val versionFile = rootDir.resolve("../../../../sdk-version.toml").canonicalFile
+    val versionFile = projectDir.resolve("sdk-version.toml").canonicalFile
     val match = Regex("(?m)^version\\s*=\\s*\"([^\"]+)\"\\s*$").find(versionFile.readText())
         ?: error("sdk-version.toml does not contain version")
     return match.groupValues[1]

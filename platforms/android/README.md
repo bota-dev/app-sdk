@@ -65,11 +65,15 @@ Note. `deprovision` is remove-only and never invokes factory reset.
 `FactoryResetManager` requires an application-supplied command ID, current
 binding generation, and grant callback. The physical reset result is persisted
 with that exact command ID and generation before receipt; the persistence
-callback receives both values with the local recording-deletion count. After restart,
-`resumePendingFactoryReset` rejects a different generation and sends only the
-saved command's receipt workflow. Material callbacks are memory-only, and all
-secure operations share the facade-wide operation owner with discovery and
-connection workflows.
+callback receives both values with the local recording-deletion count.
+`FactoryResetPersistenceResult` retains `localRecordingsDeleted` as its sole
+data-class component for binary and source compatibility. Manager-produced
+callback values initialize `commandId` and `bindingGeneration` before
+publication; accessing those properties on a legacy app-constructed or copied
+value fails closed. After restart, `resumePendingFactoryReset` rejects a
+different generation and sends only the saved command's receipt workflow.
+Material callbacks are memory-only, and all secure operations share the
+facade-wide operation owner with discovery and connection workflows.
 
 `DeviceControlManager` writes application-provided recording grants, subscribes
 before shared-core start/stop opcodes, preserves the two 50 ms stop-command
