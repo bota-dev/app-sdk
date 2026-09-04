@@ -2007,7 +2007,7 @@ worker. It starts only after this contract gate is green and reviewed.
   parent have the same semantic public API digest
   `8c02007fed5c8172b6fd54ee228c19318a35668fa9cd05ae995ad648d837e397`
   across 80 exports, and no root declaration change.
-- Backend typecheck and focused 3-suite/59-test contract-policy matrix pass;
+- Backend typecheck and focused 3-suite/62-test contract-policy matrix pass;
   lint has 20 pre-existing warnings and no errors. Firmware passes 2 legacy
   disablement tests and 9 host-contract groups with `cryptography==50.0.1`.
   The local firmware gate used the bundled arm64 Python 3.12 runtime because
@@ -2023,3 +2023,16 @@ runnable current-head gate: that comparator requires a path and the frozen
 post-baseline internal and unrelated public provisioning changes. The gate now
 checks the exact v2 commit boundary; an additional semantic parent/current API
 comparison produced the identical digest recorded above.
+
+Independent completion review found two Important issues in the test-only
+backend verifier: it trusted semantics from an authorization blob that was
+hash-linked but not signature-verified and required a caller-provided data key
+before HPKE. Follow-up
+commit `41942d82` now verifies the backend signature/time/context, enforces the
+complete authorization/manifest binding (including channel and recipient),
+recovers `K_data` from HPKE before the manifest HMAC, and treats a supplied data
+key only as optional fixture evidence. The focused matrix increased from 59 to
+62 tests. Read-only re-review found no remaining Critical or Important issues,
+confirmed no runtime registration, and assessed the milestone ready to merge;
+additional branch-specific negative vectors were classified as minor follow-up
+coverage.
