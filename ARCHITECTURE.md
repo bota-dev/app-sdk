@@ -154,8 +154,15 @@ as exact 16-byte fields and missing sequences as one packed little-endian u32
 byte field; decoded CONFIRM exposes `owner_revision` under its dedicated field.
 The internal Apple mapper now exposes canonical WINDOW_ACK/CONFIRM encoding and
 typed DATA, WINDOW_END, MANIFEST_CHUNK, EOF, and ERROR decoding through that
-shared Rust boundary. It does not yet consume a transfer stream or mutate a
-sink/checkpoint. Apple's
+shared Rust boundary. A bounded internal receiver now writes DATA directly by
+offset to a protected native file, retains only packet metadata and the fixed
+580-byte manifest, validates resume-prefix truncation and final evidence,
+selectively requests exact gaps, and refuses to produce a clean WINDOW_ACK
+until the matching native checkpoint sidecar, including the highest contiguous
+sequence needed for exact EOF validation after resume, is reported persisted.
+It is not yet connected
+to the live transfer-control stream, staging network path, or production host.
+Apple's
 serialized signed-blob writer uses the current CoreBluetooth
 write-with-response limit capped at 512 bytes, subscribes to `0407` before
 BEGIN, checks cancellation between writes, starts its RESULT timeout only after

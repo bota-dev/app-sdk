@@ -223,6 +223,14 @@ runtimes can consume the same trace.
     WINDOW_ACK/CONFIRM encoding and typed DATA, WINDOW_END, MANIFEST_CHUNK, EOF,
     and ERROR decoding, with frozen-wire XCTest coverage. This boundary has no
     sink, checkpoint, staging, or manager side effects.
+  - [x] Add the bounded internal Apple transfer receiver: write opaque DATA by
+    offset to a protected native file, retain only bounded packet metadata,
+    selectively request missing sequences, verify every proven prefix, truncate
+    unproved resume tails, retain the mutually acknowledged highest sequence in
+    the native checkpoint sidecar, require the exact checkpoint-persisted callback
+    before producing a clean WINDOW_ACK, and validate the fixed manifest plus
+    EOF evidence. It is not yet connected to the live transfer-control stream
+    or production host.
   - [ ] Wire the resulting snapshot through application selection before START,
     then implement the Apple DATA/window repair, manifest, EOF, and CONFIRM
     lifecycle using the shared encoder.

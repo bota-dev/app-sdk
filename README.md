@@ -181,8 +181,13 @@ rejecting device-originated transfer messages. Its normalized ABI keeps
 upload-session UUIDs as 16-byte values and missing sequences as one packed
 little-endian u32 byte field in both directions. The internal Apple mapper also
 uses that ABI for WINDOW_ACK/CONFIRM output and typed DATA, WINDOW_END,
-MANIFEST_CHUNK, EOF, and ERROR input. Those packet codecs do not yet consume a
-stream, write a native sink, or advance a durable checkpoint. Apple's internal
+MANIFEST_CHUNK, EOF, and ERROR input. A bounded internal receiver now writes
+opaque DATA by offset to a protected native file, verifies resume prefixes and
+EOF evidence, requests exact missing sequences, and keeps clean WINDOW_ACK
+creation locked until the matching checkpoint is reported persisted. It is not
+yet wired to the live stream, staging, or production host; the native checkpoint
+sidecar includes the highest contiguous sequence needed for exact EOF validation
+after resume. Apple's internal
 writer now
 serializes ownership, chunks
 against the current CoreBluetooth write-with-response limit capped at 512

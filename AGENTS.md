@@ -75,9 +75,16 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   16-byte fields, missing sequences as one packed little-endian u32 byte field,
   and CONFIRM `owner_revision` under its dedicated field. Apple's internal
   mapper exposes Rust-encoded WINDOW_ACK/CONFIRM plus typed Rust-decoded
-  DATA, WINDOW_END, MANIFEST_CHUNK, EOF, and ERROR values; this is only a
-  packet boundary and does not write a sink, persist a checkpoint, or stage an
-  object. Apple's internal
+  DATA, WINDOW_END, MANIFEST_CHUNK, EOF, and ERROR values. The internal
+  `EncryptedUploadV2TransferReceiver` builds on that boundary without buffering
+  ciphertext: it writes DATA by offset to a protected native file, keeps only
+  bounded packet metadata, verifies prefix hashes, truncates unproved resume
+  tails, requests exact missing sequences, and will not create a clean
+  WINDOW_ACK until the matching native checkpoint, including its highest
+  contiguous sequence, is reported persisted. It also
+  bounds the manifest to the fixed 580-byte contract and verifies EOF evidence.
+  This receiver is not connected to the production host or staging path.
+  Apple's internal
   `EncryptedUploadV2SignedBlobWriter` permits one owner, queries the actual
   write-with-response limit capped at the 512-byte protocol maximum, subscribes
   to `0407` before BEGIN, checks cancellation between writes, and starts the
