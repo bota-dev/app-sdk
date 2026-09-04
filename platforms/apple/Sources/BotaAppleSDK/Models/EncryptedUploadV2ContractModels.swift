@@ -115,6 +115,48 @@ enum EncryptedUploadV2ResumeDecision: Equatable, Sendable {
     case rejected(EncryptedUploadV2ResumeRejectionValue)
 }
 
+struct EncryptedUploadV2DataValue: Equatable, Sendable {
+    let transportSessionID: UInt64
+    let sequence: UInt32
+    let ciphertextOffset: UInt64
+    let bytes: Data
+}
+
+struct EncryptedUploadV2WindowEndValue: Equatable, Sendable {
+    let transportSessionID: UInt64
+    let windowIndex: UInt32
+    let firstSequence: UInt32
+    let lastSequence: UInt32
+    let nextCiphertextOffset: UInt64
+    let prefixSHA256: Data
+    let checkpointRevision: UInt32
+}
+
+struct EncryptedUploadV2ManifestChunkValue: Equatable, Sendable {
+    let transportSessionID: UInt64
+    let totalManifestLength: UInt16
+    let chunkOffset: UInt16
+    let manifestSHA256: Data
+    let bytes: Data
+}
+
+struct EncryptedUploadV2EOFValue: Equatable, Sendable {
+    let transportSessionID: UInt64
+    let finalSequence: UInt32
+    let blockCount: UInt32
+    let ciphertextLength: UInt64
+    let ciphertextSHA256: Data
+    let manifestSHA256: Data
+}
+
+enum EncryptedUploadV2TransferPayloadValue: Equatable, Sendable {
+    case data(EncryptedUploadV2DataValue)
+    case windowEnd(EncryptedUploadV2WindowEndValue)
+    case manifestChunk(EncryptedUploadV2ManifestChunkValue)
+    case eof(EncryptedUploadV2EOFValue)
+    case error(EncryptedUploadV2TransferErrorValue)
+}
+
 struct EncryptedUploadV2CommandRequest: Equatable, Sendable {
     let serialNumber: String
     let recordingUUID: String

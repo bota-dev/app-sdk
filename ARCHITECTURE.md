@@ -152,7 +152,10 @@ CONFIRM, and ABORT transfer encoding to the same codec; device-originated
 transfer messages are rejected. Both directions represent upload-session UUIDs
 as exact 16-byte fields and missing sequences as one packed little-endian u32
 byte field; decoded CONFIRM exposes `owner_revision` under its dedicated field.
-Apple's
+The internal Apple mapper now exposes canonical WINDOW_ACK/CONFIRM encoding and
+typed DATA, WINDOW_END, MANIFEST_CHUNK, EOF, and ERROR decoding through that
+shared Rust boundary. It does not yet consume a transfer stream or mutate a
+sink/checkpoint. Apple's
 serialized signed-blob writer uses the current CoreBluetooth
 write-with-response limit capped at 512 bytes, subscribes to `0407` before
 BEGIN, checks cancellation between writes, starts its RESULT timeout only after

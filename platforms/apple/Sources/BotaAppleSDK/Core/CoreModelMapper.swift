@@ -603,6 +603,55 @@ final class CoreModelMapper: @unchecked Sendable {
         ])
     }
 
+    func createEncryptedUploadV2WindowAcknowledgement(
+        transportSessionID: UInt64,
+        windowIndex: UInt32,
+        highestContiguousSequence: UInt32,
+        nextCiphertextOffset: UInt64,
+        prefixSHA256: Data,
+        checkpointRevision: UInt32,
+        missingSequences: [UInt32]
+    ) throws -> Data {
+        try encode(BotaPrivateProtocol.encodeEncryptedUploadV2Transfer, fields: [
+            .unsigned(id: BotaPrivateProtocol.messageType, value: 0x21),
+            .unsigned(id: BotaPrivateProtocol.transportSessionID, value: transportSessionID),
+            .unsigned(id: BotaPrivateProtocol.windowIndex, value: UInt64(windowIndex)),
+            .unsigned(
+                id: BotaPrivateProtocol.sequence,
+                value: UInt64(highestContiguousSequence)
+            ),
+            .unsigned(id: BotaPrivateProtocol.offset, value: nextCiphertextOffset),
+            .bytes(id: BotaPrivateProtocol.prefixSHA256, value: prefixSHA256),
+            .unsigned(
+                id: BotaPrivateProtocol.checkpointRevision,
+                value: UInt64(checkpointRevision)
+            ),
+            .bytes(
+                id: BotaPrivateProtocol.missingSequence,
+                value: Self.packLittleEndian(missingSequences)
+            ),
+        ])
+    }
+
+    func createEncryptedUploadV2Confirm(
+        transportSessionID: UInt64,
+        uploadSessionID: UUID,
+        recordingUUID: String,
+        recordingGeneration: UInt32,
+        ownerRevision: UInt32,
+        receiptSHA256: Data
+    ) throws -> Data {
+        try encode(BotaPrivateProtocol.encodeEncryptedUploadV2Transfer, fields: [
+            .unsigned(id: BotaPrivateProtocol.messageType, value: 0x23),
+            .unsigned(id: BotaPrivateProtocol.transportSessionID, value: transportSessionID),
+            .bytes(id: BotaPrivateProtocol.uploadSessionUUID, value: Self.bytes(of: uploadSessionID)),
+            .text(id: BotaPrivateProtocol.recordingUUID, value: recordingUUID),
+            .unsigned(id: BotaPrivateProtocol.recordingGeneration, value: UInt64(recordingGeneration)),
+            .unsigned(id: BotaPrivateProtocol.ownerRevision, value: UInt64(ownerRevision)),
+            .bytes(id: BotaPrivateProtocol.receiptSHA256, value: receiptSHA256),
+        ])
+    }
+
     func createEncryptedUploadV2Abort(
         transportSessionID: UInt64,
         reason: UInt16
@@ -691,6 +740,78 @@ final class CoreModelMapper: @unchecked Sendable {
         }
     }
 
+    func decodeEncryptedUploadV2TransferPayload(
+        _ data: Data
+    ) throws -> EncryptedUploadV2TransferPayloadValue {
+        let fields = try decode(BotaPrivateProtocol.decodeEncryptedUploadV2TransferOrStatus, data)
+        guard try fields.requiredUInt8(BotaPrivateProtocol.protocolVariant) == 3 else {
+            throw Self.invalid("encrypted-upload-v2 notification is not a transfer packet")
+        }
+
+        let transportSessionID = try fields.requiredUInt64(
+            BotaPrivateProtocol.transportSessionID
+        )
+        switch try fields.requiredUInt8(BotaPrivateProtocol.messageType) {
+        case 0x41:
+            let bytes = try fields.requiredBytes(BotaPrivateProtocol.value)
+            guard try fields.requiredUInt64(BotaPrivateProtocol.bodyLength) == UInt64(bytes.count) else {
+                throw Self.invalid("encrypted-upload-v2 DATA length does not match its payload")
+            }
+            return .data(EncryptedUploadV2DataValue(
+                transportSessionID: transportSessionID,
+                sequence: try fields.requiredUInt32(BotaPrivateProtocol.sequence),
+                ciphertextOffset: try fields.requiredUInt64(BotaPrivateProtocol.offset),
+                bytes: bytes
+            ))
+        case 0x42:
+            return .windowEnd(EncryptedUploadV2WindowEndValue(
+                transportSessionID: transportSessionID,
+                windowIndex: try fields.requiredUInt32(BotaPrivateProtocol.windowIndex),
+                firstSequence: try fields.requiredUInt32(BotaPrivateProtocol.firstSequence),
+                lastSequence: try fields.requiredUInt32(BotaPrivateProtocol.lastSequence),
+                nextCiphertextOffset: try fields.requiredUInt64(BotaPrivateProtocol.offset),
+                prefixSHA256: try fields.requiredBytes(BotaPrivateProtocol.prefixSHA256),
+                checkpointRevision: try fields.requiredUInt32(
+                    BotaPrivateProtocol.checkpointRevision
+                )
+            ))
+        case 0x43:
+            let bytes = try fields.requiredBytes(BotaPrivateProtocol.value)
+            guard try fields.requiredUInt64(BotaPrivateProtocol.bodyLength) == UInt64(bytes.count) else {
+                throw Self.invalid("encrypted-upload-v2 manifest chunk length does not match its payload")
+            }
+            return .manifestChunk(EncryptedUploadV2ManifestChunkValue(
+                transportSessionID: transportSessionID,
+                totalManifestLength: try fields.requiredUInt16(
+                    BotaPrivateProtocol.maximumManifestBytes
+                ),
+                chunkOffset: try fields.requiredUInt16(BotaPrivateProtocol.offset),
+                manifestSHA256: try fields.requiredBytes(BotaPrivateProtocol.manifestSHA256),
+                bytes: bytes
+            ))
+        case 0x44:
+            return .eof(EncryptedUploadV2EOFValue(
+                transportSessionID: transportSessionID,
+                finalSequence: try fields.requiredUInt32(BotaPrivateProtocol.sequence),
+                blockCount: try fields.requiredUInt32(BotaPrivateProtocol.blockCount),
+                ciphertextLength: try fields.requiredUInt64(BotaPrivateProtocol.ciphertextLength),
+                ciphertextSHA256: try fields.requiredBytes(BotaPrivateProtocol.ciphertextSHA256),
+                manifestSHA256: try fields.requiredBytes(BotaPrivateProtocol.manifestSHA256)
+            ))
+        case 0x4F:
+            return .error(EncryptedUploadV2TransferErrorValue(
+                transportSessionID: transportSessionID,
+                result: try fields.requiredUInt16(BotaPrivateProtocol.detailCode),
+                failedMessageType: try fields.requiredUInt8(BotaPrivateProtocol.command),
+                checkpointRevision: try fields.requiredUInt32(
+                    BotaPrivateProtocol.checkpointRevision
+                )
+            ))
+        default:
+            throw Self.invalid("encrypted-upload-v2 notification is not a transfer payload")
+        }
+    }
+
     private func decode(_ kind: UInt32, _ data: Data) throws -> PacketFields {
         do {
             let packet = try client.protocolDecode(Self.protocolPacket(kind: kind, fields: [
@@ -738,6 +859,15 @@ final class CoreModelMapper: @unchecked Sendable {
             bytes[8], bytes[9], bytes[10], bytes[11],
             bytes[12], bytes[13], bytes[14], bytes[15]
         ))
+    }
+
+    private static func packLittleEndian(_ values: [UInt32]) -> Data {
+        var data = Data(capacity: values.count * MemoryLayout<UInt32>.size)
+        for value in values {
+            var littleEndian = value.littleEndian
+            withUnsafeBytes(of: &littleEndian) { data.append(contentsOf: $0) }
+        }
+        return data
     }
 
     private static func deviceState(_ raw: UInt8) -> WireValue<DeviceState> {
@@ -897,6 +1027,7 @@ private enum BotaPrivateProtocol {
     static let plaintextLength: UInt32 = 131
     static let windowPackets: UInt32 = 134
     static let dataPayloadBytes: UInt32 = 135
+    static let missingSequence: UInt32 = 136
     static let capabilityFlags: UInt32 = 137
     static let maximumSignedBlobBytes: UInt32 = 138
     static let maximumManifestBytes: UInt32 = 139
@@ -905,12 +1036,17 @@ private enum BotaPrivateProtocol {
     static let manifestSHA256: UInt32 = 142
     static let prefixSHA256: UInt32 = 143
     static let ciphertextSHA256: UInt32 = 144
+    static let blockCount: UInt32 = 145
     static let bodyLength: UInt32 = 150
     static let blobKind: UInt32 = 151
     static let writeID: UInt32 = 152
     static let detailCode: UInt32 = 155
+    static let firstSequence: UInt32 = 158
+    static let lastSequence: UInt32 = 159
+    static let windowIndex: UInt32 = 160
     static let authorizationSHA256: UInt32 = 161
     static let receiptSHA256: UInt32 = 162
+    static let ownerRevision: UInt32 = 165
     static let command: UInt32 = 97
 }
 

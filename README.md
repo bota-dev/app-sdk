@@ -179,7 +179,11 @@ reconstructing them. Additive kind `0x0524` does the same for app-originated
 LIST, START, WINDOW_ACK, RESUME_REQUEST, CONFIRM, and ABORT frames, while
 rejecting device-originated transfer messages. Its normalized ABI keeps
 upload-session UUIDs as 16-byte values and missing sequences as one packed
-little-endian u32 byte field in both directions. Apple's internal writer now
+little-endian u32 byte field in both directions. The internal Apple mapper also
+uses that ABI for WINDOW_ACK/CONFIRM output and typed DATA, WINDOW_END,
+MANIFEST_CHUNK, EOF, and ERROR input. Those packet codecs do not yet consume a
+stream, write a native sink, or advance a durable checkpoint. Apple's internal
+writer now
 serializes ownership, chunks
 against the current CoreBluetooth write-with-response limit capped at 512
 bytes, subscribes before BEGIN, checks cancellation between writes, and starts

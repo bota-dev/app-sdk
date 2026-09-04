@@ -74,6 +74,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   transfer frames. Transfer decode/encode keeps upload-session UUIDs as exact
   16-byte fields, missing sequences as one packed little-endian u32 byte field,
   and CONFIRM `owner_revision` under its dedicated field. Apple's internal
+  mapper exposes Rust-encoded WINDOW_ACK/CONFIRM plus typed Rust-decoded
+  DATA, WINDOW_END, MANIFEST_CHUNK, EOF, and ERROR values; this is only a
+  packet boundary and does not write a sink, persist a checkpoint, or stage an
+  object. Apple's internal
   `EncryptedUploadV2SignedBlobWriter` permits one owner, queries the actual
   write-with-response limit capped at the 512-byte protocol maximum, subscribes
   to `0407` before BEGIN, checks cancellation between writes, and starts the

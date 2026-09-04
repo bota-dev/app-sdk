@@ -219,6 +219,10 @@ runtimes can consume the same trace.
     preserve device checkpoint state on RESUME_REJECT/ERROR, and retain the live
     stream/owner after acceptance. Bound cancellation or explicit
     ABORT/unsubscribe cleanup with a confirmed-disconnect reset gate.
+  - [x] Expose the remaining Apple packet-codec boundary through Rust: canonical
+    WINDOW_ACK/CONFIRM encoding and typed DATA, WINDOW_END, MANIFEST_CHUNK, EOF,
+    and ERROR decoding, with frozen-wire XCTest coverage. This boundary has no
+    sink, checkpoint, staging, or manager side effects.
   - [ ] Wire the resulting snapshot through application selection before START,
     then implement the Apple DATA/window repair, manifest, EOF, and CONFIRM
     lifecycle using the shared encoder.
