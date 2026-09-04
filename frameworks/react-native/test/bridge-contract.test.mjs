@@ -91,6 +91,7 @@ test('Codegen contract does not carry high-volume binary data', () => {
     /Uint8Array/i,
     /base64/i,
     /(?:recording|firmware)(?:Data|Payload|Bytes|Chunk)/i,
+    /(?:ciphertext|manifest|authorization|receipt)(?:Data|Payload|Bytes|Chunk|Base64)?\s*:/i,
     /^\s*(?:data|payload|bytes|chunk)\??\s*:/im,
   ];
 

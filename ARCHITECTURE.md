@@ -129,6 +129,13 @@ firmware payloads never cross the JavaScript bridge. Future workflow methods
 carry identifiers, progress, errors, and native file paths while native hosts
 own high-volume files and transfer buffers.
 
+Encrypted Upload v2 is currently a contract-only capability: the canonical
+vectors and Rust codecs exist, and Apple/Android can inspect normalized framing
+metadata internally. React Native exposes no v2 workflow or bulk bytes, and
+compatibility metadata keeps runtime support and firmware advertisement false.
+Profile selection, transfer orchestration, staging, completion, and
+receipt-gated deletion are not implemented by this slice.
+
 The JavaScript compatibility layer now restores all 80 frozen exports. This
 includes every `0.0.65` public type, the runtime error hierarchy,
 `deriveSyncStatus`, `DeviceLogDecoder`, `DeviceManager`, `RecordingManager`, and

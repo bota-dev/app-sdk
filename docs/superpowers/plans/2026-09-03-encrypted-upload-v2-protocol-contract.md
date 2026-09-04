@@ -1143,7 +1143,7 @@ git commit -m "feat: expose encrypted upload v2 contract inspection" \
 - Produces: compatibility metadata status `contract_only`, runtime support
   `false`, firmware capability advertised `false`.
 
-- [ ] **Step 1: Write boundary tests first**
+- [x] **Step 1: Write boundary tests first**
 
 Add this contract test:
 
@@ -1165,7 +1165,7 @@ Also assert the vector file SHA-256 equals the generated Rust digest constant
 and that no runtime manager source contains any v2 START opcode or v2
 characteristic UUID.
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run:
 
@@ -1177,7 +1177,7 @@ node --test test/encrypted-upload-v2-contract.test.mjs test/bridge-contract.test
 Expected: FAIL until vector/digest discovery and compatibility metadata are
 wired.
 
-- [ ] **Step 3: Mark contract presence without claiming runtime support**
+- [x] **Step 3: Mark contract presence without claiming runtime support**
 
 Add an `encryptedUploadV2` compatibility entry with this exact meaning:
 
@@ -1199,7 +1199,7 @@ Update architecture/agent docs to say contract inspection exists but selection,
 transfer, staging, and deletion remain unimplemented. Do not edit or discard
 pre-existing unrelated hunks; stage with `git add -p`.
 
-- [ ] **Step 4: Run App SDK regression gates**
+- [x] **Step 4: Run App SDK regression gates**
 
 Run:
 
@@ -1207,7 +1207,9 @@ Run:
 cd /Users/zhangqi/ws/bota/app-sdk
 npm run test:react-native
 npm run react-native:verify
-npm run baseline:react-native
+npm run baseline:react-native -- \
+  --sdk-path ../.worktrees/react-native-sdk-baseline \
+  --expected-commit 44ac1221cb71eb01cafcdbfdf7a370847d3a10b4
 npm run test:fixtures
 npm run sync:apple-fixtures
 npm run sync:android-fixtures
@@ -1219,7 +1221,7 @@ cargo test --workspace
 Expected: existing v1/P10 fixture counts and digest remain unchanged; all new
 contract gates PASS.
 
-- [ ] **Step 5: Commit only task-owned hunks**
+- [x] **Step 5: Commit only task-owned hunks**
 
 Mark Task 5 checked in the plan, then use interactive staging for already-dirty
 docs:

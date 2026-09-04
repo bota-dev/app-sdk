@@ -1,8 +1,15 @@
 # Encrypted Upload v2 Protocol Contract Design
 
-**Status:** Approved; protocol-contract implementation pending
+**Status:** Approved; canonical contract and inspection implemented, runtime workflow pending
 
 **Approved:** 2026-09-03
+
+**Implementation snapshot (2026-09-03):** The machine-readable manifest,
+generated constants, bounds-checked Rust codecs, canonical vectors, Apple and
+Android internal inspection, and React Native byte/runtime boundary gates are
+implemented. Profile selection, transfer orchestration, staging, completion,
+receipt-gated deletion, and firmware capability advertisement remain
+unimplemented.
 
 ## Decision
 

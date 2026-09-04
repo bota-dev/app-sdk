@@ -20,6 +20,17 @@
     "protocolEncoders": 13,
     "publishedFacades": ["apple"]
   },
+  "encryptedUploadV2": {
+    "contractRevision": "encrypted-upload-v2-contract-v1",
+    "contractVectors": true,
+    "rustCodec": true,
+    "appleFacadeInspection": true,
+    "androidFacadeInspection": true,
+    "reactNativeBridgeBytes": false,
+    "runtimeWorkflow": false,
+    "firmwareAdvertised": false,
+    "status": "contract_only"
+  },
   "platformFacades": {
     "apple": {
       "implementationStatus": "automated_verified",
