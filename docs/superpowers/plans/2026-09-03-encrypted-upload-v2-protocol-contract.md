@@ -429,6 +429,8 @@ staged.
 **Files:**
 - Create: `app-sdk/core/device-sdk-core/src/protocol/encrypted_upload_v2.rs`
 - Create: `app-sdk/core/device-sdk-core/tests/encrypted_upload_v2_codec.rs`
+- Modify: `app-sdk/core/device-sdk-core/Cargo.toml`
+- Modify: `app-sdk/Cargo.lock`
 - Modify: `app-sdk/core/device-sdk-core/src/protocol/mod.rs`
 - Modify: `app-sdk/core/device-sdk-core/src/protocol/cursor.rs`
 - Modify: `app-sdk/docs/superpowers/plans/2026-09-03-encrypted-upload-v2-protocol-contract.md`
@@ -448,7 +450,7 @@ staged.
   shipping SDK workflows; full document reference parsing stays in the
   non-shipping xtask and backend/firmware references.
 
-- [ ] **Step 1: Add exact-length and canonicality tests first**
+- [x] **Step 1: Add exact-length and canonicality tests first**
 
 Create `encrypted_upload_v2_codec.rs` with a table-driven length gate:
 
@@ -487,7 +489,7 @@ transfer status, BLOB_BEGIN, BLOB_COMMIT, BLOB_ABORT, BLOB_RESULT, LIST,
 RECORDING_ENTRY, RECORDING_LIST_END, START, START_ACK, WINDOW_END, EOF,
 RESUME_REQUEST, RESUME_ACCEPT, RESUME_REJECT, CONFIRM, ABORT, and ERROR.
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run:
 
@@ -497,7 +499,7 @@ cargo test -p bota-device-sdk-core --test encrypted_upload_v2_codec
 
 Expected: FAIL because the module and functions do not exist.
 
-- [ ] **Step 3: Extend the cursor with checked `u64` and exact-length helpers**
+- [x] **Step 3: Extend the cursor with checked `u64` and exact-length helpers**
 
 Add only these reusable primitives:
 
@@ -520,7 +522,7 @@ pub(super) fn require_exact(&self, expected: usize) -> Result<(), DeviceSdkError
 }
 ```
 
-- [ ] **Step 4: Define the typed contract vocabulary**
+- [x] **Step 4: Define the typed contract vocabulary**
 
 Use these public top-level shapes; their fields map one-for-one to the BLE
 framing spec and use fixed arrays for UUIDs and digests:
@@ -563,7 +565,12 @@ pub enum EncryptedUploadV2Transfer<'a> {
     ResumeReject(ResumeRejectV2),
     Confirm(ConfirmV2),
     Abort { common: CommonHeaderV2, reason: u16 },
-    Error { common: CommonHeaderV2, result: u16, detail: u32 },
+    Error {
+        common: CommonHeaderV2,
+        result: u16,
+        failed_message_type: u8,
+        checkpoint_revision: u32,
+    },
 }
 ```
 
@@ -571,7 +578,7 @@ pub enum EncryptedUploadV2Transfer<'a> {
 `transport_session_id: u64`. `WindowAckV2` owns `Vec<u32>` only after checking
 `missing_count * 4`, the declared maximum, and the containing frame length.
 
-- [ ] **Step 5: Implement the minimal structural codecs**
+- [x] **Step 5: Implement the minimal structural codecs**
 
 Implement exact decode/encode pairs using generated offsets. Centralize the
 shared rules in these private helpers:
@@ -601,7 +608,7 @@ bytes they cover, such as signed-blob reassembly. It does not parse manifest or
 authorization fields, verify backend signatures, unwrap `K_data`, decapsulate
 HPKE, or authenticate a manifest.
 
-- [ ] **Step 6: Add malformed matrices and round-trip tests**
+- [x] **Step 6: Add malformed matrices and round-trip tests**
 
 Use one loop per variable frame:
 
@@ -624,7 +631,7 @@ signed-blob chunks through a small `SignedBlobAssemblerV2`, zero session IDs,
 unknown flags, mixed v1/P10 message bytes, `usize` overflow, and every fixed
 frame's version/length/reserved fields.
 
-- [ ] **Step 7: Run core verification and commit**
+- [x] **Step 7: Run core verification and commit**
 
 Run:
 
@@ -638,7 +645,8 @@ cargo clippy -p bota-device-sdk-core --all-targets -- -D warnings
 Mark Task 2 checked in the plan, then commit:
 
 ```bash
-git add core/device-sdk-core/src/protocol/cursor.rs \
+git add Cargo.lock core/device-sdk-core/Cargo.toml \
+  core/device-sdk-core/src/protocol/cursor.rs \
   core/device-sdk-core/src/protocol/encrypted_upload_v2.rs \
   core/device-sdk-core/src/protocol/mod.rs \
   core/device-sdk-core/tests/encrypted_upload_v2_codec.rs \
