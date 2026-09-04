@@ -688,7 +688,7 @@ git commit -m "feat: add encrypted upload v2 contract codecs" \
   `generatedBy`, `keys`, and `cases`, plus generated constant
   `ENCRYPTED_UPLOAD_V2_VECTOR_SHA256`.
 
-- [ ] **Step 1: Add the exact development-only crypto dependencies**
+- [x] **Step 1: Add the exact development-only crypto dependencies**
 
 Add to `tools/xtask/Cargo.toml`:
 
@@ -705,7 +705,7 @@ Update the MIT/Apache-2.0/BSD-3-Clause license allowlist only for the resolved
 transitive crates reported by the lockfile, and keep `npm run check:licenses`
 green.
 
-- [ ] **Step 2: Write vector determinism and coverage tests first**
+- [x] **Step 2: Write vector determinism and coverage tests first**
 
 Create `tools/xtask/tests/encrypted_upload_v2_vectors.rs`:
 
@@ -740,7 +740,7 @@ fn bundle_covers_every_required_category() {
 }
 ```
 
-- [ ] **Step 3: Run the vector test and verify RED**
+- [x] **Step 3: Run the vector test and verify RED**
 
 Run:
 
@@ -751,7 +751,7 @@ node --test tools/baseline/encrypted-upload-v2-vector-contract.test.mjs
 
 Expected: FAIL because the generator and bundle do not exist.
 
-- [ ] **Step 4: Define and validate the vector JSON schema**
+- [x] **Step 4: Define and validate the vector JSON schema**
 
 Use this exact per-case TypeScript-equivalent shape; operation-specific
 `context` and `expected` objects are closed JSON Schema branches selected by
@@ -784,7 +784,7 @@ The Node test compiles this schema with the workspace's pinned AJV 8.20.0,
 validates the generated bundle, and rejects one fixture with an uppercase or
 odd-length hex field.
 
-- [ ] **Step 5: Implement deterministic vector construction**
+- [x] **Step 5: Implement deterministic vector construction**
 
 Use fixed seeds and keys, never OS randomness:
 
@@ -813,7 +813,7 @@ magic, version, suite, reserved, block-length, total-length, and checked-offset
 rules before cryptographic verification. They return normalized structs used
 only to construct `expected.normalized` values.
 
-- [ ] **Step 6: Emit the complete positive, malformed, and trace matrix**
+- [x] **Step 6: Emit the complete positive, malformed, and trace matrix**
 
 Generate concrete cases for:
 
@@ -844,7 +844,7 @@ only after capability read, historical P10 relay unchanged, and
 v2_required rejection for batch plus legacy streaming.
 ```
 
-- [ ] **Step 7: Wire the CLI, generated digest, and package scripts**
+- [x] **Step 7: Wire the CLI, generated digest, and package scripts**
 
 Add these scripts:
 
@@ -858,7 +858,7 @@ Add these scripts:
 The check command compares both JSON bytes and the generated Rust digest file.
 It exits nonzero on drift.
 
-- [ ] **Step 8: Generate, validate, and commit the canonical bundle**
+- [x] **Step 8: Generate, validate, and commit the canonical bundle**
 
 Run:
 

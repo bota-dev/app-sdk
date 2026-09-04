@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bota.dev/schemas/encrypted-upload-v2-vector-bundle-v1.json",
+  "title": "Encrypted Upload v2 canonical vector bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "contractRevision", "generatedBy", "keys", "cases"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "contractRevision": { "const": "encrypted-upload-v2-contract-v1" },
+    "generatedBy": { "const": "cargo xtask encrypted-upload-v2 vectors generate" },
+    "keys": { "$ref": "#/$defs/keys" },
+    "cases": {
+      "type": "array",
+      "minItems": 40,
+      "items": { "$ref": "#/$defs/case" }
+    }
+  },
+  "$defs": {
+    "hex": { "type": "string", "pattern": "^(?:[0-9a-f]{2})*$" },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "safeInteger": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "keys": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vectorRngSeedHex",
+        "deviceRootKeyHex",
+        "dataKeyHex",
+        "backendP256SigningKeyHex",
+        "backendP256PublicKeySpkiDerHex",
+        "hpkeRecipientPrivateKeyHex",
+        "hpkeRecipientPublicKeyHex",
+        "recordingUuid"
+      ],
+      "properties": {
+        "vectorRngSeedHex": { "$ref": "#/$defs/hex" },
+        "deviceRootKeyHex": { "$ref": "#/$defs/hex" },
+        "dataKeyHex": { "$ref": "#/$defs/hex" },
+        "backendP256SigningKeyHex": { "$ref": "#/$defs/hex" },
+        "backendP256PublicKeySpkiDerHex": { "$ref": "#/$defs/hex" },
+        "hpkeRecipientPrivateKeyHex": { "$ref": "#/$defs/hex" },
+        "hpkeRecipientPublicKeyHex": { "$ref": "#/$defs/hex" },
+        "recordingUuid": { "$ref": "#/$defs/uuid" }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dataKeyHex": { "$ref": "#/$defs/hex" },
+        "deviceRootKeyHex": { "$ref": "#/$defs/hex" },
+        "backendP256PublicKeySpkiDerHex": { "$ref": "#/$defs/hex" },
+        "hpkeRecipientPrivateKeyHex": { "$ref": "#/$defs/hex" },
+        "nowSeconds": { "$ref": "#/$defs/safeInteger" },
+        "expectedEnvironment": { "$ref": "#/$defs/safeInteger" },
+        "expectedTenantContextDigestHex": { "$ref": "#/$defs/hex" },
+        "expectedDeviceIdentityDigestHex": { "$ref": "#/$defs/hex" },
+        "expectedConfigurationDigestHex": { "$ref": "#/$defs/hex" },
+        "expectedStagingObjectDigestHex": { "$ref": "#/$defs/hex" },
+        "expectedCiphertextSha256Hex": { "$ref": "#/$defs/hex" },
+        "expectedPlaintextSha256Hex": { "$ref": "#/$defs/hex" },
+        "expectedBindingGeneration": { "$ref": "#/$defs/safeInteger" },
+        "expectedRecordingGeneration": { "$ref": "#/$defs/safeInteger" },
+        "expectedOwnerRevision": { "$ref": "#/$defs/safeInteger" },
+        "expectedTransportSessionId": { "$ref": "#/$defs/safeInteger" },
+        "expectedSessionUuid": { "$ref": "#/$defs/uuid" },
+        "expectedRecordingUuid": { "$ref": "#/$defs/uuid" },
+        "previousReceiptSha256Hex": { "$ref": "#/$defs/hex" },
+        "assembledPrefixHex": { "$ref": "#/$defs/hex" },
+        "sdkGeneration": { "enum": ["old", "new"] },
+        "firmwareGeneration": { "enum": ["old", "new", "p10"] },
+        "backendPolicy": { "enum": ["legacy_allowed", "v2_preferred", "v2_required"] },
+        "entryPoint": { "enum": ["batch", "streaming"] },
+        "capabilityRead": { "type": "boolean" },
+        "capabilityBatch": { "type": "boolean" },
+        "requestedProfile": { "enum": ["legacy_plain_v1", "legacy_p10_relay", "encrypted_upload_v2"] }
+      }
+    },
+    "normalized": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "formatVersion": { "$ref": "#/$defs/safeInteger" },
+        "environment": { "$ref": "#/$defs/safeInteger" },
+        "transportProfile": { "$ref": "#/$defs/safeInteger" },
+        "storageFormat": { "$ref": "#/$defs/safeInteger" },
+        "policy": { "$ref": "#/$defs/safeInteger" },
+        "selectedChannel": { "$ref": "#/$defs/safeInteger" },
+        "blockSize": { "$ref": "#/$defs/safeInteger" },
+        "blockCount": { "$ref": "#/$defs/safeInteger" },
+        "plaintextLength": { "$ref": "#/$defs/safeInteger" },
+        "ciphertextLength": { "$ref": "#/$defs/safeInteger" },
+        "plaintextSha256Hex": { "$ref": "#/$defs/hex" },
+        "ciphertextSha256Hex": { "$ref": "#/$defs/hex" },
+        "recordingUuid": { "$ref": "#/$defs/uuid" },
+        "recordingGeneration": { "$ref": "#/$defs/safeInteger" },
+        "bindingGeneration": { "$ref": "#/$defs/safeInteger" },
+        "ownerRevision": { "$ref": "#/$defs/safeInteger" },
+        "issuedAt": { "$ref": "#/$defs/safeInteger" },
+        "expiresAt": { "$ref": "#/$defs/safeInteger" },
+        "sessionUuid": { "$ref": "#/$defs/uuid" },
+        "uploadContextDigestHex": { "$ref": "#/$defs/hex" },
+        "storageIdentityDigestHex": { "$ref": "#/$defs/hex" },
+        "hpkePlaintextHex": { "$ref": "#/$defs/hex" },
+        "signatureValid": { "type": "boolean" },
+        "manifestTagValid": { "type": "boolean" },
+        "receiptReplay": { "enum": ["first", "idempotent"] },
+        "messageType": { "$ref": "#/$defs/safeInteger" },
+        "transportSessionId": { "$ref": "#/$defs/safeInteger" },
+        "flags": { "$ref": "#/$defs/safeInteger" },
+        "highestTransferProfileVersion": { "$ref": "#/$defs/safeInteger" },
+        "maximumSignedBlobBytes": { "$ref": "#/$defs/safeInteger" },
+        "maximumManifestBytes": { "$ref": "#/$defs/safeInteger" },
+        "maximumDataPayloadBytes": { "$ref": "#/$defs/safeInteger" },
+        "maximumWindowPackets": { "$ref": "#/$defs/safeInteger" },
+        "durableCheckpointIntervalBlocks": { "$ref": "#/$defs/safeInteger" },
+        "maximumMissingSequences": { "$ref": "#/$defs/safeInteger" }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "normalized": { "$ref": "#/$defs/normalized" },
+        "decodedType": { "type": "string", "minLength": 1 },
+        "encodedHex": { "$ref": "#/$defs/hex" },
+        "accepted": { "type": "boolean" },
+        "selectedProfile": { "enum": ["legacy_plain_v1", "legacy_p10_relay", "encrypted_upload_v2"] },
+        "emittedPacketProfile": { "enum": ["legacy_plain_v1", "legacy_p10_relay", "encrypted_upload_v2", "none"] },
+        "relayRoute": { "enum": ["presigned_s3", "upload_relay", "ciphertext_staging", "none"] },
+        "reason": { "type": "string" }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "category", "operation", "inputHex", "context"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "category": { "enum": ["storage", "signed-document", "ble", "compatibility"] },
+        "operation": {
+          "enum": [
+            "verifyStorageObject",
+            "verifyUploadAuthorization",
+            "verifyUploadManifest",
+            "verifyCompletionReceipt",
+            "decodeCapabilities",
+            "decodeSignedBlob",
+            "decodeTransfer",
+            "runCompatibilityTrace"
+          ]
+        },
+        "inputHex": { "$ref": "#/$defs/hex" },
+        "context": { "$ref": "#/$defs/context" },
+        "expected": { "$ref": "#/$defs/expected" },
+        "expectedError": { "type": "string", "pattern": "^[a-z0-9]+(?:_[a-z0-9]+)*$" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "operation": { "const": "verifyStorageObject" } }, "required": ["operation"] },
+          "then": { "properties": { "category": { "const": "storage" } } }
+        },
+        {
+          "if": { "properties": { "operation": { "enum": ["verifyUploadAuthorization", "verifyUploadManifest", "verifyCompletionReceipt"] } }, "required": ["operation"] },
+          "then": { "properties": { "category": { "const": "signed-document" } } }
+        },
+        {
+          "if": { "properties": { "operation": { "enum": ["decodeCapabilities", "decodeSignedBlob", "decodeTransfer"] } }, "required": ["operation"] },
+          "then": { "properties": { "category": { "const": "ble" } } }
+        },
+        {
+          "if": { "properties": { "operation": { "const": "runCompatibilityTrace" } }, "required": ["operation"] },
+          "then": { "properties": { "category": { "const": "compatibility" } } }
+        },
+        {
+          "oneOf": [
+            {
+              "required": ["expected"],
+              "properties": { "expected": {}, "expectedError": false }
+            },
+            {
+              "required": ["expectedError"],
+              "properties": { "expected": false, "expectedError": {} }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
