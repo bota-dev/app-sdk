@@ -256,6 +256,98 @@ void main() {
   });
 
   test(
+    'successful callback IDs reject same-kind and cross-kind replay',
+    () async {
+      var materialCalls = 0;
+      var firmwareCalls = 0;
+      final PigeonBotaPlatform platform = PigeonBotaPlatform(
+        hostApi: InMemoryBotaHostApi(),
+      );
+      final BotaDeviceClient client = BotaDeviceClient.forTesting(platform);
+      await client.configure(
+        BotaConfiguration(
+          callbacks: BotaApplicationCallbacks(
+            provisioningMaterial:
+                (BotaProvisioningMaterialRequest request) async {
+                  materialCalls += 1;
+                  return BotaProvisioningMaterial(
+                    requestId: request.requestId,
+                    apiEndpoint: const <int>[1],
+                    deviceToken: const <int>[2],
+                    mtu: 256,
+                  );
+                },
+            firmware: (BotaFirmwareRequest request) async {
+              firmwareCalls += 1;
+              return BotaFirmwareSource(
+                requestId: request.requestId,
+                url: Uri.parse('https://download.example.test/firmware'),
+              );
+            },
+          ),
+        ),
+      );
+
+      await platform.requestMaterial(_provisioningRequest(provisioningId));
+      await expectLater(
+        platform.requestMaterial(_provisioningRequest(provisioningId)),
+        throwsA(_platformError('duplicate_callback_request')),
+      );
+      await expectLater(
+        platform.requestFirmware(_firmwareRequest(provisioningId)),
+        throwsA(_platformError('callback_kind_mismatch')),
+      );
+
+      expect(materialCalls, 1);
+      expect(firmwareCalls, 0);
+      await client.destroy();
+    },
+  );
+
+  test('failed callback IDs reject same-kind and cross-kind replay', () async {
+    var materialCalls = 0;
+    var firmwareCalls = 0;
+    final PigeonBotaPlatform platform = PigeonBotaPlatform(
+      hostApi: InMemoryBotaHostApi(),
+    );
+    final BotaDeviceClient client = BotaDeviceClient.forTesting(platform);
+    await client.configure(
+      BotaConfiguration(
+        callbacks: BotaApplicationCallbacks(
+          provisioningMaterial: (_) async {
+            materialCalls += 1;
+            throw StateError('callback failed');
+          },
+          firmware: (BotaFirmwareRequest request) async {
+            firmwareCalls += 1;
+            return BotaFirmwareSource(
+              requestId: request.requestId,
+              url: Uri.parse('https://download.example.test/firmware'),
+            );
+          },
+        ),
+      ),
+    );
+
+    await expectLater(
+      platform.requestMaterial(_provisioningRequest(provisioningId)),
+      throwsA(_platformError('callback_failed')),
+    );
+    await expectLater(
+      platform.requestMaterial(_provisioningRequest(provisioningId)),
+      throwsA(_platformError('duplicate_callback_request')),
+    );
+    await expectLater(
+      platform.requestFirmware(_firmwareRequest(provisioningId)),
+      throwsA(_platformError('callback_kind_mismatch')),
+    );
+
+    expect(materialCalls, 1);
+    expect(firmwareCalls, 0);
+    await client.destroy();
+  });
+
+  test(
     'destroy expires pending callbacks before late results arrive',
     () async {
       final Completer<BotaProvisioningMaterial> material =
@@ -292,6 +384,38 @@ void main() {
     },
   );
 
+  test('destroy releases configured callback routes', () async {
+    var callbackCalls = 0;
+    final PigeonBotaPlatform platform = PigeonBotaPlatform(
+      hostApi: InMemoryBotaHostApi(),
+    );
+    final BotaDeviceClient client = BotaDeviceClient.forTesting(platform);
+    await client.configure(
+      BotaConfiguration(
+        callbacks: BotaApplicationCallbacks(
+          provisioningMaterial:
+              (BotaProvisioningMaterialRequest request) async {
+                callbackCalls += 1;
+                return BotaProvisioningMaterial(
+                  requestId: request.requestId,
+                  apiEndpoint: const <int>[1],
+                  deviceToken: const <int>[2],
+                  mtu: 256,
+                );
+              },
+        ),
+      ),
+    );
+
+    await client.destroy();
+
+    await expectLater(
+      platform.requestMaterial(_provisioningRequest(provisioningId)),
+      throwsA(_platformError('callback_unavailable')),
+    );
+    expect(callbackCalls, 0);
+  });
+
   test('application callback failures never expose payload text', () async {
     final PigeonBotaPlatform platform = PigeonBotaPlatform(
       hostApi: InMemoryBotaHostApi(),
@@ -325,6 +449,15 @@ BotaProvisioningMaterialRequestMessage _provisioningRequest(String requestId) =>
       serialNumber: 'BP0001',
       nonce: Uint8List.fromList(const <int>[1, 2]),
       devicePublicKey: Uint8List.fromList(const <int>[3, 4]),
+    );
+
+BotaFirmwareRequestMessage _firmwareRequest(String requestId) =>
+    BotaFirmwareRequestMessage(
+      requestId: requestId,
+      sourceId: 'firmware-source',
+      version: '1.2.0',
+      sizeBytes: 8192,
+      crc32: 1234,
     );
 
 Matcher _platformError(String code) => isA<PlatformException>().having(

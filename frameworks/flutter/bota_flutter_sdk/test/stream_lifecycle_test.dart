@@ -206,6 +206,49 @@ void main() {
     },
   );
 
+  test('native cancellation starts before stream errors can destroy', () async {
+    final InMemoryBotaHostApi host = InMemoryBotaHostApi();
+    final PigeonBotaPlatform platform = PigeonBotaPlatform(hostApi: host);
+    final BotaDeviceClient client = BotaDeviceClient.forTesting(platform);
+    await client.configure();
+    final Completer<void> errorDelivered = Completer<void>();
+    late Future<void> destroy;
+    client.devices.scan().listen(
+      (_) {},
+      onError: (_) {
+        destroy = client.destroy();
+        errorDelivered.complete();
+      },
+    );
+    await _flushEvents();
+    final String id = _startedSubscriptionIds(host).single;
+
+    platform.onEvent(
+      BotaEventMessage(
+        subscriptionId: id,
+        payload: BotaSubscriptionErrorEventMessage(
+          error: BotaErrorMessage(
+            code: BotaErrorCodeMessage(name: 'connectionFailed'),
+            operation: BotaOperationMessage(name: 'discover'),
+            retryable: false,
+            detail: 'scan stopped',
+          ),
+        ),
+      ),
+    );
+    await errorDelivered.future;
+    await destroy;
+
+    expect(
+      host.methodNames.where(
+        (String method) =>
+            method == 'cancelSubscription' || method == 'destroy',
+      ),
+      <String>['cancelSubscription', 'destroy'],
+    );
+    expect(host.cancelledSubscriptions, <String>[id]);
+  });
+
   test('malformed native stream errors fail closed and cancel once', () async {
     final InMemoryBotaHostApi host = InMemoryBotaHostApi();
     final PigeonBotaPlatform platform = PigeonBotaPlatform(hostApi: host);

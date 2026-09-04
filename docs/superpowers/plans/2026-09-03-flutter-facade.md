@@ -301,9 +301,7 @@
 - Create: `frameworks/flutter/bota_flutter_sdk/test/client_lifecycle_test.dart`
 - Create: `frameworks/flutter/bota_flutter_sdk/test/stream_lifecycle_test.dart`
 - Create: `frameworks/flutter/bota_flutter_sdk/test/callback_broker_test.dart`
-- Modify: `frameworks/flutter/bota_flutter_sdk/lib/src/platform.dart`
 - Modify: `frameworks/flutter/bota_flutter_sdk/lib/src/client.dart`
-- Modify: `frameworks/flutter/bota_flutter_sdk/lib/src/managers.dart`
 
 **Interfaces:**
 - Consumes: Task 3 generated `BotaHostApi` and `BotaFlutterApi`.
@@ -333,7 +331,10 @@
   ```bash
   tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
   tools/flutter/run-flutter.sh analyze frameworks/flutter/bota_flutter_sdk
-  tools/flutter/run-dart.sh format --output=none --set-exit-if-changed frameworks/flutter/bota_flutter_sdk/lib frameworks/flutter/bota_flutter_sdk/test
+  tools/flutter/run-dart.sh format --output=none --set-exit-if-changed \
+    $(find frameworks/flutter/bota_flutter_sdk/lib \
+      frameworks/flutter/bota_flutter_sdk/test -name '*.dart' \
+      ! -path '*/lib/src/generated/*' -print)
   ```
 
   Expected: PASS with no leaks reported by the lifecycle tests.

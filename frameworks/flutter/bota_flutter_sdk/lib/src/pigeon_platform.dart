@@ -30,6 +30,8 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
   final Map<String, _ActiveStream> _activeStreams = <String, _ActiveStream>{};
   final Map<String, _PendingCallback> _pendingCallbacks =
       <String, _PendingCallback>{};
+  final Map<String, _CallbackKind> _consumedCallbacks =
+      <String, _CallbackKind>{};
 
   BotaConfiguration? _configuration;
   BotaConfiguration? _configuring;
@@ -101,6 +103,11 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
   }
 
   Future<void> _performDestroy() async {
+    _configuration = null;
+    _configuring = null;
+    _configureFuture = null;
+    _consumedCallbacks.clear();
+
     final List<_PendingOperation> pending = _pendingOperations.values.toList();
     _pendingOperations.clear();
     for (final _PendingOperation operation in pending) {
@@ -734,8 +741,6 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
     final _ActiveStream? active = _activeStreams.remove(subscriptionId);
     if (active == null) return;
 
-    if (error != null) active.addError(error);
-    final Future<void> closed = active.close();
     if (cancelNative) {
       try {
         await _hostApi.cancelSubscription(subscriptionId);
@@ -743,7 +748,8 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
         // The stream's primary failure remains authoritative.
       }
     }
-    await closed;
+    if (error != null) active.addError(error);
+    await active.close();
   }
 
   @override
@@ -889,6 +895,20 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
               ),
       );
     }
+    final _CallbackKind? consumedKind = _consumedCallbacks[requestId];
+    if (consumedKind != null) {
+      return Future<TOutput>.error(
+        consumedKind == kind
+            ? _callbackError(
+                'duplicate_callback_request',
+                'The callback request ID has already been used.',
+              )
+            : _callbackError(
+                'callback_kind_mismatch',
+                'The callback request ID belongs to a different kind.',
+              ),
+      );
+    }
 
     final Completer<TOutput> completer = Completer<TOutput>();
     final _PendingCallback pending = _PendingCallback(
@@ -896,6 +916,7 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
       reject: completer.completeError,
     );
     _pendingCallbacks[requestId] = pending;
+    _consumedCallbacks[requestId] = kind;
     Future<TResponse>.sync(invoke).then(
       (TResponse response) {
         final _PendingCallback? active = _pendingCallbacks.remove(requestId);
