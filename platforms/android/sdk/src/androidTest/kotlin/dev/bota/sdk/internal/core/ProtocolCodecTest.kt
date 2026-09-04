@@ -102,6 +102,64 @@ class ProtocolCodecTest {
         }
     }
 
+    @Test
+    fun encryptedUploadV2StructuralVectorsUseSharedCore() {
+        var matched = 0
+        CoreModelMapper().use { mapper ->
+            encryptedUploadV2Cases().forEach { fixture ->
+                val operation = fixture.getString("operation")
+                if (operation !in encryptedUploadV2Operations) return@forEach
+                val name = fixture.getString("name")
+                val expectedError = fixture.optString("expectedError").takeIf(String::isNotEmpty)
+                if (expectedError != null && name !in structuralErrors) return@forEach
+                matched += 1
+
+                try {
+                    val input = fixture.getString("inputHex").hexBytes()
+                    val value = mapper.inspectEncryptedUploadV2(operation, input)
+                    assertNull(name, expectedError)
+                    val normalized = fixture.getJSONObject("expected").optJSONObject("normalized")
+                    assertEquals(name, expectedEncryptedUploadV2Kind(operation), value.kind)
+                    val messageType = when (operation) {
+                        "decodeSignedBlob" -> input.first().toUByte()
+                        else -> normalized.optionalUInt("messageType")?.toUByte()
+                    }
+                    assertEquals(name, messageType, value.messageType)
+                    assertEquals(name, normalized.optionalUInt("flags"), value.flags)
+                    assertEquals(name, normalized.optionalULong("transportSessionId"), value.transportSessionId)
+                } catch (error: BotaSDKError.Core) {
+                    assertTrue("$name: $error", expectedError != null)
+                    val expectedCode = if (name in truncatedErrors) {
+                        BotaErrorCode.TruncatedPacket
+                    } else {
+                        expectedErrorCode(expectedError)
+                    }
+                    assertEquals(name, expectedCode, error.code)
+                }
+            }
+        }
+
+        assertEquals(40, matched)
+    }
+
+    @Test
+    fun encryptedUploadV2CryptoOwnerCasesStayOpaqueAndDigestPinned() {
+        val cases = encryptedUploadV2Cases().filter {
+            it.getString("operation") !in encryptedUploadV2Operations
+        }
+        assertEquals(49, cases.size)
+        cases.forEach { fixture ->
+            val inputHex = fixture.getString("inputHex")
+            assertEquals(fixture.getString("name"), inputHex, inputHex.hexBytes().toHex())
+        }
+
+        val assets = InstrumentationRegistry.getInstrumentation().context.assets
+        val digest = assets.open("EncryptedUploadV2Vectors/encrypted-upload-v2.sha256")
+            .bufferedReader()
+            .use { it.readText() }
+        assertEquals("e9c7a41da6bfa8ab60d639a3c3f8e3fac4f8d525d61f5e407f1be599a63cf670\n", digest)
+    }
+
     private fun encode(fixture: JSONObject, operation: String): ByteArray {
         val input = fixture.optJSONObject("input") ?: JSONObject()
         return CoreModelMapper().use { mapper ->
@@ -168,6 +226,14 @@ class ProtocolCodecTest {
         suite.getJSONArray("cases").objects()
     }
 
+    private fun encryptedUploadV2Cases(): List<JSONObject> {
+        val assets = InstrumentationRegistry.getInstrumentation().context.assets
+        val bundle = assets.open("EncryptedUploadV2Vectors/encrypted-upload-v2.json")
+            .bufferedReader()
+            .use { JSONObject(it.readText()) }
+        return bundle.getJSONArray("cases").objects()
+    }
+
     private fun settings(input: JSONObject): DeviceConnectionSettings {
         val enabled = input.getJSONObject("enabled_connections")
         val heartbeat = input.optJSONObject("heartbeat_enabled_connections")
@@ -232,8 +298,57 @@ class ProtocolCodecTest {
             "createAckPacket",
             "createTransferCommand",
         )
+        val encryptedUploadV2Operations = setOf(
+            "decodeCapabilities",
+            "decodeSignedBlob",
+            "decodeTransfer",
+        )
+        val structuralErrors = setOf(
+            "ble-truncated-capability",
+            "ble-capability-trailing-byte",
+            "ble-capability-unknown-version",
+            "ble-capability-unknown-flag",
+            "ble-capability-nonzero-reserved",
+            "ble-truncated-blob-begin",
+            "ble-blob-nonzero-reserved",
+            "ble-trailing-start",
+            "ble-truncated-start",
+            "ble-nonzero-reserved",
+            "ble-unknown-message",
+            "ble-unknown-version",
+            "ble-unknown-flags",
+            "ble-window-count-mismatch",
+            "ble-data-length-mismatch",
+            "ble-zero-session",
+        )
+        val truncatedErrors = setOf(
+            "ble-truncated-capability",
+            "ble-truncated-blob-begin",
+            "ble-truncated-start",
+            "ble-window-count-mismatch",
+            "ble-data-length-mismatch",
+        )
     }
 }
+
+private fun expectedEncryptedUploadV2Kind(operation: String): UByte = when (operation) {
+    "decodeCapabilities" -> 1u
+    "decodeSignedBlob" -> 2u
+    "decodeTransfer" -> 3u
+    else -> error("unknown encrypted-upload-v2 operation $operation")
+}
+
+private fun expectedErrorCode(expectedError: String?): BotaErrorCode? = when (expectedError) {
+    "invalid_length", "noncanonical_encoding" -> BotaErrorCode.InvalidInput
+    "unsupported_version" -> BotaErrorCode.UnknownPacket
+    else -> null
+}
+
+private fun JSONObject?.optionalUInt(name: String): UInt? =
+    this?.optLong(name, -1)?.takeIf { it >= 0 }?.toUInt()
+
+private fun JSONObject?.optionalULong(name: String): ULong? =
+    this?.optLong(name, -1)?.takeIf { it >= 0 }?.toULong()
 
 private fun String.hexBytes(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 

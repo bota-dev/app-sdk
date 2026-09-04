@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HEADER="$ROOT/bindings/device-sdk-ffi/include/bota_device_sdk.h"
-EVIDENCE="$ROOT/release/evidence/1.0.0-alpha.1-native-abi.md"
+HEADER_DIGEST="$ROOT/bindings/device-sdk-ffi/bota_device_sdk.h.sha256"
 OUTPUT="$ROOT/platforms/android/sdk/build/generated/bota/jniLibs"
 ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Library/Android/sdk}}"
 NDK_VERSION="28.2.13676358"
@@ -28,10 +28,10 @@ sha256() {
   fi
 }
 
-expected_header_hash="$(awk -F'`' '/Header SHA-256/ { print $2; exit }' "$EVIDENCE")"
+expected_header_hash="$(awk '{print $1}' "$HEADER_DIGEST")"
 actual_header_hash="$(sha256 "$HEADER")"
 if [[ -z "$expected_header_hash" || "$actual_header_hash" != "$expected_header_hash" ]]; then
-  echo "Frozen ABI header digest mismatch" >&2
+  echo "Current ABI header digest mismatch" >&2
   echo "expected: $expected_header_hash" >&2
   echo "actual:   $actual_header_hash" >&2
   exit 1

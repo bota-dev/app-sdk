@@ -24,6 +24,7 @@ let package = Package(
             name: "BotaAppleSDKTests",
             dependencies: ["BotaAppleSDK", "BotaDeviceSDKC"],
             resources: [
+                .copy("Resources/EncryptedUploadV2Vectors"),
                 .copy("Resources/ProtocolFixtures"),
                 .copy("Resources/WorkflowFixtures"),
             ]

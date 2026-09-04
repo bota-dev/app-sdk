@@ -442,6 +442,36 @@ internal class CoreModelMapper(
         ),
     )
 
+    fun inspectEncryptedUploadV2(operation: String, data: ByteArray): EncryptedUploadV2ContractValue {
+        val packetKind = when (operation) {
+            "decodeCapabilities" -> EncryptedUploadV2Protocol.Kind.DecodeCapability
+            "decodeSignedBlob" -> EncryptedUploadV2Protocol.Kind.DecodeSignedBlob
+            "decodeTransfer" -> EncryptedUploadV2Protocol.Kind.DecodeTransferOrStatus
+            else -> throw invalid("unknown encrypted-upload-v2 operation $operation")
+        }
+        val fields = decode(packetKind, data)
+        return EncryptedUploadV2ContractValue(
+            kind = fields.requiredUByte(EncryptedUploadV2Protocol.Field.ProtocolVariant),
+            messageType = fields.optionalUByte(EncryptedUploadV2Protocol.Field.MessageType),
+            flags = fields.optionalUInt(EncryptedUploadV2Protocol.Field.CapabilityFlags)
+                ?: fields.optionalUInt(EncryptedUploadV2Protocol.Field.Flags),
+            transportSessionId = fields.optionalULong(EncryptedUploadV2Protocol.Field.TransportSessionId),
+            recordingUuid = fields.text(EncryptedUploadV2Protocol.Field.RecordingUuid),
+            recordingGeneration = fields.optionalUInt(EncryptedUploadV2Protocol.Field.RecordingGeneration),
+            sequence = fields.optionalUInt(EncryptedUploadV2Protocol.Field.Sequence),
+            offset = fields.optionalULong(EncryptedUploadV2Protocol.Field.Offset),
+            length = fields.optionalULong(EncryptedUploadV2Protocol.Field.BodyLength)
+                ?: fields.optionalULong(EncryptedUploadV2Protocol.Field.CiphertextLength)
+                ?: fields.optionalULong(EncryptedUploadV2Protocol.Field.PlaintextLength),
+            result = fields.optionalUShort(EncryptedUploadV2Protocol.Field.DetailCode),
+            authorizationSha256 = fields.optionalBytes(EncryptedUploadV2Protocol.Field.AuthorizationSha256),
+            ciphertextSha256 = fields.optionalBytes(EncryptedUploadV2Protocol.Field.CiphertextSha256),
+            prefixSha256 = fields.optionalBytes(EncryptedUploadV2Protocol.Field.PrefixSha256),
+            manifestSha256 = fields.optionalBytes(EncryptedUploadV2Protocol.Field.ManifestSha256),
+            receiptSha256 = fields.optionalBytes(EncryptedUploadV2Protocol.Field.ReceiptSha256),
+        )
+    }
+
     override fun close() {
         core.close()
     }
@@ -526,6 +556,7 @@ private class PacketFields(private val packet: NativePacket) {
 
     fun requiredBoolean(id: Int): Boolean = boolean(id) ?: throw invalid("missing Boolean field $id")
     fun requiredBytes(id: Int): ByteArray = packet.bytes(id) ?: throw invalid("missing bytes field $id")
+    fun optionalBytes(id: Int): ByteArray? = packet.bytes(id)
     fun requiredUByte(id: Int): UByte = unsigneds(id).firstOrNull()?.toUByteExact("field $id")
         ?: throw invalid("missing UByte field $id")
     fun optionalUByte(id: Int): UByte? = unsigneds(id).firstOrNull()?.toUByteExact("field $id")
@@ -535,6 +566,7 @@ private class PacketFields(private val packet: NativePacket) {
     fun requiredUInt(id: Int): UInt = unsigneds(id).firstOrNull()?.toUIntExact("field $id")
         ?: throw invalid("missing UInt field $id")
     fun optionalUInt(id: Int): UInt? = unsigneds(id).firstOrNull()?.toUIntExact("field $id")
+    fun optionalULong(id: Int): ULong? = unsigneds(id).firstOrNull()
     fun requiredInt(id: Int): Int = unsigneds(id).firstOrNull()?.toIntExact("field $id")
         ?: throw invalid("missing integer field $id")
     fun optionalInt(id: Int): Int? = unsigneds(id).firstOrNull()?.toIntExact("field $id")

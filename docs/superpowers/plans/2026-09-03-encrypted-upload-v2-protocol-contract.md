@@ -99,6 +99,7 @@ with `cryptography` 50.0.1 for host-only firmware conformance tests.
 - Modify: `app-sdk/core/device-sdk-core/src/generated/protocol.rs`
 - Modify: `app-sdk/docs/superpowers/specs/2026-09-03-encrypted-upload-v2-protocol-contract-design.md`
 - Modify: `app-sdk/docs/superpowers/plans/2026-09-03-encrypted-upload-v2-protocol-contract.md`
+- Modify: `app-sdk/docs/superpowers/plans/2026-08-30-native-abi-foundation.md`
 
 **Interfaces:**
 - Consumes: the exact allocations and lengths in the design spec §§ Binary
@@ -906,13 +907,15 @@ git log -1 --format=%H -- protocol/vectors/encrypted-upload-v2.json
 - Modify: `app-sdk/bindings/device-sdk-ffi/src/packet.rs`
 - Modify: `app-sdk/bindings/device-sdk-ffi/src/protocol.rs`
 - Modify: `app-sdk/bindings/device-sdk-ffi/include/bota_device_sdk.h`
-- Modify: `app-sdk/bindings/device-sdk-ffi/tests/abi_contract.rs`
+- Create: `app-sdk/bindings/device-sdk-ffi/bota_device_sdk.h.sha256`
+- Modify: `app-sdk/bindings/device-sdk-ffi/tests/packet_contract.rs`
 - Modify: `app-sdk/platforms/apple/Sources/BotaAppleSDK/Core/CoreModelMapper.swift`
 - Create: `app-sdk/platforms/apple/Sources/BotaAppleSDK/Models/EncryptedUploadV2ContractModels.swift`
 - Modify: `app-sdk/platforms/apple/Tests/BotaAppleSDKTests/ProtocolCodecTests.swift`
+- Modify: `app-sdk/platforms/apple/Package.swift`
 - Create: `app-sdk/platforms/apple/Tests/BotaAppleSDKTests/Resources/EncryptedUploadV2Vectors/encrypted-upload-v2.json`
 - Create: `app-sdk/platforms/apple/Tests/BotaAppleSDKTests/Resources/EncryptedUploadV2Vectors/encrypted-upload-v2.sha256`
-- Modify: `app-sdk/platforms/android/sdk/src/main/kotlin/dev/bota/sdk/internal/core/Protocol.kt`
+- Create: `app-sdk/platforms/android/sdk/src/main/kotlin/dev/bota/sdk/internal/core/Protocol.kt`
 - Modify: `app-sdk/platforms/android/sdk/src/main/kotlin/dev/bota/sdk/internal/core/CoreModelMapper.kt`
 - Create: `app-sdk/platforms/android/sdk/src/main/kotlin/dev/bota/sdk/internal/core/EncryptedUploadV2ContractModels.kt`
 - Modify: `app-sdk/platforms/android/sdk/src/androidTest/kotlin/dev/bota/sdk/internal/core/ProtocolCodecTest.kt`
@@ -920,6 +923,8 @@ git log -1 --format=%H -- protocol/vectors/encrypted-upload-v2.json
 - Create: `app-sdk/platforms/android/sdk/src/androidTest/assets/EncryptedUploadV2Vectors/encrypted-upload-v2.sha256`
 - Create: `app-sdk/tools/apple/sync-encrypted-upload-v2-vectors.mjs`
 - Create: `app-sdk/tools/android/sync-encrypted-upload-v2-vectors.mjs`
+- Modify: `app-sdk/tools/apple/build-xcframework.sh`
+- Modify: `app-sdk/tools/android/build-native.sh`
 - Modify: `app-sdk/package.json`
 - Modify: `app-sdk/docs/superpowers/plans/2026-09-03-encrypted-upload-v2-protocol-contract.md`
 
@@ -929,10 +934,13 @@ git log -1 --format=%H -- protocol/vectors/encrypted-upload-v2.json
   signed-blob, and transfer/status framing inspection. Existing
   `0x0501..0x051F` values do not move; storage objects and signed-document
   internals are never exposed through the native SDK ABI.
+- Produces a current ABI-header digest lock for Apple artifact builds. The
+  historical `1.0.0-alpha.1` evidence remains immutable when the additive ABI
+  grows.
 - Produces internal Swift/Kotlin `EncryptedUploadV2ContractValue`; it is not a
   public SDK model and does not start a transfer.
 
-- [ ] **Step 1: Freeze additive ABI numbers and fields in tests**
+- [x] **Step 1: Freeze additive ABI numbers and fields in tests**
 
 Add header/ABI assertions for these exact packet kinds:
 
@@ -942,7 +950,10 @@ Add header/ABI assertions for these exact packet kinds:
 0x0522 DECODE_ENCRYPTED_UPLOAD_V2_TRANSFER_OR_STATUS
 ```
 
-Append field IDs `112..149` in this exact order:
+Append field IDs `127..164` in this exact order. The originally proposed
+`112..149` range collided with the already-shipped `CAPACITY` through
+`UPLOADED_CHUNKS` fields at `112..126`; those existing ABI values remain
+unchanged:
 
 ```text
 MESSAGE_TYPE, TRANSPORT_SESSION_ID, RECORDING_GENERATION, CIPHERTEXT_LENGTH,
@@ -957,7 +968,7 @@ AUTHORIZATION_SHA256, RECEIPT_SHA256, PROGRESS_PERCENT,
 DURABLE_CIPHERTEXT_BYTES.
 ```
 
-- [ ] **Step 2: Run the ABI tests and verify RED**
+- [x] **Step 2: Run the ABI tests and verify RED**
 
 Run:
 
@@ -967,7 +978,7 @@ cargo test -p bota-device-sdk-ffi abi_contract
 
 Expected: FAIL because the additive kinds and fields do not exist.
 
-- [ ] **Step 3: Map Rust normalized values into ABI packets**
+- [x] **Step 3: Map Rust normalized values into ABI packets**
 
 Keep one decode input (`FIELD_VALUE`) and emit only scalar/UUID/digest framing
 metadata. DATA, manifest chunks, signed-blob chunks, authorizations, manifests,
@@ -995,7 +1006,7 @@ Add equivalent exhaustive branches for signed-blob and transfer/status framing
 and reject unexpected input fields with the existing
 `PacketFields::validate_allowed`.
 
-- [ ] **Step 4: Add internal Swift and Kotlin mappings**
+- [x] **Step 4: Add internal Swift and Kotlin mappings**
 
 Use one normalized internal shape on both platforms:
 
@@ -1042,7 +1053,7 @@ internal data class EncryptedUploadV2ContractValue(
 Implement platform mapper methods that choose the ABI kind by vector
 `operation` and return the normalized shape. Keep these types internal.
 
-- [ ] **Step 5: Add exact vector synchronization scripts**
+- [x] **Step 5: Add exact vector synchronization scripts**
 
 Each script reads `protocol/vectors/encrypted-upload-v2.json`, computes SHA-256,
 and writes the exact JSON bytes plus a lowercase digest and newline to
@@ -1059,7 +1070,7 @@ Add package scripts:
 }
 ```
 
-- [ ] **Step 6: Run native conformance over every structural vector**
+- [x] **Step 6: Run native conformance over every structural vector**
 
 Swift and Kotlin tests load the new resource separately from the frozen v1
 fixture list. For each structural operation, compare the mapper's normalized
@@ -1084,7 +1095,7 @@ Expected: all available host tests PASS. If no Android emulator is available,
 `testDebugUnitTest` must pass and `connectedDebugAndroidTest` is reported as a
 hardware/emulator gate rather than silently omitted.
 
-- [ ] **Step 7: Commit the additive native contract slice**
+- [x] **Step 7: Commit the additive native contract slice**
 
 Mark Task 4 checked in the plan and commit only listed paths:
 
@@ -1092,6 +1103,7 @@ Mark Task 4 checked in the plan and commit only listed paths:
 git add bindings/device-sdk-ffi \
   platforms/apple/Sources/BotaAppleSDK/Core/CoreModelMapper.swift \
   platforms/apple/Sources/BotaAppleSDK/Models/EncryptedUploadV2ContractModels.swift \
+  platforms/apple/Package.swift \
   platforms/apple/Tests/BotaAppleSDKTests/ProtocolCodecTests.swift \
   platforms/apple/Tests/BotaAppleSDKTests/Resources/EncryptedUploadV2Vectors \
   platforms/android/sdk/src/main/kotlin/dev/bota/sdk/internal/core/Protocol.kt \
@@ -1100,7 +1112,10 @@ git add bindings/device-sdk-ffi \
   platforms/android/sdk/src/androidTest/kotlin/dev/bota/sdk/internal/core/ProtocolCodecTest.kt \
   platforms/android/sdk/src/androidTest/assets/EncryptedUploadV2Vectors \
   tools/apple/sync-encrypted-upload-v2-vectors.mjs \
+  tools/apple/build-xcframework.sh \
+  tools/android/build-native.sh \
   tools/android/sync-encrypted-upload-v2-vectors.mjs package.json \
+  docs/superpowers/plans/2026-08-30-native-abi-foundation.md \
   docs/superpowers/plans/2026-09-03-encrypted-upload-v2-protocol-contract.md
 git diff --cached --check
 git commit -m "feat: expose encrypted upload v2 contract inspection" \

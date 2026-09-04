@@ -27,6 +27,78 @@ fn packet_kind_ranges_and_first_command_values_are_stable() {
 }
 
 #[test]
+fn encrypted_upload_v2_contract_inspection_allocations_are_additive() {
+    assert_eq!(
+        packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_CAPABILITY,
+        0x0520
+    );
+    assert_eq!(
+        packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB,
+        0x0521
+    );
+    assert_eq!(
+        packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_TRANSFER_OR_STATUS,
+        0x0522
+    );
+
+    let fields = [
+        field_id::MESSAGE_TYPE,
+        field_id::TRANSPORT_SESSION_ID,
+        field_id::RECORDING_GENERATION,
+        field_id::CIPHERTEXT_LENGTH,
+        field_id::PLAINTEXT_LENGTH,
+        field_id::UPLOAD_SESSION_UUID,
+        field_id::CHECKPOINT_REVISION,
+        field_id::WINDOW_PACKETS,
+        field_id::DATA_PAYLOAD_BYTES,
+        field_id::MISSING_SEQUENCE,
+        field_id::CAPABILITY_FLAGS,
+        field_id::MAX_SIGNED_BLOB_BYTES,
+        field_id::MAX_MANIFEST_BYTES,
+        field_id::CHECKPOINT_INTERVAL,
+        field_id::MAX_MISSING_SEQUENCES,
+        field_id::MANIFEST_SHA256,
+        field_id::PREFIX_SHA256,
+        field_id::CIPHERTEXT_SHA256,
+        field_id::BLOCK_COUNT,
+        field_id::COMPLETION_STATE,
+        field_id::STORAGE_FORMAT,
+        field_id::LIST_REVISION,
+        field_id::DURATION_SECONDS,
+        field_id::BODY_LENGTH,
+        field_id::BLOB_KIND,
+        field_id::WRITE_ID,
+        field_id::PHASE,
+        field_id::TRANSPORT_PROFILE,
+        field_id::DETAIL_CODE,
+        field_id::PROFILE_VERSION,
+        field_id::REQUEST_FLAGS,
+        field_id::FIRST_SEQUENCE,
+        field_id::LAST_SEQUENCE,
+        field_id::WINDOW_INDEX,
+        field_id::AUTHORIZATION_SHA256,
+        field_id::RECEIPT_SHA256,
+        field_id::PROGRESS_PERCENT,
+        field_id::DURABLE_CIPHERTEXT_BYTES,
+    ];
+    assert_eq!(fields, std::array::from_fn(|index| 127 + index as u32));
+
+    let header = include_str!("../include/bota_device_sdk.h");
+    for expected in [
+        "BOTA_DEVICE_SDK_V1_PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_CAPABILITY = 0x0520",
+        "BOTA_DEVICE_SDK_V1_PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB = 0x0521",
+        "BOTA_DEVICE_SDK_V1_PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_TRANSFER_OR_STATUS = 0x0522",
+        "BOTA_DEVICE_SDK_V1_FIELD_MESSAGE_TYPE = 127",
+        "BOTA_DEVICE_SDK_V1_FIELD_DURABLE_CIPHERTEXT_BYTES = 164",
+    ] {
+        assert!(
+            header.contains(expected),
+            "missing header allocation: {expected}"
+        );
+    }
+}
+
+#[test]
 fn owned_packet_view_preserves_scalar_utf8_and_binary_fields_until_free() {
     let packet = BotaDeviceSdkPacketV1::new(packet_kind::COMMAND_CONNECT)
         .with_i64(field_id::RSSI, -67)

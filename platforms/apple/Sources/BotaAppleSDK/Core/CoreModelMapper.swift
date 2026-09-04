@@ -432,6 +432,42 @@ final class CoreModelMapper: @unchecked Sendable {
         )
     }
 
+    func inspectEncryptedUploadV2(operation: String, data: Data) throws -> EncryptedUploadV2ContractValue {
+        let packetKind: UInt32
+        switch operation {
+        case "decodeCapabilities":
+            packetKind = BotaPrivateProtocol.decodeEncryptedUploadV2Capability
+        case "decodeSignedBlob":
+            packetKind = BotaPrivateProtocol.decodeEncryptedUploadV2SignedBlob
+        case "decodeTransfer":
+            packetKind = BotaPrivateProtocol.decodeEncryptedUploadV2TransferOrStatus
+        default:
+            throw Self.invalid("unknown encrypted-upload-v2 operation \(operation)")
+        }
+
+        let fields = try decode(packetKind, data)
+        return EncryptedUploadV2ContractValue(
+            kind: try fields.requiredUInt8(BotaPrivateProtocol.protocolVariant),
+            messageType: try fields.optionalUInt8(BotaPrivateProtocol.messageType),
+            flags: try fields.optionalUInt32(BotaPrivateProtocol.capabilityFlags)
+                ?? fields.optionalUInt32(BotaPrivateProtocol.flags),
+            transportSessionID: fields.optionalUInt64(BotaPrivateProtocol.transportSessionID),
+            recordingUUID: fields.text(BotaPrivateProtocol.recordingUUID),
+            recordingGeneration: try fields.optionalUInt32(BotaPrivateProtocol.recordingGeneration),
+            sequence: try fields.optionalUInt32(BotaPrivateProtocol.sequence),
+            offset: fields.optionalUInt64(BotaPrivateProtocol.offset),
+            length: fields.optionalUInt64(BotaPrivateProtocol.bodyLength)
+                ?? fields.optionalUInt64(BotaPrivateProtocol.ciphertextLength)
+                ?? fields.optionalUInt64(BotaPrivateProtocol.plaintextLength),
+            result: try fields.optionalUInt16(BotaPrivateProtocol.detailCode),
+            authorizationSHA256: fields.bytes(BotaPrivateProtocol.authorizationSHA256).first,
+            ciphertextSHA256: fields.bytes(BotaPrivateProtocol.ciphertextSHA256).first,
+            prefixSHA256: fields.bytes(BotaPrivateProtocol.prefixSHA256).first,
+            manifestSHA256: fields.bytes(BotaPrivateProtocol.manifestSHA256).first,
+            receiptSHA256: fields.bytes(BotaPrivateProtocol.receiptSHA256).first
+        )
+    }
+
     private func decode(_ kind: UInt32, _ data: Data) throws -> PacketFields {
         do {
             let packet = try client.protocolDecode(Self.protocolPacket(kind: kind, fields: [
@@ -590,6 +626,14 @@ private enum BotaPrivateProtocol {
     static let encodeProvisioningChunks: UInt32 = 0x051C
     static let encodeTimeSync: UInt32 = 0x051E
     static let encodeRecordingControlCommand: UInt32 = 0x051F
+    static let decodeEncryptedUploadV2Capability: UInt32 = 0x0520
+    static let decodeEncryptedUploadV2SignedBlob: UInt32 = 0x0521
+    static let decodeEncryptedUploadV2TransferOrStatus: UInt32 = 0x0522
+    static let protocolVariant: UInt32 = 61
+    static let recordingUUID: UInt32 = 13
+    static let sequence: UInt32 = 38
+    static let offset: UInt32 = 39
+    static let flags: UInt32 = 69
     static let wifiSSID: UInt32 = 114
     static let wifiSignalStrength: UInt32 = 115
     static let wifiQuality: UInt32 = 116
@@ -599,6 +643,19 @@ private enum BotaPrivateProtocol {
     static let recordingActive: UInt32 = 120
     static let recordingInitiatedRemotely: UInt32 = 121
     static let recordingSuccess: UInt32 = 122
+    static let messageType: UInt32 = 127
+    static let transportSessionID: UInt32 = 128
+    static let recordingGeneration: UInt32 = 129
+    static let ciphertextLength: UInt32 = 130
+    static let plaintextLength: UInt32 = 131
+    static let capabilityFlags: UInt32 = 137
+    static let manifestSHA256: UInt32 = 142
+    static let prefixSHA256: UInt32 = 143
+    static let ciphertextSHA256: UInt32 = 144
+    static let bodyLength: UInt32 = 150
+    static let detailCode: UInt32 = 155
+    static let authorizationSHA256: UInt32 = 161
+    static let receiptSHA256: UInt32 = 162
 }
 
 enum BotaProtocolConstants {
@@ -701,6 +758,10 @@ private struct PacketFields {
         guard let value = unsigneds(id).first else { return nil }
         guard let result = UInt32(exactly: value) else { throw CoreModelMapper.invalid("invalid UInt32 field \(id)") }
         return result
+    }
+
+    func optionalUInt64(_ id: UInt32) -> UInt64? {
+        unsigneds(id).first
     }
 
     func requiredInt(_ id: UInt32) throws -> Int {

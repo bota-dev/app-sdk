@@ -136,6 +136,9 @@ pub mod kind {
     pub const PROTOCOL_ENCODE_WIFI_CREDENTIALS: u32 = 0x051d;
     pub const PROTOCOL_ENCODE_TIME_SYNC: u32 = 0x051e;
     pub const PROTOCOL_ENCODE_RECORDING_CONTROL_COMMAND: u32 = 0x051f;
+    pub const PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_CAPABILITY: u32 = 0x0520;
+    pub const PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB: u32 = 0x0521;
+    pub const PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_TRANSFER_OR_STATUS: u32 = 0x0522;
 }
 
 pub mod field_type {
@@ -273,6 +276,44 @@ pub mod field_id {
     pub const CONFIRM_ON_COMPLETION: u32 = 124;
     pub const EXPECTED_CHUNKS: u32 = 125;
     pub const UPLOADED_CHUNKS: u32 = 126;
+    pub const MESSAGE_TYPE: u32 = 127;
+    pub const TRANSPORT_SESSION_ID: u32 = 128;
+    pub const RECORDING_GENERATION: u32 = 129;
+    pub const CIPHERTEXT_LENGTH: u32 = 130;
+    pub const PLAINTEXT_LENGTH: u32 = 131;
+    pub const UPLOAD_SESSION_UUID: u32 = 132;
+    pub const CHECKPOINT_REVISION: u32 = 133;
+    pub const WINDOW_PACKETS: u32 = 134;
+    pub const DATA_PAYLOAD_BYTES: u32 = 135;
+    pub const MISSING_SEQUENCE: u32 = 136;
+    pub const CAPABILITY_FLAGS: u32 = 137;
+    pub const MAX_SIGNED_BLOB_BYTES: u32 = 138;
+    pub const MAX_MANIFEST_BYTES: u32 = 139;
+    pub const CHECKPOINT_INTERVAL: u32 = 140;
+    pub const MAX_MISSING_SEQUENCES: u32 = 141;
+    pub const MANIFEST_SHA256: u32 = 142;
+    pub const PREFIX_SHA256: u32 = 143;
+    pub const CIPHERTEXT_SHA256: u32 = 144;
+    pub const BLOCK_COUNT: u32 = 145;
+    pub const COMPLETION_STATE: u32 = 146;
+    pub const STORAGE_FORMAT: u32 = 147;
+    pub const LIST_REVISION: u32 = 148;
+    pub const DURATION_SECONDS: u32 = 149;
+    pub const BODY_LENGTH: u32 = 150;
+    pub const BLOB_KIND: u32 = 151;
+    pub const WRITE_ID: u32 = 152;
+    pub const PHASE: u32 = 153;
+    pub const TRANSPORT_PROFILE: u32 = 154;
+    pub const DETAIL_CODE: u32 = 155;
+    pub const PROFILE_VERSION: u32 = 156;
+    pub const REQUEST_FLAGS: u32 = 157;
+    pub const FIRST_SEQUENCE: u32 = 158;
+    pub const LAST_SEQUENCE: u32 = 159;
+    pub const WINDOW_INDEX: u32 = 160;
+    pub const AUTHORIZATION_SHA256: u32 = 161;
+    pub const RECEIPT_SHA256: u32 = 162;
+    pub const PROGRESS_PERCENT: u32 = 163;
+    pub const DURABLE_CIPHERTEXT_BYTES: u32 = 164;
 }
 
 #[repr(C)]
