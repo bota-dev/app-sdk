@@ -126,17 +126,34 @@ logs and persistent queue serialization.
 - [x] Prove the validators agree on the canonical capability vector and all
   negative cases.
 
-### Task 2: Add the deterministic Rust batch-v2 reducer and workflow traces
+### Task 2A: Freeze the deterministic batch-v2 coordinator
 
 **Files:**
 
 - Create: `core/device-sdk-core/src/workflow/encrypted_upload_v2.rs`
+- Create: `core/device-sdk-core/tests/encrypted_upload_v2_coordinator.rs`
+
+- [x] Validate explicit v2 selection, exact storage format, session identity,
+  negotiated bounds, and the minimum canonical object size before actions.
+- [x] Model fresh start, proven-checkpoint resume, missing-window repair,
+  persist-before-ACK, exact transfer evidence, native staging, receipt wait,
+  receipt-gated CONFIRM, and completion as byte-free actions/events.
+- [x] Make mixed profile, cancellation, staging failure, and stale phase events
+  retain the device copy; expose no legacy-fallback action.
+- [x] Keep the coordinator disconnected from `WorkflowEngine`, ABI, native
+  hosts, and released managers until Task 2B and Task 3 are complete.
+
+### Task 2B: Integrate the coordinator with the workflow engine and traces
+
+**Files:**
+
 - Create: `core/device-sdk-core/tests/encrypted_upload_v2_workflow.rs`
 - Create: `protocol/workflows/encrypted-upload-v2.json`
 - Modify: `core/device-sdk-core/src/engine/{command,effect,event,output,runtime}.rs`
 - Modify: `protocol/workflows/schema.json`
 
-- [ ] Test fresh transfer, window repair, proven-checkpoint resume, rejected
+- [ ] Test the correlated engine adapter for fresh transfer, window repair,
+  proven-checkpoint resume, rejected
   resume, staging/finalization/receipt failure, cancellation, mixed profile,
   stale callback, second owner, and no-downgrade behavior.
 - [ ] Add one v2 command carrying only profile/policy, recording/session IDs,

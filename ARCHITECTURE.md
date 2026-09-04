@@ -140,7 +140,12 @@ rejects either legacy
 profile under `v2_required`; and accepts historical P10 only after its header
 was observed. This validator emits no BLE, file, network, delete, or fallback
 effect. Provider integration, transfer orchestration, staging, completion, and
-receipt-gated deletion are not implemented by this slice.
+receipt-gated deletion are not implemented by released APIs. A byte-free
+batch-v2 coordinator now freezes their target ordering separately from the
+shipping `WorkflowEngine`: it persists each complete window before ACK,
+truncates resume state to the last proven offset, exposes staging evidence,
+and cannot emit CONFIRM until a native host reports receipt acceptance. It has
+no legacy-fallback action. Engine/ABI/native-host integration is still absent.
 
 The JavaScript compatibility layer now restores all 80 frozen exports. This
 includes every `0.0.65` public type, the runtime error hierarchy,
@@ -273,10 +278,13 @@ The draft [Encrypted Upload v2](../internal-docs/device/Encrypted-Upload-v2.md)
 adds an explicit third workflow beside released plaintext v1 and historical
 P10 compatibility. The core's pure validator now enforces the initial
 policy/capability decision, including observed-P10 evidence, without selecting
-or starting a workflow. The future reducer will own mixed-profile rejection;
-native hosts will stream opaque canonical ciphertext and the opaque upload
-manifest to staging. That runtime target is not implemented and does not change
-the current completion metadata contract.
+or starting a workflow. Its separate deterministic batch coordinator defines
+mixed-profile failure, proven-checkpoint resume, staging, and receipt-gated
+CONFIRM without carrying ciphertext or cryptographic documents. Native hosts
+will stream opaque canonical ciphertext and the opaque upload manifest to
+staging after the coordinator is integrated with the engine and ABI. That
+runtime target is not implemented and does not change the current completion
+metadata contract.
 
 The React Native device-log broker subscribes to the public native log stream
 before starting delivery. Apple and Android retain packet decoding and emit

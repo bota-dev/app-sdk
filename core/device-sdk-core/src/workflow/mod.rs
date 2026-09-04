@@ -1,6 +1,7 @@
 mod connection;
 mod device_logs;
 mod discovery;
+mod encrypted_upload_v2;
 mod factory_reset;
 mod firmware_update;
 mod provisioning;
@@ -11,6 +12,11 @@ mod upload_handoff;
 pub(crate) use connection::ConnectionWorkflow;
 pub(crate) use device_logs::DeviceLogsWorkflow;
 pub(crate) use discovery::DiscoveryWorkflow;
+pub use encrypted_upload_v2::{
+    EncryptedUploadV2Action, EncryptedUploadV2BatchCoordinator, EncryptedUploadV2BatchEvent,
+    EncryptedUploadV2BatchRequest, EncryptedUploadV2BatchStatus, EncryptedUploadV2Checkpoint,
+    EncryptedUploadV2TransferEvidence,
+};
 pub(crate) use factory_reset::FactoryResetWorkflow;
 pub(crate) use firmware_update::FirmwareUpdateWorkflow;
 pub(crate) use provisioning::ProvisioningWorkflow;
