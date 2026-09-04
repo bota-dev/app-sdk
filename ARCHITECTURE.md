@@ -133,7 +133,13 @@ Encrypted Upload v2 is currently a contract-only capability: the canonical
 vectors and Rust codecs exist, and Apple/Android can inspect normalized framing
 metadata internally. React Native exposes no v2 workflow or bulk bytes, and
 compatibility metadata keeps runtime support and firmware advertisement false.
-Profile selection, transfer orchestration, staging, completion, and
+The core now also exposes a side-effect-free three-profile selection validator:
+it requires every batch capability bit, usable advertised bounds, and an
+immutable recording generation in `bota_enc_v2` storage before accepting v2;
+rejects either legacy
+profile under `v2_required`; and accepts historical P10 only after its header
+was observed. This validator emits no BLE, file, network, delete, or fallback
+effect. Provider integration, transfer orchestration, staging, completion, and
 receipt-gated deletion are not implemented by this slice.
 
 The JavaScript compatibility layer now restores all 80 frozen exports. This
@@ -265,10 +271,12 @@ owner.
 
 The draft [Encrypted Upload v2](../internal-docs/device/Encrypted-Upload-v2.md)
 adds an explicit third workflow beside released plaintext v1 and historical
-P10 compatibility. The core will enforce policy/capability selection and mixed
-profile rejection; native hosts will stream opaque canonical ciphertext and
-the opaque upload manifest to staging. This target is not implemented and does
-not change the current completion metadata contract.
+P10 compatibility. The core's pure validator now enforces the initial
+policy/capability decision, including observed-P10 evidence, without selecting
+or starting a workflow. The future reducer will own mixed-profile rejection;
+native hosts will stream opaque canonical ciphertext and the opaque upload
+manifest to staging. That runtime target is not implemented and does not change
+the current completion metadata contract.
 
 The React Native device-log broker subscribes to the public native log stream
 before starting delivery. Apple and Android retain packet decoding and emit

@@ -51,6 +51,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `runtimeWorkflow` and `firmwareAdvertised` false until profile selection,
   staging, completion, and receipt-gated deletion are implemented. React Native
   Codegen must not carry ciphertext, manifests, authorizations, or receipts.
+- `core/device-sdk-core/src/model/upload_profile.rs` is a side-effect-free
+  policy/capability validator only. Its presence does not authorize a v2 START
+  or change `runtimeWorkflow`; historical P10 requires an observed header.
 - React Native compatibility requires the frozen public API surface digest in
   addition to protocol fixtures and workflow traces. Internal legacy modules
   outside `src/index.ts` are not part of that public contract.
