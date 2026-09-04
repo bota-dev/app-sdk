@@ -387,8 +387,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Persist the reset command ID and binding generation with the exact device
   result. Resume only the receipt workflow and reject a stale generation before
   starting Rust. Remove-only deprovision must never call factory reset.
-- Direct Apple BLE writes and reducer workflows share one facade operation
-  coordinator; release ownership on success, failure, cancellation, and destroy.
+- Direct Apple BLE reads/writes and reducer workflows share one facade operation
+  coordinator. Their CoreBluetooth continuations must terminate on task
+  cancellation, and failed native cancellation retains category ownership until
+  the original operation ends or shared-client destruction proves cleanup. A
+  cancelled characteristic stays quarantined until its stale callback arrives
+  or disconnect clears it; stream collector completion is not native-terminal
+  proof when the corresponding stop throws.
 - Apple recording, upload-ownership, OTA, and device-log APIs expose typed
   streams and native file URLs plus bounded transfer-completion metadata only.
   Keep upload destinations opaque, let only the reducer authorize BLE fallback,

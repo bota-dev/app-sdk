@@ -360,6 +360,8 @@
 - Create: `frameworks/flutter/bota_flutter_sdk/ios/Tests/NativeLeaseCoordinatorTests.swift`
 - Create: `tools/flutter/test-apple-adapter.sh`
 - Modify: `frameworks/flutter/bota_flutter_sdk/pubspec.yaml`
+- Modify: `platforms/apple/Sources/BotaAppleSDK/Bluetooth/CoreBluetoothDriver.swift`
+- Create: `platforms/apple/Tests/BotaAppleSDKTests/CoreBluetoothDriverCancellationTests.swift`
 
 **Interfaces:**
 - Consumes: generated `BotaHostApi`, `BotaFlutterApi`, native `BotaAppleSDK.BotaDeviceClient.shared`, and exact native public manager methods.
@@ -367,7 +369,7 @@
 
 - [ ] **Step 1: Write failing Swift adapter tests**
 
-  Compile tests against protocol-shaped fake native managers and assert mapping for all one-shot operations, stream start/cancel, callback request/result, native error fields, unknown enum raw values, and large-value rejection. Lease tests assert equivalent configuration coalesces, a conflict returns `configuration_conflict`, detaching one engine removes only its work, and the final release destroys the shared client once.
+  Compile tests against protocol-shaped fake native managers and assert mapping for all one-shot operations, stream start/cancel, callback request/result, native error fields, unknown enum raw values, and large-value rejection. Lease tests assert equivalent configuration coalesces, a conflict returns `configuration_conflict`, detaching one engine removes only its work, failed native cancellation retains category ownership until the original operation terminates, a throwing stream stop cannot use collector completion as native-terminal proof, and the final release destroys the shared client once. Native driver tests cancel suspended direct reads and writes before and after continuation registration, quarantine same-characteristic reuse until the stale callback or disconnect, and reject late CoreBluetooth callbacks exactly once.
 
 - [ ] **Step 2: Run Apple tests and verify RED**
 
@@ -380,6 +382,8 @@
 - [ ] **Step 3: Implement the Swift plugin and adapter**
 
   Register the generated setup on each `FlutterPluginRegistrar`. The adapter validates operation IDs before touching native state, maps to native value types explicitly, stores connected/discovered handles only in a per-engine registry, and consumes native `AsyncStream`/`AsyncThrowingStream` values in owned tasks. Cancellation removes the task before invoking the corresponding native cancellation/stop method. Callback closures invoke the generated Flutter API and validate the response ID/kind before returning native bytes or URL requests. No callback value is logged.
+
+  Direct CoreBluetooth reads and writes install cancellation-aware continuations before dispatching native work. Task cancellation removes and resumes the matching continuation exactly once; registration races and late delegate callbacks cannot revive it. A cancelled characteristic rejects reuse until its stale callback is consumed or disconnect clears quarantine. The process-wide coordinator retains a failed-cancellation owner until the original operation terminally unwinds or final shared-client destruction proves native cleanup; a terminal stream collector is not such proof after stop throws. Another engine cannot acquire or cancel that category during recovery.
 
   Flutter Swift Package Manager integration resolves the exact synchronized Git tag and `BotaAppleSDK` product. CocoaPods depends fail-closed on the exact synchronized `BotaAppleSDK` pod; the native Apple package therefore supplies and tests its own podspec instead of relying on a React-Native-only `spm_dependency` helper. Both integrations compile the same adapter source. The generated Flutter bridge uses Swift 5 language mode under the pinned Swift 6 toolchain because Pigeon 28 generated code is not Swift 6 sendability-clean; the native `BotaAppleSDK` remains Swift 6.
 

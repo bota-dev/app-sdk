@@ -1,6 +1,170 @@
 @preconcurrency import CoreBluetooth
 import Foundation
 
+private enum CoreBluetoothRequestError: Error {
+    case characteristicQuarantined
+}
+
+final class CoreBluetoothPendingRequest<Value: Sendable>: @unchecked Sendable {
+    private enum State {
+        case awaitingContinuation
+        case suspended(CheckedContinuation<Value, Error>)
+        case cancellationRequested(CheckedContinuation<Value, Error>?)
+        case cancellationReady
+        case finished
+    }
+
+    let id = UUID()
+    private let lock = NSLock()
+    private var state: State = .awaitingContinuation
+
+    func value(
+        start: @escaping @Sendable () -> Void,
+        onCancel: @escaping @Sendable () -> Void
+    ) async throws -> Value {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                if install(continuation) { start() }
+            }
+        } onCancel: {
+            if self.beginCancellation() {
+                onCancel()
+                self.finishCancellation()
+            }
+        }
+    }
+
+    var isPending: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if case .suspended = state { return true }
+        return false
+    }
+
+    @discardableResult
+    func succeed(_ value: sending Value) -> Bool {
+        guard let continuation = takeContinuation() else { return false }
+        continuation.resume(returning: value)
+        return true
+    }
+
+    @discardableResult
+    func fail(_ error: any Error) -> Bool {
+        guard let continuation = takeContinuation() else { return false }
+        continuation.resume(throwing: error)
+        return true
+    }
+
+    private func install(_ continuation: CheckedContinuation<Value, Error>) -> Bool {
+        lock.lock()
+        switch state {
+        case .awaitingContinuation:
+            state = .suspended(continuation)
+            lock.unlock()
+            return true
+        case .cancellationRequested(nil):
+            state = .cancellationRequested(continuation)
+            lock.unlock()
+            return false
+        case .cancellationReady:
+            state = .finished
+            lock.unlock()
+            continuation.resume(throwing: CancellationError())
+            return false
+        case .cancellationRequested(.some), .suspended, .finished:
+            lock.unlock()
+            preconditionFailure("Core Bluetooth request continuation installed more than once")
+        }
+    }
+
+    private func beginCancellation() -> Bool {
+        lock.lock()
+        switch state {
+        case .awaitingContinuation:
+            state = .cancellationRequested(nil)
+            lock.unlock()
+            return true
+        case .suspended(let continuation):
+            state = .cancellationRequested(continuation)
+            lock.unlock()
+            return true
+        case .cancellationRequested, .cancellationReady, .finished:
+            lock.unlock()
+            return false
+        }
+    }
+
+    private func finishCancellation() {
+        lock.lock()
+        guard case .cancellationRequested(let continuation) = state else {
+            lock.unlock()
+            return
+        }
+        if continuation == nil {
+            state = .cancellationReady
+            lock.unlock()
+        } else {
+            state = .finished
+            lock.unlock()
+            continuation?.resume(throwing: CancellationError())
+        }
+    }
+
+    private func takeContinuation() -> CheckedContinuation<Value, Error>? {
+        lock.lock()
+        guard case .suspended(let continuation) = state else {
+            lock.unlock()
+            return nil
+        }
+        state = .finished
+        lock.unlock()
+        return continuation
+    }
+}
+
+struct CoreBluetoothPendingCallbacks<Key: Hashable, Value: Sendable> {
+    enum Resolution {
+        case ignored
+        case pending(CoreBluetoothPendingRequest<Value>)
+        case unowned
+    }
+
+    private var requests: [Key: CoreBluetoothPendingRequest<Value>] = [:]
+    private var quarantinedKeys: Set<Key> = []
+
+    @discardableResult
+    mutating func install(_ request: CoreBluetoothPendingRequest<Value>, for key: Key) -> Bool {
+        guard requests[key] == nil, !quarantinedKeys.contains(key) else { return false }
+        requests[key] = request
+        return true
+    }
+
+    @discardableResult
+    mutating func cancel(_ requestID: UUID) -> Bool {
+        guard let key = requests.first(where: { $0.value.id == requestID })?.key else {
+            return false
+        }
+        requests.removeValue(forKey: key)
+        quarantinedKeys.insert(key)
+        return true
+    }
+
+    mutating func removeAll(where predicate: (Key) -> Bool) -> [CoreBluetoothPendingRequest<Value>] {
+        let requestKeys = requests.keys.filter(predicate)
+        let removed = requestKeys.compactMap { requests.removeValue(forKey: $0) }
+        for key in quarantinedKeys.filter(predicate) {
+            quarantinedKeys.remove(key)
+        }
+        return removed
+    }
+
+    mutating func take(for key: Key) -> Resolution {
+        if quarantinedKeys.remove(key) != nil { return .ignored }
+        guard let request = requests.removeValue(forKey: key) else { return .unowned }
+        return .pending(request)
+    }
+}
+
 final class CoreBluetoothDriver: NSObject, CentralDriver, @unchecked Sendable {
     private struct CharacteristicKey: Hashable {
         let peripheralID: UUID
@@ -18,6 +182,7 @@ final class CoreBluetoothDriver: NSObject, CentralDriver, @unchecked Sendable {
     }
 
     private let queue: DispatchQueue
+    private let queueKey = DispatchSpecificKey<Void>()
     private var manager: CBCentralManager!
     private var peripherals: [UUID: CBPeripheral] = [:]
     private var characteristics: [CharacteristicKey: CBCharacteristic] = [:]
@@ -26,14 +191,15 @@ final class CoreBluetoothDriver: NSObject, CentralDriver, @unchecked Sendable {
     private var serviceContinuations: [UUID: CheckedContinuation<[String], Error>] = [:]
     private var characteristicDiscoveries: [UUID: CharacteristicDiscovery] = [:]
     private var disconnectContinuations: [UUID: CheckedContinuation<Void, Error>] = [:]
-    private var readContinuations: [CharacteristicKey: CheckedContinuation<Data, Error>] = [:]
-    private var writeContinuations: [CharacteristicKey: CheckedContinuation<Void, Error>] = [:]
+    private var readCallbacks = CoreBluetoothPendingCallbacks<CharacteristicKey, Data>()
+    private var writeCallbacks = CoreBluetoothPendingCallbacks<CharacteristicKey, Void>()
     private var notificationSetups: [CharacteristicKey: NotificationSetup] = [:]
     private var subscriptions: [CharacteristicKey: AsyncThrowingStream<Data, Error>.Continuation] = [:]
 
     init(queue: DispatchQueue = DispatchQueue(label: "dev.bota.device-sdk.bluetooth")) {
         self.queue = queue
         super.init()
+        queue.setSpecific(key: queueKey, value: ())
         manager = CBCentralManager(delegate: self, queue: queue)
     }
 
@@ -169,19 +335,27 @@ final class CoreBluetoothDriver: NSObject, CentralDriver, @unchecked Sendable {
 
     func read(peripheralID: String, serviceUUID: String, characteristicUUID: String) async throws -> Data {
         let id = try uuid(peripheralID)
-        return try await withCheckedThrowingContinuation { continuation in
-            queue.async {
+        let request = CoreBluetoothPendingRequest<Data>()
+        return try await request.value {
+            self.queue.async {
+                guard request.isPending else { return }
                 do {
                     let (peripheral, characteristic, key) = try self.characteristic(
                         peripheralID: id,
                         characteristicUUID: characteristicUUID
                     )
-                    self.readContinuations[key] = continuation
+                    guard request.isPending else { return }
+                    guard self.readCallbacks.install(request, for: key) else {
+                        request.fail(CoreBluetoothRequestError.characteristicQuarantined)
+                        return
+                    }
                     peripheral.readValue(for: characteristic)
                 } catch {
-                    continuation.resume(throwing: error)
+                    request.fail(error)
                 }
             }
+        } onCancel: {
+            self.onQueue { self.removeReadRequest(request.id) }
         }
     }
 
@@ -193,24 +367,33 @@ final class CoreBluetoothDriver: NSObject, CentralDriver, @unchecked Sendable {
         withResponse: Bool
     ) async throws {
         let id = try uuid(peripheralID)
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            queue.async {
+        let request = CoreBluetoothPendingRequest<Void>()
+        try await request.value {
+            self.queue.async {
+                guard request.isPending else { return }
                 do {
                     let (peripheral, characteristic, key) = try self.characteristic(
                         peripheralID: id,
                         characteristicUUID: characteristicUUID
                     )
+                    guard request.isPending else { return }
                     guard withResponse else {
                         peripheral.writeValue(data, for: characteristic, type: .withoutResponse)
-                        continuation.resume()
+                        request.succeed(())
                         return
                     }
-                    self.writeContinuations[key] = continuation
+                    guard request.isPending else { return }
+                    guard self.writeCallbacks.install(request, for: key) else {
+                        request.fail(CoreBluetoothRequestError.characteristicQuarantined)
+                        return
+                    }
                     peripheral.writeValue(data, for: characteristic, type: .withResponse)
                 } catch {
-                    continuation.resume(throwing: error)
+                    request.fail(error)
                 }
             }
+        } onCancel: {
+            self.onQueue { self.removeWriteRequest(request.id) }
         }
     }
 
@@ -294,17 +477,33 @@ final class CoreBluetoothDriver: NSObject, CentralDriver, @unchecked Sendable {
         connectContinuations.removeValue(forKey: id)?.resume(throwing: error)
         serviceContinuations.removeValue(forKey: id)?.resume(throwing: error)
         characteristicDiscoveries.removeValue(forKey: id)?.continuation.resume(throwing: error)
-        for key in readContinuations.keys.filter({ $0.peripheralID == id }) {
-            readContinuations.removeValue(forKey: key)?.resume(throwing: error)
+        for request in readCallbacks.removeAll(where: { $0.peripheralID == id }) {
+            request.fail(error)
         }
-        for key in writeContinuations.keys.filter({ $0.peripheralID == id }) {
-            writeContinuations.removeValue(forKey: key)?.resume(throwing: error)
+        for request in writeCallbacks.removeAll(where: { $0.peripheralID == id }) {
+            request.fail(error)
         }
         for key in notificationSetups.keys.filter({ $0.peripheralID == id }) {
             notificationSetups.removeValue(forKey: key)?.continuation.resume(throwing: error)
         }
         for key in subscriptions.keys.filter({ $0.peripheralID == id }) {
             subscriptions.removeValue(forKey: key)?.finish(throwing: error)
+        }
+    }
+
+    private func removeReadRequest(_ requestID: UUID) {
+        readCallbacks.cancel(requestID)
+    }
+
+    private func removeWriteRequest(_ requestID: UUID) {
+        writeCallbacks.cancel(requestID)
+    }
+
+    private func onQueue(_ body: () -> Void) {
+        if DispatchQueue.getSpecific(key: queueKey) != nil {
+            body()
+        } else {
+            queue.sync(execute: body)
         }
     }
 }
@@ -385,13 +584,18 @@ extension CoreBluetoothDriver: CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         let key = CharacteristicKey(peripheralID: peripheral.identifier, characteristicUUID: characteristic.uuid)
-        if let continuation = readContinuations.removeValue(forKey: key) {
+        switch readCallbacks.take(for: key) {
+        case .ignored:
+            return
+        case .pending(let request):
             if let error {
-                continuation.resume(throwing: error)
+                request.fail(error)
             } else {
-                continuation.resume(returning: characteristic.value ?? Data())
+                request.succeed(characteristic.value ?? Data())
             }
             return
+        case .unowned:
+            break
         }
         if let error {
             subscriptions.removeValue(forKey: key)?.finish(throwing: error)
@@ -402,8 +606,8 @@ extension CoreBluetoothDriver: CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         let key = CharacteristicKey(peripheralID: peripheral.identifier, characteristicUUID: characteristic.uuid)
-        guard let continuation = writeContinuations.removeValue(forKey: key) else { return }
-        if let error { continuation.resume(throwing: error) } else { continuation.resume() }
+        guard case .pending(let request) = writeCallbacks.take(for: key) else { return }
+        if let error { request.fail(error) } else { request.succeed(()) }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {

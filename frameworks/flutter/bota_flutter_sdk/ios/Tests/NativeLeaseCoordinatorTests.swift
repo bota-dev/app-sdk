@@ -112,6 +112,130 @@ final class NativeLeaseCoordinatorTests: XCTestCase {
     XCTAssertEqual(count, 0)
   }
 
+  func testThrowingCancellationRetainsOwnerUntilOriginalOperationTerminates() async throws {
+    let client = LeaseTestClient()
+    let coordinator = NativeLeaseCoordinator(client: client)
+    let otherCancellation = CancellationRecorder()
+    try await coordinator.beginOperation(
+      engineID: "engine-a",
+      category: .device,
+      operationID: "operation-a"
+    )
+
+    do {
+      try await coordinator.cancelOperation(engineID: "engine-a", category: .device) {
+        throw CancellationFailure.expected
+      }
+      XCTFail("expected native cancellation failure")
+    } catch CancellationFailure.expected {}
+
+    do {
+      try await coordinator.beginOperation(
+        engineID: "engine-b",
+        category: .device,
+        operationID: "operation-b"
+      )
+      XCTFail("failed cancellation must keep the category owned")
+    } catch let error as NativeLeaseError {
+      XCTAssertEqual(error, .operationInProgress)
+    }
+    do {
+      try await coordinator.cancelOperation(engineID: "engine-b", category: .device) {
+        await otherCancellation.record()
+      }
+      XCTFail("another engine must not cancel poisoned ownership")
+    } catch let error as NativeLeaseError {
+      XCTAssertEqual(error, .operationNotOwned)
+    }
+    let cancellationCount = await otherCancellation.count
+    XCTAssertEqual(cancellationCount, 0)
+
+    await coordinator.finishOperation(
+      engineID: "engine-a",
+      category: .device,
+      operationID: "operation-a"
+    )
+    try await coordinator.beginOperation(
+      engineID: "engine-b",
+      category: .device,
+      operationID: "operation-b"
+    )
+  }
+
+  func testTerminalOperationWaitsForThrowingCancellationToReturnBeforeReleasingOwner() async throws
+  {
+    let client = LeaseTestClient()
+    let coordinator = NativeLeaseCoordinator(client: client)
+    let cancellation = ThrowingCancellationGate()
+    try await coordinator.beginOperation(
+      engineID: "engine-a",
+      category: .device,
+      operationID: "operation-a"
+    )
+    let cancel = Task {
+      try await coordinator.cancelOperation(engineID: "engine-a", category: .device) {
+        try await cancellation.run()
+      }
+    }
+    await cancellation.waitUntilStarted()
+
+    await coordinator.finishOperation(
+      engineID: "engine-a",
+      category: .device,
+      operationID: "operation-a"
+    )
+    do {
+      try await coordinator.beginOperation(
+        engineID: "engine-b",
+        category: .device,
+        operationID: "operation-b"
+      )
+      XCTFail("cancellation closure is still accessing shared native state")
+    } catch let error as NativeLeaseError {
+      XCTAssertEqual(error, .operationInProgress)
+    }
+
+    await cancellation.fail()
+    do {
+      try await cancel.value
+      XCTFail("expected native cancellation failure")
+    } catch CancellationFailure.expected {}
+    try await coordinator.beginOperation(
+      engineID: "engine-b",
+      category: .device,
+      operationID: "operation-b"
+    )
+  }
+
+  func testFinalClientDestructionClearsFailedCancellationOwnership() async throws {
+    let client = LeaseTestClient()
+    let coordinator = NativeLeaseCoordinator(client: client)
+    let configuration = leaseConfiguration(namespace: "shared")
+    try await coordinator.acquire(engineID: "engine-a", configuration: configuration)
+    try await coordinator.beginOperation(
+      engineID: "engine-a",
+      category: .device,
+      operationID: "operation-a"
+    )
+    do {
+      try await coordinator.cancelOperation(engineID: "engine-a", category: .device) {
+        throw CancellationFailure.expected
+      }
+      XCTFail("expected native cancellation failure")
+    } catch CancellationFailure.expected {}
+
+    await coordinator.release(engineID: "engine-a")
+
+    try await coordinator.acquire(engineID: "engine-b", configuration: configuration)
+    try await coordinator.beginOperation(
+      engineID: "engine-b",
+      category: .device,
+      operationID: "operation-b"
+    )
+    let destroyCount = await client.destroyCount
+    XCTAssertEqual(destroyCount, 1)
+  }
+
   private func leaseConfiguration(namespace: String) -> NativeLeaseConfiguration {
     NativeLeaseConfiguration(
       applicationSupportDirectory: URL(fileURLWithPath: "/tmp/\(namespace)"),
@@ -121,6 +245,30 @@ final class NativeLeaseCoordinatorTests: XCTestCase {
       hasFactoryResetResultCallback: true,
       hasFirmwareCallback: true
     )
+  }
+}
+
+private enum CancellationFailure: Error {
+  case expected
+}
+
+private actor ThrowingCancellationGate {
+  private var started = false
+  private var continuation: CheckedContinuation<Void, Never>?
+
+  func run() async throws {
+    started = true
+    await withCheckedContinuation { continuation = $0 }
+    throw CancellationFailure.expected
+  }
+
+  func waitUntilStarted() async {
+    while !started { await Task.yield() }
+  }
+
+  func fail() {
+    continuation?.resume()
+    continuation = nil
   }
 }
 

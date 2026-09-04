@@ -410,6 +410,77 @@ final class BotaAppleAdapterTests: XCTestCase {
     XCTAssertEqual(finalLeaseCount, 1)
   }
 
+  func testPublicCancellationAwaitsDirectReadUnwindBeforeReleasingOwnership() async throws {
+    let native = AdapterTestClient(suspendReadStatus: true)
+    let leases = NativeLeaseCoordinator(client: native)
+    let adapterA = makeAdapter(native: native, leases: leases, engineID: "cancel-owner")
+    let adapterB = makeAdapter(native: native, leases: leases, engineID: "cancel-other")
+    try await configure(adapterA, operationID: id(90))
+    try await configure(adapterB, operationID: id(91))
+    let status = Task { try await adapterA.readDeviceStatus(operationId: self.id(92)) }
+    await native.waitUntilReadStatusStarted()
+
+    let cancel = Task { try await adapterA.cancelDeviceOperation(operationId: self.id(93)) }
+    await native.waitUntilReadStatusCancellationObserved()
+
+    do {
+      _ = try await adapterB.readDeviceStatus(operationId: id(94))
+      XCTFail("cancellation must retain ownership until the direct read unwinds")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "operation_in_progress")
+    }
+
+    await native.allowReadStatusCancellationToUnwind()
+    try await cancel.value
+    do {
+      _ = try await status.value
+      XCTFail("expected the direct read to be cancelled")
+    } catch {}
+    _ = try await adapterB.readDeviceStatus(operationId: id(95))
+  }
+
+  func testDetachRetainsOwnershipWhenNativeCancellationThrowsUntilDirectReadUnwinds() async throws {
+    let native = AdapterTestClient(suspendReadStatus: true, failDeviceCancellation: true)
+    let leases = NativeLeaseCoordinator(client: native)
+    let adapterA = makeAdapter(native: native, leases: leases, engineID: "failed-cancel-owner")
+    let adapterB = makeAdapter(native: native, leases: leases, engineID: "failed-cancel-other")
+    try await configure(adapterA, operationID: id(90))
+    try await configure(adapterB, operationID: id(91))
+    let status = Task { try await adapterA.readDeviceStatus(operationId: self.id(92)) }
+    await native.waitUntilReadStatusStarted()
+
+    let detach = Task { await adapterA.detach() }
+    await native.waitUntilReadStatusCancellationObserved()
+
+    do {
+      _ = try await adapterB.readDeviceStatus(operationId: id(93))
+      XCTFail("failed native cancellation must retain ownership during unwind")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "operation_in_progress")
+    }
+    do {
+      try await adapterB.cancelDeviceOperation(operationId: id(94))
+      XCTFail("another engine must not cancel failed ownership")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "operation_not_owned")
+    }
+    let cancellationCountDuringUnwind = await native.deviceCancellationCount
+    XCTAssertEqual(cancellationCountDuringUnwind, 1)
+
+    await native.allowReadStatusCancellationToUnwind()
+    await detach.value
+    do {
+      _ = try await status.value
+      XCTFail("expected detached direct read to be cancelled")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "engine_detached")
+    }
+
+    _ = try await adapterB.readDeviceStatus(operationId: id(95))
+    let finalLeaseCount = await leases.leaseCount
+    XCTAssertEqual(finalLeaseCount, 1)
+  }
+
   func testAnotherEngineCannotCancelOwnedNativeWork() async throws {
     let native = AdapterTestClient(useHangingScan: true)
     let leases = NativeLeaseCoordinator(client: native)
@@ -487,6 +558,56 @@ final class BotaAppleAdapterTests: XCTestCase {
     try await adapterB.cancelDeviceOperation(operationId: id(89))
     let finalCancellationCount = await native.deviceCancellationCount
     XCTAssertEqual(finalCancellationCount, 1)
+  }
+
+  func testNaturalStreamCompletionWithThrowingStopPoisonsOwnershipUntilFinalDestroy() async throws {
+    let native = AdapterTestClient(
+      failDeviceCancellation: true,
+      holdTerminalScanCleanup: true
+    )
+    let leases = NativeLeaseCoordinator(client: native)
+    let adapterA = makeAdapter(native: native, leases: leases, engineID: "failed-stream-owner")
+    let adapterB = makeAdapter(native: native, leases: leases, engineID: "failed-stream-other")
+    try await configure(adapterA, operationID: id(96))
+    try await configure(adapterB, operationID: id(97))
+    try await adapterA.startSubscription(
+      subscriptionId: id(98),
+      request: BotaScanSubscriptionMessage(timeoutMillis: 10_000, allowDuplicates: false)
+    )
+
+    await native.finishScanPublicStream()
+    try await eventually {
+      let cancellationCount = await native.deviceCancellationCount
+      return adapterA.activeSubscriptionCount == 0 && cancellationCount == 1
+    }
+
+    do {
+      _ = try await adapterB.readDeviceStatus(operationId: id(99))
+      XCTFail("a terminal Flutter collector is not proof of native cleanup")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "operation_in_progress")
+    }
+    do {
+      try await adapterB.cancelDeviceOperation(operationId: id(100))
+      XCTFail("another engine must not cancel poisoned stream ownership")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "operation_not_owned")
+    }
+
+    await adapterA.detach()
+    do {
+      _ = try await adapterB.readDeviceStatus(operationId: id(101))
+      XCTFail("a surviving lease must keep failed stream ownership poisoned")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "operation_in_progress")
+    }
+    await adapterB.detach()
+
+    let adapterC = makeAdapter(native: native, leases: leases, engineID: "after-destroy")
+    try await configure(adapterC, operationID: id(102))
+    _ = try await adapterC.readDeviceStatus(operationId: id(103))
+    let destroyCount = await native.destroyCount
+    XCTAssertEqual(destroyCount, 1)
   }
 
   func testDurableResetResumeUsesOnlyCurrentDeviceAndGenerationAfterRestart() async throws {
@@ -932,6 +1053,10 @@ private final class AdapterTestFlutterApi: BotaFlutterApiProtocol, @unchecked Se
   }
 }
 
+private enum AdapterCancellationFailure: Error {
+  case expected
+}
+
 private actor AdapterTestClient: BotaAppleClientProtocol {
   private(set) var invocations: [String] = []
   private(set) var destroyCount = 0
@@ -947,6 +1072,7 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
   private let useHangingScan: Bool
   private let suspendConfigure: Bool
   private let suspendReadStatus: Bool
+  private let failDeviceCancellation: Bool
   private let delayProvisioningProviderUntilCancellation: Bool
   private let holdTerminalScanCleanup: Bool
   private var configureStarted = false
@@ -967,12 +1093,14 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
     useHangingScan: Bool = false,
     suspendConfigure: Bool = false,
     suspendReadStatus: Bool = false,
+    failDeviceCancellation: Bool = false,
     delayProvisioningProviderUntilCancellation: Bool = false,
     holdTerminalScanCleanup: Bool = false
   ) {
     self.useHangingScan = useHangingScan
     self.suspendConfigure = suspendConfigure
     self.suspendReadStatus = suspendReadStatus
+    self.failDeviceCancellation = failDeviceCancellation
     self.delayProvisioningProviderUntilCancellation =
       delayProvisioningProviderUntilCancellation
     self.holdTerminalScanCleanup = holdTerminalScanCleanup
@@ -1015,7 +1143,11 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
     if suspendReadStatus, !readStatusDidSuspend {
       readStatusDidSuspend = true
       do {
-        return try await withCheckedThrowingContinuation { readStatusContinuation = $0 }
+        return try await withTaskCancellationHandler {
+          try await withCheckedThrowingContinuation { readStatusContinuation = $0 }
+        } onCancel: {
+          Task { await self.cancelSuspendedReadStatusFromTask() }
+        }
       } catch is CancellationError {
         readStatusCancellationObserved = true
         await withCheckedContinuation { readStatusUnwindContinuation = $0 }
@@ -1035,14 +1167,14 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
     readStatusUnwindContinuation?.resume()
     readStatusUnwindContinuation = nil
   }
-  private func cancelSuspendedReadStatus() {
+  private func cancelSuspendedReadStatusFromTask() {
     readStatusContinuation?.resume(throwing: CancellationError())
     readStatusContinuation = nil
   }
   func cancelDeviceOperation() async throws {
     deviceCancellationCount += 1
     invocations.append("cancelDeviceOperation")
-    cancelSuspendedReadStatus()
+    if failDeviceCancellation { throw AdapterCancellationFailure.expected }
     if holdTerminalScanCleanup, !terminalScanCleanupReleased {
       await withCheckedContinuation { terminalScanCleanupContinuation = $0 }
     }

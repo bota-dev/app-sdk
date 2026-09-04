@@ -58,12 +58,20 @@ actor NativeLeaseCoordinator {
   private struct OperationCancellation {
     let id: UUID
     let task: Task<CancellationOutcome, Never>
+    var status: CancellationStatus
+  }
+
+  private enum CancellationStatus: Equatable {
+    case inProgress
+    case succeeded
+    case failed
   }
 
   private struct OperationOwner {
     let engineID: String
     let operationID: String
     var cancellation: OperationCancellation?
+    var operationTerminated: Bool
     var retainAfterCancellation: Bool
   }
 
@@ -171,6 +179,7 @@ actor NativeLeaseCoordinator {
       engineID: engineID,
       operationID: operationID,
       cancellation: nil,
+      operationTerminated: false,
       retainAfterCancellation: false
     )
   }
@@ -180,13 +189,24 @@ actor NativeLeaseCoordinator {
     category: NativeOperationCategory,
     operationID: String
   ) {
-    guard let owner = operations[category],
+    guard var owner = operations[category],
       owner.engineID == engineID,
-      owner.operationID == operationID,
-      owner.cancellation == nil,
-      !owner.retainAfterCancellation
+      owner.operationID == operationID
     else { return }
-    operations.removeValue(forKey: category)
+    owner.operationTerminated = true
+    guard let cancellation = owner.cancellation else {
+      if owner.retainAfterCancellation {
+        operations[category] = owner
+      } else {
+        operations.removeValue(forKey: category)
+      }
+      return
+    }
+    if cancellation.status == .inProgress || owner.retainAfterCancellation {
+      operations[category] = owner
+    } else {
+      operations.removeValue(forKey: category)
+    }
   }
 
   func cancelOperation(
@@ -207,23 +227,26 @@ actor NativeLeaseCoordinator {
         return .failure(error)
       }
     }
-    owner.cancellation = OperationCancellation(id: cancellationID, task: task)
+    owner.cancellation = OperationCancellation(
+      id: cancellationID,
+      task: task,
+      status: .inProgress
+    )
     operations[category] = owner
     let outcome = await task.value
-    if let current = operations[category],
-      current.engineID == engineID,
-      current.operationID == owner.operationID,
-      current.cancellation?.id == cancellationID,
-      !current.retainAfterCancellation
-    {
-      operations.removeValue(forKey: category)
-    }
+    settleCancellation(
+      engineID: engineID,
+      category: category,
+      operationID: owner.operationID,
+      cancellationID: cancellationID,
+      outcome: outcome
+    )
     if case .failure(let error) = outcome { throw error }
   }
 
   func beginCancellingOperations(
     engineID: String,
-    cancellation: @escaping @Sendable (NativeOperationCategory) async -> Void
+    cancellation: @escaping @Sendable (NativeOperationCategory) async throws -> Void
   ) -> [NativeOwnedOperation] {
     let owned: [NativeOwnedOperation] = NativeOperationCategory.allCases.compactMap {
       category -> NativeOwnedOperation? in
@@ -241,9 +264,14 @@ actor NativeLeaseCoordinator {
         owner.cancellation = OperationCancellation(
           id: UUID(),
           task: Task {
-            await cancellation(category)
-            return .success
-          }
+            do {
+              try await cancellation(category)
+              return .success
+            } catch {
+              return .failure(error)
+            }
+          },
+          status: .inProgress
         )
       }
       operations[operation.category] = owner
@@ -261,21 +289,71 @@ actor NativeLeaseCoordinator {
         owner.operationID == operation.operationID,
         let cancellation = owner.cancellation
       else { continue }
-      _ = await cancellation.task.value
+      let outcome = await cancellation.task.value
+      settleCancellation(
+        engineID: engineID,
+        category: operation.category,
+        operationID: operation.operationID,
+        cancellationID: cancellation.id,
+        outcome: outcome
+      )
     }
   }
 
   func finishCancelledOperations(
     engineID: String,
-    operations owned: [NativeOwnedOperation]
+    operations owned: [NativeOwnedOperation],
+    terminalOperationIDs: Set<String>
   ) {
     for operation in owned {
-      guard let owner = operations[operation.category],
+      guard var owner = operations[operation.category],
         owner.engineID == engineID,
         owner.operationID == operation.operationID,
         owner.retainAfterCancellation
       else { continue }
-      operations.removeValue(forKey: operation.category)
+      if terminalOperationIDs.contains(operation.operationID) {
+        owner.operationTerminated = true
+      }
+      owner.retainAfterCancellation = false
+      guard let cancellation = owner.cancellation else {
+        if owner.operationTerminated {
+          operations.removeValue(forKey: operation.category)
+        } else {
+          operations[operation.category] = owner
+        }
+        continue
+      }
+      if cancellation.status == .succeeded || owner.operationTerminated {
+        operations.removeValue(forKey: operation.category)
+      } else {
+        operations[operation.category] = owner
+      }
+    }
+  }
+
+  private func settleCancellation(
+    engineID: String,
+    category: NativeOperationCategory,
+    operationID: String,
+    cancellationID: UUID,
+    outcome: CancellationOutcome
+  ) {
+    guard var owner = operations[category],
+      owner.engineID == engineID,
+      owner.operationID == operationID,
+      var cancellation = owner.cancellation,
+      cancellation.id == cancellationID
+    else { return }
+    switch outcome {
+    case .success: cancellation.status = .succeeded
+    case .failure: cancellation.status = .failed
+    }
+    owner.cancellation = cancellation
+    let nativeCleanupSucceeded = cancellation.status == .succeeded
+    if !owner.retainAfterCancellation && (nativeCleanupSucceeded || owner.operationTerminated) {
+      operations.removeValue(forKey: category)
+    } else {
+      operations[category] = owner
     }
   }
 
@@ -295,17 +373,23 @@ actor NativeLeaseCoordinator {
   }
 
   private func destroyIfUnused() async {
-    guard leases.isEmpty, pendingLeases.isEmpty, activeConfiguration != nil else { return }
-    activeConfiguration = nil
+    guard leases.isEmpty, pendingLeases.isEmpty else { return }
     if let destroying {
       await destroying.task.value
       if self.destroying?.id == destroying.id { self.destroying = nil }
+      operations.removeAll()
       return
     }
+    guard activeConfiguration != nil else {
+      if configuring == nil { operations.removeAll() }
+      return
+    }
+    activeConfiguration = nil
     let client = self.client
     let destroy = DestroyTask(id: UUID(), task: Task { await client.destroy() })
     destroying = destroy
     await destroy.task.value
     if destroying?.id == destroy.id { destroying = nil }
+    operations.removeAll()
   }
 }

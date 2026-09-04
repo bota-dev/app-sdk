@@ -929,14 +929,29 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
       finishIdentifier(subscriptionId)
       subscription.task.cancel()
       if let category = subscription.owner.category {
-        try await leaseCoordinator.cancelOperation(
-          engineID: engineID,
-          category: category
-        ) { [weak self] in
-          guard let self else { return }
-          try await self.stop(subscription.owner)
-          await subscription.task.value
+        do {
+          try await leaseCoordinator.cancelOperation(
+            engineID: engineID,
+            category: category
+          ) { [weak self] in
+            guard let self else { return }
+            var stopError: Error?
+            do {
+              try await self.stop(subscription.owner)
+            } catch {
+              stopError = error
+            }
+            await subscription.task.value
+            if let stopError { throw stopError }
+          }
+        } catch {
+          throw error
         }
+        await leaseCoordinator.finishOperation(
+          engineID: engineID,
+          category: category,
+          operationID: subscriptionId
+        )
       } else {
         try await stop(subscription.owner)
         await subscription.task.value
@@ -1027,11 +1042,24 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     do {
       try beginIdentifier(operationID, requiresConfiguration: true)
       didBeginIdentifier = true
+      let ownedOperation = inFlightOperations.first { $0.value.category == category }
+      if let ownedOperation {
+        inFlightOperations.removeValue(forKey: ownedOperation.key)
+      }
       try await leaseCoordinator.cancelOperation(
         engineID: engineID,
-        category: category,
-        cancellation: body
-      )
+        category: category
+      ) {
+        ownedOperation?.value.task.cancel()
+        var cancellationError: Error?
+        do {
+          try await body()
+        } catch {
+          cancellationError = error
+        }
+        if let ownedOperation { _ = await ownedOperation.value.task.value }
+        if let cancellationError { throw cancellationError }
+      }
       try requireAttached()
       if didBeginIdentifier { finishIdentifier(operationID) }
     } catch {
@@ -1088,10 +1116,19 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     guard let subscription = subscriptions.removeValue(forKey: id) else { return }
     finishIdentifier(id)
     if let category = subscription.owner.category {
-      try? await leaseCoordinator.cancelOperation(engineID: engineID, category: category) {
-        [weak self] in
-        guard let self else { return }
-        try await self.stop(subscription.owner)
+      do {
+        try await leaseCoordinator.cancelOperation(engineID: engineID, category: category) {
+          [weak self] in
+          guard let self else { return }
+          try await self.stop(subscription.owner)
+        }
+        await leaseCoordinator.finishOperation(
+          engineID: engineID,
+          category: category,
+          operationID: id
+        )
+      } catch {
+        // Collector completion does not prove shared native work stopped.
       }
     }
     guard !detached else { return }
@@ -1268,7 +1305,7 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
       engineID: engineID
     ) { [weak self] category in
       guard let self else { return }
-      try? await self.stop(category)
+      try await self.stop(category)
     }
     for operation in operations.values { operation.task.cancel() }
     for subscription in activeSubscriptions.values { subscription.task.cancel() }
@@ -1278,9 +1315,11 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     )
     for operation in operations.values { _ = await operation.task.value }
     for subscription in activeSubscriptions.values { await subscription.task.value }
+    let terminalOperationIDs = Set(operations.keys)
     await leaseCoordinator.finishCancelledOperations(
       engineID: engineID,
-      operations: ownedOperations
+      operations: ownedOperations,
+      terminalOperationIDs: terminalOperationIDs
     )
     for id in operations.keys {
       inFlightOperations.removeValue(forKey: id)

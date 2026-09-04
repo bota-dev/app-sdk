@@ -168,7 +168,16 @@ reference-counts access to the shared Apple/Android client. Equivalent
 configuration coalesces; incompatible concurrent configuration fails with
 `configuration_conflict`. The final lease release destroys the shared client.
 An engine detach rejects its pending Dart requests and removes only its own
-subscriptions.
+subscriptions. Process-wide operation ownership remains assigned through
+native cancellation and the original operation's terminal unwind. A failed
+cancellation poisons that category until terminal unwind or final shared-client
+destruction proves cleanup, preventing another engine from acquiring or
+cancelling shared native work. Direct CoreBluetooth reads and writes are task
+cancellation-aware: cancellation removes and resumes their pending continuation
+exactly once. The characteristic key remains quarantined until its stale delegate
+callback is discarded or disconnect proves it cannot arrive, so ambiguous reuse
+fails closed. A terminal Flutter stream collector is not native-terminal proof
+when its corresponding stop throws.
 
 ## Data And Security Ownership
 
