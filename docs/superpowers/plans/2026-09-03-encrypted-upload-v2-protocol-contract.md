@@ -1265,7 +1265,7 @@ git commit -m "test: gate encrypted upload v2 contract support" \
 - Produces no root export and no `RecordingManager`, `StreamingSession`,
   `ProtocolHandler`, or `BleManager` call site.
 
-- [ ] **Step 1: Write vector-sync tests first**
+- [x] **Step 1: Write vector-sync tests first**
 
 The test creates a temporary git repository containing a canonical vector,
 commits it, invokes the sync function, and asserts this sidecar schema:
@@ -1286,7 +1286,7 @@ commits it, invokes the sync function, and asserts this sidecar schema:
 
 It also mutates one vendored byte and proves `--check` exits nonzero.
 
-- [ ] **Step 2: Run sync tests and verify RED**
+- [x] **Step 2: Run sync tests and verify RED**
 
 Run:
 
@@ -1297,7 +1297,7 @@ node --test scripts/sync-encrypted-upload-v2-vectors.test.mjs
 
 Expected: FAIL because the sync script does not exist.
 
-- [ ] **Step 3: Implement revision-pinned vendoring**
+- [x] **Step 3: Implement revision-pinned vendoring**
 
 The script accepts named `--app-sdk` and `--source-revision` values plus an
 optional `--check` flag. Write mode requires both named values. `--check`
@@ -1320,7 +1320,7 @@ Add package scripts:
 }
 ```
 
-- [ ] **Step 4: Vendor the committed canonical vector**
+- [x] **Step 4: Vendor the committed canonical vector**
 
 Run:
 
@@ -1335,7 +1335,7 @@ node scripts/sync-encrypted-upload-v2-vectors.mjs \
 Expected: the vendored JSON bytes exactly match `git show` at the recorded
 revision.
 
-- [ ] **Step 5: Write codec and capability tests before source**
+- [x] **Step 5: Write codec and capability tests before source**
 
 Drive every applicable structural vector through an operation table:
 
@@ -1360,7 +1360,7 @@ it('requires explicit batch capabilities 0 through 6', () => {
 Assert encode cases reproduce exact hex, malformed cases throw the vector's
 stable error name, and legacy v1/P10 parser tests remain byte-identical.
 
-- [ ] **Step 6: Run the codec tests and verify RED**
+- [x] **Step 6: Run the codec tests and verify RED**
 
 Run:
 
@@ -1370,7 +1370,7 @@ npx jest __tests__/encryptedUploadV2.test.ts --runInBand
 
 Expected: FAIL because the internal codec module does not exist.
 
-- [ ] **Step 7: Implement internal TypeScript codecs**
+- [x] **Step 7: Implement internal TypeScript codecs**
 
 Use `Buffer.readUInt*LE` / `writeUInt*LE`, a checked cursor, exact-length
 guards, fixed-size digest copies, and exhaustive discriminated unions. Define:
@@ -1392,13 +1392,13 @@ Do not treat bit 7 as required and do not return a streaming capability. Keep
 document payloads, DATA bytes, manifests, authorizations, and receipts opaque;
 the decoder reports their structural metadata without decrypting them.
 
-- [ ] **Step 8: Freeze UUID constants without wiring runtime managers**
+- [x] **Step 8: Freeze UUID constants without wiring runtime managers**
 
 Add internal constants for full UUIDs `B07A0004-0006` through `000B`. Add a
 test that `rg`-equivalent source inspection finds these UUIDs only in constants,
 the internal codec test, and protocol docs—not in manager or BLE runtime files.
 
-- [ ] **Step 9: Update repository docs accurately**
+- [x] **Step 9: Update repository docs accurately**
 
 Document three profiles, the pinned vector ownership, and these status facts:
 
@@ -1411,7 +1411,7 @@ Legacy v1/P10: unchanged
 BACKEND_PUBKEY selection: prohibited
 ```
 
-- [ ] **Step 10: Verify public compatibility and commit**
+- [x] **Step 10: Verify public compatibility and commit**
 
 Run:
 
@@ -1468,7 +1468,7 @@ git commit -m "feat: add internal encrypted upload v2 contract codecs" \
 - Produces no router export, service singleton, queue registration, migration,
   signing-key lookup, S3 read, or worker dispatch.
 
-- [ ] **Step 1: Write the revision-pinned sync test**
+- [x] **Step 1: Write the revision-pinned sync test**
 
 Create a temporary git repository, write and commit
 `protocol/vectors/encrypted-upload-v2.json`, invoke the sync function with its
@@ -1477,7 +1477,7 @@ Create a temporary git repository, write and commit
 and `sha256`; validate the two hex patterns; mutate one vendored byte; then
 assert `--check` exits nonzero without a sibling App SDK checkout.
 
-- [ ] **Step 2: Run the sync test and verify RED**
+- [x] **Step 2: Run the sync test and verify RED**
 
 Run:
 
@@ -1488,7 +1488,7 @@ node --test scripts/sync-encrypted-upload-v2-vectors.test.mjs
 
 Expected: FAIL because the script does not exist.
 
-- [ ] **Step 3: Implement and run revision-pinned vendoring**
+- [x] **Step 3: Implement and run revision-pinned vendoring**
 
 Add scripts:
 
@@ -1514,7 +1514,7 @@ node scripts/sync-encrypted-upload-v2-vectors.mjs \
   --app-sdk ../../app-sdk --source-revision "$V2_SOURCE_REVISION" --check
 ```
 
-- [ ] **Step 4: Write verifier tests first**
+- [x] **Step 4: Write verifier tests first**
 
 The tests load every backend-owned vector operation and use fixed test keys
 from the bundle:
@@ -1535,7 +1535,7 @@ Explicitly assert high-S authorization/receipt rejection, altered tag/hash,
 wrong environment/identity/generation/recipient key, expired material, wrong
 HPKE context, and identical-versus-conflicting receipt replay inputs.
 
-- [ ] **Step 5: Run the verifier test and verify RED**
+- [x] **Step 5: Run the verifier test and verify RED**
 
 Run:
 
@@ -1545,7 +1545,7 @@ npx vitest run tests/unit/encrypted-upload-v2-contract.test.ts
 
 Expected: FAIL because the parser/verifier does not exist.
 
-- [ ] **Step 6: Implement strict parsing and crypto verification**
+- [x] **Step 6: Implement strict parsing and crypto verification**
 
 Use Node `crypto` for SHA-256, HMAC, `timingSafeEqual`, and P-256 verification
 with `dsaEncoding: 'ieee-p1363'`; reject `s > n/2` before verification. Use the
@@ -1569,7 +1569,7 @@ export interface EncryptedUploadV2VerificationContext {
 Never load production keys or configuration inside this module. Return parsed
 metadata only after all applicable structural and cryptographic checks pass.
 
-- [ ] **Step 7: Re-run downgrade regression tests**
+- [x] **Step 7: Re-run downgrade regression tests**
 
 Run:
 
@@ -1583,7 +1583,7 @@ npx vitest run \
 Expected: v2-required rejects whole-file completion, chunk URL issuance, and
 streaming finalization; permitted v1/P10 behavior remains unchanged.
 
-- [ ] **Step 8: Document test-only status and commit**
+- [x] **Step 8: Document test-only status and commit**
 
 Update backend docs to say the reference verifier is reusable but unregistered;
 the public v2 API, signed authorization producer, worker, and receipt producer
@@ -1632,7 +1632,7 @@ git commit -m "test: add encrypted upload v2 contract verifier" \
 - Produces a regression assertion that current legacy START keeps
   `g_transfer.e2e_enabled = 0` and contains no v2 UUID/opcode/capability.
 
-- [ ] **Step 1: Add the host-test dependency pin**
+- [x] **Step 1: Add the host-test dependency pin**
 
 Create:
 
@@ -1643,7 +1643,7 @@ cryptography==50.0.1
 This dependency is only for the isolated contract-test virtual environment;
 production firmware and JieLi builds do not consume Python packages.
 
-- [ ] **Step 2: Write sync and decoder tests first**
+- [x] **Step 2: Write sync and decoder tests first**
 
 Test exact source-revision/digest checks and these normalized structural values:
 
@@ -1661,7 +1661,7 @@ def test_runtime_firmware_does_not_advertise_v2(self):
         self.assertNotIn(forbidden.lower(), lower_source)
 ```
 
-- [ ] **Step 3: Run tests and verify RED**
+- [x] **Step 3: Run tests and verify RED**
 
 Run:
 
@@ -1671,7 +1671,7 @@ python3 scripts/test_encrypted_upload_v2_contract.py
 
 Expected: FAIL because the sync/reference modules and fixtures do not exist.
 
-- [ ] **Step 4: Implement revision-pinned vector sync**
+- [x] **Step 4: Implement revision-pinned vector sync**
 
 Use `subprocess.run(["git", "-C", app_sdk, "show", f"{revision}:{source_path}"],
 check=True, capture_output=True)` with argument arrays, never a shell string.
@@ -1687,7 +1687,7 @@ python3 scripts/sync_encrypted_upload_v2_vectors.py \
   --app-sdk ../app-sdk --source-revision "$V2_SOURCE_REVISION" --check
 ```
 
-- [ ] **Step 5: Implement the host-only decoder and crypto verifier**
+- [x] **Step 5: Implement the host-only decoder and crypto verifier**
 
 Use `struct.unpack_from` with explicit `<` formats, bounds-check before every
 read/allocation, `hashlib.sha256`, `hmac.compare_digest`,
@@ -1704,13 +1704,14 @@ Expose exactly six module functions: `decode_capabilities(data: bytes)`,
 Every function returns `dict[str, object]`; the implementation contains
 complete function bodies and no `pass` statements.
 
-- [ ] **Step 6: Run isolated host conformance and disabled-runtime gates**
+- [x] **Step 6: Run isolated host conformance and disabled-runtime gates**
 
 Run:
 
 ```bash
 V2_TEST_ENV="$(mktemp -d)"
-python3 -m venv "$V2_TEST_ENV/venv"
+V2_PYTHON="${V2_PYTHON:-python3}"
+"$V2_PYTHON" -m venv "$V2_TEST_ENV/venv"
 "$V2_TEST_ENV/venv/bin/pip" install -r scripts/requirements-encrypted-upload-v2.txt
 "$V2_TEST_ENV/venv/bin/python" scripts/test_encrypted_upload_v2_contract.py
 python3 scripts/test_ble_e2e_disabled_config.py
@@ -1720,7 +1721,7 @@ git diff -- sdk
 Expected: tests PASS and `git diff -- sdk` is empty. Do not run the JieLi build
 on macOS.
 
-- [ ] **Step 7: Document host-only status and commit**
+- [x] **Step 7: Document host-only status and commit**
 
 Update firmware docs to distinguish allocated target UUIDs from the currently
 registered GATT table and to state that capability advertisement remains off.
@@ -1760,7 +1761,7 @@ git commit -m "test: add encrypted upload v2 firmware reference" \
 - Does not change public customer documentation because no public API or SDK
   behavior ships in this milestone.
 
-- [ ] **Step 1: Replace candidate allocation language with frozen tables**
+- [x] **Step 1: Replace candidate allocation language with frozen tables**
 
 In the firmware guide, add the six `0406..040B` target characteristics, all
 message codes, exact lengths/offsets, stable results, capability flags, and the
@@ -1774,7 +1775,7 @@ production firmware.
 Do not add the UUIDs to the released/current GATT table. Keep a distinct target
 table so readers cannot infer deployment.
 
-- [ ] **Step 2: Make the reliable-transfer design defer to the frozen source**
+- [x] **Step 2: Make the reliable-transfer design defer to the frozen source**
 
 Replace candidate byte shapes with a link to the App SDK spec and manifest.
 Retain the reliability state machine, and state that batch-v2 uses full UUID,
@@ -1782,7 +1783,7 @@ immutable generation, prefix digest, durable checkpoint revision, selective
 window repair, and receipt-gated confirmation. Mark live streaming-v2 as
 undefined.
 
-- [ ] **Step 3: Update implementation status without overstating it**
+- [x] **Step 3: Update implementation status without overstating it**
 
 Use this status split in `Encrypted-Upload-v2.md` and System Design v5 C10:
 
@@ -1799,7 +1800,7 @@ durable firmware resume, direct raw-ciphertext WiFi/4G upload, receipt-gated
 device deletion, streaming-v2, cohort enablement.
 ```
 
-- [ ] **Step 4: Update the downstream impact matrix and LLM index**
+- [x] **Step 4: Update the downstream impact matrix and LLM index**
 
 Add an `Encrypted-Upload-v2.md` row to `CLAUDE.md` naming at least:
 
@@ -1819,7 +1820,7 @@ Update `llms.txt` summaries for the three changed design docs, then regenerate:
 python3 scripts/gen-llms-full.py
 ```
 
-- [ ] **Step 5: Search the entire documentation surface for changed tokens**
+- [x] **Step 5: Search the entire documentation surface for changed tokens**
 
 Run from the workspace root:
 
@@ -1833,7 +1834,7 @@ rg -n "BOTAENC2|BOTAEND2|BOTAAUT2|BOTAMNF2|BOTARCPT|B07A0004-000[6-9AB]|encrypte
 Review every hit. Fix stale claims in the task-owned documents; record that
 public docs need no edit because no customer-visible surface changed.
 
-- [ ] **Step 6: Verify generated docs and commit**
+- [x] **Step 6: Verify generated docs and commit**
 
 Run:
 
@@ -1868,7 +1869,7 @@ git commit -m "docs: freeze encrypted upload v2 protocol contract" \
 - Produces: reproducible evidence that all four consumers use one canonical
   vector digest and that no runtime behavior was activated.
 
-- [ ] **Step 1: Compare all source revisions and digests**
+- [x] **Step 1: Compare all source revisions and digests**
 
 Run:
 
@@ -1891,7 +1892,7 @@ cmp app-sdk/protocol/vectors/encrypted-upload-v2.json \
 Expected: all sidecars contain the same revision/digest and every `cmp` exits
 zero.
 
-- [ ] **Step 2: Run all contract and legacy regression suites**
+- [x] **Step 2: Run all contract and legacy regression suites**
 
 Run:
 
@@ -1904,7 +1905,11 @@ npm run check:licenses
 npm run test:fixtures
 npm run test:react-native
 npm run react-native:verify
-npm run baseline:react-native
+V2_RN_REVISION="$(git -C ../react-native-sdk log -1 --format=%H -- \
+  protocol/vendor/app-sdk/encrypted-upload-v2.json)"
+git -C ../react-native-sdk diff --exit-code \
+  "$V2_RN_REVISION^" "$V2_RN_REVISION" -- \
+  lib/typescript/src/index.d.ts
 npm run sync:apple-fixtures
 npm run sync:android-fixtures
 npm run sync:apple-encrypted-upload-v2-vectors
@@ -1938,7 +1943,7 @@ python3 -m venv "$V2_TEST_ENV/venv"
 Expected: every runnable gate PASS; an unavailable Android emulator or JieLi
 hardware build is reported separately and is not represented as a pass.
 
-- [ ] **Step 3: Prove runtime activation did not occur**
+- [x] **Step 3: Prove runtime activation did not occur**
 
 Run:
 
@@ -1956,7 +1961,7 @@ rg -n "g_transfer\.e2e_enabled = 0" firmware/sdk/apps/common/ble/le_trans_data.c
 Expected: no runtime selector, route, worker, or firmware capability exists;
 the legacy P10 hard-disable assertion remains present.
 
-- [ ] **Step 4: Inspect every repository diff and commit boundary**
+- [x] **Step 4: Inspect every repository diff and commit boundary**
 
 Run:
 
@@ -1967,11 +1972,13 @@ for V2_REPO in app-sdk react-native-sdk bota firmware internal-docs; do
 done
 ```
 
-Confirm only the previously known `app-sdk/AGENTS.md`,
-`app-sdk/ARCHITECTURE.md`, and `bota/infra/CLAUDE.md` user hunks remain
-uncommitted. Do not push, merge, deploy, or enable a cohort in this plan.
+Confirm the previously known `app-sdk/AGENTS.md`,
+`app-sdk/ARCHITECTURE.md`, `bota/infra/CLAUDE.md`, and unrelated
+`internal-docs` user work remain uncommitted. Remove only disposable build
+artifacts created by verification. Do not push, merge, deploy, or enable a
+cohort in this plan.
 
-- [ ] **Step 5: Mark the plan complete and commit the evidence update**
+- [x] **Step 5: Mark the plan complete and commit the evidence update**
 
 Mark Task 10 and all verified steps checked, then run in `app-sdk`:
 
@@ -1985,3 +1992,34 @@ git commit -m "docs: record encrypted upload v2 contract verification" \
 The next implementation milestone is the public backend v2
 session/authorization/staging/manifest API and streaming decryption/publication
 worker. It starts only after this contract gate is green and reviewed.
+
+#### Verification evidence (2026-09-03)
+
+- Canonical vector revision `ffaae76425cd71403ba4c64b49b50b3043ab3119`
+  and SHA-256
+  `e9c7a41da6bfa8ab60d639a3c3f8e3fac4f8d525d61f5e407f1be599a63cf670`
+  match every sidecar; all three vendored vector files are byte-identical.
+- App SDK generation, Rust workspace, licenses, fixtures, React Native package,
+  Apple (96 tests, 9 supervised physical-device tests skipped), and Android
+  unit gates pass. All Apple/Android fixture and v2-vector sync checks pass.
+- The maintenance React Native SDK passes 10 suites/94 tests, typecheck, build,
+  license, and lint with four pre-existing warnings. The v2 commit and its
+  parent have the same semantic public API digest
+  `8c02007fed5c8172b6fd54ee228c19318a35668fa9cd05ae995ad648d837e397`
+  across 80 exports, and no root declaration change.
+- Backend typecheck and focused 3-suite/59-test contract-policy matrix pass;
+  lint has 20 pre-existing warnings and no errors. Firmware passes 2 legacy
+  disablement tests and 9 host-contract groups with `cryptography==50.0.1`.
+  The local firmware gate used the bundled arm64 Python 3.12 runtime because
+  Apple system Python 3.9 could not install that pinned wheel on this host.
+- No runtime selector, public backend route/worker, production v2 GATT
+  registration, firmware `sdk/` change, deployment, or cohort activation is
+  present. The JieLi hardware build and supervised physical-device tests were
+  not run on this macOS contract-only gate.
+
+The originally written bare `npm run baseline:react-native` command was not a
+runnable current-head gate: that comparator requires a path and the frozen
+`44ac1221...` source revision, while the maintenance repository has intentional
+post-baseline internal and unrelated public provisioning changes. The gate now
+checks the exact v2 commit boundary; an additional semantic parent/current API
+comparison produced the identical digest recorded above.
