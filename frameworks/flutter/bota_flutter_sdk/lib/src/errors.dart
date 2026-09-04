@@ -27,6 +27,10 @@ final class BotaErrorCode {
   );
   static const downloadFailed = BotaErrorCode._('downloadFailed');
   static const internal = BotaErrorCode._('internal');
+  static const clientDestroyed = BotaErrorCode._('client_destroyed');
+  static const configurationConflict = BotaErrorCode._(
+    'configuration_conflict',
+  );
 
   final String name;
   final int? rawValue;

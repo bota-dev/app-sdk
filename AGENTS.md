@@ -47,6 +47,12 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - One workflow owns the core engine at a time; hosts preserve request and
   cancellation IDs when returning callbacks.
 - High-volume recording bytes stay off JavaScript and Dart bridges.
+- The Flutter Dart facade owns one `PigeonBotaPlatform` per engine. It uses
+  cryptographically random 32-hex bridge IDs, removes pending operation,
+  stream, and callback ownership before completion or cancellation, rejects
+  late events and callback responses, and makes destroy terminal and
+  idempotent. Dart only maps typed Pigeon values; native facades retain every
+  Bluetooth and workflow owner.
 - React Native compatibility requires the frozen public API surface digest in
   addition to protocol fixtures and workflow traces. Internal legacy modules
   outside `src/index.ts` are not part of that public contract.

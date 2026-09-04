@@ -1,6 +1,7 @@
 import 'managers.dart';
 import 'models/device.dart';
 import 'models/security.dart';
+import 'pigeon_platform.dart';
 import 'platform.dart';
 
 final class BotaConfiguration {
@@ -24,9 +25,17 @@ final class BotaConfiguration {
 
 /// Public entry point for one Flutter engine's Bota SDK facade.
 final class BotaDeviceClient {
-  BotaDeviceClient.forTesting(BotaPlatform platform)
+  factory BotaDeviceClient() => _defaultInstance;
+
+  BotaDeviceClient._(BotaPlatform platform)
     : _platform = platform,
       _managers = BotaManagerBundle(platform);
+
+  BotaDeviceClient.forTesting(BotaPlatform platform) : this._(platform);
+
+  static final BotaDeviceClient _defaultInstance = BotaDeviceClient._(
+    PigeonBotaPlatform(),
+  );
 
   final BotaPlatform _platform;
   final BotaManagerBundle _managers;
