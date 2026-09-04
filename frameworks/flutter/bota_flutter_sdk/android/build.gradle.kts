@@ -1,6 +1,9 @@
+import com.android.build.api.dsl.LibraryExtension
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
-    id("com.android.library") version "8.13.2"
-    id("org.jetbrains.kotlin.android") version "2.1.20"
+    id("com.android.library")
+    id("org.jetbrains.kotlin.android")
 }
 
 fun requiredSdkVersion(): String {
@@ -22,7 +25,7 @@ val flutterSdkPath = providers.gradleProperty("flutterSdkPath").orNull
 val flutterJar = file("$flutterSdkPath/bin/cache/artifacts/engine/android-arm64/flutter.jar")
 require(flutterJar.isFile) { "Flutter embedding JAR is missing: $flutterJar" }
 
-android {
+extensions.configure<LibraryExtension> {
     namespace = "dev.bota.sdk.flutter"
     compileSdk = 36
 
@@ -36,11 +39,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-        allWarningsAsErrors = true
-    }
-
     testOptions {
         unitTests.isReturnDefaultValues = true
     }
@@ -50,6 +48,13 @@ android {
         checkReleaseBuilds = true
         warningsAsErrors = true
         disable += "NewerVersionAvailable"
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_17
+        allWarningsAsErrors = true
     }
 }
 

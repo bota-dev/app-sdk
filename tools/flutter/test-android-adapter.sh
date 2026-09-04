@@ -35,6 +35,10 @@ flutter_home="${BOTA_FLUTTER_HOME:-$workspace_root/target/flutter-sdk/$flutter_v
 
 cat >"$consumer_root/settings.gradle.kts" <<EOF
 pluginManagement {
+    plugins {
+        id("com.android.library") version "8.13.2"
+        id("org.jetbrains.kotlin.android") version "2.1.20"
+    }
     repositories {
         google()
         mavenCentral()

@@ -705,7 +705,7 @@ internal class BotaAndroidAdapter(
         body: suspend () -> T,
     ): T {
         var beganIdentifier = false
-        val task: Deferred<Any?>
+        val task: Deferred<T>
         try {
             beginIdentifier(operationId, requiresConfiguration = true)
             beganIdentifier = true
@@ -723,8 +723,7 @@ internal class BotaAndroidAdapter(
             }
             synchronized(stateLock) { inFlightOperations[operationId] = InFlightOperation(category, task) }
             task.start()
-            @Suppress("UNCHECKED_CAST")
-            return task.await() as T
+            return task.await()
         } catch (error: Throwable) {
             val mapped = if (isDetached()) {
                 bridgeError("engine_detached", "engine is detached")

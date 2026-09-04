@@ -114,7 +114,7 @@ internal class NativeLeaseCoordinator(
         destroyToWait?.task?.await()
         if (destroyToWait != null) {
             lock.withLock {
-                if (destroying?.id == destroyToWait?.id) destroying = null
+                if (destroying?.id == destroyToWait.id) destroying = null
                 if (!pendingLeases.containsKey(engineId)) {
                     throw NativeLeaseException.AcquisitionCancelled()
                 }

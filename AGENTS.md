@@ -53,6 +53,18 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   late events and callback responses, and makes destroy terminal and
   idempotent. Dart only maps typed Pigeon values; native facades retain every
   Bluetooth and workflow owner.
+- Keep Flutter workflow conformance data-driven from all canonical
+  `protocol/workflows/*.json` suites. The fake host may translate a fixture's
+  already-decided outcome into typed Dart values, but must not implement a
+  second reducer. The current gate is exactly 29 canonical traces plus one
+  discovery assertion.
+- The Flutter example is a real compact device-management screen. Keep scan,
+  selected connect, serial-strict reconnect, status, recording list and
+  retained encrypted batch handoff, WiFi, OTA, remove-only deprovision, and
+  authenticated reset usable without logging credentials, grants, callback
+  material, URLs, headers, or recording payloads. Backend stubs fail closed
+  until the application integrates them. Do not add native live streaming or
+  unsupported Flutter targets.
 - The Flutter Android plugin uses the application context and one engine-owned
   `SupervisorJob` on `Dispatchers.Main.immediate`. Its process-wide coordinator
   owns native categories by engine, retains poison after failed native stop,
@@ -61,6 +73,17 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   packaged `android/sdk-version.toml` is resolved from the plugin project and
   must match the root version; package verification rejects drift. Run
   `tools/flutter/test-android-adapter.sh` after changing this bridge.
+- A Flutter application owns the Android plugin classpath, so the consumable
+  plugin build applies AGP and Kotlin without versions. Standalone plugin and
+  adapter-test settings pin AGP 8.13.2 and Kotlin 2.1.20. Keep the build on the
+  public `LibraryExtension` and Kotlin compiler-options APIs so generated
+  Flutter consumers can compile it with their newer compatible toolchain.
+- `tools/flutter/test-consumers.sh` generates disposable full iOS and Android
+  applications, validates Bluetooth permission declarations, rebuilds exact
+  local Apple and Android artifacts, uses an isolated Gradle cache, and requires
+  fresh release outputs. The `dev.bota` Maven group must be exclusive to the
+  fresh local repository. Never weaken the gate to accept stale output or a
+  remote native substitute.
 - React Native compatibility requires the frozen public API surface digest in
   addition to protocol fixtures and workflow traces. Internal legacy modules
   outside `src/index.ts` are not part of that public contract.
@@ -455,6 +478,10 @@ npm run test:workflows -- --sdk-path ../react-native-sdk
 (cd frameworks/react-native && bundle _2.6.9_ exec npm run test:apple:integration)
 # Run only after the matching public tag and Apple archive exist:
 (cd frameworks/react-native && bundle _2.6.9_ exec npm run test:apple:remote-resolution)
+tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
+tools/flutter/test-android-adapter.sh
+tools/flutter/test-consumers.sh
+npm run flutter:verify
 JAVA_HOME=/path/to/jdk-17 ANDROID_HOME="$HOME/Library/Android/sdk" \
   npm run test:android:foundation
 tools/android/test-package.sh --api 35 \

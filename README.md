@@ -1,9 +1,9 @@
 # Bota App SDK
 
-Source monorepo for the **Bota App SDK** family. The repository will provide
-a shared Rust protocol and workflow core with platform-native Bluetooth
-transports and idiomatic Apple, Android, React Native, Flutter, Web, and Windows
-facades.
+Source monorepo for the **Bota App SDK** family. The repository provides a
+shared Rust protocol and workflow core with platform-native Bluetooth
+transports and Apple, Android, React Native, and Flutter facades. Web and
+Windows facades remain planned.
 
 `@bota.dev/react-native-sdk@1.1.0`, `BotaAppleSDK`, and
 `dev.bota:bota-android-sdk:1.1.0` are the first synchronized public App SDK
@@ -24,6 +24,12 @@ Apple and Android do not use npm dist-tags, so beta consumers pin the exact
 synchronized version shown in the installation sections below. New synchronized
 releases use `1.x.y-beta.n`; promotion to a stable channel is a separate release
 decision.
+
+The Flutter facade is implemented in source and passes local release-consumer
+gates, but it was not included in published version `1.1.0`. Its first planned
+pub.dev release is the synchronized `1.2.0-beta.0` prerelease. Flutter
+applications must not infer package availability from the Apple, Android, or
+React Native release alone.
 
 ## Current Status
 
@@ -84,6 +90,14 @@ npm trusted publishing without moving `latest`. Local
 consumer acceptance installs that registry artifact without a workspace
 symlink and produces release-mode iOS and Android Expo bundles for both Demo
 and Bota One.
+The Flutter source package now exposes the same native-owned mobile workflows
+through typed Pigeon channels. Its Dart conformance suite discovers all 29
+canonical workflow traces and checks typed operation, event, and error routing
+without implementing another reducer. A compact device-management example and
+fresh generated consumers build release-mode Android and iOS applications
+against exact local native artifacts. Backend callbacks fail closed until an
+application supplies request-bound provisioning, reset, persistence, firmware,
+WiFi, and upload integration. Flutter publication remains a later release gate.
 The exported `DeviceManager` compatibility owner delegates scan,
 selected connection, status, settings, logs, WiFi/cache behavior, provisioning
 state and key reads, direct provisioning writes, and time sync. Those low-volume
@@ -159,8 +173,9 @@ with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed
 packets. Shared protocol decode/encode entry points cover the frozen status,
 recording list and control, transfer, OTA, provisioning, settings, and log fixtures. The Apple
-package and Android AAR are public platform distributions; the remaining
-planned native facades are not yet published.
+package and Android AAR are public platform distributions. The Flutter facade
+is implemented but not yet published; the remaining planned facades are also
+unpublished.
 ABI v1 is frozen at the typed public header and verified by standalone C and
 Swift callers. Its exact ownership contract, artifact digests, packet coverage,
 and platform exclusions are recorded in
@@ -209,7 +224,8 @@ skips before client configuration. The supervised Bota Pin and Bota Note matrix
 is not inferred from CI and remains a human release approval. The root Swift
 package distributes the Apple facade for iOS and macOS while keeping the Rust
 core in a checksummed XCFramework. This release does not replace the production
-React Native maintenance line or claim Flutter, Web, or Windows availability.
+React Native maintenance line or claim a published Flutter, Web, or Windows
+package.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and the
 [firmware compatibility matrix](protocol/compatibility/firmware-compatibility.json).
@@ -252,6 +268,19 @@ Pin the exact synchronized beta version from Maven Central:
 implementation("dev.bota:bota-android-sdk:1.1.0")
 ```
 
+## Flutter Beta Candidate
+
+The Flutter facade supports iOS 15+ and Android API 26+. It is currently a
+source candidate rather than a published `1.1.0` package. See the
+[Flutter integration guide](frameworks/flutter/bota_flutter_sdk/README.md) for
+exact-version installation, permissions, backend callbacks, serial-strict
+reconnect, retained encrypted batch handoff, WiFi, OTA, remove-only
+deprovision, authenticated reset, and unsupported targets.
+
+The first planned pub.dev release is `1.2.0-beta.0`; applications must opt into
+that exact prerelease after its synchronized native artifacts and package
+verification complete.
+
 ## Development
 
 Requirements:
@@ -262,6 +291,8 @@ Requirements:
   verification locks CocoaPods 1.16.2, xcodeproj 1.27.0, and Bundler 2.6.9
 - JDK 17, Android SDK 36, build-tools 35.0.0, NDK 28.2.13676358, and CMake
   3.22.1 for the Android facade
+- Flutter 3.47.2 with Dart 3.13.2 through the repository wrapper for Flutter
+  facade verification
 
 ```bash
 npm ci
@@ -301,6 +332,10 @@ tools/android/package-release.sh --check
 tools/android/install-release-repository.sh target/android-release target/android-m2
 tools/android/test-emulator-lane.sh --api 26
 tools/android/test-emulator-lane.sh --api 35
+tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
+tools/flutter/test-android-adapter.sh
+tools/flutter/test-consumers.sh
+npm run flutter:verify
 ```
 
 The React Native API check expects `npm ci` to have installed the reference SDK

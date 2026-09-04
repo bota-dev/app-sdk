@@ -67,6 +67,13 @@ an uncertain publish is recoverable without attempting to replace an immutable
 npm version. The npm package trusts `bota-dev/app-sdk`, `release.yml`, and the
 `release` environment; no long-lived npm write token enters GitHub Actions.
 
+The Flutter facade is implemented in source but is not part of the immutable
+`1.1.0` public release. Its first planned pub.dev artifact is the synchronized
+`1.2.0-beta.0` prerelease. Flutter publication may proceed only after the exact
+Apple and Android artifacts at that version exist, disposable release
+consumers resolve them, and the package candidate passes dry-run and inventory
+verification.
+
 ## Migration Rule
 
 The existing React Native SDK at revision `44ac1221cb71` is the initial
@@ -565,6 +572,36 @@ Swift does not contain a second wire parser.
 The Apple and Android fixture runners both execute all 39 frozen decode cases,
 including recording state and command-result compatibility.
 
+The public Flutter package is `frameworks/flutter/bota_flutter_sdk`. One
+`BotaDeviceClient` and `PigeonBotaPlatform` belong to each Flutter engine. Dart
+exposes immutable device, settings, recording, WiFi, OTA, security, and error
+values through manager APIs; it does not own Bluetooth, network requests,
+recording or firmware bodies, workflow checkpoints, or reducer decisions.
+Pigeon carries bounded commands, typed progress, native file paths, and
+request-bound application callback results. Operation, subscription, and
+callback ownership is removed before terminal completion, and destroy is
+terminal and idempotent.
+
+The application supplies provisioning material, factory-reset grants, durable
+reset-result persistence, and firmware sources through one-shot callbacks.
+WiFi and deprovision grants remain exact command inputs. These values may cross
+their request-bound method but never appear in event streams, checkpoints, or
+logs. Batch recording transfer returns a native file path and retains the
+device copy until application upload succeeds and the exact confirmation is
+sent. Native live-audio streaming and Flutter Web, macOS, Windows, and Linux
+targets are not supported.
+
+Flutter conformance discovers every canonical JSON workflow suite at test time
+and routes all 29 scenarios through a fake host implementation. The fake emits
+only each fixture's already-decided typed outcome; Rust remains the sole
+workflow reducer. Release-consumer verification generates a complete fresh
+iOS/Android Flutter application, copies in the maintained example and platform
+permissions, rebuilds local native artifacts, reserves the `dev.bota` Maven
+group for the fresh local candidate, resolves the local Apple package, and
+requires new release outputs. The temporary consumer and its isolated Gradle
+cache are deleted after each run, so stale application outputs cannot satisfy
+the gate.
+
 The Flutter Android plugin delegates every generated Pigeon host operation,
 stream, and callback to `BotaDeviceClient.shared`; it does not duplicate native
 Bluetooth or workflow behavior. Each engine owns a `SupervisorJob` on the
@@ -584,7 +621,12 @@ consumer build root. Package verification requires that copy to match the root
 26 or newer, and resolves `dev.bota:bota-android-sdk:<version>`. Local adapter
 tests publish the same native Android artifact into the repository test Maven
 directory and configure the plugin from a temporary consumer root before
-compiling it.
+compiling it. The consumable plugin does not declare AGP or Kotlin versions in
+its own project because the Flutter application owns that classpath; standalone
+package and adapter-test settings pin AGP 8.13.2 and Kotlin 2.1.20. Its build
+uses the public Android `LibraryExtension` and Kotlin compiler-options APIs so
+the same source compiles in the pinned toolchain and the newer toolchain emitted
+by the pinned Flutter application template.
 
 `CoreEngineActor` is the single Swift workflow executor. It submits all ten
 typed command shapes to Rust, drains notifications and host effects in order,

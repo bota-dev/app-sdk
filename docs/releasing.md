@@ -11,6 +11,11 @@ The nested `platforms/apple/Package.swift` remains the local-development
 package. It points at the generated XCFramework on disk so facade tests do not
 depend on a published release.
 
+The Flutter `bota_flutter_sdk` facade is implemented and locally gated for iOS
+15+ and Android API 26+, but it was not published with synchronized version
+`1.1.0`. Its first planned pub.dev release is `1.2.0-beta.0`; do not advertise
+or attempt to recover a nonexistent Flutter `1.1.0` artifact.
+
 The Android package uses Maven coordinate `dev.bota:bota-android-sdk`. The
 synchronized `1.1.0` beta release publishes it through the protected Central
 Portal workflow after deterministic packaging and native acceptance gates pass.
@@ -93,6 +98,10 @@ tools/ffi-smoke/run-native-swift-smoke.sh
 tools/apple/test-package.sh
 tools/apple/test-consumer.sh
 tools/apple/package-release.sh
+tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
+tools/flutter/test-android-adapter.sh
+tools/flutter/test-consumers.sh
+npm run flutter:verify
 cargo deny check
 ```
 
@@ -196,6 +205,42 @@ fails if either original machine-specific prefix remains in a static library.
 
 The XCFramework contains arm64 iOS, arm64/x86_64 iOS Simulator, and
 arm64/x86_64 macOS slices.
+
+## Flutter Package Gate
+
+Flutter verification must use the repository wrapper, which pins Flutter
+3.47.2 and Dart 3.13.2. The package version and its packaged Android
+`sdk-version.toml` must equal the root version, generated Pigeon Dart, Swift,
+and Kotlin outputs must be byte-identical, and analysis plus all Dart tests must
+pass.
+
+`tools/flutter/test-consumers.sh` is the pre-publication mobile build gate. It
+must:
+
+1. Reject missing or empty iOS Bluetooth usage descriptions and incomplete
+   Android API 26-35 Bluetooth permissions.
+2. Rebuild the local Apple XCFramework and Android Maven candidate after
+   removing the prior exact-version Android directory.
+3. Generate a complete disposable Flutter iOS/Android application and use an
+   isolated Gradle home.
+4. Resolve `BotaAppleSDK` from the exact local package and reserve the
+   `dev.bota` group for the exact local Android repository.
+5. Produce a new Android release APK and unsigned iOS release application.
+
+The maintained `example/` directory intentionally contains only application
+source, package metadata, and permission manifests. Generated runner files are
+never release evidence by themselves. A consumer failure must not fall back to
+an earlier application build, cached native candidate, remote Maven artifact,
+or remote Apple package.
+
+The first Flutter beta may be published only after the synchronized Apple and
+Android artifacts at `1.2.0-beta.0` are public and their no-override consumers
+pass. The protected tag workflow must preserve the exact Flutter candidate,
+run `flutter pub publish --dry-run`, and pause for the initial interactive
+pub.dev bootstrap. Later prereleases use pub.dev's GitHub OIDC workflow. Every
+publication is then downloaded and compared with the candidate inventory and
+SHA-256 before release completion. This release tooling is owned by the next
+milestone; Task 7 consumer evidence alone does not authorize publication.
 
 ## Publish
 
