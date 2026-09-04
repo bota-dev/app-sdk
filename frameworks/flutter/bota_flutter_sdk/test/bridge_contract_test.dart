@@ -129,55 +129,61 @@ void main() {
     expect(schema, isNot(contains('class BotaWireValueMessage')));
   });
 
-  test('event messages contain bounded values and no sensitive bodies', () {
-    const Set<String> eventClasses = <String>{
-      'BotaEventMessage',
-      'BotaEventPayloadMessage',
-      'BotaDiscoveredDeviceEventMessage',
-      'BotaConnectionEventMessage',
-      'BotaDeviceStatusEventMessage',
-      'BotaRecordingStateEventMessage',
-      'BotaRecordingSyncProgressEventMessage',
-      'BotaRecordingSyncCompletedEventMessage',
-      'BotaUploadOwnershipProgressEventMessage',
-      'BotaUploadOwnershipResolvedEventMessage',
-      'BotaFirmwareProgressEventMessage',
-      'BotaDeviceLogEventMessage',
-      'BotaWifiStatusEventMessage',
-      'BotaSubscriptionErrorEventMessage',
-      'BotaSubscriptionCompleteEventMessage',
-      'BotaDiscoveredDeviceMessage',
-      'BotaConnectedDeviceMessage',
-      'BotaDeviceStatusMessage',
-      'BotaDeviceFlagsMessage',
-      'BotaModemInfoMessage',
-      'BotaRecordingStateMessage',
-      'BotaRecordingTransferProgressMessage',
-      'BotaUploadOwnershipResultMessage',
-      'BotaFirmwareProgressMessage',
-      'BotaDeviceLogLineMessage',
-      'BotaWifiStatusMessage',
-      'BotaErrorMessage',
-      'BotaDeviceTypeMessage',
-      'BotaPairingStateMessage',
-      'BotaDeviceStateValueMessage',
-      'BotaLteStateMessage',
-      'BotaWifiRadioStateMessage',
-      'BotaRecordingInitiatorMessage',
-      'BotaFirmwarePhaseMessage',
-      'BotaWifiStateMessage',
-      'BotaErrorCodeMessage',
-      'BotaOperationMessage',
-    };
-    final RegExp forbiddenField = RegExp(
-      r'\b(?:Object|String|int|bool|double|Uint8List|\w+Message)\??\s+'
-      r'(?:bytes|body|chunk|packet|password|grant|privateKey)\s*[;=]',
-    );
+  test('event safety derives the transitive message closure from its root', () {
+    expect(_eventSafetyViolations(schema), isEmpty);
+  });
 
-    for (final String className in eventClasses) {
-      final String body = _classBody(schema, className);
-      expect(body, isNot(contains('Uint8List')), reason: className);
-      expect(forbiddenField.hasMatch(body), isFalse, reason: className);
+  test('event safety follows newly nested message types', () {
+    final String mutated = schema
+        .replaceFirst('sealed class BotaEventPayloadMessage {}', '''
+class BotaNestedSensitiveMessage {
+  BotaNestedSensitiveMessage({required this.password});
+
+  String password;
+}
+
+sealed class BotaEventPayloadMessage {}''')
+        .replaceFirst(
+          'BotaDeviceStatusEventMessage({required this.status});',
+          'BotaDeviceStatusEventMessage({\n'
+              '    required this.status,\n'
+              '    required this.nested,\n'
+              '  });',
+        )
+        .replaceFirst(
+          '  BotaDeviceStatusMessage status;\n}',
+          '  BotaDeviceStatusMessage status;\n'
+              '  BotaNestedSensitiveMessage nested;\n}',
+        );
+
+    expect(
+      _eventSafetyViolations(mutated),
+      contains('BotaNestedSensitiveMessage.password: forbidden field name'),
+    );
+  });
+
+  test('event safety rejects direct List<int> and Uint8List fields', () {
+    for (final String byteArrayType in <String>['List<int>', 'Uint8List']) {
+      final String mutated = schema
+          .replaceFirst(
+            'BotaEventMessage({required this.subscriptionId, required this.payload});',
+            'BotaEventMessage({\n'
+                '    required this.subscriptionId,\n'
+                '    required this.payload,\n'
+                '    required this.payloadData,\n'
+                '  });',
+          )
+          .replaceFirst(
+            '  BotaEventPayloadMessage payload;\n}',
+            '  BotaEventPayloadMessage payload;\n'
+                '  $byteArrayType payloadData;\n}',
+          );
+
+      expect(
+        _eventSafetyViolations(mutated),
+        contains('BotaEventMessage.payloadData: forbidden byte-array type'),
+        reason: byteArrayType,
+      );
     }
   });
 
@@ -228,4 +234,126 @@ String _methodReturnType(String body, String method) {
     '([\\w<>,?]+)\\s+${RegExp.escape(method)}\\s*\\(',
   ).firstMatch(body)!;
   return match.group(1)!;
+}
+
+List<String> _eventSafetyViolations(String source) {
+  const Set<String> forbiddenFieldNames = <String>{
+    'bytes',
+    'body',
+    'chunk',
+    'packet',
+    'password',
+    'grant',
+    'privateKey',
+  };
+  final Map<String, _SchemaClass> classes = _parseSchemaClasses(source);
+  final Map<String, Set<String>> subclasses = <String, Set<String>>{};
+  for (final _SchemaClass declaration in classes.values) {
+    final String? superclass = declaration.superclass;
+    if (superclass != null) {
+      subclasses
+          .putIfAbsent(superclass, () => <String>{})
+          .add(declaration.name);
+    }
+  }
+
+  final Set<String> reachable = <String>{};
+  final List<String> pending = <String>['BotaEventMessage'];
+  while (pending.isNotEmpty) {
+    final String className = pending.removeLast();
+    if (!reachable.add(className)) continue;
+    final _SchemaClass? declaration = classes[className];
+    if (declaration == null) {
+      throw StateError('Unknown event-reachable class $className');
+    }
+
+    pending.addAll(subclasses[className] ?? const <String>{});
+    for (final _SchemaField field in declaration.fields) {
+      for (final RegExpMatch reference in RegExp(
+        r'\b[A-Za-z_]\w*\b',
+      ).allMatches(field.type)) {
+        final String referencedType = reference.group(0)!;
+        if (classes.containsKey(referencedType)) pending.add(referencedType);
+      }
+    }
+  }
+
+  final List<String> violations = <String>[];
+  for (final String className in reachable) {
+    for (final _SchemaField field in classes[className]!.fields) {
+      if (forbiddenFieldNames.contains(field.name)) {
+        violations.add('$className.${field.name}: forbidden field name');
+      }
+      if (_isByteArrayType(field.type)) {
+        violations.add('$className.${field.name}: forbidden byte-array type');
+      }
+    }
+  }
+  return violations..sort();
+}
+
+Map<String, _SchemaClass> _parseSchemaClasses(String source) {
+  final Map<String, _SchemaClass> classes = <String, _SchemaClass>{};
+  final RegExp declarations = RegExp(
+    r'(?:^|\n)\s*(?:abstract\s+|sealed\s+)?class\s+'
+    r'([A-Za-z_]\w*)(?:\s+extends\s+([A-Za-z_]\w*))?\s*\{',
+  );
+  for (final RegExpMatch match in declarations.allMatches(source)) {
+    final String name = match.group(1)!;
+    classes[name] = _SchemaClass(
+      name: name,
+      superclass: match.group(2),
+      fields: _parseSchemaFields(_bodyAfterDeclaration(source, match.end)),
+    );
+  }
+  return classes;
+}
+
+List<_SchemaField> _parseSchemaFields(String body) {
+  final RegExp declaration = RegExp(
+    r'^\s*(.+?)\s+([A-Za-z_]\w*)\s*(?:=[^;]*)?;\s*$',
+    multiLine: true,
+  );
+  return declaration
+      .allMatches(body)
+      .map(
+        (RegExpMatch match) =>
+            _SchemaField(type: match.group(1)!.trim(), name: match.group(2)!),
+      )
+      .toList(growable: false);
+}
+
+String _bodyAfterDeclaration(String source, int start) {
+  var depth = 1;
+  for (var index = start; index < source.length; index += 1) {
+    if (source[index] == '{') depth += 1;
+    if (source[index] == '}') depth -= 1;
+    if (depth == 0) return source.substring(start, index);
+  }
+  throw StateError('Unclosed class declaration');
+}
+
+bool _isByteArrayType(String type) {
+  if (RegExp(r'\bUint8List\b').hasMatch(type)) return true;
+  final String compact = type.replaceAll(RegExp(r'\s+|\?'), '');
+  return RegExp(r'(^|[<,])List<int>(?=[>,]|$)').hasMatch(compact);
+}
+
+final class _SchemaClass {
+  const _SchemaClass({
+    required this.name,
+    required this.superclass,
+    required this.fields,
+  });
+
+  final String name;
+  final String? superclass;
+  final List<_SchemaField> fields;
+}
+
+final class _SchemaField {
+  const _SchemaField({required this.type, required this.name});
+
+  final String type;
+  final String name;
 }
