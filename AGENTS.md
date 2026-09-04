@@ -59,9 +59,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   byte-free native effects, versioned opaque checkpoint metadata, staging
   evidence, and receipt-gated confirmation. The Apple facade maps the additive
   command, all twelve effects, typed failures, and the staged notification to a
-  dedicated native host port, but the configured port still returns
-  `feature_unavailable`; no Apple/Android native transfer or released manager
-  implements the workflow, so keep runtime metadata false.
+  dedicated native host port. Its in-memory `EncryptedUploadV2MaterialRegistry`
+  validates the exact 408/580/336-byte opaque documents, bodyless HTTPS staging
+  requests, digest evidence, redacted descriptions, duplicate registration,
+  stale post-terminal callbacks, and remove-before-cancel terminal cleanup. The
+  configured port still returns `feature_unavailable`; no Apple/Android native
+  transfer or released manager implements the workflow, so keep runtime
+  metadata false.
 - React Native compatibility requires the frozen public API surface digest in
   addition to protocol fixtures and workflow traces. Internal legacy modules
   outside `src/index.ts` are not part of that public contract.
@@ -395,8 +399,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   user-selected peripheral learns its identity from the fresh GATT serial read;
   an explicitly supplied serial and every reconnect remain exact-match checks.
   The Apple facade never chooses a peripheral by name.
-- Apple provisioning and reset callbacks are registered by opaque material ID;
-  do not place callback results in checkpoints, logs, or public notifications.
+- Apple provisioning, reset, and Encrypted Upload v2 callbacks are registered
+  by opaque material ID; do not place callback results in checkpoints, logs, or
+  public notifications. V2 terminal cleanup removes the callback before any
+  best-effort backend cancellation can fail.
 - Persist the reset command ID and binding generation with the exact device
   result. Resume only the receipt workflow and reject a stale generation before
   starting Rust. Remove-only deprovision must never call factory reset.

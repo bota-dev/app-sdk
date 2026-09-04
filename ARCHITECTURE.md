@@ -133,21 +133,27 @@ Encrypted Upload v2 is currently a contract-only capability: the canonical
 vectors and Rust codecs exist, and Apple/Android can inspect normalized framing
 metadata internally. The Rust workflow engine and additive C ABI now also
 model v2 session ownership, durable checkpoint ordering, opaque native staging,
-and receipt-gated confirmation. Apple now has an internal command mapper and an
+and receipt-gated confirmation. Apple now has an internal command mapper, an
 exhaustive twelve-effect host port with typed failure and staged-notification
-routing; the production configuration intentionally installs an unavailable
-port until native BLE, sink, provider, staging, and recovery work lands. Android
-still has no equivalent host, React Native exposes no v2 workflow or bulk
-bytes, and compatibility metadata keeps runtime support and firmware
-advertisement false.
+routing, and an in-memory application-material registry keyed by opaque ID.
+The registry keeps authorization, manifest, receipt, and staging credentials
+out of Rust and persistent state; validates exact document sizes, evidence, and
+bodyless HTTPS PUT requests; and removes providers before terminal cancellation
+callbacks run. Registration generations also reject callbacks that complete
+after removal or replacement. The production configuration intentionally
+installs an unavailable port until native BLE, sink, staging, recovery, and
+manager wiring land. Android still has no equivalent host, React Native exposes
+no v2 workflow or bulk bytes, and compatibility metadata keeps runtime support
+and firmware advertisement false.
 The core now also exposes a side-effect-free three-profile selection validator:
 it requires every batch capability bit, usable advertised bounds, and an
 immutable recording generation in `bota_enc_v2` storage before accepting v2;
 rejects either legacy
 profile under `v2_required`; and accepts historical P10 only after its header
 was observed. This validator emits no BLE, file, network, delete, or fallback
-effect. Provider integration and native transfer/staging remain absent from
-released APIs. A byte-free batch-v2 coordinator now drives the shipping reducer
+effect. The Apple provider contract exists, but manager integration and native
+transfer/staging remain absent from released workflows. A byte-free batch-v2
+coordinator now drives the shipping reducer
 and additive ABI contract: it persists each complete window before ACK,
 truncates resume state to the last proven offset, exposes staging evidence,
 and cannot emit CONFIRM until a native host reports receipt acceptance. It has

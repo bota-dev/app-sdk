@@ -165,10 +165,14 @@ Encrypted Upload v2 has an additive, contract-only engine/ABI surface for
 profile-gated session coordination, opaque checkpoint metadata, staging
 evidence, and receipt-gated confirmation. Apple now maps its opaque command and
 all twelve effects through a dedicated internal host boundary and recognizes
-typed failures plus the staged notification; the production host still fails
-closed as unavailable and no public manager exposes the workflow. Android and
-React Native have no runtime host. Runtime compatibility metadata therefore
-remains disabled.
+typed failures plus the staged notification. Apple also has an in-memory,
+opaque-ID provider registry for application-supplied authorization, staging
+requests, manifest submission, finalization, and receipt retrieval. It rejects
+wrong document sizes, non-HTTPS or body-bearing staging requests, duplicate
+registrations, and removes material on every modeled terminal outcome. The
+production host still fails closed as unavailable and no public manager exposes
+the workflow. Android and React Native have no runtime host. Runtime
+compatibility metadata therefore remains disabled.
 ABI v1 is frozen at the typed public header and verified by standalone C and
 Swift callers. Its exact ownership contract, artifact digests, packet coverage,
 and platform exclusions are recorded in

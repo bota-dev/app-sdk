@@ -190,8 +190,10 @@ runtimes can consume the same trace.
   boundary, typed failure mapping, staged-notification mapping, and a real C ABI
   engine-loop test. The default production port remains unavailable, so this
   checkpoint alone is not runtime support.
-- [ ] Add an in-memory application provider registry keyed by opaque material
-  ID; unregister it on every terminal path.
+- [x] Add an in-memory application provider registry keyed by opaque material
+  ID; unregister it on every terminal path. Apple now validates fixed document
+  sizes, digest evidence, bodyless HTTPS staging requests, and removes entries
+  before non-success cancellation callbacks run.
 - [ ] Read capabilities fresh, run selection before START, and implement signed
   blob, START/ACK, DATA/window repair, manifest, EOF, receipt, and CONFIRM on the
   dedicated characteristics.
