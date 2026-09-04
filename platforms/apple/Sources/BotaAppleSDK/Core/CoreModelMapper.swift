@@ -491,6 +491,66 @@ final class CoreModelMapper: @unchecked Sendable {
         )
     }
 
+    func createEncryptedUploadV2SignedBlobBegin(
+        kind: UInt8,
+        writeID: UInt32,
+        totalLength: UInt16,
+        sha256: Data
+    ) throws -> Data {
+        try encode(BotaPrivateProtocol.encodeEncryptedUploadV2SignedBlob, fields: [
+            .unsigned(id: BotaPrivateProtocol.messageType, value: 0x60),
+            .unsigned(id: BotaPrivateProtocol.blobKind, value: UInt64(kind)),
+            .unsigned(id: BotaPrivateProtocol.writeID, value: UInt64(writeID)),
+            .unsigned(id: BotaPrivateProtocol.bodyLength, value: UInt64(totalLength)),
+            .bytes(id: BotaPrivateProtocol.contentSHA256, value: sha256),
+        ])
+    }
+
+    func createEncryptedUploadV2SignedBlobData(
+        kind: UInt8,
+        writeID: UInt32,
+        offset: UInt16,
+        data: Data
+    ) throws -> Data {
+        try encode(BotaPrivateProtocol.encodeEncryptedUploadV2SignedBlob, fields: [
+            .unsigned(id: BotaPrivateProtocol.messageType, value: 0x61),
+            .unsigned(id: BotaPrivateProtocol.blobKind, value: UInt64(kind)),
+            .unsigned(id: BotaPrivateProtocol.writeID, value: UInt64(writeID)),
+            .unsigned(id: BotaPrivateProtocol.offset, value: UInt64(offset)),
+            .bytes(id: BotaPrivateProtocol.value, value: data),
+        ])
+    }
+
+    func createEncryptedUploadV2SignedBlobCommit(kind: UInt8, writeID: UInt32) throws -> Data {
+        try encode(BotaPrivateProtocol.encodeEncryptedUploadV2SignedBlob, fields: [
+            .unsigned(id: BotaPrivateProtocol.messageType, value: 0x62),
+            .unsigned(id: BotaPrivateProtocol.blobKind, value: UInt64(kind)),
+            .unsigned(id: BotaPrivateProtocol.writeID, value: UInt64(writeID)),
+        ])
+    }
+
+    func createEncryptedUploadV2SignedBlobAbort(kind: UInt8, writeID: UInt32) throws -> Data {
+        try encode(BotaPrivateProtocol.encodeEncryptedUploadV2SignedBlob, fields: [
+            .unsigned(id: BotaPrivateProtocol.messageType, value: 0x63),
+            .unsigned(id: BotaPrivateProtocol.blobKind, value: UInt64(kind)),
+            .unsigned(id: BotaPrivateProtocol.writeID, value: UInt64(writeID)),
+        ])
+    }
+
+    func decodeEncryptedUploadV2SignedBlobResult(
+        _ data: Data
+    ) throws -> EncryptedUploadV2SignedBlobResultValue {
+        let fields = try decode(BotaPrivateProtocol.decodeEncryptedUploadV2SignedBlob, data)
+        guard try fields.requiredUInt8(BotaPrivateProtocol.messageType) == 0x64 else {
+            throw Self.invalid("encrypted-upload-v2 signed-blob notification is not a result")
+        }
+        return EncryptedUploadV2SignedBlobResultValue(
+            kind: try fields.requiredUInt8(BotaPrivateProtocol.blobKind),
+            writeID: try fields.requiredUInt32(BotaPrivateProtocol.writeID),
+            result: try fields.requiredUInt16(BotaPrivateProtocol.detailCode)
+        )
+    }
+
     private func decode(_ kind: UInt32, _ data: Data) throws -> PacketFields {
         do {
             let packet = try client.protocolDecode(Self.protocolPacket(kind: kind, fields: [
@@ -652,6 +712,8 @@ private enum BotaPrivateProtocol {
     static let decodeEncryptedUploadV2Capability: UInt32 = 0x0520
     static let decodeEncryptedUploadV2SignedBlob: UInt32 = 0x0521
     static let decodeEncryptedUploadV2TransferOrStatus: UInt32 = 0x0522
+    static let encodeEncryptedUploadV2SignedBlob: UInt32 = 0x0523
+    static let value: UInt32 = 30
     static let protocolVariant: UInt32 = 61
     static let recordingUUID: UInt32 = 13
     static let sequence: UInt32 = 38
@@ -666,6 +728,7 @@ private enum BotaPrivateProtocol {
     static let recordingActive: UInt32 = 120
     static let recordingInitiatedRemotely: UInt32 = 121
     static let recordingSuccess: UInt32 = 122
+    static let contentSHA256: UInt32 = 123
     static let messageType: UInt32 = 127
     static let transportSessionID: UInt32 = 128
     static let recordingGeneration: UInt32 = 129
@@ -682,6 +745,8 @@ private enum BotaPrivateProtocol {
     static let prefixSHA256: UInt32 = 143
     static let ciphertextSHA256: UInt32 = 144
     static let bodyLength: UInt32 = 150
+    static let blobKind: UInt32 = 151
+    static let writeID: UInt32 = 152
     static let detailCode: UInt32 = 155
     static let authorizationSHA256: UInt32 = 161
     static let receiptSHA256: UInt32 = 162

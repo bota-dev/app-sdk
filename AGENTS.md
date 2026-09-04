@@ -69,7 +69,14 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   bounds. It does not infer support from firmware or model strings. Outbound
   authorization and receipt blob frames must use the shared Rust encoder via
   additive ABI packet kind `0x0523`; platform facades must not reconstruct
-  those authenticated frames. The configured port still returns
+  those authenticated frames. Apple's internal
+  `EncryptedUploadV2SignedBlobWriter` permits one owner, queries the actual
+  write-with-response limit capped at the 512-byte protocol maximum, subscribes
+  to `0407` before BEGIN, checks cancellation between writes, and starts the
+  exact kind/`write_id` RESULT timeout only after COMMIT. Cleanup is bounded:
+  it best-effort ABORTs plus unsubscribes on local failure, then fails closed
+  with `uploadOwnershipUnknown` until a confirmed disconnect if cleanup cannot
+  be proven. The configured port still returns
   `feature_unavailable`; no Apple/Android native
   transfer or released manager implements the workflow, so keep runtime
   metadata false.

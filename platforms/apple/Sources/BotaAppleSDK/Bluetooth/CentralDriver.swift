@@ -34,6 +34,7 @@ protocol CentralDriver: Sendable {
     func discoverCharacteristics(peripheralID: String, serviceUUIDs: [String]) async throws
     func disconnect(peripheralID: String) async throws
     func read(peripheralID: String, serviceUUID: String, characteristicUUID: String) async throws -> Data
+    func maximumWriteValueLength(peripheralID: String, withResponse: Bool) async throws -> Int
     func write(
         peripheralID: String,
         serviceUUID: String,

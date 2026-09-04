@@ -22,6 +22,12 @@ struct EncryptedUploadV2CapabilitiesValue: Equatable, Sendable {
     let maximumMissingSequences: UInt16
 }
 
+struct EncryptedUploadV2SignedBlobResultValue: Equatable, Sendable {
+    let kind: UInt8
+    let writeID: UInt32
+    let result: UInt16
+}
+
 struct EncryptedUploadV2CommandRequest: Equatable, Sendable {
     let serialNumber: String
     let recordingUUID: String

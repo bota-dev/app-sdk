@@ -175,7 +175,12 @@ perform an uncached `0406` capability read through the shared Rust decoder,
 returning the exact bytes, digest, and typed bounds internally. The production
 ABI also provides additive packet kind `0x0523` so native facades can encode
 authenticated signed-blob frames through the shared Rust codec instead of
-reconstructing them. The production transfer host still fails closed as
+reconstructing them. Apple's internal writer now serializes ownership, chunks
+against the current CoreBluetooth write-with-response limit capped at 512
+bytes, subscribes before BEGIN, checks cancellation between writes, and starts
+the exact-matching RESULT timeout after COMMIT. Its ABORT/unsubscribe cleanup
+is bounded and uncertain cleanup fails closed until confirmed disconnect. The
+production transfer host still fails closed as
 unavailable and no public manager exposes
 the workflow. Android and React Native have no runtime host. Runtime
 compatibility metadata therefore remains disabled.

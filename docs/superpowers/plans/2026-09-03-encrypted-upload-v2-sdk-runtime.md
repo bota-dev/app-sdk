@@ -201,8 +201,13 @@ runtimes can consume the same trace.
     whose exact 24 bytes are decoded by Rust and SHA-256-bound for the provider.
   - [x] Add ABI packet kind `0x0523` so native hosts encode canonical signed-blob
     BEGIN/DATA/COMMIT/ABORT frames through the Rust codec.
+  - [x] Add the serialized Apple `0407` writer: subscribe before BEGIN, chunk by
+    the live write-with-response limit capped at 512 bytes, check cancellation
+    between writes, start the exact kind/`write_id` RESULT timeout after COMMIT,
+    and use bounded ABORT/unsubscribe cleanup that fails closed until confirmed
+    disconnect when ownership cannot be proven released.
   - [ ] Wire the resulting snapshot through application selection before START,
-    then implement the dedicated signed-blob and transfer message lifecycle.
+    then implement START/ACK, DATA/window repair, manifest, EOF, and CONFIRM.
 - [ ] Stream ciphertext to a bounded native file and staging request without a
   plaintext copy or bridge payload.
 - [ ] Persist and recover only mutually proven checkpoint metadata.

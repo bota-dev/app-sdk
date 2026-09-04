@@ -76,6 +76,11 @@ actor FakeCentralDriver: CentralDriver {
         return Data([1])
     }
 
+    func maximumWriteValueLength(peripheralID: String, withResponse: Bool) async throws -> Int {
+        log.append("maximumWriteValueLength:\(peripheralID):\(withResponse)")
+        return 512
+    }
+
     func write(
         peripheralID: String,
         serviceUUID: String,

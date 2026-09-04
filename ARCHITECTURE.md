@@ -146,8 +146,14 @@ selection read fetches `0406` again, delegates exact 24-byte decoding to Rust,
 and returns the raw-value SHA-256 plus typed bounds; it has no firmware/model
 inference or cache. The additive `0x0523` ABI encoder also delegates outbound
 signed-blob BEGIN/DATA/COMMIT/ABORT bytes to the Rust codec, keeping
-authorization and receipt framing out of platform implementations. The
-production configuration intentionally installs an
+authorization and receipt framing out of platform implementations. Apple's
+serialized signed-blob writer uses the current CoreBluetooth
+write-with-response limit capped at 512 bytes, subscribes to `0407` before
+BEGIN, checks cancellation between writes, starts its RESULT timeout only after
+COMMIT, and matches RESULT by both blob kind and `write_id`. It rejects
+concurrent owners; failure cleanup is bounded and best-effort ABORTs plus
+unsubscribes, with uncertain cleanup blocking another owner until a confirmed
+disconnect. The production configuration intentionally installs an
 unavailable transfer port until native BLE messaging, sink, staging, recovery,
 and manager wiring land. Android still has no equivalent host, React Native
 exposes no v2 workflow or bulk bytes, and compatibility metadata keeps runtime

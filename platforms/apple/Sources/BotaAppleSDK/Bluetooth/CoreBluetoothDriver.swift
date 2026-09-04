@@ -185,6 +185,21 @@ final class CoreBluetoothDriver: NSObject, CentralDriver, @unchecked Sendable {
         }
     }
 
+    func maximumWriteValueLength(peripheralID: String, withResponse: Bool) async throws -> Int {
+        let id = try uuid(peripheralID)
+        return try await withCheckedThrowingContinuation { continuation in
+            queue.async {
+                guard let peripheral = self.peripheral(id) else {
+                    continuation.resume(throwing: CentralDriverError.peripheralNotFound(peripheralID))
+                    return
+                }
+                continuation.resume(returning: peripheral.maximumWriteValueLength(
+                    for: withResponse ? .withResponse : .withoutResponse
+                ))
+            }
+        }
+    }
+
     func write(
         peripheralID: String,
         serviceUUID: String,
