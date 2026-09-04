@@ -263,6 +263,13 @@ a typed native confirm for the exact recording. Audio content, transfer packets,
 and sink handles never enter Codegen, and teardown cancels the native recording
 owner.
 
+The draft [Encrypted Upload v2](../internal-docs/device/Encrypted-Upload-v2.md)
+adds an explicit third workflow beside released plaintext v1 and historical
+P10 compatibility. The core will enforce policy/capability selection and mixed
+profile rejection; native hosts will stream opaque canonical ciphertext and
+the opaque upload manifest to staging. This target is not implemented and does
+not change the current completion metadata contract.
+
 The React Native device-log broker subscribes to the public native log stream
 before starting delivery. Apple and Android retain packet decoding and emit
 only complete sanitized lines through Codegen. JavaScript assigns the frozen

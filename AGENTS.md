@@ -207,6 +207,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   transfer E2E and optional SHA-256 metadata. Never infer relay ownership from
   the recording-list encryption flag. React Native batch sync retains the
   device copy and sends the exact native confirm only after upload succeeds.
+  The future three-profile migration is defined in
+  [`Encrypted Upload v2`](../internal-docs/device/Encrypted-Upload-v2.md): v2
+  selection must be explicit and capability-gated, bytes and manifests remain
+  opaque, and a failed v2 session never silently downgrades.
 - Keep React Native device-log stream ownership in
   `BotaDeviceSDKAndroidLogs`. It owns one native collector, contains
   asynchronous stream failures, and stops that collector during explicit
