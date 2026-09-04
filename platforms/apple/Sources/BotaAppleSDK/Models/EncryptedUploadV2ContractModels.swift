@@ -28,6 +28,93 @@ struct EncryptedUploadV2SignedBlobResultValue: Equatable, Sendable {
     let result: UInt16
 }
 
+struct EncryptedUploadV2StartRequestValue: Equatable, Sendable {
+    let transportSessionID: UInt64
+    let uploadSessionID: UUID
+    let recordingUUID: String
+    let recordingGeneration: UInt32
+    let authorizationSHA256: Data
+    let expectedCiphertextLength: UInt64
+    let expectedCiphertextSHA256: Data
+    let expectedCheckpointIntervalBlocks: UInt32
+    let checkpointRevision: UInt32
+    let nextCiphertextOffset: UInt64
+    let prefixSHA256: Data
+    let windowPackets: UInt16
+    let dataPayloadBytes: UInt16
+}
+
+struct EncryptedUploadV2ResumeRequestValue: Equatable, Sendable {
+    let transportSessionID: UInt64
+    let uploadSessionID: UUID
+    let recordingUUID: String
+    let recordingGeneration: UInt32
+    let checkpointRevision: UInt32
+    let nextCiphertextOffset: UInt64
+    let prefixSHA256: Data
+    let windowPackets: UInt16
+    let dataPayloadBytes: UInt16
+}
+
+struct EncryptedUploadV2StartAcknowledgementValue: Equatable, Sendable {
+    let transportSessionID: UInt64
+    let uploadSessionID: UUID
+    let recordingUUID: String
+    let recordingGeneration: UInt32
+    let ciphertextLength: UInt64
+    let ciphertextSHA256: Data
+    let windowPackets: UInt16
+    let dataPayloadBytes: UInt16
+    let checkpointIntervalBlocks: UInt32
+    let checkpointRevision: UInt32
+    let nextCiphertextOffset: UInt64
+    let prefixSHA256: Data
+}
+
+struct EncryptedUploadV2ResumeValue: Equatable, Sendable {
+    let transportSessionID: UInt64
+    let uploadSessionID: UUID
+    let recordingUUID: String
+    let recordingGeneration: UInt32
+    let checkpointRevision: UInt32
+    let nextCiphertextOffset: UInt64
+    let prefixSHA256: Data
+    let windowPackets: UInt16
+    let dataPayloadBytes: UInt16
+}
+
+struct EncryptedUploadV2ResumeRejectionValue: Equatable, Sendable {
+    let transportSessionID: UInt64
+    let reason: UInt16
+    let checkpointRevision: UInt32
+    let nextCiphertextOffset: UInt64
+    let prefixSHA256: Data
+}
+
+struct EncryptedUploadV2TransferErrorValue: Equatable, Sendable {
+    let transportSessionID: UInt64
+    let result: UInt16
+    let failedMessageType: UInt8
+    let checkpointRevision: UInt32
+}
+
+struct EncryptedUploadV2TransferControlRejection: Error, Equatable, Sendable {
+    let sdkError: BotaSDKError
+    let deviceError: EncryptedUploadV2TransferErrorValue
+}
+
+enum EncryptedUploadV2TransferControlValue: Equatable, Sendable {
+    case startAccepted(EncryptedUploadV2StartAcknowledgementValue)
+    case resumeAccepted(EncryptedUploadV2ResumeValue)
+    case resumeRejected(EncryptedUploadV2ResumeRejectionValue)
+    case error(EncryptedUploadV2TransferErrorValue)
+}
+
+enum EncryptedUploadV2ResumeDecision: Equatable, Sendable {
+    case accepted(EncryptedUploadV2ResumeValue)
+    case rejected(EncryptedUploadV2ResumeRejectionValue)
+}
+
 struct EncryptedUploadV2CommandRequest: Equatable, Sendable {
     let serialNumber: String
     let recordingUUID: String

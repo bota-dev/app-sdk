@@ -159,7 +159,15 @@ BEGIN, checks cancellation between writes, starts its RESULT timeout only after
 COMMIT, and matches RESULT by both blob kind and `write_id`. It rejects
 concurrent owners; failure cleanup is bounded and best-effort ABORTs plus
 unsubscribes, with uncertain cleanup blocking another owner until a confirmed
-disconnect. The production configuration intentionally installs an
+disconnect. Apple's internal transfer-control actor also subscribes to
+notify-only `0409` before sending Rust-encoded START or RESUME_REQUEST to
+write-only `0408`. It fails closed on foreign-session traffic, requires exact
+echoed identity, ciphertext, negotiated bounds, and checkpoint values on
+successful replies, preserves the device checkpoint on RESUME_REJECT/ERROR,
+and retains the live `0409` stream plus serialized owner for DATA/window/EOF.
+Cancellation or explicit abort applies the same bounded ABORT/unsubscribe
+ownership policy. The production
+configuration intentionally installs an
 unavailable transfer port until native BLE messaging, sink, staging, recovery,
 and manager wiring land. Android still has no equivalent host, React Native
 exposes no v2 workflow or bulk bytes, and compatibility metadata keeps runtime

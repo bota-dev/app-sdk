@@ -212,9 +212,16 @@ runtimes can consume the same trace.
     between writes, start the exact kind/`write_id` RESULT timeout after COMMIT,
     and use bounded ABORT/unsubscribe cleanup that fails closed until confirmed
     disconnect when ownership cannot be proven released.
+  - [x] Add the serialized Apple START/RESUME control boundary using the Rust
+    `0x0524` encoder and `0x0522` decoder. Subscribe to notify-only `0409`
+    before writing each request to `0408`, fail closed on foreign-session
+    traffic, exactly verify echoed identity/digest/accepted-checkpoint fields,
+    preserve device checkpoint state on RESUME_REJECT/ERROR, and retain the live
+    stream/owner after acceptance. Bound cancellation or explicit
+    ABORT/unsubscribe cleanup with a confirmed-disconnect reset gate.
   - [ ] Wire the resulting snapshot through application selection before START,
-    then implement the Apple START/ACK, DATA/window repair, manifest, EOF, and
-    CONFIRM lifecycle using the shared encoder.
+    then implement the Apple DATA/window repair, manifest, EOF, and CONFIRM
+    lifecycle using the shared encoder.
 - [ ] Stream ciphertext to a bounded native file and staging request without a
   plaintext copy or bridge payload.
 - [ ] Persist and recover only mutually proven checkpoint metadata.

@@ -551,6 +551,146 @@ final class CoreModelMapper: @unchecked Sendable {
         )
     }
 
+    func createEncryptedUploadV2Start(
+        transportSessionID: UInt64,
+        uploadSessionID: UUID,
+        recordingUUID: String,
+        recordingGeneration: UInt32,
+        authorizationSHA256: Data,
+        checkpointRevision: UInt32,
+        nextCiphertextOffset: UInt64,
+        prefixSHA256: Data,
+        windowPackets: UInt16,
+        dataPayloadBytes: UInt16
+    ) throws -> Data {
+        try encode(BotaPrivateProtocol.encodeEncryptedUploadV2Transfer, fields: [
+            .unsigned(id: BotaPrivateProtocol.messageType, value: 0x20),
+            .unsigned(id: BotaPrivateProtocol.transportSessionID, value: transportSessionID),
+            .bytes(id: BotaPrivateProtocol.uploadSessionUUID, value: Self.bytes(of: uploadSessionID)),
+            .text(id: BotaPrivateProtocol.recordingUUID, value: recordingUUID),
+            .unsigned(id: BotaPrivateProtocol.recordingGeneration, value: UInt64(recordingGeneration)),
+            .bytes(id: BotaPrivateProtocol.authorizationSHA256, value: authorizationSHA256),
+            .unsigned(id: BotaPrivateProtocol.checkpointRevision, value: UInt64(checkpointRevision)),
+            .unsigned(id: BotaPrivateProtocol.offset, value: nextCiphertextOffset),
+            .bytes(id: BotaPrivateProtocol.prefixSHA256, value: prefixSHA256),
+            .unsigned(id: BotaPrivateProtocol.windowPackets, value: UInt64(windowPackets)),
+            .unsigned(id: BotaPrivateProtocol.dataPayloadBytes, value: UInt64(dataPayloadBytes)),
+        ])
+    }
+
+    func createEncryptedUploadV2ResumeRequest(
+        transportSessionID: UInt64,
+        uploadSessionID: UUID,
+        recordingUUID: String,
+        recordingGeneration: UInt32,
+        checkpointRevision: UInt32,
+        nextCiphertextOffset: UInt64,
+        prefixSHA256: Data,
+        windowPackets: UInt16,
+        dataPayloadBytes: UInt16
+    ) throws -> Data {
+        try encode(BotaPrivateProtocol.encodeEncryptedUploadV2Transfer, fields: [
+            .unsigned(id: BotaPrivateProtocol.messageType, value: 0x22),
+            .unsigned(id: BotaPrivateProtocol.transportSessionID, value: transportSessionID),
+            .bytes(id: BotaPrivateProtocol.uploadSessionUUID, value: Self.bytes(of: uploadSessionID)),
+            .text(id: BotaPrivateProtocol.recordingUUID, value: recordingUUID),
+            .unsigned(id: BotaPrivateProtocol.recordingGeneration, value: UInt64(recordingGeneration)),
+            .unsigned(id: BotaPrivateProtocol.checkpointRevision, value: UInt64(checkpointRevision)),
+            .unsigned(id: BotaPrivateProtocol.offset, value: nextCiphertextOffset),
+            .bytes(id: BotaPrivateProtocol.prefixSHA256, value: prefixSHA256),
+            .unsigned(id: BotaPrivateProtocol.windowPackets, value: UInt64(windowPackets)),
+            .unsigned(id: BotaPrivateProtocol.dataPayloadBytes, value: UInt64(dataPayloadBytes)),
+        ])
+    }
+
+    func createEncryptedUploadV2Abort(
+        transportSessionID: UInt64,
+        reason: UInt16
+    ) throws -> Data {
+        try encode(BotaPrivateProtocol.encodeEncryptedUploadV2Transfer, fields: [
+            .unsigned(id: BotaPrivateProtocol.messageType, value: 0x24),
+            .unsigned(id: BotaPrivateProtocol.transportSessionID, value: transportSessionID),
+            .unsigned(id: BotaPrivateProtocol.detailCode, value: UInt64(reason)),
+        ])
+    }
+
+    func decodeEncryptedUploadV2TransferControl(
+        _ data: Data
+    ) throws -> EncryptedUploadV2TransferControlValue {
+        let fields = try decode(BotaPrivateProtocol.decodeEncryptedUploadV2TransferOrStatus, data)
+        guard try fields.requiredUInt8(BotaPrivateProtocol.protocolVariant) == 3 else {
+            throw Self.invalid("encrypted-upload-v2 notification is not a transfer packet")
+        }
+
+        let transportSessionID = try fields.requiredUInt64(
+            BotaPrivateProtocol.transportSessionID
+        )
+        switch try fields.requiredUInt8(BotaPrivateProtocol.messageType) {
+        case 0x40:
+            return .startAccepted(EncryptedUploadV2StartAcknowledgementValue(
+                transportSessionID: transportSessionID,
+                uploadSessionID: try Self.uuid(
+                    from: fields.requiredBytes(BotaPrivateProtocol.uploadSessionUUID)
+                ),
+                recordingUUID: try fields.requiredText(BotaPrivateProtocol.recordingUUID),
+                recordingGeneration: try fields.requiredUInt32(
+                    BotaPrivateProtocol.recordingGeneration
+                ),
+                ciphertextLength: try fields.requiredUInt64(BotaPrivateProtocol.ciphertextLength),
+                ciphertextSHA256: try fields.requiredBytes(BotaPrivateProtocol.ciphertextSHA256),
+                windowPackets: try fields.requiredUInt16(BotaPrivateProtocol.windowPackets),
+                dataPayloadBytes: try fields.requiredUInt16(BotaPrivateProtocol.dataPayloadBytes),
+                checkpointIntervalBlocks: try fields.requiredUInt32(
+                    BotaPrivateProtocol.checkpointInterval
+                ),
+                checkpointRevision: try fields.requiredUInt32(
+                    BotaPrivateProtocol.checkpointRevision
+                ),
+                nextCiphertextOffset: try fields.requiredUInt64(BotaPrivateProtocol.offset),
+                prefixSHA256: try fields.requiredBytes(BotaPrivateProtocol.prefixSHA256)
+            ))
+        case 0x45:
+            return .resumeAccepted(EncryptedUploadV2ResumeValue(
+                transportSessionID: transportSessionID,
+                uploadSessionID: try Self.uuid(
+                    from: fields.requiredBytes(BotaPrivateProtocol.uploadSessionUUID)
+                ),
+                recordingUUID: try fields.requiredText(BotaPrivateProtocol.recordingUUID),
+                recordingGeneration: try fields.requiredUInt32(
+                    BotaPrivateProtocol.recordingGeneration
+                ),
+                checkpointRevision: try fields.requiredUInt32(
+                    BotaPrivateProtocol.checkpointRevision
+                ),
+                nextCiphertextOffset: try fields.requiredUInt64(BotaPrivateProtocol.offset),
+                prefixSHA256: try fields.requiredBytes(BotaPrivateProtocol.prefixSHA256),
+                windowPackets: try fields.requiredUInt16(BotaPrivateProtocol.windowPackets),
+                dataPayloadBytes: try fields.requiredUInt16(BotaPrivateProtocol.dataPayloadBytes)
+            ))
+        case 0x46:
+            return .resumeRejected(EncryptedUploadV2ResumeRejectionValue(
+                transportSessionID: transportSessionID,
+                reason: try fields.requiredUInt16(BotaPrivateProtocol.detailCode),
+                checkpointRevision: try fields.requiredUInt32(
+                    BotaPrivateProtocol.checkpointRevision
+                ),
+                nextCiphertextOffset: try fields.requiredUInt64(BotaPrivateProtocol.offset),
+                prefixSHA256: try fields.requiredBytes(BotaPrivateProtocol.prefixSHA256)
+            ))
+        case 0x4F:
+            return .error(EncryptedUploadV2TransferErrorValue(
+                transportSessionID: transportSessionID,
+                result: try fields.requiredUInt16(BotaPrivateProtocol.detailCode),
+                failedMessageType: try fields.requiredUInt8(BotaPrivateProtocol.command),
+                checkpointRevision: try fields.requiredUInt32(
+                    BotaPrivateProtocol.checkpointRevision
+                )
+            ))
+        default:
+            throw Self.invalid("encrypted-upload-v2 notification is not a control reply")
+        }
+    }
+
     private func decode(_ kind: UInt32, _ data: Data) throws -> PacketFields {
         do {
             let packet = try client.protocolDecode(Self.protocolPacket(kind: kind, fields: [
@@ -580,6 +720,24 @@ final class CoreModelMapper: @unchecked Sendable {
             cancellationLow: 0,
             fields: fields
         )
+    }
+
+    private static func bytes(of uuid: UUID) -> Data {
+        var bytes = uuid.uuid
+        return withUnsafeBytes(of: &bytes) { Data($0) }
+    }
+
+    private static func uuid(from data: Data) throws -> UUID {
+        guard data.count == 16 else {
+            throw invalid("encrypted-upload-v2 upload session UUID must contain 16 bytes")
+        }
+        let bytes = [UInt8](data)
+        return UUID(uuid: (
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11],
+            bytes[12], bytes[13], bytes[14], bytes[15]
+        ))
     }
 
     private static func deviceState(_ raw: UInt8) -> WireValue<DeviceState> {
@@ -713,6 +871,7 @@ private enum BotaPrivateProtocol {
     static let decodeEncryptedUploadV2SignedBlob: UInt32 = 0x0521
     static let decodeEncryptedUploadV2TransferOrStatus: UInt32 = 0x0522
     static let encodeEncryptedUploadV2SignedBlob: UInt32 = 0x0523
+    static let encodeEncryptedUploadV2Transfer: UInt32 = 0x0524
     static let value: UInt32 = 30
     static let protocolVariant: UInt32 = 61
     static let recordingUUID: UInt32 = 13
@@ -733,6 +892,8 @@ private enum BotaPrivateProtocol {
     static let transportSessionID: UInt32 = 128
     static let recordingGeneration: UInt32 = 129
     static let ciphertextLength: UInt32 = 130
+    static let uploadSessionUUID: UInt32 = 132
+    static let checkpointRevision: UInt32 = 133
     static let plaintextLength: UInt32 = 131
     static let windowPackets: UInt32 = 134
     static let dataPayloadBytes: UInt32 = 135
@@ -750,6 +911,7 @@ private enum BotaPrivateProtocol {
     static let detailCode: UInt32 = 155
     static let authorizationSHA256: UInt32 = 161
     static let receiptSHA256: UInt32 = 162
+    static let command: UInt32 = 97
 }
 
 enum BotaProtocolConstants {
@@ -808,6 +970,11 @@ private struct PacketFields {
         return value
     }
 
+    func requiredText(_ id: UInt32) throws -> String {
+        guard let value = text(id) else { throw CoreModelMapper.invalid("missing text field \(id)") }
+        return value
+    }
+
     func requiredBytes(_ id: UInt32) throws -> Data {
         for field in values {
             if case let .bytes(fieldID, value) = field, fieldID == id { return value }
@@ -856,6 +1023,13 @@ private struct PacketFields {
 
     func optionalUInt64(_ id: UInt32) -> UInt64? {
         unsigneds(id).first
+    }
+
+    func requiredUInt64(_ id: UInt32) throws -> UInt64 {
+        guard let value = unsigneds(id).first else {
+            throw CoreModelMapper.invalid("missing UInt64 field \(id)")
+        }
+        return value
     }
 
     func requiredInt(_ id: UInt32) throws -> Int {

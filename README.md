@@ -184,7 +184,14 @@ serializes ownership, chunks
 against the current CoreBluetooth write-with-response limit capped at 512
 bytes, subscribes before BEGIN, checks cancellation between writes, and starts
 the exact-matching RESULT timeout after COMMIT. Its ABORT/unsubscribe cleanup
-is bounded and uncertain cleanup fails closed until confirmed disconnect. The
+is bounded and uncertain cleanup fails closed until confirmed disconnect. An
+internal transfer-control actor now subscribes to notify-only `0409` before
+writing Rust-encoded START or RESUME_REQUEST to `0408`, fails closed on
+foreign-session traffic, exactly validates successful reply identity,
+ciphertext and checkpoint context, and preserves device checkpoint data on
+rejection. Acceptance retains the live `0409` stream and serialized owner for
+the remaining transfer; cancellation and explicit abort use the same bounded,
+fail-closed cleanup. The
 production transfer host still fails closed as
 unavailable and no public manager exposes
 the workflow. Android and React Native have no runtime host. Runtime

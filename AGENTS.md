@@ -80,7 +80,15 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   exact kind/`write_id` RESULT timeout only after COMMIT. Cleanup is bounded:
   it best-effort ABORTs plus unsubscribes on local failure, then fails closed
   with `uploadOwnershipUnknown` until a confirmed disconnect if cleanup cannot
-  be proven. The configured port still returns
+  be proven. The internal `EncryptedUploadV2TransferControl` actor similarly
+  subscribes to notify-only `0409` before writing canonical START or
+  RESUME_REQUEST to `0408`, fails closed on a foreign transport-session ID,
+  verifies every echoed
+  recording/ciphertext/checkpoint field on START_ACK and RESUME_ACCEPT, and
+  preserves the device checkpoint reported by RESUME_REJECT or ERROR. It
+  retains the live `0409` stream and serialized owner after acceptance for the
+  remaining transfer, and uses bounded ABORT/unsubscribe cleanup with the same
+  fail-closed reconnect gate. The configured port still returns
   `feature_unavailable`; no Apple/Android native
   transfer or released manager implements the workflow, so keep runtime
   metadata false.
