@@ -361,7 +361,7 @@ final class BotaAppleNativeClient: BotaAppleClientProtocol, @unchecked Sendable 
 
 @MainActor
 final class BotaAppleAdapter: @preconcurrency BotaHostApi {
-  private enum SubscriptionOwner {
+  private enum SubscriptionOwner: Sendable {
     case deviceOperation
     case connection
     case deviceStatus
@@ -383,9 +383,19 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     }
   }
 
-  private struct Subscription {
+  private struct Subscription: Sendable {
     let owner: SubscriptionOwner
     let task: Task<Void, Never>
+  }
+
+  private enum OperationOutcome: @unchecked Sendable {
+    case success(Any)
+    case failure(Error)
+  }
+
+  private struct InFlightOperation {
+    let category: NativeOperationCategory
+    let task: Task<OperationOutcome, Never>
   }
 
   private let engineID: String
@@ -400,8 +410,13 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
   private var consumedIdentifiers: Set<String> = []
   private var startingSubscriptionIDs: Set<String> = []
   private var subscriptions: [String: Subscription] = [:]
+  private var inFlightOperations: [String: InFlightOperation] = [:]
   private var pendingCallbackCancellations: [String: @Sendable () -> Void] = [:]
   private var detached = false
+  private var destroying = false
+  private var callbackRegistrationClosed = false
+  private var releaseTask: Task<Void, Never>?
+  private var released = false
 
   init(
     engineID: String,
@@ -454,8 +469,16 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
   }
 
   func destroy(operationId: String) async throws {
-    try await perform(operationId) {
+    do {
+      try beginIdentifier(operationId, requiresConfiguration: true)
+      destroying = true
+      callbackRegistrationClosed = true
       await self.releaseEngine()
+      detached = true
+      destroying = false
+      finishIdentifier(operationId)
+    } catch {
+      throw BotaAppleMapper.pigeonError(mapLeaseError(error))
     }
   }
 
@@ -912,9 +935,11 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
         ) { [weak self] in
           guard let self else { return }
           try await self.stop(subscription.owner)
+          await subscription.task.value
         }
       } else {
         try await stop(subscription.owner)
+        await subscription.task.value
       }
     } catch {
       throw BotaAppleMapper.pigeonError(mapLeaseError(error))
@@ -922,42 +947,62 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
   }
 
   func detach() async {
-    guard !detached else { return }
+    if detached {
+      if let releaseTask { await releaseTask.value }
+      return
+    }
     detached = true
+    callbackRegistrationClosed = true
     await releaseEngine()
   }
 
   private func perform<T>(
     _ operationID: String,
-    category: NativeOperationCategory? = nil,
-    _ body: () async throws -> T
+    category: NativeOperationCategory,
+    _ body: @escaping @MainActor () async throws -> T
   ) async throws -> T {
     var ownsNativeOperation = false
     var didBeginIdentifier = false
     do {
       try beginIdentifier(operationID, requiresConfiguration: true)
       didBeginIdentifier = true
-      if let category {
-        try await leaseCoordinator.beginOperation(
-          engineID: engineID,
-          category: category,
-          operationID: operationID
-        )
-        ownsNativeOperation = true
-      }
-      let result = try await body()
+      try await leaseCoordinator.beginOperation(
+        engineID: engineID,
+        category: category,
+        operationID: operationID
+      )
+      ownsNativeOperation = true
       try requireAttached()
-      if let category, ownsNativeOperation {
+      let task = Task { @MainActor in
+        do {
+          try Task.checkCancellation()
+          return OperationOutcome.success(try await body())
+        } catch {
+          return OperationOutcome.failure(error)
+        }
+      }
+      inFlightOperations[operationID] = InFlightOperation(category: category, task: task)
+      let outcome = await task.value
+      inFlightOperations.removeValue(forKey: operationID)
+      switch outcome {
+      case .success(let result):
+        try requireAttached()
         await leaseCoordinator.finishOperation(
           engineID: engineID,
           category: category,
           operationID: operationID
         )
+        if didBeginIdentifier { finishIdentifier(operationID) }
+        guard let result = result as? T else {
+          preconditionFailure("operation result type changed while in flight")
+        }
+        return result
+      case .failure(let error):
+        throw error
       }
-      if didBeginIdentifier { finishIdentifier(operationID) }
-      return result
     } catch {
-      if let category, ownsNativeOperation {
+      inFlightOperations.removeValue(forKey: operationID)
+      if ownsNativeOperation {
         await leaseCoordinator.finishOperation(
           engineID: engineID,
           category: category,
@@ -965,7 +1010,11 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
         )
       }
       if didBeginIdentifier { finishIdentifier(operationID) }
-      throw BotaAppleMapper.pigeonError(mapLeaseError(error))
+      let mapped =
+        detached || destroying
+        ? bridgeError("engine_detached", "engine is detached")
+        : mapLeaseError(error)
+      throw BotaAppleMapper.pigeonError(mapped)
     }
   }
 
@@ -996,11 +1045,9 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     guard !activeIdentifiers.contains(id), !consumedIdentifiers.contains(id) else {
       throw bridgeError("duplicate_identifier", "operation or subscription ID was reused")
     }
+    try requireAttached()
     if requiresConfiguration, configuration == nil {
       throw bridgeError("not_configured", "adapter is not configured")
-    }
-    guard !detached else {
-      throw bridgeError("engine_detached", "engine is detached")
     }
     activeIdentifiers.insert(id)
   }
@@ -1041,11 +1088,11 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     guard let subscription = subscriptions.removeValue(forKey: id) else { return }
     finishIdentifier(id)
     if let category = subscription.owner.category {
-      await leaseCoordinator.finishOperation(
-        engineID: engineID,
-        category: category,
-        operationID: id
-      )
+      try? await leaseCoordinator.cancelOperation(engineID: engineID, category: category) {
+        [weak self] in
+        guard let self else { return }
+        try await self.stop(subscription.owner)
+      }
     }
     guard !detached else { return }
     await emit(id, BotaSubscriptionCompleteEventMessage())
@@ -1058,7 +1105,7 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
   }
 
   private func emit(_ id: String, _ payload: BotaEventPayloadMessage) async {
-    guard !detached else { return }
+    guard !detached, !destroying else { return }
     try? await flutterApi.onEvent(event: BotaEventMessage(subscriptionId: id, payload: payload))
   }
 
@@ -1193,34 +1240,53 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     } catch { await failSubscription(id, error: error) }
   }
 
-  private func cancelAllSubscriptions() async {
-    let active = subscriptions
-    subscriptions.removeAll()
-    for (id, subscription) in active {
-      finishIdentifier(id)
-      subscription.task.cancel()
-      if let category = subscription.owner.category {
-        try? await leaseCoordinator.cancelOperation(
-          engineID: engineID,
-          category: category
-        ) { [weak self] in
-          guard let self else { return }
-          try await self.stop(subscription.owner)
-        }
-      } else {
-        try? await stop(subscription.owner)
-      }
+  private func releaseEngine() async {
+    callbackRegistrationClosed = true
+    if released { return }
+    if let releaseTask {
+      await releaseTask.value
+      return
     }
+    let task = Task { @MainActor [weak self] in
+      guard let self else { return }
+      await self.cleanUpEngine()
+    }
+    releaseTask = task
+    await task.value
+    released = true
+    releaseTask = nil
   }
 
-  private func releaseEngine() async {
+  private func cleanUpEngine() async {
     rejectPendingCallbacks()
     await Task.yield()
-    await cancelAllSubscriptions()
-    await leaseCoordinator.cancelOperations(engineID: engineID) { [weak self] category in
+
+    let operations = inFlightOperations
+    let activeSubscriptions = subscriptions
+    subscriptions.removeAll()
+    let ownedOperations = await leaseCoordinator.beginCancellingOperations(
+      engineID: engineID
+    ) { [weak self] category in
       guard let self else { return }
       try? await self.stop(category)
     }
+    for operation in operations.values { operation.task.cancel() }
+    for subscription in activeSubscriptions.values { subscription.task.cancel() }
+    await leaseCoordinator.waitForOperationCancellations(
+      engineID: engineID,
+      operations: ownedOperations
+    )
+    for operation in operations.values { _ = await operation.task.value }
+    for subscription in activeSubscriptions.values { await subscription.task.value }
+    await leaseCoordinator.finishCancelledOperations(
+      engineID: engineID,
+      operations: ownedOperations
+    )
+    for id in operations.keys {
+      inFlightOperations.removeValue(forKey: id)
+      finishIdentifier(id)
+    }
+    for id in activeSubscriptions.keys { finishIdentifier(id) }
     for id in startingSubscriptionIDs { finishIdentifier(id) }
     startingSubscriptionIDs.removeAll()
     connectedDevices.removeAll()
@@ -1275,7 +1341,9 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
   }
 
   private func requireAttached() throws {
-    guard !detached else { throw bridgeError("engine_detached", "engine is detached") }
+    guard !detached, !destroying else {
+      throw bridgeError("engine_detached", "engine is detached")
+    }
   }
 
   private func mapLeaseError(_ error: Error) -> Error {
@@ -1396,12 +1464,15 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     _ request: BotaMaterialRequestMessage,
     id: String
   ) async throws -> BotaMaterialResponseMessage {
+    try requireCallbackRegistrationOpen()
     let pending = PendingFlutterCallback<BotaMaterialResponseMessage>()
     pendingCallbackCancellations[id] = {
-      pending.resume(with: .failure(BotaBridgeError(
-        code: "engine_detached",
-        detail: "engine is detached"
-      )))
+      pending.resume(
+        with: .failure(
+          BotaBridgeError(
+            code: "engine_detached",
+            detail: "engine is detached"
+          )))
     }
     defer { pendingCallbackCancellations.removeValue(forKey: id) }
     return try await withCheckedThrowingContinuation { continuation in
@@ -1415,12 +1486,15 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
   private func requestFirmware(_ request: BotaFirmwareRequestMessage, id: String) async throws
     -> BotaFirmwareSourceMessage
   {
+    try requireCallbackRegistrationOpen()
     let pending = PendingFlutterCallback<BotaFirmwareSourceMessage>()
     pendingCallbackCancellations[id] = {
-      pending.resume(with: .failure(BotaBridgeError(
-        code: "engine_detached",
-        detail: "engine is detached"
-      )))
+      pending.resume(
+        with: .failure(
+          BotaBridgeError(
+            code: "engine_detached",
+            detail: "engine is detached"
+          )))
     }
     defer { pendingCallbackCancellations.removeValue(forKey: id) }
     return try await withCheckedThrowingContinuation { continuation in
@@ -1435,12 +1509,15 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     _ request: BotaFactoryResetResultRequestMessage,
     id: String
   ) async throws -> BotaFactoryResetResultAcknowledgementMessage {
+    try requireCallbackRegistrationOpen()
     let pending = PendingFlutterCallback<BotaFactoryResetResultAcknowledgementMessage>()
     pendingCallbackCancellations[id] = {
-      pending.resume(with: .failure(BotaBridgeError(
-        code: "engine_detached",
-        detail: "engine is detached"
-      )))
+      pending.resume(
+        with: .failure(
+          BotaBridgeError(
+            code: "engine_detached",
+            detail: "engine is detached"
+          )))
     }
     defer { pendingCallbackCancellations.removeValue(forKey: id) }
     return try await withCheckedThrowingContinuation { continuation in
@@ -1455,6 +1532,12 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     let cancellations = pendingCallbackCancellations.values
     pendingCallbackCancellations.removeAll()
     for cancel in cancellations { cancel() }
+  }
+
+  private func requireCallbackRegistrationOpen() throws {
+    guard !callbackRegistrationClosed else {
+      throw bridgeError("engine_detached", "engine is detached")
+    }
   }
 
   private func callbackID() -> String {

@@ -31,6 +31,11 @@ enum NativeLeaseError: Error, Equatable {
   case operationNotOwned
 }
 
+struct NativeOwnedOperation: Equatable, Sendable {
+  let category: NativeOperationCategory
+  let operationID: String
+}
+
 actor NativeLeaseCoordinator {
   static let shared = NativeLeaseCoordinator(client: BotaAppleNativeClient.shared)
 
@@ -45,10 +50,21 @@ actor NativeLeaseCoordinator {
     let task: Task<Void, Never>
   }
 
-  private struct OperationOwner: Equatable {
+  private enum CancellationOutcome: @unchecked Sendable {
+    case success
+    case failure(Error)
+  }
+
+  private struct OperationCancellation {
+    let id: UUID
+    let task: Task<CancellationOutcome, Never>
+  }
+
+  private struct OperationOwner {
     let engineID: String
     let operationID: String
-    var isCancelling: Bool
+    var cancellation: OperationCancellation?
+    var retainAfterCancellation: Bool
   }
 
   private let client: any NativeLeaseClientProtocol
@@ -154,7 +170,8 @@ actor NativeLeaseCoordinator {
     operations[category] = OperationOwner(
       engineID: engineID,
       operationID: operationID,
-      isCancelling: false
+      cancellation: nil,
+      retainAfterCancellation: false
     )
   }
 
@@ -166,7 +183,8 @@ actor NativeLeaseCoordinator {
     guard let owner = operations[category],
       owner.engineID == engineID,
       owner.operationID == operationID,
-      !owner.isCancelling
+      owner.cancellation == nil,
+      !owner.retainAfterCancellation
     else { return }
     operations.removeValue(forKey: category)
   }
@@ -176,41 +194,94 @@ actor NativeLeaseCoordinator {
     category: NativeOperationCategory,
     cancellation: @escaping @Sendable () async throws -> Void
   ) async throws {
-    if var owner = operations[category] {
-      guard owner.engineID == engineID else { throw NativeLeaseError.operationNotOwned }
-      guard !owner.isCancelling else { throw NativeLeaseError.operationInProgress }
-      owner.isCancelling = true
-      operations[category] = owner
+    guard var owner = operations[category] else { return }
+    guard owner.engineID == engineID else { throw NativeLeaseError.operationNotOwned }
+    guard owner.cancellation == nil else { throw NativeLeaseError.operationInProgress }
+
+    let cancellationID = UUID()
+    let task = Task<CancellationOutcome, Never> {
       do {
         try await cancellation()
-        if operations[category] == owner { operations.removeValue(forKey: category) }
+        return .success
       } catch {
-        if operations[category] == owner { operations.removeValue(forKey: category) }
-        throw error
+        return .failure(error)
       }
-      return
     }
-    try await cancellation()
+    owner.cancellation = OperationCancellation(id: cancellationID, task: task)
+    operations[category] = owner
+    let outcome = await task.value
+    if let current = operations[category],
+      current.engineID == engineID,
+      current.operationID == owner.operationID,
+      current.cancellation?.id == cancellationID,
+      !current.retainAfterCancellation
+    {
+      operations.removeValue(forKey: category)
+    }
+    if case .failure(let error) = outcome { throw error }
   }
 
-  func cancelOperations(
+  func beginCancellingOperations(
     engineID: String,
     cancellation: @escaping @Sendable (NativeOperationCategory) async -> Void
-  ) async {
-    let categories = NativeOperationCategory.allCases.filter {
-      operations[$0]?.engineID == engineID
+  ) -> [NativeOwnedOperation] {
+    let owned: [NativeOwnedOperation] = NativeOperationCategory.allCases.compactMap {
+      category -> NativeOwnedOperation? in
+      guard let owner = operations[category], owner.engineID == engineID else { return nil }
+      return NativeOwnedOperation(category: category, operationID: owner.operationID)
     }
-    for category in categories {
-      guard var owner = operations[category], owner.engineID == engineID else { continue }
-      owner.isCancelling = true
-      operations[category] = owner
-      await cancellation(category)
-      if operations[category] == owner { operations.removeValue(forKey: category) }
+    for operation in owned {
+      guard var owner = operations[operation.category],
+        owner.engineID == engineID,
+        owner.operationID == operation.operationID
+      else { continue }
+      owner.retainAfterCancellation = true
+      if owner.cancellation == nil {
+        let category = operation.category
+        owner.cancellation = OperationCancellation(
+          id: UUID(),
+          task: Task {
+            await cancellation(category)
+            return .success
+          }
+        )
+      }
+      operations[operation.category] = owner
+    }
+    return owned
+  }
+
+  func waitForOperationCancellations(
+    engineID: String,
+    operations owned: [NativeOwnedOperation]
+  ) async {
+    for operation in owned {
+      guard let owner = operations[operation.category],
+        owner.engineID == engineID,
+        owner.operationID == operation.operationID,
+        let cancellation = owner.cancellation
+      else { continue }
+      _ = await cancellation.task.value
+    }
+  }
+
+  func finishCancelledOperations(
+    engineID: String,
+    operations owned: [NativeOwnedOperation]
+  ) {
+    for operation in owned {
+      guard let owner = operations[operation.category],
+        owner.engineID == engineID,
+        owner.operationID == operation.operationID,
+        owner.retainAfterCancellation
+      else { continue }
+      operations.removeValue(forKey: operation.category)
     }
   }
 
   private func requireCompatible(_ configuration: NativeLeaseConfiguration) throws {
-    let current = activeConfiguration
+    let current =
+      activeConfiguration
       ?? configuring?.configuration
       ?? leases.values.first
       ?? pendingLeases.values.first

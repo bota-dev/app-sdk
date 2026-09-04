@@ -99,6 +99,19 @@ final class NativeLeaseCoordinatorTests: XCTestCase {
     XCTAssertEqual(finalLeaseCount, 0)
   }
 
+  func testOwnerlessCancellationDoesNotInvokeNativeClosure() async throws {
+    let client = LeaseTestClient()
+    let coordinator = NativeLeaseCoordinator(client: client)
+    let cancellation = CancellationRecorder()
+
+    try await coordinator.cancelOperation(engineID: "engine-a", category: .device) {
+      await cancellation.record()
+    }
+
+    let count = await cancellation.count
+    XCTAssertEqual(count, 0)
+  }
+
   private func leaseConfiguration(namespace: String) -> NativeLeaseConfiguration {
     NativeLeaseConfiguration(
       applicationSupportDirectory: URL(fileURLWithPath: "/tmp/\(namespace)"),
@@ -109,6 +122,12 @@ final class NativeLeaseCoordinatorTests: XCTestCase {
       hasFirmwareCallback: true
     )
   }
+}
+
+private actor CancellationRecorder {
+  private(set) var count = 0
+
+  func record() { count += 1 }
 }
 
 private actor LeaseTestClient: NativeLeaseClientProtocol {

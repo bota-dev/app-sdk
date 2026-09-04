@@ -143,14 +143,13 @@ final class BotaAppleAdapterTests: XCTestCase {
         "configure", "scanStream", "connect", "reconnect", "disconnect", "readDeviceStatus",
         "cancelDeviceOperation", "startRecording", "stopRecording", "readRecordingState",
         "provision", "readConnectionSettings", "writeConnectionSettings", "deprovision",
-        "cancelProvisioningOperation", "factoryReset", "resumePendingFactoryReset",
-        "resumeUnjournaledFactoryReset", "cancelFactoryResetOperation", "listRecordings",
-        "takeTransferMetadata", "confirmRecording", "cancelRecordingOperation",
-        "cancelOtaOperation", "stopLogs", "configureWifi", "disconnectWifi",
-        "readWifiStatus", "scanWifi", "cancelWifiOperation",
+        "factoryReset", "resumePendingFactoryReset", "resumeUnjournaledFactoryReset",
+        "listRecordings", "takeTransferMetadata", "confirmRecording", "configureWifi",
+        "disconnectWifi", "readWifiStatus", "scanWifi",
         "destroy",
       ])
     )
+    XCTAssertEqual(invocations.filter { $0 == "cancelDeviceOperation" }.count, 1)
     XCTAssertEqual(flutter.materialKinds, ["provisioning", "factoryReset"])
     XCTAssertEqual(flutter.persistedResetCommands, ["command-1", "durable-command", "command-2"])
     let startRecordingGrant = await native.startRecordingGrant
@@ -321,7 +320,7 @@ final class BotaAppleAdapterTests: XCTestCase {
     XCTAssertEqual(destroyCount, 1)
   }
 
-  func testDetachRejectsSuspendedCallbackAndOneShotWork() async throws {
+  func testDetachRejectsSuspendedCallbackWork() async throws {
     let callbackNative = AdapterTestClient()
     let flutter = AdapterTestFlutterApi(responseMode: .suspendedMaterial)
     let callbackAdapter = makeAdapter(
@@ -350,20 +349,65 @@ final class BotaAppleAdapterTests: XCTestCase {
     let cancellationObservedPendingProvider =
       await callbackNative.provisioningCancellationObservedPendingProvider
     XCTAssertFalse(cancellationObservedPendingProvider)
+  }
 
-    let oneShotNative = AdapterTestClient(suspendReadStatus: true)
-    let oneShotAdapter = makeAdapter(native: oneShotNative, engineID: "one-shot-engine")
-    try await configure(oneShotAdapter, operationID: id(77))
-    let status = Task { try await oneShotAdapter.readDeviceStatus(operationId: self.id(78)) }
-    await oneShotNative.waitUntilReadStatusStarted()
-    await oneShotAdapter.detach()
-    await oneShotNative.resumeReadStatus()
+  func testProviderEnteringAfterDetachCannotRegisterFlutterCallback() async throws {
+    let native = AdapterTestClient(delayProvisioningProviderUntilCancellation: true)
+    let flutter = AdapterTestFlutterApi()
+    let adapter = makeAdapter(native: native, flutter: flutter, engineID: "late-provider")
+    try await configure(adapter)
+    _ = try await adapter.reconnect(
+      operationId: id(77), serialNumber: "BP-001", hint: reconnectHint())
+    let provision = Task {
+      try await adapter.provision(operationId: self.id(78), device: self.deviceReference())
+    }
+    await native.waitUntilProvisioningStarted()
+
+    await adapter.detach()
+
     do {
-      _ = try await status.value
-      XCTFail("expected detached one-shot operation to fail")
+      try await provision.value
+      XCTFail("expected late provider to be rejected")
     } catch let error as PigeonError {
       XCTAssertEqual(error.code, "engine_detached")
     }
+    XCTAssertTrue(flutter.materialKinds.isEmpty)
+  }
+
+  func testDetachAwaitsCancelledOneShotUnwindBeforeOwnershipAndLeaseRelease() async throws {
+    let native = AdapterTestClient(suspendReadStatus: true)
+    let leases = NativeLeaseCoordinator(client: native)
+    let adapterA = makeAdapter(native: native, leases: leases, engineID: "one-shot-owner")
+    let adapterB = makeAdapter(native: native, leases: leases, engineID: "one-shot-other")
+    try await configure(adapterA, operationID: id(79))
+    try await configure(adapterB, operationID: id(80))
+    let status = Task { try await adapterA.readDeviceStatus(operationId: self.id(81)) }
+    await native.waitUntilReadStatusStarted()
+
+    let detach = Task { await adapterA.detach() }
+    await native.waitUntilReadStatusCancellationObserved()
+
+    let leaseCountDuringUnwind = await leases.leaseCount
+    XCTAssertEqual(leaseCountDuringUnwind, 2)
+    do {
+      _ = try await adapterB.readDeviceStatus(operationId: id(82))
+      XCTFail("expected ownership to remain until the cancelled operation unwinds")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "operation_in_progress")
+    }
+
+    await native.allowReadStatusCancellationToUnwind()
+    await detach.value
+    do {
+      _ = try await status.value
+      XCTFail("expected detached one-shot operation to be cancelled")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "engine_detached")
+    }
+
+    _ = try await adapterB.readDeviceStatus(operationId: id(83))
+    let finalLeaseCount = await leases.leaseCount
+    XCTAssertEqual(finalLeaseCount, 1)
   }
 
   func testAnotherEngineCannotCancelOwnedNativeWork() async throws {
@@ -391,6 +435,58 @@ final class BotaAppleAdapterTests: XCTestCase {
     try await adapterA.cancelSubscription(subscriptionId: subscriptionID)
     let ownerCancellationCount = await native.deviceCancellationCount
     XCTAssertEqual(ownerCancellationCount, 1)
+  }
+
+  func testTerminalStreamCleanupRetainsOwnershipAndOwnerlessCancelIsNoOp() async throws {
+    let native = AdapterTestClient(holdTerminalScanCleanup: true)
+    let flutterA = AdapterTestFlutterApi()
+    let leases = NativeLeaseCoordinator(client: native)
+    let adapterA = makeAdapter(
+      native: native, flutter: flutterA, leases: leases, engineID: "stream-owner")
+    let adapterB = makeAdapter(native: native, leases: leases, engineID: "stream-other")
+    try await configure(adapterA, operationID: id(84))
+    try await configure(adapterB, operationID: id(85))
+    let subscriptionID = id(86)
+    try await adapterA.startSubscription(
+      subscriptionId: subscriptionID,
+      request: BotaScanSubscriptionMessage(timeoutMillis: 10_000, allowDuplicates: false)
+    )
+
+    await native.finishScanPublicStream()
+    try await eventually {
+      let activeSubscriptionCount = adapterA.activeSubscriptionCount
+      let cancellationCount = await native.deviceCancellationCount
+      return activeSubscriptionCount == 0 || cancellationCount > 0
+    }
+
+    do {
+      _ = try await adapterB.readDeviceStatus(operationId: id(87))
+      XCTFail("expected stream category to remain owned during native cleanup")
+    } catch let error as PigeonError {
+      XCTAssertEqual(error.code, "operation_in_progress")
+    }
+
+    let crossEngineCancel = Task { () -> PigeonError? in
+      do {
+        try await adapterB.cancelDeviceOperation(operationId: self.id(88))
+        return nil
+      } catch {
+        return error as? PigeonError
+      }
+    }
+    try await eventually { await native.deviceCancellationCount == 1 }
+    let cancellationCountDuringCleanup = await native.deviceCancellationCount
+    XCTAssertEqual(cancellationCountDuringCleanup, 1)
+    await native.allowTerminalScanCleanup()
+    let crossEngineError = await crossEngineCancel.value
+    XCTAssertEqual(crossEngineError?.code, "operation_not_owned")
+    try await eventually {
+      flutterA.events.contains { $0.payload is BotaSubscriptionCompleteEventMessage }
+    }
+
+    try await adapterB.cancelDeviceOperation(operationId: id(89))
+    let finalCancellationCount = await native.deviceCancellationCount
+    XCTAssertEqual(finalCancellationCount, 1)
   }
 
   func testDurableResetResumeUsesOnlyCurrentDeviceAndGenerationAfterRestart() async throws {
@@ -851,20 +947,35 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
   private let useHangingScan: Bool
   private let suspendConfigure: Bool
   private let suspendReadStatus: Bool
+  private let delayProvisioningProviderUntilCancellation: Bool
+  private let holdTerminalScanCleanup: Bool
   private var configureStarted = false
   private var configureContinuation: CheckedContinuation<Void, Never>?
   private var readStatusStarted = false
-  private var readStatusContinuation: CheckedContinuation<Void, Never>?
+  private var readStatusDidSuspend = false
+  private var readStatusCancellationObserved = false
+  private var readStatusContinuation: CheckedContinuation<DeviceStatus, Error>?
+  private var readStatusUnwindContinuation: CheckedContinuation<Void, Never>?
   private var provisioningProviderPending = false
+  private var provisioningStarted = false
+  private var provisioningProviderContinuation: CheckedContinuation<Void, Never>?
+  private var scanContinuation: AsyncThrowingStream<DiscoveredDevice, Error>.Continuation?
+  private var terminalScanCleanupContinuation: CheckedContinuation<Void, Never>?
+  private var terminalScanCleanupReleased = false
 
   init(
     useHangingScan: Bool = false,
     suspendConfigure: Bool = false,
-    suspendReadStatus: Bool = false
+    suspendReadStatus: Bool = false,
+    delayProvisioningProviderUntilCancellation: Bool = false,
+    holdTerminalScanCleanup: Bool = false
   ) {
     self.useHangingScan = useHangingScan
     self.suspendConfigure = suspendConfigure
     self.suspendReadStatus = suspendReadStatus
+    self.delayProvisioningProviderUntilCancellation =
+      delayProvisioningProviderUntilCancellation
+    self.holdTerminalScanCleanup = holdTerminalScanCleanup
   }
 
   func setReadStatusError(_ error: Error) { readStatusError = error }
@@ -901,8 +1012,15 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
   func readDeviceStatus() async throws -> DeviceStatus {
     invocations.append("readDeviceStatus")
     readStatusStarted = true
-    if suspendReadStatus {
-      await withCheckedContinuation { readStatusContinuation = $0 }
+    if suspendReadStatus, !readStatusDidSuspend {
+      readStatusDidSuspend = true
+      do {
+        return try await withCheckedThrowingContinuation { readStatusContinuation = $0 }
+      } catch is CancellationError {
+        readStatusCancellationObserved = true
+        await withCheckedContinuation { readStatusUnwindContinuation = $0 }
+        throw CancellationError()
+      }
     }
     if let readStatusError { throw readStatusError }
     return status()
@@ -910,13 +1028,24 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
   func waitUntilReadStatusStarted() async {
     while !readStatusStarted { await Task.yield() }
   }
-  func resumeReadStatus() {
-    readStatusContinuation?.resume()
+  func waitUntilReadStatusCancellationObserved() async {
+    while !readStatusCancellationObserved { await Task.yield() }
+  }
+  func allowReadStatusCancellationToUnwind() {
+    readStatusUnwindContinuation?.resume()
+    readStatusUnwindContinuation = nil
+  }
+  private func cancelSuspendedReadStatus() {
+    readStatusContinuation?.resume(throwing: CancellationError())
     readStatusContinuation = nil
   }
   func cancelDeviceOperation() async throws {
     deviceCancellationCount += 1
     invocations.append("cancelDeviceOperation")
+    cancelSuspendedReadStatus()
+    if holdTerminalScanCleanup, !terminalScanCleanupReleased {
+      await withCheckedContinuation { terminalScanCleanupContinuation = $0 }
+    }
   }
   func startRecording(_ device: ConnectedDevice, grantBlob: String) async throws {
     startRecordingGrant = grantBlob
@@ -937,6 +1066,10 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
   ) async throws {
     provisioningMaterialID = materialID
     invocations.append("provision")
+    provisioningStarted = true
+    if delayProvisioningProviderUntilCancellation {
+      await withCheckedContinuation { provisioningProviderContinuation = $0 }
+    }
     provisioningProviderPending = true
     defer { provisioningProviderPending = false }
     _ = try await provider(
@@ -963,6 +1096,11 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
   func cancelProvisioningOperation() async throws {
     provisioningCancellationObservedPendingProvider = provisioningProviderPending
     invocations.append("cancelProvisioningOperation")
+    provisioningProviderContinuation?.resume()
+    provisioningProviderContinuation = nil
+  }
+  func waitUntilProvisioningStarted() async {
+    while !provisioningStarted { await Task.yield() }
   }
   func factoryReset(
     _ device: ConnectedDevice,
@@ -1068,7 +1206,21 @@ private actor AdapterTestClient: BotaAppleClientProtocol {
   {
     invocations.append("scanStream")
     if useHangingScan { return AsyncThrowingStream { _ in } }
+    if holdTerminalScanCleanup {
+      let pair = AsyncThrowingStream<DiscoveredDevice, Error>.makeStream()
+      scanContinuation = pair.continuation
+      return pair.stream
+    }
     return throwingStream(discovered())
+  }
+  func finishScanPublicStream() {
+    scanContinuation?.finish()
+    scanContinuation = nil
+  }
+  func allowTerminalScanCleanup() {
+    terminalScanCleanupReleased = true
+    terminalScanCleanupContinuation?.resume()
+    terminalScanCleanupContinuation = nil
   }
   func connectionStream() async -> AsyncStream<ConnectedDevice?> {
     invocations.append("connectionStream")

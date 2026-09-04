@@ -269,9 +269,9 @@
 
 - [ ] **Step 3: Define and generate the Pigeon contract**
 
-  Use typed enums/classes for bounded device, settings, recording, OTA, WiFi, error, progress, callback-request, and callback-result values. Host methods accept an operation ID plus typed arguments and return typed values or `void`; stream starts return no body and emit `BotaEventMessage` through `BotaFlutterApi.onEvent`. Application callback requests use `BotaFlutterApi.requestMaterial`, `requestFirmware`, `requestUploadDestination`, and `persistFactoryResetResult` and return request-bound typed responses.
+  Use typed enums/classes for bounded device, settings, recording, OTA, WiFi, error, progress, callback-request, and callback-result values. Host methods accept an operation ID plus typed arguments and return typed values or `void`; stream starts return no body and emit `BotaEventMessage` through `BotaFlutterApi.onEvent`. Application callback requests use `BotaFlutterApi.requestMaterial`, `requestFirmware`, and `persistFactoryResetResult` and return request-bound typed responses.
 
-  `generate-pigeon.sh` runs the exact locked dependency, writes all three targets, and normalizes generator paths. `verify-pigeon.mjs` generates into a temporary directory and byte-compares every expected output. The frozen bridge includes three reachable application callbacks: provisioning/reset material, firmware source, and factory-reset result persistence.
+  `generate-pigeon.sh` runs the exact locked dependency, writes all three targets, and normalizes generator paths. `verify-pigeon.mjs` generates into a temporary directory and byte-compares every expected output. Application callback requests use `BotaFlutterApi.requestMaterial`, `requestFirmware`, and `persistFactoryResetResult`; the frozen bridge contains no unused upload-destination callback.
 
 - [ ] **Step 4: Generate and verify GREEN**
 
@@ -514,6 +514,7 @@
 - Create: `tools/flutter/verify-publication.mjs`
 - Create: `tools/flutter/verify-publication.test.mjs`
 - Create: `.github/workflows/publish-flutter.yml`
+- Create: `.github/workflows/publish-apple-pod.yml`
 - Modify: `sdk-version.toml`
 - Modify: `package.json`
 - Modify: `frameworks/react-native/package.json`
@@ -525,6 +526,8 @@
 - Modify: `.github/workflows/ci.yml`
 - Modify: `.github/workflows/release.yml`
 - Modify: `frameworks/flutter/bota_flutter_sdk/pubspec.yaml`
+- Modify: `Package.swift`
+- Modify: `platforms/apple/BotaAppleSDK.podspec`
 - Create: `release/examples/1.2.0-beta.0.json`
 - Create: `release/evidence/1.2.0-beta.0-flutter.md`
 
@@ -549,7 +552,7 @@
 
   Set `sdk-version.toml`, root/npm/Gradle/Flutter versions to `1.2.0-beta.0` and regenerate locks. `package-release.sh` performs pub get, generation drift, format, analyze, test, package inventory, license check, and `flutter pub publish --dry-run`; it preserves the exact package candidate and evidence under `target/flutter-release/`. Extend the candidate inventory and release manifest without changing the legacy npm `latest` guard.
 
-  The tag workflow builds and uploads Flutter before publication. For the first package version it pauses at the protected release environment and prints the exact clean-tag interactive publish command, then downloads the public pub.dev archive and verifies normalized files, contents, and SHA-256 before publishing the GitHub release. `.github/workflows/publish-flutter.yml` uses Dart's reusable pub.dev OIDC workflow for subsequent tags and has no repository secret.
+  The tag workflow publishes the immutable Apple core asset first, and the tagged root Swift package resolves that exact URL and checksum rather than an untracked local artifact. A protected native-pod bootstrap then publishes and verifies `BotaAppleSDK` at the synchronized version before either Flutter dependency manager is allowed to proceed. The Flutter job builds and uploads its candidate only after clean no-override CocoaPods and SwiftPM consumers resolve the public Apple release. For the first Flutter package version it pauses at the protected release environment and prints the exact clean-tag interactive publish command, then downloads the public pub.dev archive and verifies normalized files, contents, and SHA-256 before completing the GitHub release. `.github/workflows/publish-flutter.yml` uses Dart's reusable pub.dev OIDC workflow for subsequent tags and has no repository secret.
 
 - [ ] **Step 4: Run the complete local release gate**
 
