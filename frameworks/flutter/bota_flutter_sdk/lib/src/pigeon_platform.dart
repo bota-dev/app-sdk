@@ -75,7 +75,9 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
               ),
             )
             .then((_) {
-              _configuration = configuration;
+              if (!_destroying && !_destroyed) {
+                _configuration = configuration;
+              }
             })
             .whenComplete(() {
               if (identical(_configureFuture, result)) {

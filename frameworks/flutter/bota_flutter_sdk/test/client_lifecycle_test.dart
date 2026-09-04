@@ -63,6 +63,57 @@ void main() {
   );
 
   test(
+    'queued configure success cannot restore callbacks after destroy',
+    () async {
+      final InMemoryBotaHostApi host = InMemoryBotaHostApi();
+      final Completer<void> configureCompleter = Completer<void>.sync();
+      host.configureCompleter = configureCompleter;
+      final PigeonBotaPlatform platform = PigeonBotaPlatform(hostApi: host);
+      final BotaDeviceClient client = BotaDeviceClient.forTesting(platform);
+      var callbackCalls = 0;
+      final Future<void> configure = client.configure(
+        BotaConfiguration(
+          callbacks: BotaApplicationCallbacks(
+            provisioningMaterial:
+                (BotaProvisioningMaterialRequest request) async {
+                  callbackCalls += 1;
+                  return BotaProvisioningMaterial(
+                    requestId: request.requestId,
+                    apiEndpoint: const <int>[1],
+                    deviceToken: const <int>[2],
+                    mtu: 256,
+                  );
+                },
+          ),
+        ),
+      );
+
+      configureCompleter.complete();
+      final Future<void> destroy = client.destroy();
+      await Future.wait(<Future<void>>[configure, destroy]);
+
+      await expectLater(
+        platform.requestMaterial(
+          BotaProvisioningMaterialRequestMessage(
+            requestId: '00000000000000000000000000000001',
+            serialNumber: 'BP0001',
+            nonce: Uint8List.fromList(const <int>[1, 2]),
+            devicePublicKey: Uint8List.fromList(const <int>[3, 4]),
+          ),
+        ),
+        throwsA(
+          isA<PlatformException>().having(
+            (PlatformException error) => error.code,
+            'code',
+            'callback_unavailable',
+          ),
+        ),
+      );
+      expect(callbackCalls, 0);
+    },
+  );
+
+  test(
     'destroy rejects pending operations and invokes the host once',
     () async {
       final InMemoryBotaHostApi host = InMemoryBotaHostApi();
