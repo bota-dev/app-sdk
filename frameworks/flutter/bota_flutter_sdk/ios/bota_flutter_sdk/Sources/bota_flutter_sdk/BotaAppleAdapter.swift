@@ -26,6 +26,11 @@ private final class PendingFlutterCallback<Value>: @unchecked Sendable {
   }
 }
 
+private struct PendingCallbackCancellation: Sendable {
+  let category: NativeOperationCategory
+  let cancel: @Sendable () -> Void
+}
+
 protocol BotaAppleClientProtocol: NativeLeaseClientProtocol {
   func connect(_ device: DiscoveredDevice, serialNumber: String?) async throws -> ConnectedDevice
   func reconnect(serialNumber: String, hint: DeviceReconnectHint) async throws -> ConnectedDevice
@@ -419,7 +424,7 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
   private var startingSubscriptions: [String: StartingSubscription] = [:]
   private var subscriptions: [String: Subscription] = [:]
   private var inFlightOperations: [String: InFlightOperation] = [:]
-  private var pendingCallbackCancellations: [String: @Sendable () -> Void] = [:]
+  private var pendingCallbackCancellations: [String: PendingCallbackCancellation] = [:]
   private var detached = false
   private var destroying = false
   private var callbackRegistrationClosed = false
@@ -1330,8 +1335,7 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
   }
 
   private func cleanUpEngine() async {
-    rejectPendingCallbacks()
-    await Task.yield()
+    let rejectedCallbackCategories = rejectPendingCallbacks()
 
     let operations = inFlightOperations
     let starting = startingSubscriptions
@@ -1342,10 +1346,19 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
       uniqueKeysWithValues: starting.values.compactMap { subscription in
         subscription.owner.category.map { ($0, subscription) }
       })
+    let operationsByCategory = Dictionary(
+      uniqueKeysWithValues: operations.values.map { ($0.category, $0) }
+    )
     let ownedOperations = await leaseCoordinator.beginCancellingOperations(
       engineID: engineID
     ) { [weak self] category in
       guard let self else { return }
+      if rejectedCallbackCategories.contains(category),
+        let operation = operationsByCategory[category]
+      {
+        operation.task.cancel()
+        _ = await operation.task.value
+      }
       if let subscription = startingByCategory[category] {
         guard case .success = await subscription.task.result else { return }
       }
@@ -1472,7 +1485,8 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
         nonce: FlutterStandardTypedData(bytes: request.nonce),
         devicePublicKey: FlutterStandardTypedData(bytes: request.devicePublicKey)
       ),
-      id: id
+      id: id,
+      category: .provisioning
     )
     guard response.requestId == id else { throw callbackIDMismatch() }
     guard let response = response as? BotaProvisioningMaterialResponseMessage else {
@@ -1495,7 +1509,8 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
         commandId: request.commandID,
         bindingGeneration: try BotaAppleMapper.int64(request.bindingGeneration)
       ),
-      id: id
+      id: id,
+      category: .factoryReset
     )
     guard response.requestId == id else { throw callbackIDMismatch() }
     guard let response = response as? BotaFactoryResetGrantResponseMessage else {
@@ -1514,7 +1529,8 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
         sizeBytes: image.sizeBytes,
         crc32: image.crc32
       ),
-      id: id
+      id: id,
+      category: .ota
     )
     guard response.requestId == id else { throw callbackIDMismatch() }
     guard let url = URL(string: response.url), url.scheme != nil else {
@@ -1540,25 +1556,29 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
         bindingGeneration: try BotaAppleMapper.int64(result.bindingGeneration),
         localRecordingsDeleted: Int64(result.localRecordingsDeleted)
       ),
-      id: id
+      id: id,
+      category: .factoryReset
     )
     guard response.requestId == id else { throw callbackIDMismatch() }
   }
 
   private func requestMaterial(
     _ request: BotaMaterialRequestMessage,
-    id: String
+    id: String,
+    category: NativeOperationCategory
   ) async throws -> BotaMaterialResponseMessage {
     try requireCallbackRegistrationOpen()
     let pending = PendingFlutterCallback<BotaMaterialResponseMessage>()
-    pendingCallbackCancellations[id] = {
-      pending.resume(
-        with: .failure(
-          BotaBridgeError(
-            code: "engine_detached",
-            detail: "engine is detached"
-          )))
-    }
+    pendingCallbackCancellations[id] = PendingCallbackCancellation(
+      category: category,
+      cancel: {
+        pending.resume(
+          with: .failure(
+            BotaBridgeError(
+              code: "engine_detached",
+              detail: "engine is detached"
+            )))
+      })
     defer { pendingCallbackCancellations.removeValue(forKey: id) }
     return try await withCheckedThrowingContinuation { continuation in
       pending.install(continuation)
@@ -1568,19 +1588,25 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     }
   }
 
-  private func requestFirmware(_ request: BotaFirmwareRequestMessage, id: String) async throws
+  private func requestFirmware(
+    _ request: BotaFirmwareRequestMessage,
+    id: String,
+    category: NativeOperationCategory
+  ) async throws
     -> BotaFirmwareSourceMessage
   {
     try requireCallbackRegistrationOpen()
     let pending = PendingFlutterCallback<BotaFirmwareSourceMessage>()
-    pendingCallbackCancellations[id] = {
-      pending.resume(
-        with: .failure(
-          BotaBridgeError(
-            code: "engine_detached",
-            detail: "engine is detached"
-          )))
-    }
+    pendingCallbackCancellations[id] = PendingCallbackCancellation(
+      category: category,
+      cancel: {
+        pending.resume(
+          with: .failure(
+            BotaBridgeError(
+              code: "engine_detached",
+              detail: "engine is detached"
+            )))
+      })
     defer { pendingCallbackCancellations.removeValue(forKey: id) }
     return try await withCheckedThrowingContinuation { continuation in
       pending.install(continuation)
@@ -1592,18 +1618,21 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
 
   private func persistFactoryResetResult(
     _ request: BotaFactoryResetResultRequestMessage,
-    id: String
+    id: String,
+    category: NativeOperationCategory
   ) async throws -> BotaFactoryResetResultAcknowledgementMessage {
     try requireCallbackRegistrationOpen()
     let pending = PendingFlutterCallback<BotaFactoryResetResultAcknowledgementMessage>()
-    pendingCallbackCancellations[id] = {
-      pending.resume(
-        with: .failure(
-          BotaBridgeError(
-            code: "engine_detached",
-            detail: "engine is detached"
-          )))
-    }
+    pendingCallbackCancellations[id] = PendingCallbackCancellation(
+      category: category,
+      cancel: {
+        pending.resume(
+          with: .failure(
+            BotaBridgeError(
+              code: "engine_detached",
+              detail: "engine is detached"
+            )))
+      })
     defer { pendingCallbackCancellations.removeValue(forKey: id) }
     return try await withCheckedThrowingContinuation { continuation in
       pending.install(continuation)
@@ -1613,10 +1642,11 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     }
   }
 
-  private func rejectPendingCallbacks() {
+  private func rejectPendingCallbacks() -> Set<NativeOperationCategory> {
     let cancellations = pendingCallbackCancellations.values
     pendingCallbackCancellations.removeAll()
-    for cancel in cancellations { cancel() }
+    for cancellation in cancellations { cancellation.cancel() }
+    return Set(cancellations.map(\.category))
   }
 
   private func requireCallbackRegistrationOpen() throws {

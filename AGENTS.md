@@ -399,7 +399,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   startup before coordinator acquisition, then cancel and await that exact task before the
   post-start stop can prove cleanup. A failed startup with no stream is terminal,
   but a returned stream requires successful stop or final client destruction. Stream collector completion is not
-  native-terminal proof when the corresponding stop throws.
+  native-terminal proof when the corresponding stop throws. During detach,
+  reject registered application callbacks and await their exact owning one-shot
+  before native cancellation; operations whose provider has not registered must
+  still receive native cancellation first so they can unwind.
 - Apple recording, upload-ownership, OTA, and device-log APIs expose typed
   streams and native file URLs plus bounded transfer-completion metadata only.
   Keep upload destinations opaque, let only the reducer authorize BLE fallback,
