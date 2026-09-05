@@ -207,6 +207,31 @@ actor EncryptedUploadV2TransferControl {
         return transfer.notifications
     }
 
+    func writeActiveTransferFrame(
+        transportSessionID: UInt64,
+        frame: Data
+    ) async throws {
+        guard let transfer = activeTransfer,
+              transfer.transportSessionID == transportSessionID,
+              transfer.notificationStreamClaimed
+        else {
+            throw Self.error(
+                code: .identityMismatch,
+                detail: "no claimed encrypted transfer matches the requested transport session"
+            )
+        }
+        guard frame.count >= 68,
+              frame.first == 0x21,
+              Self.readUInt64(frame, at: 4) == transportSessionID
+        else {
+            throw Self.error(
+                code: .invalidInput,
+                detail: "active encrypted transfer frame is malformed or belongs to another session"
+            )
+        }
+        try await write(transfer.peripheralID, frame)
+    }
+
     func abortActiveTransfer(
         transportSessionID: UInt64,
         reason: UInt16,
@@ -434,6 +459,12 @@ actor EncryptedUploadV2TransferControl {
     private static func sameUUID(_ lhs: String, _ rhs: String) -> Bool {
         guard let lhs = UUID(uuidString: lhs), let rhs = UUID(uuidString: rhs) else { return false }
         return lhs == rhs
+    }
+
+    private static func readUInt64(_ data: Data, at offset: Int) -> UInt64 {
+        data[offset..<(offset + 8)].enumerated().reduce(0) { value, pair in
+            value | (UInt64(pair.element) << UInt64(pair.offset * 8))
+        }
     }
 
     private static func deviceRejection(

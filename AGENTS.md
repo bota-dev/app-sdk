@@ -83,7 +83,17 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   WINDOW_ACK until the matching native checkpoint, including its highest
   contiguous sequence, is reported persisted. It also
   bounds the manifest to the fixed 580-byte contract and verifies EOF evidence.
-  This receiver is not connected to the production host or staging path.
+  An internal `EncryptedUploadV2TransferHost` now connects that receiver to the
+  retained `0409` stream for START/RESUME, DATA/window repair, manifest, EOF,
+  abort, protected ciphertext-file writes, and recoverable native checkpoint
+  sidecars. It emits structured `WINDOW_STAGED` evidence to Rust and sends only
+  Rust-encoded ACK/repair frames through the exact owned transport session. Its
+  phase-aware notification queue is capped at 1 MiB, premature post-window
+  traffic fails closed, START/ABORT races cannot resurrect ownership, and
+  checkpoint replacement or deletion flushes the file and parent directory
+  before success. The host is not selected by the production configuration and
+  does not implement application profile selection, backend staging/receipt,
+  or CONFIRM.
   Apple's internal
   `EncryptedUploadV2SignedBlobWriter` permits one owner, queries the actual
   write-with-response limit capped at the 512-byte protocol maximum, subscribes
@@ -100,9 +110,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   retains the live `0409` stream and serialized owner after acceptance for the
   remaining transfer, and uses bounded ABORT/unsubscribe cleanup with the same
   fail-closed reconnect gate. The configured port still returns
-  `feature_unavailable`; no Apple/Android native
-  transfer or released manager implements the workflow, so keep runtime
-  metadata false.
+  `feature_unavailable`; no released manager implements the workflow, so keep
+  runtime metadata false.
 - React Native compatibility requires the frozen public API surface digest in
   addition to protocol fixtures and workflow traces. Internal legacy modules
   outside `src/index.ts` are not part of that public contract.

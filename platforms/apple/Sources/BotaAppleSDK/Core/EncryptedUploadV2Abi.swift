@@ -33,19 +33,31 @@ enum EncryptedUploadV2Abi {
 
     static let notificationStaged: UInt32 = 0x0410
 
+    static let fieldSerialNumber: UInt32 = 3
+    static let fieldMaterialID: UInt32 = 12
+    static let fieldRecordingUUID: UInt32 = 13
+    static let fieldSinkID: UInt32 = 14
+    static let fieldCheckpoint: UInt32 = 28
+    static let fieldOffset: UInt32 = 39
     static let fieldTransportSessionID: UInt32 = 128
     static let fieldRecordingGeneration: UInt32 = 129
     static let fieldCiphertextLength: UInt32 = 130
     static let fieldUploadSessionUUID: UInt32 = 132
+    static let fieldCheckpointRevision: UInt32 = 133
     static let fieldWindowPackets: UInt32 = 134
     static let fieldDataPayloadBytes: UInt32 = 135
+    static let fieldMissingSequence: UInt32 = 136
     static let fieldCapabilityFlags: UInt32 = 137
     static let fieldMaximumSignedBlobBytes: UInt32 = 138
     static let fieldMaximumManifestBytes: UInt32 = 139
     static let fieldCheckpointInterval: UInt32 = 140
     static let fieldMaximumMissingSequences: UInt32 = 141
+    static let fieldManifestSHA256: UInt32 = 142
+    static let fieldPrefixSHA256: UInt32 = 143
     static let fieldCiphertextSHA256: UInt32 = 144
+    static let fieldBlockCount: UInt32 = 145
     static let fieldStorageFormat: UInt32 = 147
+    static let fieldAuthorizationSHA256: UInt32 = 161
     static let fieldOwnerRevision: UInt32 = 165
     static let fieldUploadProfile: UInt32 = 166
     static let fieldUploadSecurityPolicy: UInt32 = 167

@@ -88,6 +88,55 @@ final class EncryptedUploadV2TransferControlTests: XCTestCase {
         XCTAssertEqual(snapshot.frames.map(\.first), [0x20, 0x24])
     }
 
+    func testActiveTransferWritesAFrameOnlyForItsExactTransportSession() async throws {
+        let probe = TransferControlProbe(notifications: [Self.startAcknowledgement()])
+        let control = try Self.control(probe)
+        _ = try await control.start(
+            peripheralID: "peripheral-1",
+            request: Self.startRequest()
+        )
+        _ = try await control.claimNotificationStream(
+            transportSessionID: Self.transportSessionID
+        )
+
+        let mapper = try CoreModelMapper()
+        let frame = try mapper.createEncryptedUploadV2WindowAcknowledgement(
+            transportSessionID: Self.transportSessionID,
+            windowIndex: 1,
+            highestContiguousSequence: 3,
+            nextCiphertextOffset: 12,
+            prefixSHA256: Data(repeating: 0x55, count: 32),
+            checkpointRevision: 2,
+            missingSequences: []
+        )
+        try await control.writeActiveTransferFrame(
+            transportSessionID: Self.transportSessionID,
+            frame: frame
+        )
+        do {
+            let foreignFrame = try mapper.createEncryptedUploadV2WindowAcknowledgement(
+                transportSessionID: Self.transportSessionID + 1,
+                windowIndex: 1,
+                highestContiguousSequence: 3,
+                nextCiphertextOffset: 12,
+                prefixSHA256: Data(repeating: 0x55, count: 32),
+                checkpointRevision: 2,
+                missingSequences: []
+            )
+            try await control.writeActiveTransferFrame(
+                transportSessionID: Self.transportSessionID + 1,
+                frame: foreignFrame
+            )
+            XCTFail("Expected a foreign transport session to be rejected")
+        } catch let error as BotaSDKError {
+            XCTAssertEqual(error.code, .identityMismatch)
+        }
+
+        let snapshot = await probe.snapshot()
+        XCTAssertEqual(snapshot.frames.map(\.first), [0x20, 0x21])
+        XCTAssertEqual(snapshot.frames.last, frame)
+    }
+
     func testStartIdentityMismatchFailsClosedAndBestEffortAborts() async throws {
         var mismatch = Self.startAcknowledgement()
         mismatch.replaceSubrange(44..<48, with: Self.u32(10))

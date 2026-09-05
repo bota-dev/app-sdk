@@ -229,11 +229,19 @@ runtimes can consume the same trace.
     unproved resume tails, retain the mutually acknowledged highest sequence in
     the native checkpoint sidecar, require the exact checkpoint-persisted callback
     before producing a clean WINDOW_ACK, and validate the fixed manifest plus
-    EOF evidence. It is not yet connected to the live transfer-control stream
-    or production host.
+    EOF evidence.
+  - [x] Connect the retained START/RESUME stream to the bounded receiver through
+    an internal host; implement DATA/window repair, manifest, EOF, abort,
+    protected ciphertext-file writes, and recoverable native checkpoint
+    sidecars; and return structured staged evidence plus Rust-encoded ACK/repair
+    frames through the exact owned transport session. Bound the phase-aware
+    notification queue, reject premature post-window traffic, serialize
+    START/ABORT ownership, and durably flush checkpoint replacement/deletion
+    before reporting success. This host remains production-unselected and has
+    no backend staging, receipt, or CONFIRM path.
   - [ ] Wire the resulting snapshot through application selection before START,
-    then implement the Apple DATA/window repair, manifest, EOF, and CONFIRM
-    lifecycle using the shared encoder.
+    then implement backend staging, receipt validation, and CONFIRM using the
+    shared encoder.
 - [ ] Stream ciphertext to a bounded native file and staging request without a
   plaintext copy or bridge payload.
 - [ ] Persist and recover only mutually proven checkpoint metadata.

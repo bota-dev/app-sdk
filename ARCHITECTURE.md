@@ -160,8 +160,16 @@ offset to a protected native file, retains only packet metadata and the fixed
 selectively requests exact gaps, and refuses to produce a clean WINDOW_ACK
 until the matching native checkpoint sidecar, including the highest contiguous
 sequence needed for exact EOF validation after resume, is reported persisted.
-It is not yet connected
-to the live transfer-control stream, staging network path, or production host.
+An internal transfer host now connects it to the retained `0409` stream for
+START/RESUME, DATA/window repair, manifest, EOF, abort, protected ciphertext
+file writes, and recoverable native checkpoint sidecars. The host emits
+structured `WINDOW_STAGED` evidence to Rust and sends only Rust-encoded
+ACK/repair frames through the exact owned transport session. Its phase-aware
+notification queue is capped at 1 MiB, premature post-window traffic fails
+closed, START/ABORT races cannot resurrect ownership, and checkpoint
+replacement or deletion flushes the file and parent directory before success.
+It is not selected by the production configuration and does not implement
+application profile selection, backend staging/receipt, or CONFIRM.
 Apple's
 serialized signed-blob writer uses the current CoreBluetooth
 write-with-response limit capped at 512 bytes, subscribes to `0407` before
@@ -176,12 +184,11 @@ echoed identity, ciphertext, negotiated bounds, and checkpoint values on
 successful replies, preserves the device checkpoint on RESUME_REJECT/ERROR,
 and retains the live `0409` stream plus serialized owner for DATA/window/EOF.
 Cancellation or explicit abort applies the same bounded ABORT/unsubscribe
-ownership policy. The production
-configuration intentionally installs an
-unavailable transfer port until native BLE messaging, sink, staging, recovery,
-and manager wiring land. Android still has no equivalent host, React Native
-exposes no v2 workflow or bulk bytes, and compatibility metadata keeps runtime
-support and firmware advertisement false.
+ownership policy. The production configuration intentionally installs an
+unavailable transfer port until profile selection, backend staging,
+receipt/CONFIRM, and manager wiring land. Android still has no equivalent host,
+React Native exposes no v2 workflow or bulk bytes, and compatibility metadata
+keeps runtime support and firmware advertisement false.
 The core now also exposes a side-effect-free three-profile selection validator:
 it requires every batch capability bit, usable advertised bounds, and an
 immutable recording generation in `bota_enc_v2` storage before accepting v2;

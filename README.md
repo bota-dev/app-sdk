@@ -184,10 +184,18 @@ uses that ABI for WINDOW_ACK/CONFIRM output and typed DATA, WINDOW_END,
 MANIFEST_CHUNK, EOF, and ERROR input. A bounded internal receiver now writes
 opaque DATA by offset to a protected native file, verifies resume prefixes and
 EOF evidence, requests exact missing sequences, and keeps clean WINDOW_ACK
-creation locked until the matching checkpoint is reported persisted. It is not
-yet wired to the live stream, staging, or production host; the native checkpoint
-sidecar includes the highest contiguous sequence needed for exact EOF validation
-after resume. Apple's internal
+creation locked until the matching checkpoint is reported persisted. An
+internal transfer host now connects it to the retained `0409` stream for
+START/RESUME, DATA/window repair, manifest, EOF, abort, protected ciphertext
+file writes, and native checkpoint recovery. It emits structured staged
+evidence and sends only Rust-encoded ACK/repair frames through the exact owned
+transport session. Its phase-aware notification queue is capped at 1 MiB,
+premature post-window traffic fails closed, START/ABORT races cannot resurrect
+ownership, and checkpoint replacement or deletion flushes the file and parent
+directory before success. The host is not selected by production configuration
+and does not implement application profile selection, backend staging/receipt,
+or CONFIRM; its native checkpoint sidecar includes the highest contiguous
+sequence needed for exact EOF validation after resume. Apple's internal
 writer now
 serializes ownership, chunks
 against the current CoreBluetooth write-with-response limit capped at 512
@@ -200,10 +208,9 @@ foreign-session traffic, exactly validates successful reply identity,
 ciphertext and checkpoint context, and preserves device checkpoint data on
 rejection. Acceptance retains the live `0409` stream and serialized owner for
 the remaining transfer; cancellation and explicit abort use the same bounded,
-fail-closed cleanup. The
-production transfer host still fails closed as
-unavailable and no public manager exposes
-the workflow. Android and React Native have no runtime host. Runtime
+fail-closed cleanup. The production-selected transfer port still fails closed
+as unavailable and no public manager exposes the workflow. Android and React
+Native have no runtime host. Runtime
 compatibility metadata therefore remains disabled.
 ABI v1 is frozen at the typed public header and verified by standalone C and
 Swift callers. Its exact ownership contract, artifact digests, packet coverage,
