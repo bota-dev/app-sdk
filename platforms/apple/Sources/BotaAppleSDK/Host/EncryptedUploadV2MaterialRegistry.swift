@@ -114,6 +114,11 @@ enum EncryptedUploadV2TerminalOutcome: CaseIterable, Equatable, Sendable {
 struct EncryptedUploadV2PreparedMaterial: Equatable, Sendable {
     let authorization: Data
     let authorizationSHA256: Data
+    let lease: EncryptedUploadV2MaterialLease
+}
+
+struct EncryptedUploadV2MaterialLease: Equatable, Sendable {
+    fileprivate let registrationID: UUID
 }
 
 struct EncryptedUploadV2AcceptedReceipt: Equatable, Sendable {
@@ -149,19 +154,22 @@ actor EncryptedUploadV2MaterialRegistry {
     }
 
     func preparedMaterial(id: String) throws -> EncryptedUploadV2PreparedMaterial {
-        let provider = try requiredEntry(id).provider
+        let entry = try requiredEntry(id)
+        let provider = entry.provider
         return EncryptedUploadV2PreparedMaterial(
             authorization: provider.authorization,
-            authorizationSHA256: Self.sha256(provider.authorization)
+            authorizationSHA256: Self.sha256(provider.authorization),
+            lease: .init(registrationID: entry.registrationID)
         )
     }
 
     func stagingRequest(
         id: String,
+        lease: EncryptedUploadV2MaterialLease,
         evidence: EncryptedUploadV2TransferEvidence
     ) async throws -> URLRequest {
         try Self.validate(evidence)
-        let entry = try requiredEntry(id)
+        let entry = try requiredEntry(id, lease: lease)
         let request = try await entry.provider.stagingRequest(for: evidence)
         try requireCurrent(id: id, registrationID: entry.registrationID)
         guard request.url?.scheme?.lowercased() == "https",
@@ -176,6 +184,7 @@ actor EncryptedUploadV2MaterialRegistry {
 
     func submitManifest(
         id: String,
+        lease: EncryptedUploadV2MaterialLease,
         manifest: Data,
         evidence: EncryptedUploadV2TransferEvidence
     ) async throws {
@@ -186,17 +195,18 @@ actor EncryptedUploadV2MaterialRegistry {
         else {
             throw EncryptedUploadV2MaterialRegistryError.invalidManifest
         }
-        let entry = try requiredEntry(id)
+        let entry = try requiredEntry(id, lease: lease)
         try await entry.provider.submit(.init(manifest: manifest, evidence: evidence))
         try requireCurrent(id: id, registrationID: entry.registrationID)
     }
 
     func finalizeAndReceiveReceipt(
         id: String,
+        lease: EncryptedUploadV2MaterialLease,
         evidence: EncryptedUploadV2TransferEvidence
     ) async throws -> EncryptedUploadV2AcceptedReceipt {
         try Self.validate(evidence)
-        let entry = try requiredEntry(id)
+        let entry = try requiredEntry(id, lease: lease)
         try await entry.provider.finalize(evidence)
         try requireCurrent(id: id, registrationID: entry.registrationID)
         let receipt = try await entry.provider.completionReceipt(evidence)
@@ -217,12 +227,41 @@ actor EncryptedUploadV2MaterialRegistry {
         }
     }
 
+    func terminate(
+        id: String,
+        lease: EncryptedUploadV2MaterialLease,
+        outcome: EncryptedUploadV2TerminalOutcome
+    ) async throws {
+        let entry = try requiredEntry(id, lease: lease)
+        providers[id] = nil
+        if outcome != .completed {
+            try await entry.provider.cancel()
+        }
+    }
+
+    func validate(id: String, lease: EncryptedUploadV2MaterialLease) throws {
+        _ = try requiredEntry(id, lease: lease)
+    }
+
+    func completeIfCurrent(id: String, lease: EncryptedUploadV2MaterialLease) {
+        guard providers[id]?.registrationID == lease.registrationID else { return }
+        providers[id] = nil
+    }
+
     func contains(id: String) -> Bool {
         providers[id] != nil
     }
 
     private func requiredEntry(_ id: String) throws -> Entry {
         guard let entry = providers[id] else {
+            throw EncryptedUploadV2MaterialRegistryError.missingMaterial
+        }
+        return entry
+    }
+
+    private func requiredEntry(_ id: String, lease: EncryptedUploadV2MaterialLease) throws -> Entry {
+        let entry = try requiredEntry(id)
+        guard entry.registrationID == lease.registrationID else {
             throw EncryptedUploadV2MaterialRegistryError.missingMaterial
         }
         return entry

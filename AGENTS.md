@@ -91,9 +91,18 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   phase-aware notification queue is capped at 1 MiB, premature post-window
   traffic fails closed, START/ABORT races cannot resurrect ownership, and
   checkpoint replacement or deletion flushes the file and parent directory
-  before success. The host is not selected by the production configuration and
-  does not implement application profile selection, backend staging/receipt,
-  or CONFIRM.
+  before success. Optional internal completion services bind START to the
+  prepared authorization and its exact material-registration lease, pass only
+  the verified native ciphertext file and fixed manifest to application-owned
+  staging/finalization callbacks, require the exact accepted receipt digest,
+  durably remove local staging state, deliver the receipt, and then send the
+  Rust-encoded CONFIRM. Cancellation ownership is registered before entering
+  the asynchronous v2 host callback. The live control actor releases its claimed
+  `0409` subscription only after that canonical CONFIRM write. Later
+  cancellation or subscription-cleanup uncertainty cannot reverse a successful
+  CONFIRM; uncertain cleanup instead poisons the BLE owner until reconnect. The
+  host is not selected by production configuration and still has no application
+  profile selection or manager wiring.
   Apple's internal
   `EncryptedUploadV2SignedBlobWriter` permits one owner, queries the actual
   write-with-response limit capped at the 512-byte protocol maximum, subscribes

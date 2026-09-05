@@ -237,11 +237,16 @@ runtimes can consume the same trace.
     frames through the exact owned transport session. Bound the phase-aware
     notification queue, reject premature post-window traffic, serialize
     START/ABORT ownership, and durably flush checkpoint replacement/deletion
-    before reporting success. This host remains production-unselected and has
-    no backend staging, receipt, or CONFIRM path.
-  - [ ] Wire the resulting snapshot through application selection before START,
-    then implement backend staging, receipt validation, and CONFIRM using the
-    shared encoder.
+    before reporting success. This host remains production-unselected.
+  - [x] Add internal completion services that require the prepared authorization,
+    pin its exact material-registration lease, upload the verified opaque
+    ciphertext file before the fixed manifest, and await the exact backend
+    receipt. Durably remove local staging state before delivering that receipt
+    and a Rust-encoded CONFIRM. Cleanup/receipt/material/evidence failures and
+    cancellation before CONFIRM leave the device copy intact; cancellation or
+    subscription-cleanup uncertainty after CONFIRM cannot reverse completion.
+  - [ ] Wire the resulting snapshot through application selection before START
+    and install the internal completion services in production configuration.
 - [ ] Stream ciphertext to a bounded native file and staging request without a
   plaintext copy or bridge payload.
 - [ ] Persist and recover only mutually proven checkpoint metadata.

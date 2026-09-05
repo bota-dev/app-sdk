@@ -93,8 +93,8 @@ actor HostEffectExecutor: CoreHost {
              .encryptedUploadV2SaveCheckpoint, .encryptedUploadV2AcknowledgeWindow,
              .encryptedUploadV2StageArtifacts, .encryptedUploadV2AwaitReceipt,
              .encryptedUploadV2ConfirmWithReceipt, .encryptedUploadV2Abort:
-            return route(
-                await encryptedUploadV2.execute(effect),
+            return routeDeferred(
+                { await self.encryptedUploadV2.execute(effect) },
                 effect: effect,
                 failureKind: EncryptedUploadV2Abi.eventFailed
             )
@@ -112,12 +112,23 @@ actor HostEffectExecutor: CoreHost {
         effect: CoreEffect,
         failureKind: UInt32
     ) -> AsyncThrowingStream<CoreHostEvent, Error> {
+        routeDeferred({ upstream }, effect: effect, failureKind: failureKind)
+    }
+
+    private func routeDeferred(
+        _ createUpstream: @escaping @Sendable () async -> AsyncThrowingStream<CoreHostEventPayload, Error>,
+        effect: CoreEffect,
+        failureKind: UInt32
+    ) -> AsyncThrowingStream<CoreHostEvent, Error> {
         let pair = AsyncThrowingStream<CoreHostEvent, Error>.makeStream()
         let task = Task {
             do {
+                let upstream = await createUpstream()
                 var eventCount = 0
                 for try await payload in upstream {
-                    try Task.checkCancellation()
+                    if payload.kind != EncryptedUploadV2Abi.eventRecordingConfirmed {
+                        try Task.checkCancellation()
+                    }
                     eventCount += 1
                     guard expectedEventKinds(for: effect).contains(payload.kind),
                           allowsMultipleEvents(effect) || eventCount == 1

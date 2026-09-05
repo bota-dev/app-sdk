@@ -58,6 +58,7 @@ enum EncryptedUploadV2Abi {
     static let fieldBlockCount: UInt32 = 145
     static let fieldStorageFormat: UInt32 = 147
     static let fieldAuthorizationSHA256: UInt32 = 161
+    static let fieldReceiptSHA256: UInt32 = 162
     static let fieldOwnerRevision: UInt32 = 165
     static let fieldUploadProfile: UInt32 = 166
     static let fieldUploadSecurityPolicy: UInt32 = 167

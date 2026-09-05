@@ -232,6 +232,53 @@ actor EncryptedUploadV2TransferControl {
         try await write(transfer.peripheralID, frame)
     }
 
+    func confirmActiveTransferFrame(
+        transportSessionID: UInt64,
+        frame: Data,
+        cleanupTimeoutNanoseconds: UInt64 = defaultCleanupTimeoutNanoseconds
+    ) async throws {
+        guard !exchangeActive else {
+            throw Self.error(
+                code: .operationInProgress,
+                detail: "an encrypted transfer-control exchange is still active"
+            )
+        }
+        guard !cleanupUncertain else {
+            throw Self.error(
+                code: .uploadOwnershipUnknown,
+                detail: "transfer-control cleanup is uncertain; reconnect before retrying"
+            )
+        }
+        guard let transfer = activeTransfer,
+              transfer.transportSessionID == transportSessionID,
+              transfer.notificationStreamClaimed
+        else {
+            throw Self.error(
+                code: .identityMismatch,
+                detail: "no claimed encrypted transfer matches the requested transport session"
+            )
+        }
+        guard frame.count == 84,
+              frame.first == 0x23,
+              Self.readUInt64(frame, at: 4) == transportSessionID
+        else {
+            throw Self.error(
+                code: .invalidInput,
+                detail: "encrypted transfer CONFIRM is malformed or belongs to another session"
+            )
+        }
+        exchangeActive = true
+        defer { exchangeActive = false }
+        try Task.checkCancellation()
+        try await write(transfer.peripheralID, frame)
+        _ = await cleanup(
+            peripheralID: transfer.peripheralID,
+            abort: nil,
+            timeoutNanoseconds: cleanupTimeoutNanoseconds
+        )
+        activeTransfer = nil
+    }
+
     func abortActiveTransfer(
         transportSessionID: UInt64,
         reason: UInt16,

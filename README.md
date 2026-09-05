@@ -192,10 +192,20 @@ evidence and sends only Rust-encoded ACK/repair frames through the exact owned
 transport session. Its phase-aware notification queue is capped at 1 MiB,
 premature post-window traffic fails closed, START/ABORT races cannot resurrect
 ownership, and checkpoint replacement or deletion flushes the file and parent
-directory before success. The host is not selected by production configuration
-and does not implement application profile selection, backend staging/receipt,
-or CONFIRM; its native checkpoint sidecar includes the highest contiguous
-sequence needed for exact EOF validation after resume. Apple's internal
+directory before success. Optional internal completion services bind START to
+the prepared authorization and exact material-registration lease, upload the
+verified opaque native file before submitting the fixed manifest, and await the
+exact accepted receipt. It durably removes its local ciphertext and checkpoint
+before delivering that receipt and sending canonical CONFIRM, so a cleanup,
+receipt, material, or evidence failure cannot reach device deletion.
+Cancellation owns the routed task before entering the asynchronous v2 host
+callback. Once CONFIRM is written, cancellation or subscription-cleanup
+uncertainty cannot reverse completion; uncertain cleanup poisons BLE ownership
+until reconnect. The host is not selected by production configuration and still
+does not implement application profile selection or manager wiring; its native
+checkpoint sidecar includes the highest contiguous sequence needed for exact EOF
+validation after resume.
+Apple's internal
 writer now
 serializes ownership, chunks
 against the current CoreBluetooth write-with-response limit capped at 512

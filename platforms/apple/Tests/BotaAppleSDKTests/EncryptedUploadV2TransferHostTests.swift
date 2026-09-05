@@ -5,6 +5,199 @@ import XCTest
 @testable import BotaAppleSDK
 
 final class EncryptedUploadV2TransferHostTests: XCTestCase {
+    func testCompletionOperationsRejectConcurrentReentry() async throws {
+        let fixture = try Fixture()
+        let gate = SuspendedFirstCompletionCall()
+        let registry = EncryptedUploadV2MaterialRegistry()
+        try await registry.register(
+            id: "material-id",
+            provider: EncryptedUploadV2MaterialProvider(
+                authorization: Data(repeating: 0xa1, count: 408),
+                stagingRequest: { _ in URLRequest(url: URL(string: "https://staging.example")!) },
+                submitManifest: { _ in },
+                finalize: { _ in },
+                completionReceipt: { _ in Data(repeating: 0xb2, count: 336) },
+                cancel: {}
+            )
+        )
+        let host = EncryptedUploadV2TransferHost(
+            rootDirectory: fixture.root,
+            mapper: try CoreModelMapper(),
+            openTransfer: { _, _ in .opened(fixture.notifications.stream) },
+            sendControl: { _ in },
+            services: .init(
+                materialRegistry: registry,
+                sendSignedDocument: { _, _, _, _ in await gate.suspendFirst() },
+                uploadCiphertext: { _, _ in },
+                confirmTransfer: { _, _ in },
+                nextWriteID: { 7 }
+            )
+        )
+        let firstEffect = fixture.prepareEffect()
+        let first = Task.detached { @Sendable in
+            var values: [CoreHostEventPayload] = []
+            for try await value in await host.execute(firstEffect) { values.append(value) }
+            return values
+        }
+        await gate.waitUntilEntered()
+
+        do {
+            _ = try await Self.collect(await host.execute(fixture.prepareEffect()))
+            XCTFail("Expected concurrent completion reentry to fail")
+        } catch let failure as EncryptedUploadV2HostFailure {
+            XCTAssertEqual(failure.errorCode, 8)
+        }
+
+        await gate.resume()
+        let firstEvents = try await first.value
+        XCTAssertEqual(firstEvents.map(\.kind), [EncryptedUploadV2Abi.eventSessionPrepared])
+    }
+
+    func testCompletionServicesStageOpaqueArtifactsBeforeReceiptGatedConfirm() async throws {
+        let fixture = try Fixture()
+        let authorization = Data(repeating: 0xa1, count: 408)
+        let receipt = Data(repeating: 0xb2, count: 336)
+        let calls = EncryptedUploadV2CompletionCalls()
+        let directorySync = DirectorySyncFailure()
+        let confirmedCommit = SuspendedFirstCompletionCall()
+        let registry = EncryptedUploadV2MaterialRegistry()
+        try await registry.register(
+            id: "material-id",
+            provider: EncryptedUploadV2MaterialProvider(
+                authorization: authorization,
+                stagingRequest: { _ in
+                    await calls.append(.stagingRequest)
+                    var request = URLRequest(url: URL(string: "https://staging.example/upload")!)
+                    request.httpMethod = "PUT"
+                    return request
+                },
+                submitManifest: { submission in
+                    await calls.append(.manifest(submission.manifest))
+                },
+                finalize: { _ in await calls.append(.finalize) },
+                completionReceipt: { _ in
+                    await calls.append(.receipt)
+                    return receipt
+                },
+                cancel: { await calls.append(.cancel) }
+            )
+        )
+        let services = EncryptedUploadV2TransferHostServices(
+            materialRegistry: registry,
+            sendSignedDocument: { kind, _, document, _ in
+                await calls.append(.signed(kind: kind, document: document))
+            },
+            uploadCiphertext: { _, fileURL in
+                await calls.append(.upload(try Data(contentsOf: fileURL)))
+            },
+            confirmTransfer: { _, frame in
+                await calls.append(.confirm(frame))
+                await confirmedCommit.suspendFirst()
+            },
+            nextWriteID: { 7 }
+        )
+        let host = EncryptedUploadV2TransferHost(
+            rootDirectory: fixture.root,
+            mapper: try CoreModelMapper(),
+            openTransfer: { _, _ in .opened(fixture.notifications.stream) },
+            sendControl: { _ in },
+            checkpointStore: .init(syncDirectory: { try directorySync.sync($0) }),
+            services: services
+        )
+
+        let prepared = try await Self.collect(await host.execute(fixture.prepareEffect()))
+        XCTAssertEqual(prepared, [.init(
+            kind: EncryptedUploadV2Abi.eventSessionPrepared,
+            fields: [.bytes(
+                id: EncryptedUploadV2Abi.fieldAuthorizationSHA256,
+                value: Data(SHA256.hash(data: authorization))
+            )]
+        )])
+
+        var transfer = await host.execute(fixture.startEffect(
+            authorizationSHA256: Data(SHA256.hash(data: authorization))
+        )).makeAsyncIterator()
+        _ = try await transfer.next()
+        fixture.sendCleanWindow()
+        _ = try await transfer.next()
+        let checkpoint = Data("opaque-core-checkpoint".utf8)
+        _ = try await Self.collect(await host.execute(fixture.checkpointEffect(
+            kind: EncryptedUploadV2Abi.effectSaveCheckpoint,
+            checkpoint: checkpoint
+        )))
+        _ = try await Self.collect(await host.execute(fixture.checkpointEffect(
+            kind: EncryptedUploadV2Abi.effectAcknowledgeWindow,
+            checkpoint: checkpoint
+        )))
+        fixture.sendManifestAndEOF()
+        _ = try await transfer.next()
+
+        let stageEvents = try await Self.collect(await host.execute(fixture.stageEffect()))
+        XCTAssertEqual(stageEvents, [.init(kind: EncryptedUploadV2Abi.eventArtifactsStaged)])
+        let receiptEvents = try await Self.collect(await host.execute(fixture.awaitReceiptEffect()))
+        let receiptSHA256 = Data(SHA256.hash(data: receipt))
+        XCTAssertEqual(receiptEvents, [.init(
+            kind: EncryptedUploadV2Abi.eventReceiptAccepted,
+            fields: [.bytes(id: EncryptedUploadV2Abi.fieldReceiptSHA256, value: receiptSHA256)]
+        )])
+        let callsBeforeMismatchedConfirm = await calls.values.count
+        do {
+            _ = try await Self.collect(await host.execute(fixture.confirmEffect(
+                receiptSHA256: Data(repeating: 0xff, count: 32)
+            )))
+            XCTFail("Expected a mismatched receipt digest to fail closed")
+        } catch let failure as EncryptedUploadV2HostFailure {
+            XCTAssertEqual(failure.errorCode, 11)
+        }
+        let callsAfterMismatchedConfirm = await calls.values.count
+        XCTAssertEqual(callsAfterMismatchedConfirm, callsBeforeMismatchedConfirm)
+        let remainsRegisteredBeforeConfirm = await registry.contains(id: "material-id")
+        XCTAssertTrue(remainsRegisteredBeforeConfirm)
+        directorySync.setShouldFail(true)
+        do {
+            _ = try await Self.collect(await host.execute(
+                fixture.confirmEffect(receiptSHA256: receiptSHA256)
+            ))
+            XCTFail("Expected failed durable cleanup to prevent device confirmation")
+        } catch {}
+        let callsAfterCleanupFailure = await calls.values.count
+        XCTAssertEqual(callsAfterCleanupFailure, callsBeforeMismatchedConfirm)
+        let remainsRegisteredAfterCleanupFailure = await registry.contains(id: "material-id")
+        XCTAssertTrue(remainsRegisteredAfterCleanupFailure)
+        directorySync.setShouldFail(false)
+        let confirmEffect = fixture.confirmEffect(receiptSHA256: receiptSHA256)
+        let confirm = Task.detached { @Sendable in
+            try await Self.collect(await host.execute(confirmEffect))
+        }
+        await confirmedCommit.waitUntilEntered()
+        try await registry.terminate(id: "material-id", outcome: .completed)
+        confirm.cancel()
+        await confirmedCommit.resume()
+        let confirmEvents = try await confirm.value
+        XCTAssertEqual(confirmEvents, [.init(kind: EncryptedUploadV2Abi.eventRecordingConfirmed)])
+
+        let values = await calls.values
+        XCTAssertEqual(values.count, 8)
+        XCTAssertEqual(values[0], .signed(kind: 1, document: authorization))
+        XCTAssertEqual(values[1], .stagingRequest)
+        XCTAssertEqual(values[2], .upload(fixture.ciphertext))
+        XCTAssertEqual(values[3], .manifest(fixture.manifest))
+        XCTAssertEqual(values[4], .finalize)
+        XCTAssertEqual(values[5], .receipt)
+        XCTAssertEqual(values[6], .signed(kind: 2, document: receipt))
+        let confirms = values.compactMap { value -> Data? in
+            guard case let .confirm(frame) = value else { return nil }
+            return frame
+        }
+        XCTAssertEqual(confirms.count, 1)
+        XCTAssertEqual(confirms[0].first, 0x23)
+        XCTAssertEqual(Data(confirms[0].suffix(32)), receiptSHA256)
+        let remainsRegistered = await registry.contains(id: "material-id")
+        XCTAssertFalse(remainsRegistered)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.fileURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.checkpointURL.path))
+    }
+
     func testStartEffectStreamsAProvenWindowFrom0409IntoStructuredCoreFields() async throws {
         let fixture = try Fixture()
         let host = EncryptedUploadV2TransferHost(
@@ -698,7 +891,10 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
                 .appendingPathExtension("json")
         }
 
-        func startEffect(checkpoint: Data? = nil) -> CoreEffect {
+        func startEffect(
+            checkpoint: Data? = nil,
+            authorizationSHA256: Data = Data(repeating: 0x66, count: 32)
+        ) -> CoreEffect {
             var fields: [CoreField] = [
                 .text(id: 3, value: serialNumber),
                 .text(id: 13, value: recordingUUID),
@@ -722,7 +918,7 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
                 .unsigned(id: 135, value: 4),
                 .unsigned(id: 130, value: UInt64(ciphertext.count)),
                 .bytes(id: 144, value: ciphertextSHA256),
-                .bytes(id: 161, value: Data(repeating: 0x66, count: 32)),
+                .bytes(id: 161, value: authorizationSHA256),
             ]
             if let checkpoint { fields.append(.bytes(id: 28, value: checkpoint)) }
             return .encryptedUploadV2StartTransfer(CorePacket(
@@ -786,6 +982,69 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
                 cancellationLow: 3,
                 fields: [.text(id: 12, value: "material-id")]
             ))
+        }
+
+        func prepareEffect() -> CoreEffect {
+            .encryptedUploadV2PrepareSession(CorePacket(
+                kind: EncryptedUploadV2Abi.effectPrepareSession,
+                operation: 8,
+                requestID: 7,
+                cancellationHigh: 2,
+                cancellationLow: 3,
+                fields: [.text(id: EncryptedUploadV2Abi.fieldMaterialID, value: "material-id")]
+            ))
+        }
+
+        func stageEffect() -> CoreEffect {
+            .encryptedUploadV2StageArtifacts(evidenceEffect(
+                kind: EncryptedUploadV2Abi.effectStageArtifacts,
+                requestID: 8,
+                includeSink: true
+            ))
+        }
+
+        func awaitReceiptEffect() -> CoreEffect {
+            .encryptedUploadV2AwaitReceipt(evidenceEffect(
+                kind: EncryptedUploadV2Abi.effectAwaitReceipt,
+                requestID: 9,
+                includeSink: false
+            ))
+        }
+
+        func confirmEffect(receiptSHA256: Data) -> CoreEffect {
+            .encryptedUploadV2ConfirmWithReceipt(CorePacket(
+                kind: EncryptedUploadV2Abi.effectConfirmWithReceipt,
+                operation: 8,
+                requestID: 10,
+                cancellationHigh: 2,
+                cancellationLow: 3,
+                fields: [
+                    .text(id: EncryptedUploadV2Abi.fieldMaterialID, value: "material-id"),
+                    .bytes(id: EncryptedUploadV2Abi.fieldReceiptSHA256, value: receiptSHA256),
+                ]
+            ))
+        }
+
+        private func evidenceEffect(kind: UInt32, requestID: UInt64, includeSink: Bool) -> CorePacket {
+            var fields: [CoreField] = [
+                .text(id: EncryptedUploadV2Abi.fieldMaterialID, value: "material-id"),
+                .unsigned(id: EncryptedUploadV2Abi.fieldCiphertextLength, value: UInt64(ciphertext.count)),
+                .bytes(id: EncryptedUploadV2Abi.fieldCiphertextSHA256, value: ciphertextSHA256),
+                .unsigned(id: EncryptedUploadV2Abi.fieldManifestLength, value: UInt64(manifest.count)),
+                .bytes(id: EncryptedUploadV2Abi.fieldManifestSHA256, value: manifestSHA256),
+                .unsigned(id: EncryptedUploadV2Abi.fieldBlockCount, value: 1),
+            ]
+            if includeSink {
+                fields.append(.text(id: EncryptedUploadV2Abi.fieldSinkID, value: sinkID))
+            }
+            return CorePacket(
+                kind: kind,
+                operation: 8,
+                requestID: requestID,
+                cancellationHigh: 2,
+                cancellationLow: 3,
+                fields: fields
+            )
         }
 
         func checkpointEffect(kind: UInt32, checkpoint: Data) -> CoreEffect {
@@ -1015,6 +1274,48 @@ private actor CapturedNativeCheckpoint {
     func set(_ value: EncryptedUploadV2CheckpointValue?) { self.value = value }
 }
 
+private enum EncryptedUploadV2CompletionCall: Equatable, Sendable {
+    case signed(kind: UInt8, document: Data)
+    case stagingRequest
+    case upload(Data)
+    case manifest(Data)
+    case finalize
+    case receipt
+    case confirm(Data)
+    case cancel
+}
+
+private actor EncryptedUploadV2CompletionCalls {
+    private(set) var values: [EncryptedUploadV2CompletionCall] = []
+    func append(_ value: EncryptedUploadV2CompletionCall) { values.append(value) }
+}
+
+private actor SuspendedFirstCompletionCall {
+    private var enteredContinuation: CheckedContinuation<Void, Never>?
+    private var resumeContinuation: CheckedContinuation<Void, Never>?
+    private var entered = false
+    private var callCount = 0
+
+    func suspendFirst() async {
+        callCount += 1
+        guard callCount == 1 else { return }
+        entered = true
+        enteredContinuation?.resume()
+        enteredContinuation = nil
+        await withCheckedContinuation { resumeContinuation = $0 }
+    }
+
+    func waitUntilEntered() async {
+        if entered { return }
+        await withCheckedContinuation { enteredContinuation = $0 }
+    }
+
+    func resume() {
+        resumeContinuation?.resume()
+        resumeContinuation = nil
+    }
+}
+
 private actor CapturedTransportSession {
     private(set) var value: UInt64?
     func set(_ value: UInt64) { self.value = value }
@@ -1125,6 +1426,22 @@ private final class DirectorySyncProbe: @unchecked Sendable {
 
     func record(_ url: URL) {
         lock.withLock { storage.append(url) }
+    }
+}
+
+private final class DirectorySyncFailure: @unchecked Sendable {
+    private let lock = NSLock()
+    private var shouldFail = false
+
+    func setShouldFail(_ value: Bool) {
+        lock.withLock { shouldFail = value }
+    }
+
+    func sync(_: URL) throws {
+        let fails = lock.withLock { shouldFail }
+        if fails {
+            throw NSError(domain: "EncryptedUploadV2TransferHostTests", code: 2)
+        }
     }
 }
 

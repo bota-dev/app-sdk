@@ -7,6 +7,19 @@ enum EncryptedUploadV2TransferOpenResult: Sendable {
     case resumeRejected
 }
 
+struct EncryptedUploadV2TransferHostServices: Sendable {
+    typealias SendSignedDocument = @Sendable (UInt8, UInt32, Data, UInt16) async throws -> Void
+    typealias UploadCiphertext = @Sendable (URLRequest, URL) async throws -> Void
+    typealias ConfirmTransfer = @Sendable (UInt64, Data) async throws -> Void
+    typealias NextWriteID = @Sendable () -> UInt32
+
+    let materialRegistry: EncryptedUploadV2MaterialRegistry
+    let sendSignedDocument: SendSignedDocument
+    let uploadCiphertext: UploadCiphertext
+    let confirmTransfer: ConfirmTransfer
+    let nextWriteID: NextWriteID
+}
+
 actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
     typealias OpenTransfer = @Sendable (
         EncryptedUploadV2StartRequestValue,
@@ -23,6 +36,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         let uploadSessionBytes: Data
         let ownerRevision: UInt32
         let transportSessionID: UInt64
+        let materialID: String
         let sinkID: String
         let windowPackets: UInt16
         let dataPayloadBytes: UInt16
@@ -47,6 +61,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
     private let sendControl: SendControl
     private let abortTransfer: AbortTransfer
     private let checkpointStore: EncryptedUploadV2DurableFileStore
+    private let services: EncryptedUploadV2TransferHostServices?
     private var activeTransfer: ActiveTransfer?
     private var loadedCheckpoint: PersistedEncryptedUploadV2Checkpoint?
     private var pendingCheckpoint: EncryptedUploadV2CheckpointValue?
@@ -58,6 +73,13 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
     private var openingTask: Task<EncryptedUploadV2TransferOpenResult, Error>?
     private var pumpTask: Task<Void, Never>?
     private var generation: UInt64 = 0
+    private var preparedMaterialID: String?
+    private var preparedAuthorizationSHA256: Data?
+    private var preparedMaterialLease: EncryptedUploadV2MaterialLease?
+    private var completedTransfer: EncryptedUploadV2CompletedTransferValue?
+    private var stagedEvidence: EncryptedUploadV2TransferEvidence?
+    private var acceptedReceipt: EncryptedUploadV2AcceptedReceipt?
+    private var completionOperationActive = false
 
     init(
         rootDirectory: URL,
@@ -65,7 +87,8 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         openTransfer: @escaping OpenTransfer,
         sendControl: @escaping SendControl,
         abortTransfer: @escaping AbortTransfer = { _ in },
-        checkpointStore: EncryptedUploadV2DurableFileStore = .init()
+        checkpointStore: EncryptedUploadV2DurableFileStore = .init(),
+        services: EncryptedUploadV2TransferHostServices? = nil
     ) {
         self.rootDirectory = rootDirectory
         self.mapper = mapper
@@ -73,6 +96,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         self.sendControl = sendControl
         self.abortTransfer = abortTransfer
         self.checkpointStore = checkpointStore
+        self.services = services
     }
 
     init(
@@ -139,6 +163,8 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
                 return try deleteCheckpoint(effect)
             case .encryptedUploadV2TruncateSink:
                 return try truncateSink(effect)
+            case .encryptedUploadV2PrepareSession:
+                return try await prepareSession(effect)
             case .encryptedUploadV2StartTransfer:
                 return try await start(effect)
             case .encryptedUploadV2SaveCheckpoint:
@@ -147,8 +173,14 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
                 return try await repairWindow(effect)
             case .encryptedUploadV2AcknowledgeWindow:
                 return try await acknowledgeWindow(effect)
+            case .encryptedUploadV2StageArtifacts:
+                return try await stageArtifacts(effect)
+            case .encryptedUploadV2AwaitReceipt:
+                return try await awaitReceipt(effect)
+            case .encryptedUploadV2ConfirmWithReceipt:
+                return try await confirmWithReceipt(effect)
             case .encryptedUploadV2Abort:
-                return try await abort()
+                return try await abort(effect)
             default:
                 return Self.failedStream("encrypted upload v2 transfer effect is not implemented")
             }
@@ -157,7 +189,15 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         }
     }
 
-    private func abort() async throws -> AsyncThrowingStream<CoreHostEventPayload, Error> {
+    private func abort(
+        _ effect: CoreEffect
+    ) async throws -> AsyncThrowingStream<CoreHostEventPayload, Error> {
+        let materialID = try effect.packet.fields.v2RequiredText(EncryptedUploadV2Abi.fieldMaterialID)
+        if let ownedMaterialID = preparedMaterialID ?? activeTransfer?.context.materialID,
+           ownedMaterialID != materialID
+        {
+            throw Self.failure(code: 11, detail: "encrypted upload v2 ABORT material does not match")
+        }
         generation &+= 1
         let active = activeTransfer
         let sessionID = retainedTransportSessionID ?? openingTransportSessionID
@@ -183,20 +223,82 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
                 openedDuringCancellation = true
             }
         }
+        var terminalError: Error?
         if let sessionID, retainedTransportSessionID != nil || openedDuringCancellation {
             do {
                 try await abortTransfer(sessionID)
                 retainedTransportSessionID = nil
             } catch {
                 retainedTransportSessionID = sessionID
-                openingTransportSessionID = nil
-                self.openingTask = nil
-                throw error
+                terminalError = error
             }
         }
         openingTransportSessionID = nil
         self.openingTask = nil
+        preparedMaterialID = nil
+        preparedAuthorizationSHA256 = nil
+        let materialLease = preparedMaterialLease
+        preparedMaterialLease = nil
+        completedTransfer = nil
+        stagedEvidence = nil
+        acceptedReceipt = nil
+        if let services, let materialLease {
+            do {
+                try await services.materialRegistry.terminate(
+                    id: materialID,
+                    lease: materialLease,
+                    outcome: .failed
+                )
+            } catch {
+                if terminalError == nil { terminalError = error }
+            }
+        }
+        if let terminalError { throw terminalError }
         return Self.empty()
+    }
+
+    private func prepareSession(
+        _ effect: CoreEffect
+    ) async throws -> AsyncThrowingStream<CoreHostEventPayload, Error> {
+        guard let services else {
+            throw Self.failure(code: 7, detail: "encrypted upload v2 completion services are unavailable")
+        }
+        guard activeTransfer == nil,
+              openingTransportSessionID == nil,
+              retainedTransportSessionID == nil,
+              preparedMaterialLease == nil
+        else {
+            throw Self.failure(code: 8, detail: "another encrypted upload v2 transfer is active")
+        }
+        try beginCompletionOperation()
+        defer { completionOperationActive = false }
+        let materialID = try effect.packet.fields.v2RequiredText(EncryptedUploadV2Abi.fieldMaterialID)
+        preparedMaterialID = nil
+        preparedAuthorizationSHA256 = nil
+        preparedMaterialLease = nil
+        completedTransfer = nil
+        stagedEvidence = nil
+        acceptedReceipt = nil
+        let operationGeneration = generation
+        let prepared = try await services.materialRegistry.preparedMaterial(id: materialID)
+        try validateGeneration(operationGeneration)
+        preparedMaterialID = materialID
+        preparedAuthorizationSHA256 = prepared.authorizationSHA256
+        preparedMaterialLease = prepared.lease
+        let writeID = services.nextWriteID()
+        guard writeID != 0 else {
+            throw Self.failure(code: 1, detail: "encrypted upload v2 signed-document write ID is zero")
+        }
+        try Task.checkCancellation()
+        try await services.sendSignedDocument(1, writeID, prepared.authorization, 408)
+        try validateGeneration(operationGeneration)
+        return Self.single(.init(
+            kind: EncryptedUploadV2Abi.eventSessionPrepared,
+            fields: [.bytes(
+                id: EncryptedUploadV2Abi.fieldAuthorizationSHA256,
+                value: prepared.authorizationSHA256
+            )]
+        ))
     }
 
     private func deleteCheckpoint(
@@ -383,6 +485,19 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             )
         }
         let context = try Self.context(effect.packet.fields)
+        if services != nil {
+            guard preparedMaterialID == context.materialID,
+                  preparedAuthorizationSHA256 == context.authorizationSHA256
+            else {
+                throw Self.failure(
+                    code: 11,
+                    detail: "START does not match the prepared encrypted upload v2 authorization"
+                )
+            }
+        }
+        completedTransfer = nil
+        stagedEvidence = nil
+        acceptedReceipt = nil
         let coreCheckpoint = effect.packet.fields.v2OptionalBytes(EncryptedUploadV2Abi.fieldCheckpoint)
         let checkpoint: EncryptedUploadV2CheckpointValue
         if let coreCheckpoint {
@@ -588,6 +703,244 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         }
     }
 
+    private func stageArtifacts(
+        _ effect: CoreEffect
+    ) async throws -> AsyncThrowingStream<CoreHostEventPayload, Error> {
+        try beginCompletionOperation()
+        defer { completionOperationActive = false }
+        let state = try completionState(effect, requiresSinkID: true)
+        let operationGeneration = generation
+        let transportSessionID = state.active.context.transportSessionID
+        try Task.checkCancellation()
+        let request = try await state.services.materialRegistry.stagingRequest(
+            id: state.materialID,
+            lease: state.materialLease,
+            evidence: state.completed.evidence
+        )
+        try validateCompletionOperation(
+            generation: operationGeneration,
+            transportSessionID: transportSessionID,
+            materialID: state.materialID,
+            evidence: state.completed.evidence
+        )
+        try Task.checkCancellation()
+        try await state.services.uploadCiphertext(request, state.completed.fileURL)
+        try validateCompletionOperation(
+            generation: operationGeneration,
+            transportSessionID: transportSessionID,
+            materialID: state.materialID,
+            evidence: state.completed.evidence
+        )
+        try Task.checkCancellation()
+        try await state.services.materialRegistry.submitManifest(
+            id: state.materialID,
+            lease: state.materialLease,
+            manifest: state.completed.manifest,
+            evidence: state.completed.evidence
+        )
+        try validateCompletionOperation(
+            generation: operationGeneration,
+            transportSessionID: transportSessionID,
+            materialID: state.materialID,
+            evidence: state.completed.evidence
+        )
+        stagedEvidence = state.completed.evidence
+        return Self.single(.init(kind: EncryptedUploadV2Abi.eventArtifactsStaged))
+    }
+
+    private func awaitReceipt(
+        _ effect: CoreEffect
+    ) async throws -> AsyncThrowingStream<CoreHostEventPayload, Error> {
+        try beginCompletionOperation()
+        defer { completionOperationActive = false }
+        let state = try completionState(effect, requiresSinkID: false)
+        guard stagedEvidence == state.completed.evidence else {
+            throw Self.failure(code: 11, detail: "encrypted upload v2 artifacts are not staged")
+        }
+        let operationGeneration = generation
+        let transportSessionID = state.active.context.transportSessionID
+        try Task.checkCancellation()
+        let receipt = try await state.services.materialRegistry.finalizeAndReceiveReceipt(
+            id: state.materialID,
+            lease: state.materialLease,
+            evidence: state.completed.evidence
+        )
+        try validateCompletionOperation(
+            generation: operationGeneration,
+            transportSessionID: transportSessionID,
+            materialID: state.materialID,
+            evidence: state.completed.evidence
+        )
+        acceptedReceipt = receipt
+        return Self.single(.init(
+            kind: EncryptedUploadV2Abi.eventReceiptAccepted,
+            fields: [.bytes(
+                id: EncryptedUploadV2Abi.fieldReceiptSHA256,
+                value: receipt.receiptSHA256
+            )]
+        ))
+    }
+
+    private func confirmWithReceipt(
+        _ effect: CoreEffect
+    ) async throws -> AsyncThrowingStream<CoreHostEventPayload, Error> {
+        try beginCompletionOperation()
+        defer { completionOperationActive = false }
+        guard let services,
+              let activeTransfer,
+              let completedTransfer,
+              let acceptedReceipt,
+              let materialLease = preparedMaterialLease
+        else {
+            throw Self.failure(code: 9, detail: "encrypted upload v2 receipt is not accepted")
+        }
+        let materialID = try effect.packet.fields.v2RequiredText(EncryptedUploadV2Abi.fieldMaterialID)
+        let receiptSHA256 = try effect.packet.fields.v2RequiredDigest(
+            EncryptedUploadV2Abi.fieldReceiptSHA256
+        )
+        guard materialID == activeTransfer.context.materialID,
+              materialID == preparedMaterialID,
+              receiptSHA256 == acceptedReceipt.receiptSHA256,
+              stagedEvidence == completedTransfer.evidence
+        else {
+            throw Self.failure(code: 11, detail: "encrypted upload v2 CONFIRM does not match accepted receipt")
+        }
+        let operationGeneration = generation
+        let context = activeTransfer.context
+        try Task.checkCancellation()
+        try await services.materialRegistry.validate(id: materialID, lease: materialLease)
+        try validateCompletionOperation(
+            generation: operationGeneration,
+            transportSessionID: context.transportSessionID,
+            materialID: materialID,
+            evidence: completedTransfer.evidence
+        )
+        try prepareConfirmedTransferForRelease(
+            activeTransfer,
+            completed: completedTransfer
+        )
+        let writeID = services.nextWriteID()
+        guard writeID != 0 else {
+            throw Self.failure(code: 1, detail: "encrypted upload v2 signed-document write ID is zero")
+        }
+        try Task.checkCancellation()
+        try await services.sendSignedDocument(2, writeID, acceptedReceipt.receipt, 336)
+        try validateCompletionOperation(
+            generation: operationGeneration,
+            transportSessionID: context.transportSessionID,
+            materialID: materialID,
+            evidence: completedTransfer.evidence
+        )
+        try Task.checkCancellation()
+        let frame = try mapper.createEncryptedUploadV2Confirm(
+            transportSessionID: context.transportSessionID,
+            uploadSessionID: context.uploadSessionID,
+            recordingUUID: context.recordingUUID,
+            recordingGeneration: context.recordingGeneration,
+            ownerRevision: context.ownerRevision,
+            receiptSHA256: acceptedReceipt.receiptSHA256
+        )
+        try Task.checkCancellation()
+        try await services.confirmTransfer(context.transportSessionID, frame)
+        await services.materialRegistry.completeIfCurrent(id: materialID, lease: materialLease)
+        await releaseConfirmedTransfer(activeTransfer)
+        return Self.single(.init(kind: EncryptedUploadV2Abi.eventRecordingConfirmed))
+    }
+
+    private func completionState(
+        _ effect: CoreEffect,
+        requiresSinkID: Bool
+    ) throws -> (
+        services: EncryptedUploadV2TransferHostServices,
+        active: ActiveTransfer,
+        completed: EncryptedUploadV2CompletedTransferValue,
+        materialID: String,
+        materialLease: EncryptedUploadV2MaterialLease
+    ) {
+        guard let services,
+              let activeTransfer,
+              let completedTransfer,
+              let preparedMaterialLease
+        else {
+            throw Self.failure(code: 9, detail: "encrypted upload v2 transfer is not complete")
+        }
+        let fields = effect.packet.fields
+        let materialID = try fields.v2RequiredText(EncryptedUploadV2Abi.fieldMaterialID)
+        if requiresSinkID {
+            let sinkID = try fields.v2RequiredText(EncryptedUploadV2Abi.fieldSinkID)
+            guard sinkID == activeTransfer.context.sinkID else {
+                throw Self.failure(code: 11, detail: "encrypted upload v2 staging sink does not match")
+            }
+        }
+        let evidence = try Self.evidence(fields)
+        guard materialID == activeTransfer.context.materialID,
+              materialID == preparedMaterialID,
+              evidence == completedTransfer.evidence
+        else {
+            throw Self.failure(code: 11, detail: "encrypted upload v2 completion evidence does not match")
+        }
+        return (services, activeTransfer, completedTransfer, materialID, preparedMaterialLease)
+    }
+
+    private func validateGeneration(_ expectedGeneration: UInt64) throws {
+        guard generation == expectedGeneration else {
+            throw Self.failure(code: 16, detail: "encrypted upload v2 operation was cancelled")
+        }
+    }
+
+    private func beginCompletionOperation() throws {
+        guard !completionOperationActive else {
+            throw Self.failure(code: 8, detail: "another encrypted upload v2 completion operation is active")
+        }
+        completionOperationActive = true
+    }
+
+    private func validateCompletionOperation(
+        generation expectedGeneration: UInt64,
+        transportSessionID: UInt64,
+        materialID: String,
+        evidence: EncryptedUploadV2TransferEvidence
+    ) throws {
+        guard generation == expectedGeneration,
+              retainedTransportSessionID == transportSessionID,
+              activeTransfer?.context.transportSessionID == transportSessionID,
+              activeTransfer?.context.materialID == materialID,
+              preparedMaterialID == materialID,
+              completedTransfer?.evidence == evidence
+        else {
+            throw Self.failure(code: 16, detail: "encrypted upload v2 completion operation was cancelled")
+        }
+    }
+
+    private func prepareConfirmedTransferForRelease(
+        _ transfer: ActiveTransfer,
+        completed: EncryptedUploadV2CompletedTransferValue
+    ) throws {
+        try checkpointStore.removeIfPresent(completed.fileURL)
+        try checkpointStore.removeIfPresent(Self.checkpointURL(
+            uploadSessionID: transfer.context.uploadSessionID,
+            rootDirectory: rootDirectory
+        ))
+    }
+
+    private func releaseConfirmedTransfer(
+        _ transfer: ActiveTransfer
+    ) async {
+        activeTransfer = nil
+        loadedCheckpoint = nil
+        pendingCheckpoint = nil
+        pendingMissingSequences = []
+        persistedCoreCheckpoint = nil
+        retainedTransportSessionID = nil
+        preparedMaterialID = nil
+        preparedAuthorizationSHA256 = nil
+        preparedMaterialLease = nil
+        completedTransfer = nil
+        stagedEvidence = nil
+        acceptedReceipt = nil
+        await transfer.reader.cancel()
+    }
+
     private func pumpStart(
         _ continuation: AsyncThrowingStream<CoreHostEventPayload, Error>.Continuation,
         includeStarted: Bool,
@@ -631,6 +984,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
                         continuation.finish()
                         return
                     }
+                    completedTransfer = value
                     continuation.yield(Self.transferCompleted(value.evidence))
                     continuation.finish()
                     startContinuation = nil
@@ -738,6 +1092,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             uploadSessionBytes: uploadSessionBytes,
             ownerRevision: try fields.v2RequiredUInt32(EncryptedUploadV2Abi.fieldOwnerRevision),
             transportSessionID: try fields.v2RequiredUnsigned(EncryptedUploadV2Abi.fieldTransportSessionID),
+            materialID: try fields.v2RequiredText(EncryptedUploadV2Abi.fieldMaterialID),
             sinkID: try fields.v2RequiredText(EncryptedUploadV2Abi.fieldSinkID),
             windowPackets: try fields.v2RequiredUInt16(EncryptedUploadV2Abi.fieldWindowPackets),
             dataPayloadBytes: try fields.v2RequiredUInt16(EncryptedUploadV2Abi.fieldDataPayloadBytes),
@@ -748,6 +1103,16 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             ciphertextLength: try fields.v2RequiredUnsigned(EncryptedUploadV2Abi.fieldCiphertextLength),
             ciphertextSHA256: try fields.v2RequiredDigest(EncryptedUploadV2Abi.fieldCiphertextSHA256),
             authorizationSHA256: try fields.v2RequiredDigest(EncryptedUploadV2Abi.fieldAuthorizationSHA256)
+        )
+    }
+
+    private static func evidence(_ fields: [CoreField]) throws -> EncryptedUploadV2TransferEvidence {
+        EncryptedUploadV2TransferEvidence(
+            ciphertextLength: try fields.v2RequiredUnsigned(EncryptedUploadV2Abi.fieldCiphertextLength),
+            ciphertextSHA256: try fields.v2RequiredDigest(EncryptedUploadV2Abi.fieldCiphertextSHA256),
+            manifestLength: try fields.v2RequiredUInt16(EncryptedUploadV2Abi.fieldManifestLength),
+            manifestSHA256: try fields.v2RequiredDigest(EncryptedUploadV2Abi.fieldManifestSHA256),
+            blockCount: try fields.v2RequiredUInt32(EncryptedUploadV2Abi.fieldBlockCount)
         )
     }
 

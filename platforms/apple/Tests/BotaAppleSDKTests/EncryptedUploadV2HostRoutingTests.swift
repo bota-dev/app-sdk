@@ -126,6 +126,59 @@ final class EncryptedUploadV2HostRoutingTests: XCTestCase {
         )])
     }
 
+    func testExecutorCancellationInterruptsSuspendedEncryptedUploadV2HostCreation() async throws {
+        let entered = expectation(description: "encrypted upload v2 host creation entered")
+        let cancelled = expectation(description: "encrypted upload v2 host creation cancelled")
+        let finished = expectation(description: "routed stream finished")
+        let probe = SuspendedEncryptedUploadV2ExecutionProbe(
+            entered: entered,
+            cancelled: cancelled
+        )
+        let executor = makeExecutor(
+            encryptedUploadV2: SuspendedEncryptedUploadV2Port(probe: probe)
+        )
+        let effect = try CoreEffect(
+            packet: EncryptedUploadV2EffectVector.named("prepare_session").packet
+        )
+        let execution = Task {
+            defer { finished.fulfill() }
+            for try await _ in await executor.execute(effect) {}
+        }
+
+        await fulfillment(of: [entered], timeout: 1)
+        await executor.cancel(effect.cancellationID)
+        await fulfillment(of: [cancelled, finished], timeout: 1)
+        execution.cancel()
+        try await execution.value
+    }
+
+    func testExecutorPreservesRecordingConfirmedAfterCancellationPastCommitPoint() async throws {
+        let entered = expectation(description: "encrypted upload v2 CONFIRM committed")
+        let cancelled = expectation(description: "committed encrypted upload v2 route cancelled")
+        let probe = SuspendedEncryptedUploadV2ExecutionProbe(
+            entered: entered,
+            cancelled: cancelled
+        )
+        let executor = makeExecutor(
+            encryptedUploadV2: SuspendedCommittedEncryptedUploadV2Port(probe: probe)
+        )
+        let effect = try CoreEffect(
+            packet: EncryptedUploadV2EffectVector.named("confirm_with_receipt").packet
+        )
+        let stream = await executor.execute(effect)
+        let consumer = Task {
+            var events: [CoreHostEvent] = []
+            for try await event in stream { events.append(event) }
+            return events
+        }
+
+        await fulfillment(of: [entered], timeout: 1)
+        await executor.cancel(effect.cancellationID)
+        await fulfillment(of: [cancelled], timeout: 1)
+        let events = try await consumer.value
+        XCTAssertEqual(events.map(\.kind), [EncryptedUploadV2Abi.eventRecordingConfirmed])
+    }
+
     func testDefaultExecutorFailsClosedBeforeNativeV2Work() async throws {
         let executor = HostEffectExecutor(
             bluetooth: EmptyAppleHostPort(),
@@ -362,6 +415,73 @@ private struct FailingEncryptedUploadV2Port: EncryptedUploadV2Host {
                 detail: "ciphertext digest mismatch"
             ))
         }
+    }
+}
+
+private struct SuspendedEncryptedUploadV2Port: EncryptedUploadV2Host {
+    let probe: SuspendedEncryptedUploadV2ExecutionProbe
+
+    func execute(_ effect: CoreEffect) async -> AsyncThrowingStream<CoreHostEventPayload, Error> {
+        probe.markEntered()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { probe.suspend($0) }
+        } onCancel: {
+            probe.markCancelled()
+        }
+        return AsyncThrowingStream { $0.finish() }
+    }
+}
+
+private struct SuspendedCommittedEncryptedUploadV2Port: EncryptedUploadV2Host {
+    let probe: SuspendedEncryptedUploadV2ExecutionProbe
+
+    func execute(_ effect: CoreEffect) async -> AsyncThrowingStream<CoreHostEventPayload, Error> {
+        probe.markEntered()
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { probe.suspend($0) }
+        } onCancel: {
+            probe.markCancelled()
+        }
+        return AsyncThrowingStream { continuation in
+            continuation.yield(.init(kind: EncryptedUploadV2Abi.eventRecordingConfirmed))
+            continuation.finish()
+        }
+    }
+}
+
+private final class SuspendedEncryptedUploadV2ExecutionProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private let entered: XCTestExpectation
+    private let cancelled: XCTestExpectation
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var cancellationObserved = false
+
+    init(entered: XCTestExpectation, cancelled: XCTestExpectation) {
+        self.entered = entered
+        self.cancelled = cancelled
+    }
+
+    func markEntered() {
+        entered.fulfill()
+    }
+
+    func suspend(_ continuation: CheckedContinuation<Void, Never>) {
+        let resumeImmediately = lock.withLock {
+            if cancellationObserved { return true }
+            self.continuation = continuation
+            return false
+        }
+        if resumeImmediately { continuation.resume() }
+    }
+
+    func markCancelled() {
+        let continuation = lock.withLock {
+            cancellationObserved = true
+            defer { self.continuation = nil }
+            return self.continuation
+        }
+        cancelled.fulfill()
+        continuation?.resume()
     }
 }
 

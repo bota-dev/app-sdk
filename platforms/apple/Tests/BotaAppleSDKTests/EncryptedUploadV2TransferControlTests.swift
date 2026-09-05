@@ -137,6 +137,87 @@ final class EncryptedUploadV2TransferControlTests: XCTestCase {
         XCTAssertEqual(snapshot.frames.last, frame)
     }
 
+    func testConfirmWritesOnlyForClaimedSessionThenReleasesSubscriptionOwnership() async throws {
+        let probe = TransferControlProbe(notifications: [Self.startAcknowledgement()])
+        let control = try Self.control(probe)
+        _ = try await control.start(
+            peripheralID: "peripheral-1",
+            request: Self.startRequest()
+        )
+        _ = try await control.claimNotificationStream(
+            transportSessionID: Self.transportSessionID
+        )
+        let frame = try CoreModelMapper().createEncryptedUploadV2Confirm(
+            transportSessionID: Self.transportSessionID,
+            uploadSessionID: Self.uploadSessionID,
+            recordingUUID: Self.recordingUUID,
+            recordingGeneration: 9,
+            ownerRevision: 3,
+            receiptSHA256: Data(repeating: 0x77, count: 32)
+        )
+
+        try await control.confirmActiveTransferFrame(
+            transportSessionID: Self.transportSessionID,
+            frame: frame
+        )
+
+        var snapshot = await probe.snapshot()
+        XCTAssertEqual(snapshot.frames.map(\.first), [0x20, 0x23])
+        XCTAssertEqual(snapshot.calls.last, .unsubscribe)
+        _ = try await control.start(
+            peripheralID: "peripheral-1",
+            request: Self.startRequest()
+        )
+        snapshot = await probe.snapshot()
+        XCTAssertEqual(snapshot.frames.map(\.first), [0x20, 0x23, 0x20])
+        try await control.abortActiveTransfer(
+            transportSessionID: Self.transportSessionID,
+            reason: 0x00FF
+        )
+    }
+
+    func testConfirmCleanupUncertaintyCannotReverseCommittedDeviceConfirmation() async throws {
+        let probe = TransferControlProbe(
+            notifications: [Self.startAcknowledgement()],
+            suspendUnsubscribe: true
+        )
+        let control = try Self.control(probe)
+        _ = try await control.start(
+            peripheralID: "peripheral-1",
+            request: Self.startRequest()
+        )
+        _ = try await control.claimNotificationStream(
+            transportSessionID: Self.transportSessionID
+        )
+        let frame = try CoreModelMapper().createEncryptedUploadV2Confirm(
+            transportSessionID: Self.transportSessionID,
+            uploadSessionID: Self.uploadSessionID,
+            recordingUUID: Self.recordingUUID,
+            recordingGeneration: 9,
+            ownerRevision: 3,
+            receiptSHA256: Data(repeating: 0x77, count: 32)
+        )
+
+        try await control.confirmActiveTransferFrame(
+            transportSessionID: Self.transportSessionID,
+            frame: frame,
+            cleanupTimeoutNanoseconds: 1_000_000
+        )
+
+        let snapshot = await probe.snapshot()
+        XCTAssertEqual(snapshot.frames.map(\.first), [0x20, 0x23])
+        do {
+            _ = try await control.start(
+                peripheralID: "peripheral-1",
+                request: Self.startRequest()
+            )
+            XCTFail("Expected uncertain post-confirm cleanup to poison the connection")
+        } catch let error as BotaSDKError {
+            XCTAssertEqual(error.code, .uploadOwnershipUnknown)
+        }
+        await probe.resumeUnsubscribe()
+    }
+
     func testStartIdentityMismatchFailsClosedAndBestEffortAborts() async throws {
         var mismatch = Self.startAcknowledgement()
         mismatch.replaceSubrange(44..<48, with: Self.u32(10))

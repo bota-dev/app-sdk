@@ -168,8 +168,18 @@ ACK/repair frames through the exact owned transport session. Its phase-aware
 notification queue is capped at 1 MiB, premature post-window traffic fails
 closed, START/ABORT races cannot resurrect ownership, and checkpoint
 replacement or deletion flushes the file and parent directory before success.
-It is not selected by the production configuration and does not implement
-application profile selection, backend staging/receipt, or CONFIRM.
+Optional internal completion services bind START to the prepared authorization,
+pin its exact material-registration lease, pass the verified opaque file to
+staging before submitting the fixed manifest, and await the exact backend
+receipt. Before receipt delivery or canonical CONFIRM, the host durably removes
+its local ciphertext and checkpoint; a cleanup failure leaves the device copy
+intact. Cancellation routing owns the task before entering the asynchronous v2
+host callback. The live control actor writes CONFIRM only for the claimed
+transport session and then releases its `0409` subscription. Once CONFIRM is
+written, later cancellation or subscription-cleanup uncertainty cannot reverse
+the confirmed result; uncertain cleanup poisons BLE ownership until reconnect.
+This host remains unselected by production configuration and has no application
+profile selection or manager wiring.
 Apple's
 serialized signed-blob writer uses the current CoreBluetooth
 write-with-response limit capped at 512 bytes, subscribes to `0407` before
@@ -185,8 +195,8 @@ successful replies, preserves the device checkpoint on RESUME_REJECT/ERROR,
 and retains the live `0409` stream plus serialized owner for DATA/window/EOF.
 Cancellation or explicit abort applies the same bounded ABORT/unsubscribe
 ownership policy. The production configuration intentionally installs an
-unavailable transfer port until profile selection, backend staging,
-receipt/CONFIRM, and manager wiring land. Android still has no equivalent host,
+unavailable transfer port until profile selection, completion-service
+installation, and manager wiring land. Android still has no equivalent host,
 React Native exposes no v2 workflow or bulk bytes, and compatibility metadata
 keeps runtime support and firmware advertisement false.
 The core now also exposes a side-effect-free three-profile selection validator:

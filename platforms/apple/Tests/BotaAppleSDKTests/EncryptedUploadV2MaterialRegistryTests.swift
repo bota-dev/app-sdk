@@ -37,14 +37,20 @@ final class EncryptedUploadV2MaterialRegistryTests: XCTestCase {
 
         try await registry.register(id: "v2-material-1", provider: provider)
         let prepared = try await registry.preparedMaterial(id: "v2-material-1")
-        let request = try await registry.stagingRequest(id: "v2-material-1", evidence: evidence)
+        let request = try await registry.stagingRequest(
+            id: "v2-material-1",
+            lease: prepared.lease,
+            evidence: evidence
+        )
         try await registry.submitManifest(
             id: "v2-material-1",
+            lease: prepared.lease,
             manifest: manifest,
             evidence: evidence
         )
         let acceptedReceipt = try await registry.finalizeAndReceiveReceipt(
             id: "v2-material-1",
+            lease: prepared.lease,
             evidence: evidence
         )
 
@@ -95,9 +101,11 @@ final class EncryptedUploadV2MaterialRegistryTests: XCTestCase {
         let manifest = Data(repeating: 2, count: 580)
         let evidence = makeEvidence(manifest: manifest)
         try await registry.register(id: "valid-material", provider: makeProvider())
+        let prepared = try await registry.preparedMaterial(id: "valid-material")
         await XCTAssertThrowsErrorAsync(
             try await registry.submitManifest(
                 id: "valid-material",
+                lease: prepared.lease,
                 manifest: Data(repeating: 2, count: 579),
                 evidence: evidence
             )
@@ -113,7 +121,11 @@ final class EncryptedUploadV2MaterialRegistryTests: XCTestCase {
             blockCount: evidence.blockCount
         )
         await XCTAssertThrowsErrorAsync(
-            try await registry.stagingRequest(id: "valid-material", evidence: invalidEvidence)
+            try await registry.stagingRequest(
+                id: "valid-material",
+                lease: prepared.lease,
+                evidence: invalidEvidence
+            )
         ) { error in
             XCTAssertEqual(error as? EncryptedUploadV2MaterialRegistryError, .invalidEvidence)
         }
@@ -135,10 +147,12 @@ final class EncryptedUploadV2MaterialRegistryTests: XCTestCase {
             cancel: {}
         )
         try await registry.register(id: "v2-material-1", provider: provider)
+        let prepared = try await registry.preparedMaterial(id: "v2-material-1")
 
         await XCTAssertThrowsErrorAsync(
             try await registry.stagingRequest(
                 id: "v2-material-1",
+                lease: prepared.lease,
                 evidence: makeEvidence(manifest: Data(repeating: 3, count: 580))
             )
         ) { error in
@@ -152,10 +166,12 @@ final class EncryptedUploadV2MaterialRegistryTests: XCTestCase {
             id: "v2-material-1",
             provider: makeProvider(receipt: Data(repeating: 4, count: 335))
         )
+        let prepared = try await registry.preparedMaterial(id: "v2-material-1")
 
         await XCTAssertThrowsErrorAsync(
             try await registry.finalizeAndReceiveReceipt(
                 id: "v2-material-1",
+                lease: prepared.lease,
                 evidence: makeEvidence(manifest: Data(repeating: 5, count: 580))
             )
         ) { error in
@@ -234,9 +250,14 @@ final class EncryptedUploadV2MaterialRegistryTests: XCTestCase {
             cancel: {}
         )
         try await registry.register(id: "v2-material-1", provider: provider)
+        let prepared = try await registry.preparedMaterial(id: "v2-material-1")
         let evidence = makeEvidence(manifest: Data(repeating: 3, count: 580))
         let requestTask = Task {
-            try await registry.stagingRequest(id: "v2-material-1", evidence: evidence)
+            try await registry.stagingRequest(
+                id: "v2-material-1",
+                lease: prepared.lease,
+                evidence: evidence
+            )
         }
 
         for await _ in started.stream.prefix(1) {}
@@ -248,6 +269,24 @@ final class EncryptedUploadV2MaterialRegistryTests: XCTestCase {
             _ = try await requestTask.value
             XCTFail("Expected stale provider callback to be rejected")
         } catch {
+            XCTAssertEqual(error as? EncryptedUploadV2MaterialRegistryError, .missingMaterial)
+        }
+    }
+
+    func testPreparedLeaseCannotResolveAReplacementProviderWithTheSameMaterialID() async throws {
+        let registry = EncryptedUploadV2MaterialRegistry()
+        try await registry.register(id: "v2-material-1", provider: makeProvider())
+        let prepared = try await registry.preparedMaterial(id: "v2-material-1")
+        try await registry.terminate(id: "v2-material-1", outcome: .completed)
+        try await registry.register(id: "v2-material-1", provider: makeProvider())
+
+        await XCTAssertThrowsErrorAsync(
+            try await registry.stagingRequest(
+                id: "v2-material-1",
+                lease: prepared.lease,
+                evidence: makeEvidence(manifest: Data(repeating: 3, count: 580))
+            )
+        ) { error in
             XCTAssertEqual(error as? EncryptedUploadV2MaterialRegistryError, .missingMaterial)
         }
     }
