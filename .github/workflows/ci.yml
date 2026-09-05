@@ -107,7 +107,7 @@ jobs:
           npx --yes "npm@$NPM_CLI_VERSION" pack --pack-destination ../../target/react-native-release
 
       - name: Upload React Native candidate
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: react-native-ci-${{ github.sha }}
           path: target/react-native-release/
@@ -199,7 +199,7 @@ jobs:
         run: tools/android/test-emulator-lane.sh --api 35
 
       - name: Upload non-publishing Android evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: android-ci-${{ github.sha }}
           path: target/android-release/
@@ -314,7 +314,7 @@ jobs:
         run: tools/apple/package-release.sh
 
       - name: Upload unpublished Apple evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: apple-package-${{ github.sha }}
           path: target/apple-release/
@@ -371,7 +371,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload candidate inventory
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-candidate-${{ github.sha }}
           path: |
