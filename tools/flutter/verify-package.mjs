@@ -266,8 +266,16 @@ export const verifyFlutterPackage = (root) => {
   }
   expectMatch(
     swiftPackage,
-    new RegExp(`exact:\\s*["']${sdkVersion.replaceAll('.', '\\.')}["']`),
-    `Flutter Swift package must pin BotaAppleSDK exactly to ${sdkVersion}`
+    new RegExp(
+      `\\.package\\(\\s*url:\\s*["']https://github\\.com/bota-dev/app-sdk\\.git["']\\s*,\\s*` +
+      `exact:\\s*["']${sdkVersion.replaceAll('.', '\\.')}["']\\s*\\)`,
+    ),
+    `Flutter Swift package must pin the app-sdk dependency exactly to ${sdkVersion}`
+  );
+  expectMatch(
+    swiftPackage,
+    /\.product\(name:\s*["']BotaAppleSDK["']\s*,\s*package:\s*["']app-sdk["']\s*\)/,
+    'Flutter Swift package must reference BotaAppleSDK from the app-sdk package identity'
   );
   expectMatch(
     swiftPackage,

@@ -139,6 +139,9 @@ fi
 
 node "$workspace_root/tools/flutter/verify-package.mjs"
 npm --prefix "$workspace_root" run flutter:generate:check
+swift package dump-package \
+  --package-path "$plugin_root/ios/bota_flutter_sdk" \
+  >"$consumer_root/flutter-public-package.json"
 
 "$workspace_root/tools/apple/build-xcframework.sh"
 [[ -d "$apple_artifact" ]] || {
@@ -168,7 +171,7 @@ SWIFT_MANIFEST="$local_plugin_root/ios/bota_flutter_sdk/Package.swift" \
       url: "https://github.com/bota-dev/app-sdk.git",
       exact: "${process.env.SDK_VERSION}"
     ),`;
-    const replacement = `.package(name: "BotaAppleSDK", path: ${JSON.stringify(process.env.APPLE_PACKAGE)}),`;
+    const replacement = `.package(name: "app-sdk", path: ${JSON.stringify(process.env.APPLE_PACKAGE)}),`;
     if (!source.includes(marker)) throw new Error("public BotaAppleSDK dependency marker changed");
     fs.writeFileSync(path, source.replace(marker, replacement));
   '

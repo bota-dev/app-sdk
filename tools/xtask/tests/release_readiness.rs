@@ -1,6 +1,7 @@
 use std::{
     fs,
     path::PathBuf,
+    process::Command,
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -454,7 +455,6 @@ fn flutter_release_is_ordered_after_public_native_dependencies_and_verified_befo
     assert_eq!(bootstrap["needs"].as_str(), Some("flutter"));
     assert_eq!(bootstrap["environment"].as_str(), Some("release"));
     let bootstrap_source = serde_yaml_ng::to_string(bootstrap).unwrap();
-    assert!(bootstrap_source.contains("git checkout --detach \"$RELEASE_TAG\""));
     assert!(bootstrap_source.contains("echo 'flutter pub publish'"));
     assert!(
         !bootstrap_source
@@ -473,6 +473,23 @@ fn flutter_release_is_ordered_after_public_native_dependencies_and_verified_befo
         bootstrap_command["if"].as_str(),
         Some("github.ref_name == 'v1.2.0-beta.0'")
     );
+    let summary = std::env::temp_dir().join(format!(
+        "bota-flutter-bootstrap-summary-{}-{}",
+        std::process::id(),
+        NEXT_ANDROID_FIXTURE_ID.fetch_add(1, Ordering::Relaxed),
+    ));
+    let status = Command::new("bash")
+        .arg("-c")
+        .arg(bootstrap_command["run"].as_str().unwrap())
+        .env("GITHUB_REF_NAME", "v1.2.0-beta.0")
+        .env("GITHUB_STEP_SUMMARY", &summary)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let rendered = fs::read_to_string(&summary).unwrap();
+    fs::remove_file(summary).unwrap();
+    assert!(rendered.contains("git checkout --detach \"v1.2.0-beta.0\""));
+    assert!(!rendered.contains("$RELEASE_TAG"));
 
     let complete = &workflow["jobs"]["complete-release"];
     assert_eq!(

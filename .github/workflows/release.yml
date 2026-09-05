@@ -1040,7 +1040,7 @@ jobs:
             echo 'git clone https://github.com/bota-dev/app-sdk.git bota-app-sdk-publish'
             echo 'cd bota-app-sdk-publish'
             echo 'git fetch origin "refs/tags/'"$RELEASE_TAG"':refs/tags/'"$RELEASE_TAG"'"'
-            echo 'git checkout --detach "$RELEASE_TAG"'
+            printf 'git checkout --detach "%s"\n' "$RELEASE_TAG"
             echo 'cd frameworks/flutter/bota_flutter_sdk'
             echo 'flutter pub publish'
             echo '```'

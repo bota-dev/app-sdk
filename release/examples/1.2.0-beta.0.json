@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "sdkFamily": "bota-app-sdk",
   "sdkVersion": "1.2.0-beta.0",
-  "sourceRevision": "de6350c7d4951695548db185003f20a6a675e649",
+  "sourceRevision": "2a65e43ee462b3231546e07274abf3561c1503eb",
   "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.0",
@@ -49,9 +49,9 @@
       "name": "bota_flutter_sdk-1.2.0-beta.0.tar.gz",
       "ecosystem": "pub",
       "version": "1.2.0-beta.0",
-      "checksumSha256": "aa03a8c9b1be2493283c6ac6ad067d6b12a81bb37eb954fcac7551079886d4c8",
-      "sourceRevision": "de6350c7d4951695548db185003f20a6a675e649",
-      "normalizedArchiveSha256": "c788f03a61d179a86738e224f441f303c70743e95aa36e6c6babe1ba0941193a",
+      "checksumSha256": "f880d3925dca2566a099f2eed8c15ec547e9fa2a4f4e7a4992d8f29eb74f834f",
+      "sourceRevision": "2a65e43ee462b3231546e07274abf3561c1503eb",
+      "normalizedArchiveSha256": "c3f5bd28a122938a26304ae04157620953f3cf1a563b74a5c8617a364cd73c11",
       "generator": {
         "name": "pigeon",
         "version": "28.0.0"
@@ -174,8 +174,8 @@
         },
         {
           "path": "ios/bota_flutter_sdk/Package.swift",
-          "byteLength": 775,
-          "sha256": "5619fbf3a565a7fdc5562aa21183a5717ccb01b8f693a1b6dea5e724fb80b338"
+          "byteLength": 770,
+          "sha256": "71236518958c84e2bb1395c9f90e9c483b6ec267fdae15c83937132c1b5a6e7d"
         },
         {
           "path": "ios/bota_flutter_sdk/Sources/bota_flutter_sdk/BotaApi.g.swift",

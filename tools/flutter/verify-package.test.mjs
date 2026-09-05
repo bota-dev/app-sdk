@@ -76,6 +76,7 @@ const validSwiftPackage = `
 .library(name: "bota-flutter-sdk", targets: ["bota_flutter_sdk"])
 .package(name: "FlutterFramework", path: "../FlutterFramework")
 .package(url: "https://github.com/bota-dev/app-sdk.git", exact: "1.1.0")
+.product(name: "BotaAppleSDK", package: "app-sdk")
 swiftLanguageModes: [.v5]
 `;
 const validApplePodspec = `
@@ -228,7 +229,7 @@ test('rejects Apple package version and language-mode drift', () => {
 
   assert.throws(
     () => verifyFlutterPackage(packageFixture.root),
-    /pin BotaAppleSDK exactly to 1\.1\.0/
+    /pin the app-sdk dependency exactly to 1\.1\.0/
   );
   assert.throws(
     () => verifyFlutterPackage(podFixture.root),
@@ -249,6 +250,19 @@ let localPath = ProcessInfo.processInfo.environment["BOTA_APPLE_SDK_PACKAGE_PATH
   assert.throws(
     () => verifyFlutterPackage(root),
     /must not contain a local BotaAppleSDK override/,
+  );
+});
+
+test('rejects a published Swift package with the wrong remote package identity', () => {
+  const { packageRoot, root } = createFixture();
+  writeFileSync(
+    join(packageRoot, 'ios/bota_flutter_sdk/Package.swift'),
+    validSwiftPackage.replace('package: "app-sdk"', 'package: "BotaAppleSDK"'),
+  );
+
+  assert.throws(
+    () => verifyFlutterPackage(root),
+    /reference BotaAppleSDK from the app-sdk package identity/,
   );
 });
 

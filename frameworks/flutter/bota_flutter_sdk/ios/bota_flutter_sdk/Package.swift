@@ -20,7 +20,7 @@ let package = Package(
       name: "bota_flutter_sdk",
       dependencies: [
         .product(name: "FlutterFramework", package: "FlutterFramework"),
-        .product(name: "BotaAppleSDK", package: "BotaAppleSDK"),
+        .product(name: "BotaAppleSDK", package: "app-sdk"),
       ],
       swiftSettings: [
         .unsafeFlags(["-strict-concurrency=complete"]),
