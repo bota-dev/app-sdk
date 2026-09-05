@@ -383,19 +383,19 @@ jobs:
           test "${{ steps.release-channel.outputs.github_prerelease }}" = true
 
       - name: Download Apple release payload
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: apple-release-${{ github.ref_name }}
           path: target/apple-release/
 
       - name: Download Android release payload
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: android-release-${{ github.ref_name }}
           path: target/android-release/
 
       - name: Download React Native release payload
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: react-native-release-${{ github.ref_name }}
           path: target/react-native-release/
@@ -662,7 +662,7 @@ jobs:
             --dir target
 
       - name: Download preserved Apple release payload
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: apple-release-v${{ steps.release-channel.outputs.version }}
           path: target/recovered/apple-release/
@@ -670,7 +670,7 @@ jobs:
           run-id: ${{ inputs.releaseRunId }}
 
       - name: Download preserved Android release payload
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: android-release-v${{ steps.release-channel.outputs.version }}
           path: target/recovered/android-release/
@@ -678,7 +678,7 @@ jobs:
           run-id: ${{ inputs.releaseRunId }}
 
       - name: Download preserved React Native release payload
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: react-native-release-v${{ steps.release-channel.outputs.version }}
           path: target/recovered/react-native-release/
