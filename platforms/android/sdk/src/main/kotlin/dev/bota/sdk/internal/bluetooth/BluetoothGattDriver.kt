@@ -5,7 +5,6 @@ import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.withTimeout
 
@@ -13,6 +12,8 @@ internal open class BluetoothTransportException(
     platformCode: Int,
     message: String,
 ) : NativeHostException(platformCode, message)
+
+internal data class ConfirmedBluetoothDisconnect(val peripheralId: String, val generation: Long)
 
 internal interface BluetoothDriver : AutoCloseable {
     suspend fun connectedAdvertisements(): List<BluetoothAdvertisement>
@@ -32,7 +33,8 @@ internal interface BluetoothDriver : AutoCloseable {
     suspend fun unsubscribe(peripheralId: String, serviceUuid: UUID, characteristicUuid: UUID)
     fun maximumWriteLength(peripheralId: String): Int
     suspend fun disconnect(peripheralId: String)
-    fun confirmedDisconnects(): Flow<String> = kotlinx.coroutines.flow.emptyFlow()
+    fun connectionGeneration(peripheralId: String): Long = 1L
+    fun confirmedDisconnects(): Flow<ConfirmedBluetoothDisconnect> = kotlinx.coroutines.flow.emptyFlow()
     override fun close()
 }
 
@@ -43,6 +45,7 @@ internal class BluetoothGattDriver(
 ) : BluetoothDriver {
     private val generationLock = Any()
     private val generations = mutableMapOf<String, Long>()
+    private val generationCounters = mutableMapOf<String, Long>()
     private val negotiatedMtus = mutableMapOf<String, Int>()
 
     override suspend fun connectedAdvertisements(): List<BluetoothAdvertisement> = platform.connectedAdvertisements()
@@ -53,7 +56,10 @@ internal class BluetoothGattDriver(
 
     override suspend fun connect(peripheralId: String) = operation(peripheralId) {
         val generation = synchronized(generationLock) {
-            (generations[peripheralId] ?: 0L).plus(1).also { generations[peripheralId] = it }
+            (generationCounters[peripheralId] ?: 0L).plus(1).also {
+                generationCounters[peripheralId] = it
+                generations[peripheralId] = it
+            }
         }
         validate(peripheralId, generation, platform.connect(peripheralId, generation))
         val mtu = validate(peripheralId, generation, platform.requestMtu(peripheralId, generation, PreferredMtu))
@@ -157,11 +163,26 @@ internal class BluetoothGattDriver(
         }
     }
 
-    override fun confirmedDisconnects(): Flow<String> = platform.confirmedDisconnects().onEach { peripheralId ->
-        queue.cancel(peripheralId)
+    override fun connectionGeneration(peripheralId: String): Long = generation(peripheralId)
+
+    fun isCurrentDisconnectedGeneration(disconnect: ConfirmedBluetoothDisconnect): Boolean =
         synchronized(generationLock) {
-            generations.remove(peripheralId)
-            negotiatedMtus.remove(peripheralId)
+            generations[disconnect.peripheralId] == null &&
+                generationCounters[disconnect.peripheralId] == disconnect.generation
+        }
+
+    override fun confirmedDisconnects(): Flow<ConfirmedBluetoothDisconnect> = platform.confirmedDisconnects().transform { event ->
+        val accepted = synchronized(generationLock) {
+            (generations[event.peripheralId] == event.generation).also { current ->
+                if (current) {
+                    generations.remove(event.peripheralId)
+                    negotiatedMtus.remove(event.peripheralId)
+                }
+            }
+        }
+        if (accepted) {
+            queue.cancel(event.peripheralId)
+            emit(event)
         }
     }
 

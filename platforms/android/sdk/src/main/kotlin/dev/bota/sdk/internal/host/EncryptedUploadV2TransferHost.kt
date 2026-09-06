@@ -48,6 +48,7 @@ internal class EncryptedUploadV2TransferHostServices(
     val openTransfer: suspend (EncryptedUploadV2StartRequest, EncryptedUploadV2CheckpointValue?) -> EncryptedUploadV2OpenResult,
     val sendControl: suspend (ULong, ByteArray, EncryptedUploadV2TransferContinuation) -> Unit,
     val confirmTransfer: suspend (ULong, ByteArray) -> Unit,
+    val confirmationAttemptedOrClaimCancellation: suspend (ULong) -> Boolean = { false },
     val abortTransfer: suspend (ULong) -> Unit,
     val releaseTransfer: suspend (ULong) -> Unit,
     val sendSignedDocument: suspend (UByte, UInt, ByteArray, UShort) -> Unit,
@@ -105,6 +106,8 @@ internal class EncryptedUploadV2TransferHost(
     private var confirmationAttempted = false
     private var confirmationSucceeded = false
     private var confirmationFinished: CompletableDeferred<Result<Unit>>? = null
+    private var activeCancellationId: CoreCancellationId? = null
+    private var confirmationCancellationId: CoreCancellationId? = null
     private var cancellationStarted = false
     private var ownershipPoisoned = false
 
@@ -117,7 +120,18 @@ internal class EncryptedUploadV2TransferHost(
         )
     }
 
-    override fun execute(effect: CoreEffect): Flow<CoreHostEventPayload> = when (effect.kind) {
+    override fun execute(effect: CoreEffect): Flow<CoreHostEventPayload> {
+        synchronized(stateLock) {
+            if (activeCancellationId != effect.cancellationId && activeContext == null && openingJob == null) {
+                confirmationAttempted = false
+                confirmationSucceeded = false
+                confirmationFinished = null
+                confirmationCancellationId = null
+                cancellationStarted = false
+            }
+            activeCancellationId = effect.cancellationId
+        }
+        return when (effect.kind) {
         CoreEffectKind.EncryptedUploadV2LoadCheckpoint -> loadCheckpoint(effect)
         CoreEffectKind.EncryptedUploadV2DeleteCheckpoint -> deleteCheckpoint(effect)
         CoreEffectKind.EncryptedUploadV2TruncateSink -> truncateSink(effect)
@@ -130,7 +144,30 @@ internal class EncryptedUploadV2TransferHost(
         CoreEffectKind.EncryptedUploadV2AwaitReceipt -> awaitReceipt(effect)
         CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt -> confirmWithReceipt(effect)
         CoreEffectKind.EncryptedUploadV2Abort -> abort(effect)
-        else -> flow<CoreHostEventPayload> { fail(7u, "non-v2 effect reached encrypted upload v2 host") }
+            else -> flow<CoreHostEventPayload> { fail(7u, "non-v2 effect reached encrypted upload v2 host") }
+        }
+    }
+
+    override suspend fun confirmationAttemptedOrClaimCancellation(
+        cancellationId: CoreCancellationId,
+    ): Boolean {
+        val transportSessionId = synchronized(stateLock) {
+            if (confirmationCancellationId == cancellationId && confirmationAttempted) return true
+            if (activeCancellationId != cancellationId) return false
+            activeContext?.transportSessionId
+        }
+        val attempted = transportSessionId?.let {
+            services.confirmationAttemptedOrClaimCancellation(it)
+        } == true
+        return synchronized(stateLock) {
+            if (attempted) {
+                confirmationAttempted = true
+                confirmationCancellationId = cancellationId
+            } else if (activeCancellationId == cancellationId) {
+                cancellationStarted = true
+            }
+            attempted
+        }
     }
 
     override suspend fun cancel(cancellationId: CoreCancellationId) {
@@ -402,7 +439,6 @@ internal class EncryptedUploadV2TransferHost(
             (!cancellationStarted && activeContext === context && materialLease == lease && acceptedReceipt === receipt)
                 .also { allowed ->
                 if (allowed) {
-                    confirmationAttempted = true
                     confirmationFinished = finished
                 }
             }
@@ -410,13 +446,38 @@ internal class EncryptedUploadV2TransferHost(
         requireValue(canConfirm, "transfer cancellation already started", 16u)
         try {
             services.confirmTransfer(context.transportSessionId, frame)
-            synchronized(stateLock) { confirmationSucceeded = true }
+            synchronized(stateLock) {
+                confirmationAttempted = true
+                confirmationCancellationId = effect.cancellationId
+                confirmationSucceeded = true
+            }
             services.materialRegistry.terminate(context.materialId, lease, EncryptedUploadV2TerminalOutcome.Completed)
             emit(CoreHostEventPayload(HostEventKind.EncryptedUploadV2RecordingConfirmed))
             finished.complete(Result.success(Unit))
-            clearState()
+            clearState(preserveConfirmation = true)
         } catch (error: Throwable) {
-            val didConfirm = synchronized(stateLock) { confirmationSucceeded }
+            val transportFailure = error as? EncryptedUploadV2ConfirmationException
+            val attempted = synchronized(stateLock) {
+                confirmationAttempted || transportFailure != null
+            }
+            if (!attempted) {
+                finished.complete(Result.failure(error))
+                throw error
+            }
+            synchronized(stateLock) {
+                confirmationAttempted = true
+                confirmationCancellationId = effect.cancellationId
+            }
+            val didConfirm = synchronized(stateLock) { confirmationSucceeded } ||
+                transportFailure?.writeSucceeded == true
+            if (didConfirm) {
+                synchronized(stateLock) { confirmationSucceeded = true }
+                runCatching {
+                    services.materialRegistry.terminate(
+                        context.materialId, lease, EncryptedUploadV2TerminalOutcome.Completed,
+                    )
+                }.exceptionOrNull()?.let { cleanup -> if (cleanup !== error) error.addSuppressed(cleanup) }
+            }
             val unknown = EncryptedUploadV2HostException(
                 19u, false,
                 message = if (didConfirm) "CONFIRM succeeded but completion cleanup is uncertain"
@@ -531,7 +592,7 @@ internal class EncryptedUploadV2TransferHost(
         failure?.let { throw it }
     }
 
-    private fun clearState() {
+    private fun clearState(preserveConfirmation: Boolean = false) {
         pumpJob?.cancel()
         startEvents?.close()
         pendingResume?.cancel()
@@ -553,10 +614,14 @@ internal class EncryptedUploadV2TransferHost(
         pendingResume = null
         boundaryTarget = null
         startEvents = null
-        confirmationAttempted = false
-        confirmationSucceeded = false
-        confirmationFinished = null
-        cancellationStarted = false
+        activeCancellationId = if (preserveConfirmation) activeCancellationId else null
+        if (!preserveConfirmation) {
+            confirmationAttempted = false
+            confirmationSucceeded = false
+            confirmationFinished = null
+            confirmationCancellationId = null
+            cancellationStarted = false
+        }
     }
 
     private data class CompletionState(

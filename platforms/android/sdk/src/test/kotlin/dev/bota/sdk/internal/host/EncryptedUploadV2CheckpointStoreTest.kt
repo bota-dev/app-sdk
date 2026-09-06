@@ -191,6 +191,67 @@ class EncryptedUploadV2CheckpointStoreTest {
         assertEquals(setOf(CatalogName), journals.values.keys)
     }
 
+    @Test
+    fun upgradeMergesEveryLegacyPairIntoAnExistingCatalog() = runTest {
+        val journals = MemoryJournals()
+        val store = EncryptedUploadV2CheckpointStore(journals)
+        val current = checkpoint(UUID.randomUUID(), revision = 8u)
+        store.save(current)
+        val legacyJournal = MemoryJournals()
+        val legacyStore = EncryptedUploadV2CheckpointStore(legacyJournal)
+        val firstLegacy = checkpoint(UUID.randomUUID(), revision = 9u).copy(
+            recordingUuid = "112233445566778899aabbccddeeff00",
+        )
+        val secondLegacy = checkpoint(UUID.randomUUID(), revision = 10u).copy(
+            recordingUuid = "212233445566778899aabbccddeeff00",
+        )
+        listOf(firstLegacy, secondLegacy).forEach { checkpoint ->
+            legacyStore.save(checkpoint)
+            val sidecar = firstCatalogSidecar(legacyJournal.values.getValue(CatalogName))
+            journals.values[legacyName(checkpoint.uploadSessionId)] = sidecar
+            journals.values[legacyIndexName(checkpoint)] = ByteBuffer.allocate(16)
+                .putLong(checkpoint.uploadSessionId.mostSignificantBits)
+                .putLong(checkpoint.uploadSessionId.leastSignificantBits)
+                .array()
+            legacyJournal.values.clear()
+        }
+
+        assertEquals(firstLegacy.uploadSessionId, store.load(firstLegacy.uploadSessionId)?.uploadSessionId)
+        assertEquals(secondLegacy.uploadSessionId, store.load(secondLegacy.uploadSessionId)?.uploadSessionId)
+        assertEquals(current.uploadSessionId, store.load(current.uploadSessionId)?.uploadSessionId)
+        assertEquals(setOf(CatalogName), journals.values.keys)
+    }
+
+    @Test
+    fun interruptedMergePreservesExistingCatalogAndEveryLegacyPairForRetry() = runTest {
+        val journals = MemoryJournals()
+        val store = EncryptedUploadV2CheckpointStore(journals)
+        val current = checkpoint(UUID.randomUUID(), revision = 11u)
+        store.save(current)
+        val legacyJournal = MemoryJournals()
+        val legacyStore = EncryptedUploadV2CheckpointStore(legacyJournal)
+        val legacy = checkpoint(UUID.randomUUID(), revision = 12u).copy(
+            recordingUuid = "312233445566778899aabbccddeeff00",
+        )
+        legacyStore.save(legacy)
+        journals.values[legacyName(legacy.uploadSessionId)] =
+            firstCatalogSidecar(legacyJournal.values.getValue(CatalogName))
+        journals.values[legacyIndexName(legacy)] = ByteBuffer.allocate(16)
+            .putLong(legacy.uploadSessionId.mostSignificantBits)
+            .putLong(legacy.uploadSessionId.leastSignificantBits)
+            .array()
+        journals.failNextWrite = true
+
+        assertThrows(IllegalStateException::class.java) {
+            kotlinx.coroutines.runBlocking { store.load(legacy.uploadSessionId) }
+        }
+        assertTrue(legacyName(legacy.uploadSessionId) in journals.values)
+        assertTrue(legacyIndexName(legacy) in journals.values)
+        assertEquals(current.uploadSessionId, store.load(current.uploadSessionId)?.uploadSessionId)
+        assertEquals(legacy.uploadSessionId, store.load(legacy.uploadSessionId)?.uploadSessionId)
+        assertEquals(setOf(CatalogName), journals.values.keys)
+    }
+
     private fun firstCatalogSidecar(catalog: ByteArray): ByteArray =
         DataInputStream(ByteArrayInputStream(catalog)).use { input ->
             input.readInt()

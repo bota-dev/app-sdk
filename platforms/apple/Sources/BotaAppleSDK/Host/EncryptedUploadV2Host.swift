@@ -3,6 +3,11 @@ import Foundation
 
 protocol EncryptedUploadV2Host: Sendable {
     func execute(_ effect: CoreEffect) async -> AsyncThrowingStream<CoreHostEventPayload, Error>
+    func confirmationAttemptedOrClaimCancellation(_ cancellationID: CoreCancellationID) async -> Bool
+}
+
+extension EncryptedUploadV2Host {
+    func confirmationAttemptedOrClaimCancellation(_ cancellationID: CoreCancellationID) async -> Bool { false }
 }
 
 struct EncryptedUploadV2HostFailure: Error, Equatable, Sendable {

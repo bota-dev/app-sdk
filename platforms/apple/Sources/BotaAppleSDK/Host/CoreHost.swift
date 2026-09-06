@@ -262,10 +262,12 @@ struct CoreHostEvent: Equatable, Sendable {
 
 protocol CoreHost: Sendable {
     func execute(_ effect: CoreEffect) async -> AsyncThrowingStream<CoreHostEvent, Error>
+    func confirmationAttemptedOrClaimCancellation(_ cancellationID: CoreCancellationID) async -> Bool
     func cancel(_ cancellationID: CoreCancellationID) async
 }
 
 extension CoreHost {
+    func confirmationAttemptedOrClaimCancellation(_ cancellationID: CoreCancellationID) async -> Bool { false }
     func cancel(_ cancellationID: CoreCancellationID) async {}
 }
 

@@ -53,6 +53,14 @@ protocol CoreWorkflowRunning: Sendable {
         capabilities: CoreCapabilities
     ) async -> AsyncThrowingStream<CoreNotification, Error>
     func cancel(_ id: UUID) async throws
+    func cancelAndReportExactSettlement(_ id: UUID) async throws -> Bool
+}
+
+extension CoreWorkflowRunning {
+    func cancelAndReportExactSettlement(_ id: UUID) async throws -> Bool {
+        try await cancel(id)
+        return false
+    }
 }
 
 extension CoreEngineActor: CoreWorkflowRunning {}

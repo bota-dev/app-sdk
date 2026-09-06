@@ -137,10 +137,11 @@ durable checkpoint ordering, opaque native staging, and receipt-gated
 confirmation. Apple has an internal command mapper, an
 exhaustive twelve-effect host port with typed failure and staged-notification
 routing, and an in-memory application-material registry keyed by opaque ID.
-The shared Rust engine now treats cancellation during an in-flight CONFIRM as
-deferred: Apple and Android settle the exact host confirmation before exposing
-completion or stable cleanup-uncertainty code 19, and neither can emit a later
-rollback. Android rejects phase-invalid transfer frames as notifications
+The shared Rust engine keeps cancellation ordinary when the CONFIRM effect is
+only queued or doing local cleanup. Apple and Android atomically claim native
+cancellation before the canonical write, or—once that write is actually
+attempted—settle exact completion or stable cleanup-uncertainty code 19 without
+a later rollback. Android rejects phase-invalid transfer frames as notifications
 arrive, uses bounded loss-aware broadcast delivery for concurrent observers,
 and reconciles the retired split checkpoint/index files into its atomic catalog.
 The registry keeps authorization, manifest, receipt, and staging credentials
@@ -445,7 +446,8 @@ mixed-profile framing, and pre-EOF completion fail closed. Checkpoint metadata
 and recording lookup identity live in one AtomicFile catalog whose file and
 parent directory are synced. Transfer and signed-document cleanup is bounded;
 an unproven unsubscribe, ABORT, or post-CONFIRM outcome poisons the owner until
-a confirmed disconnect/reset. Once CONFIRM is attempted, cancellation never
+the exact current peripheral/GATT-generation confirmed disconnect. Once the
+CONFIRM write is attempted, cancellation never
 sends ABORT or reports ordinary cancellation. Physical power-loss durability
 and physical-device interoperability remain unverified gates.
 Android now exposes the first public workflow facade through

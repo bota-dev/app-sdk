@@ -51,6 +51,8 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
         await gate.resume()
         let firstEvents = try await first.value
         XCTAssertEqual(firstEvents.map(\.kind), [EncryptedUploadV2Abi.eventSessionPrepared])
+        let preConfirmCancellation = await host.confirmationAttemptedOrClaimCancellation(firstEffect.cancellationID)
+        XCTAssertFalse(preConfirmCancellation)
     }
 
     func testCompletionServicesStageOpaqueArtifactsBeforeReceiptGatedConfirm() async throws {
@@ -101,6 +103,7 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
             mapper: try CoreModelMapper(),
             openTransfer: { _, _ in .opened(fixture.notifications.stream) },
             sendControl: { _ in },
+            claimConfirmationCancellation: { _ in await confirmedCommit.hasEntered() },
             checkpointStore: .init(syncDirectory: { try directorySync.sync($0) }),
             services: services
         )
@@ -170,11 +173,19 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
             try await Self.collect(await host.execute(confirmEffect))
         }
         await confirmedCommit.waitUntilEntered()
+        let cancellationDefersAtActualWrite = await host.confirmationAttemptedOrClaimCancellation(
+            confirmEffect.cancellationID
+        )
+        XCTAssertTrue(cancellationDefersAtActualWrite)
         try await registry.terminate(id: "material-id", outcome: .completed)
         confirm.cancel()
         await confirmedCommit.resume()
         let confirmEvents = try await confirm.value
         XCTAssertEqual(confirmEvents, [.init(kind: EncryptedUploadV2Abi.eventRecordingConfirmed)])
+        let cancellationStillSeesExactSettlement = await host.confirmationAttemptedOrClaimCancellation(
+            confirmEffect.cancellationID
+        )
+        XCTAssertTrue(cancellationStillSeesExactSettlement)
 
         let values = await calls.values
         XCTAssertEqual(values.count, 8)
@@ -1319,6 +1330,8 @@ private actor SuspendedFirstCompletionCall {
         if entered { return }
         await withCheckedContinuation { enteredContinuation = $0 }
     }
+
+    func hasEntered() -> Bool { entered }
 
     func resume() {
         resumeContinuation?.resume()

@@ -73,19 +73,21 @@ internal class EncryptedUploadV2CheckpointStore(private val journals: JournalSto
     }
 
     private suspend fun loadCatalog(): List<PersistedEncryptedUploadV2Checkpoint> =
-        readCatalog() ?: migrateLegacyCatalog()
+        mergeLegacyCatalog(readCatalog().orEmpty())
 
     private suspend fun readCatalog(): List<PersistedEncryptedUploadV2Checkpoint>? =
         journals.read(CatalogName)?.let(::decodeCatalog)
 
-    private suspend fun migrateLegacyCatalog(): List<PersistedEncryptedUploadV2Checkpoint> {
+    private suspend fun mergeLegacyCatalog(
+        existing: List<PersistedEncryptedUploadV2Checkpoint>,
+    ): List<PersistedEncryptedUploadV2Checkpoint> {
         val storedNames = journals.names()
         val names = storedNames + storedNames.filter { it.endsWith(".bak") }.map { it.removeSuffix(".bak") }
         val legacyNames = names.filter { LegacyName.matches(it) }.sorted()
-        if (legacyNames.isEmpty()) return emptyList()
+        if (legacyNames.isEmpty()) return existing
         val indexNames = legacyNames.filter { it.endsWith(".index") }
         if (indexNames.size > MaximumCatalogEntries) invalid("legacy checkpoint index has too many entries")
-        val values = indexNames.mapNotNull { indexName ->
+        val legacyValues = indexNames.mapNotNull { indexName ->
             val pointer = journals.read(indexName) ?: return@mapNotNull null
             if (pointer.size != 16) return@mapNotNull null
             val input = DataInputStream(ByteArrayInputStream(pointer))
@@ -96,6 +98,17 @@ internal class EncryptedUploadV2CheckpointStore(private val journals: JournalSto
                     legacyIndexName(value.serialNumber, value.recordingUuid, value.recordingGeneration) == indexName
             }
         }
+        validateCatalogIdentities(legacyValues)
+        val values = legacyValues.fold(existing) { values, candidate ->
+            if (values.any {
+                    it.uploadSessionId == candidate.uploadSessionId ||
+                        (it.serialNumber == candidate.serialNumber &&
+                            normalizeRecordingUuid(it.recordingUuid) == normalizeRecordingUuid(candidate.recordingUuid) &&
+                            it.recordingGeneration == candidate.recordingGeneration)
+                }
+            ) values else values + candidate
+        }
+        if (values.size > MaximumCatalogEntries) invalid("checkpoint catalog has too many entries")
         validateCatalogIdentities(values)
         journals.write(CatalogName, encodeCatalog(values))
         legacyNames.forEach { journals.delete(it) }

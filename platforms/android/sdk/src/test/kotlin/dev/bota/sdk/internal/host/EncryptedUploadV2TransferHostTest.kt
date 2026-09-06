@@ -122,19 +122,20 @@ class EncryptedUploadV2TransferHostTest {
         val receipt = host.execute(
             effect(CoreEffectKind.EncryptedUploadV2AwaitReceipt, CoreField.Text(12, materialId), *evidence),
         ).toList().single().fields.filterIsInstance<CoreField.Bytes>().single().value
+        val confirmEffect = effect(
+            CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt,
+            CoreField.Text(12, materialId), CoreField.Bytes(162, receipt),
+        )
         val confirming = async {
-            host.execute(
-                effect(
-                    CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt,
-                    CoreField.Text(12, materialId), CoreField.Bytes(162, receipt),
-                ),
-            ).toList()
+            host.execute(confirmEffect).toList()
         }
         confirmEntered.await()
+        assertTrue(host.confirmationAttemptedOrClaimCancellation(confirmEffect.cancellationId))
         val cancelling = async { host.cancel(CoreCancellationId(1u, 2u)) }
         confirmRelease.complete(Unit)
         confirming.await()
         cancelling.await()
+        assertTrue(host.confirmationAttemptedOrClaimCancellation(confirmEffect.cancellationId))
         host.cancel(CoreCancellationId(1u, 2u))
 
         assertEquals(
@@ -330,6 +331,9 @@ class EncryptedUploadV2TransferHostTest {
             effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, "material-1")),
         ).toList()
 
+        val prepare = effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, "material-1"))
+        assertFalse(host.confirmationAttemptedOrClaimCancellation(prepare.cancellationId))
+
         host.resetAfterConfirmedDisconnect()
 
         assertEquals(1, cancelled.get())
@@ -356,6 +360,7 @@ class EncryptedUploadV2TransferHostTest {
                 actions += "control-${value.single()}"
                 actions += "release"
             },
+            confirmationAttemptedOrClaimCancellation = { confirmEntered?.isCompleted == true },
             abortTransfer = { actions += "abort" }, releaseTransfer = { actions += "release" },
             sendSignedDocument = { kind, _, _, expected ->
                 assertEquals(if (kind == 1.toUByte()) 408u.toUShort() else 336u.toUShort(), expected)
@@ -403,8 +408,20 @@ class EncryptedUploadV2TransferHostTest {
     private fun EncryptedUploadV2TransferHostServices.copyForOpen(
         open: suspend (dev.bota.sdk.internal.core.EncryptedUploadV2StartRequest, dev.bota.sdk.internal.bluetooth.EncryptedUploadV2CheckpointValue?) -> EncryptedUploadV2OpenResult,
     ) = EncryptedUploadV2TransferHostServices(
-        materialRegistry, checkpointStore, open, sendControl, confirmTransfer, abortTransfer, releaseTransfer,
-        sendSignedDocument, uploadCiphertext, cancelUploads, nextWriteId, encodeAcknowledgement, encodeConfirm,
+        materialRegistry = materialRegistry,
+        checkpointStore = checkpointStore,
+        openTransfer = open,
+        sendControl = sendControl,
+        confirmTransfer = confirmTransfer,
+        confirmationAttemptedOrClaimCancellation = confirmationAttemptedOrClaimCancellation,
+        abortTransfer = abortTransfer,
+        releaseTransfer = releaseTransfer,
+        sendSignedDocument = sendSignedDocument,
+        uploadCiphertext = uploadCiphertext,
+        cancelUploads = cancelUploads,
+        nextWriteId = nextWriteId,
+        encodeAcknowledgement = encodeAcknowledgement,
+        encodeConfirm = encodeConfirm,
     )
 
     private fun startEffect(materialId: String, authorizationSha: ByteArray, ciphertext: ByteArray) = effect(

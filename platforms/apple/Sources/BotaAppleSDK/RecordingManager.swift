@@ -258,7 +258,7 @@ public actor RecordingManager {
                 if lifecycle.finishEngineStart() {
                     try? await runtime.engine.cancel(cancellationID)
                     await performEncryptedUploadV2Cleanup(
-                        lifecycle.cancellationCleanup(),
+                        lifecycle.settleEngineCancellation(completed: false),
                         runtime: runtime
                     )
                     throw facadeCancelled(operation: .transferRecording)
@@ -296,8 +296,11 @@ public actor RecordingManager {
                 await runtime.terminateEncryptedUploadV2Material(material.materialID, .completed)
                 await finish(cancellationID, runtime: runtime)
             } catch {
-                await performEncryptedUploadV2Cleanup(lifecycle.failureCleanup(), runtime: runtime)
-                await finish(cancellationID, runtime: runtime)
+                let cleanup = lifecycle.failureCleanup()
+                if !lifecycle.defersFailureCompletion() {
+                    await performEncryptedUploadV2Cleanup(cleanup, runtime: runtime)
+                    await finish(cancellationID, runtime: runtime)
+                }
                 throw facadePublicError(error)
             }
         } onCancel: {
@@ -404,17 +407,28 @@ public actor RecordingManager {
     public func cancelCurrentOperation() async throws {
         guard let id = activeCancellationID else { return }
         let runtime = try configuredRuntime()
-        activeTask?.cancel()
         if let lifecycle = activeEncryptedUploadV2Lifecycle {
             let cancellation = lifecycle.requestCancellation()
             if cancellation.cancelEngine {
-                try await runtime.engine.cancel(id)
+                do {
+                    let completed = try await runtime.engine.cancelAndReportExactSettlement(id)
+                    let cleanup = lifecycle.settleEngineCancellation(completed: completed)
+                    if !completed { activeTask?.cancel() }
+                    await performEncryptedUploadV2Cleanup(cleanup, runtime: runtime)
+                } catch {
+                    lifecycle.preserveTerminalSettlement()
+                    await finishCancellation(id, runtime: runtime)
+                    throw error
+                }
+            } else {
+                activeTask?.cancel()
+                await performEncryptedUploadV2Cleanup(cancellation.cleanup, runtime: runtime)
             }
-            await performEncryptedUploadV2Cleanup(cancellation.cleanup, runtime: runtime)
-            if cancellation.isSettled {
+            if cancellation.isSettled || cancellation.cancelEngine {
                 await finishCancellation(id, runtime: runtime)
             }
         } else {
+            activeTask?.cancel()
             try await runtime.engine.cancel(id)
             await finishCancellation(id, runtime: runtime)
         }
@@ -590,7 +604,6 @@ public actor RecordingManager {
         cancellation requestedCancellation: EncryptedUploadV2OperationLifecycle.Cancellation? = nil
     ) async {
         guard activeCancellationID == id, let runtime else { return }
-        activeTask?.cancel()
         if let lifecycle = requestedLifecycle ?? activeEncryptedUploadV2Lifecycle {
             await cancelEncryptedUploadV2(
                 id,
@@ -599,6 +612,7 @@ public actor RecordingManager {
                 cancellation: requestedCancellation
             )
         } else {
+            activeTask?.cancel()
             try? await runtime.engine.cancel(id)
             await finishCancellation(id, runtime: runtime)
         }
@@ -612,10 +626,19 @@ public actor RecordingManager {
     ) async {
         let cancellation = cancellation ?? lifecycle.requestCancellation()
         if cancellation.cancelEngine {
-            try? await runtime.engine.cancel(id)
+            do {
+                let completed = try await runtime.engine.cancelAndReportExactSettlement(id)
+                let cleanup = lifecycle.settleEngineCancellation(completed: completed)
+                if !completed { activeTask?.cancel() }
+                await performEncryptedUploadV2Cleanup(cleanup, runtime: runtime)
+            } catch {
+                lifecycle.preserveTerminalSettlement()
+            }
+        } else {
+            activeTask?.cancel()
+            await performEncryptedUploadV2Cleanup(cancellation.cleanup, runtime: runtime)
         }
-        await performEncryptedUploadV2Cleanup(cancellation.cleanup, runtime: runtime)
-        if cancellation.isSettled {
+        if cancellation.isSettled || cancellation.cancelEngine {
             await finishCancellation(id, runtime: runtime)
         }
     }
@@ -677,6 +700,7 @@ private final class EncryptedUploadV2OperationLifecycle: @unchecked Sendable {
     private var didCancelPreparation = false
     private var didTerminate = false
     private var completed = false
+    private var engineCancellationSettled = false
 
     func accept(_ material: EncryptedUploadV2Material) -> Cleanup {
         lock.withLock {
@@ -712,9 +736,33 @@ private final class EncryptedUploadV2OperationLifecycle: @unchecked Sendable {
             }
             return .init(
                 cancelEngine: enginePhase == .started,
-                cleanup: takeCleanup(.cancelled),
-                isSettled: true
+                cleanup: enginePhase == .started ? .none : takeCleanup(.cancelled),
+                isSettled: enginePhase != .started
             )
+        }
+    }
+
+    func settleEngineCancellation(completed exactlyCompleted: Bool) -> Cleanup {
+        lock.withLock {
+            engineCancellationSettled = true
+            if exactlyCompleted {
+                completed = true
+                return .none
+            }
+            return takeCleanup(.cancelled)
+        }
+    }
+
+    func preserveTerminalSettlement() {
+        lock.withLock {
+            engineCancellationSettled = true
+            completed = true
+        }
+    }
+
+    func defersFailureCompletion() -> Bool {
+        lock.withLock {
+            cancellationRequested && enginePhase == .started && !completed && !engineCancellationSettled
         }
     }
 
@@ -723,7 +771,10 @@ private final class EncryptedUploadV2OperationLifecycle: @unchecked Sendable {
     }
 
     func failureCleanup() -> Cleanup {
-        lock.withLock { takeCleanup(cancellationRequested ? .cancelled : .failed) }
+        lock.withLock {
+            if cancellationRequested && enginePhase == .started && !engineCancellationSettled { return .none }
+            return takeCleanup(cancellationRequested ? .cancelled : .failed)
+        }
     }
 
     func complete() {

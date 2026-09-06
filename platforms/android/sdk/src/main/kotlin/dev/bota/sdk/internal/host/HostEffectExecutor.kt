@@ -115,6 +115,10 @@ internal class HostEffectExecutor(
         encryptedUploadV2.cancel(cancellationId)
     }
 
+    override suspend fun confirmationAttemptedOrClaimCancellation(
+        cancellationId: CoreCancellationId,
+    ): Boolean = encryptedUploadV2.confirmationAttemptedOrClaimCancellation(cancellationId)
+
     private fun route(
         effect: CoreEffect,
         upstream: Flow<CoreHostEventPayload>,

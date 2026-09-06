@@ -40,6 +40,9 @@ internal interface CoreWorkflowRunner : AutoCloseable {
 internal fun interface CoreEffectHandler {
     fun execute(effect: CoreEffect): Flow<CoreHostEvent>
 
+    /** Atomically claims cancellation before CONFIRM, or reports that an actual CONFIRM write was attempted. */
+    suspend fun confirmationAttemptedOrClaimCancellation(cancellationId: CoreCancellationId): Boolean = false
+
     suspend fun cancel(cancellationId: CoreCancellationId) = Unit
 }
 
@@ -58,6 +61,7 @@ internal class CoreEngineRuntime(
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val effectJobs = mutableMapOf<CoreCancellationId, MutableSet<Job>>()
     private val exactSettlements = mutableMapOf<CoreCancellationId, CompletableDeferred<CoreNotification>>()
+    private val completedTerminals = mutableMapOf<CoreCancellationId, CompletableDeferred<CoreNotification>>()
     private var active: ActiveWorkflow? = null
     private var isDraining = false
     private var drainRequested = false
@@ -68,6 +72,7 @@ internal class CoreEngineRuntime(
         try {
             withContext(dispatcher) {
                 exactSettlements.entries.removeAll { it.value.isCompleted }
+                completedTerminals.clear()
                 core.start(command.packet, capabilities.bits)
                 val owner = ActiveWorkflow(CoreCancellationId(command.cancellationId), channel)
                 active = owner
@@ -118,8 +123,21 @@ internal class CoreEngineRuntime(
         cancellationId: CoreCancellationId,
         consumeExactSettlement: Boolean = true,
     ): Boolean {
+        val confirmationAttempted = effectHandler.confirmationAttemptedOrClaimCancellation(cancellationId)
         val snapshot = withContext(dispatcher) {
-            active?.takeIf { it.cancellationId == cancellationId } to exactSettlements[cancellationId]
+            active?.takeIf { it.cancellationId == cancellationId } to
+                (exactSettlements[cancellationId] ?: completedTerminals[cancellationId])
+        }
+        if (confirmationAttempted) {
+            val terminal = snapshot.first?.terminal ?: snapshot.second ?: throw BotaSDKError.Core(
+                BotaErrorCode.UploadOwnershipUnknown,
+                BotaOperation.TransferRecording,
+                retryable = false,
+                protocolStatus = null,
+                detail = "CONFIRM was attempted but its terminal settlement is unavailable",
+            )
+            withContext(dispatcher) { exactSettlements.putIfAbsent(cancellationId, terminal) }
+            return awaitExactSettlement(cancellationId, terminal, consumeExactSettlement)
         }
         val owner = snapshot.first
             ?: return snapshot.second?.let {
@@ -248,6 +266,7 @@ internal class CoreEngineRuntime(
         active = null
         owner.output.close()
         owner.terminal.complete(notification)
+        completedTerminals[owner.cancellationId] = owner.terminal
     }
 
     private fun fail(error: Throwable, cancellationId: CoreCancellationId?) {

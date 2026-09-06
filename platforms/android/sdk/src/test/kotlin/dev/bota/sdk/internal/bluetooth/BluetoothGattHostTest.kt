@@ -35,6 +35,22 @@ class BluetoothGattHostTest {
     }
 
     @Test
+    fun confirmedDisconnectDeliveryBroadcastsAndFailsClosedOnOverflow() = runTest {
+        val broadcast = AndroidDisconnectBuffer(capacity = 1)
+        val first = async(start = CoroutineStart.UNDISPATCHED) { broadcast.flow().first() }
+        val second = async(start = CoroutineStart.UNDISPATCHED) { broadcast.flow().first() }
+        val event = ConfirmedBluetoothDisconnect("device", 4)
+        broadcast.offer(event)
+        assertEquals(event, first.await())
+        assertEquals(event, second.await())
+
+        val overflow = AndroidDisconnectBuffer(capacity = 1)
+        overflow.offer(event)
+        overflow.offer(ConfirmedBluetoothDisconnect("device", 5))
+        assertTrue(runCatching { overflow.flow().toList() }.exceptionOrNull() is BluetoothTransportException)
+    }
+
+    @Test
     fun notificationBufferBroadcastsEveryValueToEveryCollector() = runTest {
         val buffer = AndroidNotificationBuffer(capacity = 2)
         val first = async(start = CoroutineStart.UNDISPATCHED) { buffer.flow(7).take(2).toList() }
@@ -178,10 +194,31 @@ class BluetoothGattHostTest {
         driver.connect("device")
         val disconnected = async(start = CoroutineStart.UNDISPATCHED) { driver.confirmedDisconnects().first() }
 
-        platform.confirmedDisconnects.emit("device")
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 1))
 
-        assertEquals("device", disconnected.await())
+        assertEquals(ConfirmedBluetoothDisconnect("device", 1), disconnected.await())
         assertTrue(runCatching { driver.maximumWriteLength("device") }.exceptionOrNull() is BluetoothTransportException)
+    }
+
+    @Test
+    fun confirmedDisconnectIgnoresOldAndDuplicateGattGenerations() = runTest {
+        val platform = FakeBluetoothPlatform()
+        val driver = BluetoothGattDriver(platform)
+        driver.connect("device")
+        val observed = async(start = CoroutineStart.UNDISPATCHED) {
+            driver.confirmedDisconnects().take(2).toList()
+        }
+
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 0))
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 1))
+        driver.connect("device")
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 1))
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 2))
+
+        assertEquals(
+            listOf(ConfirmedBluetoothDisconnect("device", 1), ConfirmedBluetoothDisconnect("device", 2)),
+            observed.await(),
+        )
     }
 }
 
@@ -198,7 +235,7 @@ private class FakeBluetoothPlatform(
     var nextStatus = 0
     var staleGeneration = false
     var suspendReads = false
-    val confirmedDisconnects = MutableSharedFlow<String>()
+    val confirmedDisconnects = MutableSharedFlow<ConfirmedBluetoothDisconnect>()
 
     override suspend fun connectedAdvertisements(): List<BluetoothAdvertisement> = initialConnected
     override fun scan(allowDuplicates: Boolean): Flow<BluetoothAdvertisement> = scans
@@ -280,7 +317,7 @@ private class FakeBluetoothPlatform(
         return result(generation, Unit)
     }
 
-    override fun confirmedDisconnects(): Flow<String> = confirmedDisconnects
+    override fun confirmedDisconnects(): Flow<ConfirmedBluetoothDisconnect> = confirmedDisconnects
 
     override fun close() = Unit
 

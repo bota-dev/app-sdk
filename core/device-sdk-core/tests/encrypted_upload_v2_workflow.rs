@@ -361,8 +361,8 @@ fn cancellation_after_selection_has_abort_and_no_fallback_or_confirm() {
 }
 
 #[test]
-fn cancellation_during_confirmation_defers_to_the_exact_host_outcome() {
-    let (mut engine, confirmation_request) = engine_waiting_for_confirmation();
+fn cancellation_after_confirm_effect_emission_still_aborts_until_the_host_attempts_the_write() {
+    let (mut engine, _confirmation_request) = engine_waiting_for_confirmation();
 
     let cancellation_effects = engine
         .dispatch(Event::Cancelled {
@@ -370,19 +370,15 @@ fn cancellation_during_confirmation_defers_to_the_exact_host_outcome() {
         })
         .unwrap();
 
-    assert!(cancellation_effects.is_empty());
-    assert!(matches!(engine.status(), WorkflowStatus::Running { .. }));
-    let completion = engine
-        .dispatch(host(
-            confirmation_request,
-            EncryptedUploadV2HostEvent::RecordingConfirmed,
-        ))
-        .unwrap();
-    assert!(completion.iter().any(|effect| matches!(
+    assert!(cancellation_effects.iter().any(|effect| matches!(
         effect.effect,
-        Effect::Notify(WorkflowNotification::Completed { .. })
+        Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::AbortV2 { .. })
     )));
-    assert!(matches!(engine.status(), WorkflowStatus::Completed { .. }));
+    assert!(cancellation_effects.iter().any(|effect| matches!(
+        effect.effect,
+        Effect::Notify(WorkflowNotification::Cancelled { .. })
+    )));
+    assert!(matches!(engine.status(), WorkflowStatus::Cancelled { .. }));
 }
 
 #[test]

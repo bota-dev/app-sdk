@@ -107,6 +107,10 @@ actor HostEffectExecutor: CoreHost {
         timers = timers.filter { $0.value.cancellationID != cancellationID }
     }
 
+    func confirmationAttemptedOrClaimCancellation(_ cancellationID: CoreCancellationID) async -> Bool {
+        await encryptedUploadV2.confirmationAttemptedOrClaimCancellation(cancellationID)
+    }
+
     private func route(
         _ upstream: AsyncThrowingStream<CoreHostEventPayload, Error>,
         effect: CoreEffect,

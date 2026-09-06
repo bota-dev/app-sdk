@@ -21,7 +21,7 @@ internal class EncryptedUploadV2SignedBlobWriter(
     private val cleanupTimeoutMilliseconds: Long = CleanupTimeoutMilliseconds,
 ) {
     private val mutex = Mutex()
-    private var cleanupUncertain = false
+    private var cleanupUncertainOwner: ConfirmedBluetoothDisconnect? = null
 
     suspend fun send(
         peripheralId: String,
@@ -31,7 +31,8 @@ internal class EncryptedUploadV2SignedBlobWriter(
         maximumBlobBytes: UShort,
         resultTimeoutMilliseconds: Long = ResultTimeoutMilliseconds,
     ) = mutex.withLock {
-        if (cleanupUncertain) ownershipUnknown()
+        if (cleanupUncertainOwner != null) ownershipUnknown()
+        val owner = ConfirmedBluetoothDisconnect(peripheralId, driver.connectionGeneration(peripheralId))
         require(writeId != 0u && value.isNotEmpty() && value.size <= maximumBlobBytes.toInt()) {
             "signed document is outside negotiated bounds"
         }
@@ -119,7 +120,7 @@ internal class EncryptedUploadV2SignedBlobWriter(
         val cleanupFailure = cleanup(peripheralId, if (primary != null && began) {
             mapper.createEncryptedUploadV2SignedBlobAbort(kind, writeId)
         } else null, maximumFrameBytes)
-        if (cleanupFailure != null) cleanupUncertain = true
+        if (cleanupFailure != null) cleanupUncertainOwner = owner
         if (primary != null) {
             cleanupFailure?.let(primary!!::addSuppressed)
             throw primary!!
@@ -127,7 +128,9 @@ internal class EncryptedUploadV2SignedBlobWriter(
         if (cleanupFailure != null) ownershipUnknown(cleanupFailure)
     }
 
-    suspend fun resetAfterConfirmedDisconnect() = mutex.withLock { cleanupUncertain = false }
+    suspend fun resetAfterConfirmedDisconnect(disconnect: ConfirmedBluetoothDisconnect) = mutex.withLock {
+        if (cleanupUncertainOwner == disconnect) cleanupUncertainOwner = null
+    }
 
     private suspend fun cleanup(
         peripheralId: String,

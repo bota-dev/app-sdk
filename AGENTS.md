@@ -403,13 +403,15 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Android runtime construction and destroy must attempt every owned close
   action even when one close fails. Preserve the first cleanup failure and add
   later failures as suppressed exceptions.
-- Encrypted Upload v2 cancellation is deferred once the Rust workflow has
-  entered CONFIRM: Apple and Android wait for the exact confirmed or code-19
-  uncertainty outcome and must not invoke host rollback. Android validates
+- Encrypted Upload v2 cancellation remains ordinary until the native host
+  atomically begins the canonical CONFIRM write. Only after that real boundary
+  do Apple and Android wait for exact completion or code-19 uncertainty without
+  invoking host rollback. Android validates
   transfer phase at notification arrival, broadcasts bounded platform
   notifications to every active observer, and resets poisoned ownership on
-  explicit or spontaneous confirmed disconnect. Its atomic checkpoint catalog
-  is also the migration marker for the earlier split checkpoint/index format.
+  an exact peripheral/GATT-generation confirmed disconnect. Its atomic checkpoint
+  catalog merges every valid earlier split checkpoint/index pair, including when
+  a catalog or only its AtomicFile backup already exists.
 - Keep Android `WorkflowFixtures` generated from all seven canonical workflow
   suites. `preDebugAndroidTestBuild` must reject stale protocol or workflow
   resources before packaged instrumentation runs.

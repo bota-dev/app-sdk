@@ -262,10 +262,12 @@ runtimes can consume the same trace.
   budget, phase validation, pre-EOF completion, atomic checkpoint lookup,
   startup/destroy races, terminal core drain, typed error mapping, and
   CONFIRM/cleanup ownership poisoning. Physical power-loss remains unverified.
-- [x] Defer shared-core cancellation during CONFIRM to the exact host outcome;
+- [x] Keep shared-core cancellation ordinary until the native host atomically
+  claims or actually attempts CONFIRM, then settle the exact host outcome;
   validate transfer phases at notification arrival; restore bounded broadcast
   notification delivery; independently bound every cleanup action; reconcile
-  the retired split checkpoint/index format; and reset material ownership on
+  every retired split checkpoint/index pair into an existing/backup-recovered
+  catalog; and reset material ownership only on an exact current-generation
   explicit or spontaneous confirmed disconnect.
 
 ### Task 6: Add the target React Native provider and progress surface

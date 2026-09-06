@@ -6,6 +6,7 @@ import dev.bota.sdk.internal.core.EncryptedUploadV2StartRequest
 import dev.bota.sdk.internal.core.EncryptedUploadV2TransferControlValue
 import dev.bota.sdk.internal.core.EncryptedUploadV2TransferPayload
 import dev.bota.sdk.internal.host.EncryptedUploadV2HostException
+import dev.bota.sdk.internal.host.EncryptedUploadV2ConfirmationException
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
@@ -120,6 +121,7 @@ internal class EncryptedUploadV2TransferControl(
 
     private data class Session(
         val peripheralId: String,
+        val generation: Long,
         val raw: Channel<ByteArray>,
         val bufferedBytes: AtomicInteger,
         val intake: EncryptedUploadV2TransferIntake,
@@ -131,7 +133,7 @@ internal class EncryptedUploadV2TransferControl(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
     private val sessions = mutableMapOf<ULong, Session>()
-    private var cleanupUncertain = false
+    private var cleanupUncertainOwner: ConfirmedBluetoothDisconnect? = null
 
     suspend fun open(
         peripheralId: String,
@@ -139,6 +141,8 @@ internal class EncryptedUploadV2TransferControl(
         checkpoint: EncryptedUploadV2CheckpointValue?,
     ): EncryptedUploadV2OpenResult {
         val ready = CompletableDeferred<Unit>()
+        val connectionGeneration = driver.connectionGeneration(peripheralId)
+        val owner = ConfirmedBluetoothDisconnect(peripheralId, connectionGeneration)
         val raw = Channel<ByteArray>(Channel.UNLIMITED)
         val bufferedBytes = AtomicInteger()
         val intake = EncryptedUploadV2TransferIntake(request.transportSessionId)
@@ -175,6 +179,9 @@ internal class EncryptedUploadV2TransferControl(
                             12u, true, message = "encrypted transfer notification stream ended before EOF",
                         )
                     } catch (error: Throwable) {
+                        if (error !is kotlinx.coroutines.CancellationException) {
+                            mutex.withLock { cleanupUncertainOwner = owner }
+                        }
                         ready.completeExceptionally(error)
                         raw.close(error)
                     }
@@ -186,9 +193,9 @@ internal class EncryptedUploadV2TransferControl(
                 raw.close(error)
             }
         }
-        val session = Session(peripheralId, raw, bufferedBytes, intake, controlAccepted, job)
+        val session = Session(peripheralId, connectionGeneration, raw, bufferedBytes, intake, controlAccepted, job)
         mutex.withLock {
-            if (cleanupUncertain) ownershipUnknown()
+            if (cleanupUncertainOwner != null) ownershipUnknown()
             require(request.transportSessionId != 0uL && sessions.isEmpty()) {
                 "encrypted transfer session is already active"
             }
@@ -267,34 +274,75 @@ internal class EncryptedUploadV2TransferControl(
             sessions[transportSessionId]?.takeIf { it.phase == Phase.Active }
                 ?: error("encrypted transfer session is not active")
         }
-        session.intake.continueWith(continuation)
-        write(session.peripheralId, frame)
+        try {
+            write(session.peripheralId, frame)
+            session.intake.continueWith(continuation)
+        } catch (error: Throwable) {
+            mutex.withLock {
+                cleanupUncertainOwner = ConfirmedBluetoothDisconnect(session.peripheralId, session.generation)
+            }
+            session.raw.close(error)
+            throw error
+        }
     }
 
     suspend fun confirm(transportSessionId: ULong, frame: ByteArray) {
         currentCoroutineContext().ensureActive()
         val session = mutex.withLock {
-            if (cleanupUncertain) ownershipUnknown()
+            if (cleanupUncertainOwner != null) ownershipUnknown()
             sessions[transportSessionId]?.takeIf { it.phase == Phase.Active }
-                ?.also { it.phase = Phase.Confirming }
                 ?: error("encrypted transfer session is not active")
         }
         var sent = false
+        var attempted = false
         try {
             withContext(NonCancellable + Dispatchers.IO) {
-                write(session.peripheralId, frame)
-                sent = true
-                mutex.withLock { session.phase = Phase.Confirmed }
+                require(frame.size <= minOf(driver.maximumWriteLength(session.peripheralId), MaximumNotificationBytes)) {
+                    "Rust-generated transfer frame exceeds negotiated write length"
+                }
+                mutex.withLock {
+                    sessions[transportSessionId]?.takeIf { it === session && it.phase == Phase.Active }
+                        ?.also { it.phase = Phase.Confirming }
+                        ?: throw EncryptedUploadV2HostException(
+                            16u, false, message = "transfer cancellation preceded CONFIRM",
+                        )
+                    attempted = true
+                    driver.write(
+                        session.peripheralId,
+                        BotaBluetoothUUIDs.StorageService,
+                        BotaBluetoothUUIDs.TransferControlV2,
+                        frame,
+                        withResponse = true,
+                    )
+                    sent = true
+                    session.phase = Phase.Confirmed
+                }
                 cleanupSubscription(session)
             }
             mutex.withLock { sessions.remove(transportSessionId, session) }
         } catch (error: Throwable) {
-            mutex.withLock { cleanupUncertain = true }
-            throw EncryptedUploadV2HostException(
-                19u, false,
+            if (!attempted) throw error
+            mutex.withLock {
+                cleanupUncertainOwner = ConfirmedBluetoothDisconnect(session.peripheralId, session.generation)
+            }
+            throw EncryptedUploadV2ConfirmationException(
+                writeSucceeded = sent,
                 message = if (sent) "CONFIRM succeeded but transfer subscription cleanup is uncertain"
                 else "CONFIRM outcome is uncertain; reconnect before retrying",
-            ).also { it.addSuppressed(error) }
+                cause = error,
+            )
+        }
+    }
+
+    suspend fun confirmationAttemptedOrClaimCancellation(transportSessionId: ULong): Boolean = mutex.withLock {
+        val session = sessions[transportSessionId] ?: return@withLock false
+        when (session.phase) {
+            Phase.Confirming, Phase.Confirmed -> true
+            Phase.Active -> {
+                session.phase = Phase.Cleaning
+                false
+            }
+            Phase.Cleaning -> false
         }
     }
 
@@ -318,13 +366,15 @@ internal class EncryptedUploadV2TransferControl(
         releaseSession(transportSessionId, session, abort = false)
     }
 
-    suspend fun resetAfterConfirmedDisconnect() {
+    suspend fun resetAfterConfirmedDisconnect(disconnect: ConfirmedBluetoothDisconnect) {
         val owned = mutex.withLock {
-            cleanupUncertain = false
-            sessions.values.toList().also { sessions.clear() }
+            if (cleanupUncertainOwner == disconnect) cleanupUncertainOwner = null
+            sessions.values.filter {
+                it.peripheralId == disconnect.peripheralId && it.generation == disconnect.generation
+            }.also { matching -> matching.forEach { sessions.values.remove(it) } }
         }
         owned.forEach {
-            it.job.cancel()
+            it.job.cancelAndJoin()
             it.raw.close()
         }
     }
@@ -375,7 +425,9 @@ internal class EncryptedUploadV2TransferControl(
         if (failure == null) {
             mutex.withLock { sessions.remove(id, session) }
         } else {
-            mutex.withLock { cleanupUncertain = true }
+            mutex.withLock {
+                cleanupUncertainOwner = ConfirmedBluetoothDisconnect(session.peripheralId, session.generation)
+            }
             throw EncryptedUploadV2HostException(
                 19u, false, message = "encrypted transfer cleanup is uncertain; reconnect before retrying",
             ).also { it.addSuppressed(failure!!) }

@@ -205,6 +205,10 @@ class CoreEngineRuntimeTest {
             override suspend fun cancel(cancellationId: CoreCancellationId) {
                 hostCancellationCount += 1
             }
+
+            override suspend fun confirmationAttemptedOrClaimCancellation(
+                cancellationId: CoreCancellationId,
+            ) = true
         })
         val cancellationId = UUID.randomUUID()
         val collecting = async {
@@ -216,7 +220,6 @@ class CoreEngineRuntimeTest {
         confirmationEntered.await()
 
         val cancelling = async { runtime.cancel(cancellationId) }
-        core.cancelEntered.await()
         confirmationRelease.complete(Unit)
         withContext(Dispatchers.Default) { withTimeout(2_000) { cancelling.await() } }
 
@@ -239,13 +242,16 @@ class CoreEngineRuntimeTest {
         )
         val confirmationEntered = CompletableDeferred<Unit>()
         val confirmationRelease = CompletableDeferred<Unit>()
-        val runtime = CoreEngineRuntime(core) { effect ->
-            flow {
-                confirmationEntered.complete(Unit)
-                confirmationRelease.await()
-                emit(CoreHostEvent.fromEffect(effect, HostEventKind.EncryptedUploadV2RecordingConfirmed))
+        val runtime = CoreEngineRuntime(core, object : CoreEffectHandler {
+            override fun execute(effect: CoreEffect) = flow {
+                    confirmationEntered.complete(Unit)
+                    confirmationRelease.await()
+                    emit(CoreHostEvent.fromEffect(effect, HostEventKind.EncryptedUploadV2RecordingConfirmed))
             }
-        }
+            override suspend fun confirmationAttemptedOrClaimCancellation(
+                cancellationId: CoreCancellationId,
+            ) = true
+        })
         val cancellationId = UUID.randomUUID()
         val collecting = async {
             runtime.run(
@@ -256,7 +262,6 @@ class CoreEngineRuntimeTest {
         confirmationEntered.await()
 
         val cancelling = async { runCatching { runtime.cancelAndReportExactSettlement(cancellationId) }.exceptionOrNull() }
-        core.cancelEntered.await()
         confirmationRelease.complete(Unit)
         try {
             val failure = withContext(Dispatchers.Default) { withTimeout(2_000) { cancelling.await() } }
@@ -286,6 +291,10 @@ class CoreEngineRuntimeTest {
             override suspend fun cancel(cancellationId: CoreCancellationId) {
                 hostCancellationCount += 1
             }
+
+            override suspend fun confirmationAttemptedOrClaimCancellation(
+                cancellationId: CoreCancellationId,
+            ) = true
         })
         val cancellationId = UUID.randomUUID()
         val collector = launch {
@@ -297,13 +306,13 @@ class CoreEngineRuntimeTest {
         confirmationEntered.await()
 
         collector.cancelAndJoin()
-        core.cancelEntered.await()
         confirmationRelease.complete(Unit)
         withContext(Dispatchers.Default) { withTimeout(2_000) { core.settled.await() } }
         val exactSettlement = runtime.cancelAndReportExactSettlement(cancellationId)
 
         assertTrue(exactSettlement)
         assertEquals(0, hostCancellationCount)
+        assertFalse(core.cancelEntered.isCompleted)
         runtime.close()
     }
 }

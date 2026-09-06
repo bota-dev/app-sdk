@@ -42,7 +42,7 @@ class EncryptedUploadV2SignedBlobWriterTest {
         }.exceptionOrNull() as EncryptedUploadV2HostException
         assertEquals(19u, poisoned.errorCode)
 
-        writer.resetAfterConfirmedDisconnect()
+        writer.resetAfterConfirmedDisconnect(ConfirmedBluetoothDisconnect("device", 1))
         driver.failUnsubscribe = false
         val afterReset = runCatching {
             writer.send("device", 1u, 9u, ByteArray(8), 408u, resultTimeoutMilliseconds = 20)

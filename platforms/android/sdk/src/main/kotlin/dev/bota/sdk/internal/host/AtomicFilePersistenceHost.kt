@@ -12,6 +12,7 @@ import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
+import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -32,7 +33,11 @@ internal class AtomicFileJournalStore(rootDirectory: File) : JournalStore {
 
     override suspend fun read(name: String): ByteArray? {
         val file = atomicFile(name)
-        return if (file.baseFile.exists()) file.openRead().use { it.readBytes() } else null
+        return try {
+            file.openRead().use { it.readBytes() }
+        } catch (_: FileNotFoundException) {
+            null
+        }
     }
 
     override suspend fun write(name: String, value: ByteArray) {

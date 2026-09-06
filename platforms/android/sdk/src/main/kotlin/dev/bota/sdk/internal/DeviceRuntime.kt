@@ -8,6 +8,7 @@ import dev.bota.sdk.internal.bluetooth.BluetoothGattDriver
 import dev.bota.sdk.internal.bluetooth.BluetoothGattHost
 import dev.bota.sdk.internal.bluetooth.BluetoothPermissionChecker
 import dev.bota.sdk.internal.bluetooth.BotaBluetoothUUIDs
+import dev.bota.sdk.internal.bluetooth.ConfirmedBluetoothDisconnect
 import dev.bota.sdk.internal.bluetooth.EncryptedUploadV2SignedBlobWriter
 import dev.bota.sdk.internal.bluetooth.EncryptedUploadV2TransferControl
 import dev.bota.sdk.internal.core.EncryptedUploadV2CapabilityReader
@@ -209,6 +210,7 @@ internal class DeviceRuntime(
                 val encryptedUploader = EncryptedUploadV2StagingUploader(networkClient).also { closeActions += it::close }
                 val encryptedSignedWriter = EncryptedUploadV2SignedBlobWriter(driver, mapper)
                 val encryptedControl = EncryptedUploadV2TransferControl(driver, mapper).also { closeActions += it::close }
+                val disconnectResetMutex = Mutex()
                 val writeIds = AtomicInteger(0)
                 fun currentPeripheral(): String = connection.current()?.id
                     ?: error("encrypted upload v2 requires a current verified connection")
@@ -218,14 +220,20 @@ internal class DeviceRuntime(
                         materialRegistry = encryptedMaterial,
                         checkpointStore = encryptedCheckpoint,
                         openTransfer = { request, checkpoint ->
-                            encryptedControl.open(currentPeripheral(), request, checkpoint)
+                            disconnectResetMutex.withLock {
+                                encryptedControl.open(currentPeripheral(), request, checkpoint)
+                            }
                         },
                         sendControl = encryptedControl::writeActiveFrame,
                         confirmTransfer = encryptedControl::confirm,
+                        confirmationAttemptedOrClaimCancellation =
+                            encryptedControl::confirmationAttemptedOrClaimCancellation,
                         abortTransfer = encryptedControl::abort,
                         releaseTransfer = encryptedControl::release,
                         sendSignedDocument = { kind, id, value, maximum ->
-                            encryptedSignedWriter.send(currentPeripheral(), kind, id, value, maximum)
+                            disconnectResetMutex.withLock {
+                                encryptedSignedWriter.send(currentPeripheral(), kind, id, value, maximum)
+                            }
                         },
                         uploadCiphertext = encryptedUploader::upload,
                         cancelUploads = encryptedUploader::cancelAll,
@@ -242,16 +250,16 @@ internal class DeviceRuntime(
                         encodeConfirm = mapper::createEncryptedUploadV2Confirm,
                     ),
                 ).also { closeActions += it::close }
-                val disconnectResetMutex = Mutex()
-                suspend fun resetEncryptedUploadOwnership() = disconnectResetMutex.withLock {
-                    encryptedControl.resetAfterConfirmedDisconnect()
-                    encryptedSignedWriter.resetAfterConfirmedDisconnect()
+                suspend fun resetEncryptedUploadOwnership(disconnect: ConfirmedBluetoothDisconnect) = disconnectResetMutex.withLock {
+                    if (!driver.isCurrentDisconnectedGeneration(disconnect)) return@withLock
+                    encryptedControl.resetAfterConfirmedDisconnect(disconnect)
+                    encryptedSignedWriter.resetAfterConfirmedDisconnect(disconnect)
                     encryptedHost.resetAfterConfirmedDisconnect()
                 }
                 val disconnectResetScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
                 closeActions += { disconnectResetScope.cancel() }
                 disconnectResetScope.launch {
-                    driver.confirmedDisconnects().collect { resetEncryptedUploadOwnership() }
+                    driver.confirmedDisconnects().collect { resetEncryptedUploadOwnership(it) }
                 }
                 val encryptedCapabilityReader = EncryptedUploadV2CapabilityReader(
                     driver::read,
@@ -286,8 +294,11 @@ internal class DeviceRuntime(
                     capabilities = allCapabilities,
                     authorize = ::authorize,
                     disconnect = { peripheralId ->
+                        val disconnect = ConfirmedBluetoothDisconnect(
+                            peripheralId, driver.connectionGeneration(peripheralId),
+                        )
                         driver.disconnect(peripheralId)
-                        resetEncryptedUploadOwnership()
+                        resetEncryptedUploadOwnership(disconnect)
                     },
                     readStatus = { peripheralId ->
                         driver.read(peripheralId, BotaBluetoothUUIDs.ControlService, BotaBluetoothUUIDs.DeviceStatus)

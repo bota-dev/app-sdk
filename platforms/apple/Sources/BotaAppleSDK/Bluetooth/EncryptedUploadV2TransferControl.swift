@@ -1,5 +1,10 @@
 import Foundation
 
+struct EncryptedUploadV2ConfirmationFailure: Error, Sendable {
+    let writeSucceeded: Bool
+    let detail: String
+}
+
 actor EncryptedUploadV2TransferControl {
     typealias Subscribe = @Sendable (String) async throws -> AsyncThrowingStream<Data, Error>
     typealias Write = @Sendable (String, Data) async throws -> Void
@@ -18,6 +23,8 @@ actor EncryptedUploadV2TransferControl {
     private var exchangeActive = false
     private var activeTransfer: ActiveEncryptedUploadV2Transfer?
     private var cleanupUncertain = false
+    private var confirmationWriteAttemptedSessionID: UInt64?
+    private var confirmationCancellationClaimedSessionID: UInt64?
 
     init(
         mapper: CoreModelMapper,
@@ -183,6 +190,15 @@ actor EncryptedUploadV2TransferControl {
     func resetAfterConfirmedDisconnect() {
         cleanupUncertain = false
         activeTransfer = nil
+        confirmationWriteAttemptedSessionID = nil
+        confirmationCancellationClaimedSessionID = nil
+    }
+
+    func confirmationAttemptedOrClaimCancellation(transportSessionID: UInt64) -> Bool {
+        if confirmationWriteAttemptedSessionID == transportSessionID { return true }
+        guard activeTransfer?.transportSessionID == transportSessionID else { return false }
+        confirmationCancellationClaimedSessionID = transportSessionID
+        return false
     }
 
     func claimNotificationStream(
@@ -270,13 +286,34 @@ actor EncryptedUploadV2TransferControl {
         exchangeActive = true
         defer { exchangeActive = false }
         try Task.checkCancellation()
-        try await write(transfer.peripheralID, frame)
-        _ = await cleanup(
+        guard confirmationCancellationClaimedSessionID != transportSessionID else {
+            throw Self.error(
+                code: .cancelled,
+                detail: "encrypted upload v2 cancellation preceded CONFIRM"
+            )
+        }
+        confirmationWriteAttemptedSessionID = transportSessionID
+        do {
+            try await write(transfer.peripheralID, frame)
+        } catch {
+            cleanupUncertain = true
+            throw EncryptedUploadV2ConfirmationFailure(
+                writeSucceeded: false,
+                detail: "CONFIRM outcome is uncertain; reconnect before retrying"
+            )
+        }
+        let cleaned = await cleanup(
             peripheralID: transfer.peripheralID,
             abort: nil,
             timeoutNanoseconds: cleanupTimeoutNanoseconds
         )
         activeTransfer = nil
+        guard cleaned else {
+            throw EncryptedUploadV2ConfirmationFailure(
+                writeSucceeded: true,
+                detail: "CONFIRM succeeded but transfer subscription cleanup is uncertain"
+            )
+        }
     }
 
     func abortActiveTransfer(
@@ -427,6 +464,8 @@ actor EncryptedUploadV2TransferControl {
                     transportSessionID: transportSessionID,
                     notifications: notifications
                 )
+                confirmationWriteAttemptedSessionID = nil
+                confirmationCancellationClaimedSessionID = nil
                 return reply
             }
             terminalReleasesDevice = true

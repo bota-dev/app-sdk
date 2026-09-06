@@ -176,6 +176,54 @@ final class EncryptedUploadV2TransferControlTests: XCTestCase {
         )
     }
 
+    func testCancellationClaimChangesOnlyAtActualConfirmWriteBoundary() async throws {
+        let beforeProbe = TransferControlProbe(notifications: [Self.startAcknowledgement()])
+        let beforeControl = try Self.control(beforeProbe)
+        _ = try await beforeControl.start(peripheralID: "peripheral-1", request: Self.startRequest())
+        _ = try await beforeControl.claimNotificationStream(transportSessionID: Self.transportSessionID)
+        let claimedBeforeWrite = await beforeControl.confirmationAttemptedOrClaimCancellation(
+            transportSessionID: Self.transportSessionID
+        )
+        XCTAssertFalse(claimedBeforeWrite)
+        do {
+            try await beforeControl.confirmActiveTransferFrame(
+                transportSessionID: Self.transportSessionID,
+                frame: try Self.confirmFrame()
+            )
+            XCTFail("Expected pre-CONFIRM cancellation to prevent the write")
+        } catch let error as BotaSDKError {
+            XCTAssertEqual(error.code, .cancelled)
+        }
+        let beforeSnapshot = await beforeProbe.snapshot()
+        XCTAssertEqual(beforeSnapshot.frames.map(\.first), [0x20])
+
+        let duringProbe = TransferControlProbe(
+            notifications: [Self.startAcknowledgement()],
+            suspendConfirm: true
+        )
+        let duringControl = try Self.control(duringProbe)
+        _ = try await duringControl.start(peripheralID: "peripheral-1", request: Self.startRequest())
+        _ = try await duringControl.claimNotificationStream(transportSessionID: Self.transportSessionID)
+        let confirmFrame = try Self.confirmFrame()
+        let confirming = Task.detached { @Sendable in
+            try await duringControl.confirmActiveTransferFrame(
+                transportSessionID: Self.transportSessionID,
+                frame: confirmFrame
+            )
+        }
+        try await Self.waitUntil { await duringProbe.hasFrame(code: 0x23) }
+        let attemptedDuringWrite = await duringControl.confirmationAttemptedOrClaimCancellation(
+            transportSessionID: Self.transportSessionID
+        )
+        XCTAssertTrue(attemptedDuringWrite)
+        await duringProbe.resumeConfirm()
+        try await confirming.value
+        let attemptedAfterWrite = await duringControl.confirmationAttemptedOrClaimCancellation(
+            transportSessionID: Self.transportSessionID
+        )
+        XCTAssertTrue(attemptedAfterWrite)
+    }
+
     func testConfirmCleanupUncertaintyCannotReverseCommittedDeviceConfirmation() async throws {
         let probe = TransferControlProbe(
             notifications: [Self.startAcknowledgement()],
@@ -198,11 +246,16 @@ final class EncryptedUploadV2TransferControlTests: XCTestCase {
             receiptSHA256: Data(repeating: 0x77, count: 32)
         )
 
-        try await control.confirmActiveTransferFrame(
-            transportSessionID: Self.transportSessionID,
-            frame: frame,
-            cleanupTimeoutNanoseconds: 1_000_000
-        )
+        do {
+            try await control.confirmActiveTransferFrame(
+                transportSessionID: Self.transportSessionID,
+                frame: frame,
+                cleanupTimeoutNanoseconds: 1_000_000
+            )
+            XCTFail("Expected post-confirm cleanup uncertainty")
+        } catch let failure as EncryptedUploadV2ConfirmationFailure {
+            XCTAssertTrue(failure.writeSucceeded)
+        }
 
         let snapshot = await probe.snapshot()
         XCTAssertEqual(snapshot.frames.map(\.first), [0x20, 0x23])
@@ -509,6 +562,17 @@ final class EncryptedUploadV2TransferControlTests: XCTestCase {
         )
     }
 
+    private static func confirmFrame() throws -> Data {
+        try CoreModelMapper().createEncryptedUploadV2Confirm(
+            transportSessionID: transportSessionID,
+            uploadSessionID: uploadSessionID,
+            recordingUUID: recordingUUID,
+            recordingGeneration: 9,
+            ownerRevision: 3,
+            receiptSHA256: Data(repeating: 0x77, count: 32)
+        )
+    }
+
     private static func data(_ hex: String) -> Data {
         Data(stride(from: 0, to: hex.count, by: 2).map { index in
             let start = hex.index(hex.startIndex, offsetBy: index)
@@ -553,14 +617,21 @@ private enum TransferControlCall: Equatable {
 private actor TransferControlProbe {
     private let notifications: [Data]
     private var suspendUnsubscribe: Bool
+    private var suspendConfirm: Bool
     private var notificationContinuation: AsyncThrowingStream<Data, Error>.Continuation?
     private var unsubscribeContinuation: CheckedContinuation<Void, Error>?
+    private var confirmContinuation: CheckedContinuation<Void, Never>?
     private var calls: [TransferControlCall] = []
     private var frames: [Data] = []
 
-    init(notifications: [Data], suspendUnsubscribe: Bool = false) {
+    init(
+        notifications: [Data],
+        suspendUnsubscribe: Bool = false,
+        suspendConfirm: Bool = false
+    ) {
         self.notifications = notifications
         self.suspendUnsubscribe = suspendUnsubscribe
+        self.suspendConfirm = suspendConfirm
     }
 
     func subscribe(peripheralID: String) throws -> AsyncThrowingStream<Data, Error> {
@@ -568,9 +639,12 @@ private actor TransferControlProbe {
         return AsyncThrowingStream { notificationContinuation = $0 }
     }
 
-    func write(peripheralID: String, data: Data) {
+    func write(peripheralID: String, data: Data) async {
         calls.append(.write)
         frames.append(data)
+        if data.first == 0x23, suspendConfirm {
+            await withCheckedContinuation { confirmContinuation = $0 }
+        }
         guard data.first != 0x24 else { return }
         notifications.forEach { notificationContinuation?.yield($0) }
         if !notifications.isEmpty { notificationContinuation?.finish() }
@@ -589,6 +663,12 @@ private actor TransferControlProbe {
         suspendUnsubscribe = false
         unsubscribeContinuation?.resume()
         unsubscribeContinuation = nil
+    }
+
+    func resumeConfirm() {
+        suspendConfirm = false
+        confirmContinuation?.resume()
+        confirmContinuation = nil
     }
 
     func hasFrame(code: UInt8) -> Bool {

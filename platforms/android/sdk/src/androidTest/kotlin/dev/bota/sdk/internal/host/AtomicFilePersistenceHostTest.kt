@@ -69,4 +69,16 @@ internal class AtomicFilePersistenceHostTest {
             root.deleteRecursively()
         }
     }
+
+    @Test
+    fun backupOnlyAtomicFileIsRecoveredByOpenRead() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val root = File(context.noBackupFilesDir, "atomic-backup-test-${UUID.randomUUID()}")
+        val store = AtomicFileJournalStore(root)
+        store.write("checkpoint", byteArrayOf(1, 2, 3))
+        store.file("checkpoint").renameTo(File(root, "checkpoint.bak"))
+
+        assertArrayEquals(byteArrayOf(1, 2, 3), AtomicFileJournalStore(root).read("checkpoint"))
+        root.deleteRecursively()
+    }
 }

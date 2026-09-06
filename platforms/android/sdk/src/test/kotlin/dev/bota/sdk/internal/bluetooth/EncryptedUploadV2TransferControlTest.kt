@@ -7,6 +7,7 @@ import dev.bota.sdk.internal.core.EncryptedUploadV2ManifestChunkValue
 import dev.bota.sdk.internal.core.EncryptedUploadV2TransferPayload
 import dev.bota.sdk.internal.core.EncryptedUploadV2WindowEndValue
 import dev.bota.sdk.internal.host.EncryptedUploadV2HostException
+import dev.bota.sdk.internal.host.EncryptedUploadV2ConfirmationException
 import dev.bota.sdk.internal.jni.NativeCore
 import dev.bota.sdk.internal.jni.NativePacket
 import java.security.MessageDigest
@@ -21,11 +22,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -74,7 +77,29 @@ class EncryptedUploadV2TransferControlTest {
             as EncryptedUploadV2HostException
         assertEquals(19u, poisoned.errorCode)
 
-        control.resetAfterConfirmedDisconnect()
+        control.resetAfterConfirmedDisconnect(ConfirmedBluetoothDisconnect("device", 1))
+        driver.failUnsubscribe = false
+        assertTrue(control.open("device", request(), null) is EncryptedUploadV2OpenResult.Opened)
+        control.release(9u)
+        control.close()
+        mapper.close()
+    }
+
+    @Test
+    fun staleDisconnectGenerationCannotClearANewerPoisonedOwner() = runTest {
+        val driver = ControlDriver(failUnsubscribe = true, connectionGeneration = 2)
+        val mapper = CoreModelMapper(TransferControlCore())
+        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        control.open("device", request(), null)
+        runCatching { control.release(9u) }
+
+        control.resetAfterConfirmedDisconnect(ConfirmedBluetoothDisconnect("device", 1))
+        assertEquals(
+            19u,
+            (runCatching { control.open("device", request(), null) }.exceptionOrNull()
+                as EncryptedUploadV2HostException).errorCode,
+        )
+        control.resetAfterConfirmedDisconnect(ConfirmedBluetoothDisconnect("device", 2))
         driver.failUnsubscribe = false
         assertTrue(control.open("device", request(), null) is EncryptedUploadV2OpenResult.Opened)
         control.release(9u)
@@ -95,7 +120,7 @@ class EncryptedUploadV2TransferControlTest {
         assertEquals(1, driver.unsubscribeCompletedCount)
         assertEquals(19u, (runCatching { control.open("device", request(), null) }.exceptionOrNull()
             as EncryptedUploadV2HostException).errorCode)
-        control.resetAfterConfirmedDisconnect()
+        control.resetAfterConfirmedDisconnect(ConfirmedBluetoothDisconnect("device", 1))
         control.close()
         mapper.close()
     }
@@ -107,6 +132,7 @@ class EncryptedUploadV2TransferControlTest {
         val control = EncryptedUploadV2TransferControl(driver, mapper)
         control.open("device", request(), null)
 
+        assertFalse(control.confirmationAttemptedOrClaimCancellation(9u))
         control.abort(9u)
         val confirmFailure = runCatching { control.confirm(9u, byteArrayOf(1)) }.exceptionOrNull()
 
@@ -131,14 +157,95 @@ class EncryptedUploadV2TransferControlTest {
         val confirming = async(Dispatchers.Default) { control.confirm(9u, byteArrayOf(1)) }
         withContext(Dispatchers.Default) { withTimeout(1_000) { entered.await() } }
 
-        val during = runCatching { control.abort(9u) }.exceptionOrNull() as EncryptedUploadV2HostException
+        val during = async(Dispatchers.Default) {
+            control.confirmationAttemptedOrClaimCancellation(9u)
+        }
+        assertFalse(during.isCompleted)
         release.complete(Unit)
         withContext(Dispatchers.Default) { withTimeout(1_000) { confirming.await() } }
+        assertTrue(withContext(Dispatchers.Default) { withTimeout(1_000) { during.await() } })
         control.abort(9u)
 
-        assertEquals(19u, during.errorCode)
         assertEquals(2, driver.writeCount)
         assertEquals(1, driver.unsubscribeCount)
+        control.close()
+        mapper.close()
+    }
+
+    @Test
+    fun successfulConfirmWriteWithFailedUnsubscribeReportsDeletionAndPoisonsUntilDisconnect() = runTest {
+        val driver = ControlDriver(failUnsubscribe = true)
+        val mapper = CoreModelMapper(TransferControlCore())
+        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        control.open("device", request(), null)
+
+        val failure = runCatching { control.confirm(9u, byteArrayOf(1)) }.exceptionOrNull()
+            as EncryptedUploadV2ConfirmationException
+        val replacement = runCatching { control.open("device", request(), null) }.exceptionOrNull()
+
+        assertTrue(failure.writeSucceeded)
+        assertEquals(19u, failure.errorCode)
+        assertEquals(19u, (replacement as EncryptedUploadV2HostException).errorCode)
+        control.resetAfterConfirmedDisconnect(ConfirmedBluetoothDisconnect("device", 1))
+        driver.failUnsubscribe = false
+        assertTrue(control.open("device", request(), null) is EncryptedUploadV2OpenResult.Opened)
+        control.release(9u)
+        control.close()
+        mapper.close()
+    }
+
+    @Test
+    fun intakeRemainsPausedUntilAcknowledgementWriteCompletes() = runTest {
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val driver = ControlDriver(activeWriteEntered = entered, activeWriteRelease = release)
+        val mapper = CoreModelMapper(TransferControlCore())
+        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        val opened = control.open("device", request(), null) as EncryptedUploadV2OpenResult.Opened
+        val windowObserved = CompletableDeferred<Unit>()
+        val collecting = async(Dispatchers.Default) {
+            runCatching { opened.notifications.onEach { windowObserved.complete(Unit) }.toList() }.exceptionOrNull()
+        }
+        driver.emit(byteArrayOf(0x42))
+        withContext(Dispatchers.Default) { withTimeout(1_000) { windowObserved.await() } }
+
+        val acknowledging = async(Dispatchers.Default) {
+            control.writeActiveFrame(9u, byteArrayOf(1), EncryptedUploadV2TransferContinuation.Window)
+        }
+        withContext(Dispatchers.Default) { withTimeout(1_000) { entered.await() } }
+        driver.emit(byteArrayOf(0x41))
+        val failure = withContext(Dispatchers.Default) { withTimeout(1_000) { collecting.await() } }
+
+        assertEquals(9u, (failure as EncryptedUploadV2HostException).errorCode)
+        release.complete(Unit)
+        runCatching { acknowledging.await() }
+        control.resetAfterConfirmedDisconnect(ConfirmedBluetoothDisconnect("device", 1))
+        control.close()
+        mapper.close()
+    }
+
+    @Test
+    fun failedAcknowledgementWritePoisonsWithoutAdvancingIntake() = runTest {
+        val driver = ControlDriver(failActiveWrite = true)
+        val mapper = CoreModelMapper(TransferControlCore())
+        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        val opened = control.open("device", request(), null) as EncryptedUploadV2OpenResult.Opened
+        val windowObserved = CompletableDeferred<Unit>()
+        val collecting = async(Dispatchers.Default) {
+            runCatching { opened.notifications.onEach { windowObserved.complete(Unit) }.toList() }.exceptionOrNull()
+        }
+        driver.emit(byteArrayOf(0x42))
+        withContext(Dispatchers.Default) { withTimeout(1_000) { windowObserved.await() } }
+
+        val failure = runCatching {
+            control.writeActiveFrame(9u, byteArrayOf(1), EncryptedUploadV2TransferContinuation.Manifest)
+        }.exceptionOrNull()
+        val replacement = runCatching { control.open("device", request(), null) }.exceptionOrNull()
+
+        assertTrue(failure is IllegalStateException)
+        assertEquals(19u, (replacement as EncryptedUploadV2HostException).errorCode)
+        assertTrue(withContext(Dispatchers.Default) { withTimeout(1_000) { collecting.await() } } != null)
+        control.resetAfterConfirmedDisconnect(ConfirmedBluetoothDisconnect("device", 1))
         control.close()
         mapper.close()
     }
@@ -204,6 +311,10 @@ private class ControlDriver(
     private val immediateSubscribeReply: Boolean = false,
     private val abortDelayMilliseconds: Long = 0,
     private val unsubscribeDelayMilliseconds: Long = 0,
+    private val activeWriteEntered: CompletableDeferred<Unit>? = null,
+    private val activeWriteRelease: CompletableDeferred<Unit>? = null,
+    private val failActiveWrite: Boolean = false,
+    private val connectionGeneration: Long = 1,
 ) : BluetoothDriver {
     private val replies = MutableSharedFlow<BluetoothNotification>()
     var subscribersAtWrite = 0
@@ -220,7 +331,12 @@ private class ControlDriver(
     ) {
         writeCount += 1
         subscribersAtWrite = replies.subscriptionCount.value
-        if (confirmEntered != null && writeCount == 2) {
+        if (activeWriteEntered != null && writeCount == 2) {
+            activeWriteEntered.complete(Unit)
+            withContext(NonCancellable) { activeWriteRelease?.await() }
+        } else if (failActiveWrite && writeCount == 2) {
+            throw IllegalStateException("ACK write failed")
+        } else if (confirmEntered != null && writeCount == 2) {
             confirmEntered.complete(Unit)
             withContext(NonCancellable) { confirmRelease?.await() }
         } else if (abortDelayMilliseconds > 0 && writeCount == 2) {
@@ -250,7 +366,10 @@ private class ControlDriver(
         if (failUnsubscribe) throw IllegalStateException("unsubscribe failed")
     }
 
+    suspend fun emit(value: ByteArray) { replies.emit(BluetoothNotification(1, value)) }
+
     override fun maximumWriteLength(peripheralId: String) = 512
+    override fun connectionGeneration(peripheralId: String) = connectionGeneration
     override suspend fun connectedAdvertisements() = emptyList<BluetoothAdvertisement>()
     override fun scan(allowDuplicates: Boolean) = emptyFlow<BluetoothAdvertisement>()
     override suspend fun stopScan() = Unit
@@ -264,8 +383,15 @@ private class ControlDriver(
 private class TransferControlCore : NativeCore {
     override fun encode(packet: NativePacket) = packetWithBytes(30, byteArrayOf(1))
 
-    override fun decode(packet: NativePacket): NativePacket =
-        if ((packet.dataValues.firstOrNull() as? ByteArray)?.size == 512) dataPacket() else controlPacket()
+    override fun decode(packet: NativePacket): NativePacket {
+        val value = packet.dataValues.firstOrNull() as? ByteArray
+        return when {
+            value?.size == 512 -> dataPacket()
+            value?.firstOrNull()?.toInt() == 0x41 -> dataPacket()
+            value?.firstOrNull()?.toInt() == 0x42 -> windowEndPacket()
+            else -> controlPacket()
+        }
+    }
 
     private fun controlPacket(): NativePacket = NativePacket(
         kind = 0x0525,
@@ -298,6 +424,15 @@ private class TransferControlCore : NativeCore {
         unsignedValues = longArrayOf(3, 0x41, 9, 0, 0, 512, 0),
         signedValues = LongArray(7),
         dataValues = arrayOf(null, null, null, null, null, null, ByteArray(512)),
+    )
+
+    private fun windowEndPacket(): NativePacket = NativePacket(
+        kind = 0x0525,
+        fieldIds = intArrayOf(61, 127, 128, 160, 158, 159, 39, 143, 133),
+        fieldTypes = IntArray(9) { if (it == 7) NativePacket.FIELD_TYPE_BYTES else NativePacket.FIELD_TYPE_UNSIGNED },
+        unsignedValues = longArrayOf(3, 0x42, 9, 0, 0, 1, 2, 0, 1),
+        signedValues = LongArray(9),
+        dataValues = arrayOf(null, null, null, null, null, null, null, EncryptedUploadV2TransferControlTest.EmptyDigest, null),
     )
 
     override fun start(command: NativePacket, capabilityBits: ULong) = error("unused")

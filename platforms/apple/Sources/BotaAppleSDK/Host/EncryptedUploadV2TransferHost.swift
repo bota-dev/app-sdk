@@ -27,6 +27,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
     ) async throws -> EncryptedUploadV2TransferOpenResult
     typealias SendControl = @Sendable (Data) async throws -> Void
     typealias AbortTransfer = @Sendable (UInt64) async throws -> Void
+    typealias ClaimConfirmationCancellation = @Sendable (UInt64) async -> Bool
 
     fileprivate struct Context: Sendable {
         let serialNumber: String
@@ -60,6 +61,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
     private let openTransfer: OpenTransfer
     private let sendControl: SendControl
     private let abortTransfer: AbortTransfer
+    private let claimConfirmationCancellation: ClaimConfirmationCancellation
     private let checkpointStore: EncryptedUploadV2DurableFileStore
     private let services: EncryptedUploadV2TransferHostServices?
     private var activeTransfer: ActiveTransfer?
@@ -80,6 +82,10 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
     private var stagedEvidence: EncryptedUploadV2TransferEvidence?
     private var acceptedReceipt: EncryptedUploadV2AcceptedReceipt?
     private var completionOperationActive = false
+    private var activeCancellationID: CoreCancellationID?
+    private var confirmationCancellationID: CoreCancellationID?
+    private var confirmationAttempted = false
+    private var cancellationClaimed = false
 
     init(
         rootDirectory: URL,
@@ -87,6 +93,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         openTransfer: @escaping OpenTransfer,
         sendControl: @escaping SendControl,
         abortTransfer: @escaping AbortTransfer = { _ in },
+        claimConfirmationCancellation: @escaping ClaimConfirmationCancellation = { _ in false },
         checkpointStore: EncryptedUploadV2DurableFileStore = .init(),
         services: EncryptedUploadV2TransferHostServices? = nil
     ) {
@@ -95,6 +102,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         self.openTransfer = openTransfer
         self.sendControl = sendControl
         self.abortTransfer = abortTransfer
+        self.claimConfirmationCancellation = claimConfirmationCancellation
         self.checkpointStore = checkpointStore
         self.services = services
     }
@@ -152,6 +160,11 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
                     reason: 0x00FF
                 )
             },
+            claimConfirmationCancellation: { transportSessionID in
+                await transferControl.confirmationAttemptedOrClaimCancellation(
+                    transportSessionID: transportSessionID
+                )
+            },
             services: services
         )
     }
@@ -199,6 +212,15 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
     }
 
     func execute(_ effect: CoreEffect) async -> AsyncThrowingStream<CoreHostEventPayload, Error> {
+        if activeCancellationID != effect.cancellationID,
+           activeTransfer == nil,
+           openingTask == nil
+        {
+            confirmationCancellationID = nil
+            confirmationAttempted = false
+            cancellationClaimed = false
+        }
+        activeCancellationID = effect.cancellationID
         do {
             switch effect {
             case .encryptedUploadV2LoadCheckpoint:
@@ -231,6 +253,21 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         } catch {
             return AsyncThrowingStream { $0.finish(throwing: error) }
         }
+    }
+
+    func confirmationAttemptedOrClaimCancellation(_ cancellationID: CoreCancellationID) async -> Bool {
+        if confirmationAttempted, confirmationCancellationID == cancellationID { return true }
+        guard activeCancellationID == cancellationID else { return false }
+        if let transportSessionID = activeTransfer?.context.transportSessionID,
+           await claimConfirmationCancellation(transportSessionID)
+        {
+            confirmationAttempted = true
+            confirmationCancellationID = cancellationID
+            return true
+        }
+        cancellationClaimed = true
+        generation &+= 1
+        return false
     }
 
     private func abort(
@@ -885,7 +922,22 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             receiptSHA256: acceptedReceipt.receiptSHA256
         )
         try Task.checkCancellation()
-        try await services.confirmTransfer(context.transportSessionID, frame)
+        guard !cancellationClaimed else {
+            throw Self.failure(code: 16, detail: "encrypted upload v2 cancellation preceded CONFIRM")
+        }
+        do {
+            try await services.confirmTransfer(context.transportSessionID, frame)
+        } catch let failure as EncryptedUploadV2ConfirmationFailure {
+            confirmationAttempted = true
+            confirmationCancellationID = effect.cancellationID
+            if failure.writeSucceeded {
+                await services.materialRegistry.completeIfCurrent(id: materialID, lease: materialLease)
+                await releaseConfirmedTransfer(activeTransfer)
+            }
+            throw Self.failure(code: 19, detail: failure.detail)
+        }
+        confirmationAttempted = true
+        confirmationCancellationID = effect.cancellationID
         await services.materialRegistry.completeIfCurrent(id: materialID, lease: materialLease)
         await releaseConfirmedTransfer(activeTransfer)
         return Self.single(.init(kind: EncryptedUploadV2Abi.eventRecordingConfirmed))
