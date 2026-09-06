@@ -258,6 +258,10 @@ runtimes can consume the same trace.
   staging, and the same opaque material-provider lifecycle.
 - [x] Run JVM unit tests, Android host tests, and compile gates without claiming
   physical-device support.
+- [x] Harden immediate-reply subscription, the combined one-MiB notification
+  budget, phase validation, pre-EOF completion, atomic checkpoint lookup,
+  startup/destroy races, terminal core drain, typed error mapping, and
+  CONFIRM/cleanup ownership poisoning. Physical power-loss remains unverified.
 
 ### Task 6: Add the target React Native provider and progress surface
 

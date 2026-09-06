@@ -72,6 +72,8 @@ internal class ManagerRuntimeFixture(
     val removedFirmware = mutableListOf<ULong>()
     var recordingList = listOf(recording)
     var encryptedV2Calls: MutableList<String>? = null
+    var encryptedV2CapabilityGate: (suspend () -> Unit)? = null
+    var encryptedV2TerminateFailure: Throwable? = null
 
     val runtime = DeviceRuntime(
         engine = runner,
@@ -112,6 +114,7 @@ internal class ManagerRuntimeFixture(
         unregisterFirmwareDownload = { id -> removedFirmware += id },
         readEncryptedUploadV2Capabilities = {
             encryptedV2Calls?.add("capability")
+            encryptedV2CapabilityGate?.invoke()
             EncryptedUploadV2CapabilitySnapshot(
                 byteArrayOf(3), ByteArray(32),
                 EncryptedUploadV2Capabilities(1u, 408u, 580u, 157u, 18u, 4u, 18u),
@@ -126,7 +129,10 @@ internal class ManagerRuntimeFixture(
             185
         },
         registerEncryptedUploadV2Material = { _, _ -> encryptedV2Calls?.add("register") },
-        terminateEncryptedUploadV2Material = { _, outcome -> encryptedV2Calls?.add("terminate-${outcome.name}") },
+        terminateEncryptedUploadV2Material = { _, outcome ->
+            encryptedV2Calls?.add("terminate-${outcome.name}")
+            encryptedV2TerminateFailure?.let { throw it }
+        },
     )
 
     init {

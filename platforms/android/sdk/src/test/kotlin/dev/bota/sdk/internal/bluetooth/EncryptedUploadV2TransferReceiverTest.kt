@@ -96,6 +96,34 @@ class EncryptedUploadV2TransferReceiverTest {
         assertEquals("committed", String(Files.readAllBytes(file)))
     }
 
+    @Test
+    fun rejectsNextWindowTrafficWhileRepairIsPending() {
+        val root = Files.createTempDirectory("bota-v2-phase")
+        val ciphertext = "abcdef".encodeToByteArray()
+        val receiver = receiver(root, ciphertext, maximumWindowPackets = 3u, maximumMissing = 3u)
+        receiver.prepare()
+        receiver.receive(
+            EncryptedUploadV2TransferPayload.Data(
+                EncryptedUploadV2DataValue(9u, 0u, 0u, "ab".encodeToByteArray()),
+            ),
+        )
+        receiver.receive(
+            EncryptedUploadV2TransferPayload.WindowEnd(
+                EncryptedUploadV2WindowEndValue(9u, 0u, 0u, 1u, 4u, sha("abcd".encodeToByteArray()), 1u),
+            ),
+        )
+
+        val error = assertThrows(EncryptedUploadV2TransferReceiverException::class.java) {
+            receiver.receive(
+                EncryptedUploadV2TransferPayload.Data(
+                    EncryptedUploadV2DataValue(9u, 2u, 4u, "ef".encodeToByteArray()),
+                ),
+            )
+        }
+
+        assertTrue(error.message!!.contains("repair"))
+    }
+
     private fun receiver(
         root: java.nio.file.Path,
         ciphertext: ByteArray,

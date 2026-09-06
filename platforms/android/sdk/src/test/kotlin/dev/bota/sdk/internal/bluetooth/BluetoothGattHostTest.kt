@@ -20,6 +20,16 @@ import org.junit.Test
 
 class BluetoothGattHostTest {
     @Test
+    fun notificationOverflowTerminatesTheStreamInsteadOfDroppingSilently() = runTest {
+        val buffer = AndroidNotificationBuffer(capacity = 1)
+        buffer.offer(byteArrayOf(1))
+        buffer.offer(byteArrayOf(2))
+
+        val error = runCatching { buffer.flow(7).toList() }.exceptionOrNull()
+
+        assertTrue(error.toString(), error is BluetoothTransportException)
+    }
+    @Test
     fun scanMergesConnectedDevicesAndDeduplicatesUnlessRequested() = runTest {
         val advertisement = BluetoothAdvertisement("device-1", "Bota Note", -42, "aabbccddeeff")
         val platform = FakeBluetoothPlatform(

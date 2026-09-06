@@ -74,6 +74,7 @@ internal class StreamingOperationState(private val label: String) {
         id: UUID,
         operation: BotaOperation,
         cleanup: suspend () -> Unit = {},
+        task: Job? = null,
     ) {
         configured.operations.begin(id, operation)
         try {
@@ -92,7 +93,7 @@ internal class StreamingOperationState(private val label: String) {
                     protocolStatus = null,
                     detail = "another $label operation is already active",
                 )
-                active = Active(id, configured, cleanup)
+                active = Active(id, configured, cleanup, task)
             }
         } catch (error: Throwable) {
             configured.operations.end(id)

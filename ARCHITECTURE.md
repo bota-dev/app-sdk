@@ -433,6 +433,15 @@ ciphertext file. Canonical CONFIRM is written only after the receipt digest
 matches, and every earlier failure or cancellation retains the device copy.
 `RecordingManager.syncEncryptedRecordingV2` starts only command `0x010c` and
 never falls back to a legacy transfer after selection.
+The `0409` collector is attached before START and the platform plus transfer
+queues share a one-MiB byte budget. Overflow, phase-invalid repair traffic,
+mixed-profile framing, and pre-EOF completion fail closed. Checkpoint metadata
+and recording lookup identity live in one AtomicFile catalog whose file and
+parent directory are synced. Transfer and signed-document cleanup is bounded;
+an unproven unsubscribe, ABORT, or post-CONFIRM outcome poisons the owner until
+a confirmed disconnect/reset. Once CONFIRM is attempted, cancellation never
+sends ABORT or reports ordinary cancellation. Physical power-loss durability
+and physical-device interoperability remain unverified gates.
 Android now exposes the first public workflow facade through
 `BotaDeviceClient` and `DeviceManager`. Configuration is idempotent until
 destroy and retains only the application context. Permission checks occur

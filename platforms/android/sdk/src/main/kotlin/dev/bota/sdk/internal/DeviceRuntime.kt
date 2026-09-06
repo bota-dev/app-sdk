@@ -213,6 +213,7 @@ internal class DeviceRuntime(
                             encryptedControl.open(currentPeripheral(), request, checkpoint)
                         },
                         sendControl = encryptedControl::writeActiveFrame,
+                        confirmTransfer = encryptedControl::confirm,
                         abortTransfer = encryptedControl::abort,
                         releaseTransfer = encryptedControl::release,
                         sendSignedDocument = { kind, id, value, maximum ->
@@ -265,7 +266,12 @@ internal class DeviceRuntime(
                     engine = engine,
                     capabilities = allCapabilities,
                     authorize = ::authorize,
-                    disconnect = driver::disconnect,
+                    disconnect = { peripheralId ->
+                        driver.disconnect(peripheralId)
+                        encryptedControl.resetAfterConfirmedDisconnect()
+                        encryptedSignedWriter.resetAfterConfirmedDisconnect()
+                        encryptedHost.resetAfterConfirmedDisconnect()
+                    },
                     readStatus = { peripheralId ->
                         driver.read(peripheralId, BotaBluetoothUUIDs.ControlService, BotaBluetoothUUIDs.DeviceStatus)
                     },

@@ -6,6 +6,7 @@ import dev.bota.sdk.internal.core.EncryptedUploadV2EofValue
 import dev.bota.sdk.internal.core.EncryptedUploadV2ManifestChunkValue
 import dev.bota.sdk.internal.core.EncryptedUploadV2TransferPayload
 import dev.bota.sdk.internal.core.EncryptedUploadV2WindowEndValue
+import dev.bota.sdk.internal.host.EncryptedUploadV2HostException
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.Files
@@ -48,7 +49,8 @@ internal sealed interface EncryptedUploadV2TransferReceiverEvent {
         EncryptedUploadV2TransferReceiverEvent
 }
 
-internal class EncryptedUploadV2TransferReceiverException(message: String) : IllegalStateException(message)
+internal class EncryptedUploadV2TransferReceiverException(message: String) :
+    EncryptedUploadV2HostException(18u, false, message = message)
 
 internal class EncryptedUploadV2TransferReceiver(
     rootDirectory: Path,
@@ -178,12 +180,15 @@ internal class EncryptedUploadV2TransferReceiver(
 
     private fun receiveData(value: EncryptedUploadV2DataValue) {
         val end = value.ciphertextOffset + value.bytes.size.toULong()
+        val repair = pendingWindow?.missingSequences
         requireValid(
             pendingWindow?.missingSequences?.isEmpty() != true && value.bytes.isNotEmpty() &&
+                (repair == null || value.sequence in repair) &&
                 value.bytes.size <= maximumDataPayloadBytes.toInt() &&
                 value.ciphertextOffset >= checkpoint.nextCiphertextOffset && end >= value.ciphertextOffset &&
                 end <= expectedCiphertextLength,
-            "data payload is outside negotiated bounds",
+            if (repair == null) "data payload is outside negotiated bounds"
+            else "data payload does not belong to the pending repair",
         )
         val metadata = PacketMetadata(value.ciphertextOffset, value.bytes.size.toULong(), sha256(value.bytes))
         packets[value.sequence]?.let { existing ->

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
@@ -76,27 +77,68 @@ internal class CoreEngineRuntime(
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
-        runBlocking {
-            val owner = withContext(dispatcher) { active }
-            if (owner != null) cancelInternal(owner.cancellationId)
-            withContext(dispatcher) { core.close() }
+        var failure: Throwable? = null
+        try {
+            runBlocking {
+                val owner = withContext(dispatcher) { active }
+                if (owner != null) {
+                    try {
+                        cancelInternal(owner.cancellationId)
+                    } catch (error: Throwable) {
+                        failure = error
+                    }
+                }
+                try {
+                    withContext(dispatcher) { core.close() }
+                } catch (error: Throwable) {
+                    failure = aggregate(failure, error)
+                }
+            }
+        } finally {
+            scope.coroutineContext[Job]?.cancel()
+            dispatcher.close()
         }
-        scope.coroutineContext[Job]?.cancel()
-        dispatcher.close()
+        failure?.let { throw it }
     }
 
     private suspend fun cancelInternal(cancellationId: CoreCancellationId) {
         val owner = withContext(dispatcher) { active?.takeIf { it.cancellationId == cancellationId } }
             ?: return
-        withContext(dispatcher) {
-            core.cancel(cancellationId.high, cancellationId.low)
+        var primary: Throwable? = null
+        var coreFailure: Throwable? = null
+        try {
+            withContext(dispatcher) {
+                core.cancel(cancellationId.high, cancellationId.low)
+            }
+        } catch (error: Throwable) {
+            coreFailure = error
+            primary = error
         }
-        effectHandler.cancel(cancellationId)
-        withContext(dispatcher) {
-            effectJobs.remove(cancellationId)?.forEach(Job::cancel)
-            drain()
+        try {
+            effectHandler.cancel(cancellationId)
+        } catch (cleanupFailure: Throwable) {
+            primary = aggregate(primary, cleanupFailure)
         }
-        owner.terminal.await()
+        val jobs = withContext(dispatcher) {
+            effectJobs.remove(cancellationId).orEmpty().toList().also { owned ->
+                owned.forEach(Job::cancel)
+            }
+        }
+        jobs.joinAll()
+        try {
+            withContext(dispatcher) {
+                val error = coreFailure
+                if (error == null) drain() else fail(error, cancellationId)
+            }
+        } catch (drainFailure: Throwable) {
+            primary = aggregate(primary, drainFailure)
+        }
+        try {
+            owner.terminal.await()
+        } catch (terminalFailure: Throwable) {
+            primary = aggregate(primary, terminalFailure)
+        }
+        primary?.let { throw it }
     }
 
     private suspend fun cancelIfActive(cancellationId: CoreCancellationId) {
@@ -184,4 +226,7 @@ internal class CoreEngineRuntime(
         owner.output.close(error)
         owner.terminal.completeExceptionally(error)
     }
+
+    private fun aggregate(primary: Throwable?, secondary: Throwable): Throwable =
+        primary?.also { if (it !== secondary) it.addSuppressed(secondary) } ?: secondary
 }

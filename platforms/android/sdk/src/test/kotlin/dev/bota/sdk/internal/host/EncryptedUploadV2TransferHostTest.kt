@@ -2,6 +2,9 @@ package dev.bota.sdk.internal.host
 
 import dev.bota.sdk.EncryptedUploadV2Material
 import dev.bota.sdk.EncryptedUploadV2SecurityPolicy
+import dev.bota.sdk.BotaErrorCode
+import dev.bota.sdk.BotaOperation
+import dev.bota.sdk.BotaSDKError
 import dev.bota.sdk.internal.bluetooth.EncryptedUploadV2OpenResult
 import dev.bota.sdk.internal.core.CoreCancellationId
 import dev.bota.sdk.internal.core.CoreEffect
@@ -21,13 +24,19 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.produceIn
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -67,14 +76,19 @@ class EncryptedUploadV2TransferHostTest {
         registry.register(materialId, material)
         val payloads = Channel<EncryptedUploadV2TransferPayload>(Channel.UNLIMITED)
         val root = Files.createTempDirectory("bota-v2-host")
-        val host = host(root, registry, payloads, actions) { path ->
+        val confirmEntered = CompletableDeferred<Unit>()
+        val confirmRelease = CompletableDeferred<Unit>()
+        val host = host(root, registry, payloads, actions, confirmEntered, confirmRelease) { path ->
             assertTrue(Files.readAllBytes(path).contentEquals(ciphertext))
         }
 
         val prepared = host.execute(effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, materialId))).toList()
         val authorizationSha = prepared.single().fields.filterIsInstance<CoreField.Bytes>().single().value
         val start = host.execute(startEffect(materialId, authorizationSha, ciphertext)).produceIn(this)
-        assertEquals(HostEventKind.EncryptedUploadV2TransferStarted, withTimeout(1_000) { start.receive() }.kind)
+        assertEquals(
+            HostEventKind.EncryptedUploadV2TransferStarted,
+            withContext(Dispatchers.Default) { withTimeout(1_000) { start.receive() } }.kind,
+        )
         payloads.send(EncryptedUploadV2TransferPayload.Data(EncryptedUploadV2DataValue(9u, 0u, 0u, ciphertext)))
         payloads.send(
             EncryptedUploadV2TransferPayload.WindowEnd(
@@ -108,12 +122,20 @@ class EncryptedUploadV2TransferHostTest {
         val receipt = host.execute(
             effect(CoreEffectKind.EncryptedUploadV2AwaitReceipt, CoreField.Text(12, materialId), *evidence),
         ).toList().single().fields.filterIsInstance<CoreField.Bytes>().single().value
-        host.execute(
-            effect(
-                CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt,
-                CoreField.Text(12, materialId), CoreField.Bytes(162, receipt),
-            ),
-        ).toList()
+        val confirming = async {
+            host.execute(
+                effect(
+                    CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt,
+                    CoreField.Text(12, materialId), CoreField.Bytes(162, receipt),
+                ),
+            ).toList()
+        }
+        confirmEntered.await()
+        val cancelling = async { host.cancel(CoreCancellationId(1u, 2u)) }
+        confirmRelease.complete(Unit)
+        confirming.await()
+        cancelling.await()
+        host.cancel(CoreCancellationId(1u, 2u))
 
         assertEquals(
             listOf(
@@ -125,6 +147,129 @@ class EncryptedUploadV2TransferHostTest {
         assertEquals(0, cancelled.get())
         assertFalse(Files.exists(root.resolve("$SinkId.encrypted-upload-v2")))
         start.cancel()
+        host.close()
+    }
+
+    @Test
+    fun notificationStreamCompletionBeforeEofFailsTheActiveTransfer() = runTest {
+        val registry = registry(AtomicInteger())
+        val payloads = Channel<EncryptedUploadV2TransferPayload>(Channel.UNLIMITED)
+        val host = host(Files.createTempDirectory("bota-v2-ended"), registry, payloads, mutableListOf()) {}
+        val prepared = host.execute(
+            effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, "material-1")),
+        ).toList()
+        val authorizationSha = prepared.single().fields.filterIsInstance<CoreField.Bytes>().single().value
+        val outcomes = Channel<Result<CoreHostEventPayload>>(Channel.UNLIMITED)
+        val startJob = launch {
+            host.execute(startEffect("material-1", authorizationSha, byteArrayOf(3, 4)))
+                .catch { outcomes.send(Result.failure(it)) }
+                .collect { outcomes.send(Result.success(it)) }
+        }
+        assertEquals(HostEventKind.EncryptedUploadV2TransferStarted, outcomes.receive().getOrThrow().kind)
+
+        payloads.close()
+        val error = runCatching {
+            withContext(Dispatchers.Default) { withTimeout(1_000) { outcomes.receive().getOrThrow() } }
+        }.exceptionOrNull()
+
+        assertTrue(error.toString(), error is EncryptedUploadV2HostException)
+        assertEquals(12u, (error as EncryptedUploadV2HostException).errorCode)
+        startJob.join()
+        host.close()
+    }
+
+    @Test
+    fun mixedProfileTransportEmitsTheDedicatedRustWorkflowEvent() = runTest {
+        val registry = registry(AtomicInteger())
+        val mixedProfile = BotaSDKError.Core(
+            BotaErrorCode.ProtocolRejected,
+            BotaOperation.Decode,
+            false,
+            null,
+            dev.bota.sdk.internal.core.MixedEncryptedUploadProfile,
+        )
+        val services = services(registry, mutableListOf()).copyForOpen { _, _ ->
+            EncryptedUploadV2OpenResult.Opened(flow { throw mixedProfile })
+        }
+        val host = EncryptedUploadV2TransferHost(Files.createTempDirectory("bota-v2-mixed"), services)
+        val prepared = host.execute(
+            effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, "material-1")),
+        ).toList()
+        val authorizationSha = prepared.single().fields.filterIsInstance<CoreField.Bytes>().single().value
+
+        val events = withContext(Dispatchers.Default) {
+            withTimeout(2_000) {
+                host.execute(startEffect("material-1", authorizationSha, byteArrayOf(3, 4))).toList()
+            }
+        }
+
+        assertEquals(
+            listOf(
+                HostEventKind.EncryptedUploadV2TransferStarted,
+                HostEventKind.EncryptedUploadV2MixedProfile,
+            ),
+            events.map { it.kind },
+        )
+        host.close()
+    }
+
+    @Test
+    fun cancellationSettlesALateSuccessfulOpenWithoutResurrectingTransfer() = runTest {
+        val registry = registry(AtomicInteger())
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val actions = mutableListOf<String>()
+        val services = services(registry, actions).copyForOpen { _, _ ->
+            entered.complete(Unit)
+            withContext(NonCancellable) { release.await() }
+            EncryptedUploadV2OpenResult.Opened(kotlinx.coroutines.flow.emptyFlow())
+        }
+        val host = EncryptedUploadV2TransferHost(Files.createTempDirectory("bota-v2-late-open"), services)
+        val prepared = host.execute(
+            effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, "material-1")),
+        ).toList()
+        val authorizationSha = prepared.single().fields.filterIsInstance<CoreField.Bytes>().single().value
+        val starting = async {
+            runCatching { host.execute(startEffect("material-1", authorizationSha, byteArrayOf(3, 4))).toList() }
+        }
+        entered.await()
+
+        val cancelling = async { host.cancel(CoreCancellationId(1u, 2u)) }
+        release.complete(Unit)
+        cancelling.await()
+        val error = withTimeout(1_000) { starting.await() }.exceptionOrNull()
+
+        assertTrue(error.toString(), error != null)
+        assertTrue(actions.contains("abort-9"))
+        assertFalse(actions.contains("release"))
+        host.close()
+    }
+
+    @Test
+    fun cancellationAfterOpenReturnsCannotInstallTheTransferPump() = runTest {
+        val registry = registry(AtomicInteger())
+        val returned = CompletableDeferred<Unit>()
+        val actions = mutableListOf<String>()
+        val services = services(registry, actions).copyForOpen { _, _ ->
+            EncryptedUploadV2OpenResult.Opened(kotlinx.coroutines.flow.emptyFlow()).also {
+                returned.complete(Unit)
+            }
+        }
+        val host = EncryptedUploadV2TransferHost(Files.createTempDirectory("bota-v2-open-install"), services)
+        val prepared = host.execute(
+            effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, "material-1")),
+        ).toList()
+        val authorizationSha = prepared.single().fields.filterIsInstance<CoreField.Bytes>().single().value
+        val starting = async(start = CoroutineStart.UNDISPATCHED) {
+            runCatching { host.execute(startEffect("material-1", authorizationSha, byteArrayOf(3, 4))).toList() }
+        }
+        returned.await()
+
+        host.cancel(CoreCancellationId(1u, 2u))
+        val error = starting.await().exceptionOrNull()
+
+        assertTrue(error.toString(), error != null)
+        assertEquals(1, actions.count { it == "abort-9" })
         host.close()
     }
 
@@ -147,7 +292,8 @@ class EncryptedUploadV2TransferHostTest {
         val services = EncryptedUploadV2TransferHostServices(
             registry, EncryptedUploadV2CheckpointStore(journals),
             openTransfer = { _, _ -> entered.complete(Unit); release.await(); error("cancelled open") },
-            sendControl = { _, _ -> }, abortTransfer = { actions += "abort-$it" },
+            sendControl = { _, _ -> }, confirmTransfer = { _, _ -> },
+            abortTransfer = { actions += "abort-$it" },
             releaseTransfer = {}, sendSignedDocument = { kind, _, _, _ -> actions += "signed-$kind" },
             uploadCiphertext = { _, _ -> }, cancelUploads = {}, nextWriteId = { 1u },
             encodeAcknowledgement = { byteArrayOf() }, encodeConfirm = { _, _, _, _, _, _ -> byteArrayOf() },
@@ -157,12 +303,15 @@ class EncryptedUploadV2TransferHostTest {
             effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, "material-1")),
         ).toList()
         val authorizationSha = prepared.single().fields.filterIsInstance<CoreField.Bytes>().single().value
-        val starting = async { host.execute(startEffect("material-1", authorizationSha, byteArrayOf(3, 4))).toList() }
+        val starting = async {
+            runCatching { host.execute(startEffect("material-1", authorizationSha, byteArrayOf(3, 4))).toList() }
+        }
         entered.await()
 
-        host.cancel(CoreCancellationId(1u, 2u))
+        val cancelling = async { host.cancel(CoreCancellationId(1u, 2u)) }
         release.complete(Unit)
-        starting.cancelAndJoin()
+        cancelling.await()
+        starting.await()
 
         assertTrue(actions.contains("abort-9"))
         assertEquals(1, cancelled.get())
@@ -174,12 +323,20 @@ class EncryptedUploadV2TransferHostTest {
         registry: EncryptedUploadV2MaterialRegistry,
         payloads: Channel<EncryptedUploadV2TransferPayload>,
         actions: MutableList<String>,
+        confirmEntered: CompletableDeferred<Unit>? = null,
+        confirmRelease: CompletableDeferred<Unit>? = null,
         upload: (java.nio.file.Path) -> Unit,
     ): EncryptedUploadV2TransferHost {
         val services = EncryptedUploadV2TransferHostServices(
             registry, EncryptedUploadV2CheckpointStore(TestJournals()),
             openTransfer = { _, _ -> EncryptedUploadV2OpenResult.Opened(payloads.receiveAsFlow()) },
             sendControl = { _, value -> actions += "control-${value.single()}" },
+            confirmTransfer = { _, value ->
+                confirmEntered?.complete(Unit)
+                confirmRelease?.await()
+                actions += "control-${value.single()}"
+                actions += "release"
+            },
             abortTransfer = { actions += "abort" }, releaseTransfer = { actions += "release" },
             sendSignedDocument = { kind, _, _, expected ->
                 assertEquals(if (kind == 1.toUByte()) 408u.toUShort() else 336u.toUShort(), expected)
@@ -195,6 +352,41 @@ class EncryptedUploadV2TransferHostTest {
         )
         return EncryptedUploadV2TransferHost(root, services)
     }
+
+    private fun registry(cancelled: AtomicInteger): EncryptedUploadV2MaterialRegistry =
+        EncryptedUploadV2MaterialRegistry().also { registry ->
+            kotlinx.coroutines.runBlocking {
+                registry.register(
+                    "material-1",
+                    EncryptedUploadV2Material(
+                        "material-1", "recording-1", UploadSession, 2u,
+                        EncryptedUploadV2SecurityPolicy.V2Required, ByteArray(408),
+                        { error("unused") }, { _, _ -> }, {}, { ByteArray(336) },
+                        { cancelled.incrementAndGet() },
+                    ),
+                )
+            }
+        }
+
+    private fun services(
+        registry: EncryptedUploadV2MaterialRegistry,
+        actions: MutableList<String>,
+    ) = EncryptedUploadV2TransferHostServices(
+        registry, EncryptedUploadV2CheckpointStore(TestJournals()),
+        openTransfer = { _, _ -> error("replace in test") },
+        sendControl = { _, _ -> }, confirmTransfer = { _, _ -> },
+        abortTransfer = { actions += "abort-$it" },
+        releaseTransfer = { actions += "release" }, sendSignedDocument = { kind, _, _, _ -> actions += "signed-$kind" },
+        uploadCiphertext = { _, _ -> }, cancelUploads = {}, nextWriteId = { 1u },
+        encodeAcknowledgement = { byteArrayOf(7) }, encodeConfirm = { _, _, _, _, _, _ -> byteArrayOf(8) },
+    )
+
+    private fun EncryptedUploadV2TransferHostServices.copyForOpen(
+        open: suspend (dev.bota.sdk.internal.core.EncryptedUploadV2StartRequest, dev.bota.sdk.internal.bluetooth.EncryptedUploadV2CheckpointValue?) -> EncryptedUploadV2OpenResult,
+    ) = EncryptedUploadV2TransferHostServices(
+        materialRegistry, checkpointStore, open, sendControl, confirmTransfer, abortTransfer, releaseTransfer,
+        sendSignedDocument, uploadCiphertext, cancelUploads, nextWriteId, encodeAcknowledgement, encodeConfirm,
+    )
 
     private fun startEffect(materialId: String, authorizationSha: ByteArray, ciphertext: ByteArray) = effect(
         CoreEffectKind.EncryptedUploadV2StartTransfer,

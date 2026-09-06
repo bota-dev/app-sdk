@@ -1,6 +1,8 @@
 package dev.bota.sdk.internal.host
 
 import android.util.AtomicFile
+import android.system.Os
+import android.system.OsConstants
 import dev.bota.sdk.internal.core.CoreEffect
 import dev.bota.sdk.internal.core.CoreEffectKind
 import dev.bota.sdk.internal.core.CoreField
@@ -44,10 +46,12 @@ internal class AtomicFileJournalStore(rootDirectory: File) : JournalStore {
             file.failWrite(output)
             throw error
         }
+        syncRootDirectory()
     }
 
     override suspend fun delete(name: String) {
         atomicFile(name).delete()
+        syncRootDirectory()
     }
 
     internal fun startWrite(name: String): FileOutputStream = atomicFile(name).startWrite()
@@ -61,6 +65,15 @@ internal class AtomicFileJournalStore(rootDirectory: File) : JournalStore {
     private fun atomicFile(name: String): AtomicFile {
         validOpaqueId(name)
         return AtomicFile(File(root, name))
+    }
+
+    private fun syncRootDirectory() {
+        val descriptor = Os.open(root.absolutePath, OsConstants.O_RDONLY, 0)
+        try {
+            Os.fsync(descriptor)
+        } finally {
+            Os.close(descriptor)
+        }
     }
 }
 

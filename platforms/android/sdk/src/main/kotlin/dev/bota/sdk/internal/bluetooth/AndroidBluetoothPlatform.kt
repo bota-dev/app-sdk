@@ -23,11 +23,12 @@ import java.util.UUID
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 
 internal data class BluetoothAdvertisement(
@@ -51,6 +52,27 @@ internal enum class GattWriteApi { Api33, Legacy }
 internal class BluetoothNotification(generation: Long, value: ByteArray) {
     val generation: Long = generation
     val value: ByteArray = value.copyOf()
+}
+
+internal class AndroidNotificationBuffer(private val capacity: Int = 64) {
+    private val channel = Channel<Result<ByteArray>>(capacity)
+
+    fun offer(value: ByteArray) {
+        if (value.size > MaximumNotificationBytes || channel.trySend(Result.success(value.copyOf())).isFailure) {
+            channel.close(BluetoothTransportException(507, "notification buffer overflow"))
+        }
+    }
+
+    fun fail(error: Throwable) { channel.close(error) }
+
+    fun close() { channel.close() }
+
+    fun flow(generation: Long): Flow<BluetoothNotification> = channel.receiveAsFlow()
+        .map { result -> BluetoothNotification(generation, result.getOrThrow()) }
+
+    private companion object {
+        const val MaximumNotificationBytes: Int = 512
+    }
 }
 
 internal interface AndroidBluetoothPlatform : AutoCloseable {
@@ -125,7 +147,7 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
     private val writes = mutableMapOf<CharacteristicKey, CancellableContinuation<GattResult<Unit>>>()
     private val descriptors = mutableMapOf<CharacteristicKey, CancellableContinuation<GattResult<Unit>>>()
     private val disconnects = mutableMapOf<OperationKey, CancellableContinuation<GattResult<Unit>>>()
-    private val notificationStreams = mutableMapOf<CharacteristicKey, MutableSharedFlow<Result<ByteArray>>>()
+    private val notificationStreams = mutableMapOf<CharacteristicKey, AndroidNotificationBuffer>()
     private var scanCallback: ScanCallback? = null
     private var closeScan: (() -> Unit)? = null
     private var gattCallback: BluetoothGattCallback? = null
@@ -263,7 +285,11 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
     ): GattResult<Unit> = onHandler {
         val key = CharacteristicKey(peripheralId, generation, serviceUuid, characteristicUuid)
         val (gatt, characteristic) = characteristic(key)
-        if (enabled) notificationStreams.getOrPut(key) { MutableSharedFlow(extraBufferCapacity = 64) }
+        if (enabled) {
+            if (key !in notificationStreams) notificationStreams[key] = AndroidNotificationBuffer(NotificationBufferCapacity)
+        } else {
+            notificationStreams.remove(key)?.close()
+        }
         val status = if (gatt.setCharacteristicNotification(characteristic, enabled)) 0 else ImmediateFailure
         GattResult(generation, status, Unit)
     }
@@ -312,10 +338,9 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
         characteristicUuid: UUID,
     ): Flow<BluetoothNotification> {
         val key = CharacteristicKey(peripheralId, generation, serviceUuid, characteristicUuid)
-        val stream = onHandler {
-            notificationStreams.getOrPut(key) { MutableSharedFlow(extraBufferCapacity = 64) }
-        }
-        return stream.map { result -> BluetoothNotification(generation, result.getOrThrow()) }
+        val stream = onHandler { notificationStreams[key] }
+            ?: throw BluetoothTransportException(404, "notification stream was not enabled")
+        return stream.flow(generation)
     }
 
     override suspend fun disconnect(peripheralId: String, generation: Long): GattResult<Unit> =
@@ -342,7 +367,7 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
                 it.close()
             }
             gatts.clear()
-            notificationStreams.values.forEach { it.tryEmit(Result.failure(BluetoothTransportException(499, "closed"))) }
+            notificationStreams.values.forEach { it.fail(BluetoothTransportException(499, "closed")) }
             notificationStreams.clear()
             thread.quitSafely()
         }
@@ -441,7 +466,7 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
         value: ByteArray,
     ) {
         characteristicKey(gatt, characteristic)?.let { key ->
-            notificationStreams[key]?.tryEmit(Result.success(value.copyOf()))
+            notificationStreams[key]?.offer(value)
         }
     }
 
@@ -456,7 +481,7 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
     private fun failNotifications(peripheralId: String, generation: Long, status: Int) {
         val error = BluetoothTransportException(status, "device disconnected")
         notificationStreams.filterKeys { it.peripheralId == peripheralId && it.generation == generation }
-            .values.forEach { it.tryEmit(Result.failure(error)) }
+            .values.forEach { it.fail(error) }
     }
 
     private suspend fun <T> pending(
@@ -566,5 +591,6 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
 
     private companion object {
         const val ImmediateFailure: Int = -1
+        const val NotificationBufferCapacity: Int = 64
     }
 }

@@ -232,14 +232,19 @@ owns cancellation before its first suspension, reads `0406` fresh, loads only
 exact non-secret resume metadata, asks the application to select material, and
 then starts only command `0x010c` with no legacy fallback. Dedicated
 `0407..0409` owners send only Rust-encoded signed documents and transfer
-controls. A bounded `FileChannel` receiver repairs exact missing sequences,
-forces each clean window before its `AtomicFile` checkpoint is acknowledged,
-and verifies the fixed manifest plus EOF evidence. The application supplies an
+controls. The collector is attached before START; the platform plus transfer
+queues share a one-MiB byte cap and reject overflow, cross-phase traffic, mixed
+profiles, and completion before EOF. A bounded `FileChannel` receiver repairs
+exact missing sequences, forces each clean window before its single AtomicFile
+checkpoint catalog is acknowledged, and verifies the fixed manifest plus EOF evidence. The application supplies an
 empty HTTPS PUT template, manifest submission, finalization, and receipt
 callbacks; OkHttp streams the verified native ciphertext body without a
 control-plane API call. The exact receipt gates canonical CONFIRM, and all
 pre-CONFIRM failure or cancellation paths retain the device copy and clean up
-opaque application material once. React Native still has no v2 surface, and
+opaque application material once. Once CONFIRM is attempted, cancellation
+cannot send ABORT; cleanup uncertainty blocks replacement ownership until a
+confirmed disconnect/reset. Physical power-loss durability remains unverified.
+React Native still has no v2 surface, and
 runtime compatibility metadata therefore remains disabled.
 ABI v1 is frozen at the typed public header and verified by standalone C and
 Swift callers. Its exact ownership contract, artifact digests, packet coverage,

@@ -91,6 +91,72 @@ class RecordingManagerTest {
     }
 
     @Test
+    fun encryptedV2DetachCancelsTheAtomicallyRegisteredStartupTask() = runTest {
+        val runner = ManagerWorkflowRunner()
+        val fixture = ManagerRuntimeFixture(runner)
+        val manager = RecordingManager()
+        manager.attach(fixture.runtime)
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        fixture.encryptedV2CapabilityGate = {
+            entered.complete(Unit)
+            withContext(NonCancellable) { release.await() }
+        }
+        val operation = async {
+            runCatching {
+                manager.syncEncryptedRecordingV2(
+                    fixture.device,
+                    EncryptedUploadV2Recording(fixture.recording.uuid, 4u, 4_096u, ByteArray(32)),
+                ) { encryptedMaterial(AtomicInteger()) }
+            }
+        }
+        entered.await()
+
+        manager.detach()
+        release.complete(Unit)
+        val error = runCatching { operation.await() }.exceptionOrNull()
+
+        assertTrue(error is CancellationException)
+        assertTrue(runner.commands.isEmpty())
+    }
+
+    @Test
+    fun encryptedV2CleanupFailureIsSuppressedBehindTheProtocolFailure() = runTest {
+        val runner = ManagerWorkflowRunner(
+            responses = {
+                listOf(
+                    managerNotification(
+                        CoreNotificationKind.Failed,
+                        operation = 8,
+                        fields = listOf(
+                            CoreField.Unsigned(47, 18u),
+                            CoreField.BooleanValue(48, false),
+                            CoreField.Text(50, "ciphertext digest mismatch"),
+                        ),
+                    ),
+                )
+            },
+        )
+        val fixture = ManagerRuntimeFixture(runner)
+        fixture.encryptedV2TerminateFailure = IllegalStateException("cleanup callback failed")
+        val manager = RecordingManager()
+        manager.attach(fixture.runtime)
+
+        val error = runCatching {
+            manager.syncEncryptedRecordingV2(
+                fixture.device,
+                EncryptedUploadV2Recording(fixture.recording.uuid, 4u, 4_096u, ByteArray(32)),
+            ) { encryptedMaterial(AtomicInteger()) }
+        }.exceptionOrNull() as BotaSDKError.Core
+
+        assertEquals(BotaErrorCode.IntegrityFailed, error.code)
+        assertEquals("ciphertext digest mismatch", error.detail)
+        assertTrue(error.suppressed.any { it.message == "cleanup callback failed" })
+        fixture.encryptedV2TerminateFailure = null
+        manager.detach()
+    }
+
+    @Test
     fun listSubscribesBeforeWriteAndUsesTheSharedDecoder() = runTest {
         val fixture = ManagerRuntimeFixture(ManagerWorkflowRunner())
         val manager = RecordingManager()

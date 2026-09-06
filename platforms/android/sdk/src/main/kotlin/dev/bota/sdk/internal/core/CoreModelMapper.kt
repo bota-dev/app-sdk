@@ -753,7 +753,13 @@ internal class CoreModelMapper(
     private fun transferFields(data: ByteArray): PacketFields {
         val fields = decode(EncryptedUploadV2Protocol.Kind.DecodeTransferOrStatus, data)
         if (fields.requiredUByte(EncryptedUploadV2Protocol.Field.ProtocolVariant) != 3.toUByte()) {
-            throw invalid("encrypted-upload-v2 notification is not a transfer packet")
+            throw BotaSDKError.Core(
+                BotaErrorCode.ProtocolRejected,
+                BotaOperation.Decode,
+                false,
+                null,
+                MixedEncryptedUploadProfile,
+            )
         }
         return fields
     }
@@ -806,6 +812,8 @@ internal class CoreModelMapper(
         dataValues = fields.map(Field::dataValue).toTypedArray(),
     )
 }
+
+internal const val MixedEncryptedUploadProfile = "encrypted_upload_v2_mixed_profile"
 
 internal object BotaProtocolConstants {
     fun byteNamed(name: String): Byte = when (name) {

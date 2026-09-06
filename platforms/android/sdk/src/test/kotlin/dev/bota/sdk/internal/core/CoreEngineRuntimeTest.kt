@@ -135,6 +135,82 @@ class CoreEngineRuntimeTest {
         assertTrue(order.indexOf("core-cancelled") < order.indexOf("host-cancelled"))
         runtime.close()
     }
+
+    @Test
+    fun hostCancellationFailureStillDrainsTheOldOwnerBeforeReplacementRun() = runTest {
+        val core = RestartableCore()
+        val handler = object : CoreEffectHandler {
+            override fun execute(effect: CoreEffect) = callbackFlow<CoreHostEvent> { awaitClose {} }
+
+            override suspend fun cancel(cancellationId: CoreCancellationId) {
+                throw IllegalStateException("application cleanup failed")
+            }
+        }
+        val runtime = CoreEngineRuntime(core, handler)
+        val firstId = UUID.randomUUID()
+        val first = async {
+            runtime.run(CoreCommand.discoverDevices(10_000u, false, firstId), CoreCapabilities.Bluetooth).toList()
+        }
+        core.started.await()
+
+        val cancellationFailure = runCatching { runtime.cancel(firstId) }.exceptionOrNull()
+        val second = runtime.run(
+            CoreCommand.discoverDevices(10_000u, false),
+            CoreCapabilities.Bluetooth,
+        ).toList()
+
+        assertEquals(listOf(CoreNotificationKind.Started, CoreNotificationKind.Cancelled), first.await().map { it.kind })
+        assertEquals("application cleanup failed", cancellationFailure?.message)
+        assertEquals(listOf(CoreNotificationKind.Started, CoreNotificationKind.Completed), second.map { it.kind })
+        assertEquals(0, core.pendingOutputCount)
+        runtime.close()
+    }
+
+    @Test
+    fun closeAlwaysClosesCoreWhenHostCancellationFails() = runTest {
+        val core = RestartableCore(completeReplacement = false)
+        val runtime = CoreEngineRuntime(core, object : CoreEffectHandler {
+            override fun execute(effect: CoreEffect) = callbackFlow<CoreHostEvent> { awaitClose {} }
+            override suspend fun cancel(cancellationId: CoreCancellationId) {
+                throw IllegalStateException("cleanup failed")
+            }
+        })
+        val collecting = launch {
+            runtime.run(CoreCommand.discoverDevices(10_000u, false), CoreCapabilities.Bluetooth).collect()
+        }
+        core.started.await()
+
+        runCatching { runtime.close() }
+
+        assertTrue(core.closed)
+        collecting.cancelAndJoin()
+    }
+}
+
+private class RestartableCore(private val completeReplacement: Boolean = true) : NativeCore {
+    private val outputs = ArrayDeque<NativePacket>()
+    private var runCount = 0
+    val started = CompletableDeferred<Unit>()
+    var closed = false
+    val pendingOutputCount: Int get() = outputs.size
+
+    override fun start(command: NativePacket, capabilityBits: ULong) {
+        runCount += 1
+        outputs += packet(0x0401)
+        if (runCount > 1 && completeReplacement) outputs += packet(0x040a)
+        started.complete(Unit)
+    }
+
+    override fun poll(): NativePacket? = outputs.removeFirstOrNull()
+    override fun dispatch(event: NativePacket) = Unit
+    override fun cancel(cancellationHigh: ULong, cancellationLow: ULong) {
+        outputs += packet(0x040b)
+    }
+    override fun decode(packet: NativePacket): NativePacket = error("unused")
+    override fun encode(packet: NativePacket): NativePacket = error("unused")
+    override fun close() { closed = true }
+
+    private fun packet(kind: Int) = NativePacket(kind = kind)
 }
 
 private class ScriptedCore(

@@ -5,7 +5,8 @@ import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.util.UUID
-import java.security.MessageDigest
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 internal data class PersistedEncryptedUploadV2Checkpoint(
     val coreCheckpoint: ByteArray,
@@ -25,50 +26,73 @@ internal data class PersistedEncryptedUploadV2Checkpoint(
 )
 
 internal class EncryptedUploadV2CheckpointStore(private val journals: JournalStore) {
-    suspend fun load(uploadSessionId: UUID): PersistedEncryptedUploadV2Checkpoint? =
-        journals.read(name(uploadSessionId))?.let(::decode)
+    private val mutex = Mutex()
+
+    suspend fun load(uploadSessionId: UUID): PersistedEncryptedUploadV2Checkpoint? = mutex.withLock {
+        loadCatalog().firstOrNull { it.uploadSessionId == uploadSessionId }
+    }
 
     suspend fun loadForRecording(
         serialNumber: String,
         recordingUuid: String,
         recordingGeneration: UInt,
-    ): PersistedEncryptedUploadV2Checkpoint? {
-        val pointer = journals.read(indexName(serialNumber, recordingUuid, recordingGeneration)) ?: return null
-        if (pointer.size != 16) invalid("checkpoint identity index is invalid")
-        val input = DataInputStream(ByteArrayInputStream(pointer))
-        val value = load(UUID(input.readLong(), input.readLong())) ?: invalid("checkpoint identity index is stale")
-        if (value.serialNumber != serialNumber || normalizeRecordingUuid(value.recordingUuid) != normalizeRecordingUuid(recordingUuid) ||
-            value.recordingGeneration != recordingGeneration
-        ) invalid("checkpoint recording identity is stale")
-        return value
+    ): PersistedEncryptedUploadV2Checkpoint? = mutex.withLock {
+        loadCatalog().firstOrNull {
+            it.serialNumber == serialNumber &&
+                normalizeRecordingUuid(it.recordingUuid) == normalizeRecordingUuid(recordingUuid) &&
+                it.recordingGeneration == recordingGeneration
+        }
     }
 
-    suspend fun save(value: PersistedEncryptedUploadV2Checkpoint) {
-        journals.write(name(value.uploadSessionId), encode(value))
-        val pointer = ByteArrayOutputStream().use { bytes ->
+    suspend fun save(value: PersistedEncryptedUploadV2Checkpoint) = mutex.withLock {
+        val values = loadCatalog().filterNot {
+            it.uploadSessionId == value.uploadSessionId ||
+                (it.serialNumber == value.serialNumber &&
+                    normalizeRecordingUuid(it.recordingUuid) == normalizeRecordingUuid(value.recordingUuid) &&
+                    it.recordingGeneration == value.recordingGeneration)
+        } + value
+        if (values.size > MaximumCatalogEntries) invalid("checkpoint catalog has too many entries")
+        journals.write(CatalogName, encodeCatalog(values))
+    }
+
+    suspend fun delete(uploadSessionId: UUID) = mutex.withLock {
+        val values = loadCatalog()
+        val retained = values.filterNot { it.uploadSessionId == uploadSessionId }
+        if (retained.size == values.size) return@withLock
+        if (retained.isEmpty()) journals.delete(CatalogName)
+        else journals.write(CatalogName, encodeCatalog(retained))
+    }
+
+    private suspend fun loadCatalog(): List<PersistedEncryptedUploadV2Checkpoint> =
+        journals.read(CatalogName)?.let(::decodeCatalog).orEmpty()
+
+    private fun encodeCatalog(values: List<PersistedEncryptedUploadV2Checkpoint>): ByteArray =
+        ByteArrayOutputStream().use { bytes ->
             DataOutputStream(bytes).use { output ->
-                output.writeLong(value.uploadSessionId.mostSignificantBits)
-                output.writeLong(value.uploadSessionId.leastSignificantBits)
+                output.writeInt(CatalogMagic)
+                output.writeInt(CatalogVersion)
+                output.writeInt(values.size)
+                values.forEach { output.writeBounded(encode(it), MaximumSidecarBytes) }
             }
-            bytes.toByteArray()
+            bytes.toByteArray().also {
+                if (it.size > MaximumCatalogBytes) invalid("checkpoint catalog is oversized")
+            }
         }
-        journals.write(indexName(value.serialNumber, value.recordingUuid, value.recordingGeneration), pointer)
-    }
 
-    suspend fun delete(uploadSessionId: UUID) {
-        val value = load(uploadSessionId)
-        journals.delete(name(uploadSessionId))
-        if (value != null) {
-            journals.delete(indexName(value.serialNumber, value.recordingUuid, value.recordingGeneration))
+    private fun decodeCatalog(value: ByteArray): List<PersistedEncryptedUploadV2Checkpoint> {
+        if (value.size > MaximumCatalogBytes) invalid("checkpoint catalog is oversized")
+        return DataInputStream(ByteArrayInputStream(value)).use { input ->
+            if (input.readInt() != CatalogMagic || input.readInt() != CatalogVersion) {
+                invalid("checkpoint catalog header is invalid")
+            }
+            val count = input.readInt()
+            if (count !in 0..MaximumCatalogEntries) invalid("checkpoint catalog count is invalid")
+            List(count) { decode(input.readBounded(MaximumSidecarBytes)) }.also {
+                if (input.available() != 0 || it.map(PersistedEncryptedUploadV2Checkpoint::uploadSessionId).distinct().size != it.size) {
+                    invalid("checkpoint catalog payload is invalid")
+                }
+            }
         }
-    }
-
-    private fun name(id: UUID): String = "encrypted-upload-v2-${id}.checkpoint"
-
-    private fun indexName(serialNumber: String, recordingUuid: String, generation: UInt): String {
-        val identity = "$serialNumber\u0000${normalizeRecordingUuid(recordingUuid)}\u0000$generation".encodeToByteArray()
-        val digest = MessageDigest.getInstance("SHA-256").digest(identity).joinToString("") { "%02x".format(it) }
-        return "encrypted-upload-v2-$digest.index"
     }
 
     private fun encode(value: PersistedEncryptedUploadV2Checkpoint): ByteArray =
@@ -146,6 +170,11 @@ internal class EncryptedUploadV2CheckpointStore(private val journals: JournalSto
     }
 
     private companion object {
+        const val CatalogName = "encrypted-upload-v2-checkpoints.catalog"
+        const val CatalogMagic = 0x4256324c
+        const val CatalogVersion = 1
+        const val MaximumCatalogEntries = 64
+        const val MaximumCatalogBytes = 4 * 1024 * 1024
         const val Magic = 0x42563243
         const val Version = 1
         const val DigestBytes = 32

@@ -1,5 +1,8 @@
 package dev.bota.sdk.internal.host
 
+import dev.bota.sdk.BotaErrorCode
+import dev.bota.sdk.BotaSDKError
+import dev.bota.sdk.internal.bluetooth.BluetoothTransportException
 import dev.bota.sdk.internal.core.CoreCancellationId
 import dev.bota.sdk.internal.core.CoreEffect
 import dev.bota.sdk.internal.core.CoreEffectHandler
@@ -201,11 +204,11 @@ internal class HostEffectExecutor(
                 hostError?.httpStatus?.let { add(CoreField.Unsigned(60, it.toULong())) }
             }
         } else if (kind == HostEventKind.EncryptedUploadV2Failed) {
-            val hostError = error as? EncryptedUploadV2HostException
+            val hostError = encryptedUploadV2Failure(error)
             buildList<CoreField> {
-                add(CoreField.Unsigned(47, (hostError?.errorCode ?: 12u).toULong()))
-                add(CoreField.BooleanValue(48, hostError?.retryable ?: true))
-                hostError?.protocolStatus?.let { add(CoreField.Unsigned(49, it.toULong())) }
+                add(CoreField.Unsigned(47, hostError.errorCode.toULong()))
+                add(CoreField.BooleanValue(48, hostError.retryable))
+                hostError.protocolStatus?.let { add(CoreField.Unsigned(49, it.toULong())) }
                 error.message?.let { add(CoreField.Text(50, it)) }
             }
         } else {
@@ -218,6 +221,48 @@ internal class HostEffectExecutor(
     private fun failedFlow(detail: String): Flow<CoreHostEvent> = flow {
         throw NativeHostException(1, detail)
     }
+
+    private fun encryptedUploadV2Failure(error: Throwable): EncryptedUploadV2HostException = when (error) {
+        is EncryptedUploadV2HostException -> error
+        is BotaSDKError.Core -> EncryptedUploadV2HostException(
+            error.code.encryptedUploadV2Code(), error.retryable, error.protocolStatus, error.detail,
+        )
+        is BluetoothTransportException -> EncryptedUploadV2HostException(
+            12u, true, message = error.message ?: "Bluetooth transport failed",
+        )
+        is IllegalArgumentException -> EncryptedUploadV2HostException(
+            1u, false, message = error.message ?: "invalid encrypted upload v2 input",
+        )
+        else -> error.cause?.takeIf { it !== error }?.let(::encryptedUploadV2Failure)
+            ?: EncryptedUploadV2HostException(
+                21u, false, message = error.message ?: "encrypted upload v2 host failed",
+            )
+    }
+}
+
+private fun BotaErrorCode.encryptedUploadV2Code(): UInt = when (this) {
+    BotaErrorCode.InvalidInput -> 1u
+    BotaErrorCode.TruncatedPacket -> 2u
+    BotaErrorCode.UnknownPacket -> 3u
+    BotaErrorCode.PayloadTooLarge -> 4u
+    BotaErrorCode.UnsupportedCapability -> 5u
+    BotaErrorCode.UnsupportedOperation -> 6u
+    BotaErrorCode.FeatureUnavailable -> 7u
+    BotaErrorCode.OperationInProgress -> 8u
+    BotaErrorCode.UnexpectedEvent -> 9u
+    BotaErrorCode.DeviceNotFound -> 10u
+    BotaErrorCode.IdentityMismatch -> 11u
+    BotaErrorCode.ConnectionFailed -> 12u
+    BotaErrorCode.PersistenceFailed -> 13u
+    BotaErrorCode.NotConnected -> 14u
+    BotaErrorCode.Timeout -> 15u
+    BotaErrorCode.Cancelled -> 16u
+    BotaErrorCode.ProtocolRejected -> 17u
+    BotaErrorCode.IntegrityFailed -> 18u
+    BotaErrorCode.UploadOwnershipUnknown -> 19u
+    BotaErrorCode.DownloadFailed -> 20u
+    BotaErrorCode.Internal -> 21u
+    is BotaErrorCode.Unknown -> 21u
 }
 
 private fun List<CoreField>.rawByteCount(): Int = sumOf { field ->

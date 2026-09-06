@@ -183,6 +183,14 @@ and converts platform failures to correlated ABI events. Additions to ABI effect
 or event kinds must extend its exhaustive tests before a host implementation
 changes.
 
+Encrypted Upload v2 subscribes to `0409` before START and keeps the combined
+platform/transfer backlog within one MiB. Overflow, traffic from a later phase,
+mixed-profile frames, and completion before EOF fail closed. Resume metadata is
+stored as one atomic checkpoint catalog with parent-directory sync. Bounded
+ABORT/unsubscribe cleanup and CONFIRM-attempt state retain ownership when the
+outcome is uncertain; only a confirmed disconnect/reset admits a replacement.
+Physical power-loss durability is not verified by JVM or Android host tests.
+
 `BluetoothGattHost` implements the Bluetooth port with one HandlerThread-owned
 Android platform adapter. GATT operations are serialized per peripheral, not
 globally; disconnect bypasses queued work, and a monotonic generation prevents

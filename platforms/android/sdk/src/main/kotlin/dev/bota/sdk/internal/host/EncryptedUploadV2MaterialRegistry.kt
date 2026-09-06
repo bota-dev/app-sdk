@@ -14,8 +14,10 @@ internal enum class EncryptedUploadV2TerminalOutcome {
     Failed,
 }
 
-internal class EncryptedUploadV2MaterialRegistryException(message: String) :
-    IllegalArgumentException(message)
+internal class EncryptedUploadV2MaterialRegistryException(
+    message: String,
+    errorCode: UInt = 1u,
+) : EncryptedUploadV2HostException(errorCode, false, message = message)
 
 internal data class EncryptedUploadV2MaterialLease(internal val registrationId: UUID)
 
@@ -88,7 +90,7 @@ internal class EncryptedUploadV2MaterialRegistry {
             evidence.manifestLength.toInt() != ManifestBytes ||
             !sha256(manifest).contentEquals(evidence.manifestSha256)
         ) {
-            throw EncryptedUploadV2MaterialRegistryException("manifest evidence is invalid")
+            throw EncryptedUploadV2MaterialRegistryException("manifest evidence is invalid", 18u)
         }
         val entry = requiredEntry(id, lease)
         entry.material.submitManifest(manifest.copyOf(), evidence)
@@ -107,7 +109,7 @@ internal class EncryptedUploadV2MaterialRegistry {
         val receipt = entry.material.completionReceipt(evidence)
         requireCurrent(id, entry.registrationId)
         if (receipt.size != ReceiptBytes) {
-            throw EncryptedUploadV2MaterialRegistryException("receipt must be exactly $ReceiptBytes bytes")
+            throw EncryptedUploadV2MaterialRegistryException("receipt must be exactly $ReceiptBytes bytes", 18u)
         }
         return EncryptedUploadV2AcceptedReceipt(receipt, sha256(receipt))
     }
@@ -157,7 +159,7 @@ internal class EncryptedUploadV2MaterialRegistry {
             value.manifestSha256.size != DigestBytes ||
             value.blockCount == 0u
         ) {
-            throw EncryptedUploadV2MaterialRegistryException("transfer evidence is invalid")
+            throw EncryptedUploadV2MaterialRegistryException("transfer evidence is invalid", 18u)
         }
     }
 

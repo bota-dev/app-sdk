@@ -3,14 +3,16 @@ package dev.bota.sdk.internal.bluetooth
 import dev.bota.sdk.internal.core.CoreModelMapper
 import dev.bota.sdk.internal.host.EncryptedUploadV2HostException
 import java.security.MessageDigest
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 internal class EncryptedUploadV2SignedBlobWriter(
@@ -18,6 +20,7 @@ internal class EncryptedUploadV2SignedBlobWriter(
     private val mapper: CoreModelMapper,
 ) {
     private val mutex = Mutex()
+    private var cleanupUncertain = false
 
     suspend fun send(
         peripheralId: String,
@@ -27,33 +30,37 @@ internal class EncryptedUploadV2SignedBlobWriter(
         maximumBlobBytes: UShort,
         resultTimeoutMilliseconds: Long = ResultTimeoutMilliseconds,
     ) = mutex.withLock {
+        if (cleanupUncertain) ownershipUnknown()
         require(writeId != 0u && value.isNotEmpty() && value.size <= maximumBlobBytes.toInt()) {
             "signed document is outside negotiated bounds"
         }
         val maximumFrameBytes = minOf(driver.maximumWriteLength(peripheralId), 512)
         require(maximumFrameBytes >= 64) { "negotiated write length is too small" }
         var began = false
+        var primary: Throwable? = null
         try {
             coroutineScope {
-                val ready = CompletableDeferred<Unit>()
-                val result = async(start = CoroutineStart.UNDISPATCHED) {
+                val notifications = driver.subscribe(
+                    peripheralId,
+                    BotaBluetoothUUIDs.StorageService,
+                    BotaBluetoothUUIDs.TransferSignedBlobV2,
+                )
+                val results = Channel<dev.bota.sdk.internal.core.EncryptedUploadV2SignedBlobResult>(Channel.UNLIMITED)
+                val collector = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
                     try {
-                        val notifications = driver.subscribe(
-                            peripheralId,
-                            BotaBluetoothUUIDs.StorageService,
-                            BotaBluetoothUUIDs.TransferSignedBlobV2,
-                        )
-                        ready.complete(Unit)
-                        notifications.first { notification ->
+                        notifications.collect { notification ->
                             val decoded = mapper.decodeEncryptedUploadV2SignedBlobResult(notification.value)
-                            decoded.kind == kind && decoded.writeId == writeId
-                        }.let { mapper.decodeEncryptedUploadV2SignedBlobResult(it.value) }
+                            results.send(decoded)
+                        }
+                        results.close(
+                            EncryptedUploadV2HostException(
+                                12u, true, message = "signed-document notification stream ended without a result",
+                            ),
+                        )
                     } catch (error: Throwable) {
-                        ready.completeExceptionally(error)
-                        throw error
+                        results.close(error)
                     }
                 }
-                ready.await()
                 write(
                     peripheralId,
                     mapper.createEncryptedUploadV2SignedBlobBegin(
@@ -76,33 +83,76 @@ internal class EncryptedUploadV2SignedBlobWriter(
                 }
                 write(peripheralId, mapper.createEncryptedUploadV2SignedBlobCommit(kind, writeId), maximumFrameBytes)
                 val reply = try {
-                    withTimeout(resultTimeoutMilliseconds) { result.await() }
+                    withTimeout(resultTimeoutMilliseconds) {
+                        var matched: dev.bota.sdk.internal.core.EncryptedUploadV2SignedBlobResult? = null
+                        while (matched == null) {
+                            val candidate = results.receive()
+                            if (candidate.kind == kind && candidate.writeId == writeId) matched = candidate
+                        }
+                        matched
+                    }
                 } catch (_: TimeoutCancellationException) {
                     throw EncryptedUploadV2HostException(
                         15u, true, message = "timed out waiting for the matching signed-document result",
                     )
                 }
                 require(reply.result == 0.toUShort()) { "device rejected signed document with ${reply.result}" }
+                collector.cancel()
             }
         } catch (error: Throwable) {
-            if (began) runCatching {
-                write(
-                    peripheralId,
-                    mapper.createEncryptedUploadV2SignedBlobAbort(kind, writeId),
-                    maximumFrameBytes,
-                )
-            }
-            throw error
-        } finally {
-            runCatching {
-                driver.unsubscribe(
-                    peripheralId,
-                    BotaBluetoothUUIDs.StorageService,
-                    BotaBluetoothUUIDs.TransferSignedBlobV2,
-                )
+            primary = error
+        }
+        val cleanupFailure = cleanup(peripheralId, if (primary != null && began) {
+            mapper.createEncryptedUploadV2SignedBlobAbort(kind, writeId)
+        } else null, maximumFrameBytes)
+        if (cleanupFailure != null) cleanupUncertain = true
+        if (primary != null) {
+            cleanupFailure?.let(primary!!::addSuppressed)
+            throw primary!!
+        }
+        if (cleanupFailure != null) ownershipUnknown(cleanupFailure)
+    }
+
+    suspend fun resetAfterConfirmedDisconnect() = mutex.withLock { cleanupUncertain = false }
+
+    private suspend fun cleanup(
+        peripheralId: String,
+        abort: ByteArray?,
+        maximumFrameBytes: Int,
+    ): Throwable? {
+        var failure: Throwable? = null
+        withContext(NonCancellable + Dispatchers.IO) {
+            try {
+                withTimeout(CleanupTimeoutMilliseconds) {
+                    if (abort != null) {
+                        try {
+                            write(peripheralId, abort, maximumFrameBytes)
+                        } catch (error: Throwable) {
+                            failure = error
+                        }
+                    }
+                    try {
+                        driver.unsubscribe(
+                            peripheralId,
+                            BotaBluetoothUUIDs.StorageService,
+                            BotaBluetoothUUIDs.TransferSignedBlobV2,
+                        )
+                    } catch (error: Throwable) {
+                        val first = failure
+                        if (first == null) failure = error else first.addSuppressed(error)
+                    }
+                }
+            } catch (error: Throwable) {
+                val first = failure
+                if (first == null) failure = error else first.addSuppressed(error)
             }
         }
+        return failure
     }
+
+    private fun ownershipUnknown(cause: Throwable? = null): Nothing = throw EncryptedUploadV2HostException(
+        19u, false, message = "signed-document cleanup is uncertain; reconnect before retrying",
+    ).also { if (cause != null) it.addSuppressed(cause) }
 
     private fun largestChunk(
         kind: UByte,
@@ -143,5 +193,6 @@ internal class EncryptedUploadV2SignedBlobWriter(
 
     private companion object {
         const val ResultTimeoutMilliseconds = 10_000L
+        const val CleanupTimeoutMilliseconds = 1_000L
     }
 }

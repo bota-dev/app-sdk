@@ -7,21 +7,27 @@ import dev.bota.sdk.internal.core.EncryptedUploadV2TransferControlValue
 import dev.bota.sdk.internal.core.EncryptedUploadV2TransferPayload
 import dev.bota.sdk.internal.host.EncryptedUploadV2HostException
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.consumeAsFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import kotlinx.coroutines.TimeoutCancellationException
 
 internal sealed interface EncryptedUploadV2OpenResult {
     data class Opened(val notifications: Flow<EncryptedUploadV2TransferPayload>) : EncryptedUploadV2OpenResult
@@ -32,16 +38,22 @@ internal class EncryptedUploadV2TransferControl(
     private val driver: BluetoothDriver,
     private val mapper: CoreModelMapper,
     private val controlTimeoutMilliseconds: Long = ControlTimeoutMilliseconds,
+    private val cleanupTimeoutMilliseconds: Long = CleanupTimeoutMilliseconds,
 ) : AutoCloseable {
+    private enum class Phase { Active, Cleaning, Confirming, Confirmed }
+
     private data class Session(
         val peripheralId: String,
         val raw: Channel<ByteArray>,
+        val bufferedBytes: AtomicInteger,
         val job: Job,
+        var phase: Phase = Phase.Active,
     )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
     private val sessions = mutableMapOf<ULong, Session>()
+    private var cleanupUncertain = false
 
     suspend fun open(
         peripheralId: String,
@@ -49,7 +61,8 @@ internal class EncryptedUploadV2TransferControl(
         checkpoint: EncryptedUploadV2CheckpointValue?,
     ): EncryptedUploadV2OpenResult {
         val ready = CompletableDeferred<Unit>()
-        val raw = Channel<ByteArray>(capacity = 2_048)
+        val raw = Channel<ByteArray>(Channel.UNLIMITED)
+        val bufferedBytes = AtomicInteger()
         val job = scope.launch(start = CoroutineStart.LAZY) {
             try {
                 val notifications = driver.subscribe(
@@ -57,39 +70,46 @@ internal class EncryptedUploadV2TransferControl(
                     BotaBluetoothUUIDs.StorageService,
                     BotaBluetoothUUIDs.RecordingTransferV2,
                 )
+                val collector = launch(start = CoroutineStart.UNDISPATCHED) {
+                    try {
+                        notifications.collect { notification ->
+                            val value = notification.value
+                            if (value.size > MaximumNotificationBytes ||
+                                bufferedBytes.addAndGet(value.size) > TransferQueueByteLimit
+                            ) {
+                                throw EncryptedUploadV2HostException(
+                                    4u, false, message = "encrypted transfer notification queue exceeded its byte bound",
+                                )
+                            }
+                            raw.send(value)
+                        }
+                        throw EncryptedUploadV2HostException(
+                            12u, true, message = "encrypted transfer notification stream ended before EOF",
+                        )
+                    } catch (error: Throwable) {
+                        ready.completeExceptionally(error)
+                        raw.close(error)
+                    }
+                }
                 ready.complete(Unit)
-                notifications.collect { raw.send(it.value) }
-                raw.close()
+                collector.join()
             } catch (error: Throwable) {
                 ready.completeExceptionally(error)
                 raw.close(error)
             }
         }
-        val session = Session(peripheralId, raw, job)
-        try {
-            mutex.withLock {
-                require(request.transportSessionId != 0uL && sessions.isEmpty()) {
-                    "encrypted transfer session is already active"
-                }
-                sessions[request.transportSessionId] = session
+        val session = Session(peripheralId, raw, bufferedBytes, job)
+        mutex.withLock {
+            if (cleanupUncertain) ownershipUnknown()
+            require(request.transportSessionId != 0uL && sessions.isEmpty()) {
+                "encrypted transfer session is already active"
             }
+            sessions[request.transportSessionId] = session
+        }
+        try {
             job.start()
             ready.await()
-            val frame = if (checkpoint == null) {
-                mapper.createEncryptedUploadV2Start(
-                    request.transportSessionId, request.uploadSessionId, request.recordingUuid,
-                    request.recordingGeneration, request.authorizationSha256, request.checkpointRevision,
-                    request.nextCiphertextOffset, request.prefixSha256, request.windowPackets, request.dataPayloadBytes,
-                )
-            } else {
-                mapper.createEncryptedUploadV2ResumeRequest(
-                    EncryptedUploadV2ResumeRequest(
-                        request.transportSessionId, request.uploadSessionId, request.recordingUuid,
-                        request.recordingGeneration, checkpoint.revision, checkpoint.nextCiphertextOffset,
-                        checkpoint.prefixSha256, request.windowPackets, request.dataPayloadBytes,
-                    ),
-                )
-            }
+            val frame = if (checkpoint == null) startFrame(request) else resumeFrame(request, checkpoint)
             write(peripheralId, frame)
             val response = try {
                 withTimeout(controlTimeoutMilliseconds) { raw.receive() }
@@ -98,6 +118,7 @@ internal class EncryptedUploadV2TransferControl(
                     15u, true, message = "timed out waiting for the encrypted transfer acknowledgement",
                 )
             }
+            bufferedBytes.addAndGet(-response.size)
             when (val control = mapper.decodeEncryptedUploadV2TransferControl(response)) {
                 is EncryptedUploadV2TransferControlValue.StartAccepted -> {
                     expected(checkpoint == null, "START received an unexpected reply type")
@@ -113,7 +134,7 @@ internal class EncryptedUploadV2TransferControl(
                         "RESUME_REJECT belongs to another transport session",
                     )
                     expected(checkpoint != null && control.value.reason != 0.toUShort(), "RESUME_REJECT is invalid")
-                    releaseSession(request.transportSessionId, session)
+                    releaseSession(request.transportSessionId, session, abort = false)
                     return EncryptedUploadV2OpenResult.ResumeRejected
                 }
                 is EncryptedUploadV2TransferControlValue.Error -> {
@@ -127,64 +148,177 @@ internal class EncryptedUploadV2TransferControl(
                         "transfer ERROR does not match the active request",
                     )
                     throw EncryptedUploadV2HostException(
-                        17u, false, control.value.result,
-                        "device rejected the encrypted transfer",
+                        17u, false, control.value.result, "device rejected the encrypted transfer",
                     )
                 }
             }
-            return EncryptedUploadV2OpenResult.Opened(
-                raw.consumeAsFlow().map(mapper::decodeEncryptedUploadV2TransferPayload),
-            )
+            return EncryptedUploadV2OpenResult.Opened(flow {
+                for (value in raw) {
+                    try {
+                        emit(mapper.decodeEncryptedUploadV2TransferPayload(value))
+                    } finally {
+                        bufferedBytes.addAndGet(-value.size)
+                    }
+                }
+            })
         } catch (error: Throwable) {
-            releaseSession(request.transportSessionId, session)
+            runCatching { releaseSession(request.transportSessionId, session, abort = true) }
+                .exceptionOrNull()?.let { cleanup -> if (cleanup !== error) error.addSuppressed(cleanup) }
             throw error
         }
     }
 
-    suspend fun writeActiveFrame(transportSessionId: ULong, frame: ByteArray) = mutex.withLock {
-        val session = sessions[transportSessionId] ?: error("encrypted transfer session is not active")
+    suspend fun writeActiveFrame(transportSessionId: ULong, frame: ByteArray) {
+        val session = mutex.withLock {
+            sessions[transportSessionId]?.takeIf { it.phase == Phase.Active }
+                ?: error("encrypted transfer session is not active")
+        }
         write(session.peripheralId, frame)
     }
 
+    suspend fun confirm(transportSessionId: ULong, frame: ByteArray) {
+        currentCoroutineContext().ensureActive()
+        val session = mutex.withLock {
+            if (cleanupUncertain) ownershipUnknown()
+            sessions[transportSessionId]?.takeIf { it.phase == Phase.Active }
+                ?.also { it.phase = Phase.Confirming }
+                ?: error("encrypted transfer session is not active")
+        }
+        var sent = false
+        try {
+            withContext(NonCancellable + Dispatchers.IO) {
+                write(session.peripheralId, frame)
+                sent = true
+                mutex.withLock { session.phase = Phase.Confirmed }
+                cleanupSubscription(session)
+            }
+            mutex.withLock { sessions.remove(transportSessionId, session) }
+        } catch (error: Throwable) {
+            mutex.withLock { cleanupUncertain = true }
+            throw EncryptedUploadV2HostException(
+                19u, false,
+                message = if (sent) "CONFIRM succeeded but transfer subscription cleanup is uncertain"
+                else "CONFIRM outcome is uncertain; reconnect before retrying",
+            ).also { it.addSuppressed(error) }
+        }
+    }
+
     suspend fun abort(transportSessionId: ULong, reason: UShort = 0x00ffu.toUShort()) {
-        val session = mutex.withLock { sessions[transportSessionId] } ?: return
-        runCatching { write(session.peripheralId, mapper.createEncryptedUploadV2Abort(transportSessionId, reason)) }
-        releaseSession(transportSessionId, session)
+        val session = mutex.withLock {
+            val value = sessions[transportSessionId] ?: return
+            if (value.phase == Phase.Confirming || value.phase == Phase.Confirmed) ownershipUnknown()
+            value.phase = Phase.Cleaning
+            value
+        }
+        releaseSession(transportSessionId, session, abort = true, reason = reason)
     }
 
     suspend fun release(transportSessionId: ULong) {
-        val session = mutex.withLock { sessions[transportSessionId] } ?: return
-        releaseSession(transportSessionId, session)
+        val session = mutex.withLock {
+            val value = sessions[transportSessionId] ?: return
+            if (value.phase == Phase.Confirming || value.phase == Phase.Confirmed) ownershipUnknown()
+            value.phase = Phase.Cleaning
+            value
+        }
+        releaseSession(transportSessionId, session, abort = false)
+    }
+
+    suspend fun resetAfterConfirmedDisconnect() {
+        val owned = mutex.withLock {
+            cleanupUncertain = false
+            sessions.values.toList().also { sessions.clear() }
+        }
+        owned.forEach {
+            it.job.cancel()
+            it.raw.close()
+        }
     }
 
     override fun close() {
+        runBlocking {
+            val owned = mutex.withLock { sessions.toMap() }
+            owned.forEach { (id, session) -> runCatching { releaseSession(id, session, abort = false) } }
+        }
         scope.coroutineContext[Job]?.cancel()
-        sessions.clear()
     }
 
-    private suspend fun releaseSession(id: ULong, session: Session) {
-        mutex.withLock { sessions.remove(id, session) }
-        session.job.cancel()
-        session.raw.close()
-        runCatching {
+    private suspend fun releaseSession(
+        id: ULong,
+        session: Session,
+        abort: Boolean,
+        reason: UShort = 0x00ffu.toUShort(),
+    ) {
+        var failure: Throwable? = null
+        withContext(NonCancellable + Dispatchers.IO) {
+            try {
+                withTimeout(cleanupTimeoutMilliseconds) {
+                    session.job.cancelAndJoin()
+                    if (abort) {
+                        try {
+                            write(session.peripheralId, mapper.createEncryptedUploadV2Abort(id, reason))
+                        } catch (error: Throwable) {
+                            failure = error
+                        }
+                    }
+                    try {
+                        driver.unsubscribe(
+                            session.peripheralId,
+                            BotaBluetoothUUIDs.StorageService,
+                            BotaBluetoothUUIDs.RecordingTransferV2,
+                        )
+                    } catch (error: Throwable) {
+                        failure = aggregate(failure, error)
+                    }
+                }
+            } catch (error: Throwable) {
+                failure = aggregate(failure, error)
+            }
+        }
+        session.raw.close(failure)
+        if (failure == null) {
+            mutex.withLock { sessions.remove(id, session) }
+        } else {
+            mutex.withLock { cleanupUncertain = true }
+            throw EncryptedUploadV2HostException(
+                19u, false, message = "encrypted transfer cleanup is uncertain; reconnect before retrying",
+            ).also { it.addSuppressed(failure!!) }
+        }
+    }
+
+    private suspend fun cleanupSubscription(session: Session) {
+        withTimeout(cleanupTimeoutMilliseconds) {
+            session.job.cancelAndJoin()
             driver.unsubscribe(
                 session.peripheralId,
                 BotaBluetoothUUIDs.StorageService,
                 BotaBluetoothUUIDs.RecordingTransferV2,
             )
         }
+        session.raw.close()
     }
 
+    private fun startFrame(request: EncryptedUploadV2StartRequest) = mapper.createEncryptedUploadV2Start(
+        request.transportSessionId, request.uploadSessionId, request.recordingUuid,
+        request.recordingGeneration, request.authorizationSha256, request.checkpointRevision,
+        request.nextCiphertextOffset, request.prefixSha256, request.windowPackets, request.dataPayloadBytes,
+    )
+
+    private fun resumeFrame(request: EncryptedUploadV2StartRequest, checkpoint: EncryptedUploadV2CheckpointValue) =
+        mapper.createEncryptedUploadV2ResumeRequest(
+            EncryptedUploadV2ResumeRequest(
+                request.transportSessionId, request.uploadSessionId, request.recordingUuid,
+                request.recordingGeneration, checkpoint.revision, checkpoint.nextCiphertextOffset,
+                checkpoint.prefixSha256, request.windowPackets, request.dataPayloadBytes,
+            ),
+        )
+
     private suspend fun write(peripheralId: String, frame: ByteArray) {
-        require(frame.size <= minOf(driver.maximumWriteLength(peripheralId), 512)) {
+        require(frame.size <= minOf(driver.maximumWriteLength(peripheralId), MaximumNotificationBytes)) {
             "Rust-generated transfer frame exceeds negotiated write length"
         }
         driver.write(
-            peripheralId,
-            BotaBluetoothUUIDs.StorageService,
-            BotaBluetoothUUIDs.TransferControlV2,
-            frame,
-            withResponse = true,
+            peripheralId, BotaBluetoothUUIDs.StorageService, BotaBluetoothUUIDs.TransferControlV2,
+            frame, withResponse = true,
         )
     }
 
@@ -226,7 +360,18 @@ internal class EncryptedUploadV2TransferControl(
         if (!condition) throw EncryptedUploadV2HostException(9u, false, message = detail)
     }
 
+    private fun ownershipUnknown(): Nothing = throw EncryptedUploadV2HostException(
+        19u, false, message = "encrypted transfer ownership is uncertain; reconnect before retrying",
+    )
+
+    private fun aggregate(primary: Throwable?, secondary: Throwable): Throwable =
+        primary?.also { if (it !== secondary) it.addSuppressed(secondary) } ?: secondary
+
     private companion object {
         const val ControlTimeoutMilliseconds = 10_000L
+        const val CleanupTimeoutMilliseconds = 1_000L
+        const val MaximumNotificationBytes = 512
+        const val PlatformNotificationReserveBytes = 64 * MaximumNotificationBytes
+        const val TransferQueueByteLimit = 1024 * 1024 - PlatformNotificationReserveBytes
     }
 }

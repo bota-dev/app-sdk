@@ -85,13 +85,14 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   bounds the manifest to the fixed 580-byte contract and verifies EOF evidence.
   An internal `EncryptedUploadV2TransferHost` now connects that receiver to the
   retained `0409` stream for START/RESUME, DATA/window repair, manifest, EOF,
-  abort, protected ciphertext-file writes, and recoverable native checkpoint
-  sidecars. It emits structured `WINDOW_STAGED` evidence to Rust and sends only
+  abort, protected ciphertext-file writes, and a recoverable native checkpoint
+  catalog. It emits structured `WINDOW_STAGED` evidence to Rust and sends only
   Rust-encoded ACK/repair frames through the exact owned transport session. Its
-  phase-aware notification queue is capped at 1 MiB, premature post-window
-  traffic fails closed, START/ABORT races cannot resurrect ownership, and
-  checkpoint replacement or deletion flushes the file and parent directory
-  before success. Optional internal completion services bind START to the
+  platform plus phase-aware transfer queues share a 1 MiB byte cap; overflow,
+  premature post-window traffic, mixed profiles, and pre-EOF completion fail
+  closed. START/ABORT races cannot resurrect ownership, and checkpoint lookup
+  plus metadata are replaced in one AtomicFile catalog whose file and parent
+  directory are flushed before success. Optional internal completion services bind START to the
   prepared authorization and its exact material-registration lease, pass only
   the verified native ciphertext file and fixed manifest to application-owned
   staging/finalization callbacks, require the exact accepted receipt digest,
@@ -100,7 +101,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   the asynchronous v2 host callback. The live control actor releases its claimed
   `0409` subscription only after that canonical CONFIRM write. Later
   cancellation or subscription-cleanup uncertainty cannot reverse a successful
-  CONFIRM; uncertain cleanup instead poisons the BLE owner until reconnect. The
+  CONFIRM or send ABORT; uncertain cleanup instead poisons the BLE owner until
+  confirmed disconnect/reset. Physical power-loss behavior remains unverified. The
   production configuration installs this host with the signed-blob writer,
   transfer-control actor, material registry, and native staging upload service.
   `RecordingManager.syncEncryptedRecordingV2` passes a fresh `0406` capability

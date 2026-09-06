@@ -11,7 +11,7 @@ internal fun interface EncryptedUploadV2Host {
     suspend fun cancel(cancellationId: CoreCancellationId) = Unit
 }
 
-internal class EncryptedUploadV2HostException(
+internal open class EncryptedUploadV2HostException(
     val errorCode: UInt,
     val retryable: Boolean,
     val protocolStatus: UShort? = null,

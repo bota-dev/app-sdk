@@ -214,8 +214,10 @@ public class RecordingManager internal constructor() {
     ) {
         val runtime = state.configuredRuntime()
         val cancellationId = UUID.randomUUID()
-        state.begin(runtime, cancellationId, BotaOperation.TransferRecording)
-        state.setTask(cancellationId, currentCoroutineContext()[kotlinx.coroutines.Job]!!)
+        state.begin(
+            runtime, cancellationId, BotaOperation.TransferRecording,
+            task = currentCoroutineContext()[kotlinx.coroutines.Job]!!,
+        )
         var material: EncryptedUploadV2Material? = null
         var registered = false
         var completed = false
@@ -310,27 +312,42 @@ public class RecordingManager internal constructor() {
                 "encrypted upload v2 workflow ended without completion",
             )
         } catch (error: Throwable) {
+            val primary = error.facadePublicError(BotaOperation.TransferRecording)
             withContext(NonCancellable) {
-                if (error is CancellationException) state.cancel(cancellationId, cancelTask = false)
-                else state.finish(cancellationId)
                 val selected = material
-                if (registered && selected != null) {
-                    runtime.terminateEncryptedUploadV2Material(
-                        selected.materialId,
-                        if (error is CancellationException) EncryptedUploadV2TerminalOutcome.Cancelled
-                        else EncryptedUploadV2TerminalOutcome.Failed,
-                    )
-                } else {
-                    selected?.cancelOnce()
-                }
+                runCleanupAfter(
+                    primary,
+                    {
+                        if (error is CancellationException) state.cancel(cancellationId, cancelTask = false)
+                        else state.finish(cancellationId)
+                    },
+                    {
+                        if (registered && selected != null) {
+                            runtime.terminateEncryptedUploadV2Material(
+                                selected.materialId,
+                                if (error is CancellationException) EncryptedUploadV2TerminalOutcome.Cancelled
+                                else EncryptedUploadV2TerminalOutcome.Failed,
+                            )
+                        } else {
+                            selected?.cancelOnce()
+                        }
+                    },
+                )
             }
-            throw error.facadePublicError(BotaOperation.TransferRecording)
+            throw primary
         }
         withContext(NonCancellable) {
-            material?.let {
-                runtime.terminateEncryptedUploadV2Material(it.materialId, EncryptedUploadV2TerminalOutcome.Completed)
-            }
-            state.finish(cancellationId)
+            runCleanupAfter(
+                null,
+                {
+                    material?.let {
+                        runtime.terminateEncryptedUploadV2Material(
+                            it.materialId, EncryptedUploadV2TerminalOutcome.Completed,
+                        )
+                    }
+                },
+                { state.finish(cancellationId) },
+            )
         }
     }
 
