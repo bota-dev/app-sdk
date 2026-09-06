@@ -1,7 +1,11 @@
 package dev.bota.sdk.internal.core
 
+import dev.bota.sdk.BotaErrorCode
+import dev.bota.sdk.BotaOperation
+import dev.bota.sdk.BotaSDKError
 import dev.bota.sdk.internal.jni.NativeCore
 import dev.bota.sdk.internal.jni.NativeCoreException
+import dev.bota.sdk.internal.workflowError
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -26,6 +30,10 @@ import kotlinx.coroutines.withContext
 internal interface CoreWorkflowRunner : AutoCloseable {
     fun run(command: CoreCommand, capabilities: CoreCapabilities): Flow<CoreNotification>
     suspend fun cancel(cancellationId: UUID)
+    suspend fun cancelAndReportExactSettlement(cancellationId: UUID): Boolean {
+        cancel(cancellationId)
+        return false
+    }
     override fun close()
 }
 
@@ -42,13 +50,14 @@ internal class CoreEngineRuntime(
     private data class ActiveWorkflow(
         val cancellationId: CoreCancellationId,
         val output: SendChannel<CoreNotification>,
-        val terminal: CompletableDeferred<Unit> = CompletableDeferred(),
+        val terminal: CompletableDeferred<CoreNotification> = CompletableDeferred(),
     )
 
     private val dispatcher: ExecutorCoroutineDispatcher =
         Executors.newSingleThreadExecutor { task -> Thread(task, "bota-core") }.asCoroutineDispatcher()
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val effectJobs = mutableMapOf<CoreCancellationId, MutableSet<Job>>()
+    private val exactSettlements = mutableMapOf<CoreCancellationId, CompletableDeferred<CoreNotification>>()
     private var active: ActiveWorkflow? = null
     private var isDraining = false
     private var drainRequested = false
@@ -58,6 +67,7 @@ internal class CoreEngineRuntime(
         check(!closed.get()) { "native core is closed" }
         try {
             withContext(dispatcher) {
+                exactSettlements.entries.removeAll { it.value.isCompleted }
                 core.start(command.packet, capabilities.bits)
                 val owner = ActiveWorkflow(CoreCancellationId(command.cancellationId), channel)
                 active = owner
@@ -74,6 +84,9 @@ internal class CoreEngineRuntime(
     override suspend fun cancel(cancellationId: UUID) {
         cancelInternal(CoreCancellationId(cancellationId))
     }
+
+    override suspend fun cancelAndReportExactSettlement(cancellationId: UUID): Boolean =
+        cancelInternal(CoreCancellationId(cancellationId))
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
@@ -101,18 +114,35 @@ internal class CoreEngineRuntime(
         failure?.let { throw it }
     }
 
-    private suspend fun cancelInternal(cancellationId: CoreCancellationId) {
-        val owner = withContext(dispatcher) { active?.takeIf { it.cancellationId == cancellationId } }
-            ?: return
+    private suspend fun cancelInternal(
+        cancellationId: CoreCancellationId,
+        consumeExactSettlement: Boolean = true,
+    ): Boolean {
+        val snapshot = withContext(dispatcher) {
+            active?.takeIf { it.cancellationId == cancellationId } to exactSettlements[cancellationId]
+        }
+        val owner = snapshot.first
+            ?: return snapshot.second?.let {
+                awaitExactSettlement(cancellationId, it, consumeExactSettlement)
+            } ?: false
         var primary: Throwable? = null
         var coreFailure: Throwable? = null
+        var cancellationDeferred = false
         try {
             withContext(dispatcher) {
                 core.cancel(cancellationId.high, cancellationId.low)
+                drain()
+                cancellationDeferred = active === owner
             }
         } catch (error: Throwable) {
             coreFailure = error
             primary = error
+        }
+        if (cancellationDeferred) {
+            withContext(dispatcher) {
+                exactSettlements.putIfAbsent(cancellationId, owner.terminal)
+            }
+            return awaitExactSettlement(cancellationId, owner.terminal, consumeExactSettlement)
         }
         try {
             effectHandler.cancel(cancellationId)
@@ -139,11 +169,12 @@ internal class CoreEngineRuntime(
             primary = aggregate(primary, terminalFailure)
         }
         primary?.let { throw it }
+        return false
     }
 
     private suspend fun cancelIfActive(cancellationId: CoreCancellationId) {
         try {
-            cancelInternal(cancellationId)
+            cancelInternal(cancellationId, consumeExactSettlement = false)
         } catch (error: Throwable) {
             withContext(dispatcher) { fail(error, cancellationId) }
         }
@@ -163,7 +194,7 @@ internal class CoreEngineRuntime(
                     if (packet.kind > 0x0400) {
                         val notification = CoreNotification.fromPacket(packet)
                         active?.output?.trySend(notification)
-                        if (notification.isTerminal) finishActive()
+                        if (notification.isTerminal) finishActive(notification)
                     } else {
                         consume(CoreEffect.fromPacket(packet))
                     }
@@ -212,11 +243,11 @@ internal class CoreEngineRuntime(
         drain()
     }
 
-    private fun finishActive() {
+    private fun finishActive(notification: CoreNotification) {
         val owner = active ?: return
         active = null
         owner.output.close()
-        owner.terminal.complete(Unit)
+        owner.terminal.complete(notification)
     }
 
     private fun fail(error: Throwable, cancellationId: CoreCancellationId?) {
@@ -229,4 +260,31 @@ internal class CoreEngineRuntime(
 
     private fun aggregate(primary: Throwable?, secondary: Throwable): Throwable =
         primary?.also { if (it !== secondary) it.addSuppressed(secondary) } ?: secondary
+
+    private suspend fun awaitExactSettlement(
+        cancellationId: CoreCancellationId,
+        terminal: CompletableDeferred<CoreNotification>,
+        consume: Boolean,
+    ): Boolean {
+        try {
+            val notification = terminal.await()
+            return when (notification.kind) {
+                CoreNotificationKind.Completed -> true
+                CoreNotificationKind.Failed -> throw notification.workflowError()
+                else -> throw BotaSDKError.Core(
+                    BotaErrorCode.UploadOwnershipUnknown,
+                    BotaOperation.TransferRecording,
+                    retryable = false,
+                    protocolStatus = null,
+                    detail = "confirmation settlement did not produce an exact completion",
+                )
+            }
+        } finally {
+            if (consume) {
+                withContext(dispatcher) {
+                    if (exactSettlements[cancellationId] === terminal) exactSettlements.remove(cancellationId)
+                }
+            }
+        }
+    }
 }

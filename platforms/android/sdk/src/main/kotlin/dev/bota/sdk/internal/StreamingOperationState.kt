@@ -15,6 +15,7 @@ internal class StreamingOperationState(private val label: String) {
         val id: UUID,
         val runtime: DeviceRuntime,
         val cleanup: suspend () -> Unit,
+        val settleBeforeTaskCancellation: Boolean,
         var task: Job? = null,
     )
 
@@ -39,14 +40,36 @@ internal class StreamingOperationState(private val label: String) {
             value
         }
         val operation = snapshot.first
-        operation?.task?.cancel()
         try {
             if (operation != null) {
-                runCleanupActions(
-                    { runCatching { operation.runtime.engine.cancel(operation.id) } },
-                    operation.cleanup,
-                    { operation.runtime.operations.end(operation.id) },
-                )
+                if (operation.settleBeforeTaskCancellation) {
+                    var exactSettlement = false
+                    var confirmationSettlement = false
+                    runCleanupActions(
+                        {
+                            try {
+                                exactSettlement = operation.runtime.engine
+                                    .cancelAndReportExactSettlement(operation.id)
+                                confirmationSettlement = exactSettlement
+                            } catch (error: Throwable) {
+                                confirmationSettlement = error.isUploadOwnershipUnknown()
+                                throw error
+                            }
+                        },
+                        {
+                            if (confirmationSettlement) operation.task?.join() else operation.task?.cancel()
+                        },
+                        operation.cleanup,
+                        { operation.runtime.operations.end(operation.id) },
+                    )
+                } else {
+                    operation.task?.cancel()
+                    runCleanupActions(
+                        { runCatching { operation.runtime.engine.cancel(operation.id) } },
+                        operation.cleanup,
+                        { operation.runtime.operations.end(operation.id) },
+                    )
+                }
             }
         } finally {
             snapshot.second?.cancel()
@@ -75,6 +98,7 @@ internal class StreamingOperationState(private val label: String) {
         operation: BotaOperation,
         cleanup: suspend () -> Unit = {},
         task: Job? = null,
+        settleBeforeTaskCancellation: Boolean = false,
     ) {
         configured.operations.begin(id, operation)
         try {
@@ -93,7 +117,7 @@ internal class StreamingOperationState(private val label: String) {
                     protocolStatus = null,
                     detail = "another $label operation is already active",
                 )
-                active = Active(id, configured, cleanup, task)
+                active = Active(id, configured, cleanup, settleBeforeTaskCancellation, task)
             }
         } catch (error: Throwable) {
             configured.operations.end(id)
@@ -113,20 +137,50 @@ internal class StreamingOperationState(private val label: String) {
         runCleanupActions(operation.cleanup, { operation.runtime.operations.end(id) })
     }
 
-    suspend fun cancel(id: UUID, cancelTask: Boolean, ignoreEngineFailure: Boolean = true) {
-        val operation = remove(id) ?: return
-        if (cancelTask) operation.task?.cancel()
-        val cancelEngine: suspend () -> Unit = if (ignoreEngineFailure) {
-            { runCatching { operation.runtime.engine.cancel(id) } }
+    suspend fun cancel(id: UUID, cancelTask: Boolean, ignoreEngineFailure: Boolean = true): Boolean {
+        val operation = remove(id) ?: return false
+        if (operation.settleBeforeTaskCancellation) {
+            var exactSettlement = false
+            var confirmationSettlement = false
+            val cancelEngine: suspend () -> Unit = {
+                try {
+                    exactSettlement = operation.runtime.engine
+                        .cancelAndReportExactSettlement(id)
+                    confirmationSettlement = exactSettlement
+                } catch (error: Throwable) {
+                    confirmationSettlement = error.isUploadOwnershipUnknown()
+                    if (!ignoreEngineFailure || confirmationSettlement) throw error
+                }
+            }
+            runCleanupActions(
+                cancelEngine,
+                {
+                    if (cancelTask) {
+                        if (confirmationSettlement) operation.task?.join() else operation.task?.cancel()
+                    }
+                },
+                operation.cleanup,
+                { operation.runtime.operations.end(id) },
+            )
+            return exactSettlement
         } else {
-            { operation.runtime.engine.cancel(id) }
+            if (cancelTask) operation.task?.cancel()
+            val cancelEngine: suspend () -> Unit = if (ignoreEngineFailure) {
+                { runCatching { operation.runtime.engine.cancel(id) } }
+            } else {
+                { operation.runtime.engine.cancel(id) }
+            }
+            runCleanupActions(
+                cancelEngine,
+                operation.cleanup,
+                { operation.runtime.operations.end(id) },
+            )
+            return false
         }
-        runCleanupActions(
-            cancelEngine,
-            operation.cleanup,
-            { operation.runtime.operations.end(id) },
-        )
     }
+
+    private fun Throwable.isUploadOwnershipUnknown(): Boolean =
+        this is BotaSDKError.Core && code == BotaErrorCode.UploadOwnershipUnknown
 
     suspend fun cancelCurrentOperation() {
         val id = synchronized(lock) { active?.id } ?: return

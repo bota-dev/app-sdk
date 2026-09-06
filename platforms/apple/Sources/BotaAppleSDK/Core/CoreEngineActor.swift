@@ -5,6 +5,7 @@ actor CoreEngineActor {
     private struct ActiveWorkflow {
         let cancellationID: CoreCancellationID
         let continuation: AsyncThrowingStream<CoreNotification, Error>.Continuation
+        var confirmationInFlight = false
     }
 
     private let abi: CoreAbiClient
@@ -12,6 +13,7 @@ actor CoreEngineActor {
     private var active: ActiveWorkflow?
     private var isDraining = false
     private var drainRequested = false
+    private var terminalWaiters: [CoreCancellationID: [CheckedContinuation<Void, Never>]] = [:]
 
     init(abi: CoreAbiClient, host: any CoreHost) {
         self.abi = abi
@@ -38,7 +40,14 @@ actor CoreEngineActor {
 
     func cancel(_ id: UUID) async throws {
         let cancellation = CoreCancellationID(id)
+        let confirmationInFlight = active?.cancellationID == cancellation &&
+            active?.confirmationInFlight == true
         try abi.cancel(cancellationHigh: cancellation.high, cancellationLow: cancellation.low)
+        if confirmationInFlight {
+            await drain()
+            await waitForTerminal(cancellation)
+            return
+        }
         await host.cancel(cancellation)
         await drain()
     }
@@ -60,12 +69,17 @@ actor CoreEngineActor {
                         active?.continuation.yield(notification)
                         if notification.isTerminal {
                             active?.continuation.finish()
-                            active = nil
+                            finishActive()
                         }
                         continue
                     }
 
                     let effect = try CoreEffect(packet: packet)
+                    if effect.kind == UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_ENCRYPTED_UPLOAD_V2_CONFIRM_WITH_RECEIPT),
+                       active?.cancellationID == effect.cancellationID
+                    {
+                        active?.confirmationInFlight = true
+                    }
                     let events = await host.execute(effect)
                     consume(events, for: effect)
                     await Task.yield()
@@ -73,7 +87,7 @@ actor CoreEngineActor {
             } while drainRequested
         } catch {
             active?.continuation.finish(throwing: error)
-            active = nil
+            finishActive()
         }
     }
 
@@ -115,6 +129,19 @@ actor CoreEngineActor {
     private func fail(_ error: Error, cancellationID: CoreCancellationID) {
         guard active?.cancellationID == cancellationID else { return }
         active?.continuation.finish(throwing: error)
+        finishActive()
+    }
+
+    private func waitForTerminal(_ cancellationID: CoreCancellationID) async {
+        guard active?.cancellationID == cancellationID else { return }
+        await withCheckedContinuation { continuation in
+            terminalWaiters[cancellationID, default: []].append(continuation)
+        }
+    }
+
+    private func finishActive() {
+        guard let cancellationID = active?.cancellationID else { return }
         active = nil
+        terminalWaiters.removeValue(forKey: cancellationID)?.forEach { $0.resume() }
     }
 }

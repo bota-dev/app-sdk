@@ -52,6 +52,10 @@ impl ActiveWorkflow {
             Self::DeviceLogs(workflow) => workflow.cancellation_id(),
         }
     }
+
+    fn defers_cancellation(&self) -> bool {
+        matches!(self, Self::EncryptedUploadV2(workflow) if workflow.confirmation_in_flight())
+    }
 }
 
 pub struct WorkflowEngine {
@@ -308,6 +312,9 @@ impl WorkflowEngine {
                 operation,
                 "cancellation ID does not own the active workflow",
             ));
+        }
+        if active.defers_cancellation() {
+            return Ok(Vec::new());
         }
 
         let mut context =

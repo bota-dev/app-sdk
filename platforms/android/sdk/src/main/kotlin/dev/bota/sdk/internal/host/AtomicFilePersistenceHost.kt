@@ -54,6 +54,8 @@ internal class AtomicFileJournalStore(rootDirectory: File) : JournalStore {
         syncRootDirectory()
     }
 
+    override suspend fun names(): Set<String> = root.list()?.toSet().orEmpty()
+
     internal fun startWrite(name: String): FileOutputStream = atomicFile(name).startWrite()
 
     internal fun finishWrite(name: String, stream: FileOutputStream) = atomicFile(name).finishWrite(stream)

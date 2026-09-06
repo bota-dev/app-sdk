@@ -3,10 +3,10 @@ package dev.bota.sdk.internal.bluetooth
 import dev.bota.sdk.internal.core.CoreModelMapper
 import dev.bota.sdk.internal.host.EncryptedUploadV2HostException
 import java.security.MessageDigest
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -18,6 +18,7 @@ import kotlinx.coroutines.withTimeout
 internal class EncryptedUploadV2SignedBlobWriter(
     private val driver: BluetoothDriver,
     private val mapper: CoreModelMapper,
+    private val cleanupTimeoutMilliseconds: Long = CleanupTimeoutMilliseconds,
 ) {
     private val mutex = Mutex()
     private var cleanupUncertain = false
@@ -45,20 +46,35 @@ internal class EncryptedUploadV2SignedBlobWriter(
                     BotaBluetoothUUIDs.StorageService,
                     BotaBluetoothUUIDs.TransferSignedBlobV2,
                 )
-                val results = Channel<dev.bota.sdk.internal.core.EncryptedUploadV2SignedBlobResult>(Channel.UNLIMITED)
+                val result = CompletableDeferred<dev.bota.sdk.internal.core.EncryptedUploadV2SignedBlobResult>()
                 val collector = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+                    var unmatchedResults = 0
+                    var unmatchedBytes = 0
                     try {
                         notifications.collect { notification ->
                             val decoded = mapper.decodeEncryptedUploadV2SignedBlobResult(notification.value)
-                            results.send(decoded)
+                            if (decoded.kind == kind && decoded.writeId == writeId) {
+                                result.complete(decoded)
+                            } else {
+                                unmatchedResults += 1
+                                unmatchedBytes += notification.value.size
+                                if (unmatchedResults > MaximumUnmatchedResults ||
+                                    unmatchedBytes > MaximumUnmatchedResultBytes
+                                ) {
+                                    throw EncryptedUploadV2HostException(
+                                        4u, false,
+                                        message = "signed-document result stream exceeded its unmatched-result bound",
+                                    )
+                                }
+                            }
                         }
-                        results.close(
+                        result.completeExceptionally(
                             EncryptedUploadV2HostException(
                                 12u, true, message = "signed-document notification stream ended without a result",
                             ),
                         )
                     } catch (error: Throwable) {
-                        results.close(error)
+                        result.completeExceptionally(error)
                     }
                 }
                 write(
@@ -83,20 +99,18 @@ internal class EncryptedUploadV2SignedBlobWriter(
                 }
                 write(peripheralId, mapper.createEncryptedUploadV2SignedBlobCommit(kind, writeId), maximumFrameBytes)
                 val reply = try {
-                    withTimeout(resultTimeoutMilliseconds) {
-                        var matched: dev.bota.sdk.internal.core.EncryptedUploadV2SignedBlobResult? = null
-                        while (matched == null) {
-                            val candidate = results.receive()
-                            if (candidate.kind == kind && candidate.writeId == writeId) matched = candidate
-                        }
-                        matched
-                    }
+                    withTimeout(resultTimeoutMilliseconds) { result.await() }
                 } catch (_: TimeoutCancellationException) {
                     throw EncryptedUploadV2HostException(
                         15u, true, message = "timed out waiting for the matching signed-document result",
                     )
                 }
-                require(reply.result == 0.toUShort()) { "device rejected signed document with ${reply.result}" }
+                if (reply.result != 0.toUShort()) {
+                    throw EncryptedUploadV2HostException(
+                        17u, false, reply.result,
+                        "device rejected signed document with protocol status ${reply.result}",
+                    )
+                }
                 collector.cancel()
             }
         } catch (error: Throwable) {
@@ -122,25 +136,20 @@ internal class EncryptedUploadV2SignedBlobWriter(
     ): Throwable? {
         var failure: Throwable? = null
         withContext(NonCancellable + Dispatchers.IO) {
+            if (abort != null) {
+                try {
+                    withTimeout(cleanupTimeoutMilliseconds) { write(peripheralId, abort, maximumFrameBytes) }
+                } catch (error: Throwable) {
+                    failure = error
+                }
+            }
             try {
-                withTimeout(CleanupTimeoutMilliseconds) {
-                    if (abort != null) {
-                        try {
-                            write(peripheralId, abort, maximumFrameBytes)
-                        } catch (error: Throwable) {
-                            failure = error
-                        }
-                    }
-                    try {
+                withTimeout(cleanupTimeoutMilliseconds) {
                         driver.unsubscribe(
                             peripheralId,
                             BotaBluetoothUUIDs.StorageService,
                             BotaBluetoothUUIDs.TransferSignedBlobV2,
                         )
-                    } catch (error: Throwable) {
-                        val first = failure
-                        if (first == null) failure = error else first.addSuppressed(error)
-                    }
                 }
             } catch (error: Throwable) {
                 val first = failure
@@ -194,5 +203,7 @@ internal class EncryptedUploadV2SignedBlobWriter(
     private companion object {
         const val ResultTimeoutMilliseconds = 10_000L
         const val CleanupTimeoutMilliseconds = 1_000L
+        const val MaximumUnmatchedResults = 64
+        const val MaximumUnmatchedResultBytes = 32 * 1024
     }
 }

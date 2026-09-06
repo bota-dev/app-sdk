@@ -292,7 +292,7 @@ class EncryptedUploadV2TransferHostTest {
         val services = EncryptedUploadV2TransferHostServices(
             registry, EncryptedUploadV2CheckpointStore(journals),
             openTransfer = { _, _ -> entered.complete(Unit); release.await(); error("cancelled open") },
-            sendControl = { _, _ -> }, confirmTransfer = { _, _ -> },
+            sendControl = { _, _, _ -> }, confirmTransfer = { _, _ -> },
             abortTransfer = { actions += "abort-$it" },
             releaseTransfer = {}, sendSignedDocument = { kind, _, _, _ -> actions += "signed-$kind" },
             uploadCiphertext = { _, _ -> }, cancelUploads = {}, nextWriteId = { 1u },
@@ -318,6 +318,25 @@ class EncryptedUploadV2TransferHostTest {
         host.close()
     }
 
+    @Test
+    fun confirmedDisconnectBeforeConfirmCancelsMaterialInsteadOfCompletingIt() = runTest {
+        val cancelled = AtomicInteger()
+        val registry = registry(cancelled)
+        val host = EncryptedUploadV2TransferHost(
+            Files.createTempDirectory("bota-v2-disconnect"),
+            services(registry, mutableListOf()),
+        )
+        host.execute(
+            effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, "material-1")),
+        ).toList()
+
+        host.resetAfterConfirmedDisconnect()
+
+        assertEquals(1, cancelled.get())
+        assertFalse(registry.contains("material-1"))
+        host.close()
+    }
+
     private fun host(
         root: java.nio.file.Path,
         registry: EncryptedUploadV2MaterialRegistry,
@@ -330,7 +349,7 @@ class EncryptedUploadV2TransferHostTest {
         val services = EncryptedUploadV2TransferHostServices(
             registry, EncryptedUploadV2CheckpointStore(TestJournals()),
             openTransfer = { _, _ -> EncryptedUploadV2OpenResult.Opened(payloads.receiveAsFlow()) },
-            sendControl = { _, value -> actions += "control-${value.single()}" },
+            sendControl = { _, value, _ -> actions += "control-${value.single()}" },
             confirmTransfer = { _, value ->
                 confirmEntered?.complete(Unit)
                 confirmRelease?.await()
@@ -374,7 +393,7 @@ class EncryptedUploadV2TransferHostTest {
     ) = EncryptedUploadV2TransferHostServices(
         registry, EncryptedUploadV2CheckpointStore(TestJournals()),
         openTransfer = { _, _ -> error("replace in test") },
-        sendControl = { _, _ -> }, confirmTransfer = { _, _ -> },
+        sendControl = { _, _, _ -> }, confirmTransfer = { _, _ -> },
         abortTransfer = { actions += "abort-$it" },
         releaseTransfer = { actions += "release" }, sendSignedDocument = { kind, _, _, _ -> actions += "signed-$kind" },
         uploadCiphertext = { _, _ -> }, cancelUploads = {}, nextWriteId = { 1u },

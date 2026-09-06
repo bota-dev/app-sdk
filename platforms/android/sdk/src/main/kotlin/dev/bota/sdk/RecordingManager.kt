@@ -217,6 +217,7 @@ public class RecordingManager internal constructor() {
         state.begin(
             runtime, cancellationId, BotaOperation.TransferRecording,
             task = currentCoroutineContext()[kotlinx.coroutines.Job]!!,
+            settleBeforeTaskCancellation = true,
         )
         var material: EncryptedUploadV2Material? = null
         var registered = false
@@ -313,15 +314,25 @@ public class RecordingManager internal constructor() {
             )
         } catch (error: Throwable) {
             val primary = error.facadePublicError(BotaOperation.TransferRecording)
+            var exactSettlement = false
+            var settlementFailure: Throwable? = null
             withContext(NonCancellable) {
                 val selected = material
-                runCleanupAfter(
-                    primary,
-                    {
-                        if (error is CancellationException) state.cancel(cancellationId, cancelTask = false)
-                        else state.finish(cancellationId)
-                    },
-                    {
+                if (error is CancellationException) {
+                    settlementFailure = runCatching {
+                        exactSettlement = state.cancel(
+                            cancellationId,
+                            cancelTask = false,
+                            ignoreEngineFailure = false,
+                        )
+                    }.exceptionOrNull()?.facadePublicError(BotaOperation.TransferRecording)
+                } else {
+                    runCleanupAfter(primary, { state.finish(cancellationId) })
+                }
+                val preserveOwnership = exactSettlement || primary.isUploadOwnershipUnknown() ||
+                    settlementFailure?.isUploadOwnershipUnknown() == true
+                if (!preserveOwnership) {
+                    runCleanupAfter(primary, {
                         if (registered && selected != null) {
                             runtime.terminateEncryptedUploadV2Material(
                                 selected.materialId,
@@ -331,9 +342,14 @@ public class RecordingManager internal constructor() {
                         } else {
                             selected?.cancelOnce()
                         }
-                    },
-                )
+                    })
+                }
             }
+            settlementFailure?.let { failure ->
+                if (failure.isUploadOwnershipUnknown()) throw failure
+                if (failure !== primary) primary.addSuppressed(failure)
+            }
+            if (error is CancellationException && exactSettlement) return
             throw primary
         }
         withContext(NonCancellable) {
@@ -544,6 +560,9 @@ private fun normalizedRecordingUuid(value: String): String {
             "${compact.substring(16, 20)}-${compact.substring(20)}",
     ).toString()
 }
+
+private fun Throwable.isUploadOwnershipUnknown(): Boolean =
+    this is BotaSDKError.Core && code == BotaErrorCode.UploadOwnershipUnknown
 
 private fun dev.bota.sdk.internal.core.CoreNotification.transferMetadata(): RecordingTransferMetadata =
     RecordingTransferMetadata(

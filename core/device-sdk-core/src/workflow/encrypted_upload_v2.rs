@@ -189,6 +189,10 @@ impl EncryptedUploadV2Workflow {
         })
     }
 
+    pub(crate) fn confirmation_in_flight(&self) -> bool {
+        matches!(self.coordinator.phase, Phase::Confirming)
+    }
+
     fn translate(
         &mut self,
         actions: Vec<EncryptedUploadV2Action>,

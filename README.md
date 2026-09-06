@@ -242,8 +242,14 @@ callbacks; OkHttp streams the verified native ciphertext body without a
 control-plane API call. The exact receipt gates canonical CONFIRM, and all
 pre-CONFIRM failure or cancellation paths retain the device copy and clean up
 opaque application material once. Once CONFIRM is attempted, cancellation
-cannot send ABORT; cleanup uncertainty blocks replacement ownership until a
-confirmed disconnect/reset. Physical power-loss durability remains unverified.
+cannot send ABORT: the shared Rust workflow and both native runtimes wait for
+the exact confirmation result, exposing completion or stable code 19
+uncertainty. Android rejects phase-invalid frames when they arrive, broadcasts
+bounded notifications to each observer, resets poisoned ownership after either
+explicit or spontaneous confirmed disconnect, and migrates the retired split
+checkpoint/index pair into its atomic catalog. Cleanup uncertainty blocks
+replacement ownership until that disconnect/reset. Physical power-loss
+durability remains unverified.
 React Native still has no v2 surface, and
 runtime compatibility metadata therefore remains disabled.
 ABI v1 is frozen at the typed public header and verified by standalone C and

@@ -8,6 +8,7 @@ import dev.bota.sdk.internal.bluetooth.EncryptedUploadV2CheckpointValue
 import dev.bota.sdk.internal.bluetooth.EncryptedUploadV2OpenResult
 import dev.bota.sdk.internal.bluetooth.EncryptedUploadV2TransferReceiver
 import dev.bota.sdk.internal.bluetooth.EncryptedUploadV2TransferReceiverEvent
+import dev.bota.sdk.internal.bluetooth.EncryptedUploadV2TransferContinuation
 import dev.bota.sdk.internal.core.CoreCancellationId
 import dev.bota.sdk.internal.core.CoreEffect
 import dev.bota.sdk.internal.core.CoreEffectKind
@@ -45,7 +46,7 @@ internal class EncryptedUploadV2TransferHostServices(
     val materialRegistry: EncryptedUploadV2MaterialRegistry,
     val checkpointStore: EncryptedUploadV2CheckpointStore,
     val openTransfer: suspend (EncryptedUploadV2StartRequest, EncryptedUploadV2CheckpointValue?) -> EncryptedUploadV2OpenResult,
-    val sendControl: suspend (ULong, ByteArray) -> Unit,
+    val sendControl: suspend (ULong, ByteArray, EncryptedUploadV2TransferContinuation) -> Unit,
     val confirmTransfer: suspend (ULong, ByteArray) -> Unit,
     val abortTransfer: suspend (ULong) -> Unit,
     val releaseTransfer: suspend (ULong) -> Unit,
@@ -147,12 +148,17 @@ internal class EncryptedUploadV2TransferHost(
     suspend fun resetAfterConfirmedDisconnect() {
         val material = synchronized(stateLock) {
             ownershipPoisoned = false
-            (preparedMaterialId ?: activeContext?.materialId) to materialLease
+            Triple(
+                preparedMaterialId ?: activeContext?.materialId,
+                materialLease,
+                if (confirmationSucceeded) EncryptedUploadV2TerminalOutcome.Completed
+                else EncryptedUploadV2TerminalOutcome.Failed,
+            )
         }
         if (material.first != null && material.second != null) {
             runCatching {
                 services.materialRegistry.terminate(
-                    material.first!!, material.second!!, EncryptedUploadV2TerminalOutcome.Completed,
+                    material.first!!, material.second!!, material.third,
                 )
             }
         }
@@ -299,7 +305,11 @@ internal class EncryptedUploadV2TransferHost(
         val acknowledgement = transferReceiver.repairAcknowledgement(missing)
         val next = Channel<CoreHostEventPayload>(1)
         boundaryTarget = next
-        services.sendControl(acknowledgement.transportSessionId, encode(acknowledgement))
+        services.sendControl(
+            acknowledgement.transportSessionId,
+            encode(acknowledgement),
+            EncryptedUploadV2TransferContinuation.Repair(missing.toSet()),
+        )
         pendingResume?.complete(Unit)
         val event = next.receive()
         emit(event)
@@ -330,7 +340,15 @@ internal class EncryptedUploadV2TransferHost(
         requireValue(persistedCoreCheckpoint?.contentEquals(core) == true, "checkpoint acknowledgement is stale")
         val acknowledgement = receiver?.windowAcknowledgement(checkpoint) ?: fail(9u, "receiver is missing")
         boundaryTarget = startEvents ?: fail(9u, "START stream is missing")
-        services.sendControl(context.transportSessionId, encode(acknowledgement))
+        services.sendControl(
+            context.transportSessionId,
+            encode(acknowledgement),
+            if (checkpoint.nextCiphertextOffset == context.ciphertextLength) {
+                EncryptedUploadV2TransferContinuation.Manifest
+            } else {
+                EncryptedUploadV2TransferContinuation.Window
+            },
+        )
         pendingCheckpoint = null
         pendingMissing = emptyList()
         persistedCoreCheckpoint = null
@@ -373,7 +391,7 @@ internal class EncryptedUploadV2TransferHost(
         requireValue(requiredText(effect, 12) == context.materialId, "CONFIRM material is stale")
         requireValue(MessageDigest.isEqual(requiredBytes(effect, 162), receipt.receiptSha256), "CONFIRM receipt is stale")
         services.checkpointStore.delete(context.uploadSessionId)
-        Files.deleteIfExists(completed.file)
+        if (Files.deleteIfExists(completed.file)) syncDirectory(completed.file.parent)
         services.sendSignedDocument(2u, nonzeroWriteId(), receipt.receipt, 336u)
         val frame = services.encodeConfirm(
             context.transportSessionId, context.uploadSessionId, context.recordingUuid,
@@ -625,6 +643,11 @@ internal class EncryptedUploadV2TransferHost(
         get() = EncryptedUploadV2CheckpointValue(revision, nextCiphertextOffset, prefixSha256, highestContiguousSequence)
 
     private fun sinkFile(sinkId: String): Path = rootDirectory.resolve("$sinkId.encrypted-upload-v2")
+
+    private fun syncDirectory(directory: Path?) {
+        if (directory == null) return
+        FileChannel.open(directory, StandardOpenOption.READ).use { it.force(true) }
+    }
 
     private fun requiredText(effect: CoreEffect, id: Int): String =
         effect.packet.texts(id).firstOrNull()?.takeIf { it.isNotEmpty() } ?: fail(1u, "field $id is missing")

@@ -56,7 +56,15 @@ import dev.bota.sdk.EncryptedUploadV2CapabilitySnapshot
 import dev.bota.sdk.EncryptedUploadV2Checkpoint
 import dev.bota.sdk.EncryptedUploadV2Material
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -234,6 +242,17 @@ internal class DeviceRuntime(
                         encodeConfirm = mapper::createEncryptedUploadV2Confirm,
                     ),
                 ).also { closeActions += it::close }
+                val disconnectResetMutex = Mutex()
+                suspend fun resetEncryptedUploadOwnership() = disconnectResetMutex.withLock {
+                    encryptedControl.resetAfterConfirmedDisconnect()
+                    encryptedSignedWriter.resetAfterConfirmedDisconnect()
+                    encryptedHost.resetAfterConfirmedDisconnect()
+                }
+                val disconnectResetScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+                closeActions += { disconnectResetScope.cancel() }
+                disconnectResetScope.launch {
+                    driver.confirmedDisconnects().collect { resetEncryptedUploadOwnership() }
+                }
                 val encryptedCapabilityReader = EncryptedUploadV2CapabilityReader(
                     driver::read,
                     mapper::decodeEncryptedUploadV2Capabilities,
@@ -268,9 +287,7 @@ internal class DeviceRuntime(
                     authorize = ::authorize,
                     disconnect = { peripheralId ->
                         driver.disconnect(peripheralId)
-                        encryptedControl.resetAfterConfirmedDisconnect()
-                        encryptedSignedWriter.resetAfterConfirmedDisconnect()
-                        encryptedHost.resetAfterConfirmedDisconnect()
+                        resetEncryptedUploadOwnership()
                     },
                     readStatus = { peripheralId ->
                         driver.read(peripheralId, BotaBluetoothUUIDs.ControlService, BotaBluetoothUUIDs.DeviceStatus)

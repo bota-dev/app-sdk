@@ -8,9 +8,13 @@ import dev.bota.sdk.internal.jni.NativePacket
 import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -28,6 +32,19 @@ class BluetoothGattHostTest {
         val error = runCatching { buffer.flow(7).toList() }.exceptionOrNull()
 
         assertTrue(error.toString(), error is BluetoothTransportException)
+    }
+
+    @Test
+    fun notificationBufferBroadcastsEveryValueToEveryCollector() = runTest {
+        val buffer = AndroidNotificationBuffer(capacity = 2)
+        val first = async(start = CoroutineStart.UNDISPATCHED) { buffer.flow(7).take(2).toList() }
+        val second = async(start = CoroutineStart.UNDISPATCHED) { buffer.flow(7).take(2).toList() }
+
+        buffer.offer(byteArrayOf(1))
+        buffer.offer(byteArrayOf(2))
+
+        assertEquals(listOf(1, 2), first.await().map { it.value.single().toInt() })
+        assertEquals(listOf(1, 2), second.await().map { it.value.single().toInt() })
     }
     @Test
     fun scanMergesConnectedDevicesAndDeduplicatesUnlessRequested() = runTest {
@@ -153,6 +170,19 @@ class BluetoothGattHostTest {
         queued.join()
         assertEquals(listOf("device"), platform.disconnected)
     }
+
+    @Test
+    fun spontaneousDisconnectIsReportedAndClearsDriverOwnership() = runTest {
+        val platform = FakeBluetoothPlatform()
+        val driver = BluetoothGattDriver(platform)
+        driver.connect("device")
+        val disconnected = async(start = CoroutineStart.UNDISPATCHED) { driver.confirmedDisconnects().first() }
+
+        platform.confirmedDisconnects.emit("device")
+
+        assertEquals("device", disconnected.await())
+        assertTrue(runCatching { driver.maximumWriteLength("device") }.exceptionOrNull() is BluetoothTransportException)
+    }
 }
 
 private class FakeBluetoothPlatform(
@@ -168,6 +198,7 @@ private class FakeBluetoothPlatform(
     var nextStatus = 0
     var staleGeneration = false
     var suspendReads = false
+    val confirmedDisconnects = MutableSharedFlow<String>()
 
     override suspend fun connectedAdvertisements(): List<BluetoothAdvertisement> = initialConnected
     override fun scan(allowDuplicates: Boolean): Flow<BluetoothAdvertisement> = scans
@@ -248,6 +279,8 @@ private class FakeBluetoothPlatform(
         disconnected += peripheralId
         return result(generation, Unit)
     }
+
+    override fun confirmedDisconnects(): Flow<String> = confirmedDisconnects
 
     override fun close() = Unit
 

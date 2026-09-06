@@ -5,6 +5,7 @@ import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.withTimeout
 
@@ -31,6 +32,7 @@ internal interface BluetoothDriver : AutoCloseable {
     suspend fun unsubscribe(peripheralId: String, serviceUuid: UUID, characteristicUuid: UUID)
     fun maximumWriteLength(peripheralId: String): Int
     suspend fun disconnect(peripheralId: String)
+    fun confirmedDisconnects(): Flow<String> = kotlinx.coroutines.flow.emptyFlow()
     override fun close()
 }
 
@@ -152,6 +154,14 @@ internal class BluetoothGattDriver(
                 generations.remove(peripheralId)
                 negotiatedMtus.remove(peripheralId)
             }
+        }
+    }
+
+    override fun confirmedDisconnects(): Flow<String> = platform.confirmedDisconnects().onEach { peripheralId ->
+        queue.cancel(peripheralId)
+        synchronized(generationLock) {
+            generations.remove(peripheralId)
+            negotiatedMtus.remove(peripheralId)
         }
     }
 

@@ -34,6 +34,82 @@ internal sealed interface EncryptedUploadV2OpenResult {
     data object ResumeRejected : EncryptedUploadV2OpenResult
 }
 
+internal sealed interface EncryptedUploadV2TransferContinuation {
+    data object Window : EncryptedUploadV2TransferContinuation
+    data object Manifest : EncryptedUploadV2TransferContinuation
+    data class Repair(val sequences: Set<UInt>) : EncryptedUploadV2TransferContinuation
+}
+
+internal class EncryptedUploadV2TransferIntake(private val transportSessionId: ULong) {
+    private sealed interface State {
+        data object Window : State
+        data object Paused : State
+        data object Manifest : State
+        data object Terminal : State
+        data class Repair(val remaining: MutableSet<UInt>) : State
+    }
+
+    private var state: State = State.Window
+
+    @Synchronized
+    fun accept(payload: EncryptedUploadV2TransferPayload) {
+        val session = when (payload) {
+            is EncryptedUploadV2TransferPayload.Data -> payload.value.transportSessionId
+            is EncryptedUploadV2TransferPayload.WindowEnd -> payload.value.transportSessionId
+            is EncryptedUploadV2TransferPayload.ManifestChunk -> payload.value.transportSessionId
+            is EncryptedUploadV2TransferPayload.Eof -> payload.value.transportSessionId
+            is EncryptedUploadV2TransferPayload.Error -> payload.value.transportSessionId
+        }
+        expected(session == transportSessionId, "transfer payload belongs to another transport session")
+        if (payload is EncryptedUploadV2TransferPayload.Error) {
+            state = State.Terminal
+            return
+        }
+        when (val current = state) {
+            State.Window -> when (payload) {
+                is EncryptedUploadV2TransferPayload.Data -> Unit
+                is EncryptedUploadV2TransferPayload.WindowEnd -> state = State.Paused
+                else -> expected(false, "transfer payload arrived outside the active window phase")
+            }
+            State.Manifest -> when (payload) {
+                is EncryptedUploadV2TransferPayload.ManifestChunk -> Unit
+                is EncryptedUploadV2TransferPayload.Eof -> state = State.Terminal
+                else -> expected(false, "transfer payload arrived outside the manifest phase")
+            }
+            is State.Repair -> when (payload) {
+                is EncryptedUploadV2TransferPayload.Data -> expected(
+                    current.remaining.remove(payload.value.sequence),
+                    "repair retransmission was not requested or was duplicated",
+                )
+                is EncryptedUploadV2TransferPayload.WindowEnd -> {
+                    expected(current.remaining.isEmpty(), "repair ended before every requested retransmission arrived")
+                    state = State.Paused
+                }
+                else -> expected(false, "transfer payload arrived outside the repair phase")
+            }
+            State.Paused -> expected(false, "transfer payload arrived while the host was deciding the next phase")
+            State.Terminal -> expected(false, "transfer payload arrived after the stream terminated")
+        }
+    }
+
+    @Synchronized
+    fun continueWith(next: EncryptedUploadV2TransferContinuation) {
+        expected(state == State.Paused, "transfer continuation is not at a window boundary")
+        state = when (next) {
+            EncryptedUploadV2TransferContinuation.Window -> State.Window
+            EncryptedUploadV2TransferContinuation.Manifest -> State.Manifest
+            is EncryptedUploadV2TransferContinuation.Repair -> {
+                expected(next.sequences.isNotEmpty(), "repair continuation has no requested sequence")
+                State.Repair(next.sequences.toMutableSet())
+            }
+        }
+    }
+
+    private fun expected(condition: Boolean, detail: String) {
+        if (!condition) throw EncryptedUploadV2HostException(9u, false, message = detail)
+    }
+}
+
 internal class EncryptedUploadV2TransferControl(
     private val driver: BluetoothDriver,
     private val mapper: CoreModelMapper,
@@ -46,6 +122,8 @@ internal class EncryptedUploadV2TransferControl(
         val peripheralId: String,
         val raw: Channel<ByteArray>,
         val bufferedBytes: AtomicInteger,
+        val intake: EncryptedUploadV2TransferIntake,
+        val controlAccepted: CompletableDeferred<Unit>,
         val job: Job,
         var phase: Phase = Phase.Active,
     )
@@ -63,6 +141,8 @@ internal class EncryptedUploadV2TransferControl(
         val ready = CompletableDeferred<Unit>()
         val raw = Channel<ByteArray>(Channel.UNLIMITED)
         val bufferedBytes = AtomicInteger()
+        val intake = EncryptedUploadV2TransferIntake(request.transportSessionId)
+        val controlAccepted = CompletableDeferred<Unit>()
         val job = scope.launch(start = CoroutineStart.LAZY) {
             try {
                 val notifications = driver.subscribe(
@@ -71,6 +151,7 @@ internal class EncryptedUploadV2TransferControl(
                     BotaBluetoothUUIDs.RecordingTransferV2,
                 )
                 val collector = launch(start = CoroutineStart.UNDISPATCHED) {
+                    var awaitingControl = true
                     try {
                         notifications.collect { notification ->
                             val value = notification.value
@@ -81,6 +162,13 @@ internal class EncryptedUploadV2TransferControl(
                                     4u, false, message = "encrypted transfer notification queue exceeded its byte bound",
                                 )
                             }
+                            if (awaitingControl) {
+                                awaitingControl = false
+                                raw.send(value)
+                                controlAccepted.await()
+                                return@collect
+                            }
+                            intake.accept(mapper.decodeEncryptedUploadV2TransferPayload(value))
                             raw.send(value)
                         }
                         throw EncryptedUploadV2HostException(
@@ -98,7 +186,7 @@ internal class EncryptedUploadV2TransferControl(
                 raw.close(error)
             }
         }
-        val session = Session(peripheralId, raw, bufferedBytes, job)
+        val session = Session(peripheralId, raw, bufferedBytes, intake, controlAccepted, job)
         mutex.withLock {
             if (cleanupUncertain) ownershipUnknown()
             require(request.transportSessionId != 0uL && sessions.isEmpty()) {
@@ -119,7 +207,9 @@ internal class EncryptedUploadV2TransferControl(
                 )
             }
             bufferedBytes.addAndGet(-response.size)
-            when (val control = mapper.decodeEncryptedUploadV2TransferControl(response)) {
+            val decodedControl = mapper.decodeEncryptedUploadV2TransferControl(response)
+            controlAccepted.complete(Unit)
+            when (val control = decodedControl) {
                 is EncryptedUploadV2TransferControlValue.StartAccepted -> {
                     expected(checkpoint == null, "START received an unexpected reply type")
                     validateStart(request, control.value)
@@ -168,11 +258,16 @@ internal class EncryptedUploadV2TransferControl(
         }
     }
 
-    suspend fun writeActiveFrame(transportSessionId: ULong, frame: ByteArray) {
+    suspend fun writeActiveFrame(
+        transportSessionId: ULong,
+        frame: ByteArray,
+        continuation: EncryptedUploadV2TransferContinuation,
+    ) {
         val session = mutex.withLock {
             sessions[transportSessionId]?.takeIf { it.phase == Phase.Active }
                 ?: error("encrypted transfer session is not active")
         }
+        session.intake.continueWith(continuation)
         write(session.peripheralId, frame)
     }
 
@@ -251,24 +346,26 @@ internal class EncryptedUploadV2TransferControl(
         var failure: Throwable? = null
         withContext(NonCancellable + Dispatchers.IO) {
             try {
+                withTimeout(cleanupTimeoutMilliseconds) { session.job.cancelAndJoin() }
+            } catch (error: Throwable) {
+                failure = aggregate(failure, error)
+            }
+            if (abort) {
+                try {
+                    withTimeout(cleanupTimeoutMilliseconds) {
+                        write(session.peripheralId, mapper.createEncryptedUploadV2Abort(id, reason))
+                    }
+                } catch (error: Throwable) {
+                    failure = aggregate(failure, error)
+                }
+            }
+            try {
                 withTimeout(cleanupTimeoutMilliseconds) {
-                    session.job.cancelAndJoin()
-                    if (abort) {
-                        try {
-                            write(session.peripheralId, mapper.createEncryptedUploadV2Abort(id, reason))
-                        } catch (error: Throwable) {
-                            failure = error
-                        }
-                    }
-                    try {
-                        driver.unsubscribe(
-                            session.peripheralId,
-                            BotaBluetoothUUIDs.StorageService,
-                            BotaBluetoothUUIDs.RecordingTransferV2,
-                        )
-                    } catch (error: Throwable) {
-                        failure = aggregate(failure, error)
-                    }
+                    driver.unsubscribe(
+                        session.peripheralId,
+                        BotaBluetoothUUIDs.StorageService,
+                        BotaBluetoothUUIDs.RecordingTransferV2,
+                    )
                 }
             } catch (error: Throwable) {
                 failure = aggregate(failure, error)
@@ -286,15 +383,25 @@ internal class EncryptedUploadV2TransferControl(
     }
 
     private suspend fun cleanupSubscription(session: Session) {
-        withTimeout(cleanupTimeoutMilliseconds) {
-            session.job.cancelAndJoin()
-            driver.unsubscribe(
-                session.peripheralId,
-                BotaBluetoothUUIDs.StorageService,
-                BotaBluetoothUUIDs.RecordingTransferV2,
-            )
+        var failure: Throwable? = null
+        try {
+            withTimeout(cleanupTimeoutMilliseconds) { session.job.cancelAndJoin() }
+        } catch (error: Throwable) {
+            failure = error
         }
-        session.raw.close()
+        try {
+            withTimeout(cleanupTimeoutMilliseconds) {
+                driver.unsubscribe(
+                    session.peripheralId,
+                    BotaBluetoothUUIDs.StorageService,
+                    BotaBluetoothUUIDs.RecordingTransferV2,
+                )
+            }
+        } catch (error: Throwable) {
+            failure = aggregate(failure, error)
+        }
+        session.raw.close(failure)
+        failure?.let { throw it }
     }
 
     private fun startFrame(request: EncryptedUploadV2StartRequest) = mapper.createEncryptedUploadV2Start(

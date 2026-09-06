@@ -27,7 +27,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 
@@ -55,20 +55,66 @@ internal class BluetoothNotification(generation: Long, value: ByteArray) {
 }
 
 internal class AndroidNotificationBuffer(private val capacity: Int = 64) {
-    private val channel = Channel<Result<ByteArray>>(capacity)
+    private val lock = Any()
+    private val pending = ArrayDeque<ByteArray>()
+    private val subscribers = linkedSetOf<Channel<ByteArray>>()
+    private var closed = false
+    private var terminalError: Throwable? = null
 
     fun offer(value: ByteArray) {
-        if (value.size > MaximumNotificationBytes || channel.trySend(Result.success(value.copyOf())).isFailure) {
-            channel.close(BluetoothTransportException(507, "notification buffer overflow"))
+        val overflow = BluetoothTransportException(507, "notification buffer overflow")
+        synchronized(lock) {
+            if (closed) return
+            if (value.size > MaximumNotificationBytes) {
+                failLocked(overflow)
+            } else if (subscribers.isEmpty()) {
+                if (pending.size >= capacity) failLocked(overflow) else pending.addLast(value.copyOf())
+            } else {
+                val failed = subscribers.filter { it.trySend(value.copyOf()).isFailure }
+                failed.forEach {
+                    subscribers.remove(it)
+                    it.close(overflow)
+                }
+            }
         }
     }
 
-    fun fail(error: Throwable) { channel.close(error) }
+    fun fail(error: Throwable) = synchronized(lock) { if (!closed) failLocked(error) }
 
-    fun close() { channel.close() }
+    fun close() = synchronized(lock) {
+        if (!closed) {
+            closed = true
+            subscribers.forEach { it.close() }
+            subscribers.clear()
+            pending.clear()
+        }
+    }
 
-    fun flow(generation: Long): Flow<BluetoothNotification> = channel.receiveAsFlow()
-        .map { result -> BluetoothNotification(generation, result.getOrThrow()) }
+    fun flow(generation: Long): Flow<BluetoothNotification> = flow {
+        val channel = Channel<ByteArray>(capacity)
+        synchronized(lock) {
+            val error = terminalError
+            if (closed) channel.close(error) else {
+                subscribers += channel
+                pending.forEach { channel.trySend(it) }
+                pending.clear()
+            }
+        }
+        try {
+            for (value in channel) emit(BluetoothNotification(generation, value))
+        } finally {
+            synchronized(lock) { subscribers.remove(channel) }
+            channel.cancel()
+        }
+    }
+
+    private fun failLocked(error: Throwable) {
+        closed = true
+        terminalError = error
+        subscribers.forEach { it.close(error) }
+        subscribers.clear()
+        pending.clear()
+    }
 
     private companion object {
         const val MaximumNotificationBytes: Int = 512
@@ -120,6 +166,7 @@ internal interface AndroidBluetoothPlatform : AutoCloseable {
         characteristicUuid: UUID,
     ): Flow<BluetoothNotification>
     suspend fun disconnect(peripheralId: String, generation: Long): GattResult<Unit>
+    fun confirmedDisconnects(): Flow<String> = kotlinx.coroutines.flow.emptyFlow()
     override fun close()
 }
 
@@ -147,6 +194,7 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
     private val writes = mutableMapOf<CharacteristicKey, CancellableContinuation<GattResult<Unit>>>()
     private val descriptors = mutableMapOf<CharacteristicKey, CancellableContinuation<GattResult<Unit>>>()
     private val disconnects = mutableMapOf<OperationKey, CancellableContinuation<GattResult<Unit>>>()
+    private val confirmedDisconnects = Channel<String>(Channel.UNLIMITED)
     private val notificationStreams = mutableMapOf<CharacteristicKey, AndroidNotificationBuffer>()
     private var scanCallback: ScanCallback? = null
     private var closeScan: (() -> Unit)? = null
@@ -359,6 +407,8 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
             }
         }
 
+    override fun confirmedDisconnects(): Flow<String> = confirmedDisconnects.receiveAsFlow()
+
     override fun close() {
         handler.post {
             stopScanOnHandler()
@@ -369,6 +419,7 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
             gatts.clear()
             notificationStreams.values.forEach { it.fail(BluetoothTransportException(499, "closed")) }
             notificationStreams.clear()
+            confirmedDisconnects.close()
             thread.quitSafely()
         }
     }
@@ -384,6 +435,7 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
                     connects.remove(key)?.resume(GattResult(generation, status.takeIf { it != 0 } ?: ImmediateFailure, Unit))
                     disconnects.remove(key)?.resume(GattResult(generation, status, Unit))
                     failNotifications(gatt.device.address, generation, status)
+                    confirmedDisconnects.trySend(gatt.device.address)
                     if (gatts[gatt.device.address] === gatt) gatts.remove(gatt.device.address)
                     gattGenerations.remove(gatt)
                     gatt.close()

@@ -190,6 +190,13 @@ stored as one atomic checkpoint catalog with parent-directory sync. Bounded
 ABORT/unsubscribe cleanup and CONFIRM-attempt state retain ownership when the
 outcome is uncertain; only a confirmed disconnect/reset admits a replacement.
 Physical power-loss durability is not verified by JVM or Android host tests.
+Phase validation happens when each notification arrives, and the platform
+delivers a bounded copy to every active observer instead of load-balancing one
+channel between collectors. The catalog migrates the retired split
+checkpoint/index pair and retains an empty atomic record as the delete marker.
+CONFIRM cancellation waits for exact completion or code 19, while both explicit
+and spontaneous confirmed disconnects clear poisoned ownership and fail any
+pre-CONFIRM material rather than reporting it completed.
 
 `BluetoothGattHost` implements the Bluetooth port with one HandlerThread-owned
 Android platform adapter. GATT operations are serialized per peripheral, not

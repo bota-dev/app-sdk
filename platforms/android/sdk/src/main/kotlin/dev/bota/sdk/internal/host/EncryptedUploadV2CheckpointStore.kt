@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.security.MessageDigest
 import java.util.UUID
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -37,11 +38,20 @@ internal class EncryptedUploadV2CheckpointStore(private val journals: JournalSto
         recordingUuid: String,
         recordingGeneration: UInt,
     ): PersistedEncryptedUploadV2Checkpoint? = mutex.withLock {
-        loadCatalog().firstOrNull {
+        val current = loadCatalog().firstOrNull {
             it.serialNumber == serialNumber &&
                 normalizeRecordingUuid(it.recordingUuid) == normalizeRecordingUuid(recordingUuid) &&
                 it.recordingGeneration == recordingGeneration
         }
+        if (current != null) return@withLock current
+        val index = legacyIndexName(serialNumber, recordingUuid, recordingGeneration)
+        val pointer = journals.read(index) ?: return@withLock null
+        if (pointer.size == 16) {
+            val input = DataInputStream(ByteArrayInputStream(pointer))
+            journals.delete(legacyName(UUID(input.readLong(), input.readLong())))
+        }
+        journals.delete(index)
+        null
     }
 
     suspend fun save(value: PersistedEncryptedUploadV2Checkpoint) = mutex.withLock {
@@ -59,12 +69,46 @@ internal class EncryptedUploadV2CheckpointStore(private val journals: JournalSto
         val values = loadCatalog()
         val retained = values.filterNot { it.uploadSessionId == uploadSessionId }
         if (retained.size == values.size) return@withLock
-        if (retained.isEmpty()) journals.delete(CatalogName)
-        else journals.write(CatalogName, encodeCatalog(retained))
+        journals.write(CatalogName, encodeCatalog(retained))
     }
 
     private suspend fun loadCatalog(): List<PersistedEncryptedUploadV2Checkpoint> =
-        journals.read(CatalogName)?.let(::decodeCatalog).orEmpty()
+        readCatalog() ?: migrateLegacyCatalog()
+
+    private suspend fun readCatalog(): List<PersistedEncryptedUploadV2Checkpoint>? =
+        journals.read(CatalogName)?.let(::decodeCatalog)
+
+    private suspend fun migrateLegacyCatalog(): List<PersistedEncryptedUploadV2Checkpoint> {
+        val storedNames = journals.names()
+        val names = storedNames + storedNames.filter { it.endsWith(".bak") }.map { it.removeSuffix(".bak") }
+        val legacyNames = names.filter { LegacyName.matches(it) }.sorted()
+        if (legacyNames.isEmpty()) return emptyList()
+        val indexNames = legacyNames.filter { it.endsWith(".index") }
+        if (indexNames.size > MaximumCatalogEntries) invalid("legacy checkpoint index has too many entries")
+        val values = indexNames.mapNotNull { indexName ->
+            val pointer = journals.read(indexName) ?: return@mapNotNull null
+            if (pointer.size != 16) return@mapNotNull null
+            val input = DataInputStream(ByteArrayInputStream(pointer))
+            val id = UUID(input.readLong(), input.readLong())
+            val sidecar = journals.read(legacyName(id)) ?: return@mapNotNull null
+            runCatching { decode(sidecar) }.getOrNull()?.takeIf { value ->
+                value.uploadSessionId == id &&
+                    legacyIndexName(value.serialNumber, value.recordingUuid, value.recordingGeneration) == indexName
+            }
+        }
+        validateCatalogIdentities(values)
+        journals.write(CatalogName, encodeCatalog(values))
+        legacyNames.forEach { journals.delete(it) }
+        return values
+    }
+
+    private fun legacyName(id: UUID): String = "encrypted-upload-v2-$id.checkpoint"
+
+    private fun legacyIndexName(serialNumber: String, recordingUuid: String, generation: UInt): String {
+        val identity = "$serialNumber\u0000${normalizeRecordingUuid(recordingUuid)}\u0000$generation".encodeToByteArray()
+        val digest = MessageDigest.getInstance("SHA-256").digest(identity).joinToString("") { "%02x".format(it) }
+        return "encrypted-upload-v2-$digest.index"
+    }
 
     private fun encodeCatalog(values: List<PersistedEncryptedUploadV2Checkpoint>): ByteArray =
         ByteArrayOutputStream().use { bytes ->
@@ -91,8 +135,16 @@ internal class EncryptedUploadV2CheckpointStore(private val journals: JournalSto
                 if (input.available() != 0 || it.map(PersistedEncryptedUploadV2Checkpoint::uploadSessionId).distinct().size != it.size) {
                     invalid("checkpoint catalog payload is invalid")
                 }
+                validateCatalogIdentities(it)
             }
         }
+    }
+
+    private fun validateCatalogIdentities(values: List<PersistedEncryptedUploadV2Checkpoint>) {
+        val identities = values.map {
+            Triple(it.serialNumber, normalizeRecordingUuid(it.recordingUuid), it.recordingGeneration)
+        }
+        if (identities.distinct().size != identities.size) invalid("checkpoint catalog recording identity is duplicated")
     }
 
     private fun encode(value: PersistedEncryptedUploadV2Checkpoint): ByteArray =
@@ -181,5 +233,6 @@ internal class EncryptedUploadV2CheckpointStore(private val journals: JournalSto
         const val MaximumIdentifierBytes = 128
         const val MaximumCoreCheckpointBytes = 32 * 1024
         const val MaximumSidecarBytes = 65_536
+        val LegacyName = Regex("encrypted-upload-v2-[0-9a-fA-F-]{36}\\.checkpoint|encrypted-upload-v2-[0-9a-f]{64}\\.index")
     }
 }

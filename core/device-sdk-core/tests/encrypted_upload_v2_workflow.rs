@@ -146,6 +146,26 @@ fn engine_waiting_for_staging() -> (WorkflowEngine, RequestId) {
     (engine, stage_request)
 }
 
+fn engine_waiting_for_confirmation() -> (WorkflowEngine, RequestId) {
+    let (mut engine, stage_request) = engine_waiting_for_staging();
+    let effects = engine
+        .dispatch(host(
+            stage_request,
+            EncryptedUploadV2HostEvent::ArtifactsStaged,
+        ))
+        .unwrap();
+    let effects = engine
+        .dispatch(host(
+            v2_request_id(&effects),
+            EncryptedUploadV2HostEvent::CompletionReceiptAccepted {
+                receipt_sha256: [0x77; 32],
+            },
+        ))
+        .unwrap();
+    let confirmation_request = v2_request_id(&effects);
+    (engine, confirmation_request)
+}
+
 #[test]
 fn invalid_v2_decision_fails_before_engine_state_or_host_effects() {
     let mut invalid = request();
@@ -338,6 +358,31 @@ fn cancellation_after_selection_has_abort_and_no_fallback_or_confirm() {
         Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::ConfirmWithReceipt { .. })
             | Effect::Notify(WorkflowNotification::BleFallbackReady { .. })
     )));
+}
+
+#[test]
+fn cancellation_during_confirmation_defers_to_the_exact_host_outcome() {
+    let (mut engine, confirmation_request) = engine_waiting_for_confirmation();
+
+    let cancellation_effects = engine
+        .dispatch(Event::Cancelled {
+            cancellation_id: CANCELLATION,
+        })
+        .unwrap();
+
+    assert!(cancellation_effects.is_empty());
+    assert!(matches!(engine.status(), WorkflowStatus::Running { .. }));
+    let completion = engine
+        .dispatch(host(
+            confirmation_request,
+            EncryptedUploadV2HostEvent::RecordingConfirmed,
+        ))
+        .unwrap();
+    assert!(completion.iter().any(|effect| matches!(
+        effect.effect,
+        Effect::Notify(WorkflowNotification::Completed { .. })
+    )));
+    assert!(matches!(engine.status(), WorkflowStatus::Completed { .. }));
 }
 
 #[test]

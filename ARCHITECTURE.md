@@ -137,6 +137,12 @@ durable checkpoint ordering, opaque native staging, and receipt-gated
 confirmation. Apple has an internal command mapper, an
 exhaustive twelve-effect host port with typed failure and staged-notification
 routing, and an in-memory application-material registry keyed by opaque ID.
+The shared Rust engine now treats cancellation during an in-flight CONFIRM as
+deferred: Apple and Android settle the exact host confirmation before exposing
+completion or stable cleanup-uncertainty code 19, and neither can emit a later
+rollback. Android rejects phase-invalid transfer frames as notifications
+arrive, uses bounded loss-aware broadcast delivery for concurrent observers,
+and reconciles the retired split checkpoint/index files into its atomic catalog.
 The registry keeps authorization, manifest, receipt, and staging credentials
 out of Rust and persistent state; validates exact document sizes, evidence, and
 bodyless HTTPS PUT requests; and removes providers before terminal cancellation

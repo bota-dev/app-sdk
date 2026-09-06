@@ -17,26 +17,40 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import okhttp3.Request
 import dev.bota.sdk.internal.host.EncryptedUploadV2TerminalOutcome
+import dev.bota.sdk.internal.workflowError
 
 internal class ManagerWorkflowRunner(
     private val responses: (CoreCommand) -> List<CoreNotification> = { emptyList() },
     private val keepOpen: (CoreCommand) -> Boolean = { false },
+    private val failure: (CoreCommand) -> Throwable? = { null },
 ) : CoreWorkflowRunner {
     val commands = mutableListOf<CoreCommand>()
     val cancelledIds = mutableListOf<UUID>()
+    var cancellationSettlement: CoreNotification? = null
+    private val settlements = Channel<CoreNotification>(Channel.UNLIMITED)
 
     override fun run(command: CoreCommand, capabilities: CoreCapabilities): Flow<CoreNotification> = flow {
         commands += command
         responses(command).forEach { emit(it) }
-        if (keepOpen(command)) awaitCancellation()
+        failure(command)?.let { throw it }
+        if (keepOpen(command)) emit(settlements.receive())
     }
 
     override suspend fun cancel(cancellationId: UUID) {
         cancelledIds += cancellationId
+        cancellationSettlement?.let { settlements.send(it) }
+    }
+
+    override suspend fun cancelAndReportExactSettlement(cancellationId: UUID): Boolean {
+        cancel(cancellationId)
+        val settlement = cancellationSettlement
+        if (settlement?.kind == CoreNotificationKind.Failed) throw settlement.workflowError()
+        return settlement != null
     }
 
     override fun close() = Unit
