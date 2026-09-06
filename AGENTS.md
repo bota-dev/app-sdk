@@ -452,8 +452,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `release/evidence/1.0.0-alpha.1-native-abi.md`; facade work may add Swift or
   Kotlin types but must not redesign the C boundary.
 - Apple workflow calls pass through one `CoreEngineActor`; `run` establishes the
-  ABI workflow owner before returning its stream, and host callbacks preserve
-  the effect operation, request ID, and cancellation identity exactly.
+  ABI workflow owner and drains initially queued effects through host
+  registration before returning its stream. Host callbacks preserve the effect
+  operation, request ID, and cancellation identity exactly.
 - Apple concurrency tests must await explicit callback handshakes; stream
   completion does not order background host-effect bookkeeping.
 - `BotaDeviceClient.configure()` is idempotent until `destroy()`. Public device

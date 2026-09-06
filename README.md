@@ -236,9 +236,10 @@ universal macOS XCFramework from that frozen header and proves a Swift package
 can import the real ABI. Its Swift value models and protocol codecs are fixture
 tested against the shared Rust implementation, including unknown wire values
 and Bota Note connection normalization. A serialized Swift actor now establishes
-the ABI workflow owner before returning each stream, drives the real Rust
-workflow engine, preserves request/cancellation correlation, and checks all 29
-canonical workflow traces from generated SwiftPM resources. Its
+the ABI workflow owner and registers initially queued host effects before
+returning each stream, drives the real Rust workflow engine, preserves
+request/cancellation correlation, and checks all 29 canonical workflow traces
+from generated SwiftPM resources. Its
 host executor exhaustively routes the released effects plus all twelve additive
 Encrypted Upload v2 effects through narrow native ports, bounds raw payloads,
 and isolates cancelled or late completions.

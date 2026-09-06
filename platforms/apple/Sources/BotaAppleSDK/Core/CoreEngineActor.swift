@@ -29,7 +29,7 @@ actor CoreEngineActor {
                 cancellationID: CoreCancellationID(command.cancellationID),
                 continuation: pair.continuation
             )
-            Task { await self.drain() }
+            await drain()
         } catch {
             pair.continuation.finish(throwing: error)
         }

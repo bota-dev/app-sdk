@@ -110,6 +110,51 @@ final class CoreEngineActorTests: XCTestCase {
         }
     }
 
+    func testImmediateCancellationDoesNotStartQueuedStartEffectsAfterHostCancellation() async throws {
+        let host = ImmediateCancellationHost()
+        let engine = CoreEngineActor(abi: try CoreAbiClient(), host: host)
+        let cancellationID = UUID(uuidString: "02020202-0202-0202-0202-020202020202")!
+
+        let stream = await engine.run(
+            .discoverDevices(
+                timeoutMilliseconds: 10_000,
+                allowDuplicates: false,
+                cancellationID: cancellationID
+            ),
+            capabilities: [.bluetooth, .timer]
+        )
+        try await engine.cancel(cancellationID)
+
+        var notifications: [CoreNotificationKind] = []
+        for try await notification in stream {
+            notifications.append(notification.kind)
+        }
+
+        XCTAssertEqual(notifications, [.started, .cancelled])
+        let timeline = await host.timeline
+        XCTAssertEqual(timeline, [
+            .effect(UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_BLE_START_SCAN)),
+            .effect(UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_TIMER_SCHEDULE)),
+            .cancel,
+            .effect(UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_BLE_STOP_SCAN)),
+            .effect(UInt32(BOTA_DEVICE_SDK_V1_HOST_EFFECT_TIMER_CANCEL)),
+        ])
+
+        let replacementCancellationID = UUID(uuidString: "03030303-0303-0303-0303-030303030303")!
+        let replacement = await engine.run(
+            .discoverDevices(
+                timeoutMilliseconds: 10_000,
+                allowDuplicates: false,
+                cancellationID: replacementCancellationID
+            ),
+            capabilities: [.bluetooth, .timer]
+        )
+        var iterator = replacement.makeAsyncIterator()
+        let replacementStarted = try await iterator.next()
+        XCTAssertEqual(replacementStarted?.kind, .started)
+        try await engine.cancel(replacementCancellationID)
+    }
+
     func testRejectsAStaleHostEventWithoutLosingTheOwner() async throws {
         let host = FakeCoreHost(handler: FakeCoreHost.discoveryHandler(staleFirst: true))
         let engine = CoreEngineActor(abi: try CoreAbiClient(), host: host)
@@ -143,6 +188,24 @@ final class CoreEngineActorTests: XCTestCase {
         await fulfillment(of: [completed], timeout: 0.5)
         collector.cancel()
         await host.finishScan()
+    }
+}
+
+private actor ImmediateCancellationHost: CoreHost {
+    enum Event: Equatable {
+        case effect(UInt32)
+        case cancel
+    }
+
+    private(set) var timeline: [Event] = []
+
+    func execute(_ effect: CoreEffect) async -> AsyncThrowingStream<CoreHostEvent, Error> {
+        timeline.append(.effect(effect.kind))
+        return AsyncThrowingStream { $0.finish() }
+    }
+
+    func cancel(_ cancellationID: CoreCancellationID) async {
+        timeline.append(.cancel)
     }
 }
 

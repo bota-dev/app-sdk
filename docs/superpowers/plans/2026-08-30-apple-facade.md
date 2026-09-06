@@ -272,9 +272,10 @@ git commit -m "feat(apple): map shared models and codecs" \
 
 **Interfaces:**
 - Consumes: all 10 command kinds, 30 effect kinds, 34 host-event kinds, 12 notifications, and 29 canonical workflow scenarios.
-- Produces: `CoreEngineActor.run`, which establishes the ABI owner before
-  returning its ordered `AsyncThrowingStream<CoreNotification, Error>`, `cancel`,
-  and internal correlated dispatch/drain behavior.
+- Produces: `CoreEngineActor.run`, which establishes the ABI owner and drains
+  initially queued effects through host registration before returning its
+  ordered `AsyncThrowingStream<CoreNotification, Error>`, `cancel`, and internal
+  correlated dispatch/drain behavior.
 
 ```swift
 actor CoreEngineActor {
@@ -299,10 +300,12 @@ Expected: FAIL because `CoreEngineActor` and the fixture resource do not exist.
 
 - [ ] **Step 3: Implement one serialized engine loop**
 
-`run` converts one command, calls start, drains all queued packets, yields
-notifications, and executes effects one at a time through `CoreHost`. Each host
-completion is dispatched before the next poll. The actor retains the active
-cancellation ID until terminal notification. A second command is allowed to
+`run` converts one command, calls start, drains the initial queued packets through
+host-effect registration before returning, yields notifications, and executes
+effects one at a time through `CoreHost`. Each host completion is dispatched
+before the next poll. The actor retains the active cancellation ID until terminal
+notification. Immediate cancellation therefore cannot precede registration of a
+start effect that was already queued by Rust. A second command is allowed to
 reach Rust and returns stable `operationInProgress`; Swift does not invent a
 parallel ownership policy.
 

@@ -677,11 +677,14 @@ including recording state and command-result compatibility.
 
 `CoreEngineActor` is the single Swift workflow executor. It submits all ten
 typed command shapes to Rust, establishes the ABI workflow owner before it
-returns a notification stream, drains notifications and host effects in order,
-dispatches correlated host completions before polling again, and keeps the
-active cancellation identity until a terminal notification. Cancellation reaches
-that ABI owner before native host cancellation begins. Unexpected stale
-host events are rejected by Rust without releasing the current owner. The
+returns a notification stream, and drains the initial ABI queue through native
+host-effect registration before that return. It continues draining notifications
+and host effects in order, dispatches correlated host completions before polling
+again, and keeps the active cancellation identity until a terminal notification.
+Cancellation reaches that ABI owner before native host cancellation begins, so
+an immediate cancellation cannot be followed by registration of a queued start
+effect. Unexpected stale host events are rejected by Rust without releasing the
+current owner. The
 compact SwiftPM workflow resource is generated from all seven canonical suites;
 package tests reject drift and cover all 29 scenario labels. Concrete native
 effect implementations route through the native hosts described below.
