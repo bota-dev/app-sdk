@@ -101,8 +101,12 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `0409` subscription only after that canonical CONFIRM write. Later
   cancellation or subscription-cleanup uncertainty cannot reverse a successful
   CONFIRM; uncertain cleanup instead poisons the BLE owner until reconnect. The
-  host is not selected by production configuration and still has no application
-  profile selection or manager wiring.
+  production configuration installs this host with the signed-blob writer,
+  transfer-control actor, material registry, and native staging upload service.
+  `RecordingManager.syncEncryptedRecordingV2` passes a fresh `0406` capability
+  snapshot and matching native checkpoint to an application-owned provider
+  before it starts the explicit v2 command; it never infers or retries legacy
+  behavior after v2 selection.
   Apple's internal
   `EncryptedUploadV2SignedBlobWriter` permits one owner, queries the actual
   write-with-response limit capped at the 512-byte protocol maximum, subscribes

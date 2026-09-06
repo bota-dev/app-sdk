@@ -1,14 +1,14 @@
 import CryptoKit
 @preconcurrency import Foundation
 
-struct EncryptedUploadV2TransferEvidence: Equatable, Sendable {
-    let ciphertextLength: UInt64
-    let ciphertextSHA256: Data
-    let manifestLength: UInt16
-    let manifestSHA256: Data
-    let blockCount: UInt32
+public struct EncryptedUploadV2TransferEvidence: Equatable, Sendable {
+    public let ciphertextLength: UInt64
+    public let ciphertextSHA256: Data
+    public let manifestLength: UInt16
+    public let manifestSHA256: Data
+    public let blockCount: UInt32
 
-    init(
+    public init(
         ciphertextLength: UInt64,
         ciphertextSHA256: Data,
         manifestLength: UInt16,

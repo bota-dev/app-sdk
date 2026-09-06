@@ -178,8 +178,12 @@ host callback. The live control actor writes CONFIRM only for the claimed
 transport session and then releases its `0409` subscription. Once CONFIRM is
 written, later cancellation or subscription-cleanup uncertainty cannot reverse
 the confirmed result; uncertain cleanup poisons BLE ownership until reconnect.
-This host remains unselected by production configuration and has no application
-profile selection or manager wiring.
+Production configuration installs this host with the signed-blob writer,
+transfer-control owner, material registry, and native file upload service.
+`RecordingManager.syncEncryptedRecordingV2` reads `0406` fresh and gathers the
+matching native checkpoint before its application-owned provider selects the
+explicit v2 material; it never infers or retries a legacy profile after that
+selection.
 Apple's
 serialized signed-blob writer uses the current CoreBluetooth
 write-with-response limit capped at 512 bytes, subscribes to `0407` before
@@ -194,9 +198,8 @@ echoed identity, ciphertext, negotiated bounds, and checkpoint values on
 successful replies, preserves the device checkpoint on RESUME_REJECT/ERROR,
 and retains the live `0409` stream plus serialized owner for DATA/window/EOF.
 Cancellation or explicit abort applies the same bounded ABORT/unsubscribe
-ownership policy. The production configuration intentionally installs an
-unavailable transfer port until profile selection, completion-service
-installation, and manager wiring land. Android still has no equivalent host,
+ownership policy. The production configuration installs the Apple-only internal
+v2 port after application-owned selection. Android still has no equivalent host,
 React Native exposes no v2 workflow or bulk bytes, and compatibility metadata
 keeps runtime support and firmware advertisement false.
 The core now also exposes a side-effect-free three-profile selection validator:
@@ -205,14 +208,15 @@ immutable recording generation in `bota_enc_v2` storage before accepting v2;
 rejects either legacy
 profile under `v2_required`; and accepts historical P10 only after its header
 was observed. This validator emits no BLE, file, network, delete, or fallback
-effect. The Apple provider contract exists, but manager integration and native
-transfer/staging remain absent from released workflows. A byte-free batch-v2
+effect. The Apple provider contract is selected by the public manager entry,
+which installs matching material and starts only the explicit v2 profile. A byte-free batch-v2
 coordinator now drives the shipping reducer
 and additive ABI contract: it persists each complete window before ACK,
 truncates resume state to the last proven offset, exposes staging evidence,
 and cannot emit CONFIRM until a native host reports receipt acceptance. It has
-no legacy-fallback action. Apple host-boundary integration is present, but its
-runtime implementation and public-facade integration are still absent.
+no legacy-fallback action. Apple production wiring provides the host's
+transport, staging, receipt, and cancellation services; other native facades
+remain outside this runtime milestone.
 
 The JavaScript compatibility layer now restores all 80 frozen exports. This
 includes every `0.0.65` public type, the runtime error hierarchy,
@@ -348,12 +352,13 @@ policy/capability decision, including observed-P10 evidence, without selecting
 or starting a workflow. Its separate deterministic batch coordinator defines
 mixed-profile failure, proven-checkpoint resume, staging, and receipt-gated
 CONFIRM without carrying ciphertext or cryptographic documents. Native hosts
-will stream opaque canonical ciphertext and the opaque upload manifest to
-staging after their transport implementations are complete. Apple can now
-drive the integrated engine/ABI through a dedicated internal host port, but its
-default port fails closed with `feature_unavailable`; no ciphertext transfer or
-staging occurs. That runtime target is not implemented and does not change the
-current completion metadata contract.
+stream opaque canonical ciphertext and the opaque upload manifest to staging
+after their transport implementations are complete. Apple production
+configuration installs the dedicated internal host port, while the public
+manager obtains a fresh capability/checkpoint snapshot before the application
+selects its v2 material. Its current completion metadata remains contract-only:
+this Apple runtime work does not enable the broader release workflow or
+firmware advertisement.
 
 The React Native device-log broker subscribes to the public native log stream
 before starting delivery. Apple and Android retain packet decoding and emit

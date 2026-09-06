@@ -1,5 +1,199 @@
 import Foundation
 
+public struct EncryptedUploadV2Capabilities: Equatable, Sendable {
+    public let flags: UInt32
+    public let maximumSignedBlobBytes: UInt16
+    public let maximumManifestBytes: UInt16
+    public let maximumDataPayloadBytes: UInt16
+    public let maximumWindowPackets: UInt16
+    public let durableCheckpointIntervalBlocks: UInt32
+    public let maximumMissingSequences: UInt16
+
+    public init(
+        flags: UInt32,
+        maximumSignedBlobBytes: UInt16,
+        maximumManifestBytes: UInt16,
+        maximumDataPayloadBytes: UInt16,
+        maximumWindowPackets: UInt16,
+        durableCheckpointIntervalBlocks: UInt32,
+        maximumMissingSequences: UInt16
+    ) {
+        self.flags = flags
+        self.maximumSignedBlobBytes = maximumSignedBlobBytes
+        self.maximumManifestBytes = maximumManifestBytes
+        self.maximumDataPayloadBytes = maximumDataPayloadBytes
+        self.maximumWindowPackets = maximumWindowPackets
+        self.durableCheckpointIntervalBlocks = durableCheckpointIntervalBlocks
+        self.maximumMissingSequences = maximumMissingSequences
+    }
+
+    var value: EncryptedUploadV2CapabilitiesValue {
+        .init(
+            flags: flags,
+            maximumSignedBlobBytes: maximumSignedBlobBytes,
+            maximumManifestBytes: maximumManifestBytes,
+            maximumDataPayloadBytes: maximumDataPayloadBytes,
+            maximumWindowPackets: maximumWindowPackets,
+            durableCheckpointIntervalBlocks: durableCheckpointIntervalBlocks,
+            maximumMissingSequences: maximumMissingSequences
+        )
+    }
+
+    init(value: EncryptedUploadV2CapabilitiesValue) {
+        self.init(
+            flags: value.flags,
+            maximumSignedBlobBytes: value.maximumSignedBlobBytes,
+            maximumManifestBytes: value.maximumManifestBytes,
+            maximumDataPayloadBytes: value.maximumDataPayloadBytes,
+            maximumWindowPackets: value.maximumWindowPackets,
+            durableCheckpointIntervalBlocks: value.durableCheckpointIntervalBlocks,
+            maximumMissingSequences: value.maximumMissingSequences
+        )
+    }
+}
+
+public struct EncryptedUploadV2CapabilitySnapshot: Equatable, Sendable {
+    public let rawValue: Data
+    public let sha256: Data
+    public let capabilities: EncryptedUploadV2Capabilities
+
+    public init(rawValue: Data, sha256: Data, capabilities: EncryptedUploadV2Capabilities) {
+        self.rawValue = rawValue
+        self.sha256 = sha256
+        self.capabilities = capabilities
+    }
+}
+
+public struct EncryptedUploadV2Recording: Equatable, Sendable {
+    public let uuid: String
+    public let generation: UInt32
+    public let ciphertextLength: UInt64
+    public let ciphertextSHA256: Data
+
+    public init(uuid: String, generation: UInt32, ciphertextLength: UInt64, ciphertextSHA256: Data) {
+        self.uuid = uuid
+        self.generation = generation
+        self.ciphertextLength = ciphertextLength
+        self.ciphertextSHA256 = ciphertextSHA256
+    }
+}
+
+public struct EncryptedUploadV2Checkpoint: Equatable, Sendable {
+    public let uploadSessionID: UUID
+    public let ownerRevision: UInt32
+    public let revision: UInt32
+    public let nextCiphertextOffset: UInt64
+    public let prefixSHA256: Data
+    public let highestContiguousSequence: UInt32?
+
+    public init(
+        uploadSessionID: UUID,
+        ownerRevision: UInt32,
+        revision: UInt32,
+        nextCiphertextOffset: UInt64,
+        prefixSHA256: Data,
+        highestContiguousSequence: UInt32?
+    ) {
+        self.uploadSessionID = uploadSessionID
+        self.ownerRevision = ownerRevision
+        self.revision = revision
+        self.nextCiphertextOffset = nextCiphertextOffset
+        self.prefixSHA256 = prefixSHA256
+        self.highestContiguousSequence = highestContiguousSequence
+    }
+}
+
+public struct EncryptedUploadV2ProviderContext: Equatable, Sendable {
+    public let recording: EncryptedUploadV2Recording
+    public let capability: EncryptedUploadV2CapabilitySnapshot
+    public let checkpoint: EncryptedUploadV2Checkpoint?
+
+    public init(
+        recording: EncryptedUploadV2Recording,
+        capability: EncryptedUploadV2CapabilitySnapshot,
+        checkpoint: EncryptedUploadV2Checkpoint?
+    ) {
+        self.recording = recording
+        self.capability = capability
+        self.checkpoint = checkpoint
+    }
+}
+
+public enum EncryptedUploadV2SecurityPolicy: Sendable {
+    case legacyAllowed
+    case v2Preferred
+    case v2Required
+
+    var value: UploadSecurityPolicyValue {
+        switch self {
+        case .legacyAllowed: .legacyAllowed
+        case .v2Preferred: .v2Preferred
+        case .v2Required: .v2Required
+        }
+    }
+}
+
+public struct EncryptedUploadV2Material: @unchecked Sendable {
+    public typealias StagingRequest = @Sendable (EncryptedUploadV2TransferEvidence) async throws -> URLRequest
+    public typealias ManifestSubmitter = @Sendable (Data, EncryptedUploadV2TransferEvidence) async throws -> Void
+    public typealias Finalizer = @Sendable (EncryptedUploadV2TransferEvidence) async throws -> Void
+    public typealias ReceiptProvider = @Sendable (EncryptedUploadV2TransferEvidence) async throws -> Data
+    public typealias CancellationHandler = @Sendable () async throws -> Void
+
+    public let materialID: String
+    public let recordingID: String
+    public let uploadSessionID: UUID
+    public let ownerRevision: UInt32
+    public let policy: EncryptedUploadV2SecurityPolicy
+    public let authorization: Data
+    let stagingRequest: StagingRequest
+    let submitManifest: ManifestSubmitter
+    let finalize: Finalizer
+    let completionReceipt: ReceiptProvider
+    let cancel: CancellationHandler
+
+    public init(
+        materialID: String,
+        recordingID: String,
+        uploadSessionID: UUID,
+        ownerRevision: UInt32,
+        policy: EncryptedUploadV2SecurityPolicy,
+        authorization: Data,
+        stagingRequest: @escaping StagingRequest,
+        submitManifest: @escaping ManifestSubmitter,
+        finalize: @escaping Finalizer,
+        completionReceipt: @escaping ReceiptProvider,
+        cancel: @escaping CancellationHandler = {}
+    ) {
+        self.materialID = materialID
+        self.recordingID = recordingID
+        self.uploadSessionID = uploadSessionID
+        self.ownerRevision = ownerRevision
+        self.policy = policy
+        self.authorization = authorization
+        self.stagingRequest = stagingRequest
+        self.submitManifest = submitManifest
+        self.finalize = finalize
+        self.completionReceipt = completionReceipt
+        self.cancel = cancel
+    }
+
+    var provider: EncryptedUploadV2MaterialProvider {
+        .init(
+            authorization: authorization,
+            stagingRequest: stagingRequest,
+            submitManifest: { try await submitManifest($0.manifest, $0.evidence) },
+            finalize: finalize,
+            completionReceipt: completionReceipt,
+            cancel: cancel
+        )
+    }
+}
+
+public typealias EncryptedUploadV2ProfileProvider = @Sendable (
+    EncryptedUploadV2ProviderContext
+) async throws -> EncryptedUploadV2Material
+
 enum RecordingUploadProfileValue: UInt64, Equatable, Sendable {
     case legacyPlainV1 = 1
     case legacyP10Relay = 2

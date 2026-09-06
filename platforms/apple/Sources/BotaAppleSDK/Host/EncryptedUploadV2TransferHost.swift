@@ -103,7 +103,8 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         rootDirectory: URL,
         mapper: CoreModelMapper,
         transferControl: EncryptedUploadV2TransferControl,
-        resolvePeripheralID: @escaping @Sendable () async throws -> String
+        resolvePeripheralID: @escaping @Sendable () async throws -> String,
+        services: EncryptedUploadV2TransferHostServices? = nil
     ) {
         self.init(
             rootDirectory: rootDirectory,
@@ -150,7 +151,46 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
                     transportSessionID: transportSessionID,
                     reason: 0x00FF
                 )
-            }
+            },
+            services: services
+        )
+    }
+
+    func checkpoint(
+        serialNumber: String,
+        recordingUUID: String,
+        recordingGeneration: UInt32
+    ) throws -> EncryptedUploadV2Checkpoint? {
+        let directory = rootDirectory.appendingPathComponent("Checkpoints", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: directory.path) else { return nil }
+        let urls = try FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]
+        )
+        let values = try urls.compactMap { url -> PersistedEncryptedUploadV2Checkpoint? in
+            guard url.pathExtension == "json",
+                  (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) <= Self.maximumCheckpointSidecarBytes
+            else { return nil }
+            return try JSONDecoder().decode(PersistedEncryptedUploadV2Checkpoint.self, from: Data(contentsOf: url))
+        }.filter {
+            $0.serialNumber == serialNumber
+                && $0.recordingUUID == recordingUUID
+                && $0.recordingGeneration == recordingGeneration
+        }
+        guard values.count <= 1 else {
+            throw Self.failure(code: 11, detail: "multiple encrypted upload v2 checkpoints match recording identity")
+        }
+        guard let value = values.first,
+              let uploadSessionID = UUID(v2Bytes: value.uploadSessionBytes)
+        else { return nil }
+        return .init(
+            uploadSessionID: uploadSessionID,
+            ownerRevision: value.ownerRevision,
+            revision: value.revision,
+            nextCiphertextOffset: value.nextCiphertextOffset,
+            prefixSHA256: value.prefixSHA256,
+            highestContiguousSequence: value.highestContiguousSequence
         )
     }
 

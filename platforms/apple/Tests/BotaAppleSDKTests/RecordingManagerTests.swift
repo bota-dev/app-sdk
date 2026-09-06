@@ -174,10 +174,94 @@ final class RecordingManagerTests: XCTestCase {
         XCTAssertEqual(commands.first?.kind, 0x010b)
     }
 
+    func testEncryptedV2ReadsFreshSnapshotBeforeApplicationSelectionAndStartsOnlyV2() async throws {
+        let capability = EncryptedUploadV2CapabilitySnapshot(
+            rawValue: Data(repeating: 0xa1, count: 24),
+            sha256: Data(repeating: 0xb2, count: 32),
+            capabilities: .init(
+                flags: 0x7f,
+                maximumSignedBlobBytes: 408,
+                maximumManifestBytes: 580,
+                maximumDataPayloadBytes: 160,
+                maximumWindowPackets: 4,
+                durableCheckpointIntervalBlocks: 1,
+                maximumMissingSequences: 1
+            )
+        )
+        let runner = TransferWorkflowRunner { _ in [
+            transferNotification(UInt32(BOTA_DEVICE_SDK_V1_NOTIFICATION_COMPLETED), operation: 4),
+        ] }
+        let checkpoint = EncryptedUploadV2Checkpoint(
+            uploadSessionID: UUID(uuidString: "10213243-5465-7687-98a9-bacbdcedfe0f")!,
+            ownerRevision: 2,
+            revision: 5,
+            nextCiphertextOffset: 512,
+            prefixSHA256: Data(repeating: 0x44, count: 32),
+            highestContiguousSequence: 3
+        )
+        let recorder = TransferFacadeRecorder()
+        let manager = RecordingManager()
+        await manager.attach(await transferRuntime(
+            runner: runner,
+            recorder: recorder,
+            encryptedUploadV2Capabilities: { _ in capability },
+            encryptedUploadV2Checkpoint: { serialNumber, recordingUUID, generation in
+                XCTAssertEqual(serialNumber, "EVFXXW67KP")
+                XCTAssertEqual(recordingUUID, "00112233-4455-6677-8899-aabbccddeeff")
+                XCTAssertEqual(generation, 3)
+                return checkpoint
+            }
+        ))
+
+        let recording = EncryptedUploadV2Recording(
+            uuid: "00112233-4455-6677-8899-aabbccddeeff",
+            generation: 3,
+            ciphertextLength: 1024,
+            ciphertextSHA256: Data(repeating: 0x5a, count: 32)
+        )
+        let selection = EncryptedUploadV2SelectionRecorder()
+        try await manager.syncEncryptedRecordingV2(transferDevice(), recording: recording) { context in
+            await selection.record(context)
+            return .init(
+                materialID: "material-id",
+                recordingID: "rec_123",
+                uploadSessionID: UUID(uuidString: "00112233-4455-6677-8899-aabbccddeeff")!,
+                ownerRevision: 4,
+                policy: .v2Required,
+                authorization: Data(repeating: 0xc3, count: 408),
+                stagingRequest: { _ in URLRequest(url: URL(string: "https://staging.example/upload")!) },
+                submitManifest: { _, _ in },
+                finalize: { _ in },
+                completionReceipt: { _ in Data(repeating: 0xd4, count: 336) },
+                cancel: {}
+            )
+        }
+
+        let selectedContext = await selection.context
+        XCTAssertEqual(selectedContext?.capability, capability)
+        XCTAssertEqual(selectedContext?.checkpoint, checkpoint)
+        let commands = await runner.commands
+        XCTAssertEqual(commands.map(\.kind), [
+            UInt32(BOTA_DEVICE_SDK_V1_COMMAND_TRANSFER_ENCRYPTED_RECORDING),
+        ])
+        XCTAssertEqual(
+            commands.first?.fields.unsigned(UInt32(BOTA_DEVICE_SDK_V1_FIELD_CAPABILITY_FLAGS)),
+            UInt64(capability.capabilities.flags)
+        )
+    }
+
     private static func hex(_ value: String) -> Data {
         Data(stride(from: 0, to: value.count, by: 2).map { offset in
             let start = value.index(value.startIndex, offsetBy: offset)
             return UInt8(value[start..<value.index(start, offsetBy: 2)], radix: 16)!
         })
+    }
+}
+
+private actor EncryptedUploadV2SelectionRecorder {
+    private(set) var context: EncryptedUploadV2ProviderContext?
+
+    func record(_ context: EncryptedUploadV2ProviderContext) {
+        self.context = context
     }
 }

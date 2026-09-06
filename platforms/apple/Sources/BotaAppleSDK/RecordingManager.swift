@@ -127,6 +127,123 @@ public actor RecordingManager {
         transferMetadataBySinkID.removeValue(forKey: sinkID)
     }
 
+    /// Runs only the explicitly selected v2 workflow. Legacy selection remains on the
+    /// existing API and is never inferred or retried from a v2 failure.
+    public func syncEncryptedRecordingV2(
+        _ device: ConnectedDevice,
+        recording: EncryptedUploadV2Recording,
+        provider: @escaping EncryptedUploadV2ProfileProvider
+    ) async throws {
+        let runtime = try configuredRuntime()
+        try await runtime.connection.require(device)
+        let capability = try await runtime.readEncryptedUploadV2Capabilities(device.id)
+        let checkpoint = try await runtime.encryptedUploadV2Checkpoint(
+            device.serialNumber,
+            recording.uuid,
+            recording.generation
+        )
+        let material = try await provider(.init(
+            recording: recording,
+            capability: capability,
+            checkpoint: checkpoint
+        ))
+        try await runtime.connection.require(device)
+        let maximumFrameBytes = min(
+            try await runtime.encryptedUploadV2MaximumWriteLength(device.id),
+            512
+        )
+        guard maximumFrameBytes >= 128 else {
+            throw BotaSDKError(
+                code: .unsupportedCapability,
+                operation: .transferRecording,
+                retryable: false,
+                detail: "encrypted upload v2 write limit is too small"
+            )
+        }
+        let maximumMissingSequences = min(
+            Int(capability.capabilities.maximumMissingSequences),
+            (maximumFrameBytes - 68) / 4
+        )
+        let windowPackets = min(Int(capability.capabilities.maximumWindowPackets), maximumMissingSequences)
+        let dataPayloadBytes = min(
+            Int(capability.capabilities.maximumDataPayloadBytes),
+            maximumFrameBytes - 28
+        )
+        guard windowPackets > 0, dataPayloadBytes > 0,
+              let negotiatedWindowPackets = UInt16(exactly: windowPackets),
+              let negotiatedDataPayloadBytes = UInt16(exactly: dataPayloadBytes)
+        else {
+            throw BotaSDKError(
+                code: .unsupportedCapability,
+                operation: .transferRecording,
+                retryable: false,
+                detail: "encrypted upload v2 negotiated bounds are unusable"
+            )
+        }
+        let command = CoreCommand.transferEncryptedRecording(.init(
+            serialNumber: device.serialNumber,
+            recordingUUID: recording.uuid,
+            recordingGeneration: recording.generation,
+            storageFormat: 3,
+            uploadSessionID: material.uploadSessionID,
+            ownerRevision: material.ownerRevision,
+            transportSessionID: Self.randomTransportSessionID(),
+            materialID: material.materialID,
+            sinkID: UUID().uuidString,
+            profile: .encryptedUploadV2,
+            securityPolicy: material.policy.value,
+            capabilities: capability.capabilities.value,
+            windowPackets: negotiatedWindowPackets,
+            dataPayloadBytes: negotiatedDataPayloadBytes,
+            ciphertextLength: recording.ciphertextLength,
+            ciphertextSHA256: recording.ciphertextSHA256
+        ))
+        try await begin(command.cancellationID, operation: .transferRecording, runtime: runtime)
+        do {
+            try await runtime.registerEncryptedUploadV2Material(material.materialID, material)
+            activeCleanup = {
+                await runtime.terminateEncryptedUploadV2Material(material.materialID, .failed)
+            }
+            var completed = false
+            let notifications = await runtime.engine.run(command, capabilities: runtime.capabilities)
+            for try await notification in notifications {
+                switch notification.kind {
+                case .completed:
+                    completed = true
+                case .failed:
+                    throw workflowError(notification)
+                case .cancelled:
+                    throw facadeCancelled(operation: .transferRecording)
+                case .started, .encryptedUploadV2Staged:
+                    break
+                case .deviceDiscovered, .connectionEstablished, .progress, .retrying,
+                     .deviceUploadPreserved, .bleFallbackReady, .firmwareProgress, .deviceLog,
+                     .streamingPaused, .streamingResumed, .streamingCompleted:
+                    throw BotaSDKError(
+                        code: .unexpectedEvent,
+                        operation: .transferRecording,
+                        retryable: false,
+                        detail: "unexpected notification in encrypted upload v2 workflow"
+                    )
+                }
+            }
+            guard completed else {
+                throw BotaSDKError(
+                    code: .unexpectedEvent,
+                    operation: .transferRecording,
+                    retryable: false,
+                    detail: "encrypted upload v2 workflow ended without completion"
+                )
+            }
+            await runtime.terminateEncryptedUploadV2Material(material.materialID, .completed)
+            await finish(command.cancellationID, runtime: runtime)
+        } catch {
+            await runtime.terminateEncryptedUploadV2Material(material.materialID, .failed)
+            await finish(command.cancellationID, runtime: runtime)
+            throw facadePublicError(error)
+        }
+    }
+
     public func streamRecording(
         _ device: ConnectedDevice,
         recordingUUID: String,
@@ -392,6 +509,10 @@ public actor RecordingManager {
     private func configuredRuntime() throws -> DeviceRuntime {
         guard let runtime else { throw facadeNotConfigured() }
         return runtime
+    }
+
+    private static func randomTransportSessionID() -> UInt64 {
+        UInt64.random(in: 1...UInt64.max)
     }
 }
 

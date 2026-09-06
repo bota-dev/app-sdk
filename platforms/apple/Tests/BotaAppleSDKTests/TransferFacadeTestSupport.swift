@@ -56,7 +56,13 @@ actor TransferFacadeRecorder {
 func transferRuntime(
     runner: TransferWorkflowRunner,
     recorder: TransferFacadeRecorder,
-    notificationData: Data = Data()
+    notificationData: Data = Data(),
+    encryptedUploadV2Capabilities: @escaping @Sendable
+        (String) async throws -> EncryptedUploadV2CapabilitySnapshot = { _ in
+            throw NativeHostError.missingResource("encrypted upload v2 capabilities")
+        },
+    encryptedUploadV2Checkpoint: @escaping @Sendable
+        (String, String, UInt32) async throws -> EncryptedUploadV2Checkpoint? = { _, _, _ in nil }
 ) async -> DeviceRuntime {
     let mapper = try! CoreModelMapper()
     let connection = DeviceConnectionRegistry()
@@ -77,6 +83,9 @@ func transferRuntime(
             }
         },
         directUnsubscribe: { _, _, characteristic in await recorder.unsubscribe(characteristic) },
+        readEncryptedUploadV2Capabilities: encryptedUploadV2Capabilities,
+        encryptedUploadV2Checkpoint: encryptedUploadV2Checkpoint,
+        encryptedUploadV2MaximumWriteLength: { _ in 185 },
         parseRecordingList: { try mapper.parseRecordingList($0) },
         createTransferCommand: { try mapper.createTransferCommand($0) },
         recordingFileURL: { sinkID in URL(fileURLWithPath: "/tmp/\(sinkID).recording") },

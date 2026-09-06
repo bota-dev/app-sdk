@@ -201,10 +201,12 @@ receipt, material, or evidence failure cannot reach device deletion.
 Cancellation owns the routed task before entering the asynchronous v2 host
 callback. Once CONFIRM is written, cancellation or subscription-cleanup
 uncertainty cannot reverse completion; uncertain cleanup poisons BLE ownership
-until reconnect. The host is not selected by production configuration and still
-does not implement application profile selection or manager wiring; its native
-checkpoint sidecar includes the highest contiguous sequence needed for exact EOF
-validation after resume.
+until reconnect. Production configuration installs the internal host, and
+`RecordingManager.syncEncryptedRecordingV2` reads a fresh capability plus the
+matching native checkpoint before calling an application-owned provider for an
+explicit v2 decision. It never substitutes a legacy transfer after that
+selection; its native checkpoint sidecar includes the highest contiguous
+sequence needed for exact EOF validation after resume.
 Apple's internal
 writer now
 serializes ownership, chunks

@@ -71,6 +71,10 @@ struct DeviceRuntime: Sendable {
     let directSubscribe: @Sendable (String, String, String) async throws -> AsyncThrowingStream<Data, Error>
     let directUnsubscribe: @Sendable (String, String, String) async throws -> Void
     let readEncryptedUploadV2Capabilities: @Sendable (String) async throws -> EncryptedUploadV2CapabilitySnapshot
+    let encryptedUploadV2Checkpoint: @Sendable (String, String, UInt32) async throws -> EncryptedUploadV2Checkpoint?
+    let encryptedUploadV2MaximumWriteLength: @Sendable (String) async throws -> Int
+    let registerEncryptedUploadV2Material: @Sendable (String, EncryptedUploadV2Material) async throws -> Void
+    let terminateEncryptedUploadV2Material: @Sendable (String, EncryptedUploadV2TerminalOutcome) async -> Void
     let delay: @Sendable (UInt64) async throws -> Void
     let parseRecordingState: @Sendable (Data) throws -> RecordingState
     let parseRecordingControlResult: @Sendable (Data) throws -> RecordingControlResult
@@ -139,6 +143,15 @@ struct DeviceRuntime: Sendable {
             (String) async throws -> EncryptedUploadV2CapabilitySnapshot = { _ in
             throw NativeHostError.missingResource("encrypted upload v2 capabilities")
         },
+        encryptedUploadV2Checkpoint: @escaping @Sendable
+            (String, String, UInt32) async throws -> EncryptedUploadV2Checkpoint? = { _, _, _ in nil },
+        encryptedUploadV2MaximumWriteLength: @escaping @Sendable (String) async throws -> Int = { _ in
+            throw NativeHostError.missingResource("encrypted upload v2 write limit")
+        },
+        registerEncryptedUploadV2Material: @escaping @Sendable
+            (String, EncryptedUploadV2Material) async throws -> Void = { _, _ in },
+        terminateEncryptedUploadV2Material: @escaping @Sendable
+            (String, EncryptedUploadV2TerminalOutcome) async -> Void = { _, _ in },
         delay: @escaping @Sendable (UInt64) async throws -> Void = { milliseconds in
             try await Task.sleep(nanoseconds: milliseconds * 1_000_000)
         },
@@ -235,6 +248,10 @@ struct DeviceRuntime: Sendable {
         self.directSubscribe = directSubscribe
         self.directUnsubscribe = directUnsubscribe
         self.readEncryptedUploadV2Capabilities = readEncryptedUploadV2Capabilities
+        self.encryptedUploadV2Checkpoint = encryptedUploadV2Checkpoint
+        self.encryptedUploadV2MaximumWriteLength = encryptedUploadV2MaximumWriteLength
+        self.registerEncryptedUploadV2Material = registerEncryptedUploadV2Material
+        self.terminateEncryptedUploadV2Material = terminateEncryptedUploadV2Material
         self.delay = delay
         self.parseRecordingState = parseRecordingState
         self.parseRecordingControlResult = parseRecordingControlResult

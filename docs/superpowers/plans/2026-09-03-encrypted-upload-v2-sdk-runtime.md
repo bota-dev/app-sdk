@@ -194,7 +194,7 @@ runtimes can consume the same trace.
   ID; unregister it on every terminal path. Apple now validates fixed document
   sizes, digest evidence, bodyless HTTPS staging requests, and removes entries
   before non-success cancellation callbacks run.
-- [ ] Read capabilities fresh, run selection before START, and implement signed
+- [x] Read capabilities fresh, run selection before START, and implement signed
   blob, START/ACK, DATA/window repair, manifest, EOF, receipt, and CONFIRM on the
   dedicated characteristics.
   - [x] Pin Apple's `0406..040B` UUIDs and configure an uncached `0406` read
@@ -245,12 +245,12 @@ runtimes can consume the same trace.
     and a Rust-encoded CONFIRM. Cleanup/receipt/material/evidence failures and
     cancellation before CONFIRM leave the device copy intact; cancellation or
     subscription-cleanup uncertainty after CONFIRM cannot reverse completion.
-  - [ ] Wire the resulting snapshot through application selection before START
+  - [x] Wire the resulting snapshot through application selection before START
     and install the internal completion services in production configuration.
-- [ ] Stream ciphertext to a bounded native file and staging request without a
+- [x] Stream ciphertext to a bounded native file and staging request without a
   plaintext copy or bridge payload.
-- [ ] Persist and recover only mutually proven checkpoint metadata.
-- [ ] Add XCTest coverage for all reducer traces and native failure paths.
+- [x] Persist and recover only mutually proven checkpoint metadata.
+- [x] Add XCTest coverage for all reducer traces and native failure paths.
 
 ### Task 5: Implement Android native transfer, staging, and recovery
 
