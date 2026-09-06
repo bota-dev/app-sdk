@@ -48,8 +48,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   cancellation IDs when returning callbacks.
 - High-volume recording bytes stay off JavaScript and Dart bridges.
 - Keep `encryptedUploadV2` compatibility metadata at `contract_only` with
-  `runtimeWorkflow` and `firmwareAdvertised` false until profile selection,
-  staging, completion, and receipt-gated deletion are implemented. React Native
+  `runtimeWorkflow` and `firmwareAdvertised` false until the remaining React
+  Native, firmware, release, and hardware gates are complete. React Native
   Codegen must not carry ciphertext, manifests, authorizations, or receipts.
 - `core/device-sdk-core/src/model/upload_profile.rs` is a side-effect-free
   policy/capability validator only. Its presence does not authorize a v2 START
@@ -126,9 +126,18 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   preserves the device checkpoint reported by RESUME_REJECT or ERROR. It
   retains the live `0409` stream and serialized owner after acceptance for the
   remaining transfer, and uses bounded ABORT/unsubscribe cleanup with the same
-  fail-closed reconnect gate. The configured port still returns
-  `feature_unavailable`; no released manager implements the workflow, so keep
-  runtime metadata false.
+  fail-closed reconnect gate. Android mirrors the same wire ownership through a
+  coroutine-serialized signed-document writer and retained `0409` transfer
+  control, with every authenticated frame produced by the Rust mapper. Its
+  receiver writes bounded DATA windows through `FileChannel`, persists exact
+  non-secret resume sidecars with `AtomicFile`, streams only the verified
+  ciphertext file through an application-provided empty HTTPS PUT template,
+  and gates CONFIRM on manifest submission, finalization, and the exact receipt
+  digest. `RecordingManager.syncEncryptedRecordingV2` selects from a fresh
+  capability snapshot before command `0x010c`; cancellation owns provider,
+  START, staging, and terminal material cleanup without a legacy retry. These
+  native implementations do not complete the remaining release or firmware
+  gates, so runtime metadata stays false.
 - React Native compatibility requires the frozen public API surface digest in
   addition to protocol fixtures and workflow traces. Internal legacy modules
   outside `src/index.ts` are not part of that public contract.

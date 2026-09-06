@@ -8,6 +8,9 @@ import dev.bota.sdk.internal.bluetooth.BluetoothGattDriver
 import dev.bota.sdk.internal.bluetooth.BluetoothGattHost
 import dev.bota.sdk.internal.bluetooth.BluetoothPermissionChecker
 import dev.bota.sdk.internal.bluetooth.BotaBluetoothUUIDs
+import dev.bota.sdk.internal.bluetooth.EncryptedUploadV2SignedBlobWriter
+import dev.bota.sdk.internal.bluetooth.EncryptedUploadV2TransferControl
+import dev.bota.sdk.internal.core.EncryptedUploadV2CapabilityReader
 import dev.bota.sdk.internal.bluetooth.FrameworkAndroidBluetoothPlatform
 import dev.bota.sdk.internal.core.CoreCapabilities
 import dev.bota.sdk.internal.core.CoreEngineRuntime
@@ -20,6 +23,12 @@ import dev.bota.sdk.internal.host.AtomicFilePersistenceHost
 import dev.bota.sdk.internal.host.FileFirmwareBlobHost
 import dev.bota.sdk.internal.host.FileRecordingSinkHost
 import dev.bota.sdk.internal.host.HostEffectExecutor
+import dev.bota.sdk.internal.host.EncryptedUploadV2CheckpointStore
+import dev.bota.sdk.internal.host.EncryptedUploadV2MaterialRegistry
+import dev.bota.sdk.internal.host.EncryptedUploadV2StagingUploader
+import dev.bota.sdk.internal.host.EncryptedUploadV2TerminalOutcome
+import dev.bota.sdk.internal.host.EncryptedUploadV2TransferHost
+import dev.bota.sdk.internal.host.EncryptedUploadV2TransferHostServices
 import dev.bota.sdk.internal.host.OkHttpNetworkHost
 import dev.bota.sdk.internal.host.PersistedFactoryResetResult
 import dev.bota.sdk.internal.jni.NativeCoreBridge
@@ -42,6 +51,10 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import dev.bota.sdk.EncryptedUploadV2CapabilitySnapshot
+import dev.bota.sdk.EncryptedUploadV2Checkpoint
+import dev.bota.sdk.EncryptedUploadV2Material
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import okhttp3.OkHttpClient
@@ -138,6 +151,15 @@ internal class DeviceRuntime(
     val unregisterStreamingSink: suspend (String) -> Unit = {},
     val registerFirmwareDownload: (ULong, Request) -> Path = { _, _ -> error("firmware download unavailable") },
     val unregisterFirmwareDownload: (ULong) -> Unit = {},
+    val readEncryptedUploadV2Capabilities: suspend (String) -> EncryptedUploadV2CapabilitySnapshot = {
+        error("encrypted upload v2 capability reader unavailable")
+    },
+    val encryptedUploadV2Checkpoint: suspend (String, String, UInt) -> EncryptedUploadV2Checkpoint? = { _, _, _ -> null },
+    val encryptedUploadV2MaximumWriteLength: (String) -> Int = { error("encrypted upload v2 MTU unavailable") },
+    val registerEncryptedUploadV2Material: suspend (String, EncryptedUploadV2Material) -> Unit = { _, _ ->
+        error("encrypted upload v2 material registry unavailable")
+    },
+    val terminateEncryptedUploadV2Material: suspend (String, EncryptedUploadV2TerminalOutcome) -> Unit = { _, _ -> },
 ) : AutoCloseable {
     private val closed = AtomicBoolean(false)
 
@@ -163,13 +185,58 @@ internal class DeviceRuntime(
                     context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
                 }
                 val bluetooth = BluetoothGattHost(driver, permissions)
-                val persistence = AtomicFilePersistenceHost(AtomicFileJournalStore(File(root, "state")))
+                val persistenceJournals = AtomicFileJournalStore(File(root, "state"))
+                val persistence = AtomicFilePersistenceHost(persistenceJournals)
                 val secureStorage = AndroidKeystoreSecureStorageHost(context, rootDirectory = File(root, "secrets"))
                 val network = OkHttpNetworkHost(networkClient).also { closeActions += it::close }
                 val material = ApplicationMaterialHost().also { closeActions += it::close }
                 val recordingSink = FileRecordingSinkHost(networkClient = networkClient).also { closeActions += it::close }
                 val firmwareBlob = FileFirmwareBlobHost().also { closeActions += it::close }
                 val mapper = CoreModelMapper().also { closeActions += it::close }
+                val connection = DeviceConnectionRegistry()
+                val encryptedMaterial = EncryptedUploadV2MaterialRegistry()
+                val encryptedCheckpoint = EncryptedUploadV2CheckpointStore(
+                    AtomicFileJournalStore(File(root, "encrypted-upload-v2/checkpoints")),
+                )
+                val encryptedUploader = EncryptedUploadV2StagingUploader(networkClient).also { closeActions += it::close }
+                val encryptedSignedWriter = EncryptedUploadV2SignedBlobWriter(driver, mapper)
+                val encryptedControl = EncryptedUploadV2TransferControl(driver, mapper).also { closeActions += it::close }
+                val writeIds = AtomicInteger(0)
+                fun currentPeripheral(): String = connection.current()?.id
+                    ?: error("encrypted upload v2 requires a current verified connection")
+                val encryptedHost = EncryptedUploadV2TransferHost(
+                    File(root, "encrypted-upload-v2/files").toPath(),
+                    EncryptedUploadV2TransferHostServices(
+                        materialRegistry = encryptedMaterial,
+                        checkpointStore = encryptedCheckpoint,
+                        openTransfer = { request, checkpoint ->
+                            encryptedControl.open(currentPeripheral(), request, checkpoint)
+                        },
+                        sendControl = encryptedControl::writeActiveFrame,
+                        abortTransfer = encryptedControl::abort,
+                        releaseTransfer = encryptedControl::release,
+                        sendSignedDocument = { kind, id, value, maximum ->
+                            encryptedSignedWriter.send(currentPeripheral(), kind, id, value, maximum)
+                        },
+                        uploadCiphertext = encryptedUploader::upload,
+                        cancelUploads = encryptedUploader::cancelAll,
+                        nextWriteId = {
+                            writeIds.updateAndGet { current -> if (current == Int.MAX_VALUE) 1 else current + 1 }.toUInt()
+                        },
+                        encodeAcknowledgement = { value ->
+                            mapper.createEncryptedUploadV2WindowAcknowledgement(
+                                value.transportSessionId, value.windowIndex, value.highestContiguousSequence,
+                                value.nextCiphertextOffset, value.prefixSha256, value.checkpointRevision,
+                                value.missingSequences,
+                            )
+                        },
+                        encodeConfirm = mapper::createEncryptedUploadV2Confirm,
+                    ),
+                ).also { closeActions += it::close }
+                val encryptedCapabilityReader = EncryptedUploadV2CapabilityReader(
+                    driver::read,
+                    mapper::decodeEncryptedUploadV2Capabilities,
+                )
                 val host = HostEffectExecutor(
                     bluetooth = bluetooth,
                     persistence = persistence,
@@ -178,6 +245,7 @@ internal class DeviceRuntime(
                     material = material,
                     recordingSink = recordingSink,
                     firmwareBlob = firmwareBlob,
+                    encryptedUploadV2 = encryptedHost,
                 )
                 val engine = CoreEngineRuntime(NativeCoreBridge(), host).also { closeActions += it::close }
                 val allCapabilities = CoreCapabilities.Bluetooth + CoreCapabilities.Timer +
@@ -217,6 +285,7 @@ internal class DeviceRuntime(
                     },
                     decodeStatus = mapper::parseDeviceStatus,
                     closeResources = { closeAll(*closeActions.asReversed().toTypedArray()) },
+                    connection = connection,
                     directRead = driver::read,
                     directWrite = { peripheralId, service, characteristic, value ->
                         driver.write(peripheralId, service, characteristic, value, withResponse = true)
@@ -292,6 +361,11 @@ internal class DeviceRuntime(
                         network.unregister(downloadId)
                         firmwareBlob.unregister(downloadId)
                     },
+                    readEncryptedUploadV2Capabilities = encryptedCapabilityReader::readFresh,
+                    encryptedUploadV2Checkpoint = encryptedHost::checkpoint,
+                    encryptedUploadV2MaximumWriteLength = driver::maximumWriteLength,
+                    registerEncryptedUploadV2Material = encryptedMaterial::register,
+                    terminateEncryptedUploadV2Material = encryptedMaterial::terminate,
                 )
             } catch (failure: Throwable) {
                 runCatching { closeAll(*closeActions.asReversed().toTypedArray()) }

@@ -16,6 +16,7 @@ internal enum class CoreNotificationKind(val wireValue: Int) {
     StreamingPaused(0x040d),
     StreamingResumed(0x040e),
     StreamingCompleted(0x040f),
+    EncryptedUploadV2Staged(0x0410),
     Completed(0x040a),
     Cancelled(0x040b),
     Failed(0x040c),

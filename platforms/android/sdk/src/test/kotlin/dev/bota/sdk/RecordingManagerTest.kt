@@ -7,19 +7,89 @@ import dev.bota.sdk.model.StreamingUploadDestination
 import dev.bota.sdk.model.StreamingUploadMethod
 import dev.bota.sdk.model.StreamingRecordingEvent
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RecordingManagerTest {
+    @Test
+    fun encryptedV2SelectsFromFreshCapabilitiesBeforeStartingAndNeverFallsBack() = runTest {
+        val runner = ManagerWorkflowRunner(responses = { listOf(completedNotification(operation = 8)) })
+        val fixture = ManagerRuntimeFixture(runner)
+        val manager = RecordingManager()
+        manager.attach(fixture.runtime)
+        val calls = mutableListOf<String>()
+        fixture.encryptedV2Calls = calls
+        val cancelled = AtomicInteger()
+        val material = encryptedMaterial(cancelled)
+
+        manager.syncEncryptedRecordingV2(
+            fixture.device,
+            EncryptedUploadV2Recording(fixture.recording.uuid, 4u, 4_096u, ByteArray(32) { 0x5a }),
+        ) { context ->
+            calls += "provider"
+            assertEquals(157u.toUShort(), context.capability.capabilities.maximumDataPayloadBytes)
+            material
+        }
+
+        assertEquals(listOf("capability", "checkpoint", "maximum-write", "provider", "register", "terminate-Completed"), calls)
+        assertEquals(0x010c, runner.commands.single().kind)
+        assertEquals(0, cancelled.get())
+
+        val providerFailure = runCatching {
+            manager.syncEncryptedRecordingV2(
+                fixture.device,
+                EncryptedUploadV2Recording(fixture.recording.uuid, 4u, 4_096u, ByteArray(32) { 0x5a }),
+            ) { throw IllegalStateException("selection failed") }
+        }.exceptionOrNull()
+        assertTrue(providerFailure is BotaSDKError)
+        assertEquals(1, runner.commands.size)
+        manager.detach()
+    }
+
+    @Test
+    fun encryptedV2CancellationDuringLateProviderCleanupNeverStartsCore() = runTest {
+        val runner = ManagerWorkflowRunner()
+        val fixture = ManagerRuntimeFixture(runner)
+        val manager = RecordingManager()
+        manager.attach(fixture.runtime)
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val cancelled = AtomicInteger()
+        val operation = async {
+            manager.syncEncryptedRecordingV2(
+                fixture.device,
+                EncryptedUploadV2Recording(fixture.recording.uuid, 4u, 4_096u, ByteArray(32) { 0x5a }),
+            ) {
+                entered.complete(Unit)
+                withContext(NonCancellable) { release.await() }
+                encryptedMaterial(cancelled)
+            }
+        }
+        entered.await()
+
+        operation.cancel()
+        release.complete(Unit)
+        runCatching { operation.await() }
+
+        assertTrue(runner.commands.isEmpty())
+        assertEquals(1, cancelled.get())
+        manager.detach()
+    }
+
     @Test
     fun listSubscribesBeforeWriteAndUsesTheSharedDecoder() = runTest {
         val fixture = ManagerRuntimeFixture(ManagerWorkflowRunner())
@@ -263,4 +333,18 @@ class RecordingManagerTest {
         assertEquals("unsubscribe", fixture.actions.last())
         manager.detach()
     }
+
+    private fun encryptedMaterial(cancelled: AtomicInteger) = EncryptedUploadV2Material(
+        materialId = "material-1",
+        recordingId = "recording-1",
+        uploadSessionId = UUID.fromString("00112233-4455-6677-8899-aabbccddeeff"),
+        ownerRevision = 2u,
+        policy = EncryptedUploadV2SecurityPolicy.V2Required,
+        authorization = ByteArray(408),
+        stagingRequest = { Request.Builder().url("https://example.test/upload").put(byteArrayOf().toRequestBody()).build() },
+        submitManifest = { _, _ -> },
+        finalize = {},
+        completionReceipt = { ByteArray(336) },
+        cancel = { cancelled.incrementAndGet() },
+    )
 }

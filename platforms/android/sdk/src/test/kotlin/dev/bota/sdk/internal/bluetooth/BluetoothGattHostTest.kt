@@ -84,10 +84,11 @@ class BluetoothGattHostTest {
 
     @Test
     fun connectNegotiatesMtuAndRejectsStatusTimeoutAndStaleGeneration() = runTest {
-        val platform = FakeBluetoothPlatform()
+        val platform = FakeBluetoothPlatform(negotiatedMtu = 185)
         val driver = BluetoothGattDriver(platform, operationTimeoutMilliseconds = 20)
         driver.connect("device")
         assertEquals(listOf("connect:device:1", "mtu:device:1:517"), platform.calls.take(2))
+        assertEquals(182, driver.maximumWriteLength("device"))
 
         platform.nextStatus = 133
         assertTrue(runCatching { driver.discoverServices("device") }.exceptionOrNull() is BluetoothTransportException)
@@ -148,6 +149,7 @@ private class FakeBluetoothPlatform(
     override val apiLevel: Int = 35,
     private val initialConnected: List<BluetoothAdvertisement> = emptyList(),
     private val scans: Flow<BluetoothAdvertisement> = flowOf(),
+    private val negotiatedMtu: Int = 517,
 ) : AndroidBluetoothPlatform {
     val calls = mutableListOf<String>()
     val connected = mutableListOf<String>()
@@ -169,7 +171,7 @@ private class FakeBluetoothPlatform(
 
     override suspend fun requestMtu(peripheralId: String, generation: Long, mtu: Int): GattResult<Int> {
         calls += "mtu:$peripheralId:$generation:$mtu"
-        return result(generation, mtu)
+        return result(generation, negotiatedMtu)
     }
 
     override suspend fun discoverServices(peripheralId: String, generation: Long): GattResult<GattDiscovery> {

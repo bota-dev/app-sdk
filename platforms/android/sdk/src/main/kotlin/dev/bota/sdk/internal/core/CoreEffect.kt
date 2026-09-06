@@ -39,6 +39,18 @@ internal enum class CoreEffectKind(val wireValue: Int) {
     StreamingSinkFinalize(0x033f),
     FirmwareBlobRead(0x0340),
     StreamingSinkDiscard(0x0341),
+    EncryptedUploadV2LoadCheckpoint(0x0342),
+    EncryptedUploadV2DeleteCheckpoint(0x0343),
+    EncryptedUploadV2TruncateSink(0x0344),
+    EncryptedUploadV2PrepareSession(0x0345),
+    EncryptedUploadV2StartTransfer(0x0346),
+    EncryptedUploadV2RepairWindow(0x0347),
+    EncryptedUploadV2SaveCheckpoint(0x0348),
+    EncryptedUploadV2AcknowledgeWindow(0x0349),
+    EncryptedUploadV2StageArtifacts(0x034a),
+    EncryptedUploadV2AwaitReceipt(0x034b),
+    EncryptedUploadV2ConfirmWithReceipt(0x034c),
+    EncryptedUploadV2Abort(0x034d),
     ;
 
     companion object {

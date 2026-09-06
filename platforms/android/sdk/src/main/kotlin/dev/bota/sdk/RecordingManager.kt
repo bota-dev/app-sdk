@@ -4,6 +4,9 @@ import dev.bota.sdk.internal.StreamingOperationState
 import dev.bota.sdk.internal.cancelled
 import dev.bota.sdk.internal.core.CoreCommand
 import dev.bota.sdk.internal.core.CoreNotificationKind
+import dev.bota.sdk.internal.core.EncryptedUploadV2CommandRequest
+import dev.bota.sdk.internal.core.EncryptedUploadV2CapabilitiesValue
+import dev.bota.sdk.internal.host.EncryptedUploadV2TerminalOutcome
 import dev.bota.sdk.internal.facadePublicError
 import dev.bota.sdk.internal.requiredText
 import dev.bota.sdk.internal.requiredUnsigned
@@ -19,6 +22,7 @@ import dev.bota.sdk.model.StreamingRecordingEvent
 import java.nio.file.Path
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.security.SecureRandom
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.NonCancellable
@@ -30,6 +34,8 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 public sealed interface RecordingSyncEvent {
     public data class Progress(public val progress: RecordingTransferProgress) : RecordingSyncEvent
@@ -199,6 +205,134 @@ public class RecordingManager internal constructor() {
 
     public fun transferMetadata(sinkId: String): RecordingTransferMetadata? =
         transferMetadataBySinkId.remove(sinkId)
+
+    /** Runs only the explicitly selected encrypted-upload-v2 profile; it never falls back to v1. */
+    public suspend fun syncEncryptedRecordingV2(
+        device: ConnectedDevice,
+        recording: EncryptedUploadV2Recording,
+        provider: EncryptedUploadV2ProfileProvider,
+    ) {
+        val runtime = state.configuredRuntime()
+        val cancellationId = UUID.randomUUID()
+        state.begin(runtime, cancellationId, BotaOperation.TransferRecording)
+        state.setTask(cancellationId, currentCoroutineContext()[kotlinx.coroutines.Job]!!)
+        var material: EncryptedUploadV2Material? = null
+        var registered = false
+        var completed = false
+        try {
+            currentCoroutineContext().ensureActive()
+            runtime.authorize(BotaOperation.TransferRecording)
+            runtime.connection.require(device)
+            val capability = runtime.readEncryptedUploadV2Capabilities(device.id)
+            currentCoroutineContext().ensureActive()
+            val checkpoint = runtime.encryptedUploadV2Checkpoint(
+                device.serialNumber, normalizedRecordingUuid(recording.uuid), recording.generation,
+            )
+            val maximumFrameBytes = minOf(runtime.encryptedUploadV2MaximumWriteLength(device.id), 512)
+            val maximumMissing = minOf(
+                capability.capabilities.maximumMissingSequences.toInt(),
+                (maximumFrameBytes - 68) / 4,
+            )
+            val maximumWindow = minOf(capability.capabilities.maximumWindowPackets.toInt(), maximumMissing)
+            val maximumData = minOf(capability.capabilities.maximumDataPayloadBytes.toInt(), maximumFrameBytes - 28)
+            if (maximumFrameBytes < 128 || maximumWindow <= 0 || maximumData <= 0) {
+                throw BotaSDKError.Core(
+                    BotaErrorCode.UnsupportedCapability, BotaOperation.TransferRecording, false, null,
+                    "encrypted upload v2 negotiated bounds are unusable",
+                )
+            }
+            material = provider.select(EncryptedUploadV2ProviderContext(recording, capability, checkpoint))
+            currentCoroutineContext().ensureActive()
+            runtime.connection.require(device)
+            val transportSessionId: ULong
+            val sinkId: String
+            val windowPackets: UShort
+            val dataPayloadBytes: UShort
+            if (checkpoint != null) {
+                if (material.uploadSessionId != checkpoint.uploadSessionId ||
+                    material.ownerRevision != checkpoint.ownerRevision || checkpoint.transportSessionId == 0uL ||
+                    runCatching { UUID.fromString(checkpoint.sinkId) }.isFailure ||
+                    checkpoint.windowPackets == 0.toUShort() || checkpoint.dataPayloadBytes == 0.toUShort() ||
+                    checkpoint.windowPackets.toInt() > maximumWindow || checkpoint.dataPayloadBytes.toInt() > maximumData
+                ) {
+                    throw BotaSDKError.Core(
+                        BotaErrorCode.IntegrityFailed, BotaOperation.TransferRecording, false, null,
+                        "encrypted upload v2 checkpoint does not match selected material",
+                    )
+                }
+                transportSessionId = checkpoint.transportSessionId
+                sinkId = checkpoint.sinkId
+                windowPackets = checkpoint.windowPackets
+                dataPayloadBytes = checkpoint.dataPayloadBytes
+            } else {
+                transportSessionId = randomTransportSessionId()
+                sinkId = UUID.randomUUID().toString()
+                windowPackets = maximumWindow.toUShort()
+                dataPayloadBytes = maximumData.toUShort()
+            }
+            val securityPolicy = when (material.policy) {
+                EncryptedUploadV2SecurityPolicy.LegacyAllowed -> 1uL
+                EncryptedUploadV2SecurityPolicy.V2Preferred -> 2uL
+                EncryptedUploadV2SecurityPolicy.V2Required -> 3uL
+            }
+            val values = capability.capabilities
+            val command = CoreCommand.transferEncryptedRecording(
+                EncryptedUploadV2CommandRequest(
+                    device.serialNumber, recording.uuid, recording.generation, 3u,
+                    material.uploadSessionId, material.ownerRevision, transportSessionId,
+                    material.materialId, sinkId, securityPolicy,
+                    EncryptedUploadV2CapabilitiesValue(
+                        values.flags, values.maximumSignedBlobBytes, values.maximumManifestBytes,
+                        values.maximumDataPayloadBytes, values.maximumWindowPackets,
+                        values.durableCheckpointIntervalBlocks, values.maximumMissingSequences,
+                    ),
+                    windowPackets, dataPayloadBytes, recording.ciphertextLength, recording.ciphertextSha256,
+                ),
+                cancellationId,
+            )
+            runtime.registerEncryptedUploadV2Material(material.materialId, material)
+            registered = true
+            currentCoroutineContext().ensureActive()
+            runtime.engine.run(command, runtime.capabilities).collect { notification ->
+                when (notification.kind) {
+                    CoreNotificationKind.Completed -> completed = true
+                    CoreNotificationKind.Failed -> throw notification.workflowError()
+                    CoreNotificationKind.Cancelled -> throw cancelled(BotaOperation.TransferRecording)
+                    CoreNotificationKind.Started, CoreNotificationKind.EncryptedUploadV2Staged -> Unit
+                    else -> throw BotaSDKError.Core(
+                        BotaErrorCode.UnexpectedEvent, BotaOperation.TransferRecording, false, null,
+                        "unexpected notification in encrypted upload v2 workflow",
+                    )
+                }
+            }
+            if (!completed) throw BotaSDKError.Core(
+                BotaErrorCode.UnexpectedEvent, BotaOperation.TransferRecording, false, null,
+                "encrypted upload v2 workflow ended without completion",
+            )
+        } catch (error: Throwable) {
+            withContext(NonCancellable) {
+                if (error is CancellationException) state.cancel(cancellationId, cancelTask = false)
+                else state.finish(cancellationId)
+                val selected = material
+                if (registered && selected != null) {
+                    runtime.terminateEncryptedUploadV2Material(
+                        selected.materialId,
+                        if (error is CancellationException) EncryptedUploadV2TerminalOutcome.Cancelled
+                        else EncryptedUploadV2TerminalOutcome.Failed,
+                    )
+                } else {
+                    selected?.cancelOnce()
+                }
+            }
+            throw error.facadePublicError(BotaOperation.TransferRecording)
+        }
+        withContext(NonCancellable) {
+            material?.let {
+                runtime.terminateEncryptedUploadV2Material(it.materialId, EncryptedUploadV2TerminalOutcome.Completed)
+            }
+            state.finish(cancellationId)
+        }
+    }
 
     public fun streamRecording(
         device: ConnectedDevice,
@@ -376,6 +510,22 @@ public class RecordingManager internal constructor() {
     }
 
     public suspend fun cancelCurrentOperation(): Unit = state.cancelCurrentOperation()
+}
+
+private fun randomTransportSessionId(): ULong {
+    var value = 0uL
+    val random = SecureRandom()
+    while (value == 0uL) value = random.nextLong().toULong()
+    return value
+}
+
+private fun normalizedRecordingUuid(value: String): String {
+    val compact = value.replace("-", "")
+    if (compact.length != 32) return value
+    return UUID.fromString(
+        "${compact.substring(0, 8)}-${compact.substring(8, 12)}-${compact.substring(12, 16)}-" +
+            "${compact.substring(16, 20)}-${compact.substring(20)}",
+    ).toString()
 }
 
 private fun dev.bota.sdk.internal.core.CoreNotification.transferMetadata(): RecordingTransferMetadata =

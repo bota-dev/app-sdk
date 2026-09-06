@@ -29,6 +29,7 @@ internal interface BluetoothDriver : AutoCloseable {
     )
     suspend fun subscribe(peripheralId: String, serviceUuid: UUID, characteristicUuid: UUID): Flow<BluetoothNotification>
     suspend fun unsubscribe(peripheralId: String, serviceUuid: UUID, characteristicUuid: UUID)
+    fun maximumWriteLength(peripheralId: String): Int
     suspend fun disconnect(peripheralId: String)
     override fun close()
 }
@@ -40,6 +41,7 @@ internal class BluetoothGattDriver(
 ) : BluetoothDriver {
     private val generationLock = Any()
     private val generations = mutableMapOf<String, Long>()
+    private val negotiatedMtus = mutableMapOf<String, Int>()
 
     override suspend fun connectedAdvertisements(): List<BluetoothAdvertisement> = platform.connectedAdvertisements()
 
@@ -52,7 +54,8 @@ internal class BluetoothGattDriver(
             (generations[peripheralId] ?: 0L).plus(1).also { generations[peripheralId] = it }
         }
         validate(peripheralId, generation, platform.connect(peripheralId, generation))
-        validate(peripheralId, generation, platform.requestMtu(peripheralId, generation, PreferredMtu))
+        val mtu = validate(peripheralId, generation, platform.requestMtu(peripheralId, generation, PreferredMtu))
+        synchronized(generationLock) { negotiatedMtus[peripheralId] = mtu }
         Unit
     }
 
@@ -132,6 +135,11 @@ internal class BluetoothGattDriver(
             )
         }
 
+    override fun maximumWriteLength(peripheralId: String): Int = synchronized(generationLock) {
+        negotiatedMtus[peripheralId]
+    }?.minus(3)?.coerceAtLeast(20)
+        ?: throw BluetoothTransportException(404, "device $peripheralId is not connected")
+
     override suspend fun disconnect(peripheralId: String) {
         queue.cancel(peripheralId)
         val generation = synchronized(generationLock) { generations[peripheralId] } ?: return
@@ -140,13 +148,19 @@ internal class BluetoothGattDriver(
                 validate(peripheralId, generation, platform.disconnect(peripheralId, generation))
             }
         } finally {
-            synchronized(generationLock) { generations.remove(peripheralId) }
+            synchronized(generationLock) {
+                generations.remove(peripheralId)
+                negotiatedMtus.remove(peripheralId)
+            }
         }
     }
 
     override fun close() {
         synchronized(generationLock) { generations.keys.toList() }.forEach(queue::cancel)
-        synchronized(generationLock) { generations.clear() }
+        synchronized(generationLock) {
+            generations.clear()
+            negotiatedMtus.clear()
+        }
         platform.close()
     }
 

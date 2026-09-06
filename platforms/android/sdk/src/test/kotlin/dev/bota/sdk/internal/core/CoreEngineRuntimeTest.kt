@@ -101,11 +101,46 @@ class CoreEngineRuntimeTest {
         assertTrue(core.closed)
         assertFalse(core.cancelAfterClose)
     }
+
+    @Test
+    fun cancellationRegistersQueuedEffectsAndReachesCoreBeforeHostCancellation() = runTest {
+        val order = mutableListOf<String>()
+        val core = ScriptedCore(terminalOnStart = false, cancellationOrder = order)
+        val effectStarted = CompletableDeferred<Unit>()
+        val handler = object : CoreEffectHandler {
+            override fun execute(effect: CoreEffect): kotlinx.coroutines.flow.Flow<CoreHostEvent> = callbackFlow {
+                order += "effect-started"
+                effectStarted.complete(Unit)
+                awaitClose {}
+            }
+
+            override suspend fun cancel(cancellationId: CoreCancellationId) {
+                order += "host-cancelled"
+            }
+        }
+        val runtime = CoreEngineRuntime(core, handler)
+        val cancellationId = UUID.randomUUID()
+        val collector = launch {
+            runtime.run(
+                CoreCommand.discoverDevices(10_000u, false, cancellationId),
+                CoreCapabilities.Bluetooth + CoreCapabilities.Timer,
+            ).collect()
+        }
+        effectStarted.await()
+
+        collector.cancelAndJoin()
+        withContext(Dispatchers.Default) { withTimeout(2_000) { core.cancelled.await() } }
+
+        assertTrue(order.indexOf("effect-started") < order.indexOf("core-cancelled"))
+        assertTrue(order.indexOf("core-cancelled") < order.indexOf("host-cancelled"))
+        runtime.close()
+    }
 }
 
 private class ScriptedCore(
     private val terminalOnStart: Boolean,
     private var staleDispatchesRemaining: Int = 0,
+    private val cancellationOrder: MutableList<String>? = null,
 ) : NativeCore {
     private val outputs = ArrayDeque<NativePacket>()
     private var active = false
@@ -155,6 +190,7 @@ private class ScriptedCore(
         if (!active) throw NativeCoreException(9, 1, false, -1, "unexpected cancellation")
         cancelledHigh = cancellationHigh
         cancelledLow = cancellationLow
+        cancellationOrder?.add("core-cancelled")
         outputs += packet(0x040b)
         active = false
         cancelled.complete(Unit)

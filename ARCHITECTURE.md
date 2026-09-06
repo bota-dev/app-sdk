@@ -129,11 +129,12 @@ firmware payloads never cross the JavaScript bridge. Future workflow methods
 carry identifiers, progress, errors, and native file paths while native hosts
 own high-volume files and transfer buffers.
 
-Encrypted Upload v2 is currently a contract-only capability: the canonical
-vectors and Rust codecs exist, and Apple/Android can inspect normalized framing
-metadata internally. The Rust workflow engine and additive C ABI now also
-model v2 session ownership, durable checkpoint ordering, opaque native staging,
-and receipt-gated confirmation. Apple now has an internal command mapper, an
+Encrypted Upload v2 remains contract-only in compatibility metadata: the
+canonical vectors, Rust codecs, and native Apple and Android runtimes exist,
+while React Native, firmware advertisement, release, and hardware gates remain
+open. The Rust workflow engine and additive C ABI model v2 session ownership,
+durable checkpoint ordering, opaque native staging, and receipt-gated
+confirmation. Apple has an internal command mapper, an
 exhaustive twelve-effect host port with typed failure and staged-notification
 routing, and an in-memory application-material registry keyed by opaque ID.
 The registry keeps authorization, manifest, receipt, and staging credentials
@@ -201,10 +202,17 @@ echoed identity, ciphertext, negotiated bounds, and checkpoint values on
 successful replies, preserves the device checkpoint on RESUME_REJECT/ERROR,
 and retains the live `0409` stream plus serialized owner for DATA/window/EOF.
 Cancellation or explicit abort applies the same bounded ABORT/unsubscribe
-ownership policy. The production configuration installs the Apple-only internal
-v2 port after application-owned selection. Android still has no equivalent host,
-React Native exposes no v2 workflow or bulk bytes, and compatibility metadata
-keeps runtime support and firmware advertisement false.
+ownership policy. Android now mirrors this boundary with coroutine ownership:
+it reads `0406` fresh, sends only Rust-encoded signed documents and transfer
+controls on `0407..0409`, writes bounded ciphertext windows directly through
+`FileChannel`, and keeps exact resume metadata in `AtomicFile` sidecars. Its
+OkHttp staging host replaces an application-provided empty HTTPS PUT template
+with a streaming body for only the verified native ciphertext file, submits the
+fixed manifest, awaits application finalization and an exact receipt, then sends
+canonical CONFIRM. Production configuration installs both native ports after
+application-owned selection. React Native still exposes no v2 workflow or bulk
+bytes, and the remaining firmware, release, and hardware gates keep runtime
+support and firmware advertisement false.
 The core now also exposes a side-effect-free three-profile selection validator:
 it requires every batch capability bit, usable advertised bounds, and an
 immutable recording generation in `bota_enc_v2` storage before accepting v2;
@@ -385,15 +393,15 @@ ABI fields but never parses or serializes a wire packet in Kotlin. API-35
 instrumentation runs all 55 language-neutral fixtures through JNI, including
 unknown values, encrypted payload metadata, settings, OTA, WiFi, and logs. No
 Kotlin workflow state machine exists: one closeable single-thread coroutine
-runtime submits all 10 commands to Rust, drains all 30 effect and 12
-notification kinds, and returns all 34 correlated host-event kinds with the
+runtime submits the additive command set to Rust, drains all 47 effect and 16
+notification kinds, and returns all 51 correlated host-event kinds with the
 original request and 128-bit cancellation IDs. API-35 instrumentation verifies
 the Android resource generated from all 29 canonical workflow scenarios. An
-exhaustive `HostEffectExecutor` routes all 30 effects through separate BLE,
-persistence, secure-storage, network, material, recording-sink, and
-firmware-blob ports. It owns timers, bounds returned bytes, permits multi-event
-streams only where the ABI does, and rejects mismatched callbacks before Rust
-sees them.
+exhaustive `HostEffectExecutor` routes all 47 effects through separate BLE,
+persistence, secure-storage, network, material, recording-sink, firmware-blob,
+and Encrypted Upload v2 ports. It owns timers, bounds returned bytes, permits
+multi-event streams only where the ABI does, and rejects mismatched callbacks
+before Rust sees them.
 The Android Bluetooth transport confines `BluetoothLeScanner`,
 `BluetoothGatt`, callbacks, and mutable framework state to one named
 HandlerThread. A per-device queue serializes MTU, discovery, read, write, and
@@ -412,6 +420,19 @@ only opaque IDs and bytes. OkHttp requests and application material are one-shot
 host registrations removed on completion, cancellation, failure, replacement,
 or destroy. The network host tracks and cancels only its own calls when sharing
 an injected client.
+The dedicated Android Encrypted Upload v2 host reads `0406` immediately before
+application profile selection, uses the Rust encoders for signed documents and
+all `0408` transfer controls, and retains the exact `0409` subscription for
+START, repair, manifest, and EOF. Its receiver writes DATA by offset into a
+bounded `FileChannel`, forces each staged window before persisting the matching
+non-secret `AtomicFile` checkpoint, and resumes only from mutually proven
+identity, bounds, offset, sequence, and prefix-hash metadata. The application
+provides an empty HTTPS PUT template, fixed-manifest submission, finalization,
+and receipt callbacks; the OkHttp host streams only the verified native
+ciphertext file. Canonical CONFIRM is written only after the receipt digest
+matches, and every earlier failure or cancellation retains the device copy.
+`RecordingManager.syncEncryptedRecordingV2` starts only command `0x010c` and
+never falls back to a legacy transfer after selection.
 Android now exposes the first public workflow facade through
 `BotaDeviceClient` and `DeviceManager`. Configuration is idempotent until
 destroy and retains only the application context. Permission checks occur

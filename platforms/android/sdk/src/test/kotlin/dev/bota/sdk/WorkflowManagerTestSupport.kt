@@ -20,6 +20,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import okhttp3.Request
+import dev.bota.sdk.internal.host.EncryptedUploadV2TerminalOutcome
 
 internal class ManagerWorkflowRunner(
     private val responses: (CoreCommand) -> List<CoreNotification> = { emptyList() },
@@ -70,6 +71,7 @@ internal class ManagerRuntimeFixture(
     val firmwarePaths = mutableMapOf<ULong, Path>()
     val removedFirmware = mutableListOf<ULong>()
     var recordingList = listOf(recording)
+    var encryptedV2Calls: MutableList<String>? = null
 
     val runtime = DeviceRuntime(
         engine = runner,
@@ -108,6 +110,23 @@ internal class ManagerRuntimeFixture(
             Path.of("/tmp/bota-test-$id.firmware").also { firmwarePaths[id] = it }
         },
         unregisterFirmwareDownload = { id -> removedFirmware += id },
+        readEncryptedUploadV2Capabilities = {
+            encryptedV2Calls?.add("capability")
+            EncryptedUploadV2CapabilitySnapshot(
+                byteArrayOf(3), ByteArray(32),
+                EncryptedUploadV2Capabilities(1u, 408u, 580u, 157u, 18u, 4u, 18u),
+            )
+        },
+        encryptedUploadV2Checkpoint = { _, _, _ ->
+            encryptedV2Calls?.add("checkpoint")
+            null
+        },
+        encryptedUploadV2MaximumWriteLength = {
+            encryptedV2Calls?.add("maximum-write")
+            185
+        },
+        registerEncryptedUploadV2Material = { _, _ -> encryptedV2Calls?.add("register") },
+        terminateEncryptedUploadV2Material = { _, outcome -> encryptedV2Calls?.add("terminate-${outcome.name}") },
     )
 
     init {

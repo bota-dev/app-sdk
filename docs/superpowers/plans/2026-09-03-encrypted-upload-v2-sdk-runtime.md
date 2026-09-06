@@ -254,9 +254,9 @@ runtimes can consume the same trace.
 
 ### Task 5: Implement Android native transfer, staging, and recovery
 
-- [ ] Mirror Task 4 with coroutine cancellation, bounded file I/O, OkHttp
+- [x] Mirror Task 4 with coroutine cancellation, bounded file I/O, OkHttp
   staging, and the same opaque material-provider lifecycle.
-- [ ] Run JVM unit tests, Android host tests, and compile gates without claiming
+- [x] Run JVM unit tests, Android host tests, and compile gates without claiming
   physical-device support.
 
 ### Task 6: Add the target React Native provider and progress surface

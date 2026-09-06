@@ -1051,6 +1051,86 @@ public final class dev/bota/sdk/DeviceReconnectHint {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class dev/bota/sdk/EncryptedUploadV2Capabilities {
+	public synthetic fun <init> (ISSSSISLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getDurableCheckpointIntervalBlocks-pVg5ArA ()I
+	public final fun getFlags-pVg5ArA ()I
+	public final fun getMaximumDataPayloadBytes-Mh2AYeg ()S
+	public final fun getMaximumManifestBytes-Mh2AYeg ()S
+	public final fun getMaximumMissingSequences-Mh2AYeg ()S
+	public final fun getMaximumSignedBlobBytes-Mh2AYeg ()S
+	public final fun getMaximumWindowPackets-Mh2AYeg ()S
+}
+
+public final class dev/bota/sdk/EncryptedUploadV2CapabilitySnapshot {
+	public fun <init> ([B[BLdev/bota/sdk/EncryptedUploadV2Capabilities;)V
+	public final fun getCapabilities ()Ldev/bota/sdk/EncryptedUploadV2Capabilities;
+	public final fun getRawValue ()[B
+	public final fun getSha256 ()[B
+}
+
+public final class dev/bota/sdk/EncryptedUploadV2Checkpoint {
+	public synthetic fun <init> (Ljava/util/UUID;IIJ[BLkotlin/UInt;JLjava/lang/String;SSLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getDataPayloadBytes-Mh2AYeg ()S
+	public final fun getHighestContiguousSequence-0hXNFcg ()Lkotlin/UInt;
+	public final fun getNextCiphertextOffset-s-VKNKU ()J
+	public final fun getOwnerRevision-pVg5ArA ()I
+	public final fun getPrefixSha256 ()[B
+	public final fun getRevision-pVg5ArA ()I
+	public final fun getSinkId ()Ljava/lang/String;
+	public final fun getTransportSessionId-s-VKNKU ()J
+	public final fun getUploadSessionId ()Ljava/util/UUID;
+	public final fun getWindowPackets-Mh2AYeg ()S
+}
+
+public final class dev/bota/sdk/EncryptedUploadV2Material {
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/UUID;ILdev/bota/sdk/EncryptedUploadV2SecurityPolicy;[BLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/util/UUID;ILdev/bota/sdk/EncryptedUploadV2SecurityPolicy;[BLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function3;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getMaterialId ()Ljava/lang/String;
+	public final fun getOwnerRevision-pVg5ArA ()I
+	public final fun getPolicy ()Ldev/bota/sdk/EncryptedUploadV2SecurityPolicy;
+	public final fun getRecordingId ()Ljava/lang/String;
+	public final fun getUploadSessionId ()Ljava/util/UUID;
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/bota/sdk/EncryptedUploadV2ProfileProvider {
+	public abstract fun select (Ldev/bota/sdk/EncryptedUploadV2ProviderContext;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/EncryptedUploadV2ProviderContext {
+	public fun <init> (Ldev/bota/sdk/EncryptedUploadV2Recording;Ldev/bota/sdk/EncryptedUploadV2CapabilitySnapshot;Ldev/bota/sdk/EncryptedUploadV2Checkpoint;)V
+	public final fun getCapability ()Ldev/bota/sdk/EncryptedUploadV2CapabilitySnapshot;
+	public final fun getCheckpoint ()Ldev/bota/sdk/EncryptedUploadV2Checkpoint;
+	public final fun getRecording ()Ldev/bota/sdk/EncryptedUploadV2Recording;
+}
+
+public final class dev/bota/sdk/EncryptedUploadV2Recording {
+	public synthetic fun <init> (Ljava/lang/String;IJ[BLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getCiphertextLength-s-VKNKU ()J
+	public final fun getCiphertextSha256 ()[B
+	public final fun getGeneration-pVg5ArA ()I
+	public final fun getUuid ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/EncryptedUploadV2SecurityPolicy : java/lang/Enum {
+	public static final field LegacyAllowed Ldev/bota/sdk/EncryptedUploadV2SecurityPolicy;
+	public static final field V2Preferred Ldev/bota/sdk/EncryptedUploadV2SecurityPolicy;
+	public static final field V2Required Ldev/bota/sdk/EncryptedUploadV2SecurityPolicy;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/EncryptedUploadV2SecurityPolicy;
+	public static fun values ()[Ldev/bota/sdk/EncryptedUploadV2SecurityPolicy;
+}
+
+public final class dev/bota/sdk/EncryptedUploadV2TransferEvidence {
+	public synthetic fun <init> (J[BS[BILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getBlockCount-pVg5ArA ()I
+	public final fun getCiphertextLength-s-VKNKU ()J
+	public final fun getCiphertextSha256 ()[B
+	public final fun getManifestLength-Mh2AYeg ()S
+	public final fun getManifestSha256 ()[B
+}
+
 public final class dev/bota/sdk/FactoryResetManager {
 	public final fun cancelCurrentOperation (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun factoryReset-7hoFjp4 (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;JLkotlin/jvm/functions/Function2;Lkotlin/jvm/functions/Function2;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -1099,6 +1179,9 @@ public final class dev/bota/sdk/RecordingManager {
 	public final fun confirmRecording (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun listRecordings (Ldev/bota/sdk/model/ConnectedDevice;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun observeUploadOwnership (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lkotlinx/coroutines/flow/Flow;
+	public final fun streamRecording-c9L97WU (Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;IJLdev/bota/sdk/model/StreamingChunkDestinationProvider;Ldev/bota/sdk/model/StreamingFinalizeHandler;)Lkotlinx/coroutines/flow/Flow;
+	public static synthetic fun streamRecording-c9L97WU$default (Ldev/bota/sdk/RecordingManager;Ldev/bota/sdk/model/ConnectedDevice;Ljava/lang/String;Ljava/lang/String;IJLdev/bota/sdk/model/StreamingChunkDestinationProvider;Ldev/bota/sdk/model/StreamingFinalizeHandler;ILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
+	public final fun syncEncryptedRecordingV2 (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/EncryptedUploadV2Recording;Ldev/bota/sdk/EncryptedUploadV2ProfileProvider;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun syncRecording (Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/model/DeviceRecording;Ljava/lang/String;Z)Lkotlinx/coroutines/flow/Flow;
 	public static synthetic fun syncRecording$default (Ldev/bota/sdk/RecordingManager;Ldev/bota/sdk/model/ConnectedDevice;Ldev/bota/sdk/model/DeviceRecording;Ljava/lang/String;ZILjava/lang/Object;)Lkotlinx/coroutines/flow/Flow;
 	public final fun transferMetadata (Ljava/lang/String;)Ldev/bota/sdk/RecordingTransferMetadata;
@@ -1833,6 +1916,107 @@ public final class dev/bota/sdk/model/RecordingTransferProgress {
 	public final fun getTotalBytes-s-VKNKU ()J
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/bota/sdk/model/StreamingChunkDestinationProvider {
+	public abstract fun destination (Ldev/bota/sdk/model/StreamingChunkRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/model/StreamingChunkRequest {
+	public synthetic fun <init> (IZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-pVg5ArA ()I
+	public final fun component2 ()Z
+	public final fun copy-qim9Vi0 (IZ)Ldev/bota/sdk/model/StreamingChunkRequest;
+	public static synthetic fun copy-qim9Vi0$default (Ldev/bota/sdk/model/StreamingChunkRequest;IZILjava/lang/Object;)Ldev/bota/sdk/model/StreamingChunkRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getSequence-pVg5ArA ()I
+	public fun hashCode ()I
+	public final fun isEncrypted ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/bota/sdk/model/StreamingFinalizeHandler {
+	public abstract fun finalize (Ldev/bota/sdk/model/StreamingFinalizeMetadata;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/bota/sdk/model/StreamingFinalizeMetadata {
+	public synthetic fun <init> (IJJZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-pVg5ArA ()I
+	public final fun component2-s-VKNKU ()J
+	public final fun component3-s-VKNKU ()J
+	public final fun component4 ()Z
+	public final fun copy-gbd35kc (IJJZ)Ldev/bota/sdk/model/StreamingFinalizeMetadata;
+	public static synthetic fun copy-gbd35kc$default (Ldev/bota/sdk/model/StreamingFinalizeMetadata;IJJZILjava/lang/Object;)Ldev/bota/sdk/model/StreamingFinalizeMetadata;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDurationMilliseconds-s-VKNKU ()J
+	public final fun getFileSizeBytes-s-VKNKU ()J
+	public final fun getTotalChunks-pVg5ArA ()I
+	public fun hashCode ()I
+	public final fun isEncrypted ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/bota/sdk/model/StreamingRecordingEvent {
+}
+
+public final class dev/bota/sdk/model/StreamingRecordingEvent$Completed : dev/bota/sdk/model/StreamingRecordingEvent {
+	public synthetic fun <init> (JIZLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-s-VKNKU ()J
+	public final fun component2-pVg5ArA ()I
+	public final fun component3 ()Z
+	public final fun copy-j4JL-BM (JIZ)Ldev/bota/sdk/model/StreamingRecordingEvent$Completed;
+	public static synthetic fun copy-j4JL-BM$default (Ldev/bota/sdk/model/StreamingRecordingEvent$Completed;JIZILjava/lang/Object;)Ldev/bota/sdk/model/StreamingRecordingEvent$Completed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getTotalBytes-s-VKNKU ()J
+	public final fun getUploadedChunks-pVg5ArA ()I
+	public fun hashCode ()I
+	public final fun isEncrypted ()Z
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/StreamingRecordingEvent$Paused : dev/bota/sdk/model/StreamingRecordingEvent {
+	public synthetic fun <init> (JLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1-s-VKNKU ()J
+	public final fun copy-VKZWuLQ (J)Ldev/bota/sdk/model/StreamingRecordingEvent$Paused;
+	public static synthetic fun copy-VKZWuLQ$default (Ldev/bota/sdk/model/StreamingRecordingEvent$Paused;JILjava/lang/Object;)Ldev/bota/sdk/model/StreamingRecordingEvent$Paused;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getCompletedBytes-s-VKNKU ()J
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/StreamingRecordingEvent$Resumed : dev/bota/sdk/model/StreamingRecordingEvent {
+	public static final field INSTANCE Ldev/bota/sdk/model/StreamingRecordingEvent$Resumed;
+	public fun equals (Ljava/lang/Object;)Z
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/StreamingUploadDestination {
+	public fun <init> (Ljava/lang/String;Ldev/bota/sdk/model/StreamingUploadMethod;Ljava/lang/String;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ldev/bota/sdk/model/StreamingUploadMethod;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ldev/bota/sdk/model/StreamingUploadMethod;
+	public final fun component3 ()Ljava/lang/String;
+	public final fun component4 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ldev/bota/sdk/model/StreamingUploadMethod;Ljava/lang/String;Ljava/lang/String;)Ldev/bota/sdk/model/StreamingUploadDestination;
+	public static synthetic fun copy$default (Ldev/bota/sdk/model/StreamingUploadDestination;Ljava/lang/String;Ldev/bota/sdk/model/StreamingUploadMethod;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Ldev/bota/sdk/model/StreamingUploadDestination;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getBearerToken ()Ljava/lang/String;
+	public final fun getContentType ()Ljava/lang/String;
+	public final fun getMethod ()Ldev/bota/sdk/model/StreamingUploadMethod;
+	public final fun getUrl ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/bota/sdk/model/StreamingUploadMethod : java/lang/Enum {
+	public static final field Post Ldev/bota/sdk/model/StreamingUploadMethod;
+	public static final field Put Ldev/bota/sdk/model/StreamingUploadMethod;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getWireValue ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Ldev/bota/sdk/model/StreamingUploadMethod;
+	public static fun values ()[Ldev/bota/sdk/model/StreamingUploadMethod;
 }
 
 public abstract interface class dev/bota/sdk/model/TransferCommand {

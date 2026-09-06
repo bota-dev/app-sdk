@@ -27,6 +27,7 @@ internal class HostEffectExecutor(
     private val material: MaterialHost,
     private val recordingSink: RecordingSinkHost,
     private val firmwareBlob: FirmwareBlobHost,
+    private val encryptedUploadV2: EncryptedUploadV2Host = UnavailableEncryptedUploadV2Host(),
     private val progress: suspend (completed: ULong, total: ULong) -> Unit = { _, _ -> },
 ) : CoreEffectHandler {
     private data class TimerOwner(
@@ -86,6 +87,19 @@ internal class HostEffectExecutor(
             )
         CoreEffectKind.FirmwareBlobRead ->
             route(effect, firmwareBlob.execute(effect), HostEventKind.FirmwareBlobFailed)
+        CoreEffectKind.EncryptedUploadV2LoadCheckpoint,
+        CoreEffectKind.EncryptedUploadV2DeleteCheckpoint,
+        CoreEffectKind.EncryptedUploadV2TruncateSink,
+        CoreEffectKind.EncryptedUploadV2PrepareSession,
+        CoreEffectKind.EncryptedUploadV2StartTransfer,
+        CoreEffectKind.EncryptedUploadV2RepairWindow,
+        CoreEffectKind.EncryptedUploadV2SaveCheckpoint,
+        CoreEffectKind.EncryptedUploadV2AcknowledgeWindow,
+        CoreEffectKind.EncryptedUploadV2StageArtifacts,
+        CoreEffectKind.EncryptedUploadV2AwaitReceipt,
+        CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt,
+        CoreEffectKind.EncryptedUploadV2Abort ->
+            route(effect, encryptedUploadV2.execute(effect), HostEventKind.EncryptedUploadV2Failed)
     }
 
     override suspend fun cancel(cancellationId: CoreCancellationId) {
@@ -95,6 +109,7 @@ internal class HostEffectExecutor(
             owned
         }
         jobs.forEach(Job::cancel)
+        encryptedUploadV2.cancel(cancellationId)
     }
 
     private fun route(
@@ -185,6 +200,14 @@ internal class HostEffectExecutor(
                 add(CoreField.Unsigned(59, transferId))
                 hostError?.httpStatus?.let { add(CoreField.Unsigned(60, it.toULong())) }
             }
+        } else if (kind == HostEventKind.EncryptedUploadV2Failed) {
+            val hostError = error as? EncryptedUploadV2HostException
+            buildList<CoreField> {
+                add(CoreField.Unsigned(47, (hostError?.errorCode ?: 12u).toULong()))
+                add(CoreField.BooleanValue(48, hostError?.retryable ?: true))
+                hostError?.protocolStatus?.let { add(CoreField.Unsigned(49, it.toULong())) }
+                error.message?.let { add(CoreField.Text(50, it)) }
+            }
         } else {
             val platformCode = -(hostError?.platformCode ?: 1).toLong().absoluteValue
             listOf(CoreField.Signed(52, platformCode))
@@ -241,6 +264,18 @@ private fun allowsMultipleEvents(kind: CoreEffectKind): Boolean = when (kind) {
     CoreEffectKind.StreamingSinkFinalize,
     CoreEffectKind.StreamingSinkDiscard,
     CoreEffectKind.FirmwareBlobRead -> false
+    CoreEffectKind.EncryptedUploadV2LoadCheckpoint,
+    CoreEffectKind.EncryptedUploadV2DeleteCheckpoint,
+    CoreEffectKind.EncryptedUploadV2TruncateSink,
+    CoreEffectKind.EncryptedUploadV2PrepareSession,
+    CoreEffectKind.EncryptedUploadV2RepairWindow,
+    CoreEffectKind.EncryptedUploadV2SaveCheckpoint,
+    CoreEffectKind.EncryptedUploadV2AcknowledgeWindow,
+    CoreEffectKind.EncryptedUploadV2StageArtifacts,
+    CoreEffectKind.EncryptedUploadV2AwaitReceipt,
+    CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt,
+    CoreEffectKind.EncryptedUploadV2Abort -> false
+    CoreEffectKind.EncryptedUploadV2StartTransfer -> true
 }
 
 private fun expectedEventKinds(kind: CoreEffectKind): Set<HostEventKind> = when (kind) {
@@ -292,6 +327,33 @@ private fun expectedEventKinds(kind: CoreEffectKind): Set<HostEventKind> = when 
     CoreEffectKind.StreamingSinkFinalize -> setOf(HostEventKind.StreamingSinkFinalized)
     CoreEffectKind.StreamingSinkDiscard -> emptySet()
     CoreEffectKind.FirmwareBlobRead -> setOf(HostEventKind.FirmwareChunkRead)
+    CoreEffectKind.EncryptedUploadV2LoadCheckpoint ->
+        setOf(HostEventKind.EncryptedUploadV2CheckpointLoaded)
+    CoreEffectKind.EncryptedUploadV2DeleteCheckpoint,
+    CoreEffectKind.EncryptedUploadV2Abort -> emptySet()
+    CoreEffectKind.EncryptedUploadV2TruncateSink ->
+        setOf(HostEventKind.EncryptedUploadV2SinkTruncated)
+    CoreEffectKind.EncryptedUploadV2PrepareSession ->
+        setOf(HostEventKind.EncryptedUploadV2SessionPrepared)
+    CoreEffectKind.EncryptedUploadV2StartTransfer -> setOf(
+        HostEventKind.EncryptedUploadV2TransferStarted,
+        HostEventKind.EncryptedUploadV2ResumeRejected,
+        HostEventKind.EncryptedUploadV2WindowStaged,
+        HostEventKind.EncryptedUploadV2TransferCompleted,
+        HostEventKind.EncryptedUploadV2MixedProfile,
+    )
+    CoreEffectKind.EncryptedUploadV2RepairWindow ->
+        setOf(HostEventKind.EncryptedUploadV2WindowStaged)
+    CoreEffectKind.EncryptedUploadV2SaveCheckpoint ->
+        setOf(HostEventKind.EncryptedUploadV2CheckpointSaved)
+    CoreEffectKind.EncryptedUploadV2AcknowledgeWindow ->
+        setOf(HostEventKind.EncryptedUploadV2WindowAcknowledged)
+    CoreEffectKind.EncryptedUploadV2StageArtifacts ->
+        setOf(HostEventKind.EncryptedUploadV2ArtifactsStaged)
+    CoreEffectKind.EncryptedUploadV2AwaitReceipt ->
+        setOf(HostEventKind.EncryptedUploadV2ReceiptAccepted)
+    CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt ->
+        setOf(HostEventKind.EncryptedUploadV2RecordingConfirmed)
 }
 
 private val CoreEffectKind.isStreamingSink: Boolean

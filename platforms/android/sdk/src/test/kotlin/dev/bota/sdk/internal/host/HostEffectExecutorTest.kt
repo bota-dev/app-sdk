@@ -20,7 +20,7 @@ import org.junit.Test
 
 class HostEffectExecutorTest {
     @Test
-    fun routesAllThirtyEffectsAndPreservesCorrelation() = runTest {
+    fun routesEveryEffectIncludingAllTwelveV2EffectsAndPreservesCorrelation() = runTest {
         val calls = mutableListOf<Pair<String, CoreEffectKind>>()
         val progress = mutableListOf<Pair<ULong, ULong>>()
         val ports = ports(calls) { effect -> successPayload(effect.kind)?.let(::flowOf) ?: emptyFlow() }
@@ -32,6 +32,7 @@ class HostEffectExecutorTest {
             ports.material,
             ports.recordingSink,
             ports.firmwareBlob,
+            ports.encryptedUploadV2,
         ) { completed, total -> progress += completed to total }
 
         CoreEffectKind.entries.forEachIndexed { index, kind ->
@@ -125,6 +126,7 @@ private data class Ports(
     val material: MaterialHost,
     val recordingSink: RecordingSinkHost,
     val firmwareBlob: FirmwareBlobHost,
+    val encryptedUploadV2: EncryptedUploadV2Host,
 )
 
 private fun ports(
@@ -138,6 +140,7 @@ private fun ports(
     MaterialHost { effect -> calls += "material" to effect.kind; output(effect) },
     RecordingSinkHost { effect -> calls += "sink" to effect.kind; output(effect) },
     FirmwareBlobHost { effect -> calls += "firmware" to effect.kind; output(effect) },
+    EncryptedUploadV2Host { effect -> calls += "encrypted-v2" to effect.kind; output(effect) },
 )
 
 private fun executor(ports: Ports) = HostEffectExecutor(
@@ -148,6 +151,7 @@ private fun executor(ports: Ports) = HostEffectExecutor(
     ports.material,
     ports.recordingSink,
     ports.firmwareBlob,
+    ports.encryptedUploadV2,
 )
 
 private fun effect(
@@ -221,6 +225,28 @@ private fun successPayload(kind: CoreEffectKind): CoreHostEventPayload? = when (
     CoreEffectKind.StreamingSinkAppendEncrypted -> CoreHostEventPayload(HostEventKind.StreamingSinkAccepted)
     CoreEffectKind.StreamingSinkFinalize -> CoreHostEventPayload(HostEventKind.StreamingSinkFinalized)
     CoreEffectKind.FirmwareBlobRead -> CoreHostEventPayload(HostEventKind.FirmwareChunkRead)
+    CoreEffectKind.EncryptedUploadV2LoadCheckpoint ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2CheckpointLoaded)
+    CoreEffectKind.EncryptedUploadV2DeleteCheckpoint,
+    CoreEffectKind.EncryptedUploadV2Abort -> null
+    CoreEffectKind.EncryptedUploadV2TruncateSink ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2SinkTruncated)
+    CoreEffectKind.EncryptedUploadV2PrepareSession ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2SessionPrepared)
+    CoreEffectKind.EncryptedUploadV2StartTransfer ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2TransferStarted)
+    CoreEffectKind.EncryptedUploadV2RepairWindow ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2WindowStaged)
+    CoreEffectKind.EncryptedUploadV2SaveCheckpoint ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2CheckpointSaved)
+    CoreEffectKind.EncryptedUploadV2AcknowledgeWindow ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2WindowAcknowledged)
+    CoreEffectKind.EncryptedUploadV2StageArtifacts ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2ArtifactsStaged)
+    CoreEffectKind.EncryptedUploadV2AwaitReceipt ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2ReceiptAccepted)
+    CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2RecordingConfirmed)
 }
 
 private fun isPortEffect(kind: CoreEffectKind): Boolean =

@@ -1,0 +1,238 @@
+package dev.bota.sdk.internal.host
+
+import dev.bota.sdk.EncryptedUploadV2Material
+import dev.bota.sdk.EncryptedUploadV2SecurityPolicy
+import dev.bota.sdk.internal.bluetooth.EncryptedUploadV2OpenResult
+import dev.bota.sdk.internal.core.CoreCancellationId
+import dev.bota.sdk.internal.core.CoreEffect
+import dev.bota.sdk.internal.core.CoreEffectKind
+import dev.bota.sdk.internal.core.CoreField
+import dev.bota.sdk.internal.core.EncryptedUploadV2DataValue
+import dev.bota.sdk.internal.core.EncryptedUploadV2EofValue
+import dev.bota.sdk.internal.core.EncryptedUploadV2ManifestChunkValue
+import dev.bota.sdk.internal.core.EncryptedUploadV2TransferPayload
+import dev.bota.sdk.internal.core.EncryptedUploadV2WindowEndValue
+import dev.bota.sdk.internal.core.HostEventKind
+import dev.bota.sdk.internal.core.toNativePacket
+import java.nio.file.Files
+import java.security.MessageDigest
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.produceIn
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class EncryptedUploadV2TransferHostTest {
+    @Test
+    fun stagesCiphertextThenManifestThenReceiptBeforeExactConfirm() = runTest {
+        val actions = mutableListOf<String>()
+        val cancelled = AtomicInteger()
+        val registry = EncryptedUploadV2MaterialRegistry()
+        val materialId = "material-1"
+        val authorization = ByteArray(408) { 1 }
+        val manifest = ByteArray(580) { (it % 251).toByte() }
+        val ciphertext = byteArrayOf(3, 4)
+        val material = EncryptedUploadV2Material(
+            materialId, "recording-1", UploadSession, 2u, EncryptedUploadV2SecurityPolicy.V2Required,
+            authorization,
+            stagingRequest = {
+                actions += "staging-request"
+                Request.Builder().url("https://example.test/upload").put(byteArrayOf().toRequestBody()).build()
+            },
+            submitManifest = { value, _ ->
+                assertTrue(value.contentEquals(manifest))
+                actions += "manifest"
+            },
+            finalize = { actions += "finalize" },
+            completionReceipt = {
+                actions += "receipt"
+                ByteArray(336) { 2 }
+            },
+            cancel = { cancelled.incrementAndGet() },
+        )
+        registry.register(materialId, material)
+        val payloads = Channel<EncryptedUploadV2TransferPayload>(Channel.UNLIMITED)
+        val root = Files.createTempDirectory("bota-v2-host")
+        val host = host(root, registry, payloads, actions) { path ->
+            assertTrue(Files.readAllBytes(path).contentEquals(ciphertext))
+        }
+
+        val prepared = host.execute(effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, materialId))).toList()
+        val authorizationSha = prepared.single().fields.filterIsInstance<CoreField.Bytes>().single().value
+        val start = host.execute(startEffect(materialId, authorizationSha, ciphertext)).produceIn(this)
+        assertEquals(HostEventKind.EncryptedUploadV2TransferStarted, withTimeout(1_000) { start.receive() }.kind)
+        payloads.send(EncryptedUploadV2TransferPayload.Data(EncryptedUploadV2DataValue(9u, 0u, 0u, ciphertext)))
+        payloads.send(
+            EncryptedUploadV2TransferPayload.WindowEnd(
+                EncryptedUploadV2WindowEndValue(9u, 0u, 0u, 0u, 2u, sha(ciphertext), 1u),
+            ),
+        )
+        val window = withContext(Dispatchers.Default) { withTimeout(2_000) { start.receive() } }
+        assertEquals(HostEventKind.EncryptedUploadV2WindowStaged, window.kind)
+        val coreCheckpoint = byteArrayOf(7, 8, 9)
+        host.execute(effect(CoreEffectKind.EncryptedUploadV2SaveCheckpoint, CoreField.Bytes(28, coreCheckpoint))).toList()
+        host.execute(effect(CoreEffectKind.EncryptedUploadV2AcknowledgeWindow, CoreField.Bytes(28, coreCheckpoint))).toList()
+        payloads.send(
+            EncryptedUploadV2TransferPayload.ManifestChunk(
+                EncryptedUploadV2ManifestChunkValue(9u, 580u, 0u, sha(manifest), manifest),
+            ),
+        )
+        payloads.send(
+            EncryptedUploadV2TransferPayload.Eof(
+                EncryptedUploadV2EofValue(9u, 0u, 1u, 2u, sha(ciphertext), sha(manifest)),
+            ),
+        )
+        val completed = withContext(Dispatchers.Default) { withTimeout(2_000) { start.receive() } }
+        assertEquals(HostEventKind.EncryptedUploadV2TransferCompleted, completed.kind)
+        val evidence = evidenceFields(ciphertext, manifest)
+        host.execute(
+            effect(
+                CoreEffectKind.EncryptedUploadV2StageArtifacts,
+                CoreField.Text(12, materialId), CoreField.Text(14, SinkId), *evidence,
+            ),
+        ).toList()
+        val receipt = host.execute(
+            effect(CoreEffectKind.EncryptedUploadV2AwaitReceipt, CoreField.Text(12, materialId), *evidence),
+        ).toList().single().fields.filterIsInstance<CoreField.Bytes>().single().value
+        host.execute(
+            effect(
+                CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt,
+                CoreField.Text(12, materialId), CoreField.Bytes(162, receipt),
+            ),
+        ).toList()
+
+        assertEquals(
+            listOf(
+                "signed-1", "control-7", "staging-request", "upload", "manifest",
+                "finalize", "receipt", "signed-2", "control-8", "release",
+            ),
+            actions,
+        )
+        assertEquals(0, cancelled.get())
+        assertFalse(Files.exists(root.resolve("$SinkId.encrypted-upload-v2")))
+        start.cancel()
+        host.close()
+    }
+
+    @Test
+    fun cancellationDuringOpenAbortsTheOwnedSessionAndCleansMaterialOnce() = runTest {
+        val registry = EncryptedUploadV2MaterialRegistry()
+        val cancelled = AtomicInteger()
+        registry.register(
+            "material-1",
+            EncryptedUploadV2Material(
+                "material-1", "recording-1", UploadSession, 2u, EncryptedUploadV2SecurityPolicy.V2Required,
+                ByteArray(408), { error("unused") }, { _, _ -> }, {}, { ByteArray(336) },
+                { cancelled.incrementAndGet() },
+            ),
+        )
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val actions = mutableListOf<String>()
+        val journals = TestJournals()
+        val services = EncryptedUploadV2TransferHostServices(
+            registry, EncryptedUploadV2CheckpointStore(journals),
+            openTransfer = { _, _ -> entered.complete(Unit); release.await(); error("cancelled open") },
+            sendControl = { _, _ -> }, abortTransfer = { actions += "abort-$it" },
+            releaseTransfer = {}, sendSignedDocument = { kind, _, _, _ -> actions += "signed-$kind" },
+            uploadCiphertext = { _, _ -> }, cancelUploads = {}, nextWriteId = { 1u },
+            encodeAcknowledgement = { byteArrayOf() }, encodeConfirm = { _, _, _, _, _, _ -> byteArrayOf() },
+        )
+        val host = EncryptedUploadV2TransferHost(Files.createTempDirectory("bota-v2-cancel"), services)
+        val prepared = host.execute(
+            effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, "material-1")),
+        ).toList()
+        val authorizationSha = prepared.single().fields.filterIsInstance<CoreField.Bytes>().single().value
+        val starting = async { host.execute(startEffect("material-1", authorizationSha, byteArrayOf(3, 4))).toList() }
+        entered.await()
+
+        host.cancel(CoreCancellationId(1u, 2u))
+        release.complete(Unit)
+        starting.cancelAndJoin()
+
+        assertTrue(actions.contains("abort-9"))
+        assertEquals(1, cancelled.get())
+        host.close()
+    }
+
+    private fun host(
+        root: java.nio.file.Path,
+        registry: EncryptedUploadV2MaterialRegistry,
+        payloads: Channel<EncryptedUploadV2TransferPayload>,
+        actions: MutableList<String>,
+        upload: (java.nio.file.Path) -> Unit,
+    ): EncryptedUploadV2TransferHost {
+        val services = EncryptedUploadV2TransferHostServices(
+            registry, EncryptedUploadV2CheckpointStore(TestJournals()),
+            openTransfer = { _, _ -> EncryptedUploadV2OpenResult.Opened(payloads.receiveAsFlow()) },
+            sendControl = { _, value -> actions += "control-${value.single()}" },
+            abortTransfer = { actions += "abort" }, releaseTransfer = { actions += "release" },
+            sendSignedDocument = { kind, _, _, expected ->
+                assertEquals(if (kind == 1.toUByte()) 408u.toUShort() else 336u.toUShort(), expected)
+                if (kind == 2.toUByte()) {
+                    assertFalse(Files.exists(root.resolve("$SinkId.encrypted-upload-v2")))
+                }
+                actions += "signed-$kind"
+            },
+            uploadCiphertext = { _, path -> upload(path); actions += "upload" },
+            cancelUploads = {}, nextWriteId = { 1u },
+            encodeAcknowledgement = { byteArrayOf(7) },
+            encodeConfirm = { _, _, _, _, _, _ -> byteArrayOf(8) },
+        )
+        return EncryptedUploadV2TransferHost(root, services)
+    }
+
+    private fun startEffect(materialId: String, authorizationSha: ByteArray, ciphertext: ByteArray) = effect(
+        CoreEffectKind.EncryptedUploadV2StartTransfer,
+        CoreField.Text(3, "EVFXXW67KP"), CoreField.Text(13, RecordingId), CoreField.Unsigned(129, 4u),
+        CoreField.Unsigned(147, 3u), CoreField.Bytes(132, uuidBytes(UploadSession)), CoreField.Unsigned(165, 2u),
+        CoreField.Unsigned(128, 9u), CoreField.Text(12, materialId), CoreField.Text(14, SinkId),
+        CoreField.Unsigned(137, 0x7fu), CoreField.Unsigned(138, 408u), CoreField.Unsigned(139, 580u),
+        CoreField.Unsigned(169, 2u), CoreField.Unsigned(170, 1u), CoreField.Unsigned(140, 1u),
+        CoreField.Unsigned(141, 1u), CoreField.Unsigned(134, 1u), CoreField.Unsigned(135, 2u),
+        CoreField.Unsigned(130, ciphertext.size.toULong()), CoreField.Bytes(144, sha(ciphertext)),
+        CoreField.Bytes(161, authorizationSha),
+    )
+
+    private fun evidenceFields(ciphertext: ByteArray, manifest: ByteArray): Array<CoreField> = arrayOf(
+        CoreField.Unsigned(130, ciphertext.size.toULong()), CoreField.Bytes(144, sha(ciphertext)),
+        CoreField.Unsigned(168, 580u), CoreField.Bytes(142, sha(manifest)), CoreField.Unsigned(145, 1u),
+    )
+
+    private fun effect(kind: CoreEffectKind, vararg fields: CoreField) = CoreEffect(
+        kind,
+        fields.toList().toNativePacket(kind.wireValue, operation = 8, requestId = 1u),
+    )
+
+    private fun uuidBytes(id: UUID) = java.nio.ByteBuffer.allocate(16)
+        .putLong(id.mostSignificantBits).putLong(id.leastSignificantBits).array()
+
+    private fun sha(value: ByteArray) = MessageDigest.getInstance("SHA-256").digest(value)
+
+    private companion object {
+        val UploadSession: UUID = UUID.fromString("00112233-4455-6677-8899-aabbccddeeff")
+        const val RecordingId = "00112233-4455-6677-8899-aabbccddeeff"
+        const val SinkId = "11111111-2222-3333-4444-555555555555"
+    }
+}
+
+private class TestJournals : JournalStore {
+    private val values = mutableMapOf<String, ByteArray>()
+    override suspend fun read(name: String): ByteArray? = values[name]
+    override suspend fun write(name: String, value: ByteArray) { values[name] = value.copyOf() }
+    override suspend fun delete(name: String) { values.remove(name) }
+}

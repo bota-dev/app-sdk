@@ -55,20 +55,17 @@ internal class CoreEngineRuntime(
 
     override fun run(command: CoreCommand, capabilities: CoreCapabilities): Flow<CoreNotification> = callbackFlow {
         check(!closed.get()) { "native core is closed" }
-        val collectorClosed = AtomicBoolean(false)
-        scope.launch {
-            if (collectorClosed.get()) return@launch
-            try {
+        try {
+            withContext(dispatcher) {
                 core.start(command.packet, capabilities.bits)
                 val owner = ActiveWorkflow(CoreCancellationId(command.cancellationId), channel)
                 active = owner
                 drain()
-            } catch (error: Throwable) {
-                close(error)
             }
+        } catch (error: Throwable) {
+            close(error)
         }
         awaitClose {
-            collectorClosed.set(true)
             scope.launch { cancelIfActive(CoreCancellationId(command.cancellationId)) }
         }
     }
@@ -91,10 +88,12 @@ internal class CoreEngineRuntime(
     private suspend fun cancelInternal(cancellationId: CoreCancellationId) {
         val owner = withContext(dispatcher) { active?.takeIf { it.cancellationId == cancellationId } }
             ?: return
+        withContext(dispatcher) {
+            core.cancel(cancellationId.high, cancellationId.low)
+        }
         effectHandler.cancel(cancellationId)
         withContext(dispatcher) {
             effectJobs.remove(cancellationId)?.forEach(Job::cancel)
-            core.cancel(cancellationId.high, cancellationId.low)
             drain()
         }
         owner.terminal.await()

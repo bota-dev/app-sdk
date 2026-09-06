@@ -151,6 +151,38 @@ internal data class CoreCommand(
             CoreField.BooleanValue(124, confirmOnCompletion),
         )
 
+        fun transferEncryptedRecording(
+            request: EncryptedUploadV2CommandRequest,
+            cancellationId: UUID = UUID.randomUUID(),
+        ) = CoreCommand(
+            0x010c,
+            cancellationId,
+            listOf(
+                CoreField.Text(3, request.serialNumber),
+                CoreField.Text(13, request.recordingUuid),
+                CoreField.Unsigned(129, request.recordingGeneration.toULong()),
+                CoreField.Unsigned(147, request.storageFormat.toULong()),
+                CoreField.Bytes(132, request.uploadSessionId.toNetworkBytes()),
+                CoreField.Unsigned(165, request.ownerRevision.toULong()),
+                CoreField.Unsigned(128, request.transportSessionId),
+                CoreField.Text(12, request.materialId),
+                CoreField.Text(14, request.sinkId),
+                CoreField.Unsigned(166, 3u),
+                CoreField.Unsigned(167, request.securityPolicy),
+                CoreField.Unsigned(137, request.capabilities.flags.toULong()),
+                CoreField.Unsigned(138, request.capabilities.maximumSignedBlobBytes.toULong()),
+                CoreField.Unsigned(139, request.capabilities.maximumManifestBytes.toULong()),
+                CoreField.Unsigned(169, request.capabilities.maximumDataPayloadBytes.toULong()),
+                CoreField.Unsigned(170, request.capabilities.maximumWindowPackets.toULong()),
+                CoreField.Unsigned(140, request.capabilities.durableCheckpointIntervalBlocks.toULong()),
+                CoreField.Unsigned(141, request.capabilities.maximumMissingSequences.toULong()),
+                CoreField.Unsigned(134, request.windowPackets.toULong()),
+                CoreField.Unsigned(135, request.dataPayloadBytes.toULong()),
+                CoreField.Unsigned(130, request.ciphertextLength),
+                CoreField.Bytes(144, request.ciphertextSha256),
+            ),
+        )
+
         fun uploadRecording(
             serialNumber: String,
             recordingUuid: String,

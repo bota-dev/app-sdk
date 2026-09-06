@@ -161,8 +161,10 @@ packets. Shared protocol decode/encode entry points cover the frozen status,
 recording list and control, transfer, OTA, provisioning, settings, and log fixtures. The Apple
 package and Android AAR are public platform distributions; the remaining
 planned native facades are not yet published.
-Encrypted Upload v2 has an additive, contract-only engine/ABI surface for
-profile-gated session coordination, opaque checkpoint metadata, staging
+Encrypted Upload v2 has an additive engine/ABI surface whose compatibility
+metadata remains contract-only while firmware, React Native, release, and
+hardware gates remain open. The surface provides profile-gated session
+coordination, opaque checkpoint metadata, staging
 evidence, and receipt-gated confirmation. Apple now maps its opaque command and
 all twelve effects through a dedicated internal host boundary and recognizes
 typed failures plus the staged notification. Apple also has an in-memory,
@@ -223,10 +225,22 @@ foreign-session traffic, exactly validates successful reply identity,
 ciphertext and checkpoint context, and preserves device checkpoint data on
 rejection. Acceptance retains the live `0409` stream and serialized owner for
 the remaining transfer; cancellation and explicit abort use the same bounded,
-fail-closed cleanup. The production-selected transfer port still fails closed
-as unavailable and no public manager exposes the workflow. Android and React
-Native have no runtime host. Runtime
-compatibility metadata therefore remains disabled.
+fail-closed cleanup.
+Android mirrors the native workflow through its established coroutine runtime
+and exhaustive host executor. `RecordingManager.syncEncryptedRecordingV2`
+owns cancellation before its first suspension, reads `0406` fresh, loads only
+exact non-secret resume metadata, asks the application to select material, and
+then starts only command `0x010c` with no legacy fallback. Dedicated
+`0407..0409` owners send only Rust-encoded signed documents and transfer
+controls. A bounded `FileChannel` receiver repairs exact missing sequences,
+forces each clean window before its `AtomicFile` checkpoint is acknowledged,
+and verifies the fixed manifest plus EOF evidence. The application supplies an
+empty HTTPS PUT template, manifest submission, finalization, and receipt
+callbacks; OkHttp streams the verified native ciphertext body without a
+control-plane API call. The exact receipt gates canonical CONFIRM, and all
+pre-CONFIRM failure or cancellation paths retain the device copy and clean up
+opaque application material once. React Native still has no v2 surface, and
+runtime compatibility metadata therefore remains disabled.
 ABI v1 is frozen at the typed public header and verified by standalone C and
 Swift callers. Its exact ownership contract, artifact digests, packet coverage,
 and platform exclusions are recorded in
