@@ -106,8 +106,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   `RecordingManager.syncEncryptedRecordingV2` passes a fresh `0406` capability
   snapshot and matching native checkpoint to an application-owned provider
   before it starts the explicit v2 command. The manager owns cancellation
-  before any read or provider await, propagates cancellation to a running Rust
-  workflow before cleanup, and reuses the checkpoint's exact session, sink, and
+  before any read or provider await, records cancellation while the Rust engine
+  starts and cancels that exact owner before it can consume output or clean up,
+  and reuses the checkpoint's exact session, sink, and
   safe negotiated bounds only when its selected material matches. It never
   infers or retries legacy behavior after v2 selection.
   Apple's internal

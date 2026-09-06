@@ -297,10 +297,14 @@ final class RecordingManagerTests: XCTestCase {
                 provider: { _ in material }
             )
         }
-        await runner.waitUntilStarted()
+        await waitForEncryptedV2Handshake("engine start") {
+            await runner.waitUntilStarted()
+        }
         task.cancel()
         await runner.waitUntilCancelled()
-        await task.value
+        await waitForEncryptedV2Handshake("engine-start cancellation completion") {
+            await task.value
+        }
 
         let commands = await runner.commands
         let cancellations = await runner.cancellations
@@ -370,6 +374,118 @@ final class RecordingManagerTests: XCTestCase {
         XCTAssertEqual(selectionCount, 0)
     }
 
+    func testEncryptedV2CancellationDuringEngineStartCancelsTheLateEngineOwner() async throws {
+        let runner = DelayedStartTransferWorkflowRunner()
+        let termination = EncryptedUploadV2TerminalOutcomeRecorder()
+        let capability = Self.encryptedV2Capability
+        let recording = Self.encryptedV2Recording
+        let material = Self.encryptedV2Material()
+        let manager = RecordingManager()
+        await manager.attach(await transferRuntime(
+            runner: runner,
+            recorder: TransferFacadeRecorder(),
+            encryptedUploadV2Capabilities: { _ in capability },
+            registerEncryptedUploadV2Material: { _, _ in },
+            terminateEncryptedUploadV2Material: { _, outcome in await termination.record(outcome) }
+        ))
+
+        let task = Task {
+            try? await manager.syncEncryptedRecordingV2(
+                transferDevice(),
+                recording: recording,
+                provider: { _ in material }
+            )
+        }
+        await runner.waitUntilStarted()
+        task.cancel()
+        await runner.resumeStart()
+        await task.value
+
+        let commands = await runner.commands
+        let cancellations = await runner.cancellations
+        let outcomes = await termination.outcomes
+        XCTAssertEqual(cancellations, [commands[0].cancellationID])
+        XCTAssertEqual(outcomes, [.cancelled])
+    }
+
+    func testEncryptedV2CancellationCleansLateProviderMaterialAfterFacadeOwnershipEnds() async throws {
+        let runner = TransferWorkflowRunner { _ in [] }
+        let provider = EncryptedUploadV2ProviderGate()
+        let cancellation = EncryptedUploadV2CancellationRecorder()
+        let capability = Self.encryptedV2Capability
+        let recording = Self.encryptedV2Recording
+        let manager = RecordingManager()
+        await manager.attach(await transferRuntime(
+            runner: runner,
+            recorder: TransferFacadeRecorder(),
+            encryptedUploadV2Capabilities: { _ in capability }
+        ))
+
+        let task = Task {
+            try? await manager.syncEncryptedRecordingV2(
+                transferDevice(),
+                recording: recording,
+                provider: { _ in await provider.material() }
+            )
+        }
+        await waitForEncryptedV2Handshake("provider request") {
+            await provider.waitUntilRequested()
+        }
+        task.cancel()
+        await provider.resume(with: Self.encryptedV2Material(cancellation))
+        await waitForEncryptedV2Handshake("late-provider cancellation completion") {
+            await task.value
+        }
+
+        let cancellationCount = await cancellation.value()
+        let commands = await runner.commands
+        XCTAssertEqual(cancellationCount, 1)
+        XCTAssertTrue(commands.isEmpty)
+    }
+
+    func testEncryptedV2CancellationTerminatesLateRegistrySuccessExactlyOnce() async throws {
+        let runner = TransferWorkflowRunner { _ in [] }
+        let registration = EncryptedUploadV2RegistrationGate()
+        let termination = EncryptedUploadV2TerminalOutcomeRecorder()
+        let cancellation = EncryptedUploadV2CancellationRecorder()
+        let capability = Self.encryptedV2Capability
+        let recording = Self.encryptedV2Recording
+        let material = Self.encryptedV2Material(cancellation)
+        let manager = RecordingManager()
+        await manager.attach(await transferRuntime(
+            runner: runner,
+            recorder: TransferFacadeRecorder(),
+            encryptedUploadV2Capabilities: { _ in capability },
+            registerEncryptedUploadV2Material: { _, _ in await registration.register() },
+            terminateEncryptedUploadV2Material: { _, outcome in await termination.record(outcome) }
+        ))
+
+        let task = Task {
+            try? await manager.syncEncryptedRecordingV2(
+                transferDevice(),
+                recording: recording,
+                provider: { _ in material }
+            )
+        }
+        await waitForEncryptedV2Handshake("material registration") {
+            await registration.waitUntilRequested()
+        }
+        task.cancel()
+        await registration.resume()
+        await waitForEncryptedV2Handshake("late-registration cancellation completion") {
+            await task.value
+        }
+
+        let registrationCount = await registration.count()
+        let cancellationCount = await cancellation.value()
+        let outcomes = await termination.value()
+        let commands = await runner.commands
+        XCTAssertEqual(registrationCount, 1)
+        XCTAssertEqual(cancellationCount, 1)
+        XCTAssertEqual(outcomes, [.cancelled])
+        XCTAssertTrue(commands.isEmpty)
+    }
+
     private static let encryptedV2Capability = EncryptedUploadV2CapabilitySnapshot(
         rawValue: Data(repeating: 0xa1, count: 24),
         sha256: Data(repeating: 0xb2, count: 32),
@@ -383,6 +499,18 @@ final class RecordingManagerTests: XCTestCase {
             maximumMissingSequences: 1
         )
     )
+
+    private func waitForEncryptedV2Handshake(
+        _ description: String,
+        operation: @escaping @Sendable () async -> Void
+    ) async {
+        let expectation = expectation(description: description)
+        Task {
+            await operation()
+            expectation.fulfill()
+        }
+        await fulfillment(of: [expectation], timeout: 1)
+    }
 
     private static let encryptedV2Recording = EncryptedUploadV2Recording(
         uuid: "00112233-4455-6677-8899-aabbccddeeff",
@@ -428,11 +556,13 @@ private actor EncryptedUploadV2SelectionRecorder {
 private actor EncryptedUploadV2TerminalOutcomeRecorder {
     private(set) var outcomes: [EncryptedUploadV2TerminalOutcome] = []
     func record(_ outcome: EncryptedUploadV2TerminalOutcome) { outcomes.append(outcome) }
+    func value() -> [EncryptedUploadV2TerminalOutcome] { outcomes }
 }
 
 private actor EncryptedUploadV2CancellationRecorder {
     private(set) var count = 0
     func record() { count += 1 }
+    func value() -> Int { count }
 }
 
 private actor EncryptedUploadV2CapabilityReadGate {
@@ -461,4 +591,52 @@ private actor EncryptedUploadV2CapabilityReadGate {
 private actor EncryptedUploadV2SelectionCallRecorder {
     private(set) var count = 0
     func record() { count += 1 }
+}
+
+private actor EncryptedUploadV2ProviderGate {
+    private var continuation: CheckedContinuation<EncryptedUploadV2Material, Never>?
+    private var requestContinuation: CheckedContinuation<Void, Never>?
+    private var requested = false
+
+    func material() async -> EncryptedUploadV2Material {
+        requested = true
+        requestContinuation?.resume()
+        requestContinuation = nil
+        return await withCheckedContinuation { continuation = $0 }
+    }
+
+    func waitUntilRequested() async {
+        guard !requested else { return }
+        await withCheckedContinuation { requestContinuation = $0 }
+    }
+
+    func resume(with material: EncryptedUploadV2Material) {
+        continuation?.resume(returning: material)
+        continuation = nil
+    }
+}
+
+private actor EncryptedUploadV2RegistrationGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var requestContinuation: CheckedContinuation<Void, Never>?
+    private var requests = 0
+
+    func register() async {
+        requests += 1
+        requestContinuation?.resume()
+        requestContinuation = nil
+        await withCheckedContinuation { continuation = $0 }
+    }
+
+    func waitUntilRequested() async {
+        guard requests == 0 else { return }
+        await withCheckedContinuation { requestContinuation = $0 }
+    }
+
+    func resume() {
+        continuation?.resume()
+        continuation = nil
+    }
+
+    func count() -> Int { requests }
 }

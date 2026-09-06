@@ -32,10 +32,7 @@ public actor RecordingManager {
     private var activeCancellationID: UUID?
     private var activeTask: Task<Void, Never>?
     private var activeCleanup: (@Sendable () async -> Void)?
-    private var activeEncryptedUploadV2MaterialID: String?
-    private var activeEncryptedUploadV2CancellationID: UUID?
-    private var activeEncryptedUploadV2EngineID: UUID?
-    private var activeEncryptedUploadV2CancellationRequested = false
+    private var activeEncryptedUploadV2Lifecycle: EncryptedUploadV2OperationLifecycle?
     private var transferMetadataBySinkID: [String: RecordingTransferMetadata] = [:]
 
     public init() {}
@@ -45,13 +42,12 @@ public actor RecordingManager {
     func detach() async {
         activeTask?.cancel()
         if let id = activeCancellationID {
-            if activeEncryptedUploadV2CancellationID == id {
-                activeEncryptedUploadV2CancellationRequested = true
-            }
-            if activeEncryptedUploadV2CancellationID != id || activeEncryptedUploadV2EngineID == id {
+            if let lifecycle = activeEncryptedUploadV2Lifecycle, let runtime {
+                await cancelEncryptedUploadV2(id, lifecycle: lifecycle, runtime: runtime)
+            } else {
                 try? await runtime?.engine.cancel(id)
+                if let runtime { await finishCancellation(id, runtime: runtime) }
             }
-            if let runtime { await finishCancellation(id, runtime: runtime) }
         }
         activeTask = nil
         activeCancellationID = nil
@@ -144,10 +140,10 @@ public actor RecordingManager {
     ) async throws {
         let cancellationID = UUID()
         let runtime = try configuredRuntime()
+        let lifecycle = EncryptedUploadV2OperationLifecycle()
         return try await withTaskCancellationHandler {
             try await begin(cancellationID, operation: .transferRecording, runtime: runtime)
-            activeEncryptedUploadV2CancellationID = cancellationID
-            activeEncryptedUploadV2CancellationRequested = false
+            activeEncryptedUploadV2Lifecycle = lifecycle
             do {
                 try Task.checkCancellation()
                 try await runtime.connection.require(device)
@@ -194,7 +190,7 @@ public actor RecordingManager {
                     capability: capability,
                     checkpoint: checkpoint
                 ))
-                activeCleanup = { await material.cancelPreparation() }
+                await performEncryptedUploadV2Cleanup(lifecycle.accept(material), runtime: runtime)
                 try requireActive(cancellationID)
                 try Task.checkCancellation()
                 try await runtime.connection.require(device)
@@ -250,15 +246,23 @@ public actor RecordingManager {
                     ciphertextSHA256: recording.ciphertextSHA256
                 ), cancellationID: cancellationID)
                 try await runtime.registerEncryptedUploadV2Material(material.materialID, material)
-                activeEncryptedUploadV2MaterialID = material.materialID
-                activeCleanup = {
-                    await runtime.terminateEncryptedUploadV2Material(material.materialID, .failed)
-                }
+                await performEncryptedUploadV2Cleanup(
+                    lifecycle.register(material.materialID),
+                    runtime: runtime
+                )
                 try requireActive(cancellationID)
                 try Task.checkCancellation()
                 var completed = false
+                lifecycle.beginEngineStart()
                 let notifications = await runtime.engine.run(command, capabilities: runtime.capabilities)
-                activeEncryptedUploadV2EngineID = cancellationID
+                if lifecycle.finishEngineStart() {
+                    try? await runtime.engine.cancel(cancellationID)
+                    await performEncryptedUploadV2Cleanup(
+                        lifecycle.cancellationCleanup(),
+                        runtime: runtime
+                    )
+                    throw facadeCancelled(operation: .transferRecording)
+                }
                 for try await notification in notifications {
                     switch notification.kind {
                     case .completed:
@@ -288,16 +292,23 @@ public actor RecordingManager {
                         detail: "encrypted upload v2 workflow ended without completion"
                     )
                 }
-                activeCleanup = nil
-                activeEncryptedUploadV2MaterialID = nil
+                lifecycle.complete()
                 await runtime.terminateEncryptedUploadV2Material(material.materialID, .completed)
                 await finish(cancellationID, runtime: runtime)
             } catch {
+                await performEncryptedUploadV2Cleanup(lifecycle.failureCleanup(), runtime: runtime)
                 await finish(cancellationID, runtime: runtime)
                 throw facadePublicError(error)
             }
         } onCancel: {
-            Task { await self.cancel(cancellationID) }
+            let cancellation = lifecycle.requestCancellation()
+            Task {
+                await self.cancel(
+                    cancellationID,
+                    lifecycle: lifecycle,
+                    cancellation: cancellation
+                )
+            }
         }
     }
 
@@ -394,10 +405,13 @@ public actor RecordingManager {
         guard let id = activeCancellationID else { return }
         let runtime = try configuredRuntime()
         activeTask?.cancel()
-        if activeEncryptedUploadV2CancellationID == id {
-            activeEncryptedUploadV2CancellationRequested = true
-        }
-        if activeEncryptedUploadV2CancellationID != id || activeEncryptedUploadV2EngineID == id {
+        if let lifecycle = activeEncryptedUploadV2Lifecycle {
+            let cancellation = lifecycle.requestCancellation()
+            if cancellation.cancelEngine {
+                try await runtime.engine.cancel(id)
+            }
+            await performEncryptedUploadV2Cleanup(cancellation.cleanup, runtime: runtime)
+        } else {
             try await runtime.engine.cancel(id)
         }
         await finishCancellation(id, runtime: runtime)
@@ -554,20 +568,11 @@ public actor RecordingManager {
     private func finish(_ id: UUID, runtime: DeviceRuntime) async {
         guard activeCancellationID == id else { return }
         let cleanup = activeCleanup
-        let encryptedMaterialID = activeEncryptedUploadV2MaterialID
-        let cancellationRequested = activeEncryptedUploadV2CancellationRequested
         activeCancellationID = nil
         activeTask = nil
         activeCleanup = nil
-        activeEncryptedUploadV2MaterialID = nil
-        activeEncryptedUploadV2CancellationID = nil
-        activeEncryptedUploadV2EngineID = nil
-        activeEncryptedUploadV2CancellationRequested = false
-        if cancellationRequested, let encryptedMaterialID {
-            await runtime.terminateEncryptedUploadV2Material(encryptedMaterialID, .cancelled)
-        } else {
-            await cleanup?()
-        }
+        activeEncryptedUploadV2Lifecycle = nil
+        await cleanup?()
         await runtime.operations.end(id)
     }
 
@@ -576,16 +581,52 @@ public actor RecordingManager {
         await finish(id, runtime: runtime)
     }
 
-    private func cancel(_ id: UUID) async {
+    private func cancel(
+        _ id: UUID,
+        lifecycle requestedLifecycle: EncryptedUploadV2OperationLifecycle? = nil,
+        cancellation requestedCancellation: EncryptedUploadV2OperationLifecycle.Cancellation? = nil
+    ) async {
         guard activeCancellationID == id, let runtime else { return }
         activeTask?.cancel()
-        if activeEncryptedUploadV2CancellationID == id {
-            activeEncryptedUploadV2CancellationRequested = true
+        if let lifecycle = requestedLifecycle ?? activeEncryptedUploadV2Lifecycle {
+            await cancelEncryptedUploadV2(
+                id,
+                lifecycle: lifecycle,
+                runtime: runtime,
+                cancellation: requestedCancellation
+            )
+        } else {
+            try? await runtime.engine.cancel(id)
+            await finishCancellation(id, runtime: runtime)
         }
-        if activeEncryptedUploadV2CancellationID != id || activeEncryptedUploadV2EngineID == id {
+    }
+
+    private func cancelEncryptedUploadV2(
+        _ id: UUID,
+        lifecycle: EncryptedUploadV2OperationLifecycle,
+        runtime: DeviceRuntime,
+        cancellation: EncryptedUploadV2OperationLifecycle.Cancellation? = nil
+    ) async {
+        let cancellation = cancellation ?? lifecycle.requestCancellation()
+        if cancellation.cancelEngine {
             try? await runtime.engine.cancel(id)
         }
+        await performEncryptedUploadV2Cleanup(cancellation.cleanup, runtime: runtime)
         await finishCancellation(id, runtime: runtime)
+    }
+
+    private func performEncryptedUploadV2Cleanup(
+        _ cleanup: EncryptedUploadV2OperationLifecycle.Cleanup,
+        runtime: DeviceRuntime
+    ) async {
+        switch cleanup {
+        case .none:
+            break
+        case let .cancelPreparation(material):
+            await material.cancelPreparation()
+        case let .terminate(materialID, outcome):
+            await runtime.terminateEncryptedUploadV2Material(materialID, outcome)
+        }
     }
 
     private func configuredRuntime() throws -> DeviceRuntime {
@@ -601,6 +642,98 @@ public actor RecordingManager {
 
     private static func randomTransportSessionID() -> UInt64 {
         UInt64.random(in: 1...UInt64.max)
+    }
+}
+
+private final class EncryptedUploadV2OperationLifecycle: @unchecked Sendable {
+    enum Cleanup {
+        case none
+        case cancelPreparation(EncryptedUploadV2Material)
+        case terminate(String, EncryptedUploadV2TerminalOutcome)
+    }
+
+    struct Cancellation {
+        let cancelEngine: Bool
+        let cleanup: Cleanup
+    }
+
+    private enum EnginePhase {
+        case notStarted
+        case starting
+        case started
+    }
+
+    private let lock = NSLock()
+    private var material: EncryptedUploadV2Material?
+    private var materialID: String?
+    private var enginePhase = EnginePhase.notStarted
+    private var cancellationRequested = false
+    private var didCancelPreparation = false
+    private var didTerminate = false
+    private var completed = false
+
+    func accept(_ material: EncryptedUploadV2Material) -> Cleanup {
+        lock.withLock {
+            self.material = material
+            return cancellationRequested ? takeCleanup(.cancelled) : .none
+        }
+    }
+
+    func register(_ materialID: String) -> Cleanup {
+        lock.withLock {
+            self.materialID = materialID
+            guard cancellationRequested, enginePhase != .starting else { return .none }
+            return takeCleanup(.cancelled)
+        }
+    }
+
+    func beginEngineStart() {
+        lock.withLock { enginePhase = .starting }
+    }
+
+    func finishEngineStart() -> Bool {
+        lock.withLock {
+            enginePhase = .started
+            return cancellationRequested
+        }
+    }
+
+    func requestCancellation() -> Cancellation {
+        lock.withLock {
+            cancellationRequested = true
+            guard enginePhase != .starting else {
+                return .init(cancelEngine: false, cleanup: .none)
+            }
+            return .init(
+                cancelEngine: enginePhase == .started,
+                cleanup: takeCleanup(.cancelled)
+            )
+        }
+    }
+
+    func cancellationCleanup() -> Cleanup {
+        lock.withLock { takeCleanup(.cancelled) }
+    }
+
+    func failureCleanup() -> Cleanup {
+        lock.withLock { takeCleanup(cancellationRequested ? .cancelled : .failed) }
+    }
+
+    func complete() {
+        lock.withLock { completed = true }
+    }
+
+    private func takeCleanup(_ outcome: EncryptedUploadV2TerminalOutcome) -> Cleanup {
+        guard !completed else { return .none }
+        if let materialID, !didTerminate {
+            didTerminate = true
+            return .terminate(materialID, outcome)
+        }
+        if let material, !didCancelPreparation {
+            didCancelPreparation = true
+            return .cancelPreparation(material)
+        }
+        return .none
     }
 }
 

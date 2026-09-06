@@ -205,8 +205,9 @@ until reconnect. Production configuration installs the internal host, and
 `RecordingManager.syncEncryptedRecordingV2` reads a fresh capability plus the
 matching native checkpoint before calling an application-owned provider for an
 explicit v2 decision. It never substitutes a legacy transfer after that
-selection; cancellation owns the operation before selection and reaches a
-running workflow before cleanup. Its native checkpoint sidecar includes the
+selection; cancellation owns the operation before selection, records through
+engine startup, and reaches that exact workflow before it consumes output or
+cleanup begins. Its native checkpoint sidecar includes the
 session, sink, safe negotiated bounds, and highest contiguous sequence needed
 for exact resume and EOF validation.
 Apple's internal

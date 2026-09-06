@@ -64,6 +64,44 @@ actor SuspendedTransferWorkflowRunner: CoreWorkflowRunning {
     }
 }
 
+actor DelayedStartTransferWorkflowRunner: CoreWorkflowRunning {
+    private(set) var commands: [CoreCommand] = []
+    private(set) var cancellations: [UUID] = []
+    private var startContinuation: CheckedContinuation<Void, Never>?
+    private var resumeContinuation: CheckedContinuation<Void, Never>?
+    private var notificationContinuation: AsyncThrowingStream<CoreNotification, Error>.Continuation?
+
+    func run(
+        _ command: CoreCommand,
+        capabilities: CoreCapabilities
+    ) async -> AsyncThrowingStream<CoreNotification, Error> {
+        commands.append(command)
+        startContinuation?.resume()
+        startContinuation = nil
+        await withCheckedContinuation { resumeContinuation = $0 }
+        let pair = AsyncThrowingStream<CoreNotification, Error>.makeStream()
+        notificationContinuation = pair.continuation
+        pair.continuation.yield(transferCompleted(operation: 4))
+        pair.continuation.finish()
+        return pair.stream
+    }
+
+    func cancel(_ id: UUID) async throws {
+        cancellations.append(id)
+        notificationContinuation?.finish()
+    }
+
+    func waitUntilStarted() async {
+        guard commands.isEmpty else { return }
+        await withCheckedContinuation { startContinuation = $0 }
+    }
+
+    func resumeStart() {
+        resumeContinuation?.resume()
+        resumeContinuation = nil
+    }
+}
+
 actor TransferFacadeRecorder {
     struct Write: Equatable, Sendable {
         let service: String

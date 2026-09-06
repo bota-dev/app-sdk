@@ -183,7 +183,8 @@ transfer-control owner, material registry, and native file upload service.
 `RecordingManager.syncEncryptedRecordingV2` reads `0406` fresh and gathers the
 matching native checkpoint before its application-owned provider selects the
 explicit v2 material. It owns cancellation before the first asynchronous read,
-cancels the exact running Rust workflow before non-success cleanup, and binds a
+records cancellation through engine startup, cancels that exact Rust workflow
+before it consumes output or performs non-success cleanup, and binds a
 resume to the checkpoint's exact transport session, sink, and safe negotiated
 bounds; it never infers or retries a legacy profile after that selection.
 Apple's
