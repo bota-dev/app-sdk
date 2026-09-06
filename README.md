@@ -244,11 +244,15 @@ pre-CONFIRM failure or cancellation paths retain the device copy and clean up
 opaque application material once. Effect emission and local cleanup do not yet
 cross the deletion boundary; once the native host actually attempts CONFIRM,
 cancellation cannot send ABORT and both native runtimes wait for the exact
-confirmation result, exposing completion or stable code 19
-uncertainty. Apple preserves that exact result when cancellation races engine
-startup return. Android latches a successful driver write before releasing its
-transfer owner, and disconnect reset fails the exact old effect and joins its
-pump before replacement ownership can start. Android rejects phase-invalid frames when they arrive, broadcasts
+confirmation result, exposing completion or stable code 19 uncertainty. When
+cancellation races Apple engine startup return, only exact completion or code 19
+preserves terminal material; other claimed-cancellation errors remove it as
+cancelled. Android latches a successful driver write before releasing its
+transfer owner. Disconnect reset installs the replacement barrier, removes the
+exact control/writer owners under its DeviceRuntime mutex, then waits for
+settlement outside that mutex. It fails the exact old effect and joins its pump
+before replacement ownership can start. Android
+rejects phase-invalid frames when they arrive, broadcasts
 bounded notifications to each observer, resets poisoned ownership after either
 the exact current explicit or spontaneous GATT-generation disconnect, and
 merges every retired split checkpoint/index pair into an existing or recovered

@@ -248,8 +248,9 @@ runtimes can consume the same trace.
   - [x] Wire the resulting snapshot through application selection before START
     and install the internal completion services in production configuration.
   - [x] Preserve exact Completed or code-19 settlement when cancellation races
-    the return from Apple engine startup; never force cancelled material after
-    CONFIRM may have deleted the device copy.
+    the return from Apple engine startup; an ordinary cancel failure after an
+    atomic pre-CONFIRM claim removes material as cancelled, while a possible
+    CONFIRM never does.
 - [x] Stream ciphertext to a bounded native file and staging request without a
   plaintext copy or bridge payload.
 - [x] Persist and recover only mutually proven checkpoint metadata.
@@ -273,8 +274,10 @@ runtimes can consume the same trace.
   catalog; and reset material ownership only on an exact current-generation
   explicit or spontaneous confirmed disconnect.
 - [x] Latch Android CONFIRM write success in host state before releasing the
-  control owner, and serialize disconnect reset with exact settlement, old
-  effect-channel failure, opening/pump join, and replacement admission.
+  control owner; install the host replacement barrier before exact-generation
+  control/writer reset under the DeviceRuntime mutex, then await settlement
+  outside that mutex before old effect-channel failure, opening/pump join, and
+  replacement admission.
 
 ### Task 6: Add the target React Native provider and progress surface
 

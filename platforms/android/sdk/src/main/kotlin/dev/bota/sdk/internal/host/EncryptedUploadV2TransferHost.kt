@@ -191,7 +191,9 @@ internal class EncryptedUploadV2TransferHost(
         }
     }
 
-    suspend fun resetAfterConfirmedDisconnect() {
+    suspend fun resetAfterConfirmedDisconnect(
+        resetTransportOwnership: suspend () -> Boolean = { true },
+    ) {
         val barrier = CompletableDeferred<Unit>()
         val pendingReset = synchronized(stateLock) {
             resetFinished?.also { return@synchronized it }
@@ -204,6 +206,7 @@ internal class EncryptedUploadV2TransferHost(
         }
         try {
             withContext(NonCancellable) {
+                if (!resetTransportOwnership()) return@withContext
                 synchronized(stateLock) { confirmationFinished }?.await()
                 val disconnected = EncryptedUploadV2HostException(
                     12u,

@@ -479,6 +479,42 @@ class EncryptedUploadV2TransferHostTest {
     }
 
     @Test
+    fun replacementWaitsWhileExactTransportResetIsPrepared() = runTest {
+        val registry = registry(AtomicInteger())
+        val host = EncryptedUploadV2TransferHost(
+            Files.createTempDirectory("bota-v2-reset-preparation"),
+            services(registry, mutableListOf()),
+        )
+        val transportResetEntered = CompletableDeferred<Unit>()
+        val transportResetRelease = CompletableDeferred<Unit>()
+        val replacementPrepared = CompletableDeferred<Unit>()
+
+        val resetting = async(start = CoroutineStart.UNDISPATCHED) {
+            host.resetAfterConfirmedDisconnect {
+                transportResetEntered.complete(Unit)
+                transportResetRelease.await()
+                true
+            }
+        }
+        withTimeout(1_000) { transportResetEntered.await() }
+        val replacement = async(start = CoroutineStart.UNDISPATCHED) {
+            host.execute(
+                effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, "material-1")),
+            ).toList()
+            replacementPrepared.complete(Unit)
+        }
+        val replacementAdmittedBeforeTransportReset = replacementPrepared.isCompleted
+        transportResetRelease.complete(Unit)
+
+        withTimeout(1_000) { resetting.await() }
+        withTimeout(1_000) { replacement.await() }
+
+        assertFalse(replacementAdmittedBeforeTransportReset)
+        assertTrue(replacementPrepared.isCompleted)
+        host.close()
+    }
+
+    @Test
     fun confirmedDisconnectFailsTheExactOldEffectAndWaitsForItsPumpToExit() = runTest {
         val registry = registry(AtomicInteger())
         val pumpCancellationEntered = CompletableDeferred<Unit>()

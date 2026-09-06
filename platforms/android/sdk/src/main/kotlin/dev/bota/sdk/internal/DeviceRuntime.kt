@@ -56,11 +56,11 @@ import java.util.concurrent.atomic.AtomicInteger
 import dev.bota.sdk.EncryptedUploadV2CapabilitySnapshot
 import dev.bota.sdk.EncryptedUploadV2Checkpoint
 import dev.bota.sdk.EncryptedUploadV2Material
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -257,12 +257,16 @@ internal class DeviceRuntime(
                         encodeConfirm = mapper::createEncryptedUploadV2Confirm,
                     ),
                 ).also { closeActions += it::close }
-                suspend fun resetEncryptedUploadOwnership(disconnect: ConfirmedBluetoothDisconnect) = disconnectResetMutex.withLock {
-                    if (!driver.isCurrentDisconnectedGeneration(disconnect)) return@withLock
-                    encryptedControl.resetAfterConfirmedDisconnect(disconnect)
-                    encryptedSignedWriter.resetAfterConfirmedDisconnect(disconnect)
-                    encryptedHost.resetAfterConfirmedDisconnect()
-                }
+                suspend fun resetEncryptedUploadOwnership(disconnect: ConfirmedBluetoothDisconnect) =
+                    resetEncryptedUploadV2Ownership(
+                        disconnectResetMutex = disconnectResetMutex,
+                        isCurrentDisconnect = { driver.isCurrentDisconnectedGeneration(disconnect) },
+                        resetControl = { encryptedControl.resetAfterConfirmedDisconnect(disconnect) },
+                        resetSignedWriter = { encryptedSignedWriter.resetAfterConfirmedDisconnect(disconnect) },
+                        resetHost = { resetTransportOwnership ->
+                            encryptedHost.resetAfterConfirmedDisconnect(resetTransportOwnership)
+                        },
+                    )
                 val disconnectResetScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
                 closeActions += { disconnectResetScope.cancel() }
                 disconnectResetScope.launch {
@@ -429,4 +433,21 @@ internal fun closeAll(vararg actions: () -> Unit) {
         }
     }
     firstFailure?.let { throw it }
+}
+
+internal suspend fun resetEncryptedUploadV2Ownership(
+    disconnectResetMutex: Mutex,
+    isCurrentDisconnect: () -> Boolean,
+    resetControl: suspend () -> Unit,
+    resetSignedWriter: suspend () -> Unit,
+    resetHost: suspend (resetTransportOwnership: suspend () -> Boolean) -> Unit,
+) {
+    resetHost {
+        disconnectResetMutex.withLock {
+            if (!isCurrentDisconnect()) return@withLock false
+            resetControl()
+            resetSignedWriter()
+            true
+        }
+    }
 }

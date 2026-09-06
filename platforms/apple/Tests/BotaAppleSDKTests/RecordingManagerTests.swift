@@ -529,6 +529,56 @@ final class RecordingManagerTests: XCTestCase {
         XCTAssertEqual(outcomes, [])
     }
 
+    func testEncryptedV2StartupCancellationCleansClaimedNonOwnershipFailure() async throws {
+        let runner = DelayedStartExactSettlementWorkflowRunner(settlement: .claimedCancellationFailed)
+        let registry = EncryptedUploadV2MaterialRegistry()
+        let cancellation = EncryptedUploadV2CancellationRecorder()
+        let recording = Self.encryptedV2Recording
+        let material = Self.encryptedV2Material(cancellation)
+        let manager = RecordingManager()
+        await manager.attach(await transferRuntime(
+            runner: runner,
+            recorder: TransferFacadeRecorder(),
+            encryptedUploadV2Capabilities: { _ in Self.encryptedV2Capability },
+            registerEncryptedUploadV2Material: { id, material in
+                try await registry.register(id: id, provider: material.provider)
+            },
+            terminateEncryptedUploadV2Material: { id, outcome in
+                try? await registry.terminate(id: id, outcome: outcome)
+            }
+        ))
+
+        let task = Task.detached { @Sendable in
+            try await manager.syncEncryptedRecordingV2(
+                transferDevice(),
+                recording: recording,
+                provider: { _ in material }
+            )
+        }
+        await waitForEncryptedV2Handshake("claimed-cancellation engine startup") {
+            await runner.waitUntilStarted()
+        }
+        task.cancel()
+        await runner.resumeStart()
+        let taskResult = await task.result
+
+        let commands = await runner.commands
+        let ordinaryCancellations = await runner.ordinaryCancellations
+        let exactSettlements = await runner.exactSettlements
+        let cancellationCount = await cancellation.value()
+        let isRegistered = await registry.contains(id: material.materialID)
+        guard case let .failure(error) = taskResult,
+              let sdkError = error as? BotaSDKError
+        else {
+            return XCTFail("expected claimed cancellation failure")
+        }
+        XCTAssertEqual(sdkError.code, .internal)
+        XCTAssertEqual(ordinaryCancellations, [])
+        XCTAssertEqual(exactSettlements, [commands[0].cancellationID])
+        XCTAssertEqual(cancellationCount, 1)
+        XCTAssertFalse(isRegistered)
+    }
+
     func testEncryptedV2CancellationCleansLateProviderMaterialAfterFacadeOwnershipEnds() async throws {
         let runner = TransferWorkflowRunner { _ in [] }
         let provider = EncryptedUploadV2ProviderGate()

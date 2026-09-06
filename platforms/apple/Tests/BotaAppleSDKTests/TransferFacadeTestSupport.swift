@@ -106,6 +106,7 @@ actor DelayedStartExactSettlementWorkflowRunner: CoreWorkflowRunning {
     enum Settlement: Sendable {
         case completed
         case ownershipUnknown
+        case claimedCancellationFailed
     }
 
     private let settlement: Settlement
@@ -141,6 +142,13 @@ actor DelayedStartExactSettlementWorkflowRunner: CoreWorkflowRunning {
                 operation: .transferRecording,
                 retryable: false,
                 detail: "CONFIRM succeeded but cleanup is uncertain"
+            )
+        case .claimedCancellationFailed:
+            throw BotaSDKError(
+                code: .internal,
+                operation: .transferRecording,
+                retryable: false,
+                detail: "cancellation failed after the host claimed ownership"
             )
         }
     }

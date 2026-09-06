@@ -260,7 +260,16 @@ public actor RecordingManager {
                     do {
                         exactlyCompleted = try await runtime.engine.cancelAndReportExactSettlement(cancellationID)
                     } catch {
-                        lifecycle.preserveTerminalSettlement()
+                        if let sdkError = facadePublicError(error) as? BotaSDKError,
+                           sdkError.code == .uploadOwnershipUnknown
+                        {
+                            lifecycle.preserveTerminalSettlement()
+                        } else {
+                            await performEncryptedUploadV2Cleanup(
+                                lifecycle.settleEngineCancellation(completed: false),
+                                runtime: runtime
+                            )
+                        }
                         await finish(cancellationID, runtime: runtime)
                         throw error
                     }

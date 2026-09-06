@@ -141,10 +141,11 @@ The shared Rust engine keeps cancellation ordinary when the CONFIRM effect is
 only queued or doing local cleanup. Apple and Android atomically claim native
 cancellation before the canonical write, or—once that write is actually
 attempted—settle exact completion or stable cleanup-uncertainty code 19 without
-a later rollback. Apple also uses exact settlement when cancellation races the
-return from engine startup, so a settled CONFIRM cannot be converted into
-material cancellation. Android rejects phase-invalid transfer frames as notifications
-arrive, uses bounded loss-aware broadcast delivery for concurrent observers,
+a later rollback. When cancellation races Apple engine startup return, exact
+Completed or code 19 preserves terminal material, while an ordinary cancel
+failure after a pre-CONFIRM claim removes the material as cancelled. Android
+rejects phase-invalid transfer frames as notifications arrive, uses bounded
+loss-aware broadcast delivery for concurrent observers,
 and reconciles the retired split checkpoint/index files into its atomic catalog.
 The registry keeps authorization, manifest, receipt, and staging credentials
 out of Rust and persistent state; validates exact document sizes, evidence, and
@@ -450,10 +451,12 @@ parent directory are synced. Transfer and signed-document cleanup is bounded;
 an unproven unsubscribe, ABORT, or post-CONFIRM outcome poisons the owner until
 the exact current peripheral/GATT-generation confirmed disconnect. Once the
 CONFIRM write succeeds, its evidence reaches host state before the transfer
-owner is released. Disconnect reset waits for that settlement, detaches and
-fails the old generation's channels, and joins its opening and pump jobs before
-new ownership can start. Once the write is attempted, cancellation never sends
-ABORT or reports ordinary cancellation. Physical power-loss durability
+  owner is released. Disconnect reset installs the host replacement barrier,
+  removes the exact control/writer owners under the DeviceRuntime mutex, then
+  leaves that mutex before it waits for settlement. It detaches and fails the
+  old generation's channels and joins its opening and pump jobs before new
+  ownership can start. Once the write is attempted, cancellation never
+sends ABORT or reports ordinary cancellation. Physical power-loss durability
 and physical-device interoperability remain unverified gates.
 Android now exposes the first public workflow facade through
 `BotaDeviceClient` and `DeviceManager`. Configuration is idempotent until

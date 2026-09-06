@@ -198,10 +198,12 @@ state, and retains an empty atomic record as the delete marker. CONFIRM effect
 emission and local cleanup remain cancellable; only the actual write attempt
 waits for exact completion or code 19. A successful driver write is latched in
 host state before the control owner can be released. Explicit and spontaneous
-disconnects carry exact peripheral/GATT generation; reset waits for any CONFIRM
-settlement, fails the exact old effect channels, and joins old opening/pump jobs
-before it clears poison or admits replacement ownership. Pre-CONFIRM material
-is failed rather than reported completed.
+disconnects carry exact peripheral/GATT generation. Reset installs the host
+replacement barrier, removes the exact control/writer owners under the
+DeviceRuntime mutex, releases that mutex before awaiting any CONFIRM settlement,
+fails the exact old effect channels, and joins old opening/pump jobs before it
+clears poison or admits replacement ownership.
+Pre-CONFIRM material is failed rather than reported completed.
 
 `BluetoothGattHost` implements the Bluetooth port with one HandlerThread-owned
 Android platform adapter. GATT operations are serialized per peripheral, not
