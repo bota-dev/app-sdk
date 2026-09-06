@@ -85,6 +85,10 @@ public struct EncryptedUploadV2Checkpoint: Equatable, Sendable {
     public let nextCiphertextOffset: UInt64
     public let prefixSHA256: Data
     public let highestContiguousSequence: UInt32?
+    public let transportSessionID: UInt64
+    public let sinkID: String
+    public let windowPackets: UInt16
+    public let dataPayloadBytes: UInt16
 
     public init(
         uploadSessionID: UUID,
@@ -92,7 +96,11 @@ public struct EncryptedUploadV2Checkpoint: Equatable, Sendable {
         revision: UInt32,
         nextCiphertextOffset: UInt64,
         prefixSHA256: Data,
-        highestContiguousSequence: UInt32?
+        highestContiguousSequence: UInt32?,
+        transportSessionID: UInt64,
+        sinkID: String,
+        windowPackets: UInt16,
+        dataPayloadBytes: UInt16
     ) {
         self.uploadSessionID = uploadSessionID
         self.ownerRevision = ownerRevision
@@ -100,6 +108,10 @@ public struct EncryptedUploadV2Checkpoint: Equatable, Sendable {
         self.nextCiphertextOffset = nextCiphertextOffset
         self.prefixSHA256 = prefixSHA256
         self.highestContiguousSequence = highestContiguousSequence
+        self.transportSessionID = transportSessionID
+        self.sinkID = sinkID
+        self.windowPackets = windowPackets
+        self.dataPayloadBytes = dataPayloadBytes
     }
 }
 
@@ -150,7 +162,8 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
     let submitManifest: ManifestSubmitter
     let finalize: Finalizer
     let completionReceipt: ReceiptProvider
-    let cancel: CancellationHandler
+    private let cancellationHandler: CancellationHandler
+    private let cancellation = EncryptedUploadV2MaterialCancellation()
 
     public init(
         materialID: String,
@@ -175,7 +188,7 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
         self.submitManifest = submitManifest
         self.finalize = finalize
         self.completionReceipt = completionReceipt
-        self.cancel = cancel
+        cancellationHandler = cancel
     }
 
     var provider: EncryptedUploadV2MaterialProvider {
@@ -185,8 +198,26 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
             submitManifest: { try await submitManifest($0.manifest, $0.evidence) },
             finalize: finalize,
             completionReceipt: completionReceipt,
-            cancel: cancel
+            cancel: { try await cancellation.run(cancellationHandler) }
         )
+    }
+
+    func cancelPreparation() async {
+        try? await cancellation.run(cancellationHandler)
+    }
+}
+
+private final class EncryptedUploadV2MaterialCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var didRun = false
+
+    func run(_ handler: @escaping EncryptedUploadV2Material.CancellationHandler) async throws {
+        let shouldRun = lock.withLock { () -> Bool in
+            guard !didRun else { return false }
+            didRun = true
+            return true
+        }
+        if shouldRun { try await handler() }
     }
 }
 

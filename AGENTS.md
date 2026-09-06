@@ -105,8 +105,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   transfer-control actor, material registry, and native staging upload service.
   `RecordingManager.syncEncryptedRecordingV2` passes a fresh `0406` capability
   snapshot and matching native checkpoint to an application-owned provider
-  before it starts the explicit v2 command; it never infers or retries legacy
-  behavior after v2 selection.
+  before it starts the explicit v2 command. The manager owns cancellation
+  before any read or provider await, propagates cancellation to a running Rust
+  workflow before cleanup, and reuses the checkpoint's exact session, sink, and
+  safe negotiated bounds only when its selected material matches. It never
+  infers or retries legacy behavior after v2 selection.
   Apple's internal
   `EncryptedUploadV2SignedBlobWriter` permits one owner, queries the actual
   write-with-response limit capped at the 512-byte protocol maximum, subscribes

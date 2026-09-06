@@ -32,6 +32,10 @@ public actor RecordingManager {
     private var activeCancellationID: UUID?
     private var activeTask: Task<Void, Never>?
     private var activeCleanup: (@Sendable () async -> Void)?
+    private var activeEncryptedUploadV2MaterialID: String?
+    private var activeEncryptedUploadV2CancellationID: UUID?
+    private var activeEncryptedUploadV2EngineID: UUID?
+    private var activeEncryptedUploadV2CancellationRequested = false
     private var transferMetadataBySinkID: [String: RecordingTransferMetadata] = [:]
 
     public init() {}
@@ -41,9 +45,13 @@ public actor RecordingManager {
     func detach() async {
         activeTask?.cancel()
         if let id = activeCancellationID {
-            try? await runtime?.engine.cancel(id)
-            await activeCleanup?()
-            await runtime?.operations.end(id)
+            if activeEncryptedUploadV2CancellationID == id {
+                activeEncryptedUploadV2CancellationRequested = true
+            }
+            if activeEncryptedUploadV2CancellationID != id || activeEncryptedUploadV2EngineID == id {
+                try? await runtime?.engine.cancel(id)
+            }
+            if let runtime { await finishCancellation(id, runtime: runtime) }
         }
         activeTask = nil
         activeCancellationID = nil
@@ -134,113 +142,162 @@ public actor RecordingManager {
         recording: EncryptedUploadV2Recording,
         provider: @escaping EncryptedUploadV2ProfileProvider
     ) async throws {
+        let cancellationID = UUID()
         let runtime = try configuredRuntime()
-        try await runtime.connection.require(device)
-        let capability = try await runtime.readEncryptedUploadV2Capabilities(device.id)
-        let checkpoint = try await runtime.encryptedUploadV2Checkpoint(
-            device.serialNumber,
-            recording.uuid,
-            recording.generation
-        )
-        let material = try await provider(.init(
-            recording: recording,
-            capability: capability,
-            checkpoint: checkpoint
-        ))
-        try await runtime.connection.require(device)
-        let maximumFrameBytes = min(
-            try await runtime.encryptedUploadV2MaximumWriteLength(device.id),
-            512
-        )
-        guard maximumFrameBytes >= 128 else {
-            throw BotaSDKError(
-                code: .unsupportedCapability,
-                operation: .transferRecording,
-                retryable: false,
-                detail: "encrypted upload v2 write limit is too small"
-            )
-        }
-        let maximumMissingSequences = min(
-            Int(capability.capabilities.maximumMissingSequences),
-            (maximumFrameBytes - 68) / 4
-        )
-        let windowPackets = min(Int(capability.capabilities.maximumWindowPackets), maximumMissingSequences)
-        let dataPayloadBytes = min(
-            Int(capability.capabilities.maximumDataPayloadBytes),
-            maximumFrameBytes - 28
-        )
-        guard windowPackets > 0, dataPayloadBytes > 0,
-              let negotiatedWindowPackets = UInt16(exactly: windowPackets),
-              let negotiatedDataPayloadBytes = UInt16(exactly: dataPayloadBytes)
-        else {
-            throw BotaSDKError(
-                code: .unsupportedCapability,
-                operation: .transferRecording,
-                retryable: false,
-                detail: "encrypted upload v2 negotiated bounds are unusable"
-            )
-        }
-        let command = CoreCommand.transferEncryptedRecording(.init(
-            serialNumber: device.serialNumber,
-            recordingUUID: recording.uuid,
-            recordingGeneration: recording.generation,
-            storageFormat: 3,
-            uploadSessionID: material.uploadSessionID,
-            ownerRevision: material.ownerRevision,
-            transportSessionID: Self.randomTransportSessionID(),
-            materialID: material.materialID,
-            sinkID: UUID().uuidString,
-            profile: .encryptedUploadV2,
-            securityPolicy: material.policy.value,
-            capabilities: capability.capabilities.value,
-            windowPackets: negotiatedWindowPackets,
-            dataPayloadBytes: negotiatedDataPayloadBytes,
-            ciphertextLength: recording.ciphertextLength,
-            ciphertextSHA256: recording.ciphertextSHA256
-        ))
-        try await begin(command.cancellationID, operation: .transferRecording, runtime: runtime)
-        do {
-            try await runtime.registerEncryptedUploadV2Material(material.materialID, material)
-            activeCleanup = {
-                await runtime.terminateEncryptedUploadV2Material(material.materialID, .failed)
-            }
-            var completed = false
-            let notifications = await runtime.engine.run(command, capabilities: runtime.capabilities)
-            for try await notification in notifications {
-                switch notification.kind {
-                case .completed:
-                    completed = true
-                case .failed:
-                    throw workflowError(notification)
-                case .cancelled:
-                    throw facadeCancelled(operation: .transferRecording)
-                case .started, .encryptedUploadV2Staged:
-                    break
-                case .deviceDiscovered, .connectionEstablished, .progress, .retrying,
-                     .deviceUploadPreserved, .bleFallbackReady, .firmwareProgress, .deviceLog,
-                     .streamingPaused, .streamingResumed, .streamingCompleted:
+        return try await withTaskCancellationHandler {
+            try await begin(cancellationID, operation: .transferRecording, runtime: runtime)
+            activeEncryptedUploadV2CancellationID = cancellationID
+            activeEncryptedUploadV2CancellationRequested = false
+            do {
+                try Task.checkCancellation()
+                try await runtime.connection.require(device)
+                try requireActive(cancellationID)
+                let capability = try await runtime.readEncryptedUploadV2Capabilities(device.id)
+                try requireActive(cancellationID)
+                let checkpoint = try await runtime.encryptedUploadV2Checkpoint(
+                    device.serialNumber,
+                    recording.uuid,
+                    recording.generation
+                )
+                try requireActive(cancellationID)
+                let maximumFrameBytes = min(
+                    try await runtime.encryptedUploadV2MaximumWriteLength(device.id),
+                    512
+                )
+                let maximumMissingSequences = min(
+                    Int(capability.capabilities.maximumMissingSequences),
+                    (maximumFrameBytes - 68) / 4
+                )
+                let maximumWindowPackets = min(
+                    Int(capability.capabilities.maximumWindowPackets),
+                    maximumMissingSequences
+                )
+                let maximumDataPayloadBytes = min(
+                    Int(capability.capabilities.maximumDataPayloadBytes),
+                    maximumFrameBytes - 28
+                )
+                guard maximumFrameBytes >= 128,
+                      maximumWindowPackets > 0,
+                      maximumDataPayloadBytes > 0,
+                      let negotiatedMaximumWindowPackets = UInt16(exactly: maximumWindowPackets),
+                      let negotiatedMaximumDataPayloadBytes = UInt16(exactly: maximumDataPayloadBytes)
+                else {
+                    throw BotaSDKError(
+                        code: .unsupportedCapability,
+                        operation: .transferRecording,
+                        retryable: false,
+                        detail: "encrypted upload v2 negotiated bounds are unusable"
+                    )
+                }
+                let material = try await provider(.init(
+                    recording: recording,
+                    capability: capability,
+                    checkpoint: checkpoint
+                ))
+                activeCleanup = { await material.cancelPreparation() }
+                try requireActive(cancellationID)
+                try Task.checkCancellation()
+                try await runtime.connection.require(device)
+                try requireActive(cancellationID)
+
+                let transportSessionID: UInt64
+                let sinkID: String
+                let windowPackets: UInt16
+                let dataPayloadBytes: UInt16
+                if let checkpoint {
+                    guard material.uploadSessionID == checkpoint.uploadSessionID,
+                          material.ownerRevision == checkpoint.ownerRevision,
+                          checkpoint.transportSessionID != 0,
+                          UUID(uuidString: checkpoint.sinkID) != nil,
+                          checkpoint.windowPackets > 0,
+                          checkpoint.dataPayloadBytes > 0,
+                          checkpoint.windowPackets <= negotiatedMaximumWindowPackets,
+                          checkpoint.dataPayloadBytes <= negotiatedMaximumDataPayloadBytes
+                    else {
+                        throw BotaSDKError(
+                            code: .integrityFailed,
+                            operation: .transferRecording,
+                            retryable: false,
+                            detail: "encrypted upload v2 checkpoint does not match selected material"
+                        )
+                    }
+                    transportSessionID = checkpoint.transportSessionID
+                    sinkID = checkpoint.sinkID
+                    windowPackets = checkpoint.windowPackets
+                    dataPayloadBytes = checkpoint.dataPayloadBytes
+                } else {
+                    transportSessionID = Self.randomTransportSessionID()
+                    sinkID = UUID().uuidString
+                    windowPackets = negotiatedMaximumWindowPackets
+                    dataPayloadBytes = negotiatedMaximumDataPayloadBytes
+                }
+                let command = CoreCommand.transferEncryptedRecording(.init(
+                    serialNumber: device.serialNumber,
+                    recordingUUID: recording.uuid,
+                    recordingGeneration: recording.generation,
+                    storageFormat: 3,
+                    uploadSessionID: material.uploadSessionID,
+                    ownerRevision: material.ownerRevision,
+                    transportSessionID: transportSessionID,
+                    materialID: material.materialID,
+                    sinkID: sinkID,
+                    profile: .encryptedUploadV2,
+                    securityPolicy: material.policy.value,
+                    capabilities: capability.capabilities.value,
+                    windowPackets: windowPackets,
+                    dataPayloadBytes: dataPayloadBytes,
+                    ciphertextLength: recording.ciphertextLength,
+                    ciphertextSHA256: recording.ciphertextSHA256
+                ), cancellationID: cancellationID)
+                try await runtime.registerEncryptedUploadV2Material(material.materialID, material)
+                activeEncryptedUploadV2MaterialID = material.materialID
+                activeCleanup = {
+                    await runtime.terminateEncryptedUploadV2Material(material.materialID, .failed)
+                }
+                try requireActive(cancellationID)
+                try Task.checkCancellation()
+                var completed = false
+                let notifications = await runtime.engine.run(command, capabilities: runtime.capabilities)
+                activeEncryptedUploadV2EngineID = cancellationID
+                for try await notification in notifications {
+                    switch notification.kind {
+                    case .completed:
+                        completed = true
+                    case .failed:
+                        throw workflowError(notification)
+                    case .cancelled:
+                        throw facadeCancelled(operation: .transferRecording)
+                    case .started, .encryptedUploadV2Staged:
+                        break
+                    case .deviceDiscovered, .connectionEstablished, .progress, .retrying,
+                         .deviceUploadPreserved, .bleFallbackReady, .firmwareProgress, .deviceLog,
+                         .streamingPaused, .streamingResumed, .streamingCompleted:
+                        throw BotaSDKError(
+                            code: .unexpectedEvent,
+                            operation: .transferRecording,
+                            retryable: false,
+                            detail: "unexpected notification in encrypted upload v2 workflow"
+                        )
+                    }
+                }
+                guard completed else {
                     throw BotaSDKError(
                         code: .unexpectedEvent,
                         operation: .transferRecording,
                         retryable: false,
-                        detail: "unexpected notification in encrypted upload v2 workflow"
+                        detail: "encrypted upload v2 workflow ended without completion"
                     )
                 }
+                activeCleanup = nil
+                activeEncryptedUploadV2MaterialID = nil
+                await runtime.terminateEncryptedUploadV2Material(material.materialID, .completed)
+                await finish(cancellationID, runtime: runtime)
+            } catch {
+                await finish(cancellationID, runtime: runtime)
+                throw facadePublicError(error)
             }
-            guard completed else {
-                throw BotaSDKError(
-                    code: .unexpectedEvent,
-                    operation: .transferRecording,
-                    retryable: false,
-                    detail: "encrypted upload v2 workflow ended without completion"
-                )
-            }
-            await runtime.terminateEncryptedUploadV2Material(material.materialID, .completed)
-            await finish(command.cancellationID, runtime: runtime)
-        } catch {
-            await runtime.terminateEncryptedUploadV2Material(material.materialID, .failed)
-            await finish(command.cancellationID, runtime: runtime)
-            throw facadePublicError(error)
+        } onCancel: {
+            Task { await self.cancel(cancellationID) }
         }
     }
 
@@ -337,8 +394,13 @@ public actor RecordingManager {
         guard let id = activeCancellationID else { return }
         let runtime = try configuredRuntime()
         activeTask?.cancel()
-        try await runtime.engine.cancel(id)
-        await finish(id, runtime: runtime)
+        if activeEncryptedUploadV2CancellationID == id {
+            activeEncryptedUploadV2CancellationRequested = true
+        }
+        if activeEncryptedUploadV2CancellationID != id || activeEncryptedUploadV2EngineID == id {
+            try await runtime.engine.cancel(id)
+        }
+        await finishCancellation(id, runtime: runtime)
     }
 
     private func consumeTransfer(
@@ -492,23 +554,49 @@ public actor RecordingManager {
     private func finish(_ id: UUID, runtime: DeviceRuntime) async {
         guard activeCancellationID == id else { return }
         let cleanup = activeCleanup
+        let encryptedMaterialID = activeEncryptedUploadV2MaterialID
+        let cancellationRequested = activeEncryptedUploadV2CancellationRequested
         activeCancellationID = nil
         activeTask = nil
         activeCleanup = nil
-        await cleanup?()
+        activeEncryptedUploadV2MaterialID = nil
+        activeEncryptedUploadV2CancellationID = nil
+        activeEncryptedUploadV2EngineID = nil
+        activeEncryptedUploadV2CancellationRequested = false
+        if cancellationRequested, let encryptedMaterialID {
+            await runtime.terminateEncryptedUploadV2Material(encryptedMaterialID, .cancelled)
+        } else {
+            await cleanup?()
+        }
         await runtime.operations.end(id)
+    }
+
+    private func finishCancellation(_ id: UUID, runtime: DeviceRuntime) async {
+        guard activeCancellationID == id else { return }
+        await finish(id, runtime: runtime)
     }
 
     private func cancel(_ id: UUID) async {
         guard activeCancellationID == id, let runtime else { return }
         activeTask?.cancel()
-        try? await runtime.engine.cancel(id)
-        await finish(id, runtime: runtime)
+        if activeEncryptedUploadV2CancellationID == id {
+            activeEncryptedUploadV2CancellationRequested = true
+        }
+        if activeEncryptedUploadV2CancellationID != id || activeEncryptedUploadV2EngineID == id {
+            try? await runtime.engine.cancel(id)
+        }
+        await finishCancellation(id, runtime: runtime)
     }
 
     private func configuredRuntime() throws -> DeviceRuntime {
         guard let runtime else { throw facadeNotConfigured() }
         return runtime
+    }
+
+    private func requireActive(_ id: UUID) throws {
+        guard activeCancellationID == id else {
+            throw facadeCancelled(operation: .transferRecording)
+        }
     }
 
     private static func randomTransportSessionID() -> UInt64 {

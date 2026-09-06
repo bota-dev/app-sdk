@@ -403,6 +403,16 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
                 checkpoint: coreCheckpoint
             )
         ))
+        let snapshot = try await firstHost.checkpoint(
+            serialNumber: fixture.serialNumber,
+            recordingUUID: fixture.recordingUUID,
+            recordingGeneration: 7
+        )
+        XCTAssertEqual(snapshot?.uploadSessionID, fixture.uploadSessionID)
+        XCTAssertEqual(snapshot?.transportSessionID, fixture.transportSessionID)
+        XCTAssertEqual(snapshot?.sinkID, fixture.sinkID)
+        XCTAssertEqual(snapshot?.windowPackets, 4)
+        XCTAssertEqual(snapshot?.dataPayloadBytes, 4)
 
         let resumed = CapturedNativeCheckpoint()
         let resumeNotifications = AsyncThrowingStream<Data, Error>.makeStream()

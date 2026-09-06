@@ -185,7 +185,7 @@ final class RecordingManagerTests: XCTestCase {
                 maximumDataPayloadBytes: 160,
                 maximumWindowPackets: 4,
                 durableCheckpointIntervalBlocks: 1,
-                maximumMissingSequences: 1
+                maximumMissingSequences: 4
             )
         )
         let runner = TransferWorkflowRunner { _ in [
@@ -197,7 +197,11 @@ final class RecordingManagerTests: XCTestCase {
             revision: 5,
             nextCiphertextOffset: 512,
             prefixSHA256: Data(repeating: 0x44, count: 32),
-            highestContiguousSequence: 3
+            highestContiguousSequence: 3,
+            transportSessionID: 0x1020_3040_5060_7080,
+            sinkID: "11223344-5566-7788-99aa-bbccddeeff00",
+            windowPackets: 2,
+            dataPayloadBytes: 100
         )
         let recorder = TransferFacadeRecorder()
         let manager = RecordingManager()
@@ -225,8 +229,8 @@ final class RecordingManagerTests: XCTestCase {
             return .init(
                 materialID: "material-id",
                 recordingID: "rec_123",
-                uploadSessionID: UUID(uuidString: "00112233-4455-6677-8899-aabbccddeeff")!,
-                ownerRevision: 4,
+                uploadSessionID: checkpoint.uploadSessionID,
+                ownerRevision: checkpoint.ownerRevision,
                 policy: .v2Required,
                 authorization: Data(repeating: 0xc3, count: 408),
                 stagingRequest: { _ in URLRequest(url: URL(string: "https://staging.example/upload")!) },
@@ -248,6 +252,161 @@ final class RecordingManagerTests: XCTestCase {
             commands.first?.fields.unsigned(UInt32(BOTA_DEVICE_SDK_V1_FIELD_CAPABILITY_FLAGS)),
             UInt64(capability.capabilities.flags)
         )
+        XCTAssertEqual(
+            commands.first?.fields.unsigned(EncryptedUploadV2Abi.fieldTransportSessionID),
+            checkpoint.transportSessionID
+        )
+        XCTAssertEqual(
+            commands.first?.fields.compactMap { field -> String? in
+                guard case let .text(id, value) = field,
+                      id == UInt32(BOTA_DEVICE_SDK_V1_FIELD_SINK_ID)
+                else { return nil }
+                return value
+            }.first,
+            checkpoint.sinkID
+        )
+        XCTAssertEqual(
+            commands.first?.fields.unsigned(EncryptedUploadV2Abi.fieldWindowPackets),
+            UInt64(checkpoint.windowPackets)
+        )
+        XCTAssertEqual(
+            commands.first?.fields.unsigned(EncryptedUploadV2Abi.fieldDataPayloadBytes),
+            UInt64(checkpoint.dataPayloadBytes)
+        )
+    }
+
+    func testEncryptedV2CallerCancellationCancelsTheRunningEngineBeforeCompletion() async throws {
+        let runner = SuspendedTransferWorkflowRunner()
+        let termination = EncryptedUploadV2TerminalOutcomeRecorder()
+        let capability = Self.encryptedV2Capability
+        let recording = Self.encryptedV2Recording
+        let material = Self.encryptedV2Material()
+        let manager = RecordingManager()
+        await manager.attach(await transferRuntime(
+            runner: runner,
+            recorder: TransferFacadeRecorder(),
+            encryptedUploadV2Capabilities: { _ in capability },
+            registerEncryptedUploadV2Material: { _, _ in },
+            terminateEncryptedUploadV2Material: { _, outcome in await termination.record(outcome) }
+        ))
+
+        let task = Task {
+            try? await manager.syncEncryptedRecordingV2(
+                transferDevice(),
+                recording: recording,
+                provider: { _ in material }
+            )
+        }
+        await runner.waitUntilStarted()
+        task.cancel()
+        await runner.waitUntilCancelled()
+        await task.value
+
+        let commands = await runner.commands
+        let cancellations = await runner.cancellations
+        let outcomes = await termination.outcomes
+        XCTAssertEqual(cancellations, [commands[0].cancellationID])
+        XCTAssertEqual(outcomes, [.cancelled])
+    }
+
+    func testEncryptedV2OwnsSelectionAndCancelsPreparedMaterialWhenRegistrationFails() async throws {
+        let runner = TransferWorkflowRunner { _ in [] }
+        let cancellation = EncryptedUploadV2CancellationRecorder()
+        let manager = RecordingManager()
+        await manager.attach(await transferRuntime(
+            runner: runner,
+            recorder: TransferFacadeRecorder(),
+            encryptedUploadV2Capabilities: { _ in Self.encryptedV2Capability },
+            registerEncryptedUploadV2Material: { _, _ in throw NativeHostError.missingResource("registry") }
+        ))
+
+        do {
+            try await manager.syncEncryptedRecordingV2(
+                transferDevice(),
+                recording: Self.encryptedV2Recording,
+                provider: { _ in Self.encryptedV2Material(cancellation) }
+            )
+            XCTFail("expected material registration to fail")
+        } catch { }
+
+        let cancellationCount = await cancellation.count
+        let commands = await runner.commands
+        XCTAssertEqual(cancellationCount, 1)
+        XCTAssertTrue(commands.isEmpty)
+    }
+
+    func testEncryptedV2CancellationOwnsCapabilityReadBeforeProviderSelection() async throws {
+        let runner = TransferWorkflowRunner { _ in [] }
+        let capabilityRead = EncryptedUploadV2CapabilityReadGate()
+        let selection = EncryptedUploadV2SelectionCallRecorder()
+        let capability = Self.encryptedV2Capability
+        let recording = Self.encryptedV2Recording
+        let material = Self.encryptedV2Material()
+        let manager = RecordingManager()
+        await manager.attach(await transferRuntime(
+            runner: runner,
+            recorder: TransferFacadeRecorder(),
+            encryptedUploadV2Capabilities: { _ in await capabilityRead.read() }
+        ))
+
+        let task = Task {
+            try? await manager.syncEncryptedRecordingV2(
+                transferDevice(),
+                recording: recording,
+                provider: { _ in
+                    await selection.record()
+                    return material
+                }
+            )
+        }
+        await capabilityRead.waitUntilRead()
+        try await manager.cancelCurrentOperation()
+        await capabilityRead.resume(with: capability)
+        await task.value
+
+        let cancellations = await runner.cancellations
+        let selectionCount = await selection.count
+        XCTAssertEqual(cancellations.count, 0)
+        XCTAssertEqual(selectionCount, 0)
+    }
+
+    private static let encryptedV2Capability = EncryptedUploadV2CapabilitySnapshot(
+        rawValue: Data(repeating: 0xa1, count: 24),
+        sha256: Data(repeating: 0xb2, count: 32),
+        capabilities: .init(
+            flags: 0x7f,
+            maximumSignedBlobBytes: 408,
+            maximumManifestBytes: 580,
+            maximumDataPayloadBytes: 160,
+            maximumWindowPackets: 4,
+            durableCheckpointIntervalBlocks: 1,
+            maximumMissingSequences: 1
+        )
+    )
+
+    private static let encryptedV2Recording = EncryptedUploadV2Recording(
+        uuid: "00112233-4455-6677-8899-aabbccddeeff",
+        generation: 3,
+        ciphertextLength: 1024,
+        ciphertextSHA256: Data(repeating: 0x5a, count: 32)
+    )
+
+    private static func encryptedV2Material(
+        _ cancellation: EncryptedUploadV2CancellationRecorder? = nil
+    ) -> EncryptedUploadV2Material {
+        .init(
+            materialID: "material-id",
+            recordingID: "rec_123",
+            uploadSessionID: UUID(uuidString: "00112233-4455-6677-8899-aabbccddeeff")!,
+            ownerRevision: 4,
+            policy: .v2Required,
+            authorization: Data(repeating: 0xc3, count: 408),
+            stagingRequest: { _ in URLRequest(url: URL(string: "https://staging.example/upload")!) },
+            submitManifest: { _, _ in },
+            finalize: { _ in },
+            completionReceipt: { _ in Data(repeating: 0xd4, count: 336) },
+            cancel: { await cancellation?.record() }
+        )
     }
 
     private static func hex(_ value: String) -> Data {
@@ -264,4 +423,42 @@ private actor EncryptedUploadV2SelectionRecorder {
     func record(_ context: EncryptedUploadV2ProviderContext) {
         self.context = context
     }
+}
+
+private actor EncryptedUploadV2TerminalOutcomeRecorder {
+    private(set) var outcomes: [EncryptedUploadV2TerminalOutcome] = []
+    func record(_ outcome: EncryptedUploadV2TerminalOutcome) { outcomes.append(outcome) }
+}
+
+private actor EncryptedUploadV2CancellationRecorder {
+    private(set) var count = 0
+    func record() { count += 1 }
+}
+
+private actor EncryptedUploadV2CapabilityReadGate {
+    private var continuation: CheckedContinuation<EncryptedUploadV2CapabilitySnapshot, Never>?
+    private var readContinuation: CheckedContinuation<Void, Never>?
+    private var didRead = false
+
+    func read() async -> EncryptedUploadV2CapabilitySnapshot {
+        didRead = true
+        readContinuation?.resume()
+        readContinuation = nil
+        return await withCheckedContinuation { continuation = $0 }
+    }
+
+    func waitUntilRead() async {
+        guard !didRead else { return }
+        await withCheckedContinuation { readContinuation = $0 }
+    }
+
+    func resume(with capability: EncryptedUploadV2CapabilitySnapshot) {
+        continuation?.resume(returning: capability)
+        continuation = nil
+    }
+}
+
+private actor EncryptedUploadV2SelectionCallRecorder {
+    private(set) var count = 0
+    func record() { count += 1 }
 }

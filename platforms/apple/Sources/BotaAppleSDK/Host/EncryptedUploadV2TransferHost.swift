@@ -190,7 +190,11 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             revision: value.revision,
             nextCiphertextOffset: value.nextCiphertextOffset,
             prefixSHA256: value.prefixSHA256,
-            highestContiguousSequence: value.highestContiguousSequence
+            highestContiguousSequence: value.highestContiguousSequence,
+            transportSessionID: value.transportSessionID,
+            sinkID: value.sinkID,
+            windowPackets: value.windowPackets,
+            dataPayloadBytes: value.dataPayloadBytes
         )
     }
 

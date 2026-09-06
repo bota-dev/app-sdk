@@ -182,8 +182,10 @@ Production configuration installs this host with the signed-blob writer,
 transfer-control owner, material registry, and native file upload service.
 `RecordingManager.syncEncryptedRecordingV2` reads `0406` fresh and gathers the
 matching native checkpoint before its application-owned provider selects the
-explicit v2 material; it never infers or retries a legacy profile after that
-selection.
+explicit v2 material. It owns cancellation before the first asynchronous read,
+cancels the exact running Rust workflow before non-success cleanup, and binds a
+resume to the checkpoint's exact transport session, sink, and safe negotiated
+bounds; it never infers or retries a legacy profile after that selection.
 Apple's
 serialized signed-blob writer uses the current CoreBluetooth
 write-with-response limit capped at 512 bytes, subscribes to `0407` before

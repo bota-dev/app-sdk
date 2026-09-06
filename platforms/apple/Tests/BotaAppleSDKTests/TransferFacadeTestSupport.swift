@@ -27,6 +27,43 @@ actor TransferWorkflowRunner: CoreWorkflowRunning {
     func cancel(_ id: UUID) async throws { cancellations.append(id) }
 }
 
+actor SuspendedTransferWorkflowRunner: CoreWorkflowRunning {
+    private(set) var commands: [CoreCommand] = []
+    private(set) var cancellations: [UUID] = []
+    private var continuation: AsyncThrowingStream<CoreNotification, Error>.Continuation?
+    private var startContinuation: CheckedContinuation<Void, Never>?
+    private var cancellationContinuation: CheckedContinuation<Void, Never>?
+
+    func run(
+        _ command: CoreCommand,
+        capabilities: CoreCapabilities
+    ) -> AsyncThrowingStream<CoreNotification, Error> {
+        commands.append(command)
+        let pair = AsyncThrowingStream<CoreNotification, Error>.makeStream()
+        continuation = pair.continuation
+        startContinuation?.resume()
+        startContinuation = nil
+        return pair.stream
+    }
+
+    func cancel(_ id: UUID) async throws {
+        cancellations.append(id)
+        continuation?.finish()
+        cancellationContinuation?.resume()
+        cancellationContinuation = nil
+    }
+
+    func waitUntilStarted() async {
+        guard commands.isEmpty else { return }
+        await withCheckedContinuation { startContinuation = $0 }
+    }
+
+    func waitUntilCancelled() async {
+        guard cancellations.isEmpty else { return }
+        await withCheckedContinuation { cancellationContinuation = $0 }
+    }
+}
+
 actor TransferFacadeRecorder {
     struct Write: Equatable, Sendable {
         let service: String
@@ -54,7 +91,7 @@ actor TransferFacadeRecorder {
 }
 
 func transferRuntime(
-    runner: TransferWorkflowRunner,
+    runner: any CoreWorkflowRunning,
     recorder: TransferFacadeRecorder,
     notificationData: Data = Data(),
     encryptedUploadV2Capabilities: @escaping @Sendable
@@ -62,7 +99,12 @@ func transferRuntime(
             throw NativeHostError.missingResource("encrypted upload v2 capabilities")
         },
     encryptedUploadV2Checkpoint: @escaping @Sendable
-        (String, String, UInt32) async throws -> EncryptedUploadV2Checkpoint? = { _, _, _ in nil }
+        (String, String, UInt32) async throws -> EncryptedUploadV2Checkpoint? = { _, _, _ in nil },
+    encryptedUploadV2MaximumWriteLength: @escaping @Sendable (String) async throws -> Int = { _ in 185 },
+    registerEncryptedUploadV2Material: @escaping @Sendable
+        (String, EncryptedUploadV2Material) async throws -> Void = { _, _ in },
+    terminateEncryptedUploadV2Material: @escaping @Sendable
+        (String, EncryptedUploadV2TerminalOutcome) async -> Void = { _, _ in }
 ) async -> DeviceRuntime {
     let mapper = try! CoreModelMapper()
     let connection = DeviceConnectionRegistry()
@@ -85,7 +127,9 @@ func transferRuntime(
         directUnsubscribe: { _, _, characteristic in await recorder.unsubscribe(characteristic) },
         readEncryptedUploadV2Capabilities: encryptedUploadV2Capabilities,
         encryptedUploadV2Checkpoint: encryptedUploadV2Checkpoint,
-        encryptedUploadV2MaximumWriteLength: { _ in 185 },
+        encryptedUploadV2MaximumWriteLength: encryptedUploadV2MaximumWriteLength,
+        registerEncryptedUploadV2Material: registerEncryptedUploadV2Material,
+        terminateEncryptedUploadV2Material: terminateEncryptedUploadV2Material,
         parseRecordingList: { try mapper.parseRecordingList($0) },
         createTransferCommand: { try mapper.createTransferCommand($0) },
         recordingFileURL: { sinkID in URL(fileURLWithPath: "/tmp/\(sinkID).recording") },
