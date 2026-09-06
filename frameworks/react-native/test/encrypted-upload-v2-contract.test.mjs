@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const workspaceRoot = join(packageRoot, '..', '..');
-const specPath = join(packageRoot, 'src/specs/NativeBotaDeviceSDK.ts');
 const vectorPath = join(workspaceRoot, 'protocol/vectors/encrypted-upload-v2.json');
 const digestPath = join(
   workspaceRoot,
@@ -17,22 +16,184 @@ const compatibilityPath = join(
   workspaceRoot,
   'protocol/compatibility/firmware-compatibility.json'
 );
+const codegenContractPath = join(
+  packageRoot,
+  'generated/codegen-contract.json'
+);
+const appleAdapterPath = join(packageRoot, 'ios/BotaDeviceSDK.mm');
+const androidAdapterPath = join(
+  packageRoot,
+  'android/src/main/java/dev/bota/sdk/reactnative/BotaDeviceSDKModule.kt'
+);
 
-test('encrypted upload v2 is contract-only and absent from Codegen bytes', () => {
-  const spec = readFileSync(specPath, 'utf8');
-  for (const forbidden of [
-    'ciphertext: Array',
-    'manifest: Array',
-    'authorization: Array',
-    'receipt: Array',
-    'ciphertextBase64',
-    'manifestBase64',
-    'authorizationBase64',
-    'receiptBase64',
-  ]) {
-    assert.equal(spec.includes(forbidden), false, forbidden);
+test('encrypted upload v2 Codegen exposes only the approved metadata aliases', () => {
+  const contract = JSON.parse(readFileSync(codegenContractPath, 'utf8'));
+  const module = contract.schema.modules.NativeBotaDeviceSDK;
+  const signature = (property) =>
+    `${property.name}${property.optional ? '?' : '!'}:${property.typeAnnotation.type}${
+      property.typeAnnotation.name === undefined
+        ? ''
+        : `(${property.typeAnnotation.name})`
+    }`;
+  const expectedProperties = {
+    NativeEncryptedUploadV2Capability: [
+      'durableCheckpointIntervalBlocks!:NumberTypeAnnotation',
+      'encodingVersion!:NumberTypeAnnotation',
+      'flags!:NumberTypeAnnotation',
+      'maximumDataPayloadBytes!:NumberTypeAnnotation',
+      'maximumManifestBytes!:NumberTypeAnnotation',
+      'maximumMissingSequences!:NumberTypeAnnotation',
+      'maximumSignedBlobBytes!:NumberTypeAnnotation',
+      'maximumWindowPackets!:NumberTypeAnnotation',
+      'rawValueHex!:StringTypeAnnotation',
+      'sha256Hex!:StringTypeAnnotation',
+      'transferProfileVersion!:NumberTypeAnnotation',
+    ],
+    NativeEncryptedUploadV2Checkpoint: [
+      'dataPayloadBytes!:NumberTypeAnnotation',
+      'highestContiguousSequence?:NumberTypeAnnotation',
+      'nextCiphertextOffset!:StringTypeAnnotation',
+      'ownerRevision!:NumberTypeAnnotation',
+      'prefixSha256!:StringTypeAnnotation',
+      'revision!:NumberTypeAnnotation',
+      'sinkRegistrationId!:StringTypeAnnotation',
+      'transportSessionId!:StringTypeAnnotation',
+      'uploadSessionId!:StringTypeAnnotation',
+      'version!:NumberTypeAnnotation',
+      'windowPackets!:NumberTypeAnnotation',
+    ],
+    NativeEncryptedUploadV2ProfileDecision: [
+      'materialRegistrationId!:StringTypeAnnotation',
+      'ownerRevision!:NumberTypeAnnotation',
+      'profile!:StringTypeAnnotation',
+      'securityPolicy!:StringTypeAnnotation',
+      'uploadSessionId!:StringTypeAnnotation',
+    ],
+    NativeEncryptedUploadV2ProfileRequest: [
+      'capability!:TypeAliasTypeAnnotation(NativeEncryptedUploadV2Capability)',
+      'checkpoint?:TypeAliasTypeAnnotation(NativeEncryptedUploadV2Checkpoint)',
+      'operationId!:StringTypeAnnotation',
+      'recording!:TypeAliasTypeAnnotation(NativeEncryptedUploadV2Recording)',
+      'requestId!:StringTypeAnnotation',
+    ],
+    NativeEncryptedUploadV2Progress: [
+      'checkpointRevision?:NumberTypeAnnotation',
+      'completedBytes!:StringTypeAnnotation',
+      'errorCode?:StringTypeAnnotation',
+      'operationId!:StringTypeAnnotation',
+      'phase!:StringTypeAnnotation',
+      'protocolStatus?:NumberTypeAnnotation',
+      'recordingUuid!:StringTypeAnnotation',
+      'retryable?:BooleanTypeAnnotation',
+      'totalBytes!:StringTypeAnnotation',
+    ],
+    NativeEncryptedUploadV2Recording: [
+      'ciphertextLength!:StringTypeAnnotation',
+      'ciphertextSha256!:StringTypeAnnotation',
+      'generation!:NumberTypeAnnotation',
+      'uuid!:StringTypeAnnotation',
+    ],
+  };
+
+  const v2Aliases = Object.fromEntries(
+    Object.entries(module.aliasMap)
+      .filter(([name]) => name.startsWith('NativeEncryptedUploadV2'))
+      .map(([name, alias]) => [
+        name,
+        alias.properties.map(signature).sort(),
+      ])
+  );
+  assert.deepEqual(v2Aliases, expectedProperties);
+
+  const v2Events = module.spec.eventEmitters
+    .filter((event) => event.name.includes('EncryptedUploadV2'))
+    .map((event) => [
+      event.name,
+      event.typeAnnotation.typeAnnotation.name,
+    ]);
+  assert.deepEqual(v2Events, [
+    [
+      'onEncryptedUploadV2ProfileRequested',
+      'NativeEncryptedUploadV2ProfileRequest',
+    ],
+    ['onEncryptedUploadV2Progress', 'NativeEncryptedUploadV2Progress'],
+  ]);
+
+  const v2Methods = Object.fromEntries(
+    module.spec.methods
+      .filter((method) =>
+        /Encrypted(?:UploadV2|RecordingV2)/.test(method.name)
+      )
+      .map((method) => [
+        method.name,
+        method.typeAnnotation.params.map(signature),
+      ])
+  );
+  assert.deepEqual(v2Methods, {
+    rejectEncryptedUploadV2Profile: [
+      'requestId!:StringTypeAnnotation',
+      'errorCode!:StringTypeAnnotation',
+    ],
+    resolveEncryptedUploadV2Profile: [
+      'requestId!:StringTypeAnnotation',
+      'decision!:TypeAliasTypeAnnotation(NativeEncryptedUploadV2ProfileDecision)',
+    ],
+    syncEncryptedRecordingV2: [
+      'device!:TypeAliasTypeAnnotation(NativeConnectedDevice)',
+      'recording!:TypeAliasTypeAnnotation(NativeEncryptedUploadV2Recording)',
+      'operationId!:StringTypeAnnotation',
+    ],
+  });
+});
+
+test('encrypted upload v2 Codegen rejects bulk data and sensitive native material', () => {
+  const contract = JSON.parse(readFileSync(codegenContractPath, 'utf8'));
+  const aliases = contract.schema.modules.NativeBotaDeviceSDK.aliasMap;
+  const module = contract.schema.modules.NativeBotaDeviceSDK;
+  const names = Object.entries(aliases)
+    .filter(([name]) => name.startsWith('NativeEncryptedUploadV2'))
+    .flatMap(([, alias]) => alias.properties.map((property) => property.name))
+    .concat(
+      module.spec.methods
+        .filter((method) =>
+          /Encrypted(?:UploadV2|RecordingV2)/.test(method.name)
+        )
+        .flatMap((method) =>
+          method.typeAnnotation.params.map((parameter) => parameter.name)
+        )
+    );
+  const forbidden = [
+    /^(?:data|payload|bytes|chunk)$/i,
+    /^ciphertext(?:data|payload|bytes|chunk|base64)?$/i,
+    /^authorization(?:document|data|payload|bytes|base64)?$/i,
+    /^manifest(?:document|data|payload|bytes|chunk|base64)?$/i,
+    /^receipt(?:document|data|payload|bytes|base64)?$/i,
+    /staging(?:url|header|headers|credential|credentials)/i,
+    /(?:native|recording|file)(?:bytes|data|payload|path)$/i,
+    /(?:privatekey|secretkey|wrappingkey|encryptionkey|nonce|aeadtag)$/i,
+  ];
+
+  for (const name of names) {
+    for (const pattern of forbidden) {
+      assert.doesNotMatch(name, pattern, `${name} crosses the v2 Codegen boundary`);
+    }
   }
-  assert.equal(spec.includes('startEncryptedUploadV2'), false);
+});
+
+test('encrypted upload v2 Promise failures expose only a stable sanitized error', () => {
+  const apple = readFileSync(appleAdapterPath, 'utf8');
+  const android = readFileSync(androidAdapterPath, 'utf8');
+
+  assert.match(apple, /BotaRejectEncryptedUploadV2Error\(reject\)/);
+  assert.match(
+    apple,
+    /reject\(@"encrypted_upload_v2_failed", @"encrypted upload v2 failed", nil\)/
+  );
+  assert.match(android, /launchEncryptedUploadV2\(promise\)/);
+  assert.match(
+    android,
+    /promise\.reject\(ENCRYPTED_UPLOAD_V2_ERROR_CODE, "encrypted upload v2 failed"\)/
+  );
 });
 
 test('encrypted upload v2 vector digest matches generated Rust evidence', () => {

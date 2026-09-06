@@ -139,7 +139,14 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   capability snapshot before command `0x010c`; cancellation owns provider,
   START, staging, and terminal material cleanup without a legacy retry. These
   native implementations do not complete the remaining release or firmware
-  gates, so runtime metadata stays false.
+  gates, so runtime metadata stays false. React Native exposes the same
+  explicit selection through additive
+  `BotaDeviceSDK.recordings.syncEncryptedRecordingV2`; Codegen carries only
+  fresh capability, recording, checkpoint, session, progress, and stable-error
+  metadata. Applications register the complete v2 material once in the Apple
+  or Android `BotaDeviceSDKEncryptedUploadV2Materials` registry and return only
+  its opaque registration ID through JavaScript. Keep `BotaClient`, legacy
+  managers and events frozen, and never add an implicit legacy fallback.
 - React Native compatibility requires the frozen public API surface digest in
   addition to protocol fixtures and workflow traces. Internal legacy modules
   outside `src/index.ts` are not part of that public contract.

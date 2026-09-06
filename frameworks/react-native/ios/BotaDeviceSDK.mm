@@ -11,6 +11,11 @@ static void BotaRejectAppleError(NSError *error, RCTPromiseRejectBlock reject)
   reject(@"apple_sdk_error", error.localizedDescription, error);
 }
 
+static void BotaRejectEncryptedUploadV2Error(RCTPromiseRejectBlock reject)
+{
+  reject(@"encrypted_upload_v2_failed", @"encrypted upload v2 failed", nil);
+}
+
 @interface BotaDeviceSDK : NativeBotaDeviceSDKSpecBase <NativeBotaDeviceSDKSpec>
 @end
 
@@ -597,6 +602,84 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
                   }
                   resolve(result);
                 }];
+}
+
+- (void)syncEncryptedRecordingV2:
+            (JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device
+                       recording:
+                           (JS::NativeBotaDeviceSDK::NativeEncryptedUploadV2Recording &)recording
+                     operationId:(NSString *)operationId
+                         resolve:(RCTPromiseResolveBlock)resolve
+                          reject:(RCTPromiseRejectBlock)reject
+{
+  __weak BotaDeviceSDK *weakSelf = self;
+  [[BotaDeviceSDKAppleBridge shared]
+      syncEncryptedRecordingV2WithID:device.id_()
+                         serialNumber:device.serialNumber()
+                           deviceType:device.deviceType()
+                      firmwareVersion:device.firmwareVersion()
+                      hardwareRevision:device.hardwareRevision()
+                        isProvisioned:device.isProvisioned()
+                      connectionState:device.connectionState()
+                                  mtu:device.mtu()
+                        recordingUUID:recording.uuid()
+                           generation:recording.generation()
+                     ciphertextLength:recording.ciphertextLength()
+                     ciphertextSHA256:recording.ciphertextSha256()
+                          operationID:operationId
+                     onProfileRequest:^(NSDictionary *request) {
+                       [weakSelf emitOnEncryptedUploadV2ProfileRequested:request];
+                     }
+                           onProgress:^(NSDictionary *progress) {
+                             [weakSelf emitOnEncryptedUploadV2Progress:progress];
+                           }
+                           completion:^(NSError *_Nullable error) {
+                             if (error != nil) {
+                               BotaRejectEncryptedUploadV2Error(reject);
+                               return;
+                             }
+                             resolve(nil);
+                           }];
+}
+
+- (void)resolveEncryptedUploadV2Profile:
+            (NSString *)requestId
+                               decision:
+                                   (JS::NativeBotaDeviceSDK::NativeEncryptedUploadV2ProfileDecision &)decision
+                                resolve:(RCTPromiseResolveBlock)resolve
+                                 reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      resolveEncryptedUploadV2ProfileWithRequestID:requestId
+                                           profile:decision.profile()
+                                   uploadSessionID:decision.uploadSessionId()
+                                     ownerRevision:decision.ownerRevision()
+                                    securityPolicy:decision.securityPolicy()
+                            materialRegistrationID:decision.materialRegistrationId()
+                                        completion:^(NSError *_Nullable error) {
+                                          if (error != nil) {
+                                            BotaRejectAppleError(error, reject);
+                                            return;
+                                          }
+                                          resolve(nil);
+                                        }];
+}
+
+- (void)rejectEncryptedUploadV2Profile:(NSString *)requestId
+                             errorCode:(NSString *)errorCode
+                               resolve:(RCTPromiseResolveBlock)resolve
+                                reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared]
+      rejectEncryptedUploadV2ProfileWithRequestID:requestId
+                                        errorCode:errorCode
+                                       completion:^(NSError *_Nullable error) {
+                                         if (error != nil) {
+                                           BotaRejectAppleError(error, reject);
+                                           return;
+                                         }
+                                         resolve(nil);
+                                       }];
 }
 
 - (void)startStreaming:(JS::NativeBotaDeviceSDK::NativeConnectedDevice &)device

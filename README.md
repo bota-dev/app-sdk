@@ -259,8 +259,14 @@ merges every retired split checkpoint/index pair into an existing or recovered
 AtomicFile catalog. Cleanup uncertainty blocks
 replacement ownership until that disconnect/reset. Physical power-loss
 durability remains unverified.
-React Native still has no v2 surface, and
-runtime compatibility metadata therefore remains disabled.
+React Native now has an additive explicit encrypted-upload-v2
+selection/progress surface. Codegen carries only fresh capability, recording,
+checkpoint, session, progress, stable-error, and opaque native-registration
+metadata; native Apple and Android registries retain authorization, staging,
+manifest, receipt, file, and cryptographic material. Existing `BotaClient` and
+legacy-provider behavior is unchanged and there is no implicit fallback.
+Runtime compatibility metadata remains disabled until the outstanding
+firmware, release, and hardware gates pass.
 ABI v1 is frozen at the typed public header and verified by standalone C and
 Swift callers. Its exact ownership contract, artifact digests, packet coverage,
 and platform exclusions are recorded in

@@ -29,6 +29,43 @@ const connected = {
   mtu: 247,
 };
 
+const encryptedUploadV2Recording = {
+  uuid: '00112233-4455-6677-8899-aabbccddeeff',
+  generation: 4,
+  ciphertextLength: '4096',
+  ciphertextSha256: '5a'.repeat(32),
+};
+
+const encryptedUploadV2ProviderContext = {
+  recording: encryptedUploadV2Recording,
+  capability: {
+    encodingVersion: 1,
+    transferProfileVersion: 2,
+    rawValueHex: '010218007f0000000004000400001000080001000010000000',
+    sha256Hex: '6b'.repeat(32),
+    flags: 0x7f,
+    maximumSignedBlobBytes: 1024,
+    maximumManifestBytes: 1024,
+    maximumDataPayloadBytes: 4096,
+    maximumWindowPackets: 8,
+    durableCheckpointIntervalBlocks: 256,
+    maximumMissingSequences: 16,
+  },
+  checkpoint: {
+    version: 1,
+    uploadSessionId: '10213243-5465-7687-98a9-bacbdcedfe0f',
+    ownerRevision: 2,
+    revision: 3,
+    nextCiphertextOffset: '2048',
+    prefixSha256: '7c'.repeat(32),
+    highestContiguousSequence: 7,
+    transportSessionId: '72623859790382856',
+    sinkRegistrationId: 'native-sink-1',
+    windowPackets: 8,
+    dataPayloadBytes: 512,
+  },
+};
+
 const status = {
   batteryLevel: 72,
   batteryMv: 3_842,
@@ -66,6 +103,8 @@ function nativeFixture() {
   let factoryResetHandler = null;
   let factoryResetPersistenceHandler = null;
   let recordingProgressHandler = null;
+  let encryptedUploadV2ProfileHandler = null;
+  let encryptedUploadV2ProgressHandler = null;
   let uploadOwnershipProgressHandler = null;
   let firmwareUpdateProgressHandler = null;
   let deviceLogHandler = null;
@@ -77,6 +116,8 @@ function nativeFixture() {
   let factoryResetCommandId = null;
   let factoryResetBindingGeneration = null;
   let factoryResetRequiresPersistence = false;
+  let encryptedUploadV2Resolve = null;
+  let encryptedUploadV2Reject = null;
   let removed = false;
   return {
     calls,
@@ -169,6 +210,22 @@ function nativeFixture() {
         return {
           remove() {
             recordingProgressHandler = null;
+          },
+        };
+      },
+      onEncryptedUploadV2ProfileRequested(handler) {
+        encryptedUploadV2ProfileHandler = handler;
+        return {
+          remove() {
+            encryptedUploadV2ProfileHandler = null;
+          },
+        };
+      },
+      onEncryptedUploadV2Progress(handler) {
+        encryptedUploadV2ProgressHandler = handler;
+        return {
+          remove() {
+            encryptedUploadV2ProgressHandler = null;
           },
         };
       },
@@ -410,6 +467,54 @@ function nativeFixture() {
         calls.push(['syncRecording', device, recording]);
         recordingProgressHandler?.({ completedUnits: 24_000, totalUnits: 48_000 });
         return '/tmp/bota-recordings/recording-1.ogg';
+      },
+      async syncEncryptedRecordingV2(device, recording, operationId) {
+        calls.push(['syncEncryptedRecordingV2', device, recording, operationId]);
+        queueMicrotask(() => {
+          encryptedUploadV2ProgressHandler?.({
+            operationId,
+            recordingUuid: recording.uuid,
+            phase: 'profile_requested',
+            completedBytes: '2048',
+            totalBytes: recording.ciphertextLength,
+            checkpointRevision: 3,
+          });
+          encryptedUploadV2ProfileHandler?.({
+            requestId: 'v2-profile-request',
+            operationId,
+            ...encryptedUploadV2ProviderContext,
+          });
+        });
+        return new Promise((resolve, reject) => {
+          encryptedUploadV2Resolve = resolve;
+          encryptedUploadV2Reject = reject;
+        });
+      },
+      async resolveEncryptedUploadV2Profile(requestId, decision) {
+        calls.push(['resolveEncryptedUploadV2Profile', requestId, decision]);
+        const operationId = calls.find(
+          ([name]) => name === 'syncEncryptedRecordingV2'
+        )[3];
+        encryptedUploadV2ProgressHandler?.({
+          operationId,
+          recordingUuid: encryptedUploadV2Recording.uuid,
+          phase: 'transferring',
+          completedBytes: '2048',
+          totalBytes: encryptedUploadV2Recording.ciphertextLength,
+          checkpointRevision: 3,
+        });
+        encryptedUploadV2ProgressHandler?.({
+          operationId,
+          recordingUuid: encryptedUploadV2Recording.uuid,
+          phase: 'completed',
+          completedBytes: encryptedUploadV2Recording.ciphertextLength,
+          totalBytes: encryptedUploadV2Recording.ciphertextLength,
+        });
+        encryptedUploadV2Resolve?.();
+      },
+      async rejectEncryptedUploadV2Profile(requestId, errorCode) {
+        calls.push(['rejectEncryptedUploadV2Profile', requestId, errorCode]);
+        encryptedUploadV2Reject?.(new Error('encrypted upload v2 material was rejected'));
       },
       async observeUploadOwnership(device, request) {
         calls.push(['observeUploadOwnership', device, request]);
@@ -897,6 +1002,93 @@ test('recording list and sync preserve metadata, progress, and native file owner
       },
     ],
   ]);
+});
+
+test('encrypted upload v2 selects only an opaque native registration and maps progress', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+  const contexts = [];
+  const progress = [];
+  const decision = {
+    profile: 'encrypted_upload_v2',
+    uploadSessionId: '10213243-5465-7687-98a9-bacbdcedfe0f',
+    ownerRevision: 2,
+    securityPolicy: 'v2_required',
+    materialRegistrationId: 'native-material-1',
+  };
+
+  await client.recordings.syncEncryptedRecordingV2(
+    connected,
+    encryptedUploadV2Recording,
+    async (context) => {
+      contexts.push(context);
+      return decision;
+    },
+    (value) => progress.push(value)
+  );
+
+  assert.deepEqual(contexts, [encryptedUploadV2ProviderContext]);
+  assert.deepEqual(progress, [
+    {
+      recordingUuid: encryptedUploadV2Recording.uuid,
+      phase: 'profile_requested',
+      completedBytes: '2048',
+      totalBytes: '4096',
+      checkpointRevision: 3,
+    },
+    {
+      recordingUuid: encryptedUploadV2Recording.uuid,
+      phase: 'transferring',
+      completedBytes: '2048',
+      totalBytes: '4096',
+      checkpointRevision: 3,
+    },
+    {
+      recordingUuid: encryptedUploadV2Recording.uuid,
+      phase: 'completed',
+      completedBytes: '4096',
+      totalBytes: '4096',
+    },
+  ]);
+  const operationId = fixture.calls[0][3];
+  assert.match(operationId, /^[0-9a-f-]{36}$/);
+  assert.deepEqual(fixture.calls, [
+    [
+      'syncEncryptedRecordingV2',
+      connected,
+      encryptedUploadV2Recording,
+      operationId,
+    ],
+    ['resolveEncryptedUploadV2Profile', 'v2-profile-request', decision],
+  ]);
+});
+
+test('encrypted upload v2 rejects the native request when its provider fails', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+
+  await assert.rejects(
+    client.recordings.syncEncryptedRecordingV2(
+      connected,
+      encryptedUploadV2Recording,
+      async () => {
+        throw new Error('private provider diagnostics');
+      }
+    ),
+    /encrypted upload v2 material was rejected/
+  );
+
+  assert.equal(fixture.calls[0][0], 'syncEncryptedRecordingV2');
+  assert.deepEqual(fixture.calls[1], [
+    'rejectEncryptedUploadV2Profile',
+    'v2-profile-request',
+    'application_material_rejected',
+  ]);
+  assert.equal(
+    fixture.calls.some(([name]) => name === 'syncRecording'),
+    false,
+    'a v2 provider failure must not invoke the legacy transfer'
+  );
 });
 
 test('upload ownership exposes only the native decision and low-volume progress', async () => {

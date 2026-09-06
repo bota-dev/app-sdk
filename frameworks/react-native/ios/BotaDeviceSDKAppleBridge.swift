@@ -6,6 +6,7 @@ private enum BotaDeviceSDKAppleBridgeInputError: LocalizedError {
     case invalidConnectionSettings
     case invalidEnvironment
     case invalidHexadecimal
+    case invalidSHA256
     case invalidTimeout
     case invalidUnsignedInteger
 
@@ -15,6 +16,7 @@ private enum BotaDeviceSDKAppleBridgeInputError: LocalizedError {
         case .invalidConnectionSettings: "connection settings contain an unsupported value"
         case .invalidEnvironment: "API environment is unsupported"
         case .invalidHexadecimal: "public key must be hexadecimal"
+        case .invalidSHA256: "SHA-256 value must contain exactly 32 bytes"
         case .invalidTimeout: "timeout must be a finite non-negative number"
         case .invalidUnsignedInteger: "value must be a finite non-negative integer"
         }
@@ -860,6 +862,114 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                 completion(value, nil)
             } catch {
                 completion(nil, error as NSError)
+            }
+        }
+    }
+
+    @objc(syncEncryptedRecordingV2WithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:recordingUUID:generation:ciphertextLength:ciphertextSHA256:operationID:onProfileRequest:onProgress:completion:)
+    public func syncEncryptedRecordingV2(
+        id: String,
+        serialNumber: String,
+        deviceType: String,
+        firmwareVersion: String,
+        hardwareRevision: String?,
+        isProvisioned: Bool,
+        connectionState: String,
+        mtu: Double,
+        recordingUUID: String,
+        generation: Double,
+        ciphertextLength: String,
+        ciphertextSHA256: String,
+        operationID: String,
+        onProfileRequest: @escaping @Sendable ([String: Any]) -> Void,
+        onProgress: @escaping @Sendable ([String: Any]) -> Void,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                guard let generationValue = UInt32(
+                    exactly: try Self.unsignedInteger(generation)
+                ),
+                    let length = UInt64(ciphertextLength)
+                else {
+                    throw BotaDeviceSDKAppleBridgeInputError.invalidUnsignedInteger
+                }
+                let digest = try Self.sha256Data(ciphertextSHA256)
+                try await recordings.syncEncryptedRecordingV2(
+                    Self.connectedDevice(
+                        id: id,
+                        serialNumber: serialNumber,
+                        deviceType: deviceType,
+                        firmwareVersion: firmwareVersion,
+                        hardwareRevision: hardwareRevision,
+                        isProvisioned: isProvisioned,
+                        connectionState: connectionState,
+                        mtu: mtu
+                    ),
+                    recording: .init(
+                        uuid: recordingUUID,
+                        generation: generationValue,
+                        ciphertextLength: length,
+                        ciphertextSHA256: digest
+                    ),
+                    operationID: operationID,
+                    onProfileRequest: onProfileRequest,
+                    onProgress: onProgress
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(resolveEncryptedUploadV2ProfileWithRequestID:profile:uploadSessionID:ownerRevision:securityPolicy:materialRegistrationID:completion:)
+    public func resolveEncryptedUploadV2Profile(
+        requestID: String,
+        profile: String,
+        uploadSessionID: String,
+        ownerRevision: Double,
+        securityPolicy: String,
+        materialRegistrationID: String,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                guard let revision = UInt32(
+                    exactly: try Self.unsignedInteger(ownerRevision)
+                ) else {
+                    throw BotaDeviceSDKAppleBridgeInputError.invalidUnsignedInteger
+                }
+                try await recordings.resolveEncryptedUploadV2Profile(
+                    requestID: requestID,
+                    profile: profile,
+                    uploadSessionID: uploadSessionID,
+                    ownerRevision: revision,
+                    securityPolicy: securityPolicy,
+                    materialRegistrationID: materialRegistrationID
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(rejectEncryptedUploadV2ProfileWithRequestID:errorCode:completion:)
+    public func rejectEncryptedUploadV2Profile(
+        requestID: String,
+        errorCode: String,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await recordings.rejectEncryptedUploadV2Profile(
+                    requestID: requestID,
+                    errorCode: errorCode
+                )
+                completion(nil)
+            } catch {
+                completion(error as NSError)
             }
         }
     }
@@ -1955,6 +2065,15 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
             }
             data.append(byte)
             index = end
+        }
+        return data
+    }
+
+    private static func sha256Data(_ value: String) throws -> Data {
+        guard value.count == 64,
+              let data = try? hexData(value)
+        else {
+            throw BotaDeviceSDKAppleBridgeInputError.invalidSHA256
         }
         return data
     }

@@ -220,9 +220,13 @@ OkHttp staging host replaces an application-provided empty HTTPS PUT template
 with a streaming body for only the verified native ciphertext file, submits the
 fixed manifest, awaits application finalization and an exact receipt, then sends
 canonical CONFIRM. Production configuration installs both native ports after
-application-owned selection. React Native still exposes no v2 workflow or bulk
-bytes, and the remaining firmware, release, and hardware gates keep runtime
-support and firmware advertisement false.
+application-owned selection. React Native now exposes an additive explicit v2
+selection/progress workflow, but no bulk bytes or sensitive control-plane or
+cryptographic material cross Codegen. Apple and Android consume that material
+from a one-shot native `BotaDeviceSDKEncryptedUploadV2Materials` registration
+selected by an opaque ID; existing JavaScript managers and events are
+unchanged, with no implicit legacy fallback. The remaining firmware, release,
+and hardware gates keep runtime support and firmware advertisement false.
 The core now also exposes a side-effect-free three-profile selection validator:
 it requires every batch capability bit, usable advertised bounds, and an
 immutable recording generation in `bota_enc_v2` storage before accepting v2;
