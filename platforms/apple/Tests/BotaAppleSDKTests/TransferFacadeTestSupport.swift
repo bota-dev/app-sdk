@@ -131,6 +131,7 @@ actor TransferFacadeRecorder {
 func transferRuntime(
     runner: any CoreWorkflowRunning,
     recorder: TransferFacadeRecorder,
+    operations: DeviceOperationCoordinator = DeviceOperationCoordinator(),
     notificationData: Data = Data(),
     encryptedUploadV2Capabilities: @escaping @Sendable
         (String) async throws -> EncryptedUploadV2CapabilitySnapshot = { _ in
@@ -151,6 +152,7 @@ func transferRuntime(
         engine: runner,
         capabilities: .all,
         connection: connection,
+        operations: operations,
         disconnect: { _ in },
         directWrite: { _, service, characteristic, data in
             await recorder.write(service: service, characteristic: characteristic, data: data)

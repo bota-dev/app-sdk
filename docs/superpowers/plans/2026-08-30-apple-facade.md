@@ -272,7 +272,9 @@ git commit -m "feat(apple): map shared models and codecs" \
 
 **Interfaces:**
 - Consumes: all 10 command kinds, 30 effect kinds, 34 host-event kinds, 12 notifications, and 29 canonical workflow scenarios.
-- Produces: `CoreEngineActor.run`, `cancel`, internal correlated dispatch/drain behavior, and ordered `AsyncThrowingStream<CoreNotification, Error>`.
+- Produces: `CoreEngineActor.run`, which establishes the ABI owner before
+  returning its ordered `AsyncThrowingStream<CoreNotification, Error>`, `cancel`,
+  and internal correlated dispatch/drain behavior.
 
 ```swift
 actor CoreEngineActor {

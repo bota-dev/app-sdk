@@ -22,35 +22,25 @@ actor CoreEngineActor {
         _ command: CoreCommand,
         capabilities: CoreCapabilities
     ) async -> AsyncThrowingStream<CoreNotification, Error> {
-        AsyncThrowingStream { continuation in
-            Task {
-                await self.start(command, capabilities: capabilities, continuation: continuation)
-            }
-        }
-    }
-
-    func cancel(_ id: UUID) async throws {
-        let cancellation = CoreCancellationID(id)
-        await host.cancel(cancellation)
-        try abi.cancel(cancellationHigh: cancellation.high, cancellationLow: cancellation.low)
-        await drain()
-    }
-
-    private func start(
-        _ command: CoreCommand,
-        capabilities: CoreCapabilities,
-        continuation: AsyncThrowingStream<CoreNotification, Error>.Continuation
-    ) async {
+        let pair = AsyncThrowingStream<CoreNotification, Error>.makeStream()
         do {
             try abi.start(command.packet, capabilities: capabilities.rawValue)
             active = ActiveWorkflow(
                 cancellationID: CoreCancellationID(command.cancellationID),
-                continuation: continuation
+                continuation: pair.continuation
             )
-            await drain()
+            Task { await self.drain() }
         } catch {
-            continuation.finish(throwing: error)
+            pair.continuation.finish(throwing: error)
         }
+        return pair.stream
+    }
+
+    func cancel(_ id: UUID) async throws {
+        let cancellation = CoreCancellationID(id)
+        try abi.cancel(cancellationHigh: cancellation.high, cancellationLow: cancellation.low)
+        await host.cancel(cancellation)
+        await drain()
     }
 
     private func drain() async {

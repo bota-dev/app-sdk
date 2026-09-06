@@ -209,7 +209,7 @@ final class CoreAbiClientTests: XCTestCase {
     }
 }
 
-private struct TestField {
+fileprivate struct TestField {
     let id: UInt32
     let type: UInt32
     var unsigned: UInt64 = 0
@@ -217,7 +217,7 @@ private struct TestField {
     var data: [UInt8] = []
 }
 
-private struct TestError {
+fileprivate struct TestError {
     let code: UInt32
     let operation: UInt32
     let retryable: Bool
@@ -324,10 +324,12 @@ private final class TestErrorStorage {
     }
 }
 
-private final class TestCoreAbi: CoreAbi, @unchecked Sendable {
+final class TestCoreAbi: CoreAbi, @unchecked Sendable {
     var startStatus = BOTA_DEVICE_SDK_V1_OK
-    var error: TestError?
+    fileprivate var error: TestError?
     var startInspection: ((BotaDeviceSdkPacketViewV1) throws -> Void)?
+    var startEntered: (@Sendable () -> Void)?
+    var startGate: DispatchSemaphore?
     private(set) var engineNewCount = 0
     private(set) var engineFreeCount = 0
     private(set) var packetFreeCount = 0
@@ -341,7 +343,7 @@ private final class TestCoreAbi: CoreAbi, @unchecked Sendable {
         enqueue(TestPacketStorage(packet: packet))
     }
 
-    func enqueueRawPacket(kind: UInt32, operation: UInt32, fields: [TestField]) {
+    fileprivate func enqueueRawPacket(kind: UInt32, operation: UInt32, fields: [TestField]) {
         enqueue(TestPacketStorage(kind: kind, operation: operation, fields: fields))
     }
 
@@ -371,6 +373,8 @@ private final class TestCoreAbi: CoreAbi, @unchecked Sendable {
         capabilities: UInt64
     ) -> BotaDeviceSdkStatusV1 {
         startCount += 1
+        startEntered?()
+        startGate?.wait()
         if let packet {
             do {
                 try startInspection?(packet.pointee)
@@ -380,6 +384,10 @@ private final class TestCoreAbi: CoreAbi, @unchecked Sendable {
             }
         }
         return startStatus
+    }
+
+    func resumeStart() {
+        startGate?.signal()
     }
 
     func enginePollOutput(

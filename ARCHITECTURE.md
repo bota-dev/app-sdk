@@ -676,9 +676,11 @@ The Apple and Android fixture runners both execute all 39 frozen decode cases,
 including recording state and command-result compatibility.
 
 `CoreEngineActor` is the single Swift workflow executor. It submits all ten
-typed command shapes to Rust, drains notifications and host effects in order,
+typed command shapes to Rust, establishes the ABI workflow owner before it
+returns a notification stream, drains notifications and host effects in order,
 dispatches correlated host completions before polling again, and keeps the
-active cancellation identity until a terminal notification. Unexpected stale
+active cancellation identity until a terminal notification. Cancellation reaches
+that ABI owner before native host cancellation begins. Unexpected stale
 host events are rejected by Rust without releasing the current owner. The
 compact SwiftPM workflow resource is generated from all seven canonical suites;
 package tests reject drift and cover all 29 scenario labels. Concrete native

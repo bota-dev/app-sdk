@@ -408,6 +408,48 @@ final class RecordingManagerTests: XCTestCase {
         XCTAssertEqual(outcomes, [.cancelled])
     }
 
+    func testEncryptedV2StartupCancellationRetainsSharedOperationUntilTheEngineSettles() async throws {
+        let runner = DelayedStartTransferWorkflowRunner()
+        let operations = DeviceOperationCoordinator()
+        let capability = Self.encryptedV2Capability
+        let recording = Self.encryptedV2Recording
+        let material = Self.encryptedV2Material()
+        let manager = RecordingManager()
+        await manager.attach(await transferRuntime(
+            runner: runner,
+            recorder: TransferFacadeRecorder(),
+            operations: operations,
+            encryptedUploadV2Capabilities: { _ in capability }
+        ))
+
+        let task = Task {
+            try? await manager.syncEncryptedRecordingV2(
+                transferDevice(),
+                recording: recording,
+                provider: { _ in material }
+            )
+        }
+        await waitForEncryptedV2Handshake("engine startup") {
+            await runner.waitUntilStarted()
+        }
+        try await manager.cancelCurrentOperation()
+
+        let replacementID = UUID()
+        do {
+            try await operations.begin(replacementID, operation: .transferRecording)
+            XCTFail("startup cancellation must retain the shared operation")
+            await operations.end(replacementID)
+        } catch let error as BotaSDKError {
+            XCTAssertEqual(error.code, .operationInProgress)
+        }
+
+        await runner.resumeStart()
+        await waitForEncryptedV2Handshake("startup cancellation settlement") {
+            await task.value
+        }
+        try await operations.begin(UUID(), operation: .transferRecording)
+    }
+
     func testEncryptedV2CancellationCleansLateProviderMaterialAfterFacadeOwnershipEnds() async throws {
         let runner = TransferWorkflowRunner { _ in [] }
         let provider = EncryptedUploadV2ProviderGate()

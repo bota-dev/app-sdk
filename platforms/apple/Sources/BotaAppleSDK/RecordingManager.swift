@@ -411,10 +411,13 @@ public actor RecordingManager {
                 try await runtime.engine.cancel(id)
             }
             await performEncryptedUploadV2Cleanup(cancellation.cleanup, runtime: runtime)
+            if cancellation.isSettled {
+                await finishCancellation(id, runtime: runtime)
+            }
         } else {
             try await runtime.engine.cancel(id)
+            await finishCancellation(id, runtime: runtime)
         }
-        await finishCancellation(id, runtime: runtime)
     }
 
     private func consumeTransfer(
@@ -612,7 +615,9 @@ public actor RecordingManager {
             try? await runtime.engine.cancel(id)
         }
         await performEncryptedUploadV2Cleanup(cancellation.cleanup, runtime: runtime)
-        await finishCancellation(id, runtime: runtime)
+        if cancellation.isSettled {
+            await finishCancellation(id, runtime: runtime)
+        }
     }
 
     private func performEncryptedUploadV2Cleanup(
@@ -655,6 +660,7 @@ private final class EncryptedUploadV2OperationLifecycle: @unchecked Sendable {
     struct Cancellation {
         let cancelEngine: Bool
         let cleanup: Cleanup
+        let isSettled: Bool
     }
 
     private enum EnginePhase {
@@ -702,11 +708,12 @@ private final class EncryptedUploadV2OperationLifecycle: @unchecked Sendable {
         lock.withLock {
             cancellationRequested = true
             guard enginePhase != .starting else {
-                return .init(cancelEngine: false, cleanup: .none)
+                return .init(cancelEngine: false, cleanup: .none, isSettled: false)
             }
             return .init(
                 cancelEngine: enginePhase == .started,
-                cleanup: takeCleanup(.cancelled)
+                cleanup: takeCleanup(.cancelled),
+                isSettled: true
             )
         }
     }

@@ -5,6 +5,31 @@ import XCTest
 @testable import BotaAppleSDK
 
 final class CoreEngineActorTests: XCTestCase {
+    func testRunWaitsForTheABIWorkflowOwnerBeforeReturningItsStream() async throws {
+        let abi = TestCoreAbi()
+        let engine = CoreEngineActor(abi: try CoreAbiClient(abi: abi), host: FakeCoreHost(handler: { _ in [] }))
+        let startEntered = expectation(description: "ABI start entered")
+        let runReturned = expectation(description: "run returned before ABI start")
+        runReturned.isInverted = true
+        abi.startEntered = { startEntered.fulfill() }
+        abi.startGate = DispatchSemaphore(value: 0)
+
+        let run = Task {
+            let stream = await engine.run(
+                .discoverDevices(timeoutMilliseconds: 10_000, allowDuplicates: false),
+                capabilities: [.bluetooth, .timer]
+            )
+            _ = stream
+            runReturned.fulfill()
+        }
+
+        await fulfillment(of: [startEntered, runReturned], timeout: 0.1)
+        abi.resumeStart()
+        await run.value
+
+        XCTAssertEqual(abi.startCount, 1)
+    }
+
     func testRunsOneWorkflowWithOrderedNotificationsAndMonotonicRequests() async throws {
         let host = FakeCoreHost(handler: FakeCoreHost.discoveryHandler())
         let engine = CoreEngineActor(abi: try CoreAbiClient(), host: host)
