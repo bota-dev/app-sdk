@@ -134,7 +134,7 @@ class EncryptedUploadV2TransferControlTest {
 
         assertFalse(control.confirmationAttemptedOrClaimCancellation(9u))
         control.abort(9u)
-        val confirmFailure = runCatching { control.confirm(9u, byteArrayOf(1)) }.exceptionOrNull()
+        val confirmFailure = runCatching { control.confirm(9u, byteArrayOf(1)) {} }.exceptionOrNull()
 
         assertTrue(confirmFailure is IllegalStateException)
         assertEquals(2, driver.writeCount)
@@ -154,7 +154,7 @@ class EncryptedUploadV2TransferControlTest {
         val mapper = CoreModelMapper(TransferControlCore())
         val control = EncryptedUploadV2TransferControl(driver, mapper)
         control.open("device", request(), null)
-        val confirming = async(Dispatchers.Default) { control.confirm(9u, byteArrayOf(1)) }
+        val confirming = async(Dispatchers.Default) { control.confirm(9u, byteArrayOf(1)) {} }
         withContext(Dispatchers.Default) { withTimeout(1_000) { entered.await() } }
 
         val during = async(Dispatchers.Default) {
@@ -179,7 +179,7 @@ class EncryptedUploadV2TransferControlTest {
         val control = EncryptedUploadV2TransferControl(driver, mapper)
         control.open("device", request(), null)
 
-        val failure = runCatching { control.confirm(9u, byteArrayOf(1)) }.exceptionOrNull()
+        val failure = runCatching { control.confirm(9u, byteArrayOf(1)) {} }.exceptionOrNull()
             as EncryptedUploadV2ConfirmationException
         val replacement = runCatching { control.open("device", request(), null) }.exceptionOrNull()
 
@@ -187,6 +187,40 @@ class EncryptedUploadV2TransferControlTest {
         assertEquals(19u, failure.errorCode)
         assertEquals(19u, (replacement as EncryptedUploadV2HostException).errorCode)
         control.resetAfterConfirmedDisconnect(ConfirmedBluetoothDisconnect("device", 1))
+        driver.failUnsubscribe = false
+        assertTrue(control.open("device", request(), null) is EncryptedUploadV2OpenResult.Opened)
+        control.release(9u)
+        control.close()
+        mapper.close()
+    }
+
+    @Test
+    fun disconnectDuringConfirmUnsubscribeWaitsForSettlementAndClearsTheExactPoison() = runTest {
+        val unsubscribeEntered = CompletableDeferred<Unit>()
+        val unsubscribeRelease = CompletableDeferred<Unit>()
+        val driver = ControlDriver(
+            failUnsubscribe = true,
+            unsubscribeEntered = unsubscribeEntered,
+            unsubscribeRelease = unsubscribeRelease,
+        )
+        val mapper = CoreModelMapper(TransferControlCore())
+        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        control.open("device", request(), null)
+        val confirming = async(Dispatchers.Default) {
+            runCatching { control.confirm(9u, byteArrayOf(1)) {} }.exceptionOrNull()
+        }
+        withContext(Dispatchers.Default) { withTimeout(1_000) { unsubscribeEntered.await() } }
+
+        val resetting = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            control.resetAfterConfirmedDisconnect(ConfirmedBluetoothDisconnect("device", 1))
+        }
+        val resetReturnedBeforeConfirmationSettled = resetting.isCompleted
+        unsubscribeRelease.complete(Unit)
+        val failure = withContext(Dispatchers.Default) { withTimeout(1_000) { confirming.await() } }
+        withContext(Dispatchers.Default) { withTimeout(1_000) { resetting.await() } }
+
+        assertFalse(resetReturnedBeforeConfirmationSettled)
+        assertTrue((failure as EncryptedUploadV2ConfirmationException).writeSucceeded)
         driver.failUnsubscribe = false
         assertTrue(control.open("device", request(), null) is EncryptedUploadV2OpenResult.Opened)
         control.release(9u)
@@ -315,6 +349,8 @@ private class ControlDriver(
     private val activeWriteRelease: CompletableDeferred<Unit>? = null,
     private val failActiveWrite: Boolean = false,
     private val connectionGeneration: Long = 1,
+    private val unsubscribeEntered: CompletableDeferred<Unit>? = null,
+    private val unsubscribeRelease: CompletableDeferred<Unit>? = null,
 ) : BluetoothDriver {
     private val replies = MutableSharedFlow<BluetoothNotification>()
     var subscribersAtWrite = 0
@@ -361,6 +397,8 @@ private class ControlDriver(
 
     override suspend fun unsubscribe(peripheralId: String, serviceUuid: UUID, characteristicUuid: UUID) {
         unsubscribeCount += 1
+        unsubscribeEntered?.complete(Unit)
+        if (unsubscribeRelease != null) withContext(NonCancellable) { unsubscribeRelease.await() }
         if (unsubscribeDelayMilliseconds > 0) delay(unsubscribeDelayMilliseconds)
         unsubscribeCompletedCount += 1
         if (failUnsubscribe) throw IllegalStateException("unsubscribe failed")

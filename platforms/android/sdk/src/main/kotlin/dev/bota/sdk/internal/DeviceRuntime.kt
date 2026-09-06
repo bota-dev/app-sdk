@@ -225,9 +225,16 @@ internal class DeviceRuntime(
                             }
                         },
                         sendControl = encryptedControl::writeActiveFrame,
-                        confirmTransfer = encryptedControl::confirm,
-                        confirmationAttemptedOrClaimCancellation =
-                            encryptedControl::confirmationAttemptedOrClaimCancellation,
+                        confirmTransfer = { transportSessionId, frame, writeSucceeded ->
+                            disconnectResetMutex.withLock {
+                                encryptedControl.confirm(transportSessionId, frame, writeSucceeded)
+                            }
+                        },
+                        confirmationAttemptedOrClaimCancellation = { transportSessionId ->
+                            disconnectResetMutex.withLock {
+                                encryptedControl.confirmationAttemptedOrClaimCancellation(transportSessionId)
+                            }
+                        },
                         abortTransfer = encryptedControl::abort,
                         releaseTransfer = encryptedControl::release,
                         sendSignedDocument = { kind, id, value, maximum ->

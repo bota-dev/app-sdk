@@ -450,6 +450,85 @@ final class RecordingManagerTests: XCTestCase {
         try await operations.begin(UUID(), operation: .transferRecording)
     }
 
+    func testEncryptedV2StartupCancellationPropagatesExactCompletedConfirmation() async throws {
+        let runner = DelayedStartExactSettlementWorkflowRunner(settlement: .completed)
+        let termination = EncryptedUploadV2TerminalOutcomeRecorder()
+        let recording = Self.encryptedV2Recording
+        let material = Self.encryptedV2Material()
+        let manager = RecordingManager()
+        await manager.attach(await transferRuntime(
+            runner: runner,
+            recorder: TransferFacadeRecorder(),
+            encryptedUploadV2Capabilities: { _ in Self.encryptedV2Capability },
+            terminateEncryptedUploadV2Material: { _, outcome in await termination.record(outcome) }
+        ))
+
+        let task = Task.detached { @Sendable in
+            try await manager.syncEncryptedRecordingV2(
+                transferDevice(),
+                recording: recording,
+                provider: { _ in material }
+            )
+        }
+        await waitForEncryptedV2Handshake("exact-completion engine startup") {
+            await runner.waitUntilStarted()
+        }
+        task.cancel()
+        await runner.resumeStart()
+        let taskResult = await task.result
+
+        let commands = await runner.commands
+        let ordinaryCancellations = await runner.ordinaryCancellations
+        let exactSettlements = await runner.exactSettlements
+        let outcomes = await termination.value()
+        if case let .failure(error) = taskResult { XCTFail("unexpected startup result: \(error)") }
+        XCTAssertEqual(ordinaryCancellations, [])
+        XCTAssertEqual(exactSettlements, [commands[0].cancellationID])
+        XCTAssertEqual(outcomes, [.completed])
+    }
+
+    func testEncryptedV2StartupCancellationPropagatesExactConfirmationUncertainty() async throws {
+        let runner = DelayedStartExactSettlementWorkflowRunner(settlement: .ownershipUnknown)
+        let termination = EncryptedUploadV2TerminalOutcomeRecorder()
+        let recording = Self.encryptedV2Recording
+        let material = Self.encryptedV2Material()
+        let manager = RecordingManager()
+        await manager.attach(await transferRuntime(
+            runner: runner,
+            recorder: TransferFacadeRecorder(),
+            encryptedUploadV2Capabilities: { _ in Self.encryptedV2Capability },
+            terminateEncryptedUploadV2Material: { _, outcome in await termination.record(outcome) }
+        ))
+
+        let task = Task.detached { @Sendable in
+            try await manager.syncEncryptedRecordingV2(
+                transferDevice(),
+                recording: recording,
+                provider: { _ in material }
+            )
+        }
+        await waitForEncryptedV2Handshake("uncertain-confirmation engine startup") {
+            await runner.waitUntilStarted()
+        }
+        task.cancel()
+        await runner.resumeStart()
+        let taskResult = await task.result
+
+        let commands = await runner.commands
+        let ordinaryCancellations = await runner.ordinaryCancellations
+        let exactSettlements = await runner.exactSettlements
+        let outcomes = await termination.value()
+        guard case let .failure(error) = taskResult,
+              let sdkError = error as? BotaSDKError
+        else {
+            return XCTFail("expected startup confirmation uncertainty")
+        }
+        XCTAssertEqual(sdkError.code, .uploadOwnershipUnknown)
+        XCTAssertEqual(ordinaryCancellations, [])
+        XCTAssertEqual(exactSettlements, [commands[0].cancellationID])
+        XCTAssertEqual(outcomes, [])
+    }
+
     func testEncryptedV2CancellationCleansLateProviderMaterialAfterFacadeOwnershipEnds() async throws {
         let runner = TransferWorkflowRunner { _ in [] }
         let provider = EncryptedUploadV2ProviderGate()

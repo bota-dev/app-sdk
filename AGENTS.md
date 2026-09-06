@@ -406,7 +406,12 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Encrypted Upload v2 cancellation remains ordinary until the native host
   atomically begins the canonical CONFIRM write. Only after that real boundary
   do Apple and Android wait for exact completion or code-19 uncertainty without
-  invoking host rollback. Android validates
+  invoking host rollback. Apple applies the same exact settlement when
+  cancellation races the return from engine startup. Android records a
+  successful driver write in host state before releasing the transfer owner;
+  confirmed-disconnect reset waits for that settlement, detaches and fails the
+  exact old channels, and joins its opening/pump jobs before admitting a
+  replacement. Android validates
   transfer phase at notification arrival, broadcasts bounded platform
   notifications to every active observer, and resets poisoned ownership on
   an exact peripheral/GATT-generation confirmed disconnect. Its atomic checkpoint

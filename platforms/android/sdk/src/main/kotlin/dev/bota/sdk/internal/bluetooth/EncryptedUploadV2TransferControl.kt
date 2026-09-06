@@ -127,6 +127,7 @@ internal class EncryptedUploadV2TransferControl(
         val intake: EncryptedUploadV2TransferIntake,
         val controlAccepted: CompletableDeferred<Unit>,
         val job: Job,
+        val confirmationFinished: CompletableDeferred<Unit> = CompletableDeferred(),
         var phase: Phase = Phase.Active,
     )
 
@@ -286,7 +287,11 @@ internal class EncryptedUploadV2TransferControl(
         }
     }
 
-    suspend fun confirm(transportSessionId: ULong, frame: ByteArray) {
+    suspend fun confirm(
+        transportSessionId: ULong,
+        frame: ByteArray,
+        writeSucceeded: () -> Unit,
+    ) {
         currentCoroutineContext().ensureActive()
         val session = mutex.withLock {
             if (cleanupUncertainOwner != null) ownershipUnknown()
@@ -316,6 +321,7 @@ internal class EncryptedUploadV2TransferControl(
                     )
                     sent = true
                     session.phase = Phase.Confirmed
+                    writeSucceeded()
                 }
                 cleanupSubscription(session)
             }
@@ -331,6 +337,8 @@ internal class EncryptedUploadV2TransferControl(
                 else "CONFIRM outcome is uncertain; reconnect before retrying",
                 cause = error,
             )
+        } finally {
+            session.confirmationFinished.complete(Unit)
         }
     }
 
@@ -367,15 +375,25 @@ internal class EncryptedUploadV2TransferControl(
     }
 
     suspend fun resetAfterConfirmedDisconnect(disconnect: ConfirmedBluetoothDisconnect) {
-        val owned = mutex.withLock {
-            if (cleanupUncertainOwner == disconnect) cleanupUncertainOwner = null
-            sessions.values.filter {
-                it.peripheralId == disconnect.peripheralId && it.generation == disconnect.generation
-            }.also { matching -> matching.forEach { sessions.values.remove(it) } }
-        }
-        owned.forEach {
-            it.job.cancelAndJoin()
-            it.raw.close()
+        withContext(NonCancellable) {
+            val settling = mutex.withLock {
+                sessions.values.filter {
+                    it.peripheralId == disconnect.peripheralId &&
+                        it.generation == disconnect.generation &&
+                        (it.phase == Phase.Confirming || it.phase == Phase.Confirmed)
+                }.map { it.confirmationFinished }
+            }
+            settling.forEach { it.await() }
+            val owned = mutex.withLock {
+                if (cleanupUncertainOwner == disconnect) cleanupUncertainOwner = null
+                sessions.values.filter {
+                    it.peripheralId == disconnect.peripheralId && it.generation == disconnect.generation
+                }.also { matching -> matching.forEach { sessions.values.remove(it) } }
+            }
+            owned.forEach {
+                it.job.cancelAndJoin()
+                it.raw.close()
+            }
         }
     }
 

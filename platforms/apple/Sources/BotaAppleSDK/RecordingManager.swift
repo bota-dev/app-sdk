@@ -256,11 +256,23 @@ public actor RecordingManager {
                 lifecycle.beginEngineStart()
                 let notifications = await runtime.engine.run(command, capabilities: runtime.capabilities)
                 if lifecycle.finishEngineStart() {
-                    try? await runtime.engine.cancel(cancellationID)
+                    let exactlyCompleted: Bool
+                    do {
+                        exactlyCompleted = try await runtime.engine.cancelAndReportExactSettlement(cancellationID)
+                    } catch {
+                        lifecycle.preserveTerminalSettlement()
+                        await finish(cancellationID, runtime: runtime)
+                        throw error
+                    }
                     await performEncryptedUploadV2Cleanup(
-                        lifecycle.settleEngineCancellation(completed: false),
+                        lifecycle.settleEngineCancellation(completed: exactlyCompleted),
                         runtime: runtime
                     )
+                    if exactlyCompleted {
+                        await runtime.terminateEncryptedUploadV2Material(material.materialID, .completed)
+                        await finish(cancellationID, runtime: runtime)
+                        return
+                    }
                     throw facadeCancelled(operation: .transferRecording)
                 }
                 for try await notification in notifications {

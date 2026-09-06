@@ -102,6 +102,60 @@ actor DelayedStartTransferWorkflowRunner: CoreWorkflowRunning {
     }
 }
 
+actor DelayedStartExactSettlementWorkflowRunner: CoreWorkflowRunning {
+    enum Settlement: Sendable {
+        case completed
+        case ownershipUnknown
+    }
+
+    private let settlement: Settlement
+    private(set) var commands: [CoreCommand] = []
+    private(set) var ordinaryCancellations: [UUID] = []
+    private(set) var exactSettlements: [UUID] = []
+    private var startContinuation: CheckedContinuation<Void, Never>?
+    private var resumeContinuation: CheckedContinuation<Void, Never>?
+
+    init(settlement: Settlement) { self.settlement = settlement }
+
+    func run(
+        _ command: CoreCommand,
+        capabilities: CoreCapabilities
+    ) async -> AsyncThrowingStream<CoreNotification, Error> {
+        commands.append(command)
+        startContinuation?.resume()
+        startContinuation = nil
+        await withCheckedContinuation { resumeContinuation = $0 }
+        return AsyncThrowingStream { $0.finish() }
+    }
+
+    func cancel(_ id: UUID) async throws { ordinaryCancellations.append(id) }
+
+    func cancelAndReportExactSettlement(_ id: UUID) async throws -> Bool {
+        exactSettlements.append(id)
+        switch settlement {
+        case .completed:
+            return true
+        case .ownershipUnknown:
+            throw BotaSDKError(
+                code: .uploadOwnershipUnknown,
+                operation: .transferRecording,
+                retryable: false,
+                detail: "CONFIRM succeeded but cleanup is uncertain"
+            )
+        }
+    }
+
+    func waitUntilStarted() async {
+        guard commands.isEmpty else { return }
+        await withCheckedContinuation { startContinuation = $0 }
+    }
+
+    func resumeStart() {
+        resumeContinuation?.resume()
+        resumeContinuation = nil
+    }
+}
+
 actor TransferFacadeRecorder {
     struct Write: Equatable, Sendable {
         let service: String

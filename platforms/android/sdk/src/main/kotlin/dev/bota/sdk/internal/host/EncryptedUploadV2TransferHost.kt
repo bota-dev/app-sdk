@@ -47,7 +47,7 @@ internal class EncryptedUploadV2TransferHostServices(
     val checkpointStore: EncryptedUploadV2CheckpointStore,
     val openTransfer: suspend (EncryptedUploadV2StartRequest, EncryptedUploadV2CheckpointValue?) -> EncryptedUploadV2OpenResult,
     val sendControl: suspend (ULong, ByteArray, EncryptedUploadV2TransferContinuation) -> Unit,
-    val confirmTransfer: suspend (ULong, ByteArray) -> Unit,
+    val confirmTransfer: suspend (ULong, ByteArray, () -> Unit) -> Unit,
     val confirmationAttemptedOrClaimCancellation: suspend (ULong) -> Boolean = { false },
     val abortTransfer: suspend (ULong) -> Unit,
     val releaseTransfer: suspend (ULong) -> Unit,
@@ -82,6 +82,17 @@ internal class EncryptedUploadV2TransferHost(
         val authorizationSha256: ByteArray,
     )
 
+    private data class DetachedLifecycle(
+        val openingJob: Deferred<EncryptedUploadV2OpenResult>?,
+        val pumpJob: Job?,
+        val startEvents: Channel<CoreHostEventPayload>?,
+        val boundaryTarget: Channel<CoreHostEventPayload>?,
+        val pendingResume: CompletableDeferred<Unit>?,
+        val materialId: String?,
+        val materialLease: EncryptedUploadV2MaterialLease?,
+        val materialOutcome: EncryptedUploadV2TerminalOutcome,
+    )
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val stateLock = Any()
     private var generation = 0L
@@ -110,6 +121,7 @@ internal class EncryptedUploadV2TransferHost(
     private var confirmationCancellationId: CoreCancellationId? = null
     private var cancellationStarted = false
     private var ownershipPoisoned = false
+    private var resetFinished: CompletableDeferred<Unit>? = null
 
     suspend fun checkpoint(serialNumber: String, recordingUuid: String, generation: UInt): EncryptedUploadV2Checkpoint? {
         val value = services.checkpointStore.loadForRecording(serialNumber, recordingUuid, generation) ?: return null
@@ -120,32 +132,24 @@ internal class EncryptedUploadV2TransferHost(
         )
     }
 
-    override fun execute(effect: CoreEffect): Flow<CoreHostEventPayload> {
-        synchronized(stateLock) {
-            if (activeCancellationId != effect.cancellationId && activeContext == null && openingJob == null) {
-                confirmationAttempted = false
-                confirmationSucceeded = false
-                confirmationFinished = null
-                confirmationCancellationId = null
-                cancellationStarted = false
-            }
-            activeCancellationId = effect.cancellationId
-        }
-        return when (effect.kind) {
-        CoreEffectKind.EncryptedUploadV2LoadCheckpoint -> loadCheckpoint(effect)
-        CoreEffectKind.EncryptedUploadV2DeleteCheckpoint -> deleteCheckpoint(effect)
-        CoreEffectKind.EncryptedUploadV2TruncateSink -> truncateSink(effect)
-        CoreEffectKind.EncryptedUploadV2PrepareSession -> prepareSession(effect)
-        CoreEffectKind.EncryptedUploadV2StartTransfer -> startTransfer(effect)
-        CoreEffectKind.EncryptedUploadV2RepairWindow -> repairWindow(effect)
-        CoreEffectKind.EncryptedUploadV2SaveCheckpoint -> saveCheckpoint(effect)
-        CoreEffectKind.EncryptedUploadV2AcknowledgeWindow -> acknowledgeWindow(effect)
-        CoreEffectKind.EncryptedUploadV2StageArtifacts -> stageArtifacts(effect)
-        CoreEffectKind.EncryptedUploadV2AwaitReceipt -> awaitReceipt(effect)
-        CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt -> confirmWithReceipt(effect)
-        CoreEffectKind.EncryptedUploadV2Abort -> abort(effect)
+    override fun execute(effect: CoreEffect): Flow<CoreHostEventPayload> = flow {
+        beginEffect(effect)
+        val upstream = when (effect.kind) {
+            CoreEffectKind.EncryptedUploadV2LoadCheckpoint -> loadCheckpoint(effect)
+            CoreEffectKind.EncryptedUploadV2DeleteCheckpoint -> deleteCheckpoint(effect)
+            CoreEffectKind.EncryptedUploadV2TruncateSink -> truncateSink(effect)
+            CoreEffectKind.EncryptedUploadV2PrepareSession -> prepareSession(effect)
+            CoreEffectKind.EncryptedUploadV2StartTransfer -> startTransfer(effect)
+            CoreEffectKind.EncryptedUploadV2RepairWindow -> repairWindow(effect)
+            CoreEffectKind.EncryptedUploadV2SaveCheckpoint -> saveCheckpoint(effect)
+            CoreEffectKind.EncryptedUploadV2AcknowledgeWindow -> acknowledgeWindow(effect)
+            CoreEffectKind.EncryptedUploadV2StageArtifacts -> stageArtifacts(effect)
+            CoreEffectKind.EncryptedUploadV2AwaitReceipt -> awaitReceipt(effect)
+            CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt -> confirmWithReceipt(effect)
+            CoreEffectKind.EncryptedUploadV2Abort -> abort(effect)
             else -> flow<CoreHostEventPayload> { fail(7u, "non-v2 effect reached encrypted upload v2 host") }
         }
+        upstream.collect { emit(it) }
     }
 
     override suspend fun confirmationAttemptedOrClaimCancellation(
@@ -160,13 +164,18 @@ internal class EncryptedUploadV2TransferHost(
             services.confirmationAttemptedOrClaimCancellation(it)
         } == true
         return synchronized(stateLock) {
-            if (attempted) {
+            if (confirmationCancellationId == cancellationId && confirmationAttempted) {
+                true
+            } else if (attempted) {
                 confirmationAttempted = true
                 confirmationCancellationId = cancellationId
+                true
             } else if (activeCancellationId == cancellationId) {
                 cancellationStarted = true
+                false
+            } else {
+                false
             }
-            attempted
         }
     }
 
@@ -183,23 +192,65 @@ internal class EncryptedUploadV2TransferHost(
     }
 
     suspend fun resetAfterConfirmedDisconnect() {
-        val material = synchronized(stateLock) {
-            ownershipPoisoned = false
-            Triple(
-                preparedMaterialId ?: activeContext?.materialId,
-                materialLease,
-                if (confirmationSucceeded) EncryptedUploadV2TerminalOutcome.Completed
-                else EncryptedUploadV2TerminalOutcome.Failed,
-            )
+        val barrier = CompletableDeferred<Unit>()
+        val pendingReset = synchronized(stateLock) {
+            resetFinished?.also { return@synchronized it }
+            resetFinished = barrier
+            null
         }
-        if (material.first != null && material.second != null) {
-            runCatching {
-                services.materialRegistry.terminate(
-                    material.first!!, material.second!!, material.third,
+        if (pendingReset != null) {
+            pendingReset.await()
+            return
+        }
+        try {
+            withContext(NonCancellable) {
+                synchronized(stateLock) { confirmationFinished }?.await()
+                val disconnected = EncryptedUploadV2HostException(
+                    12u,
+                    true,
+                    message = "confirmed disconnect interrupted encrypted upload v2",
                 )
+                val detached = synchronized(stateLock) {
+                    generation += 1
+                    DetachedLifecycle(
+                        openingJob = openingJob,
+                        pumpJob = pumpJob,
+                        startEvents = startEvents,
+                        boundaryTarget = boundaryTarget,
+                        pendingResume = pendingResume,
+                        materialId = preparedMaterialId ?: activeContext?.materialId,
+                        materialLease = materialLease,
+                        materialOutcome = if (confirmationSucceeded) {
+                            EncryptedUploadV2TerminalOutcome.Completed
+                        } else {
+                            EncryptedUploadV2TerminalOutcome.Failed
+                        },
+                    ).also { clearStateLocked() }
+                }
+                detached.pendingResume?.completeExceptionally(disconnected)
+                detached.startEvents?.close(disconnected)
+                if (detached.boundaryTarget !== detached.startEvents) {
+                    detached.boundaryTarget?.close(disconnected)
+                }
+                detached.openingJob?.cancelAndJoin()
+                detached.pumpJob?.cancelAndJoin()
+                if (detached.materialId != null && detached.materialLease != null) {
+                    runCatching {
+                        services.materialRegistry.terminate(
+                            detached.materialId,
+                            detached.materialLease,
+                            detached.materialOutcome,
+                        )
+                    }
+                }
+                synchronized(stateLock) { ownershipPoisoned = false }
             }
+        } finally {
+            synchronized(stateLock) {
+                if (resetFinished === barrier) resetFinished = null
+            }
+            barrier.complete(Unit)
         }
-        clearState()
     }
 
     private fun loadCheckpoint(effect: CoreEffect) = flow {
@@ -324,7 +375,9 @@ internal class EncryptedUploadV2TransferHost(
                         receiver = transferReceiver
                         startEvents = events
                         boundaryTarget = events
-                        pumpJob = scope.launch { pump(opened.notifications, transferReceiver) }
+                        pumpJob = scope.launch {
+                            pump(startGeneration, context, events, opened.notifications, transferReceiver)
+                        }
                     }
                     owned
                 }
@@ -445,16 +498,17 @@ internal class EncryptedUploadV2TransferHost(
         }
         requireValue(canConfirm, "transfer cancellation already started", 16u)
         try {
-            services.confirmTransfer(context.transportSessionId, frame)
-            synchronized(stateLock) {
-                confirmationAttempted = true
-                confirmationCancellationId = effect.cancellationId
-                confirmationSucceeded = true
+            services.confirmTransfer(context.transportSessionId, frame) {
+                synchronized(stateLock) {
+                    confirmationAttempted = true
+                    confirmationCancellationId = effect.cancellationId
+                    confirmationSucceeded = true
+                }
             }
             services.materialRegistry.terminate(context.materialId, lease, EncryptedUploadV2TerminalOutcome.Completed)
             emit(CoreHostEventPayload(HostEventKind.EncryptedUploadV2RecordingConfirmed))
-            finished.complete(Result.success(Unit))
             clearState(preserveConfirmation = true)
+            finished.complete(Result.success(Unit))
         } catch (error: Throwable) {
             val transportFailure = error as? EncryptedUploadV2ConfirmationException
             val attempted = synchronized(stateLock) {
@@ -497,31 +551,42 @@ internal class EncryptedUploadV2TransferHost(
     }
 
     private suspend fun pump(
+        ownerGeneration: Long,
+        ownerContext: Context,
+        ownerStartEvents: Channel<CoreHostEventPayload>,
         notifications: Flow<EncryptedUploadV2TransferPayload>,
         transferReceiver: EncryptedUploadV2TransferReceiver,
     ) {
+        var completed = false
         try {
             notifications.collect { payload ->
                 when (val event = transferReceiver.receive(payload)) {
                     null -> Unit
                     is EncryptedUploadV2TransferReceiverEvent.WindowStaged -> {
-                        pendingCheckpoint = event.value.checkpoint
-                        pendingMissing = event.value.missingSequences
                         val gate = CompletableDeferred<Unit>()
-                        pendingResume = gate
-                        val target = boundaryTarget ?: fail(9u, "window event has no owner")
-                        target.send(windowStaged(activeContext ?: fail(9u, "context is missing"), event.value))
+                        val target = synchronized(stateLock) {
+                            if (!ownsPump(ownerGeneration, ownerContext)) return@collect
+                            pendingCheckpoint = event.value.checkpoint
+                            pendingMissing = event.value.missingSequences
+                            pendingResume = gate
+                            boundaryTarget ?: fail(9u, "window event has no owner")
+                        }
+                        target.send(windowStaged(ownerContext, event.value))
                         gate.await()
                     }
                     is EncryptedUploadV2TransferReceiverEvent.Completed -> {
-                        completedTransfer = event.value
-                        val target = boundaryTarget ?: fail(9u, "completion event has no owner")
+                        val target = synchronized(stateLock) {
+                            if (!ownsPump(ownerGeneration, ownerContext)) return@collect
+                            completedTransfer = event.value
+                            completed = true
+                            boundaryTarget ?: fail(9u, "completion event has no owner")
+                        }
                         target.send(transferCompleted(event.value.evidence))
-                        startEvents?.close()
+                        ownerStartEvents.close()
                     }
                 }
             }
-            if (completedTransfer == null) {
+            if (!completed) {
                 throw EncryptedUploadV2HostException(
                     12u, true, message = "encrypted transfer stream ended before EOF",
                 )
@@ -531,13 +596,18 @@ internal class EncryptedUploadV2TransferHost(
                 error.code == BotaErrorCode.ProtocolRejected &&
                 error.detail == MixedEncryptedUploadProfile
             ) {
-                val target = boundaryTarget ?: startEvents
+                val target = synchronized(stateLock) {
+                    if (ownsPump(ownerGeneration, ownerContext)) boundaryTarget ?: ownerStartEvents else null
+                }
                 target?.send(CoreHostEventPayload(HostEventKind.EncryptedUploadV2MixedProfile))
                 target?.close()
-                if (target !== startEvents) startEvents?.close()
+                if (target !== ownerStartEvents) ownerStartEvents.close()
             } else {
-                startEvents?.close(error)
-                boundaryTarget?.close(error)
+                val target = synchronized(stateLock) {
+                    if (ownsPump(ownerGeneration, ownerContext)) boundaryTarget else null
+                }
+                ownerStartEvents.close(error)
+                if (target !== ownerStartEvents) target?.close(error)
             }
         }
     }
@@ -592,10 +662,28 @@ internal class EncryptedUploadV2TransferHost(
         failure?.let { throw it }
     }
 
-    private fun clearState(preserveConfirmation: Boolean = false) {
-        pumpJob?.cancel()
-        startEvents?.close()
-        pendingResume?.cancel()
+    private suspend fun beginEffect(effect: CoreEffect) {
+        while (true) {
+            val pending = synchronized(stateLock) {
+                resetFinished?.let { return@synchronized it }
+                if (activeCancellationId != effect.cancellationId && activeContext == null && openingJob == null) {
+                    clearConfirmationState()
+                }
+                activeCancellationId = effect.cancellationId
+                null
+            } ?: return
+            pending.await()
+        }
+    }
+
+    private fun ownsPump(ownerGeneration: Long, ownerContext: Context): Boolean =
+        generation == ownerGeneration && activeContext === ownerContext
+
+    private fun clearState(preserveConfirmation: Boolean = false) = synchronized(stateLock) {
+        clearStateLocked(preserveConfirmation)
+    }
+
+    private fun clearStateLocked(preserveConfirmation: Boolean = false) {
         activeContext = null
         receiver = null
         loadedCheckpoint = null
@@ -615,13 +703,15 @@ internal class EncryptedUploadV2TransferHost(
         boundaryTarget = null
         startEvents = null
         activeCancellationId = if (preserveConfirmation) activeCancellationId else null
-        if (!preserveConfirmation) {
-            confirmationAttempted = false
-            confirmationSucceeded = false
-            confirmationFinished = null
-            confirmationCancellationId = null
-            cancellationStarted = false
-        }
+        if (!preserveConfirmation) clearConfirmationState()
+    }
+
+    private fun clearConfirmationState() {
+        confirmationAttempted = false
+        confirmationSucceeded = false
+        confirmationFinished = null
+        confirmationCancellationId = null
+        cancellationStarted = false
     }
 
     private data class CompletionState(

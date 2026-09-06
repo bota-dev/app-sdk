@@ -247,6 +247,9 @@ runtimes can consume the same trace.
     subscription-cleanup uncertainty after CONFIRM cannot reverse completion.
   - [x] Wire the resulting snapshot through application selection before START
     and install the internal completion services in production configuration.
+  - [x] Preserve exact Completed or code-19 settlement when cancellation races
+    the return from Apple engine startup; never force cancelled material after
+    CONFIRM may have deleted the device copy.
 - [x] Stream ciphertext to a bounded native file and staging request without a
   plaintext copy or bridge payload.
 - [x] Persist and recover only mutually proven checkpoint metadata.
@@ -269,6 +272,9 @@ runtimes can consume the same trace.
   every retired split checkpoint/index pair into an existing/backup-recovered
   catalog; and reset material ownership only on an exact current-generation
   explicit or spontaneous confirmed disconnect.
+- [x] Latch Android CONFIRM write success in host state before releasing the
+  control owner, and serialize disconnect reset with exact settlement, old
+  effect-channel failure, opening/pump join, and replacement admission.
 
 ### Task 6: Add the target React Native provider and progress surface
 
