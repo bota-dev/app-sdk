@@ -4,6 +4,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Runtime changes require a new version and Apple release checksum.
+      - dependency-name: hpke
+        versions:
+          - "0.14.1"
     groups:
       cargo-minor-patch:
         update-types:
