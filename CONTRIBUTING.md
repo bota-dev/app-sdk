@@ -26,8 +26,10 @@ Rust jobs cache dependencies using the pinned toolchain and save the cache even
 when a later check fails. Caches remain scoped by job. Android's npm cache key
 includes both the repository and React Native lockfiles. Apple XCFramework
 packaging still compiles in an isolated temporary directory; the Rust cache does
-not reuse those temporary build outputs. Compare completed Actions job timings
-and cache hits after rollout before claiming a measured speedup.
+not reuse those temporary build outputs. The maintenance React Native workflow
+baseline is checked out under `.ci/`, outside Cargo's `target/`, so Rust cache
+cleanup cannot remove it before the tooling checks run. Compare completed Actions
+job timings and cache hits after rollout before claiming a measured speedup.
 
 ## Required Checks
 

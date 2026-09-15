@@ -5,6 +5,7 @@
 .idea/
 .vscode/
 .worktrees/
+/.ci/
 *.iml
 *.log
 
