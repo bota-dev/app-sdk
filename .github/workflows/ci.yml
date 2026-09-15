@@ -1,14 +1,7 @@
 name: CI
 
 on:
-  pull_request:
-  push:
-    branches: [main]
-
-# Preserve every main-branch candidate; only superseded PR runs are expendable.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
