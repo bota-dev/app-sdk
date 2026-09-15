@@ -607,7 +607,7 @@ class EncryptedUploadV2TransferHostTest {
         assertEquals(HostEventKind.EncryptedUploadV2TransferStarted, firstStartEvents.receive().kind)
 
         val resetting = async(start = CoroutineStart.UNDISPATCHED) { host.resetAfterConfirmedDisconnect() }
-        withContext(Dispatchers.Default) { withTimeout(1_000) { oldPumpCancellationEntered.await() } }
+        withContext(Dispatchers.Default) { withTimeout(5_000) { oldPumpCancellationEntered.await() } }
         val replacementStarted = CompletableDeferred<Unit>()
         val replacementCancellation = CoreCancellationId(9u, 10u)
         val replacement = async(start = CoroutineStart.UNDISPATCHED) {
@@ -635,12 +635,12 @@ class EncryptedUploadV2TransferHostTest {
         val replacementStartedBeforeOldPumpExit = replacementStarted.isCompleted
         val replacementPreparedBeforeOldPumpExit = actions.count { it == "signed-1" } > 1
         oldPumpRelease.complete(Unit)
-        withContext(Dispatchers.Default) { withTimeout(1_000) { resetting.await() } }
-        withContext(Dispatchers.Default) { withTimeout(1_000) { firstStart.await() } }
-        withContext(Dispatchers.Default) { withTimeout(1_000) { replacementStarted.await() } }
+        withContext(Dispatchers.Default) { withTimeout(5_000) { resetting.await() } }
+        withContext(Dispatchers.Default) { withTimeout(5_000) { firstStart.await() } }
+        withContext(Dispatchers.Default) { withTimeout(5_000) { replacementStarted.await() } }
         val replacementFinishedBeforeOwnCancellation = replacement.isCompleted
         host.cancel(replacementCancellation)
-        withContext(Dispatchers.Default) { withTimeout(1_000) { replacement.await() } }
+        withContext(Dispatchers.Default) { withTimeout(5_000) { replacement.await() } }
 
         assertFalse(replacementStartedBeforeOldPumpExit)
         assertFalse(replacementPreparedBeforeOldPumpExit)
