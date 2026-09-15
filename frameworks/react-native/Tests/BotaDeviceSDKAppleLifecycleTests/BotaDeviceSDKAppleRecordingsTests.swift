@@ -100,11 +100,14 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
         XCTAssertEqual(Set((request["recording"] as! [String: Any]).keys), [
             "uuid", "generation", "ciphertextLength", "ciphertextSha256",
         ])
-        XCTAssertEqual(Set((request["capability"] as! [String: Any]).keys), [
+        let capability = request["capability"] as! [String: Any]
+        XCTAssertEqual(Set(capability.keys), [
             "encodingVersion", "transferProfileVersion", "rawValueHex", "sha256Hex", "flags",
             "maximumSignedBlobBytes", "maximumManifestBytes", "maximumDataPayloadBytes",
             "maximumWindowPackets", "durableCheckpointIntervalBlocks", "maximumMissingSequences",
         ])
+        XCTAssertEqual(capability["encodingVersion"] as? Int, 1)
+        XCTAssertEqual(capability["transferProfileVersion"] as? Int, 2)
         XCTAssertEqual(Set((request["checkpoint"] as! [String: Any]).keys), [
             "version", "uploadSessionId", "ownerRevision", "revision", "nextCiphertextOffset",
             "prefixSha256", "highestContiguousSequence", "transportSessionId", "sinkRegistrationId",

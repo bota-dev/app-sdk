@@ -546,8 +546,8 @@ actor BotaDeviceSDKAppleRecordings {
     ) -> [String: Any] {
         let values = snapshot.capabilities
         return [
-            "encodingVersion": snapshot.rawValue.first ?? 0,
-            "transferProfileVersion": snapshot.rawValue.dropFirst().first ?? 0,
+            "encodingVersion": Int(snapshot.rawValue.first ?? 0),
+            "transferProfileVersion": Int(snapshot.rawValue.dropFirst().first ?? 0),
             "rawValueHex": snapshot.rawValue.hexString,
             "sha256Hex": snapshot.sha256.hexString,
             "flags": values.flags,
