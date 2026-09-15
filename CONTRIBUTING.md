@@ -16,6 +16,19 @@ not need access to those documents to open an issue or propose a change.
 5. Update fixtures, compatibility data, and documentation.
 6. Commit one coherent behavior change.
 
+## CI build time
+
+CI cancels an older run when a new commit updates the same pull request. Each
+main-branch run keeps its own concurrency group so its release candidate can
+finish. All test and packaging gates still run; release publication is unchanged.
+
+Rust jobs cache dependencies using the pinned toolchain and save the cache even
+when a later check fails. Caches remain scoped by job. Android's npm cache key
+includes both the repository and React Native lockfiles. Apple XCFramework
+packaging still compiles in an isolated temporary directory; the Rust cache does
+not reuse those temporary build outputs. Compare completed Actions job timings
+and cache hits after rollout before claiming a measured speedup.
+
 ## Required Checks
 
 ```bash
