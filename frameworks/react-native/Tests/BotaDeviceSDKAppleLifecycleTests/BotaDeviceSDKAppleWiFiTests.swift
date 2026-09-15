@@ -1,4 +1,5 @@
 import BotaAppleSDK
+import Foundation
 import XCTest
 @testable import BotaDeviceSDKAppleAdapter
 
@@ -58,7 +59,9 @@ private actor TestAppleWiFiClient: BotaDeviceSDKAppleWiFiClient {
     }
 
     private(set) var configurationInput: ConfigurationInput?
-    private(set) var subscriptionTerminations = 0
+    private let terminationCapture = WiFiTerminationCapture()
+
+    var subscriptionTerminations: Int { terminationCapture.snapshot() }
 
     func configure(
         _ device: ConnectedDevice,
@@ -80,8 +83,9 @@ private actor TestAppleWiFiClient: BotaDeviceSDKAppleWiFiClient {
         _ device: ConnectedDevice
     ) async throws -> AsyncThrowingStream<WiFiStatusInfo, Error> {
         let pair = AsyncThrowingStream<WiFiStatusInfo, Error>.makeStream()
+        let terminationCapture = terminationCapture
         pair.continuation.onTermination = { @Sendable _ in
-            Task { await self.didTerminate() }
+            terminationCapture.increment()
         }
         pair.continuation.yield(.init(status: .connected, signalStrength: 87, ssid: "Bota"))
         return pair.stream
@@ -95,8 +99,19 @@ private actor TestAppleWiFiClient: BotaDeviceSDKAppleWiFiClient {
     }
 
     func cancelCurrentOperation() async {}
+}
 
-    private func didTerminate() { subscriptionTerminations += 1 }
+private final class WiFiTerminationCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+
+    func increment() {
+        lock.withLock { value += 1 }
+    }
+
+    func snapshot() -> Int {
+        lock.withLock { value }
+    }
 }
 
 private func wifiTestDevice() -> ConnectedDevice {
