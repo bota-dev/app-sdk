@@ -279,6 +279,33 @@ internal data class CoreCommand(
                 "reconnect" -> reconnect(serial)
                 "provision" -> provision(serial, "material")
                 "transfer_recording" -> transferRecording(serial, recording, "sink", 1u)
+                "transfer_encrypted_recording" -> transferEncryptedRecording(
+                    EncryptedUploadV2CommandRequest(
+                        serialNumber = serial,
+                        recordingUuid = recording,
+                        recordingGeneration = 1u,
+                        storageFormat = 3u,
+                        uploadSessionId = UUID.fromString("00112233-4455-6677-8899-aabbccddeeff"),
+                        ownerRevision = 1u,
+                        transportSessionId = 1u,
+                        materialId = "material",
+                        sinkId = "sink",
+                        securityPolicy = 3u,
+                        capabilities = EncryptedUploadV2CapabilitiesValue(
+                            flags = 0x7fu,
+                            maximumSignedBlobBytes = 1_024u,
+                            maximumManifestBytes = 1_024u,
+                            maximumDataPayloadBytes = 180u,
+                            maximumWindowPackets = 8u,
+                            durableCheckpointIntervalBlocks = 4u,
+                            maximumMissingSequences = 3u,
+                        ),
+                        windowPackets = 4u,
+                        dataPayloadBytes = 160u,
+                        ciphertextLength = 330u,
+                        ciphertextSha256 = ByteArray(32) { 0x5a },
+                    ),
+                )
                 "upload_recording" -> uploadRecording(serial, recording, "upload", "destination")
                 "update_firmware" -> updateFirmware(serial, "1.0.0", 1u, 1u, 1u)
                 "read_device_logs" -> readDeviceLogs(serial)

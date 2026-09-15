@@ -74,6 +74,12 @@ behavioral baseline. It remains authoritative until the monorepo implementation
 passes the relevant fixture, workflow, native, application, and physical-device
 acceptance gates.
 
+The public TypeScript surface remains frozen against `0.0.65` at that revision.
+Executable workflow evidence is a separate authority: maintenance SDK `0.0.67`
+at revision `e11fde5be40027ec6cf1985fc0eadb00ece23e65`. CI and tagged-release
+verification run its referenced v2 tests without changing the public-surface
+contract.
+
 Its public TypeScript entrypoint is frozen separately in
 `protocol/baseline/react-native-public-api-0.0.65.json`. The semantic contract
 records 80 exports, expanded type aliases, class static APIs, and every reachable
@@ -130,9 +136,10 @@ carry identifiers, progress, errors, and native file paths while native hosts
 own high-volume files and transfer buffers.
 
 Encrypted Upload v2 remains contract-only in compatibility metadata: the
-canonical vectors, Rust codecs, and native Apple and Android runtimes exist,
-while React Native, firmware advertisement, release, and hardware gates remain
-open. The Rust workflow engine and additive C ABI model v2 session ownership,
+canonical vectors, Rust codecs, native Apple and Android runtimes, target React
+Native facade, and maintenance React Native runtime evidence exist, while
+firmware advertisement, published-release, and hardware gates remain open. The
+Rust workflow engine and additive C ABI model v2 session ownership,
 durable checkpoint ordering, opaque native staging, and receipt-gated
 confirmation. Apple has an internal command mapper, an
 exhaustive twelve-effect host port with typed failure and staged-notification
@@ -410,7 +417,7 @@ Kotlin workflow state machine exists: one closeable single-thread coroutine
 runtime submits the additive command set to Rust, drains all 47 effect and 16
 notification kinds, and returns all 51 correlated host-event kinds with the
 original request and 128-bit cancellation IDs. API-35 instrumentation verifies
-the Android resource generated from all 29 canonical workflow scenarios. An
+the Android resource generated from all 33 canonical workflow scenarios. An
 exhaustive `HostEffectExecutor` routes all 47 effects through separate BLE,
 persistence, secure-storage, network, material, recording-sink, firmware-blob,
 and Encrypted Upload v2 ports. It owns timers, bounds returned bytes, permits
@@ -735,8 +742,8 @@ Cancellation reaches that ABI owner before native host cancellation begins, so
 an immediate cancellation cannot be followed by registration of a queued start
 effect. Unexpected stale host events are rejected by Rust without releasing the
 current owner. The
-compact SwiftPM workflow resource is generated from all seven canonical suites;
-package tests reject drift and cover all 29 scenario labels. Concrete native
+compact SwiftPM workflow resource is generated from all eight canonical suites;
+package tests reject drift and cover all 33 scenario labels. Concrete native
 effect implementations route through the native hosts described below.
 
 `HostEffectExecutor` converts the ABI boundary into six narrow native host

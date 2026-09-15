@@ -222,6 +222,143 @@
       "errorCode": "not_connected"
     },
     {
+      "workflow": "encrypted-upload-v2",
+      "name": "encrypted-upload-v2-success",
+      "classification": "positive",
+      "command": "transfer_encrypted_recording",
+      "capabilities": [
+        "ble",
+        "persistence",
+        "network_transfer",
+        "progress",
+        "host_material",
+        "recording_sink"
+      ],
+      "inputs": [
+        "capability_read",
+        "profile_selected",
+        "checkpoint_loaded",
+        "sink_truncated",
+        "session_prepared",
+        "transfer_started",
+        "transfer_completed",
+        "artifacts_staged",
+        "receipt_accepted",
+        "recording_confirmed"
+      ],
+      "effects": [
+        "read_capabilities",
+        "select_profile",
+        "load_checkpoint",
+        "truncate_sink",
+        "prepare_session",
+        "start_v2_transfer",
+        "stage_artifacts",
+        "await_receipt",
+        "confirm_with_receipt",
+        "delete_checkpoint"
+      ],
+      "notifications": [
+        "started",
+        "encrypted_upload_v2_staged",
+        "completed"
+      ],
+      "terminalStatus": "completed"
+    },
+    {
+      "workflow": "encrypted-upload-v2",
+      "name": "encrypted-upload-v2-mixed-profile-rejection",
+      "classification": "rejection",
+      "command": "transfer_encrypted_recording",
+      "capabilities": [
+        "ble",
+        "persistence",
+        "network_transfer",
+        "progress",
+        "host_material",
+        "recording_sink"
+      ],
+      "inputs": [
+        "profile_selected",
+        "mixed_profile_message"
+      ],
+      "effects": [
+        "abort_v2",
+        "retain_recording"
+      ],
+      "notifications": [
+        "started",
+        "failed"
+      ],
+      "terminalStatus": "failed",
+      "errorCode": "protocol_rejected"
+    },
+    {
+      "workflow": "encrypted-upload-v2",
+      "name": "encrypted-upload-v2-cancellation-retains-recording",
+      "classification": "cancellation",
+      "command": "transfer_encrypted_recording",
+      "capabilities": [
+        "ble",
+        "persistence",
+        "network_transfer",
+        "progress",
+        "host_material",
+        "recording_sink"
+      ],
+      "inputs": [
+        "profile_selected",
+        "cancelled"
+      ],
+      "effects": [
+        "abort_v2",
+        "retain_recording"
+      ],
+      "notifications": [
+        "started",
+        "cancelled"
+      ],
+      "terminalStatus": "cancelled"
+    },
+    {
+      "workflow": "encrypted-upload-v2",
+      "name": "encrypted-upload-v2-checkpoint-resume",
+      "classification": "resume",
+      "command": "transfer_encrypted_recording",
+      "capabilities": [
+        "ble",
+        "persistence",
+        "network_transfer",
+        "progress",
+        "host_material",
+        "recording_sink"
+      ],
+      "inputs": [
+        "checkpoint_loaded",
+        "sink_truncated",
+        "session_prepared",
+        "transfer_started",
+        "window_staged_missing",
+        "window_repaired",
+        "checkpoint_saved",
+        "window_acknowledged"
+      ],
+      "effects": [
+        "load_checkpoint",
+        "truncate_sink",
+        "prepare_session",
+        "start_v2_transfer",
+        "repair_window",
+        "save_checkpoint",
+        "acknowledge_window"
+      ],
+      "notifications": [
+        "started",
+        "progress"
+      ],
+      "terminalStatus": "running"
+    },
+    {
       "workflow": "factory-reset",
       "name": "factory-reset-success",
       "classification": "positive",

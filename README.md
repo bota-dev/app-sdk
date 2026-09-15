@@ -33,11 +33,12 @@ decoders, byte-exact serializers, stable models/errors, and deterministic
 discovery, connection-recovery, provisioning, authenticated-reset, resumable
 recording-transfer, guarded upload-handoff, and resumable firmware-update
 reducers, plus exclusive device-log subscription ownership and line delivery.
-Twenty-nine canonical workflow scenarios are schema validated, pinned to the
-React Native `0.0.65` baseline, and backed by 25 executable Rust tests covering
-positive, rejection, cancellation, and resume or restart-recovery behavior.
-The same pinned SDK now has a semantic TypeScript compatibility contract for
-all 80 root exports, expanded type aliases, static factories, and reachable
+Thirty-three canonical workflow scenarios are schema validated, pinned to the
+React Native `0.0.67` executable workflow baseline, and backed by 29 executable
+Rust tests covering positive, rejection, cancellation, and resume or
+restart-recovery behavior. The separate `0.0.65` baseline remains the semantic
+TypeScript compatibility contract for all 80 root exports, expanded type
+aliases, static factories, and reachable
 public members; future React Native packages must match that digest in addition
 to the protocol and workflow gates. A private `frameworks/react-native`
 foundation now pins the apps' React Native 0.86.3 New Architecture floor,
@@ -108,7 +109,7 @@ settings, and expose stable machine-readable errors. A single-thread coroutine
 runtime now owns every Android JNI call, preserves 128-bit cancellation and
 host callback correlation, and maps all 10 commands, 30 effects, 34 events,
 and 12 notifications. API 35 instrumentation validates the generated resource
-covering all 29 canonical workflow scenarios. Its exhaustive host executor
+covering all 33 canonical workflow scenarios. Its exhaustive host executor
 routes every effect through a narrow typed native port, validates callback
 kinds and payload bounds, and preserves correlation while mapping platform
 failures to stable ABI events. The Android BluetoothGatt host now keeps
@@ -278,7 +279,7 @@ tested against the shared Rust implementation, including unknown wire values
 and Bota Note connection normalization. A serialized Swift actor now establishes
 the ABI workflow owner and registers initially queued host effects before
 returning each stream, drives the real Rust workflow engine, preserves
-request/cancellation correlation, and checks all 29 canonical workflow traces
+request/cancellation correlation, and checks all 33 canonical workflow traces
 from generated SwiftPM resources. Its
 host executor exhaustively routes the released effects plus all twelve additive
 Encrypted Upload v2 effects through narrow native ports, bounds raw payloads,

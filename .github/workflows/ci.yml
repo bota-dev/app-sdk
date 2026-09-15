@@ -20,11 +20,21 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Check out maintenance React Native workflow baseline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: bota-dev/react-native-sdk
+          ref: e11fde5be40027ec6cf1985fc0eadb00ece23e65
+          path: target/react-native-workflow-baseline
+
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            target/react-native-workflow-baseline/package-lock.json
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
@@ -38,8 +48,15 @@ jobs:
       - name: Install Node.js dependencies
         run: npm ci
 
+      - name: Install maintenance React Native workflow dependencies
+        working-directory: target/react-native-workflow-baseline
+        run: npm ci
+
       - name: Test repository tooling
         run: npm run test:tooling
+
+      - name: Verify cross-SDK workflow evidence
+        run: npm run test:workflows -- --sdk-path target/react-native-workflow-baseline
 
       - name: Validate React Native public API contract
         run: node tools/baseline/react-native-api-contract.mjs validate --contract protocol/baseline/react-native-public-api-0.0.65.json --baseline-metadata protocol/baseline/react-native-sdk-0.0.65.json

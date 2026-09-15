@@ -21,9 +21,9 @@ class WorkflowConformanceTest {
         val scenarios = suite.getJSONArray("scenarios").objects()
 
         assertEquals(1, suite.getInt("schemaVersion"))
-        assertEquals(29, scenarios.size)
-        assertEquals(29, scenarios.map { it.getString("name") }.toSet().size)
-        assertEquals(7, scenarios.map { it.getString("workflow") }.toSet().size)
+        assertEquals(33, scenarios.size)
+        assertEquals(33, scenarios.map { it.getString("name") }.toSet().size)
+        assertEquals(8, scenarios.map { it.getString("workflow") }.toSet().size)
 
         scenarios.forEach { scenario ->
             val name = scenario.getString("name")
@@ -42,16 +42,18 @@ class WorkflowConformanceTest {
         val effectVocabulary = setOf(
             "abort", "append_new_sequence", "append_sink", "cancel_timer", "cleanup_subscription",
             "confirm_delete", "connect", "connect_next", "delete_checkpoint", "delete_result", "disconnect",
-            "discover_services", "discard_sink", "download", "final_ack", "finalize_sink", "load_checkpoint",
-            "nack", "prepare_material", "read_blob_chunks", "read_blob_from_zero", "read_nonce",
+            "discover_services", "abort_v2", "acknowledge_window", "await_receipt", "confirm_with_receipt",
+            "discard_sink", "download", "final_ack", "finalize_sink", "load_checkpoint", "nack",
+            "prepare_material", "prepare_session", "read_blob_chunks", "read_blob_from_zero", "read_capabilities", "read_nonce",
             "read_public_key", "read_serial", "read_status", "read_version", "reconnect", "restart_transfer",
-            "save_checkpoint", "save_identity", "save_result", "skip_durable_sequence", "start_logging",
-            "start_scan", "start_transfer", "start_upload", "stop_logging", "stop_scan", "subscribe",
+            "repair_window", "retain_recording", "save_checkpoint", "save_identity", "save_result", "select_profile",
+            "skip_durable_sequence", "stage_artifacts", "start_logging", "start_scan", "start_transfer", "start_upload",
+            "start_v2_transfer", "stop_logging", "stop_scan", "subscribe",
             "truncate_sink", "truncate_to_checkpoint", "unsubscribe", "verify", "write_chunks", "write_grant",
             "write_receipt", "write_reset",
         )
         val notificationVocabulary = setOf(
-            "ble_fallback_ready", "cancelled", "completed", "connection_established", "device_log", "failed",
+            "ble_fallback_ready", "cancelled", "completed", "connection_established", "device_log", "encrypted_upload_v2_staged", "failed",
             "firmware_progress", "progress", "retrying", "started",
         )
         val terminalStatuses = setOf("idle", "running", "completed", "cancelled", "failed")

@@ -399,6 +399,33 @@ extension CoreCommand {
         case "reconnect": return .reconnect(serialNumber: serial)
         case "provision": return .provision(serialNumber: serial, materialID: "material")
         case "transfer_recording": return .transferRecording(serialNumber: serial, recordingUUID: recording, sinkID: "sink", totalUnits: 1)
+        case "transfer_encrypted_recording":
+            return .transferEncryptedRecording(.init(
+                serialNumber: serial,
+                recordingUUID: recording,
+                recordingGeneration: 1,
+                storageFormat: 3,
+                uploadSessionID: UUID(uuidString: "00112233-4455-6677-8899-aabbccddeeff")!,
+                ownerRevision: 1,
+                transportSessionID: 1,
+                materialID: "material",
+                sinkID: "sink",
+                profile: .encryptedUploadV2,
+                securityPolicy: .v2Required,
+                capabilities: .init(
+                    flags: 0x7f,
+                    maximumSignedBlobBytes: 1_024,
+                    maximumManifestBytes: 1_024,
+                    maximumDataPayloadBytes: 180,
+                    maximumWindowPackets: 8,
+                    durableCheckpointIntervalBlocks: 4,
+                    maximumMissingSequences: 3
+                ),
+                windowPackets: 4,
+                dataPayloadBytes: 160,
+                ciphertextLength: 330,
+                ciphertextSHA256: Data(repeating: 0x5a, count: 32)
+            ))
         case "upload_recording": return .uploadRecording(serialNumber: serial, recordingUUID: recording, uploadID: "upload", destinationID: "destination")
         case "update_firmware": return .updateFirmware(serialNumber: serial, version: "1.0.0", sizeBytes: 1, crc32: 1, downloadID: 1)
         case "read_device_logs": return .readDeviceLogs(serialNumber: serial)

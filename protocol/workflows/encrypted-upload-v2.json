@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "workflow": "encrypted-upload-v2",
+  "baseline": {
+    "package": "@bota.dev/react-native-sdk",
+    "version": "0.0.67",
+    "revision": "e11fde5be40027ec6cf1985fc0eadb00ece23e65"
+  },
+  "scenarios": [
+    {
+      "name": "encrypted-upload-v2-success",
+      "classification": "positive",
+      "sourceTest": "__tests__/encryptedUploadV2RecordingManager.test.ts#accepts canonical profile 3 for an ordinary upload through receipt-confirmed deletion",
+      "rustTest": "encrypted_upload_v2_workflow::staging_notification_precedes_receipt_and_only_receipt_acceptance_emits_confirm",
+      "runtimeTests": {
+        "apple": "platforms/apple/Tests/BotaAppleSDKTests/EncryptedUploadV2HostRoutingTests.swift#testRealCoreEnginePreservesStagingBeforeReceiptAndConfirmation",
+        "android": "platforms/android/sdk/src/test/kotlin/dev/bota/sdk/internal/host/EncryptedUploadV2TransferHostTest.kt#successfulConfirmHandoffIsAtomicBeforeHostContinuation",
+        "targetReactNative": "frameworks/react-native/test/device-client.test.mjs#encrypted upload v2 selects only an opaque native registration and maps progress"
+      },
+      "command": "transfer_encrypted_recording",
+      "capabilities": ["ble", "persistence", "network_transfer", "progress", "host_material", "recording_sink"],
+      "inputs": ["capability_read", "profile_selected", "checkpoint_loaded", "sink_truncated", "session_prepared", "transfer_started", "transfer_completed", "artifacts_staged", "receipt_accepted", "recording_confirmed"],
+      "expected": {
+        "effects": ["read_capabilities", "select_profile", "load_checkpoint", "truncate_sink", "prepare_session", "start_v2_transfer", "stage_artifacts", "await_receipt", "confirm_with_receipt", "delete_checkpoint"],
+        "notifications": ["started", "encrypted_upload_v2_staged", "completed"],
+        "terminalStatus": "completed"
+      }
+    },
+    {
+      "name": "encrypted-upload-v2-mixed-profile-rejection",
+      "classification": "rejection",
+      "sourceTest": "__tests__/encryptedUploadV2RecordingManager.test.ts#never confirms or downgrades after a v2 finalization failure",
+      "rustTest": "encrypted_upload_v2_workflow::mixed_profile_and_host_failure_are_terminal_without_fallback_or_confirm",
+      "runtimeTests": {
+        "apple": "platforms/apple/Tests/BotaAppleSDKTests/RecordingManagerTests.swift#testEncryptedV2ReadsFreshSnapshotBeforeApplicationSelectionAndStartsOnlyV2",
+        "android": "platforms/android/sdk/src/test/kotlin/dev/bota/sdk/internal/host/EncryptedUploadV2TransferHostTest.kt#mixedProfileTransportEmitsTheDedicatedRustWorkflowEvent",
+        "targetReactNative": "frameworks/react-native/test/device-client.test.mjs#a v2 provider failure must not invoke the legacy transfer"
+      },
+      "command": "transfer_encrypted_recording",
+      "capabilities": ["ble", "persistence", "network_transfer", "progress", "host_material", "recording_sink"],
+      "inputs": ["profile_selected", "mixed_profile_message"],
+      "expected": {
+        "effects": ["abort_v2", "retain_recording"],
+        "notifications": ["started", "failed"],
+        "terminalStatus": "failed",
+        "errorCode": "protocol_rejected"
+      }
+    },
+    {
+      "name": "encrypted-upload-v2-cancellation-retains-recording",
+      "classification": "cancellation",
+      "sourceTest": "__tests__/encryptedUploadV2RecordingManager.test.ts#aborts and cancels when the consumer stops an unconfirmed generator",
+      "rustTest": "encrypted_upload_v2_workflow::cancellation_after_selection_has_abort_and_no_fallback_or_confirm",
+      "runtimeTests": {
+        "apple": "platforms/apple/Tests/BotaAppleSDKTests/RecordingManagerTests.swift#testEncryptedV2CallerCancellationCancelsTheRunningEngineBeforeCompletion",
+        "android": "platforms/android/sdk/src/test/kotlin/dev/bota/sdk/internal/bluetooth/EncryptedUploadV2TransferControlTest.kt#cancellationBeforeConfirmAbortsAndNeverSendsConfirm",
+        "targetReactNative": "frameworks/react-native/test/device-client.test.mjs#a v2 provider failure must not invoke the legacy transfer"
+      },
+      "command": "transfer_encrypted_recording",
+      "capabilities": ["ble", "persistence", "network_transfer", "progress", "host_material", "recording_sink"],
+      "inputs": ["profile_selected", "cancelled"],
+      "expected": {
+        "effects": ["abort_v2", "retain_recording"],
+        "notifications": ["started", "cancelled"],
+        "terminalStatus": "cancelled"
+      }
+    },
+    {
+      "name": "encrypted-upload-v2-checkpoint-resume",
+      "classification": "resume",
+      "sourceTest": "__tests__/encryptedUploadV2RecordingManager.test.ts#resumes the same accepted replacement checkpoint without resetting its offset",
+      "rustTest": "encrypted_upload_v2_workflow::resume_repair_persists_before_ack_and_returns_ownership_to_the_transfer",
+      "runtimeTests": {
+        "apple": "platforms/apple/Tests/BotaAppleSDKTests/EncryptedUploadV2TransferHostTests.swift#testCheckpointSavePrecedesWindowAckAndResumesTheStartStreamToEOF",
+        "android": "platforms/android/sdk/src/test/kotlin/dev/bota/sdk/internal/bluetooth/EncryptedUploadV2TransferReceiverTest.kt#resumeTruncatesUncommittedTailAndVerifiesPrefix",
+        "targetReactNative": "frameworks/react-native/test/device-client.test.mjs#encrypted upload v2 selects only an opaque native registration and maps progress"
+      },
+      "command": "transfer_encrypted_recording",
+      "capabilities": ["ble", "persistence", "network_transfer", "progress", "host_material", "recording_sink"],
+      "inputs": ["checkpoint_loaded", "sink_truncated", "session_prepared", "transfer_started", "window_staged_missing", "window_repaired", "checkpoint_saved", "window_acknowledged"],
+      "expected": {
+        "effects": ["load_checkpoint", "truncate_sink", "prepare_session", "start_v2_transfer", "repair_window", "save_checkpoint", "acknowledge_window"],
+        "notifications": ["started", "progress"],
+        "terminalStatus": "running"
+      }
+    }
+  ]
+}

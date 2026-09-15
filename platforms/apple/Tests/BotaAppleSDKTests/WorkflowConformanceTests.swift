@@ -11,9 +11,9 @@ final class WorkflowConformanceTests: XCTestCase {
         let suite = try JSONDecoder().decode(WorkflowFixtureSuite.self, from: Data(contentsOf: resource))
 
         XCTAssertEqual(suite.schemaVersion, 1)
-        XCTAssertEqual(suite.scenarios.count, 29)
-        XCTAssertEqual(Set(suite.scenarios.map(\.name)).count, 29)
-        XCTAssertEqual(Set(suite.scenarios.map(\.workflow)).count, 7)
+        XCTAssertEqual(suite.scenarios.count, 33)
+        XCTAssertEqual(Set(suite.scenarios.map(\.name)).count, 33)
+        XCTAssertEqual(Set(suite.scenarios.map(\.workflow)).count, 8)
 
         for scenario in suite.scenarios {
             XCTAssertNotNil(CoreCommand.fixture(named: scenario.command), scenario.name)
@@ -47,15 +47,17 @@ private enum WorkflowTraceVocabulary {
     static let effects: Set<String> = [
         "abort", "append_new_sequence", "append_sink", "cancel_timer", "cleanup_subscription",
         "confirm_delete", "connect", "connect_next", "delete_checkpoint", "delete_result", "disconnect", "discover_services",
-        "discard_sink", "download", "final_ack", "finalize_sink", "load_checkpoint", "nack", "prepare_material",
+        "abort_v2", "acknowledge_window", "await_receipt", "confirm_with_receipt", "discard_sink", "download",
+        "final_ack", "finalize_sink", "load_checkpoint", "nack", "prepare_material", "prepare_session",
+        "read_capabilities", "repair_window", "retain_recording", "select_profile", "stage_artifacts",
         "read_blob_chunks", "read_blob_from_zero", "read_nonce", "read_public_key", "read_serial", "read_status",
         "read_version", "reconnect", "restart_transfer", "save_checkpoint", "save_identity", "save_result",
-        "skip_durable_sequence", "start_logging", "start_scan", "start_transfer", "start_upload", "stop_logging",
+        "skip_durable_sequence", "start_logging", "start_scan", "start_transfer", "start_upload", "start_v2_transfer", "stop_logging",
         "stop_scan", "subscribe", "truncate_sink", "truncate_to_checkpoint", "unsubscribe", "verify",
         "write_chunks", "write_grant", "write_receipt", "write_reset",
     ]
     static let notifications: Set<String> = [
-        "ble_fallback_ready", "cancelled", "completed", "connection_established", "device_log", "failed",
+        "ble_fallback_ready", "cancelled", "completed", "connection_established", "device_log", "encrypted_upload_v2_staged", "failed",
         "firmware_progress", "progress", "retrying", "started",
     ]
     static let terminalStatuses: Set<String> = ["idle", "running", "completed", "cancelled", "failed"]

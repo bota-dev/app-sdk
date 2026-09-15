@@ -9,6 +9,10 @@
     "version": "0.0.65",
     "revision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4"
   },
+  "reactNativeWorkflowBaseline": {
+    "version": "0.0.67",
+    "revision": "e11fde5be40027ec6cf1985fc0eadb00ece23e65"
+  },
   "nativeAbi": {
     "version": 1,
     "status": "foundation_verified",
@@ -27,6 +31,9 @@
     "appleFacadeInspection": true,
     "androidFacadeInspection": true,
     "reactNativeBridgeBytes": false,
+    "targetReactNativeFacadeInspection": true,
+    "maintenanceReactNativeRuntime": true,
+    "crossSdkWorkflowEvidence": true,
     "runtimeWorkflow": false,
     "firmwareAdvertised": false,
     "status": "contract_only"
@@ -201,6 +208,12 @@
     },
     {
       "workflow": "recording-transfer",
+      "scenarios": 4,
+      "classifications": ["positive", "rejection", "cancellation", "resume"],
+      "status": "supported"
+    },
+    {
+      "workflow": "encrypted-upload-v2",
       "scenarios": 4,
       "classifications": ["positive", "rejection", "cancellation", "resume"],
       "status": "supported"

@@ -48,9 +48,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   cancellation IDs when returning callbacks.
 - High-volume recording bytes stay off JavaScript and Dart bridges.
 - Keep `encryptedUploadV2` compatibility metadata at `contract_only` with
-  `runtimeWorkflow` and `firmwareAdvertised` false until the remaining React
-  Native, firmware, release, and hardware gates are complete. React Native
+  `runtimeWorkflow` and `firmwareAdvertised` false until the remaining
+  firmware, published-release, and hardware gates are complete. React Native
   Codegen must not carry ciphertext, manifests, authorizations, or receipts.
+- Keep the frozen public API authority in `reactNativeBaseline` at maintenance
+  SDK `0.0.65`. Executable workflow evidence uses the separate
+  `reactNativeWorkflowBaseline` pinned to maintenance SDK `0.0.67`; CI and tag
+  verification must check out that exact revision and run its referenced tests.
 - `core/device-sdk-core/src/model/upload_profile.rs` is a side-effect-free
   policy/capability validator only. Its presence does not authorize a v2 START
   or change `runtimeWorkflow`; historical P10 requires an observed header.
@@ -427,7 +431,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   an exact peripheral/GATT-generation confirmed disconnect. Its atomic checkpoint
   catalog merges every valid earlier split checkpoint/index pair, including when
   a catalog or only its AtomicFile backup already exists.
-- Keep Android `WorkflowFixtures` generated from all seven canonical workflow
+- Keep Android `WorkflowFixtures` generated from all eight canonical workflow
   suites. `preDebugAndroidTestBuild` must reject stale protocol or workflow
   resources before packaged instrumentation runs.
 - Keep Android host effects exhaustive. Each effect routes to one typed native

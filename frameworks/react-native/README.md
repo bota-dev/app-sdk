@@ -83,6 +83,9 @@ downgrades to a legacy profile.
 
 Runtime compatibility metadata remains disabled until the separate firmware,
 release, and hardware gates pass; this API does not advertise device support.
+Its target-facade tests and the maintenance SDK `0.0.67` runtime tests are
+cross-referenced by the same canonical v2 workflow evidence in CI and tagged
+release verification. The frozen public compatibility surface remains `0.0.65`.
 
 ## Documentation
 

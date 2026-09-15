@@ -65,7 +65,8 @@ Kotlin 2.1.20, TypeScript 6, React Native Codegen, XCTest, JUnit, and Jest 30.
   separately allocated `0406..040B` surface and reject mixed messages.
 - Keep `protocol/compatibility/firmware-compatibility.json` at
   `status: contract_only`, `runtimeWorkflow: false`, and
-  `firmwareAdvertised: false` until Tasks 1-8 are complete.
+  `firmwareAdvertised: false` until Tasks 1-8 and the separate firmware,
+  published-release, and physical-hardware gates are complete.
 - ABI v1 changes are additive only. Existing packet kinds, field IDs, symbols,
   and ownership rules cannot change meaning.
 - Durable checkpoints contain identifiers, digests, revisions, offsets,
@@ -162,11 +163,11 @@ logs and persistent queue serialization.
 - [x] Emit terminal staging evidence before waiting for the application-owned
   finalization result and receipt.
 
-The existing `protocol/workflows/schema.json` is deliberately tied to the
-released `@bota.dev/react-native-sdk` `0.0.65` baseline. A v2 cross-SDK trace
-would falsely claim that baseline implements this workflow, so the v2 trace is
-deferred to Task 8 after the maintenance SDK has a real source test and both
-runtimes can consume the same trace.
+The frozen public TypeScript contract remains tied to released
+`@bota.dev/react-native-sdk` `0.0.65`. Executable workflow evidence is tracked
+separately by `reactNativeWorkflowBaseline`, which now pins maintenance SDK
+`0.0.67`; this permits a canonical v2 trace without falsely claiming that the
+older public-API baseline implements v2.
 
 ### Task 3: Extend frozen ABI v1 additively
 
@@ -281,32 +282,35 @@ runtimes can consume the same trace.
 
 ### Task 6: Add the target React Native provider and progress surface
 
-- [ ] Add only capability/profile/identifier/checkpoint/progress/error and
+- [x] Add only capability/profile/identifier/checkpoint/progress/error and
   opaque registration-ID fields to Codegen.
-- [ ] Add static tests forbidding v2 DATA, authorization, manifest, receipt,
+- [x] Add static tests forbidding v2 DATA, authorization, manifest, receipt,
   staging URL/header, and native file bytes on the Codegen surface.
-- [ ] Keep the legacy provider and public `BotaClient` behavior unchanged.
+- [x] Keep the legacy provider and public `BotaClient` behavior unchanged.
 
 ### Task 7: Implement maintenance `react-native-sdk` batch-v2
 
-- [ ] Extend `ProtocolHandler` with the dedicated v2 characteristics and an
+- [x] Extend `ProtocolHandler` with the dedicated v2 characteristics and an
   opaque sink; do not reuse the v1/P10 parser or packet types.
-- [ ] Persist only resumable checkpoint metadata. Keep authorization, receipt,
+- [x] Persist only resumable checkpoint metadata. Keep authorization, receipt,
   manifest, staging credentials, and ciphertext out of AsyncStorage queue JSON.
-- [ ] Stage the exact ciphertext bytes, submit the opaque manifest, wait for the
+- [x] Stage the exact ciphertext bytes, submit the opaque manifest, wait for the
   application receipt, and confirm deletion only after device acceptance.
-- [ ] Preserve all existing `syncRecording` and `syncAllRecordings` behavior for
+- [x] Preserve all existing `syncRecording` and `syncAllRecordings` behavior for
   the legacy provider overload.
 
 ### Task 8: Cross-SDK conformance and release gating
 
-- [ ] Run canonical/malformed vectors and identical workflow traces through
+- [x] Run canonical/malformed vectors and identical workflow traces through
   Rust, Swift, Kotlin, target React Native, and maintenance React Native.
-- [ ] Verify v1/P10 fixture digests, public surface compatibility, cancellation,
+- [x] Verify v1/P10 fixture digests, public surface compatibility, cancellation,
   restart recovery, and every retain-device failure.
-- [ ] Update compatibility metadata only when both SDK runtime suites pass; keep
+- [x] Update compatibility metadata only when both SDK runtime suites pass; keep
   `firmwareAdvertised: false` until firmware and hardware gates finish.
-- [ ] Publish no package and enable no policy cohort as part of this plan.
+- [x] Publish no package and enable no policy cohort as part of this plan.
+
+Source verification is recorded in
+`release/evidence/1.1.0-source-encrypted-upload-v2-sdk-runtime.md`.
 
 ## Verification Commands
 
