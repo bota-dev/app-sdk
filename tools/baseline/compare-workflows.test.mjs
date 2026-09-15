@@ -138,6 +138,14 @@ test('release verification executes the pinned maintenance workflow baseline', (
   assert.doesNotMatch(workflow, /path:\s*target\/react-native-workflow-baseline/);
 });
 
+test('CI generates unpublished Apple evidence without relaxing the release checksum gate', () => {
+  const ci = readFileSync('.github/workflows/ci.yml', 'utf8');
+  const release = readFileSync('.github/workflows/release.yml', 'utf8');
+  assert.match(ci, /tools\/apple\/package-release\.sh --evidence-only/);
+  assert.match(release, /run:\s*tools\/apple\/package-release\.sh\s*$/m);
+  assert.doesNotMatch(release, /package-release\.sh --evidence-only/);
+});
+
 test('all committed workflow suites satisfy the conformance contract', () => {
   assert.deepEqual(validateWorkflowDirectory('protocol/workflows'), []);
 });

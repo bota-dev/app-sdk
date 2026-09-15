@@ -11,8 +11,9 @@ PACKAGE_MANIFEST_MODE=check
 case ${1:-} in
     "") ;;
     --write-package-manifest) PACKAGE_MANIFEST_MODE=write ;;
+    --evidence-only) PACKAGE_MANIFEST_MODE=evidence ;;
     *)
-        printf 'usage: %s [--write-package-manifest]\n' "$0" >&2
+        printf 'usage: %s [--write-package-manifest|--evidence-only]\n' "$0" >&2
         exit 1
         ;;
 esac
@@ -117,7 +118,7 @@ if [ "$PACKAGE_MANIFEST_MODE" = write ]; then
         --sdk-version "$SDK_VERSION" \
         --artifact-checksum "$SWIFTPM_CHECKSUM" \
         --output "$ROOT/Package.swift"
-else
+elif [ "$PACKAGE_MANIFEST_MODE" = check ]; then
     $NODE "$ROOT/tools/release/generate-public-swift-package.mjs" \
         --sdk-version "$SDK_VERSION" \
         --artifact-checksum "$SWIFTPM_CHECKSUM" \

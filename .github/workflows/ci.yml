@@ -360,7 +360,7 @@ jobs:
         run: node --test tools/release/generate-apple-*.test.mjs
 
       - name: Generate unpublished Apple release evidence
-        run: tools/apple/package-release.sh
+        run: tools/apple/package-release.sh --evidence-only
 
       - name: Upload unpublished Apple evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

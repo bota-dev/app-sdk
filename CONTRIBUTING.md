@@ -30,6 +30,9 @@ not reuse those temporary build outputs. The maintenance React Native workflow
 baseline is checked out under `.ci/`, outside Cargo's `target/`, so Rust cache
 cleanup cannot remove it before the tooling checks run. Compare completed Actions
 job timings and cache hits after rollout before claiming a measured speedup.
+PR and main CI generate commit-specific Apple evidence with
+`tools/apple/package-release.sh --evidence-only`; protected release tags retain
+the exact root Swift package checksum gate.
 
 ## Required Checks
 
