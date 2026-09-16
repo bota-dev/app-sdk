@@ -9,8 +9,9 @@
 - Added generated Pigeon bindings backed by the public Apple and Android native
   facades. Recording bodies, firmware bodies, raw Bluetooth packets, and
   device-private material remain outside Dart event channels.
-- Added all 29 canonical workflow conformance traces and disposable Android and
-  iOS release consumers.
+- Added all 29 Flutter-supported canonical workflow conformance traces;
+  explicitly classified the four Encrypted Upload v2 traces as unsupported;
+  and added disposable Android and iOS release consumers.
 - Added a device-management example whose backend callbacks fail closed until
   the application supplies request-bound material.
 - Added deterministic package/archive inventory, dependency-license evidence,

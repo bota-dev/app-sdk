@@ -82,7 +82,10 @@ tools/flutter/run-dart.sh format --output=none --set-exit-if-changed \
   frameworks/flutter/bota_flutter_sdk/example/lib
 ```
 
-The workflow conformance suite must discover exactly the 29 scenarios from all
-canonical `protocol/workflows/*.json` files. The fake host may translate each
-fixture's decided terminal outcome into typed bridge values; it must not copy a
-workflow reducer into Dart.
+The workflow conformance suite must discover all 33 scenarios from the
+canonical `protocol/workflows/*.json` files, replay the 29 Flutter-supported
+traces, and explicitly classify the four Encrypted Upload v2 traces as
+unsupported. The fake host may translate each fixture's decided terminal
+outcome into typed bridge values; it must not copy a workflow reducer into
+Dart. Encrypted Upload v2 staging and receipt-confirmed deletion are not
+exposed by this beta and must not be routed through legacy batch transfer.

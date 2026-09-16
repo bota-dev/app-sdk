@@ -37,6 +37,12 @@ Flutter targets are also unsupported until their own capability and lifecycle
 plans pass. Unsupported operations fail before native device state changes and
 are absent from the advertised Flutter capability set.
 
+The contract-only Encrypted Upload v2 workflow added to the native and React
+Native facades after this design remains outside the first Flutter beta. Its
+four canonical traces are discovered and explicitly classified as unsupported;
+Flutter continues to use retained native-file handoff and explicit
+confirmation.
+
 ## Approaches Considered
 
 ### Chosen: one native Flutter plugin with generated typed channels

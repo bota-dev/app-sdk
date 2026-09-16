@@ -12,17 +12,37 @@ import 'support/in_memory_bota_host_api.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final List<_WorkflowScenario> scenarios = _loadCanonicalScenarios();
+  final List<_WorkflowScenario> canonicalScenarios = _loadCanonicalScenarios();
+  final List<_WorkflowScenario> supportedScenarios = canonicalScenarios
+      .where(
+        (_WorkflowScenario scenario) =>
+            _expectedTypedTraces.containsKey(scenario.name),
+      )
+      .toList();
 
-  test('discovers exactly the 29 canonical workflow traces', () {
-    expect(scenarios, hasLength(29));
+  test('classifies all 33 canonical traces without overstating support', () {
+    expect(canonicalScenarios, hasLength(33));
     expect(
-      scenarios.map((_WorkflowScenario value) => value.name).toSet(),
+      supportedScenarios.map((_WorkflowScenario value) => value.name).toSet(),
       _expectedTypedTraces.keys.toSet(),
+    );
+    final List<_WorkflowScenario> unsupportedScenarios = canonicalScenarios
+        .where(
+          (_WorkflowScenario scenario) =>
+              !_expectedTypedTraces.containsKey(scenario.name),
+        )
+        .toList();
+    expect(
+      unsupportedScenarios.map((_WorkflowScenario value) => value.name).toSet(),
+      _unsupportedCanonicalTraces,
+    );
+    expect(
+      unsupportedScenarios.map((_WorkflowScenario value) => value.command),
+      everyElement('transfer_encrypted_recording'),
     );
   });
 
-  for (final _WorkflowScenario scenario in scenarios) {
+  for (final _WorkflowScenario scenario in supportedScenarios) {
     test('${scenario.workflow}/${scenario.name}', () async {
       final List<String> actual = await _replayThroughFakeHost(scenario);
       expect(actual, _expectedTypedTraces[scenario.name]);
@@ -171,6 +191,13 @@ const Set<String> _streamCommands = <String>{
   'upload_recording',
   'update_firmware',
   'read_device_logs',
+};
+
+const Set<String> _unsupportedCanonicalTraces = <String>{
+  'encrypted-upload-v2-success',
+  'encrypted-upload-v2-mixed-profile-rejection',
+  'encrypted-upload-v2-cancellation-retains-recording',
+  'encrypted-upload-v2-checkpoint-resume',
 };
 
 final Map<String, List<String>> _expectedTypedTraces = <String, List<String>>{

@@ -56,8 +56,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep t
 - Keep Flutter workflow conformance data-driven from all canonical
   `protocol/workflows/*.json` suites. The fake host may translate a fixture's
   already-decided outcome into typed Dart values, but must not implement a
-  second reducer. The current gate is exactly 29 canonical traces plus one
-  discovery assertion.
+  second reducer. The current gate discovers all 33 canonical traces, replays
+  the 29 Flutter-supported traces, and explicitly classifies the four
+  Encrypted Upload v2 traces as unsupported.
 - The Flutter example is a real compact device-management screen. Keep scan,
   selected connect, serial-strict reconnect, status, recording list and
   retained encrypted batch handoff, WiFi, OTA, remove-only deprovision, and

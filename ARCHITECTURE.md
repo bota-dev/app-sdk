@@ -686,7 +686,7 @@ published for `v1.1.0`; the remaining planned facades are not yet published. See
 [`FFI evaluation`](docs/spikes/ffi-boundary-evaluation.md).
 
 The synchronized candidate inventory is produced by main CI and covers Apple,
-Android, React Native, and Flutter release directories from one source
+Android, React Native, Web, and Flutter release directories from one source
 revision. An annotated tag records that inventory digest. The tag workflow
 downloads the CI inventory, compares its native subset before any publication,
 publishes and verifies the immutable Apple asset and CocoaPod, runs clean public
@@ -776,16 +776,17 @@ device copy until application upload succeeds and the exact confirmation is
 sent. Native live-audio streaming and Flutter Web, macOS, Windows, and Linux
 targets are not supported.
 
-Flutter conformance discovers every canonical JSON workflow suite at test time
-and routes all 29 scenarios through a fake host implementation. The fake emits
-only each fixture's already-decided typed outcome; Rust remains the sole
-workflow reducer. Release-consumer verification generates a complete fresh
-iOS/Android Flutter application, copies in the maintained example and platform
-permissions, rebuilds local native artifacts, reserves the `dev.bota` Maven
-group for the fresh local candidate, resolves the local Apple package, and
-requires new release outputs. The temporary consumer and its isolated Gradle
-cache are deleted after each run, so stale application outputs cannot satisfy
-the gate.
+Flutter conformance discovers every canonical JSON workflow suite at test time,
+routes the 29 Flutter-supported scenarios through a fake host implementation,
+and explicitly classifies the four Encrypted Upload v2 scenarios as
+unsupported. The fake emits only each fixture's already-decided typed outcome;
+Rust remains the sole workflow reducer. Release-consumer verification generates
+a complete fresh iOS/Android Flutter application, copies in the maintained
+example and platform permissions, rebuilds local native artifacts, reserves
+the `dev.bota` Maven group for the fresh local candidate, resolves the local
+Apple package, and requires new release outputs. The temporary consumer and its
+isolated Gradle cache are deleted after each run, so stale application outputs
+cannot satisfy the gate.
 
 The Flutter Android plugin delegates every generated Pigeon host operation,
 stream, and callback to `BotaDeviceClient.shared`; it does not duplicate native

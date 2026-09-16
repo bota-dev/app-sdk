@@ -163,6 +163,11 @@ await backend.uploadRecordingFile(localPath!, metadata);
 await bota.recordings.confirm(connected, recording.recordingId);
 ```
 
+The contract-only Encrypted Upload v2 workflow exposed by the native and React
+Native facades is not part of this Flutter beta. Flutter applications use the
+retained native-file handoff above; they must not infer v2 staging or
+receipt-confirmed deletion support from an encrypted recording flag.
+
 Confirmation removes the matching recording from the physical device. Do not
 confirm on a failed or uncertain upload. High-volume recording bodies stay in
 native files; native live-audio streaming is not supported by this Flutter
@@ -248,11 +253,11 @@ application has an explicit policy.
 ## Supported Surface
 
 This beta targets Flutter iOS and Android only. Web, macOS, Windows, and Linux
-Flutter targets are unsupported. Native live-audio streaming is unsupported.
-The supported mobile surface includes discovery, connection, status, recording
-control and batch transfer, provisioning, connection settings, upload
-ownership, WiFi, OTA, sanitized device logs, remove-only deprovision, and
-authenticated factory reset.
+Flutter targets are unsupported. Native live-audio streaming and Encrypted
+Upload v2 staging are unsupported. The supported mobile surface includes
+discovery, connection, status, recording control and batch transfer,
+provisioning, connection settings, upload ownership, WiFi, OTA, sanitized
+device logs, remove-only deprovision, and authenticated factory reset.
 
 Prereleases use exact `1.x.y-beta.n` versions. Applications must opt into each
 beta explicitly; no Flutter package from the historical `1.1.0` release should
@@ -273,9 +278,11 @@ npm run flutter:verify
 tools/flutter/package-release.sh --check
 ```
 
-The conformance suite discovers all 29 canonical JSON workflow traces and
-checks typed Dart routing through a fake native bridge. Rust remains the only
-workflow reducer. The package-release command additionally preserves the exact
-archive, sorted file inventory, normalized archive digest, dependency lock and
-license evidence, dry-run result, consumer result, and v2 release manifest
-under `target/flutter-release/`; it performs no publication.
+The conformance suite discovers all 33 canonical JSON workflow traces, checks
+typed Dart routing for the 29 supported traces through a fake native bridge,
+and explicitly classifies the four Encrypted Upload v2 traces as unsupported.
+Rust remains the only workflow reducer. The package-release command
+additionally preserves the exact archive, sorted file inventory, normalized
+archive digest, dependency lock and license evidence, dry-run result, consumer
+result, and v2 release manifest under `target/flutter-release/`; it performs no
+publication.
