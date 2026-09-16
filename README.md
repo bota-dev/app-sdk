@@ -27,6 +27,15 @@ decision.
 
 ## Current Status
 
+The next synchronized candidate is `1.2.0-beta.0`. It adds the first
+`@bota.dev/web-sdk` package: an explicit, foreground Web Bluetooth picker,
+exact serial verification through the shared Rust/WASM workflow, explicit
+disconnect, and fresh read-only identity, device-status, and
+encrypted-upload-v2 capability snapshots. A packed-package gate installs the
+exact tarball in a clean Vite application. Recording, upload, provisioning,
+settings, control, OTA, logs, saved reconnect, and background browser behavior
+remain deferred.
+
 The App SDK has published synchronized beta release `1.1.0`: the repository has a generated
 protocol manifest, 64 language-neutral compatibility fixtures, bounded Rust
 decoders, byte-exact serializers, stable models/errors, and deterministic
@@ -319,7 +328,8 @@ skips before client configuration. The supervised Bota Pin and Bota Note matrix
 is not inferred from CI and remains a human release approval. The root Swift
 package distributes the Apple facade for iOS and macOS while keeping the Rust
 core in a checksummed XCFramework. This release does not replace the production
-React Native maintenance line or claim Flutter, Web, or Windows availability.
+React Native maintenance line or claim Flutter or Windows availability. Web is
+available only through the scoped `1.2.0-beta.0` candidate described above.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and the
 [firmware compatibility matrix](protocol/compatibility/firmware-compatibility.json).
@@ -362,6 +372,41 @@ Pin the exact synchronized beta version from Maven Central:
 implementation("dev.bota:bota-android-sdk:1.1.0")
 ```
 
+## Web Beta Installation
+
+After the `1.2.0-beta.0` candidate is published, install the exact beta:
+
+```bash
+npm install @bota.dev/web-sdk@1.2.0-beta.0
+```
+
+Web Bluetooth requires a secure context and a browser implementation that
+supports it. Call `connect` directly from a user gesture so the browser may
+show its device picker. The serial number must come from the authenticated
+Portal device record; the SDK does not trust the advertised device name.
+
+```ts
+import { BotaDeviceClient } from '@bota.dev/web-sdk'
+
+const bota = await BotaDeviceClient.create()
+
+if (!bota.devices.isSupported) {
+  throw new Error('This browser does not support Web Bluetooth')
+}
+
+const device = await bota.devices.connect({
+  expectedSerialNumber: 'YOUR_DEVICE_SERIAL',
+})
+const snapshot = await bota.devices.readSnapshot()
+
+console.log(device.serialNumber, snapshot.status.batteryPercent)
+
+await bota.destroy()
+```
+
+The first Web beta is intentionally read-only after connection. It does not
+list, transfer, or upload recordings and does not call the Bota API.
+
 ## Development
 
 Requirements:
@@ -377,6 +422,7 @@ Requirements:
 npm ci
 npm run check
 npm run test:release
+npm run web:verify
 npm run baseline:react-native:api -- --sdk-path ../react-native-sdk
 npm run sync:android-fixtures
 npm run sync:apple-fixtures

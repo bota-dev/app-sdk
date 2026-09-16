@@ -953,8 +953,11 @@ Codegen contract.
 
 Implement in separate plans because capability and lifecycle contracts differ:
 
-- Web/Electron: WASM core plus Web Bluetooth, foreground-only transfer, browser
-  picker, and durable resumable errors;
+- Web/Electron: the `1.2.0-beta.0` foundation now provides the WASM core bridge,
+  explicit Web Bluetooth picker, exact serial verification, and read-only
+  identity/status/capability snapshots. Foreground recording transfer, upload,
+  resumable errors, Electron validation, and physical-browser acceptance remain
+  open;
 - Flutter: native facade delegation on Apple and Android before desktop support;
 - Windows: C# facade plus WinRT GATT, followed by Flutter Windows integration.
 
