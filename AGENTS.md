@@ -361,10 +361,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep b
   x86_64 emulator lanes. `test-emulator-lane.sh` owns AVD creation, boot
   readiness, fresh installs, animation settings, shutdown, and deletion. It
   exports one lane-local `ANDROID_AVD_HOME` for both `avdmanager` and the
-  emulator, bounds ADB attachment, and prints the captured emulator output on
-  startup failure. Before either emulator starts, all source, frozen-binary,
+  emulator, bounds ADB attachment, detects exited background emulator jobs,
+  and prints the captured emulator output on startup failure. Before either
+  emulator starts, all source, frozen-binary,
   and clean Maven consumers must compile against the exact installed candidate
-  repository. Do not cache AVD state or put signing material in ordinary CI.
+  repository. Android JUnit instrumentation methods must return `Unit`
+  explicitly when an expression body could infer another return type. Do not
+  cache AVD state or put signing material in ordinary CI.
 - The protected `v1.1.0` publication uses only
   `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
   `SIGNING_IN_MEMORY_KEY`, and `SIGNING_IN_MEMORY_KEY_PASSWORD`. Persist the
