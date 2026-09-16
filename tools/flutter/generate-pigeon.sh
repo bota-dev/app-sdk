@@ -36,3 +36,6 @@ cd "$PACKAGE_ROOT"
   --kotlin_out "$OUTPUT_ROOT/$PACKAGE_PATH/$KOTLIN_OUT" \
   --kotlin_package "$KOTLIN_PACKAGE" \
   --package_name "$DART_PACKAGE"
+
+node "$ROOT/tools/flutter/normalize-pigeon-output.mjs" \
+  "$OUTPUT_ROOT/$PACKAGE_PATH/$KOTLIN_OUT"

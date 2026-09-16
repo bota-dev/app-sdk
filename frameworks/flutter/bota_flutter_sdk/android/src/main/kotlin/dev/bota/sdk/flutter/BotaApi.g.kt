@@ -2175,7 +2175,7 @@ data class BotaErrorMessage (
  * Generated class from Pigeon that represents data sent in messages.
  * This class should not be extended by any user class outside of the generated file.
  */
-sealed class BotaMaterialRequestMessage 
+sealed class BotaMaterialRequestMessage
 /** Generated class from Pigeon that represents data sent in messages. */
 data class BotaProvisioningMaterialRequestMessage (
   val requestId: String,
@@ -2282,7 +2282,7 @@ data class BotaFactoryResetGrantRequestMessage (
  * Generated class from Pigeon that represents data sent in messages.
  * This class should not be extended by any user class outside of the generated file.
  */
-sealed class BotaMaterialResponseMessage 
+sealed class BotaMaterialResponseMessage
 /** Generated class from Pigeon that represents data sent in messages. */
 data class BotaProvisioningMaterialResponseMessage (
   val requestId: String,
@@ -2561,7 +2561,7 @@ data class BotaFactoryResetResultAcknowledgementMessage (
  * Generated class from Pigeon that represents data sent in messages.
  * This class should not be extended by any user class outside of the generated file.
  */
-sealed class BotaSubscriptionRequestMessage 
+sealed class BotaSubscriptionRequestMessage
 /** Generated class from Pigeon that represents data sent in messages. */
 data class BotaScanSubscriptionMessage (
   val timeoutMillis: Long,
@@ -2917,7 +2917,7 @@ data class BotaWifiStatusSubscriptionMessage (
  * Generated class from Pigeon that represents data sent in messages.
  * This class should not be extended by any user class outside of the generated file.
  */
-sealed class BotaEventPayloadMessage 
+sealed class BotaEventPayloadMessage
 /** Generated class from Pigeon that represents data sent in messages. */
 data class BotaDiscoveredDeviceEventMessage (
   val device: BotaDiscoveredDeviceMessage
@@ -4840,7 +4840,7 @@ class BotaFlutterApi(private val binaryMessenger: BinaryMessenger, private val m
           }
         } else {
           continuation.resumeWithException(BotaApiPigeonUtils.createConnectionError(channelName))
-        } 
+        }
       }
     }
   }
@@ -4861,7 +4861,7 @@ class BotaFlutterApi(private val binaryMessenger: BinaryMessenger, private val m
         }
       } else {
         callback(Result.failure(BotaApiPigeonUtils.createConnectionError(channelName)))
-      } 
+      }
     }
   }
   fun requestFirmware(requestArg: BotaFirmwareRequestMessage, callback: (Result<BotaFirmwareSourceMessage>) -> Unit)
@@ -4881,7 +4881,7 @@ class BotaFlutterApi(private val binaryMessenger: BinaryMessenger, private val m
         }
       } else {
         callback(Result.failure(BotaApiPigeonUtils.createConnectionError(channelName)))
-      } 
+      }
     }
   }
   fun persistFactoryResetResult(requestArg: BotaFactoryResetResultRequestMessage, callback: (Result<BotaFactoryResetResultAcknowledgementMessage>) -> Unit)
@@ -4901,7 +4901,7 @@ class BotaFlutterApi(private val binaryMessenger: BinaryMessenger, private val m
         }
       } else {
         callback(Result.failure(BotaApiPigeonUtils.createConnectionError(channelName)))
-      } 
+      }
     }
   }
 }

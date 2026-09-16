@@ -12,6 +12,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { generatedPigeonFiles, verifyPigeon } from './verify-pigeon.mjs';
+import { normalizePigeonOutput } from './normalize-pigeon-output.mjs';
 
 const workspaceRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
@@ -51,5 +52,19 @@ test('rejects one changed generated token', async () => {
   await assert.rejects(
     verifyPigeon(root, { generate: copyCanonicalOutputs }),
     /generated Pigeon output drift.*bota_api\.g\.dart/s,
+  );
+});
+
+test('checked-in generated outputs contain no trailing whitespace', () => {
+  for (const file of generatedPigeonFiles) {
+    const source = readFileSync(join(workspaceRoot, file), 'utf8');
+    assert.doesNotMatch(source, /[ \t]+$/m, file);
+  }
+});
+
+test('normalization removes generated trailing whitespace only', () => {
+  assert.equal(
+    normalizePigeonOutput('sealed class Example \nval value = "a  "  \n'),
+    'sealed class Example\nval value = "a  "\n',
   );
 });
