@@ -18,10 +18,9 @@ not need access to those documents to open an issue or propose a change.
 
 ## CI build time
 
-CI and the dependency license gate are manual-only to avoid consuming Actions
-minutes on pull requests and main-branch pushes. Run them from the Actions tab
-when full repository verification is needed. Tag-triggered release automation
-remains enabled.
+CI and the dependency license gate run on pull requests and main-branch pushes.
+Superseded pull-request CI runs are cancelled, while every main-branch release
+candidate run finishes. Tag-triggered release automation remains enabled.
 
 Rust jobs cache dependencies using the pinned toolchain and save the cache even
 when a later check fails. Caches remain scoped by job. Android's npm cache key
