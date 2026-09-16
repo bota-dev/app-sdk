@@ -67,9 +67,9 @@ fn android_build_fixture() -> PathBuf {
 
 #[test]
 fn version_tag_and_publishable_metadata_are_synchronized() {
-    let release = xtask::release::verify_release(&root(), "v1.1.0").unwrap();
+    let release = xtask::release::verify_release(&root(), "v1.2.0-beta.0").unwrap();
 
-    assert_eq!(release.version, "1.1.0");
+    assert_eq!(release.version, "1.2.0-beta.0");
     assert_eq!(release.crate_name, "bota-device-sdk-core");
 }
 
@@ -104,7 +104,7 @@ fn compatibility_metadata_reports_apple_and_the_android_release_candidate() {
 #[test]
 fn mismatched_or_unprefixed_tags_are_rejected() {
     let wrong_version = xtask::release::verify_release(&root(), "v1.0.0-alpha.1").unwrap_err();
-    let missing_prefix = xtask::release::verify_release(&root(), "1.1.0").unwrap_err();
+    let missing_prefix = xtask::release::verify_release(&root(), "1.2.0-beta.0").unwrap_err();
 
     assert!(wrong_version.contains("does not match"));
     assert!(missing_prefix.contains("must start with v"));
@@ -112,7 +112,7 @@ fn mismatched_or_unprefixed_tags_are_rejected() {
 
 #[test]
 fn ci_workflow_validates_the_current_release_manifest() {
-    let release = xtask::release::verify_release(&root(), "v1.1.0").unwrap();
+    let release = xtask::release::verify_release(&root(), "v1.2.0-beta.0").unwrap();
     let path = root().join(".github/workflows/ci.yml");
     let contents = fs::read_to_string(path).unwrap();
     let _: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
@@ -207,7 +207,7 @@ fn release_workflow_packs_publishes_and_verifies_the_react_native_package() {
 
     let publish = &workflow["jobs"]["publish"];
     assert_eq!(publish["permissions"]["id-token"].as_str(), Some("write"));
-    assert!(contents.contains("needs: [verify, apple, android, react-native]"));
+    assert!(contents.contains("needs: [verify, apple, android, react-native, web]"));
     assert!(contents.contains("registry-url: https://registry.npmjs.org"));
     assert!(contents.contains("target/react-native-release"));
     assert!(
@@ -220,6 +220,73 @@ fn release_workflow_packs_publishes_and_verifies_the_react_native_package() {
     );
     assert!(!contents.contains("NPM_TOKEN"));
     assert!(!contents.contains("NODE_AUTH_TOKEN"));
+}
+
+#[test]
+fn web_package_version_and_release_artifact_are_synchronized() {
+    let sdk_version: toml::Value =
+        toml::from_str(&fs::read_to_string(root().join("sdk-version.toml")).unwrap()).unwrap();
+    let expected = sdk_version["version"].as_str().unwrap();
+    let package: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(root().join("frameworks/web/package.json")).unwrap(),
+    )
+    .unwrap();
+    let manifest: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(
+            root()
+                .join("release/examples")
+                .join(format!("{expected}.json")),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+
+    assert_eq!(package["version"], expected);
+    assert!(
+        manifest["artifacts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|artifact| {
+                artifact["platform"] == "web"
+                    && artifact["packageIdentifier"] == "@bota.dev/web-sdk"
+                    && artifact["version"] == expected
+            })
+    );
+}
+
+#[test]
+fn workflows_build_and_preserve_the_exact_web_candidate() {
+    let ci_contents = fs::read_to_string(root().join(".github/workflows/ci.yml")).unwrap();
+    let ci: serde_yaml_ng::Value = serde_yaml_ng::from_str(&ci_contents).unwrap();
+    assert_eq!(ci["jobs"]["web"]["runs-on"].as_str(), Some("ubuntu-latest"));
+    assert!(ci_contents.contains("npm run web:verify"));
+    assert!(ci_contents.contains("name: web-ci-${{ github.sha }}"));
+    assert!(ci_contents.contains("path: target/web-release/"));
+    assert_eq!(
+        ci["jobs"]["release-candidate"]["needs"],
+        serde_yaml_ng::from_str::<serde_yaml_ng::Value>(
+            "[android-native, apple, react-native, web]"
+        )
+        .unwrap()
+    );
+    assert!(ci_contents.contains(
+        "target/apple-release target/android-release target/react-native-release target/web-release"
+    ));
+
+    let release_contents =
+        fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
+    let release: serde_yaml_ng::Value = serde_yaml_ng::from_str(&release_contents).unwrap();
+    assert_eq!(
+        release["jobs"]["web"]["runs-on"].as_str(),
+        Some("ubuntu-latest")
+    );
+    assert!(release_contents.contains("name: web-release-${{ github.ref_name }}"));
+    assert!(release_contents.contains("path: target/web-release/"));
+    assert!(release_contents.contains("@bota.dev/web-sdk@$RELEASE_VERSION"));
+    assert!(release_contents.contains(
+        "target/apple-release target/android-release target/react-native-release target/web-release"
+    ));
 }
 
 #[test]
@@ -289,12 +356,15 @@ fn ci_emits_the_exact_release_candidate_inventory_used_for_tagging() {
 
     assert_eq!(
         workflow["jobs"]["release-candidate"]["needs"],
-        serde_yaml_ng::from_str::<serde_yaml_ng::Value>("[android-native, apple, react-native]")
-            .unwrap()
+        serde_yaml_ng::from_str::<serde_yaml_ng::Value>(
+            "[android-native, apple, react-native, web]"
+        )
+        .unwrap()
     );
     assert!(contents.contains("name: react-native-ci-${{ github.sha }}"));
     assert!(contents.contains("name: android-ci-${{ github.sha }}"));
     assert!(contents.contains("name: apple-package-${{ github.sha }}"));
+    assert!(contents.contains("name: web-ci-${{ github.sha }}"));
     assert!(contents.contains("tools/release/write-candidate-inventory.sh"));
     assert!(contents.contains("release-candidate-files.json.sha256"));
     assert!(contents.contains("name: release-candidate-${{ github.sha }}"));
@@ -391,7 +461,7 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     assert!(contents.contains("central-portal-state.json"));
     assert!(contents.contains("central-bundle-files.json"));
     assert!(contents.contains("central-bundle.zip"));
-    assert!(contents.contains("needs: [verify, apple, android, react-native]"));
+    assert!(contents.contains("needs: [verify, apple, android, react-native, web]"));
     assert!(contents.contains("matrix:\n        api: [26, 35]"));
     assert!(contents.contains("tools/android/test-public-consumer.sh --api ${{ matrix.api }}"));
     assert!(!contents.contains("echo \"published=false\""));
@@ -426,7 +496,7 @@ fn release_workflow_never_publishes_npm_without_the_beta_tag() {
         .filter(|line| line.contains("npm@$NPM_CLI_VERSION") && line.contains(" publish "))
         .collect::<Vec<_>>();
 
-    assert_eq!(npm_publish_lines.len(), 2);
+    assert_eq!(npm_publish_lines.len(), 4);
     for line in npm_publish_lines {
         assert!(line.contains("--tag \"$NPM_DIST_TAG\""), "{line}");
     }

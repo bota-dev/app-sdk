@@ -1,8 +1,8 @@
 # Releasing The Bota App SDK
 
-The synchronized beta currently publishes the Apple `BotaAppleSDK` Swift
-package for iOS 15+ and macOS 13+, the Android Maven package, and the React
-Native package. Apple consumers add
+The synchronized beta publishes the Apple `BotaAppleSDK` Swift package for
+iOS 15+ and macOS 13+, the Android Maven package, the React Native package,
+and the read-only `@bota.dev/web-sdk` package. Apple consumers add
 `https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
 compiles the Swift facade source and downloads a checksummed
 `BotaDeviceSDKCore.xcframework.zip` from the matching GitHub Release.
@@ -26,6 +26,10 @@ publication must use dist-tag `beta`, and GitHub Releases remain prereleases.
 SwiftPM and Maven Central consumers pin the exact synchronized beta version.
 Historical immutable `1.1.0` is the one recovery exception; do not rename,
 unpublish, or recreate it. The next synchronized release is `1.2.0-beta.0`.
+Before that first Web publication, configure the npm trusted publisher for
+`@bota.dev/web-sdk` against the protected `release` environment and this
+repository's release workflow. The workflow intentionally has no token-based
+fallback.
 
 ## Repository Setup
 
@@ -81,6 +85,7 @@ npm ci
 npm run check
 npm run test:tooling
 npm run test:release
+npm run web:verify
 npm run sync:apple-fixtures
 npm run test:workflows -- --sdk-path ../react-native-sdk
 cargo xtask release verify-tag "v$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml)"
@@ -199,20 +204,22 @@ arm64/x86_64 macOS slices.
 
 ## Publish
 
-Before tagging, configure the npm trusted publisher for
-`@bota.dev/react-native-sdk` with organization `bota-dev`, repository
-`app-sdk`, workflow `release.yml`, environment `release`, and allowed action
-`npm publish`. The package has one trusted publisher, so replace the legacy
-React Native repository publisher instead of retaining both.
+Before tagging, configure npm trusted publishers for both
+`@bota.dev/react-native-sdk` and `@bota.dev/web-sdk` with organization
+`bota-dev`, repository `app-sdk`, workflow `release.yml`, environment
+`release`, and allowed action `npm publish`. Each package has one trusted
+publisher. Replace the legacy React Native repository publisher instead of
+retaining both. The Web package's first publication must also use this
+protected workflow; do not bootstrap it from a developer token.
 
 This workflow owns npm `beta`; the legacy React Native repository owns npm
 `latest`. Every npm publication command includes `--tag beta`, verifies the
 candidate `dist.shasum`, and proves that `latest` is unchanged.
 
 After the release commit is on `main`, wait for its `CI` workflow to complete.
-The `Release candidate inventory` job downloads the Apple, Android, and React
-Native artifacts built on the same runner classes as the tag workflow and
-uploads `release-candidate-<commit>`. Use that artifact's
+The `Release candidate inventory` job downloads the Apple, Android, React
+Native, and Web artifacts built on the same runner classes as the tag workflow
+and uploads `release-candidate-<commit>`. Use that artifact's
 `release-candidate-files.json.sha256` value in the annotated tag; do not derive
 the tag hash from locally built payloads. The Android Javadoc archive omits
 Dokka's nondeterministic aggregate `deprecated.html` page so repeated clean CI
@@ -251,13 +258,14 @@ install its own Node.js dependencies before running repository tooling.
 4. Rebuilds the deterministic XCFramework and rejects root-package checksum
    drift.
 5. Waits for approval in the protected `release` environment.
-6. Publishes the exact npm tarball to dist-tag `beta` through OIDC trusted
-   publishing, verifies the registry `dist.shasum`, and proves npm `latest` did
-   not move. A rerun verifies an existing version instead of attempting to
-   replace it.
-7. Creates a GitHub prerelease and uploads every public Apple release file and
-   the React Native tarball. The Android payload remains an immutable workflow
-   artifact downloaded inside the protected job; its flat filenames
+6. Publishes the exact React Native and Web npm tarballs to dist-tag `beta`
+   through OIDC trusted publishing, verifies both registry `dist.shasum`
+   values, and proves npm `latest` did not move. The Web first-publication path
+   accepts an absent pre-release `latest` tag. A rerun verifies an existing
+   version instead of attempting to replace it.
+7. Creates a GitHub prerelease and uploads every public Apple release file plus
+   the React Native and Web tarballs. The Android payload remains an immutable
+   workflow artifact downloaded inside the protected job; its flat filenames
    intentionally are not mixed with Apple's colliding `LICENSE` and manifest
    assets.
 8. Creates an unrelated macOS package that resolves the public Git tag and
@@ -289,10 +297,10 @@ the preserved deployment name, recreates `READY` state from the archived ZIP
 and inventory, and uploads those exact bytes as a fresh deployment. The new
 state records `retryOfDeploymentId` for auditability.
 
-Both recovery modes download the original run's Apple, Android, and React
-Native artifacts and compare a newly generated candidate inventory with the
+Both recovery modes download the original run's Apple, Android, React Native,
+and Web artifacts and compare a newly generated candidate inventory with the
 one preserved on the draft release. After Central and its public inventory
-pass, the recovery job publishes or verifies the exact npm tarball under
+pass, the recovery job publishes or verifies both exact npm tarballs under
 `beta`, leaves `latest` unchanged, publishes the existing GitHub prerelease
 assets, and enables the same public SwiftPM plus API 26/API 35 Maven consumer
 jobs as the tag workflow. Recovery resolves metadata from the requested tag;
