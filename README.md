@@ -165,7 +165,7 @@ directory before enabling API 26 and API 35 consumer smoke tests. Uncertain
 deployments resume by UUID without another upload; confirmed failed deployments
 can be replaced only by uploading the exact preserved signed bundle.
 The native-boundary spike selected a manually owned C ABI after comparing it
-with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
+with pinned UniFFI `0.32.1`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed
 packets. Shared protocol decode/encode entry points cover the frozen status,
 recording list and control, transfer, OTA, provisioning, settings, and log fixtures. The Apple

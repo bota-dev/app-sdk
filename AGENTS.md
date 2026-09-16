@@ -505,7 +505,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep b
   application context. It must never initiate Bluetooth, storage, or network
   work during process startup.
 - Native facades use the manually owned opaque C ABI selected in ADR 0001;
-  UniFFI `0.32.0` exists only in the non-published comparison spike.
+  UniFFI `0.32.1` exists only in the non-published comparison spike.
 - ABI v1 numeric meanings and ownership rules are frozen by
   `release/evidence/1.0.0-alpha.1-native-abi.md`; facade work may add Swift or
   Kotlin types but must not redesign the C boundary.
