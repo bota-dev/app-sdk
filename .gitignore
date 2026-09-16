@@ -17,6 +17,9 @@
 /frameworks/react-native/lib/
 /frameworks/react-native/.build/
 /frameworks/react-native/generated/build/
+/frameworks/web/node_modules/
+/frameworks/web/dist/
+/frameworks/web/src/generated/
 
 # Platform build outputs
 /.build/
