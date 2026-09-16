@@ -1,9 +1,27 @@
 import type { CoreBridge, CoreEffect, CoreHostEvent } from './core.ts'
 import { BotaSDKError, normalizeCoreError } from './errors.ts'
-import type { ConnectOptions, ConnectedDevice } from './models.ts'
-import type { BrowserBluetoothTransport, BrowserDeviceHandle } from './transport.ts'
+import type {
+  ConnectOptions,
+  ConnectedDevice,
+  DeviceSnapshot,
+  EncryptedUploadV2Capabilities,
+} from './models.ts'
+import {
+  BrowserTransportError,
+  type BrowserBluetoothTransport,
+  type BrowserDeviceHandle,
+} from './transport.ts'
 
 const SERIAL_PATTERN = /^[A-Za-z0-9]{1,64}$/
+const DEVICE_INFORMATION_SERVICE = '180A'
+const SERIAL_NUMBER = '2A25'
+const MODEL_NUMBER = '2A24'
+const HARDWARE_REVISION = '2A27'
+const FIRMWARE_REVISION = '2A26'
+const CONTROL_SERVICE = 'B07A0002-0000-1000-8000-00805F9B34FB'
+const DEVICE_STATUS = 'B07A0002-0001-1000-8000-00805F9B34FB'
+const STORAGE_SERVICE = 'B07A0004-0000-1000-8000-00805F9B34FB'
+const V2_CAPABILITIES = 'B07A0004-0006-1000-8000-00805F9B34FB'
 
 export class DeviceManager {
   private readonly core: CoreBridge
@@ -82,6 +100,66 @@ export class DeviceManager {
     }
   }
 
+  async readSnapshot(): Promise<DeviceSnapshot> {
+    if (this.destroyed) throw new BotaSDKError('cancelled', 'read_snapshot')
+    const device = this.activeDevice
+    const connected = this.verifiedDevice
+    if (!device || !connected || !this.transportConnected) {
+      throw new BotaSDKError('device_disconnected', 'read_snapshot')
+    }
+    if (this.operationActive) {
+      throw new BotaSDKError('operation_in_progress', 'read_snapshot')
+    }
+
+    this.operationActive = true
+    try {
+      const serialNumber = await this.readRequiredText(
+        device,
+        DEVICE_INFORMATION_SERVICE,
+        SERIAL_NUMBER,
+      )
+      if (serialNumber !== connected.serialNumber) {
+        await this.disconnect()
+        throw new BotaSDKError('identity_mismatch', 'read_snapshot')
+      }
+
+      const modelNumber = await this.readOptionalText(
+        device,
+        DEVICE_INFORMATION_SERVICE,
+        MODEL_NUMBER,
+      )
+      const hardwareRevision = await this.readOptionalText(
+        device,
+        DEVICE_INFORMATION_SERVICE,
+        HARDWARE_REVISION,
+      )
+      const firmwareRevision = await this.readOptionalText(
+        device,
+        DEVICE_INFORMATION_SERVICE,
+        FIRMWARE_REVISION,
+      )
+      const statusBytes = await this.read(device, CONTROL_SERVICE, DEVICE_STATUS)
+      const status = this.core.decodeDeviceStatus(statusBytes)
+      const encryptedUploadV2 = await this.readCapabilities(device)
+
+      return {
+        identity: {
+          serialNumber,
+          modelNumber,
+          hardwareRevision,
+          firmwareRevision,
+        },
+        status,
+        capabilities: { encryptedUploadV2 },
+        capturedAt: new Date(),
+      }
+    } catch (error) {
+      throw snapshotError(error)
+    } finally {
+      this.operationActive = false
+    }
+  }
+
   async destroy(): Promise<void> {
     if (this.destroyed) return
     this.destroyed = true
@@ -95,6 +173,74 @@ export class DeviceManager {
       if (!effect) continue
       const next = await this.executeEffect(effect)
       queue.push(...next)
+    }
+  }
+
+  private async read(
+    device: BrowserDeviceHandle,
+    serviceUuid: string,
+    characteristicUuid: string,
+  ): Promise<Uint8Array> {
+    try {
+      return await this.transport.read(device, serviceUuid, characteristicUuid)
+    } catch (error) {
+      if (error instanceof BrowserTransportError && error.code === 'disconnected') {
+        this.transportConnected = false
+        this.clearConnection()
+      }
+      throw error
+    }
+  }
+
+  private async readRequiredText(
+    device: BrowserDeviceHandle,
+    serviceUuid: string,
+    characteristicUuid: string,
+  ): Promise<string> {
+    const value = await this.read(device, serviceUuid, characteristicUuid)
+    try {
+      const decoded = new TextDecoder('utf-8', { fatal: true })
+        .decode(value)
+        .replace(/^[\0\s]+|[\0\s]+$/g, '')
+      if (!decoded) throw new Error('empty')
+      return decoded
+    } catch (error) {
+      throw new BotaSDKError('protocol_error', 'read_snapshot', { cause: error })
+    }
+  }
+
+  private async readOptionalText(
+    device: BrowserDeviceHandle,
+    serviceUuid: string,
+    characteristicUuid: string,
+  ): Promise<string | null> {
+    try {
+      return await this.readRequiredText(device, serviceUuid, characteristicUuid)
+    } catch (error) {
+      if (
+        error instanceof BrowserTransportError &&
+        error.code === 'characteristic_not_found'
+      ) {
+        return null
+      }
+      throw error
+    }
+  }
+
+  private async readCapabilities(
+    device: BrowserDeviceHandle,
+  ): Promise<EncryptedUploadV2Capabilities | null> {
+    try {
+      const bytes = await this.read(device, STORAGE_SERVICE, V2_CAPABILITIES)
+      return this.core.decodeEncryptedUploadV2Capabilities(bytes)
+    } catch (error) {
+      if (
+        error instanceof BrowserTransportError &&
+        error.code === 'characteristic_not_found'
+      ) {
+        return null
+      }
+      throw error
     }
   }
 
@@ -261,4 +407,21 @@ function platformCode(error: unknown): number | null {
     return error.code
   }
   return null
+}
+
+function snapshotError(error: unknown): BotaSDKError {
+  if (error instanceof BotaSDKError) return error
+  if (error instanceof BrowserTransportError) {
+    if (error.code === 'disconnected') {
+      return new BotaSDKError('device_disconnected', 'read_snapshot', {
+        cause: error,
+      })
+    }
+    if (error.code === 'unavailable') {
+      return new BotaSDKError('bluetooth_unavailable', 'read_snapshot', {
+        cause: error,
+      })
+    }
+  }
+  return normalizeCoreError(error, 'read_snapshot')
 }

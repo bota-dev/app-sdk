@@ -3,6 +3,10 @@ import type {
   BrowserDeviceHandle,
 } from '../transport.ts'
 
+function readKey(serviceUuid: string, characteristicUuid: string): string {
+  return `${serviceUuid}:${characteristicUuid}`
+}
+
 export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport {
   isSupported = true
   readonly calls: string[] = []
@@ -13,6 +17,8 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
   pickerError: unknown = null
   connectGate: Promise<void> | null = null
   serialNumber = 'GDPPSBZJN6'
+  readonly readValues = new Map<string, Uint8Array>()
+  readonly readErrors = new Map<string, unknown>()
   private disconnectListeners = new Set<() => void>()
 
   async requestDevice(): Promise<BrowserDeviceHandle> {
@@ -36,6 +42,11 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
     characteristicUuid: string,
   ): Promise<Uint8Array> {
     this.calls.push(`read:${device.id}:${serviceUuid}:${characteristicUuid}`)
+    const key = readKey(serviceUuid, characteristicUuid)
+    const error = this.readErrors.get(key)
+    if (error) throw error
+    const value = this.readValues.get(key)
+    if (value) return value.slice()
     if (serviceUuid === '180A' && characteristicUuid === '2A25') {
       return new TextEncoder().encode(this.serialNumber)
     }
@@ -56,5 +67,21 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
 
   emitDisconnected(): void {
     for (const listener of [...this.disconnectListeners]) listener()
+  }
+
+  setRead(
+    serviceUuid: string,
+    characteristicUuid: string,
+    value: Uint8Array,
+  ): void {
+    this.readValues.set(readKey(serviceUuid, characteristicUuid), value)
+  }
+
+  failRead(
+    serviceUuid: string,
+    characteristicUuid: string,
+    error: unknown,
+  ): void {
+    this.readErrors.set(readKey(serviceUuid, characteristicUuid), error)
   }
 }
