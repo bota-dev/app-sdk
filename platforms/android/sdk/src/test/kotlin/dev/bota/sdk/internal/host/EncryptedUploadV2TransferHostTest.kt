@@ -397,7 +397,7 @@ class EncryptedUploadV2TransferHostTest {
         val returned = CompletableDeferred<Unit>()
         val actions = mutableListOf<String>()
         val services = services(registry, actions).copyForOpen { _, _ ->
-            EncryptedUploadV2OpenResult.Opened(kotlinx.coroutines.flow.emptyFlow()).also {
+            EncryptedUploadV2OpenResult.Opened(flow { awaitCancellation() }).also {
                 returned.complete(Unit)
             }
         }
@@ -412,9 +412,9 @@ class EncryptedUploadV2TransferHostTest {
         returned.await()
 
         host.cancel(CoreCancellationId(1u, 2u))
-        val error = starting.await().exceptionOrNull()
+        val error = withTimeout(AsyncSettlementTimeoutMilliseconds) { starting.await() }.exceptionOrNull()
 
-        assertTrue(error.toString(), error != null)
+        assertTrue(error.toString(), error is EncryptedUploadV2HostException && error.errorCode == 16u)
         assertEquals(1, actions.count { it == "abort-9" })
         host.close()
     }

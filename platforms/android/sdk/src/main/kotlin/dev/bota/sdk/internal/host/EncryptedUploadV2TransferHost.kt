@@ -93,6 +93,17 @@ internal class EncryptedUploadV2TransferHost(
         val materialOutcome: EncryptedUploadV2TerminalOutcome,
     )
 
+    private data class CancelledLifecycle(
+        val transportSessionId: ULong?,
+        val openingJob: Deferred<EncryptedUploadV2OpenResult>?,
+        val pumpJob: Job?,
+        val startEvents: Channel<CoreHostEventPayload>?,
+        val boundaryTarget: Channel<CoreHostEventPayload>?,
+        val pendingResume: CompletableDeferred<Unit>?,
+        val materialId: String?,
+        val materialLease: EncryptedUploadV2MaterialLease?,
+    )
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val stateLock = Any()
     private var generation = 0L
@@ -630,32 +641,47 @@ internal class EncryptedUploadV2TransferHost(
         }
         var failure: Throwable? = null
         withContext(NonCancellable) {
-            val context = activeContext
-            val session = context?.transportSessionId ?: openingSessionId
-            val opening = synchronized(stateLock) {
+            val cancelled = EncryptedUploadV2HostException(
+                16u,
+                false,
+                message = "encrypted transfer was cancelled",
+            )
+            val detached = synchronized(stateLock) {
+                val context = activeContext
                 generation += 1
-                openingJob
+                CancelledLifecycle(
+                    transportSessionId = context?.transportSessionId ?: openingSessionId,
+                    openingJob = openingJob,
+                    pumpJob = pumpJob,
+                    startEvents = startEvents,
+                    boundaryTarget = boundaryTarget,
+                    pendingResume = pendingResume,
+                    materialId = preparedMaterialId ?: context?.materialId,
+                    materialLease = materialLease,
+                )
             }
-            val pump = pumpJob
+            detached.pendingResume?.completeExceptionally(cancelled)
+            detached.startEvents?.close(cancelled)
+            if (detached.boundaryTarget !== detached.startEvents) {
+                detached.boundaryTarget?.close(cancelled)
+            }
             try {
                 services.cancelUploads()
             } catch (error: Throwable) {
                 failure = error
             }
-            pump?.cancelAndJoin()
-            opening?.cancelAndJoin()
-            if (session != null) {
+            detached.pumpJob?.cancelAndJoin()
+            detached.openingJob?.cancelAndJoin()
+            if (detached.transportSessionId != null) {
                 try {
-                    services.abortTransfer(session)
+                    services.abortTransfer(detached.transportSessionId)
                 } catch (error: Throwable) {
                     failure = aggregate(failure, error)
                 }
             }
-            val id = preparedMaterialId ?: context?.materialId
-            val lease = materialLease
-            if (id != null && lease != null) {
+            if (detached.materialId != null && detached.materialLease != null) {
                 try {
-                    services.materialRegistry.terminate(id, lease, outcome)
+                    services.materialRegistry.terminate(detached.materialId, detached.materialLease, outcome)
                 } catch (error: Throwable) {
                     failure = aggregate(failure, error)
                 }

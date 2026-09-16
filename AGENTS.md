@@ -92,7 +92,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep b
   abort, protected ciphertext-file writes, and a recoverable native checkpoint
   catalog. It emits structured `WINDOW_STAGED` evidence to Rust and sends only
   Rust-encoded ACK/repair frames through the exact owned transport session. Its
-  platform plus phase-aware transfer queues share a 1 MiB byte cap; overflow,
+  cancellation teardown closes owned resume and event channels before stopping
+  transfer jobs, including when the pump has been created but has not started.
+  The platform plus phase-aware transfer queues share a 1 MiB byte cap; overflow,
   premature post-window traffic, mixed profiles, and pre-EOF completion fail
   closed. START/ABORT races cannot resurrect ownership, and checkpoint lookup
   plus metadata are replaced in one AtomicFile catalog whose file and parent
