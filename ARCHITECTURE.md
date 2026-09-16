@@ -32,8 +32,9 @@ private normative design before merge.
 
 ```text
 core/           Shared Rust protocol and workflow core
-platforms/      Apple, Android, Windows, and Web facades/adapters
-frameworks/     React Native and Flutter bindings
+bindings/       Internal native ABI and WebAssembly bridges
+platforms/      Apple, Android, and future Windows facades/adapters
+frameworks/     React Native, Web, and future Flutter bindings
 protocol/       Machine-readable manifest, fixtures, and compatibility data
 tests/          Cross-platform conformance and physical-device suites
 tools/          Code generation, validation, and release tooling
@@ -66,6 +67,11 @@ rerun first compares the registry `dist.shasum` with the candidate tarball, so
 an uncertain publish is recoverable without attempting to replace an immutable
 npm version. The npm package trusts `bota-dev/app-sdk`, `release.yml`, and the
 `release` environment; no long-lived npm write token enters GitHub Actions.
+The Web package follows the same immutable-candidate rule. CI builds its WASM
+bridge, packs `@bota.dev/web-sdk`, installs that exact tarball in a clean Vite
+consumer, and includes it in the annotated tag inventory. The protected
+release publishes only the preserved tarball under npm `beta`, verifies the
+registry `dist.shasum`, and does not move `latest`.
 
 ## Migration Rule
 
@@ -865,6 +871,33 @@ persist the command-bound result, then sends receipt opcode `0x0A`. It asks the
 host to delete that journal only after the receipt write succeeds. Resume mode
 waits for firmware's exact replay and can send only the receipt; it cannot
 resolve a grant or resend destructive opcode `0x06`.
+
+## Web facade
+
+`frameworks/web` is a publishable ESM facade over the private
+`bindings/device-sdk-wasm` bridge. Browser code owns Web Bluetooth lifecycle;
+the WASM core owns exact connection sequencing and protocol decoding. The
+initial public API contains `BotaDeviceClient.create()`, `destroy()`,
+`DeviceManager.connect()`, `disconnect()`, `connectedDevice`, and
+`readSnapshot()`.
+
+Connection always starts with the browser's explicit device picker and requires
+the caller's expected serial number. The advertised name is only a picker
+filter and display value. The device is published only after the Device
+Information serial characteristic matches through the Rust workflow. Every
+snapshot reads and verifies that serial again, then returns optional model,
+hardware, and firmware identity, decoded device status, and a fresh decoded
+encrypted-upload-v2 capability value when characteristic `0406` exists.
+If client destruction races an open picker, the eventual picker result is
+rejected as cancelled before it can become the active device or start GATT
+work. If destruction races later connection work, the captured device is
+disconnected and cannot be published by a late workflow completion.
+
+This release is foreground-only and requires a secure-context browser with Web
+Bluetooth. It has no automatic scan, saved-device reconnect, background or
+closed-tab execution, recording operations, upload transport, provisioning,
+settings, recording control, OTA, or logs. The host Portal continues to own
+authentication and all backend API calls.
 
 ## Security
 

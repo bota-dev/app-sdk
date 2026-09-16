@@ -70,7 +70,7 @@ jobs:
         run: node tools/baseline/react-native-api-contract.mjs validate --contract protocol/baseline/react-native-public-api-0.0.65.json --baseline-metadata protocol/baseline/react-native-sdk-0.0.65.json
 
       - name: Validate release manifest
-        run: cargo xtask release validate release/examples/1.1.0.json
+        run: cargo xtask release validate release/examples/1.2.0-beta.0.json
 
       - name: Check generated protocol constants
         run: cargo xtask protocol generate --check
@@ -141,6 +141,47 @@ jobs:
         with:
           name: react-native-ci-${{ github.sha }}
           path: target/react-native-release/
+          if-no-files-found: error
+          compression-level: 0
+
+  web:
+    name: Web SDK package and Vite consumer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            frameworks/web/package-lock.json
+            tests/consumers/web-vite/package-lock.json
+
+      - name: Set up Rust WebAssembly target
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.98.0
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install pinned wasm-bindgen CLI
+        run: cargo install wasm-bindgen-cli --version 0.2.128 --locked
+
+      - name: Verify Web package and packed consumer
+        run: npm run web:verify
+
+      - name: Upload Web candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: web-ci-${{ github.sha }}
+          path: target/web-release/
           if-no-files-found: error
           compression-level: 0
 
@@ -376,7 +417,7 @@ jobs:
 
   release-candidate:
     name: Release candidate inventory
-    needs: [android-native, apple, react-native]
+    needs: [android-native, apple, react-native, web]
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
@@ -405,12 +446,18 @@ jobs:
           name: react-native-ci-${{ github.sha }}
           path: target/react-native-release/
 
+      - name: Download Web candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: web-ci-${{ github.sha }}
+          path: target/web-release/
+
       - name: Write candidate inventory
         run: |
           tools/release/write-candidate-inventory.sh \
             --source-revision "$GITHUB_SHA" \
             --output target/release-candidate-files.json \
-            target/apple-release target/android-release target/react-native-release
+            target/apple-release target/android-release target/react-native-release target/web-release
           sha256sum target/release-candidate-files.json \
             > target/release-candidate-files.json.sha256
           {

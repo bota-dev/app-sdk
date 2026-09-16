@@ -55,6 +55,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep b
   SDK `0.0.65`. Executable workflow evidence uses the separate
   `reactNativeWorkflowBaseline` pinned to maintenance SDK `0.0.67`; CI and tag
   verification must check out that exact revision and run its referenced tests.
+  Keep that checkout under the ignored `.ci/` scratch directory, never Cargo's
+  `target/`, because the Rust cache action recursively cleans `target/` on a
+  cache mismatch.
 - `core/device-sdk-core/src/model/upload_profile.rs` is a side-effect-free
   policy/capability validator only. Its presence does not authorize a v2 START
   or change `runtimeWorkflow`; historical P10 requires an observed header.
@@ -174,6 +177,16 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep b
   consumers from an `npm pack` artifact, not a source symlink: Demo and Bota
   One must each produce release-mode iOS and Android Expo bundles before
   preview or production rollout.
+- `frameworks/web` is the first browser facade and publishes as
+  `@bota.dev/web-sdk`. Its initial surface is deliberately read-only: an
+  explicit Web Bluetooth picker, exact serial-number verification through the
+  shared Rust connection workflow, disconnect, and fresh identity, device
+  status, and encrypted-upload-v2 capability reads decoded by the WASM core.
+  Keep backend calls, recording list/transfer/upload, provisioning, settings,
+  recording control, OTA, logs, reconnect persistence, and background work out
+  of this increment. A missing Web Bluetooth implementation must fail as
+  `unsupported_browser` before opening the picker, and a snapshot must
+  re-verify the serial before returning data.
 - `RecordingManager` and `StreamingSession` preserve their frozen object model
   while Rust plus the Apple/Android hosts own recording bytes, live-transfer
   buffering, chunk uploads, finalization ordering, and cancellation. Codegen
@@ -381,9 +394,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep b
   superseded only through `centralRecoveryMode=retry-failed`, which verifies
   the failed UUID and re-uploads the exact preserved ZIP under a fresh state
   record containing `retryOfDeploymentId`. Recovery also requires the original
-  tag workflow `releaseRunId`; it downloads all three platform artifacts,
-  matches their candidate inventory, then completes npm, the GitHub Release,
-  and the public Apple and Android consumer gates.
+  tag workflow `releaseRunId`; it downloads all four Apple, Android, React
+  Native, and Web platform artifacts, matches their candidate inventory, then
+  completes npm, the GitHub Release, and the public Apple and Android consumer
+  gates.
 - Create annotated release tags only from the `release-candidate-<commit>`
   inventory emitted by successful main CI. Local Apple or Android builds may
   use different host toolchains and are preflight evidence, not release
@@ -551,6 +565,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep b
 npm ci
 npm run check
 npm run test:release
+npm run web:verify
 npm run baseline:react-native:api -- --sdk-path ../react-native-sdk
 npm run sync:android-fixtures
 npm run sync:apple-fixtures

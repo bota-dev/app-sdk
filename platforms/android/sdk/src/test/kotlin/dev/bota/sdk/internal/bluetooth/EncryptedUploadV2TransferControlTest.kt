@@ -50,13 +50,12 @@ class EncryptedUploadV2TransferControlTest {
 
     @Test
     fun transferQueueFailsClosedAtTheDocumentedTotalByteBound() = runTest {
-        val overflowAttempted = CompletableDeferred<Unit>()
-        val driver = ControlDriver(overflow = true, overflowAttempted = overflowAttempted)
+        val driver = ControlDriver(overflow = true)
         val mapper = CoreModelMapper(TransferControlCore())
         val control = testControl(driver, mapper)
 
         val opened = control.open("device", request(), null) as EncryptedUploadV2OpenResult.Opened
-        withContext(Dispatchers.Default) { withTimeout(1_000) { overflowAttempted.await() } }
+        withContext(Dispatchers.Default) { withTimeout(1_000) { driver.awaitOverflowAttempt() } }
         val error = runCatching { opened.notifications.toList() }.exceptionOrNull()
 
         assertTrue(error.toString(), error is EncryptedUploadV2HostException)
@@ -348,7 +347,6 @@ class EncryptedUploadV2TransferControlTest {
 
 private class ControlDriver(
     private val overflow: Boolean = false,
-    private val overflowAttempted: CompletableDeferred<Unit>? = null,
     var failUnsubscribe: Boolean = false,
     private val confirmEntered: CompletableDeferred<Unit>? = null,
     private val confirmRelease: CompletableDeferred<Unit>? = null,
@@ -363,6 +361,7 @@ private class ControlDriver(
     private val unsubscribeRelease: CompletableDeferred<Unit>? = null,
 ) : BluetoothDriver {
     private val replies = MutableSharedFlow<BluetoothNotification>()
+    private val overflowAttempted = CompletableDeferred<Unit>()
     var subscribersAtWrite = 0
     var writeCount = 0
     var unsubscribeCount = 0
@@ -400,17 +399,11 @@ private class ControlDriver(
         emit(BluetoothNotification(1, byteArrayOf(0x40)))
         awaitCancellation()
     } else if (overflow) flow {
-        emit(BluetoothNotification(1, byteArrayOf(0x40)))
-        repeat(2_000) { index ->
-            if (index == 1_984) {
-                try {
-                    emit(BluetoothNotification(1, ByteArray(512)))
-                } finally {
-                    overflowAttempted?.complete(Unit)
-                }
-            } else {
-                emit(BluetoothNotification(1, ByteArray(512)))
-            }
+        try {
+            emit(BluetoothNotification(1, byteArrayOf(0x40)))
+            repeat(2_000) { emit(BluetoothNotification(1, ByteArray(512))) }
+        } finally {
+            overflowAttempted.complete(Unit)
         }
         awaitCancellation()
     } else replies
@@ -425,6 +418,8 @@ private class ControlDriver(
     }
 
     suspend fun emit(value: ByteArray) { replies.emit(BluetoothNotification(1, value)) }
+
+    suspend fun awaitOverflowAttempt() = overflowAttempted.await()
 
     override fun maximumWriteLength(peripheralId: String) = 512
     override fun connectionGeneration(peripheralId: String) = connectionGeneration

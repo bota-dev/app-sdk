@@ -12,7 +12,7 @@ const publishedV1 = readJson(
   new URL('../../release/examples/published-1.0.0-v1.json', import.meta.url),
 );
 const v2Example = readJson(
-  new URL('../../release/examples/1.1.0.json', import.meta.url),
+  new URL('../../release/examples/1.2.0-beta.0.json', import.meta.url),
 );
 const packagePairs = [
   ['apple', 'BotaAppleSDK'],
@@ -30,7 +30,7 @@ test('the synchronized release example includes every publishable facade', () =>
       platform,
       packageIdentifier,
     ]),
-    packagePairs.slice(0, 3),
+    [packagePairs[0], packagePairs[1], packagePairs[2], packagePairs[4]],
   );
 });
 

@@ -18,9 +18,10 @@ not need access to those documents to open an issue or propose a change.
 
 ## CI build time
 
-CI cancels an older run when a new commit updates the same pull request. Each
-main-branch run keeps its own concurrency group so its release candidate can
-finish. All test and packaging gates still run; release publication is unchanged.
+CI and the dependency license gate are manual-only to avoid consuming Actions
+minutes on pull requests and main-branch pushes. Run them from the Actions tab
+when full repository verification is needed. Tag-triggered release automation
+remains enabled.
 
 Rust jobs cache dependencies using the pinned toolchain and save the cache even
 when a later check fails. Caches remain scoped by job. Android's npm cache key

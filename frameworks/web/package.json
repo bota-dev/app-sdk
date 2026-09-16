@@ -1,0 +1,42 @@
+{
+  "name": "@bota.dev/web-sdk",
+  "version": "1.2.0-beta.0",
+  "description": "Bota SDK for Web Bluetooth applications",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bota-dev/app-sdk.git",
+    "directory": "frameworks/web"
+  },
+  "homepage": "https://github.com/bota-dev/app-sdk#readme",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build:wasm": "../../tools/web/build-wasm.sh",
+    "build": "npm run build:wasm && tsc -p tsconfig.build.json && cp src/generated/*.wasm dist/generated/",
+    "test": "npm run build:wasm && node --test src/__tests__/*.test.ts",
+    "type-check": "npm run build:wasm && tsc --noEmit",
+    "verify": "npm run test && npm run type-check && npm run build"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "npm@11.10.0",
+  "devDependencies": {
+    "@types/node": "22.20.3",
+    "@types/web-bluetooth": "0.0.21",
+    "typescript": "6.0.3"
+  }
+}

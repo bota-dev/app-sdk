@@ -87,6 +87,11 @@ pub mod release {
     }
 
     #[derive(Deserialize)]
+    struct PublishedPackageJson {
+        version: String,
+    }
+
+    #[derive(Deserialize)]
     struct CargoManifest {
         package: CargoPackage,
     }
@@ -132,6 +137,10 @@ pub mod release {
             return Err("workspace package.json must remain private".to_owned());
         }
         require_version("package.json", &package_json.version, &expected.version)?;
+
+        let web_package: PublishedPackageJson =
+            parse_json_file(&root.join("frameworks/web/package.json"))?;
+        require_version("@bota.dev/web-sdk", &web_package.version, &expected.version)?;
 
         let core_path = root.join("core/device-sdk-core/Cargo.toml");
         let core: CargoManifest = parse_toml_file(&core_path)?;

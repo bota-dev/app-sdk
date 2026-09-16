@@ -124,7 +124,7 @@ test('CI executes the pinned maintenance workflow baseline', () => {
     workflow,
     /npm run test:workflows -- --sdk-path \.ci\/react-native-workflow-baseline/
   );
-  assert.doesNotMatch(workflow, /path:\s*target\/react-native-workflow-baseline/);
+  assert.doesNotMatch(workflow, /target\/react-native-workflow-baseline/);
 });
 
 test('release verification executes the pinned maintenance workflow baseline', () => {
@@ -135,7 +135,7 @@ test('release verification executes the pinned maintenance workflow baseline', (
     workflow,
     /npm run test:workflows -- --sdk-path \.ci\/react-native-workflow-baseline/
   );
-  assert.doesNotMatch(workflow, /path:\s*target\/react-native-workflow-baseline/);
+  assert.doesNotMatch(workflow, /target\/react-native-workflow-baseline/);
 });
 
 test('CI generates unpublished Apple evidence without relaxing the release checksum gate', () => {
