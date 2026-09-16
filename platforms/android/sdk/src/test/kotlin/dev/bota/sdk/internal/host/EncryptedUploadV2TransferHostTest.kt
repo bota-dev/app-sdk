@@ -525,9 +525,11 @@ class EncryptedUploadV2TransferHostTest {
     @Test
     fun confirmedDisconnectFailsTheExactOldEffectAndWaitsForItsPumpToExit() = runTest {
         val registry = registry(AtomicInteger())
+        val pumpStarted = CompletableDeferred<Unit>()
         val pumpCancellationEntered = CompletableDeferred<Unit>()
         val pumpRelease = CompletableDeferred<Unit>()
         val oldNotifications = flow<EncryptedUploadV2TransferPayload> {
+            pumpStarted.complete(Unit)
             try {
                 awaitCancellation()
             } finally {
@@ -554,6 +556,9 @@ class EncryptedUploadV2TransferHostTest {
             }
         }
         assertEquals(HostEventKind.EncryptedUploadV2TransferStarted, startEvents.receive().kind)
+        withContext(Dispatchers.Default) {
+            withTimeout(AsyncSettlementTimeoutMilliseconds) { pumpStarted.await() }
+        }
 
         val resetting = async(start = CoroutineStart.UNDISPATCHED) { host.resetAfterConfirmedDisconnect() }
         withContext(Dispatchers.Default) {

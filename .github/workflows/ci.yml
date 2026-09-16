@@ -210,10 +210,10 @@ jobs:
           tools/android/package-release.sh --check
           tools/android/install-release-repository.sh target/android-release target/android-m2
           platforms/android/gradlew -p platforms/android \
-            :sdk:testDebugUnitTest \
             :sdk:lintRelease \
             :sdk:assembleDebug \
             :sdk:assembleDebugAndroidTest
+          platforms/android/gradlew -p platforms/android :sdk:testDebugUnitTest
           tools/android/test-legacy-consumer.sh --mode source --compile-only \
             --repository target/android-m2
           tools/android/test-legacy-consumer.sh --mode binary --compile-only \
