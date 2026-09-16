@@ -80,6 +80,10 @@ from the committed root package. Never hand-edit the release URL or checksum.
 
 Use Node.js 22 or newer and the Rust toolchain pinned by the repository:
 
+CI checks out the pinned maintenance React Native workflow baseline below
+`.ci/`. Do not move that checkout below Cargo's `target/`; the Rust cache action
+may recursively clean that directory before the baseline dependency install.
+
 ```bash
 npm ci
 npm run check

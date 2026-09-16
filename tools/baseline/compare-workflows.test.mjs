@@ -122,8 +122,9 @@ test('CI executes the pinned maintenance workflow baseline', () => {
   assert.match(workflow, /ref:\s*e11fde5be40027ec6cf1985fc0eadb00ece23e65/);
   assert.match(
     workflow,
-    /npm run test:workflows -- --sdk-path target\/react-native-workflow-baseline/
+    /npm run test:workflows -- --sdk-path \.ci\/react-native-workflow-baseline/
   );
+  assert.doesNotMatch(workflow, /target\/react-native-workflow-baseline/);
 });
 
 test('release verification executes the pinned maintenance workflow baseline', () => {
@@ -132,8 +133,9 @@ test('release verification executes the pinned maintenance workflow baseline', (
   assert.match(workflow, /ref:\s*e11fde5be40027ec6cf1985fc0eadb00ece23e65/);
   assert.match(
     workflow,
-    /npm run test:workflows -- --sdk-path target\/react-native-workflow-baseline/
+    /npm run test:workflows -- --sdk-path \.ci\/react-native-workflow-baseline/
   );
+  assert.doesNotMatch(workflow, /target\/react-native-workflow-baseline/);
 });
 
 test('all committed workflow suites satisfy the conformance contract', () => {

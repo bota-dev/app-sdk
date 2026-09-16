@@ -55,7 +55,7 @@ class EncryptedUploadV2TransferControlTest {
         val control = EncryptedUploadV2TransferControl(driver, mapper)
 
         val opened = control.open("device", request(), null) as EncryptedUploadV2OpenResult.Opened
-        withContext(Dispatchers.Default) { delay(50) }
+        withContext(Dispatchers.Default) { withTimeout(1_000) { driver.awaitOverflowAttempt() } }
         val error = runCatching { opened.notifications.toList() }.exceptionOrNull()
 
         assertTrue(error.toString(), error is EncryptedUploadV2HostException)
@@ -353,6 +353,7 @@ private class ControlDriver(
     private val unsubscribeRelease: CompletableDeferred<Unit>? = null,
 ) : BluetoothDriver {
     private val replies = MutableSharedFlow<BluetoothNotification>()
+    private val overflowAttempted = CompletableDeferred<Unit>()
     var subscribersAtWrite = 0
     var writeCount = 0
     var unsubscribeCount = 0
@@ -390,8 +391,12 @@ private class ControlDriver(
         emit(BluetoothNotification(1, byteArrayOf(0x40)))
         awaitCancellation()
     } else if (overflow) flow {
-        emit(BluetoothNotification(1, byteArrayOf(0x40)))
-        repeat(2_000) { emit(BluetoothNotification(1, ByteArray(512))) }
+        try {
+            emit(BluetoothNotification(1, byteArrayOf(0x40)))
+            repeat(2_000) { emit(BluetoothNotification(1, ByteArray(512))) }
+        } finally {
+            overflowAttempted.complete(Unit)
+        }
         awaitCancellation()
     } else replies
 
@@ -405,6 +410,8 @@ private class ControlDriver(
     }
 
     suspend fun emit(value: ByteArray) { replies.emit(BluetoothNotification(1, value)) }
+
+    suspend fun awaitOverflowAttempt() = overflowAttempted.await()
 
     override fun maximumWriteLength(peripheralId: String) = 512
     override fun connectionGeneration(peripheralId: String) = connectionGeneration

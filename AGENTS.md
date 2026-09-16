@@ -55,6 +55,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   SDK `0.0.65`. Executable workflow evidence uses the separate
   `reactNativeWorkflowBaseline` pinned to maintenance SDK `0.0.67`; CI and tag
   verification must check out that exact revision and run its referenced tests.
+  Keep that checkout under the ignored `.ci/` scratch directory, never Cargo's
+  `target/`, because the Rust cache action recursively cleans `target/` on a
+  cache mismatch.
 - `core/device-sdk-core/src/model/upload_profile.rs` is a side-effect-free
   policy/capability validator only. Its presence does not authorize a v2 START
   or change `runtimeWorkflow`; historical P10 requires an observed header.
