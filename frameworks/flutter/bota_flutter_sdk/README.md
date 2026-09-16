@@ -5,20 +5,20 @@ Flutter applications on iOS 15+ and Android API 26+ by delegating Bluetooth,
 file, network, and workflow ownership to `BotaAppleSDK` and
 `dev.bota:bota-android-sdk`.
 
-The source facade and deterministic `1.2.0-beta.0` release candidate are
-implemented and pass local publication and release-consumer gates. The package
-was not part of the published synchronized `1.1.0` release, and
-`1.2.0-beta.0` has not been published by this preparation. Until that exact
-prerelease exists on pub.dev, consume this package only from an exact source
-revision for development.
+The source facade is implemented and passes local build and release-consumer
+gates. The package was not part of the published synchronized `1.1.0` release.
+`1.2.0-beta.0` is occupied by an immutable non-Flutter tag and must not be
+reused. Until an owner-selected synchronized prerelease exists on pub.dev,
+consume this package only from an exact source revision for development.
 
 ## Install
 
-After the first Flutter beta is published, pin its exact prerelease version:
+After the first Flutter beta is published, pin its exact owner-selected
+prerelease version:
 
 ```yaml
 dependencies:
-  bota_flutter_sdk: 1.2.0-beta.0
+  bota_flutter_sdk: <published-version>
 ```
 
 For source development, point at an exact checkout rather than a moving branch:
@@ -247,6 +247,11 @@ try {
 }
 ```
 
+Adapter-only failures, including configuration conflicts, detached engines,
+missing engine-local devices, and cross-engine ownership violations, are
+projected into the same stable fields. Native bridge codes, messages, and
+detail text are not public branching surfaces.
+
 Unknown future enum values are preserved. Treat them as unsupported until the
 application has an explicit policy.
 
@@ -275,6 +280,7 @@ From the repository root:
 tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
 tools/flutter/test-consumers.sh
 npm run flutter:verify
+# Available only after replacing occupied beta.0 across every version authority:
 tools/flutter/package-release.sh --check
 ```
 

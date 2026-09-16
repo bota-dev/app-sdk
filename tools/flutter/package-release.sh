@@ -5,24 +5,33 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PACKAGE_PATH="frameworks/flutter/bota_flutter_sdk"
 PACKAGE_ROOT="$ROOT/$PACKAGE_PATH"
 OUTPUT="$ROOT/target/flutter-release"
-EXAMPLE_MANIFEST="$ROOT/release/examples/1.2.0-beta.0.json"
 MODE="${1:-}"
+OCCUPIED_VERSION="1.2.0-beta.0"
 
 if [[ "$MODE" != "--check" && "$MODE" != "--write-example" ]] || [[ $# -ne 1 ]]; then
   echo "usage: $0 <--check|--write-example>" >&2
   exit 2
 fi
 
-node_major="$(node -p 'Number(process.versions.node.split(".")[0])')"
-if [[ "$node_major" -lt 22 ]]; then
-  echo "Flutter release packaging requires Node.js 22 or newer" >&2
+sdk_version="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' "$ROOT/sdk-version.toml")"
+source_revision="$(git -C "$ROOT" rev-parse HEAD)"
+if [[ "$sdk_version" == "$OCCUPIED_VERSION" ]]; then
+  echo "Flutter release version $sdk_version is occupied by an immutable tag and must not be reused" >&2
+  exit 1
+fi
+if [[ -z "$sdk_version" ]] || [[ ! "$source_revision" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "Flutter release metadata is not synchronized" >&2
+  exit 1
+fi
+EXAMPLE_MANIFEST="$ROOT/release/examples/$sdk_version.json"
+if [[ ! -f "$EXAMPLE_MANIFEST" ]]; then
+  echo "Flutter release example is missing for synchronized version $sdk_version" >&2
   exit 1
 fi
 
-sdk_version="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' "$ROOT/sdk-version.toml")"
-source_revision="$(git -C "$ROOT" rev-parse HEAD)"
-if [[ "$sdk_version" != "1.2.0-beta.0" ]] || [[ ! "$source_revision" =~ ^[0-9a-f]{40}$ ]]; then
-  echo "Flutter release metadata is not synchronized" >&2
+node_major="$(node -p 'Number(process.versions.node.split(".")[0])')"
+if [[ "$node_major" -lt 22 ]]; then
+  echo "Flutter release packaging requires Node.js 22 or newer" >&2
   exit 1
 fi
 

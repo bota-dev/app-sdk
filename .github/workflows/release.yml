@@ -1158,25 +1158,6 @@ jobs:
           name: flutter-release-${{ github.ref_name }}
           path: target/flutter-release/
 
-      - name: Print protected first-publish command
-        if: github.ref_name == 'v1.2.0-beta.0'
-        shell: bash
-        run: |
-          set -euo pipefail
-          RELEASE_TAG="$GITHUB_REF_NAME"
-          {
-            echo '### One-time pub.dev bootstrap'
-            echo 'Run from a fresh clone after reviewing the preserved candidate:'
-            echo '```bash'
-            echo 'git clone https://github.com/bota-dev/app-sdk.git bota-app-sdk-publish'
-            echo 'cd bota-app-sdk-publish'
-            echo 'git fetch origin "refs/tags/'"$RELEASE_TAG"':refs/tags/'"$RELEASE_TAG"'"'
-            printf 'git checkout --detach "%s"\n' "$RELEASE_TAG"
-            echo 'cd frameworks/flutter/bota_flutter_sdk'
-            echo 'flutter pub publish'
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
       - name: Download and verify public pub.dev archive
         shell: bash
         run: |

@@ -544,6 +544,38 @@ fn flutter_ci_builds_and_uploads_the_deterministic_candidate() {
 }
 
 #[test]
+fn flutter_candidate_tooling_refuses_the_occupied_beta_zero_identity() {
+    let contents = fs::read_to_string(root().join("tools/flutter/package-release.sh")).unwrap();
+    let output = Command::new(root().join("tools/flutter/package-release.sh"))
+        .arg("--check")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8(output.stderr).unwrap(),
+        "Flutter release version 1.2.0-beta.0 is occupied by an immutable tag and must not be reused\n"
+    );
+    assert!(contents.contains("OCCUPIED_VERSION=\"1.2.0-beta.0\""));
+    assert!(contents.contains("release/examples/$sdk_version.json"));
+    assert!(contents.contains("is occupied by an immutable tag"));
+    assert!(!contents.contains("EXAMPLE_MANIFEST=\"$ROOT/release/examples/1.2.0-beta.0.json\""));
+    assert!(!contents.contains("$sdk_version\" != \"1.2.0-beta.0"));
+}
+
+#[test]
+fn primary_operator_docs_mark_beta_zero_occupied() {
+    for path in ["README.md", "docs/releasing.md"] {
+        let contents = fs::read_to_string(root().join(path)).unwrap();
+        assert!(contents.contains("`1.2.0-beta.0` is occupied"), "{path}");
+        assert!(
+            contents.contains("must not be reused"),
+            "{path} must forbid reuse"
+        );
+    }
+}
+
+#[test]
 fn flutter_release_is_ordered_after_public_native_dependencies_and_verified_before_completion() {
     let contents = fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
     let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
@@ -573,41 +605,17 @@ fn flutter_release_is_ordered_after_public_native_dependencies_and_verified_befo
     assert_eq!(bootstrap["needs"].as_str(), Some("flutter"));
     assert_eq!(bootstrap["environment"].as_str(), Some("release"));
     let bootstrap_source = serde_yaml_ng::to_string(bootstrap).unwrap();
-    assert!(bootstrap_source.contains("echo 'flutter pub publish'"));
-    assert!(
-        !bootstrap_source
-            .lines()
-            .any(|line| line.trim() == "flutter pub publish")
-    );
+    assert!(!bootstrap_source.contains("flutter pub publish"));
+    assert!(!bootstrap_source.contains("v1.2.0-beta.0"));
     assert!(bootstrap_source.contains("verify-publication.mjs verify-public"));
     assert!(bootstrap_source.contains("api/archives/bota_flutter_sdk-"));
-    let bootstrap_command = bootstrap["steps"]
-        .as_sequence()
-        .unwrap()
-        .iter()
-        .find(|step| step["name"].as_str() == Some("Print protected first-publish command"))
-        .unwrap();
-    assert_eq!(
-        bootstrap_command["if"].as_str(),
-        Some("github.ref_name == 'v1.2.0-beta.0'")
+    assert!(
+        bootstrap["steps"]
+            .as_sequence()
+            .unwrap()
+            .iter()
+            .all(|step| step["name"].as_str() != Some("Print protected first-publish command"))
     );
-    let summary = std::env::temp_dir().join(format!(
-        "bota-flutter-bootstrap-summary-{}-{}",
-        std::process::id(),
-        NEXT_ANDROID_FIXTURE_ID.fetch_add(1, Ordering::Relaxed),
-    ));
-    let status = Command::new("bash")
-        .arg("-c")
-        .arg(bootstrap_command["run"].as_str().unwrap())
-        .env("GITHUB_REF_NAME", "v1.2.0-beta.0")
-        .env("GITHUB_STEP_SUMMARY", &summary)
-        .status()
-        .unwrap();
-    assert!(status.success());
-    let rendered = fs::read_to_string(&summary).unwrap();
-    fs::remove_file(summary).unwrap();
-    assert!(rendered.contains("git checkout --detach \"v1.2.0-beta.0\""));
-    assert!(!rendered.contains("$RELEASE_TAG"));
 
     let complete = &workflow["jobs"]["complete-release"];
     assert_eq!(

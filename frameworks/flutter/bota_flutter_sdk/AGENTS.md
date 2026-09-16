@@ -50,7 +50,9 @@ source package; never add `BOTA_APPLE_SDK_PACKAGE_PATH` to public package files.
 ## Release Candidate
 
 `tools/flutter/package-release.sh --check` is the complete local publication
-gate. It verifies synchronized metadata, Pigeon drift, formatting, analysis,
+gate after an owner-selected synchronized version replaces occupied
+`1.2.0-beta.0`; it must fail closed while beta.0 remains selected. It verifies
+synchronized metadata, Pigeon drift, formatting, analysis,
 all Dart tests, hosted dependency licenses, `flutter pub publish --dry-run`,
 and fresh Android and iOS consumers before preserving a deterministic archive,
 normalized inventory, lock, manifest, and evidence under

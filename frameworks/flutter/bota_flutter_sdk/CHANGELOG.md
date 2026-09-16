@@ -1,7 +1,12 @@
 # Changelog
 
-## 1.2.0-beta.0 (unpublished candidate)
+## 1.2.0-beta.0 (historical unpublished Flutter metadata)
 
+- Projected adapter-only bridge failures into sanitized stable Dart error codes
+  while preserving the public operation; added `operationNotOwned` for
+  cross-engine ownership rejection.
+- Marked this version identity occupied by immutable non-Flutter source. The
+  package must receive a new synchronized version before release packaging.
 - Added the initial iOS and Android Flutter facade for discovery, connection,
   status, recording control and batch transfer, provisioning, connection
   settings, upload ownership, WiFi, OTA, sanitized logs, remove-only

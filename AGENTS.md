@@ -86,7 +86,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   fresh local repository. Never weaken the gate to accept stale output or a
   remote native substitute.
 - `tools/flutter/package-release.sh --check` is the non-publishing Flutter
-  release gate. It must preserve only deterministic archive, inventory, lock,
+  release gate after an owner-selected synchronized version replaces occupied
+  `1.2.0-beta.0`; it must refuse beta.0. It preserves only deterministic archive, inventory, lock,
   license, dry-run, consumer, and manifest evidence under
   `target/flutter-release`. Public Flutter Apple metadata has no local override;
   source gates patch only disposable Swift package copies. The archive verifier
@@ -688,10 +689,11 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
 - The private React Native foundation is not a release artifact and must not be
   added to a release manifest or published to npm before Milestone 4 exits.
 - Read `docs/releasing.md` before creating or pushing a release tag.
-- Prepared `1.2.0-beta.0` metadata and evidence do not claim publication. The
-  first Flutter publication requires the protected clean-tag interactive
-  bootstrap; later betas use the protected OIDC workflow and verify occupied
-  versions instead of attempting to replace them.
+- Prepared `1.2.0-beta.0` metadata and evidence do not claim publication. That
+  identity is occupied by immutable non-Flutter source and must not be reused.
+  The next synchronized version requires an explicit owner decision; later
+  betas use the protected OIDC workflow and verify occupied versions instead
+  of attempting to replace them.
 - The public Apple package is the root `Package.swift`; keep the nested
   `platforms/apple/Package.swift` for local development against the generated
   XCFramework.

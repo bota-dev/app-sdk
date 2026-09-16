@@ -2,9 +2,9 @@
 
 Published synchronized beta `1.1.0` includes the Apple `BotaAppleSDK` Swift
 package for iOS 15+ and macOS 13+, the Android Maven package, and the React
-Native package. Prepared `1.2.0-beta.0` metadata additionally includes the
-first Flutter and read-only `@bota.dev/web-sdk` candidates; preparation does
-not claim publication. Apple consumers add
+Native package. `1.2.0-beta.0` is occupied by an immutable annotated tag for
+non-Flutter source; it must not be reused for the prepared Flutter facade. No
+replacement synchronized version has been selected. Apple consumers add
 `https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
 compiles the Swift facade source and downloads a checksummed
 `BotaDeviceSDKCore.xcframework.zip` from the matching GitHub Release.
@@ -15,8 +15,8 @@ depend on a published release.
 
 The Flutter `bota_flutter_sdk` facade is implemented and locally gated for iOS
 15+ and Android API 26+, but it was not published with synchronized version
-`1.1.0`. Its first planned pub.dev release is `1.2.0-beta.0`; do not advertise
-or attempt to recover a nonexistent Flutter `1.1.0` artifact.
+`1.1.0` or the occupied `1.2.0-beta.0` identity. Do not advertise or attempt to
+recover either nonexistent Flutter artifact.
 
 The Android package uses Maven coordinate `dev.bota:bota-android-sdk`. The
 synchronized `1.1.0` beta release publishes it through the protected Central
@@ -32,7 +32,8 @@ The synchronized line is beta. New versions must match `1.x.y-beta.n`, npm
 publication must use dist-tag `beta`, and GitHub Releases remain prereleases.
 SwiftPM and Maven Central consumers pin the exact synchronized beta version.
 Historical immutable `1.1.0` is the one recovery exception; do not rename,
-unpublish, or recreate it. The next synchronized release is `1.2.0-beta.0`.
+unpublish, or recreate it. The next synchronized release requires an explicit
+owner decision; do not move, delete, recreate, or reuse `v1.2.0-beta.0`.
 Before that first Web publication, configure the npm trusted publisher for
 `@bota.dev/web-sdk` against the protected `release` environment and this
 repository's release workflow. The workflow intentionally has no token-based
@@ -60,9 +61,10 @@ new hardware or firmware requires another lab run.
 Start from a clean `main` branch. Update every synchronized version authority
 and commit that version bump before calculating the Apple checksum.
 
-While the beta policy is active, use a version such as `1.2.0-beta.0`. The
-release-channel resolver rejects a new stable tag before any publication work
-starts.
+While the beta policy is active, select a new `1.x.y-beta.n` version that is not
+already occupied. Update every version authority and the matching
+`release/examples/VERSION.json` together. The release-channel resolver rejects
+a new stable tag before any publication work starts.
 
 Generate the deterministic archive and write the matching root Swift package:
 
@@ -121,6 +123,7 @@ tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
 tools/flutter/test-android-adapter.sh
 tools/flutter/test-consumers.sh
 npm run flutter:verify
+# Expected to refuse while sdk-version.toml remains occupied beta.0.
 tools/flutter/package-release.sh --check
 node --test tools/flutter/verify-publication.test.mjs tools/release/*.test.mjs
 cargo deny check
@@ -254,16 +257,18 @@ never release evidence by themselves. A consumer failure must not fall back to
 an earlier application build, cached native candidate, remote Maven artifact,
 or remote Apple package.
 
-The first Flutter beta may be published only after the synchronized Apple and
-Android artifacts at `1.2.0-beta.0` are public and their no-override consumers
-pass. The protected tag workflow must preserve the exact Flutter candidate,
-run `flutter pub publish --dry-run`, and pause for the initial interactive
-pub.dev bootstrap. Later prereleases use pub.dev's GitHub OIDC workflow. Every
-publication is then downloaded and compared with the candidate's exact file
-hashes and normalized archive SHA-256 before release completion.
+The first Flutter beta may be published only after an owner selects a new
+synchronized version, every version authority changes together, and the Apple
+and Android artifacts at that exact version are public with passing no-override
+consumers. The initial pub.dev publication mechanism must be deliberately
+authorized for that selected version; the workflow no longer prints a beta.0
+publish command. Later prereleases use pub.dev's GitHub OIDC workflow. Every
+publication is downloaded and compared with the candidate's exact file hashes
+and normalized archive SHA-256 before release completion.
 
-`tools/flutter/package-release.sh --check` writes only deterministic evidence
-to `target/flutter-release/`: the candidate archive, exact package inventory,
+`tools/flutter/package-release.sh --check` refuses occupied
+`1.2.0-beta.0`. After a synchronized owner-selected version update, it writes
+only deterministic evidence to `target/flutter-release/`: the candidate archive, exact package inventory,
 v2 release manifest, dependency lock and graph, hosted-package license hashes,
 normalized dry-run output, and fixed verification record. It rejects unsafe or
 hidden paths, links, credentials, generated/build outputs, local Apple
@@ -348,10 +353,10 @@ install its own Node.js dependencies before running repository tooling.
 9. Rebuilds the exact Flutter candidate only after the public Apple and Android
    consumers pass and compares it to the Flutter subset of the CI inventory
    named in the annotated tag.
-10. For `1.2.0-beta.0`, pauses at the protected environment and prints the exact
-    clean-tag interactive publish command. For later beta tags, the separate
-    OIDC workflow waits for that ordered candidate artifact before invoking
-    Dart's official reusable publisher.
+10. Refuses the occupied `1.2.0-beta.0` identity. After the owner selects and
+    prepares a new synchronized version, its explicitly authorized first-publish
+    procedure must consume the ordered candidate artifact; later beta tags use
+    Dart's official reusable OIDC publisher.
 11. Downloads the public pub.dev archive, compares its complete normalized
     inventory and file hashes, preserves public evidence, and only then attaches
     Flutter artifacts as the completed synchronized prerelease evidence.

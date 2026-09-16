@@ -26,8 +26,10 @@ The already-published `1.1.0` artifacts are reclassified operationally:
 - Maven Central `dev.bota:bota-android-sdk:1.1.0` and SwiftPM tag `v1.1.0`
   remain available and must be installed by exact version during the beta.
 
-The next synchronized App SDK release is `1.2.0-beta.0`. A prerelease must not
-be created for the already-finalized `1.1.0` tuple because that would move
+The historical next-release target `1.2.0-beta.0` is now occupied by an
+immutable annotated tag and must not be reused for different source. The next
+synchronized App SDK version requires an explicit owner decision. A prerelease
+must not be created for the already-finalized `1.1.0` tuple because that would move
 semantic-version precedence backward.
 
 Demo and Bota One may continue pinning exact App SDK version `1.1.0` as beta

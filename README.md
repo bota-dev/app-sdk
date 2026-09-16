@@ -25,15 +25,16 @@ synchronized version shown in the installation sections below. New synchronized
 releases use `1.x.y-beta.n`; promotion to a stable channel is a separate release
 decision.
 
-The Flutter facade and deterministic synchronized `1.2.0-beta.0` candidate are
-implemented and pass local publication and release-consumer gates, but no
-Flutter version has been published yet. Flutter applications must not infer
-pub.dev availability from the Apple, Android, or React Native release alone.
+The Flutter facade is implemented and passes local build and release-consumer
+gates, but no Flutter version has been published yet. `1.2.0-beta.0` is occupied
+by an immutable annotated tag for earlier non-Flutter source; it must not be reused
+for this Flutter-bearing tree. Flutter applications must not infer
+pub.dev availability from the Apple, Android, or React Native release.
 
 ## Current Status
 
-The next synchronized candidate is `1.2.0-beta.0`. It adds the first
-`@bota.dev/web-sdk` package: an explicit, foreground Web Bluetooth picker,
+The next synchronized version has not been selected. The prepared source adds
+the first `@bota.dev/web-sdk` package: an explicit, foreground Web Bluetooth picker,
 exact serial verification through the shared Rust/WASM workflow, explicit
 disconnect, and fresh read-only identity, device-status, and
 encrypted-upload-v2 capability snapshots. A packed-package gate installs the
@@ -185,8 +186,9 @@ command, host event, host effect, and workflow notification through typed
 packets. Shared protocol decode/encode entry points cover the frozen status,
 recording list and control, transfer, OTA, provisioning, settings, and log fixtures. The Apple
 package and Android AAR are public platform distributions. The Flutter facade
-and read-only Web candidate are implemented for `1.2.0-beta.0` but are not yet
-published; the remaining planned facades are also unpublished.
+and read-only Web source are implemented, but the current Flutter-bearing
+source has no releasable synchronized version; the remaining planned facades
+are also unpublished.
 Encrypted Upload v2 has an additive engine/ABI surface whose compatibility
 metadata remains contract-only while firmware, React Native, release, and
 hardware gates remain open. The surface provides profile-gated session
@@ -345,8 +347,8 @@ is not inferred from CI and remains a human release approval. The root Swift
 package distributes the Apple facade for iOS and macOS while keeping the Rust
 core in a checksummed XCFramework. This release does not replace the production
 React Native maintenance line or claim published Flutter, Web, or Windows
-availability. Flutter and Web are available only as the scoped
-`1.2.0-beta.0` candidates described above.
+availability. Flutter is available only from an exact source revision until an
+owner-selected synchronized version is prepared and published.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and the
 [firmware compatibility matrix](protocol/compatibility/firmware-compatibility.json).
@@ -391,17 +393,17 @@ implementation("dev.bota:bota-android-sdk:1.1.0")
 
 ## Flutter Beta Candidate
 
-The Flutter facade supports iOS 15+ and Android API 26+. The synchronized
-`1.2.0-beta.0` source and deterministic archive candidate are prepared, but
-the package is not published. See the
+The Flutter facade supports iOS 15+ and Android API 26+. Its source and local
+build gates are prepared, but the package is not published. See the
 [Flutter integration guide](frameworks/flutter/bota_flutter_sdk/README.md) for
 exact-version installation, permissions, backend callbacks, serial-strict
 reconnect, retained encrypted batch handoff, WiFi, OTA, remove-only
 deprovision, authenticated reset, and unsupported targets.
 
-The first planned pub.dev release is `1.2.0-beta.0`; applications must opt into
-that exact prerelease only after pub.dev publication and public archive
-verification complete.
+The historical `1.2.0-beta.0` preparation cannot be published from this source
+because that immutable tag identifies non-Flutter source. An owner must select
+a new synchronized prerelease and update every version authority before
+candidate packaging or publication can resume.
 
 ## Web Beta Installation
 
@@ -494,6 +496,7 @@ tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
 tools/flutter/test-android-adapter.sh
 tools/flutter/test-consumers.sh
 npm run flutter:verify
+# After an owner-selected synchronized version replaces occupied beta.0:
 tools/flutter/package-release.sh --check
 ```
 
