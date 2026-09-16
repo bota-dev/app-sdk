@@ -218,7 +218,7 @@ fn ci_workflow_validates_the_current_release_manifest() {
 }
 
 #[test]
-fn verification_workflows_are_manual_only() {
+fn verification_workflows_cover_pull_requests_and_main_without_cancelling_main() {
     for path in [
         ".github/workflows/ci.yml",
         ".github/workflows/license-gate.yml",
@@ -227,12 +227,34 @@ fn verification_workflows_are_manual_only() {
         let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
         let triggers = workflow["on"].as_mapping().unwrap();
 
-        assert_eq!(triggers.len(), 1, "{path} must remain manual-only");
-        assert!(
-            triggers.contains_key(serde_yaml_ng::Value::String("workflow_dispatch".to_owned())),
-            "{path} must expose workflow_dispatch"
+        assert_eq!(
+            triggers.len(),
+            3,
+            "{path} must expose exactly three triggers"
+        );
+        for trigger in ["workflow_dispatch", "pull_request", "push"] {
+            assert!(
+                triggers.contains_key(serde_yaml_ng::Value::String(trigger.to_owned())),
+                "{path} must expose {trigger}"
+            );
+        }
+        assert_eq!(
+            workflow["on"]["push"]["branches"],
+            serde_yaml_ng::from_str::<serde_yaml_ng::Value>("[main]").unwrap(),
+            "{path} must run on main pushes"
         );
     }
+
+    let contents = fs::read_to_string(root().join(".github/workflows/ci.yml")).unwrap();
+    let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
+    assert_eq!(
+        workflow["concurrency"]["group"].as_str(),
+        Some("${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}")
+    );
+    assert_eq!(
+        workflow["concurrency"]["cancel-in-progress"].as_str(),
+        Some("${{ github.event_name == 'pull_request' }}")
+    );
 }
 
 #[test]
