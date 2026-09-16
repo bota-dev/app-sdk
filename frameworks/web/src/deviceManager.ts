@@ -59,10 +59,12 @@ export class DeviceManager {
     }
 
     this.operationActive = true
+    let selected: BrowserDeviceHandle | null = null
     try {
-      const selected = await this.transport.requestDevice().catch((error: unknown) => {
+      selected = await this.transport.requestDevice().catch((error: unknown) => {
         throw pickerError(error)
       })
+      if (this.destroyed) throw new BotaSDKError('cancelled', 'connect')
       this.activeDevice = selected
       this.removeDisconnectListener = this.transport.onDisconnected(selected, () => {
         this.transportConnected = false
@@ -77,10 +79,17 @@ export class DeviceManager {
         cancellationId,
       })
       await this.executeEffects(effects)
+      if (this.destroyed || this.activeDevice !== selected) {
+        throw new BotaSDKError('cancelled', 'connect')
+      }
       if (!this.verifiedDevice) throw new BotaSDKError('internal_error', 'connect')
       return this.verifiedDevice
     } catch (error) {
+      const lifecycleCancelled = this.destroyed
       await this.cleanupFailedConnection()
+      if (lifecycleCancelled) {
+        throw new BotaSDKError('cancelled', 'connect', { cause: error })
+      }
       throw normalizeCoreError(error, 'connect')
     } finally {
       this.operationActive = false
@@ -263,15 +272,19 @@ export class DeviceManager {
         if (!device || device.id !== effect.peripheralId) throw new BotaSDKError('internal_error', 'connect')
         try {
           await this.transport.connect(device)
-          this.transportConnected = true
-          return this.dispatchCore({
-            requestId: effect.requestId,
-            kind: 'ble_connected',
-            peripheralId: device.id,
-          })
         } catch (error) {
           return this.dispatchBleFailure(effect.requestId, error)
         }
+        if (this.destroyed || this.activeDevice !== device) {
+          await this.transport.disconnect(device).catch(() => undefined)
+          throw new BotaSDKError('cancelled', 'connect')
+        }
+        this.transportConnected = true
+        return this.dispatchCore({
+          requestId: effect.requestId,
+          kind: 'ble_connected',
+          peripheralId: device.id,
+        })
       case 'ble_discover_services':
         if (!device || device.id !== effect.peripheralId) throw new BotaSDKError('internal_error', 'connect')
         try {

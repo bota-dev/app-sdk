@@ -15,7 +15,10 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
     name: 'Bota Pin',
   }
   pickerError: unknown = null
+  pickerGate: Promise<void> | null = null
   connectGate: Promise<void> | null = null
+  discoverGate: Promise<void> | null = null
+  emitDisconnectedOnDisconnect = false
   serialNumber = 'GDPPSBZJN6'
   readonly readValues = new Map<string, Uint8Array>()
   readonly readErrors = new Map<string, unknown>()
@@ -23,6 +26,7 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
 
   async requestDevice(): Promise<BrowserDeviceHandle> {
     this.calls.push('request_device')
+    if (this.pickerGate) await this.pickerGate
     if (this.pickerError) throw this.pickerError
     return this.device
   }
@@ -34,6 +38,7 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
 
   async discoverServices(device: BrowserDeviceHandle): Promise<void> {
     this.calls.push(`discover:${device.id}`)
+    if (this.discoverGate) await this.discoverGate
   }
 
   async read(
@@ -55,6 +60,7 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
 
   async disconnect(device: BrowserDeviceHandle): Promise<void> {
     this.calls.push(`disconnect:${device.id}`)
+    if (this.emitDisconnectedOnDisconnect) this.emitDisconnected()
   }
 
   onDisconnected(

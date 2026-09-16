@@ -888,6 +888,10 @@ Information serial characteristic matches through the Rust workflow. Every
 snapshot reads and verifies that serial again, then returns optional model,
 hardware, and firmware identity, decoded device status, and a fresh decoded
 encrypted-upload-v2 capability value when characteristic `0406` exists.
+If client destruction races an open picker, the eventual picker result is
+rejected as cancelled before it can become the active device or start GATT
+work. If destruction races later connection work, the captured device is
+disconnected and cannot be published by a late workflow completion.
 
 This release is foreground-only and requires a secure-context browser with Web
 Bluetooth. It has no automatic scan, saved-device reconnect, background or

@@ -16,6 +16,12 @@ Use a secure context and a browser that implements Web Bluetooth. The initial
 `connect()` call must run from a user gesture because it opens the browser's
 device picker.
 
+Destroying the client while that picker or its connection workflow is pending
+cancels the SDK connection. If the browser later returns a selection, the SDK
+rejects it as `cancelled` before starting GATT. If GATT work had already
+started, the SDK disconnects the selected device and rejects the pending
+connection as `cancelled` without publishing it.
+
 ## Connect and read a snapshot
 
 ```ts

@@ -63,6 +63,31 @@ test('picker cancellation maps to the stable public error', async () => {
   )
 })
 
+test('destroy while the picker is pending cancels before any GATT work', async () => {
+  const transport = new FakeBrowserBluetoothTransport()
+  let releasePicker!: () => void
+  transport.pickerGate = new Promise<void>((resolve) => {
+    releasePicker = resolve
+  })
+  const { manager } = await createManager(transport)
+  const connecting = manager.connect({ expectedSerialNumber: 'GDPPSBZJN6' })
+
+  assert.deepEqual(transport.calls, ['request_device'])
+  await manager.destroy()
+
+  const rejection = assert.rejects(connecting, (error: unknown) => {
+    assert.ok(error instanceof BotaSDKError)
+    assert.equal(error.code, 'cancelled')
+    assert.equal(error.operation, 'connect')
+    return true
+  })
+  releasePicker()
+  await rejection
+
+  assert.deepEqual(transport.calls, ['request_device'])
+  assert.equal(manager.connectedDevice, null)
+})
+
 test('the browser picker requests the read-only device services', async () => {
   const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
   let options: RequestDeviceOptions | undefined
@@ -140,6 +165,23 @@ test('identity mismatch disconnects the selected device before rejection', async
   assert.equal(manager.connectedDevice, null)
 })
 
+test('identity mismatch remains stable when disconnect emits its browser event', async () => {
+  const transport = new FakeBrowserBluetoothTransport()
+  transport.serialNumber = 'OTHERDEVICE1'
+  transport.emitDisconnectedOnDisconnect = true
+  const { manager } = await createManager(transport)
+
+  await assert.rejects(
+    manager.connect({ expectedSerialNumber: 'GDPPSBZJN6' }),
+    (error: unknown) => {
+      assert.ok(error instanceof BotaSDKError)
+      assert.equal(error.code, 'identity_mismatch')
+      return true
+    },
+  )
+  assert.equal(manager.connectedDevice, null)
+})
+
 test('a second connection cannot replace the active owner', async () => {
   const transport = new FakeBrowserBluetoothTransport()
   let releaseConnect!: () => void
@@ -161,6 +203,73 @@ test('a second connection cannot replace the active owner', async () => {
 
   releaseConnect()
   await first
+})
+
+test('destroy while GATT connect is pending disconnects the late connection', async () => {
+  const transport = new FakeBrowserBluetoothTransport()
+  let releaseConnect!: () => void
+  transport.connectGate = new Promise<void>((resolve) => {
+    releaseConnect = resolve
+  })
+  const { manager } = await createManager(transport)
+  const connecting = manager.connect({ expectedSerialNumber: 'GDPPSBZJN6' })
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+  assert.deepEqual(transport.calls, [
+    'request_device',
+    'connect:browser-peripheral-1',
+  ])
+  await manager.destroy()
+
+  const rejection = assert.rejects(connecting, (error: unknown) => {
+    assert.ok(error instanceof BotaSDKError)
+    assert.equal(error.code, 'cancelled')
+    assert.equal(error.operation, 'connect')
+    return true
+  })
+  releaseConnect()
+  await rejection
+
+  assert.deepEqual(transport.calls, [
+    'request_device',
+    'connect:browser-peripheral-1',
+    'disconnect:browser-peripheral-1',
+  ])
+  assert.equal(manager.connectedDevice, null)
+})
+
+test('destroy during connection workflow cannot publish a late device', async () => {
+  const transport = new FakeBrowserBluetoothTransport()
+  let releaseDiscovery!: () => void
+  transport.discoverGate = new Promise<void>((resolve) => {
+    releaseDiscovery = resolve
+  })
+  const { manager } = await createManager(transport)
+  const connecting = manager.connect({ expectedSerialNumber: 'GDPPSBZJN6' })
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+  assert.deepEqual(transport.calls, [
+    'request_device',
+    'connect:browser-peripheral-1',
+    'discover:browser-peripheral-1',
+  ])
+  await manager.destroy()
+
+  const rejection = assert.rejects(connecting, (error: unknown) => {
+    assert.ok(error instanceof BotaSDKError)
+    assert.equal(error.code, 'cancelled')
+    assert.equal(error.operation, 'connect')
+    return true
+  })
+  releaseDiscovery()
+  await rejection
+
+  assert.equal(
+    transport.calls.filter((call) => call === 'disconnect:browser-peripheral-1')
+      .length,
+    1,
+  )
+  assert.equal(manager.connectedDevice, null)
 })
 
 test('browser disconnect and destroy clear connection ownership', async () => {
