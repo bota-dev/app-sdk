@@ -18,6 +18,7 @@ final class InMemoryBotaHostApi extends BotaHostApi {
   final List<String> cancelledSubscriptions = <String>[];
 
   Completer<void>? configureCompleter;
+  Object? configureError;
   Completer<BotaConnectedDeviceMessage>? connectCompleter;
   Object? connectError;
   StackTrace? connectErrorStack;
@@ -35,6 +36,10 @@ final class InMemoryBotaHostApi extends BotaHostApi {
     BotaConfigurationMessage configuration,
   ) {
     _record('configure', operationId, configuration);
+    final Object? error = configureError;
+    if (error != null) {
+      return Future<void>.error(error, StackTrace.current);
+    }
     return configureCompleter?.future ?? Future<void>.value();
   }
 

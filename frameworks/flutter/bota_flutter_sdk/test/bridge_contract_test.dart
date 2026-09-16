@@ -231,7 +231,54 @@ sealed class BotaEventPayloadMessage {}''')
       expect(pattern.hasMatch('g123456789abcdef0123456789abcdef'), isFalse);
     },
   );
+
+  test('Dart maps every native adapter-only bridge error code', () {
+    const Set<String> expectedCodes = <String>{
+      'callback_id_mismatch',
+      'callback_kind_mismatch',
+      'callback_unavailable',
+      'cancelled',
+      'configuration_conflict',
+      'device_not_found',
+      'duplicate_identifier',
+      'engine_detached',
+      'invalid_callback_response',
+      'invalid_configuration',
+      'invalid_operation_id',
+      'invalid_request',
+      'not_configured',
+      'operation_in_progress',
+      'operation_not_owned',
+      'subscription_not_found',
+      'unsupported_subscription',
+    };
+    final Set<String> nativeCodes = <String>{
+      ..._bridgeErrorCodes(
+        File(
+          'ios/bota_flutter_sdk/Sources/bota_flutter_sdk/BotaAppleAdapter.swift',
+        ).readAsStringSync(),
+      ),
+      ..._bridgeErrorCodes(
+        File(
+          'android/src/main/kotlin/dev/bota/sdk/flutter/BotaAndroidAdapter.kt',
+        ).readAsStringSync(),
+      ),
+    };
+    final String dartPlatform = File(
+      'lib/src/pigeon_platform.dart',
+    ).readAsStringSync();
+
+    expect(nativeCodes, expectedCodes);
+    for (final String code in expectedCodes) {
+      expect(dartPlatform, contains("'$code' =>"), reason: code);
+    }
+  });
 }
+
+Set<String> _bridgeErrorCodes(String source) => RegExp(
+  r'(?:bridgeError\(|BotaBridgeError\(\s*code:)\s*"([a-z_]+)"',
+  multiLine: true,
+).allMatches(source).map((RegExpMatch match) => match.group(1)!).toSet();
 
 String _classBody(String source, String className) {
   final RegExpMatch declaration = RegExp(

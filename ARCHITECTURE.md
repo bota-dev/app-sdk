@@ -73,13 +73,12 @@ consumer, and includes it in the annotated tag inventory. The protected
 release publishes only the preserved tarball under npm `beta`, verifies the
 registry `dist.shasum`, and does not move `latest`.
 
-The Flutter facade is implemented in source and has a deterministic
-`1.2.0-beta.0` candidate, but it is not part of the immutable `1.1.0` public
-release and has not been published. The candidate binds its exact source
+The Flutter facade is implemented in source, but it is not part of the
+immutable `1.1.0` public release and has not been published. The historical
+`1.2.0-beta.0` candidate identity is occupied by immutable non-Flutter source
+and cannot identify this tree. A future candidate binds its exact source
 revision, Pigeon identity, raw and normalized archive digests, and every file's
-digest. Flutter publication may proceed only after the exact Apple and Android
-artifacts at that version exist, clean no-override consumers resolve them, and
-the candidate passes license, dry-run, build, and inventory verification.
+digest only after an owner selects a new synchronized version.
 
 ## Migration Rule
 
@@ -766,6 +765,12 @@ Pigeon carries bounded commands, typed progress, native file paths, and
 request-bound application callback results. Operation, subscription, and
 callback ownership is removed before terminal completion, and destroy is
 terminal and idempotent.
+
+Native SDK failures retain their typed error details. Adapter-only failures use
+an exhaustive sanitized projection from native outer bridge codes to stable
+Dart error codes while preserving the operation selected by the public Dart
+call. Unknown outer codes fail closed and native message/detail text is never a
+public branching surface.
 
 The application supplies provisioning material, factory-reset grants, durable
 reset-result persistence, and firmware sources through one-shot callbacks.

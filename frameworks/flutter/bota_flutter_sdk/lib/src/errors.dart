@@ -31,6 +31,7 @@ final class BotaErrorCode {
   static const configurationConflict = BotaErrorCode._(
     'configuration_conflict',
   );
+  static const operationNotOwned = BotaErrorCode._('operation_not_owned');
 
   final String name;
   final int? rawValue;

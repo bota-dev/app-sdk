@@ -988,8 +988,15 @@ BotaSdkException _configurationConflict() => const BotaSdkException(
 
 BotaSdkException _stableError(Object error, BotaOperation operation) {
   if (error case BotaSdkException sdkError) return sdkError;
-  if (error case PlatformException(details: final BotaErrorMessage details)) {
-    return _stableBridgeError(details, operation);
+  if (error case PlatformException(
+    :final code,
+    details: final BotaErrorMessage details,
+  )) {
+    final BotaSdkException? bridgeError = _adapterBridgeError(code, operation);
+    if (bridgeError != null) return bridgeError;
+    if (code == 'bota_sdk_error') {
+      return _stableBridgeError(details, operation);
+    }
   }
   return BotaSdkException(
     code: BotaErrorCode.internal,
@@ -998,6 +1005,36 @@ BotaSdkException _stableError(Object error, BotaOperation operation) {
     detail: error is PlatformException
         ? 'The native bridge operation failed.'
         : 'The bridge operation failed.',
+  );
+}
+
+BotaSdkException? _adapterBridgeError(String code, BotaOperation operation) {
+  final (BotaErrorCode, bool)? mapping = switch (code) {
+    'callback_id_mismatch' => (BotaErrorCode.unexpectedEvent, false),
+    'callback_kind_mismatch' => (BotaErrorCode.unexpectedEvent, false),
+    'callback_unavailable' => (BotaErrorCode.featureUnavailable, false),
+    'cancelled' => (BotaErrorCode.cancelled, false),
+    'configuration_conflict' => (BotaErrorCode.configurationConflict, false),
+    'device_not_found' => (BotaErrorCode.deviceNotFound, false),
+    'duplicate_identifier' => (BotaErrorCode.invalidInput, false),
+    'engine_detached' => (BotaErrorCode.clientDestroyed, false),
+    'invalid_callback_response' => (BotaErrorCode.invalidInput, false),
+    'invalid_configuration' => (BotaErrorCode.invalidInput, false),
+    'invalid_operation_id' => (BotaErrorCode.invalidInput, false),
+    'invalid_request' => (BotaErrorCode.invalidInput, false),
+    'not_configured' => (BotaErrorCode.featureUnavailable, false),
+    'operation_in_progress' => (BotaErrorCode.operationInProgress, true),
+    'operation_not_owned' => (BotaErrorCode.operationNotOwned, false),
+    'subscription_not_found' => (BotaErrorCode.operationNotOwned, false),
+    'unsupported_subscription' => (BotaErrorCode.unsupportedOperation, false),
+    _ => null,
+  };
+  if (mapping == null) return null;
+  return BotaSdkException(
+    code: mapping.$1,
+    operation: operation,
+    retryable: mapping.$2,
+    detail: 'The native bridge rejected the operation.',
   );
 }
 

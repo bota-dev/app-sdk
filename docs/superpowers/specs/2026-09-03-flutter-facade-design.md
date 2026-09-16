@@ -10,9 +10,11 @@ iOS and Android by delegating to the already-published `BotaAppleSDK` and
 `dev.bota:bota-android-sdk` facades. It does not introduce another Bluetooth
 stack, another workflow engine, or a backend API client.
 
-The first Flutter-bearing synchronized release is `1.2.0-beta.0`. Apple,
-Android, React Native, and Flutter continue to use the same version from
-`sdk-version.toml`.
+The original first Flutter-bearing synchronized release target was
+`1.2.0-beta.0`. That identity is now occupied by an immutable annotated tag for
+non-Flutter source and must not be reused. A replacement version is an explicit
+owner decision; Apple, Android, React Native, Flutter, and Web must still use
+the same selected version from `sdk-version.toml`.
 
 ## Scope
 
@@ -119,6 +121,12 @@ Failures use `BotaSdkException` with stable `code`, `operation`, `retryable`,
 optional `protocolStatus`, and diagnostic `detail` fields. Dart applications
 branch on those fields, not platform exception text.
 
+Adapter-only outer bridge codes are exhaustively projected to sanitized stable
+public codes while retaining the Dart call's exact operation. Native SDK errors
+continue to use their typed detail mapping. Unknown or malformed outer errors
+fail closed as `internal`; neither outer code nor native message/detail text is
+a public branching surface.
+
 `BotaDeviceClient.configure` accepts asynchronous application callbacks for
 provisioning material, command-bound reset grants, durable reset-result
 persistence, and application-authorized firmware sources. Batch-upload
@@ -219,7 +227,9 @@ evidence. The v2 release manifest gains a `flutter` artifact with package
 identifier `bota_flutter_sdk` only after these gates pass.
 
 pub.dev requires a package's first version to be published interactively. The
-one-time `1.2.0-beta.0` bootstrap therefore uses this fail-closed sequence:
+occupied `1.2.0-beta.0` identity cannot be that first Flutter publication. Once
+an owner selects a new synchronized version and explicitly authorizes its
+first-publish mechanism, the fail-closed sequence remains:
 
 1. CI builds and preserves the exact Flutter candidate from the annotated tag.
 2. The protected release environment pauses before public publication.
@@ -275,8 +285,9 @@ Milestone 5's Flutter slice exits when:
 - iOS and Android delegate all declared capabilities to the native facades;
 - unsupported targets and live streaming are explicit;
 - local, CI, release-mode example, and supervised hardware gates pass;
-- `1.2.0-beta.0` is published and checksum-verified on pub.dev together with the
-  matching Apple, Android, and React Native beta artifacts; and
+- the owner-selected synchronized version is published and checksum-verified
+  on pub.dev together with the matching Apple, Android, and React Native beta
+  artifacts; and
 - no production application is silently moved from the legacy npm `latest`
   line.
 

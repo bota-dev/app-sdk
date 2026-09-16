@@ -173,7 +173,7 @@ void main() {
   test('native structured errors become stable SDK exceptions', () async {
     final InMemoryBotaHostApi host = InMemoryBotaHostApi();
     host.connectError = PlatformException(
-      code: 'native_error',
+      code: 'bota_sdk_error',
       message: 'platform wrapper text',
       details: BotaErrorMessage(
         code: BotaErrorCodeMessage(name: 'timeout'),
@@ -226,40 +226,169 @@ void main() {
     await client.destroy();
   });
 
-  test('malformed native errors fail closed without stranding work', () async {
-    final InMemoryBotaHostApi host = InMemoryBotaHostApi();
-    host.connectError = PlatformException(
-      code: 'native-secret-code',
-      message: 'native-secret-message',
-      details: BotaErrorMessage(
-        code: BotaErrorCodeMessage(name: 'futureErrorWithoutRawValue'),
-        operation: BotaOperationMessage(name: 'connect'),
-        retryable: false,
-        detail: 'native-secret-detail',
+  test(
+    'bridge-only errors preserve stable code and public operation',
+    () async {
+      final List<
+        ({
+          String outerCode,
+          BotaErrorCode expectedCode,
+          BotaOperation expectedOperation,
+          bool duringConfigure,
+        })
+      >
+      cases =
+          <
+            ({
+              String outerCode,
+              BotaErrorCode expectedCode,
+              BotaOperation expectedOperation,
+              bool duringConfigure,
+            })
+          >[
+            (
+              outerCode: 'configuration_conflict',
+              expectedCode: BotaErrorCode.configurationConflict,
+              expectedOperation: BotaOperation.validate,
+              duringConfigure: true,
+            ),
+            (
+              outerCode: 'operation_not_owned',
+              expectedCode: BotaErrorCode.operationNotOwned,
+              expectedOperation: BotaOperation.connect,
+              duringConfigure: false,
+            ),
+            (
+              outerCode: 'device_not_found',
+              expectedCode: BotaErrorCode.deviceNotFound,
+              expectedOperation: BotaOperation.connect,
+              duringConfigure: false,
+            ),
+            (
+              outerCode: 'engine_detached',
+              expectedCode: BotaErrorCode.clientDestroyed,
+              expectedOperation: BotaOperation.connect,
+              duringConfigure: false,
+            ),
+          ];
+
+      for (final testCase in cases) {
+        final InMemoryBotaHostApi host = InMemoryBotaHostApi();
+        final PlatformException bridgeFailure = PlatformException(
+          code: testCase.outerCode,
+          message: 'native-secret-message-${testCase.outerCode}',
+          details: BotaErrorMessage(
+            code: BotaErrorCodeMessage(name: 'invalidInput'),
+            operation: BotaOperationMessage(name: 'validate'),
+            retryable: false,
+            detail: 'native-secret-detail-${testCase.outerCode}',
+          ),
+        );
+        if (testCase.duringConfigure) {
+          host.configureError = bridgeFailure;
+        } else {
+          host.connectError = bridgeFailure;
+        }
+        final BotaDeviceClient client = BotaDeviceClient.forTesting(
+          PigeonBotaPlatform(hostApi: host),
+        );
+
+        final Object error;
+        if (testCase.duringConfigure) {
+          error = await _captureError(client.configure());
+        } else {
+          await client.configure();
+          error = await _captureError(client.devices.connect(discoveredDevice));
+        }
+
+        expect(
+          error,
+          isA<BotaSdkException>()
+              .having(
+                (BotaSdkException value) => value.code,
+                'code',
+                testCase.expectedCode,
+              )
+              .having(
+                (BotaSdkException value) => value.operation,
+                'operation',
+                testCase.expectedOperation,
+              )
+              .having(
+                (BotaSdkException value) => value.detail,
+                'detail',
+                isNot(contains('native-secret')),
+              ),
+          reason: testCase.outerCode,
+        );
+        expect(error.toString(), isNot(contains('native-secret')));
+        await client.destroy();
+      }
+    },
+  );
+
+  test('malformed and unknown native errors fail closed', () async {
+    final List<PlatformException> failures = <PlatformException>[
+      PlatformException(
+        code: 'bota_sdk_error',
+        message: 'native-secret-message-malformed',
+        details: BotaErrorMessage(
+          code: BotaErrorCodeMessage(name: 'futureErrorWithoutRawValue'),
+          operation: BotaOperationMessage(name: 'connect'),
+          retryable: false,
+          detail: 'native-secret-detail-malformed',
+        ),
       ),
-    );
-    final BotaDeviceClient client = BotaDeviceClient.forTesting(
-      PigeonBotaPlatform(hostApi: host),
-    );
-    await client.configure();
-
-    final Object error = await _captureError(
-      client.devices
-          .connect(discoveredDevice)
-          .timeout(const Duration(seconds: 1)),
-    );
-
-    expect(
-      error,
-      isA<BotaSdkException>().having(
-        (BotaSdkException value) => value.code,
-        'code',
-        BotaErrorCode.internal,
+      PlatformException(
+        code: 'future_bridge_code',
+        message: 'native-secret-message-unknown',
+        details: BotaErrorMessage(
+          code: BotaErrorCodeMessage(name: 'timeout'),
+          operation: BotaOperationMessage(name: 'validate'),
+          retryable: true,
+          detail: 'native-secret-detail-unknown',
+        ),
       ),
-    );
-    expect(error.toString(), isNot(contains('native-secret')));
+    ];
 
-    await client.destroy();
+    for (final PlatformException failure in failures) {
+      final InMemoryBotaHostApi host = InMemoryBotaHostApi()
+        ..connectError = failure;
+      final BotaDeviceClient client = BotaDeviceClient.forTesting(
+        PigeonBotaPlatform(hostApi: host),
+      );
+      await client.configure();
+
+      final Object error = await _captureError(
+        client.devices
+            .connect(discoveredDevice)
+            .timeout(const Duration(seconds: 1)),
+      );
+
+      expect(
+        error,
+        isA<BotaSdkException>()
+            .having(
+              (BotaSdkException value) => value.code,
+              'code',
+              BotaErrorCode.internal,
+            )
+            .having(
+              (BotaSdkException value) => value.operation,
+              'operation',
+              BotaOperation.connect,
+            )
+            .having(
+              (BotaSdkException value) => value.detail,
+              'detail',
+              isNot(contains('native-secret')),
+            ),
+        reason: failure.code,
+      );
+      expect(error.toString(), isNot(contains('native-secret')));
+
+      await client.destroy();
+    }
   });
 
   test(
