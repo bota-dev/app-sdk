@@ -20,6 +20,8 @@
 /frameworks/web/node_modules/
 /frameworks/web/dist/
 /frameworks/web/src/generated/
+/tests/consumers/web-vite/node_modules/
+/tests/consumers/web-vite/dist/
 
 # Platform build outputs
 /.build/
