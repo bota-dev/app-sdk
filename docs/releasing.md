@@ -76,6 +76,12 @@ tools/apple/package-release.sh
 Normal mode fails if rebuilding the XCFramework produces a checksum different
 from the committed root package. Never hand-edit the release URL or checksum.
 
+PR and main CI use `tools/apple/package-release.sh --evidence-only` to generate
+and validate unpublished evidence for the current commit without comparing it
+to the immutable package from the previous release. This mode is not used by
+the protected release workflow; tagged releases always use normal mode and its
+exact root-package checksum check.
+
 ## Local Release Gate
 
 Use Node.js 22 or newer and the Rust toolchain pinned by the repository:

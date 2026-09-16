@@ -37,7 +37,7 @@ class EncryptedUploadV2TransferControlTest {
     fun collectorIsAttachedBeforeStartWriteSoImmediateReplyIsNotLost() = runTest {
         val driver = ControlDriver()
         val mapper = CoreModelMapper(TransferControlCore())
-        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        val control = testControl(driver, mapper)
 
         val opened = control.open("device", request(), null)
 
@@ -52,7 +52,7 @@ class EncryptedUploadV2TransferControlTest {
     fun transferQueueFailsClosedAtTheDocumentedTotalByteBound() = runTest {
         val driver = ControlDriver(overflow = true)
         val mapper = CoreModelMapper(TransferControlCore())
-        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        val control = testControl(driver, mapper)
 
         val opened = control.open("device", request(), null) as EncryptedUploadV2OpenResult.Opened
         withContext(Dispatchers.Default) { withTimeout(1_000) { driver.awaitOverflowAttempt() } }
@@ -68,7 +68,7 @@ class EncryptedUploadV2TransferControlTest {
     fun unsubscribeFailurePoisonsTheOwnerUntilConfirmedDisconnectReset() = runTest {
         val driver = ControlDriver(failUnsubscribe = true)
         val mapper = CoreModelMapper(TransferControlCore())
-        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        val control = testControl(driver, mapper)
         control.open("device", request(), null)
         val cleanup = runCatching { control.release(9u) }.exceptionOrNull() as EncryptedUploadV2HostException
         assertEquals(19u, cleanup.errorCode)
@@ -89,7 +89,7 @@ class EncryptedUploadV2TransferControlTest {
     fun staleDisconnectGenerationCannotClearANewerPoisonedOwner() = runTest {
         val driver = ControlDriver(failUnsubscribe = true, connectionGeneration = 2)
         val mapper = CoreModelMapper(TransferControlCore())
-        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        val control = testControl(driver, mapper)
         control.open("device", request(), null)
         runCatching { control.release(9u) }
 
@@ -129,7 +129,7 @@ class EncryptedUploadV2TransferControlTest {
     fun cancellationBeforeConfirmAbortsAndNeverSendsConfirm() = runTest {
         val driver = ControlDriver()
         val mapper = CoreModelMapper(TransferControlCore())
-        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        val control = testControl(driver, mapper)
         control.open("device", request(), null)
 
         assertFalse(control.confirmationAttemptedOrClaimCancellation(9u))
@@ -152,7 +152,7 @@ class EncryptedUploadV2TransferControlTest {
             confirmRelease = release,
         )
         val mapper = CoreModelMapper(TransferControlCore())
-        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        val control = testControl(driver, mapper)
         control.open("device", request(), null)
         val confirming = async(Dispatchers.Default) { control.confirm(9u, byteArrayOf(1)) {} }
         withContext(Dispatchers.Default) { withTimeout(1_000) { entered.await() } }
@@ -176,7 +176,7 @@ class EncryptedUploadV2TransferControlTest {
     fun successfulConfirmWriteWithFailedUnsubscribeReportsDeletionAndPoisonsUntilDisconnect() = runTest {
         val driver = ControlDriver(failUnsubscribe = true)
         val mapper = CoreModelMapper(TransferControlCore())
-        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        val control = testControl(driver, mapper)
         control.open("device", request(), null)
 
         val failure = runCatching { control.confirm(9u, byteArrayOf(1)) {} }.exceptionOrNull()
@@ -204,7 +204,7 @@ class EncryptedUploadV2TransferControlTest {
             unsubscribeRelease = unsubscribeRelease,
         )
         val mapper = CoreModelMapper(TransferControlCore())
-        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        val control = testControl(driver, mapper)
         control.open("device", request(), null)
         val confirming = async(Dispatchers.Default) {
             runCatching { control.confirm(9u, byteArrayOf(1)) {} }.exceptionOrNull()
@@ -234,7 +234,7 @@ class EncryptedUploadV2TransferControlTest {
         val release = CompletableDeferred<Unit>()
         val driver = ControlDriver(activeWriteEntered = entered, activeWriteRelease = release)
         val mapper = CoreModelMapper(TransferControlCore())
-        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        val control = testControl(driver, mapper)
         val opened = control.open("device", request(), null) as EncryptedUploadV2OpenResult.Opened
         val windowObserved = CompletableDeferred<Unit>()
         val collecting = async(Dispatchers.Default) {
@@ -262,7 +262,7 @@ class EncryptedUploadV2TransferControlTest {
     fun failedAcknowledgementWritePoisonsWithoutAdvancingIntake() = runTest {
         val driver = ControlDriver(failActiveWrite = true)
         val mapper = CoreModelMapper(TransferControlCore())
-        val control = EncryptedUploadV2TransferControl(driver, mapper)
+        val control = testControl(driver, mapper)
         val opened = control.open("device", request(), null) as EncryptedUploadV2OpenResult.Opened
         val windowObserved = CompletableDeferred<Unit>()
         val collecting = async(Dispatchers.Default) {
@@ -331,7 +331,15 @@ class EncryptedUploadV2TransferControlTest {
         1u, 0u, 0u, EmptyDigest, 1u, 1u,
     )
 
+    private fun testControl(driver: ControlDriver, mapper: CoreModelMapper) =
+        EncryptedUploadV2TransferControl(
+            driver,
+            mapper,
+            cleanupTimeoutMilliseconds = TestCleanupTimeoutMilliseconds,
+        )
+
     companion object {
+        private const val TestCleanupTimeoutMilliseconds = 5_000L
         val Session: UUID = UUID.fromString("00112233-4455-6677-8899-aabbccddeeff")
         val EmptyDigest: ByteArray = MessageDigest.getInstance("SHA-256").digest(byteArrayOf())
     }

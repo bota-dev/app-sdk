@@ -190,6 +190,7 @@ final class BotaDeviceSDKAppleDevicesTests: XCTestCase {
         }
         await received.waitForCount(1)
         await devices.stopStatusUpdates()
+        await client.waitForStatusTerminationCount(1)
 
         let snapshot = await client.snapshot()
         XCTAssertEqual(snapshot.statusReadCount, 1)
@@ -444,6 +445,7 @@ private actor TestAppleDeviceClient: BotaDeviceSDKAppleDeviceClient {
     private var disconnectCount = 0
     private var statusReadCount = 0
     private var statusTerminationCount = 0
+    private var statusTerminationWaiters: [(Int, CheckedContinuation<Void, Never>)] = []
 
     init(
         discovered: DiscoveredDevice,
@@ -512,7 +514,17 @@ private actor TestAppleDeviceClient: BotaDeviceSDKAppleDeviceClient {
         )
     }
 
+    func waitForStatusTerminationCount(_ count: Int) async {
+        if statusTerminationCount >= count { return }
+        await withCheckedContinuation { continuation in
+            statusTerminationWaiters.append((count, continuation))
+        }
+    }
+
     private func statusTerminated() {
         statusTerminationCount += 1
+        let ready = statusTerminationWaiters.filter { statusTerminationCount >= $0.0 }
+        statusTerminationWaiters.removeAll { statusTerminationCount >= $0.0 }
+        ready.forEach { $0.1.resume() }
     }
 }

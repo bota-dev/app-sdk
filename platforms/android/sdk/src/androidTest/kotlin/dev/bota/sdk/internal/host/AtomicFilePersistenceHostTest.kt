@@ -71,7 +71,7 @@ internal class AtomicFilePersistenceHostTest {
     }
 
     @Test
-    fun backupOnlyAtomicFileIsRecoveredByOpenRead() = runBlocking {
+    fun backupOnlyAtomicFileIsRecoveredByOpenRead(): Unit = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val root = File(context.noBackupFilesDir, "atomic-backup-test-${UUID.randomUUID()}")
         val store = AtomicFileJournalStore(root)

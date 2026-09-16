@@ -25,6 +25,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+private const val AsyncSettlementTimeoutMilliseconds = 5_000L
+
 class CoreEngineRuntimeTest {
     @Test
     fun runsEffectsAndNotificationsInOrderOnOneNativeThread() = runTest {
@@ -95,7 +97,7 @@ class CoreEngineRuntimeTest {
 
         collector.cancelAndJoin()
         withContext(Dispatchers.Default) {
-            withTimeout(2_000) { core.cancelled.await() }
+            withTimeout(AsyncSettlementTimeoutMilliseconds) { core.cancelled.await() }
         }
         runtime.close()
 
@@ -110,6 +112,7 @@ class CoreEngineRuntimeTest {
         val order = mutableListOf<String>()
         val core = ScriptedCore(terminalOnStart = false, cancellationOrder = order)
         val effectStarted = CompletableDeferred<Unit>()
+        val hostCancelled = CompletableDeferred<Unit>()
         val handler = object : CoreEffectHandler {
             override fun execute(effect: CoreEffect): kotlinx.coroutines.flow.Flow<CoreHostEvent> = callbackFlow {
                 order += "effect-started"
@@ -119,6 +122,7 @@ class CoreEngineRuntimeTest {
 
             override suspend fun cancel(cancellationId: CoreCancellationId) {
                 order += "host-cancelled"
+                hostCancelled.complete(Unit)
             }
         }
         val runtime = CoreEngineRuntime(core, handler)
@@ -132,7 +136,12 @@ class CoreEngineRuntimeTest {
         effectStarted.await()
 
         collector.cancelAndJoin()
-        withContext(Dispatchers.Default) { withTimeout(2_000) { core.cancelled.await() } }
+        withContext(Dispatchers.Default) {
+            withTimeout(AsyncSettlementTimeoutMilliseconds) {
+                core.cancelled.await()
+                hostCancelled.await()
+            }
+        }
 
         assertTrue(order.indexOf("effect-started") < order.indexOf("core-cancelled"))
         assertTrue(order.indexOf("core-cancelled") < order.indexOf("host-cancelled"))
@@ -221,7 +230,7 @@ class CoreEngineRuntimeTest {
 
         val cancelling = async { runtime.cancel(cancellationId) }
         confirmationRelease.complete(Unit)
-        withContext(Dispatchers.Default) { withTimeout(2_000) { cancelling.await() } }
+        withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { cancelling.await() } }
 
         assertEquals(0, hostCancellationCount)
         assertEquals(
@@ -264,7 +273,9 @@ class CoreEngineRuntimeTest {
         val cancelling = async { runCatching { runtime.cancelAndReportExactSettlement(cancellationId) }.exceptionOrNull() }
         confirmationRelease.complete(Unit)
         try {
-            val failure = withContext(Dispatchers.Default) { withTimeout(2_000) { cancelling.await() } }
+            val failure = withContext(Dispatchers.Default) {
+                withTimeout(AsyncSettlementTimeoutMilliseconds) { cancelling.await() }
+            }
             assertTrue(failure is BotaSDKError.Core)
             failure as BotaSDKError.Core
             assertEquals(BotaErrorCode.UploadOwnershipUnknown, failure.code)
@@ -307,7 +318,7 @@ class CoreEngineRuntimeTest {
 
         collector.cancelAndJoin()
         confirmationRelease.complete(Unit)
-        withContext(Dispatchers.Default) { withTimeout(2_000) { core.settled.await() } }
+        withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { core.settled.await() } }
         val exactSettlement = runtime.cancelAndReportExactSettlement(cancellationId)
 
         assertTrue(exactSettlement)

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xtask manifest uses `toml` 1.x; validate future major changes with the full Rust and tooling workflow.
+CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep both automatic PR/main triggers and `workflow_dispatch` on the CI and license workflows so integration branches can be verified explicitly. Run Android unit tests separately from parallel lint and APK assembly. The xtask manifest uses `toml` 1.x; validate future major changes with the full Rust and tooling workflow. Keep root TypeScript on 6.x while `tools/baseline/react-native-api-contract.mjs` depends on its stable compiler API; TypeScript 7 exposes the replacement compiler API only through `typescript/unstable/*` and requires a deliberate contract-extractor migration. Async teardown and backpressure tests must wait for explicit actor or coroutine signals for each phase, including pump entry before asserting a flow's `finally` block and separate core/host cancellation completion, instead of sampling scheduling-dependent state. Use five-second test-only settlement watchdogs around those signals so loaded CI workers still expose real deadlocks without creating one-second scheduling races. Non-timeout transfer-control tests likewise override the production cleanup deadline with a five-second fixture value; dedicated timeout tests inject their own short deadline.
 
 ## Repository Purpose
 
@@ -95,7 +95,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   abort, protected ciphertext-file writes, and a recoverable native checkpoint
   catalog. It emits structured `WINDOW_STAGED` evidence to Rust and sends only
   Rust-encoded ACK/repair frames through the exact owned transport session. Its
-  platform plus phase-aware transfer queues share a 1 MiB byte cap; overflow,
+  cancellation teardown closes owned resume and event channels before stopping
+  transfer jobs, including when the pump has been created but has not started.
+  The platform plus phase-aware transfer queues share a 1 MiB byte cap; overflow,
   premature post-window traffic, mixed profiles, and pre-EOF completion fail
   closed. START/ABORT races cannot resurrect ownership, and checkpoint lookup
   plus metadata are replaced in one AtomicFile catalog whose file and parent
@@ -372,10 +374,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   x86_64 emulator lanes. `test-emulator-lane.sh` owns AVD creation, boot
   readiness, fresh installs, animation settings, shutdown, and deletion. It
   exports one lane-local `ANDROID_AVD_HOME` for both `avdmanager` and the
-  emulator, bounds ADB attachment, and prints the captured emulator output on
-  startup failure. Before either emulator starts, all source, frozen-binary,
+  emulator, bounds ADB attachment, detects exited background emulator jobs,
+  and prints the captured emulator output on startup failure. Before either
+  emulator starts, all source, frozen-binary,
   and clean Maven consumers must compile against the exact installed candidate
-  repository. Do not cache AVD state or put signing material in ordinary CI.
+  repository. Android JUnit instrumentation methods must return `Unit`
+  explicitly when an expression body could infer another return type. Do not
+  cache AVD state or put signing material in ordinary CI.
 - The protected `v1.1.0` publication uses only
   `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
   `SIGNING_IN_MEMORY_KEY`, and `SIGNING_IN_MEMORY_KEY_PASSWORD`. Persist the
