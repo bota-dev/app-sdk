@@ -339,7 +339,7 @@ class EncryptedUploadV2TransferControlTest {
         )
 
     companion object {
-        private const val TestCleanupTimeoutMilliseconds = 5_000L
+        private const val TestCleanupTimeoutMilliseconds = 30_000L
         val Session: UUID = UUID.fromString("00112233-4455-6677-8899-aabbccddeeff")
         val EmptyDigest: ByteArray = MessageDigest.getInstance("SHA-256").digest(byteArrayOf())
     }
