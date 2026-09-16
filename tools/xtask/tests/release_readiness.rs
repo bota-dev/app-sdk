@@ -229,7 +229,7 @@ fn verification_workflows_are_manual_only() {
 
         assert_eq!(triggers.len(), 1, "{path} must remain manual-only");
         assert!(
-            triggers.contains_key(&serde_yaml_ng::Value::String(
+            triggers.contains_key(serde_yaml_ng::Value::String(
                 "workflow_dispatch".to_owned()
             )),
             "{path} must expose workflow_dispatch"
