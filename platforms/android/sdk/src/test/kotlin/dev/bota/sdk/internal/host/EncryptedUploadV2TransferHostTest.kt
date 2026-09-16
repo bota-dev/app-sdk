@@ -580,6 +580,7 @@ class EncryptedUploadV2TransferHostTest {
                 { error("unused") }, { _, _ -> }, {}, { ByteArray(336) }, {},
             ),
         )
+        val oldPumpStarted = CompletableDeferred<Unit>()
         val oldPumpCancellationEntered = CompletableDeferred<Unit>()
         val oldPumpRelease = CompletableDeferred<Unit>()
         val replacementPayloads = Channel<EncryptedUploadV2TransferPayload>(Channel.UNLIMITED)
@@ -590,6 +591,7 @@ class EncryptedUploadV2TransferHostTest {
             services(registry, actions).copyForOpen { _, _ ->
                 if (opens.getAndIncrement() == 0) {
                     EncryptedUploadV2OpenResult.Opened(flow {
+                        oldPumpStarted.complete(Unit)
                         try {
                             awaitCancellation()
                         } finally {
@@ -615,6 +617,9 @@ class EncryptedUploadV2TransferHostTest {
             }
         }
         assertEquals(HostEventKind.EncryptedUploadV2TransferStarted, firstStartEvents.receive().kind)
+        withContext(Dispatchers.Default) {
+            withTimeout(AsyncSettlementTimeoutMilliseconds) { oldPumpStarted.await() }
+        }
 
         val resetting = async(start = CoroutineStart.UNDISPATCHED) { host.resetAfterConfirmedDisconnect() }
         withContext(Dispatchers.Default) {
