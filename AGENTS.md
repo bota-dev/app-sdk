@@ -1,6 +1,6 @@
 # AGENTS.md
 
-CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xtask manifest uses `toml` 1.x; validate future major changes with the full Rust and tooling workflow. Keep root TypeScript on 6.x while `tools/baseline/react-native-api-contract.mjs` depends on its stable compiler API; TypeScript 7 exposes the replacement compiler API only through `typescript/unstable/*` and requires a deliberate contract-extractor migration. Async teardown and backpressure tests must wait for explicit actor or coroutine signals instead of assuming cancellation bookkeeping or background queue work has already run.
+CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xtask manifest uses `toml` 1.x; validate future major changes with the full Rust and tooling workflow. Keep root TypeScript on 6.x while `tools/baseline/react-native-api-contract.mjs` depends on its stable compiler API; TypeScript 7 exposes the replacement compiler API only through `typescript/unstable/*` and requires a deliberate contract-extractor migration. Async teardown and backpressure tests must wait for explicit actor or coroutine signals instead of assuming cancellation bookkeeping or background queue work has already run. Use five-second test-only settlement watchdogs around those signals so loaded CI workers still expose real deadlocks without creating one-second scheduling races.
 
 ## Repository Purpose
 

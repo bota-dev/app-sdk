@@ -105,7 +105,7 @@ class EncryptedUploadV2TransferHostTest {
         val start = host.execute(startEffect(materialId, authorizationSha, ciphertext)).produceIn(this)
         assertEquals(
             HostEventKind.EncryptedUploadV2TransferStarted,
-            withContext(Dispatchers.Default) { withTimeout(1_000) { start.receive() } }.kind,
+            withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { start.receive() } }.kind,
         )
         payloads.send(EncryptedUploadV2TransferPayload.Data(EncryptedUploadV2DataValue(9u, 0u, 0u, ciphertext)))
         payloads.send(
@@ -113,7 +113,9 @@ class EncryptedUploadV2TransferHostTest {
                 EncryptedUploadV2WindowEndValue(9u, 0u, 0u, 0u, 2u, sha(ciphertext), 1u),
             ),
         )
-        val window = withContext(Dispatchers.Default) { withTimeout(2_000) { start.receive() } }
+        val window = withContext(Dispatchers.Default) {
+            withTimeout(AsyncSettlementTimeoutMilliseconds) { start.receive() }
+        }
         assertEquals(HostEventKind.EncryptedUploadV2WindowStaged, window.kind)
         val coreCheckpoint = byteArrayOf(7, 8, 9)
         host.execute(effect(CoreEffectKind.EncryptedUploadV2SaveCheckpoint, CoreField.Bytes(28, coreCheckpoint))).toList()
@@ -128,7 +130,9 @@ class EncryptedUploadV2TransferHostTest {
                 EncryptedUploadV2EofValue(9u, 0u, 1u, 2u, sha(ciphertext), sha(manifest)),
             ),
         )
-        val completed = withContext(Dispatchers.Default) { withTimeout(2_000) { start.receive() } }
+        val completed = withContext(Dispatchers.Default) {
+            withTimeout(AsyncSettlementTimeoutMilliseconds) { start.receive() }
+        }
         assertEquals(HostEventKind.EncryptedUploadV2TransferCompleted, completed.kind)
         val evidence = evidenceFields(ciphertext, manifest)
         host.execute(
@@ -259,13 +263,15 @@ class EncryptedUploadV2TransferHostTest {
                 ).toList()
             }.exceptionOrNull()
         }
-        withContext(Dispatchers.Default) { withTimeout(1_000) { cleanupEntered.await() } }
+        withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { cleanupEntered.await() } }
 
         val resetting = async(start = CoroutineStart.UNDISPATCHED) { host.resetAfterConfirmedDisconnect() }
         val resetReturnedBeforeCleanupSettled = resetting.isCompleted
         cleanupRelease.complete(Unit)
-        val failure = withContext(Dispatchers.Default) { withTimeout(1_000) { confirming.await() } }
-        withContext(Dispatchers.Default) { withTimeout(1_000) { resetting.await() } }
+        val failure = withContext(Dispatchers.Default) {
+            withTimeout(AsyncSettlementTimeoutMilliseconds) { confirming.await() }
+        }
+        withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { resetting.await() } }
         registry.register(
             "material-2",
             EncryptedUploadV2Material(
@@ -307,7 +313,9 @@ class EncryptedUploadV2TransferHostTest {
 
         payloads.close()
         val error = runCatching {
-            withContext(Dispatchers.Default) { withTimeout(1_000) { outcomes.receive().getOrThrow() } }
+            withContext(Dispatchers.Default) {
+                withTimeout(AsyncSettlementTimeoutMilliseconds) { outcomes.receive().getOrThrow() }
+            }
         }.exceptionOrNull()
 
         assertTrue(error.toString(), error is EncryptedUploadV2HostException)
@@ -336,7 +344,7 @@ class EncryptedUploadV2TransferHostTest {
         val authorizationSha = prepared.single().fields.filterIsInstance<CoreField.Bytes>().single().value
 
         val events = withContext(Dispatchers.Default) {
-            withTimeout(2_000) {
+            withTimeout(AsyncSettlementTimeoutMilliseconds) {
                 host.execute(startEffect("material-1", authorizationSha, byteArrayOf(3, 4))).toList()
             }
         }
@@ -375,7 +383,7 @@ class EncryptedUploadV2TransferHostTest {
         val cancelling = async { host.cancel(CoreCancellationId(1u, 2u)) }
         release.complete(Unit)
         cancelling.await()
-        val error = withTimeout(1_000) { starting.await() }.exceptionOrNull()
+        val error = withTimeout(AsyncSettlementTimeoutMilliseconds) { starting.await() }.exceptionOrNull()
 
         assertTrue(error.toString(), error != null)
         assertTrue(actions.contains("abort-9"))
@@ -496,7 +504,7 @@ class EncryptedUploadV2TransferHostTest {
                 true
             }
         }
-        withTimeout(1_000) { transportResetEntered.await() }
+        withTimeout(AsyncSettlementTimeoutMilliseconds) { transportResetEntered.await() }
         val replacement = async(start = CoroutineStart.UNDISPATCHED) {
             host.execute(
                 effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, "material-1")),
@@ -506,8 +514,8 @@ class EncryptedUploadV2TransferHostTest {
         val replacementAdmittedBeforeTransportReset = replacementPrepared.isCompleted
         transportResetRelease.complete(Unit)
 
-        withTimeout(1_000) { resetting.await() }
-        withTimeout(1_000) { replacement.await() }
+        withTimeout(AsyncSettlementTimeoutMilliseconds) { resetting.await() }
+        withTimeout(AsyncSettlementTimeoutMilliseconds) { replacement.await() }
 
         assertFalse(replacementAdmittedBeforeTransportReset)
         assertTrue(replacementPrepared.isCompleted)
@@ -548,10 +556,12 @@ class EncryptedUploadV2TransferHostTest {
         assertEquals(HostEventKind.EncryptedUploadV2TransferStarted, startEvents.receive().kind)
 
         val resetting = async(start = CoroutineStart.UNDISPATCHED) { host.resetAfterConfirmedDisconnect() }
-        withContext(Dispatchers.Default) { withTimeout(1_000) { pumpCancellationEntered.await() } }
+        withContext(Dispatchers.Default) {
+            withTimeout(AsyncSettlementTimeoutMilliseconds) { pumpCancellationEntered.await() }
+        }
         val resetReturnedBeforePumpExit = resetting.isCompleted
         pumpRelease.complete(Unit)
-        withContext(Dispatchers.Default) { withTimeout(1_000) { resetting.await() } }
+        withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { resetting.await() } }
         val terminal = start.await().exceptionOrNull()
 
         assertFalse(resetReturnedBeforePumpExit)
@@ -607,7 +617,9 @@ class EncryptedUploadV2TransferHostTest {
         assertEquals(HostEventKind.EncryptedUploadV2TransferStarted, firstStartEvents.receive().kind)
 
         val resetting = async(start = CoroutineStart.UNDISPATCHED) { host.resetAfterConfirmedDisconnect() }
-        withContext(Dispatchers.Default) { withTimeout(5_000) { oldPumpCancellationEntered.await() } }
+        withContext(Dispatchers.Default) {
+            withTimeout(AsyncSettlementTimeoutMilliseconds) { oldPumpCancellationEntered.await() }
+        }
         val replacementStarted = CompletableDeferred<Unit>()
         val replacementCancellation = CoreCancellationId(9u, 10u)
         val replacement = async(start = CoroutineStart.UNDISPATCHED) {
@@ -635,12 +647,14 @@ class EncryptedUploadV2TransferHostTest {
         val replacementStartedBeforeOldPumpExit = replacementStarted.isCompleted
         val replacementPreparedBeforeOldPumpExit = actions.count { it == "signed-1" } > 1
         oldPumpRelease.complete(Unit)
-        withContext(Dispatchers.Default) { withTimeout(5_000) { resetting.await() } }
-        withContext(Dispatchers.Default) { withTimeout(5_000) { firstStart.await() } }
-        withContext(Dispatchers.Default) { withTimeout(5_000) { replacementStarted.await() } }
+        withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { resetting.await() } }
+        withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { firstStart.await() } }
+        withContext(Dispatchers.Default) {
+            withTimeout(AsyncSettlementTimeoutMilliseconds) { replacementStarted.await() }
+        }
         val replacementFinishedBeforeOwnCancellation = replacement.isCompleted
         host.cancel(replacementCancellation)
-        withContext(Dispatchers.Default) { withTimeout(5_000) { replacement.await() } }
+        withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { replacement.await() } }
 
         assertFalse(replacementStartedBeforeOldPumpExit)
         assertFalse(replacementPreparedBeforeOldPumpExit)
@@ -793,6 +807,7 @@ class EncryptedUploadV2TransferHostTest {
     private fun sha(value: ByteArray) = MessageDigest.getInstance("SHA-256").digest(value)
 
     private companion object {
+        const val AsyncSettlementTimeoutMilliseconds = 5_000L
         val UploadSession: UUID = UUID.fromString("00112233-4455-6677-8899-aabbccddeeff")
         const val RecordingId = "00112233-4455-6677-8899-aabbccddeeff"
         const val SinkId = "11111111-2222-3333-4444-555555555555"
