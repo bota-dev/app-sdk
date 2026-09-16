@@ -1,6 +1,6 @@
 # AGENTS.md
 
-CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep both automatic PR/main triggers and `workflow_dispatch` on the CI and license workflows so integration branches can be verified explicitly. Run Android unit tests separately from parallel lint and APK assembly. The xtask manifest uses `toml` 1.x; validate future major changes with the full Rust and tooling workflow. Keep root TypeScript on 6.x while `tools/baseline/react-native-api-contract.mjs` depends on its stable compiler API; TypeScript 7 exposes the replacement compiler API only through `typescript/unstable/*` and requires a deliberate contract-extractor migration. Async teardown and backpressure tests must wait for explicit actor or coroutine signals for each phase, including pump entry before asserting a flow's `finally` block and separate core/host cancellation completion, instead of sampling scheduling-dependent state. Use five-second test-only settlement watchdogs around those signals so loaded CI workers still expose real deadlocks without creating one-second scheduling races. Non-timeout transfer-control tests likewise override the production cleanup deadline with a five-second fixture value; dedicated timeout tests inject their own short deadline.
+CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep both automatic PR/main triggers and `workflow_dispatch` on the CI and license workflows so integration branches can be verified explicitly. Run Android unit tests separately from parallel lint and APK assembly. The xtask manifest uses `toml` 1.x; validate future major changes with the full Rust and tooling workflow. Keep root TypeScript on 6.x while `tools/baseline/react-native-api-contract.mjs` depends on its stable compiler API; TypeScript 7 exposes the replacement compiler API only through `typescript/unstable/*` and requires a deliberate contract-extractor migration. Async teardown and backpressure tests must wait for explicit actor or coroutine signals for each phase, including pump entry before asserting a flow's `finally` block and separate core/host cancellation completion, instead of sampling scheduling-dependent state. Use five-second test-only settlement watchdogs around those signals so loaded CI workers still expose real deadlocks without creating one-second scheduling races. Non-timeout transfer-control tests use a 30-second fixture cleanup deadline because they exercise multi-dispatcher teardown after the release build; dedicated timeout tests inject their own short deadline, and production retains its one-second cleanup contract.
 
 ## Repository Purpose
 
@@ -505,7 +505,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep b
   application context. It must never initiate Bluetooth, storage, or network
   work during process startup.
 - Native facades use the manually owned opaque C ABI selected in ADR 0001;
-  UniFFI `0.32.0` exists only in the non-published comparison spike.
+  UniFFI `0.32.1` exists only in the non-published comparison spike.
 - ABI v1 numeric meanings and ownership rules are frozen by
   `release/evidence/1.0.0-alpha.1-native-abi.md`; facade work may add Swift or
   Kotlin types but must not redesign the C boundary.

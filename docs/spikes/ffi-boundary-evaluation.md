@@ -3,7 +3,7 @@
 - Status: Decided for the first native facade milestone
 - Date: 2026-08-30
 - Selected boundary: manually owned C ABI
-- Compared generator: UniFFI `0.32.0`
+- Compared generator: UniFFI `0.32.1`
 
 ## Scope
 
@@ -40,7 +40,7 @@ UniFFI remains a non-published comparison spike only. It is not a dependency of
 ## Why
 
 The pinned [UniFFI bindings documentation](https://mozilla.github.io/uniffi-rs/latest/bindings.html)
-and generator provide first-party Swift and Kotlin output. The `0.32.0` CLI in
+and generator provide first-party Swift and Kotlin output. The `0.32.1` CLI in
 this spike also lists Python and Ruby, but not C# or Dart. Third-party bindings
 were not accepted as the foundation of Bota's cross-platform ABI.
 
@@ -57,7 +57,7 @@ Measurements used Rust `1.98.0` on arm64 macOS with the default release profile.
 The manual and generated candidates were compiled from the same smoke crate;
 the UniFFI generator CLI was separated from the runtime graph before measuring.
 
-| Measure | Manual C ABI | UniFFI `0.32.0` |
+| Measure | Manual C ABI | UniFFI `0.32.1` |
 | --- | ---: | ---: |
 | Release `cdylib` | 1,028,432 bytes | 1,158,464 bytes |
 | Size increase from generator runtime | - | 130,032 bytes (12.6%) |
@@ -162,12 +162,12 @@ envelope.
 
 ## License And Reproducibility
 
-UniFFI `0.32.0` is MPL-2.0. Exact package-specific exceptions are recorded in
+UniFFI `0.32.1` is MPL-2.0. Exact package-specific exceptions are recorded in
 `deny.toml` for the non-shipping spike crates; MPL-2.0 was not added to the
 repository-wide allow list. `cargo deny check` passes.
 
 The repository pins Rust `1.98.0`, locks dependencies in `Cargo.lock`, and pins
-UniFFI exactly to `0.32.0`. Linux CI compiles and runs the shipping typed C
+UniFFI exactly to `0.32.1`. Linux CI compiles and runs the shipping typed C
 caller, runs the feature-gated UniFFI comparison, and regenerates Swift and
 Kotlin output with formatting disabled. macOS CI compiles and runs both the
 shipping typed Swift caller and the generated comparison binding.

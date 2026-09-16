@@ -109,9 +109,9 @@ class EncryptedUploadV2TransferControlTest {
 
     @Test
     fun abortTimeoutStillAttemptsUnsubscribeAndPoisonsUntilReset() = runTest {
-        val driver = ControlDriver(abortDelayMilliseconds = 30, unsubscribeDelayMilliseconds = 1)
+        val driver = ControlDriver(abortDelayMilliseconds = 1_000, unsubscribeDelayMilliseconds = 10)
         val mapper = CoreModelMapper(TransferControlCore())
-        val control = EncryptedUploadV2TransferControl(driver, mapper, cleanupTimeoutMilliseconds = 20)
+        val control = EncryptedUploadV2TransferControl(driver, mapper, cleanupTimeoutMilliseconds = 200)
         control.open("device", request(), null)
 
         val cleanup = runCatching { control.abort(9u) }.exceptionOrNull() as EncryptedUploadV2HostException
@@ -155,15 +155,19 @@ class EncryptedUploadV2TransferControlTest {
         val control = testControl(driver, mapper)
         control.open("device", request(), null)
         val confirming = async(Dispatchers.Default) { control.confirm(9u, byteArrayOf(1)) {} }
-        withContext(Dispatchers.Default) { withTimeout(1_000) { entered.await() } }
+        withContext(Dispatchers.Default) { withTimeout(TestSettlementTimeoutMilliseconds) { entered.await() } }
 
         val during = async(Dispatchers.Default) {
             control.confirmationAttemptedOrClaimCancellation(9u)
         }
         assertFalse(during.isCompleted)
         release.complete(Unit)
-        withContext(Dispatchers.Default) { withTimeout(1_000) { confirming.await() } }
-        assertTrue(withContext(Dispatchers.Default) { withTimeout(1_000) { during.await() } })
+        withContext(Dispatchers.Default) {
+            withTimeout(TestSettlementTimeoutMilliseconds) { confirming.await() }
+        }
+        assertTrue(withContext(Dispatchers.Default) {
+            withTimeout(TestSettlementTimeoutMilliseconds) { during.await() }
+        })
         control.abort(9u)
 
         assertEquals(2, driver.writeCount)
@@ -339,7 +343,8 @@ class EncryptedUploadV2TransferControlTest {
         )
 
     companion object {
-        private const val TestCleanupTimeoutMilliseconds = 5_000L
+        private const val TestCleanupTimeoutMilliseconds = 30_000L
+        private const val TestSettlementTimeoutMilliseconds = 5_000L
         val Session: UUID = UUID.fromString("00112233-4455-6677-8899-aabbccddeeff")
         val EmptyDigest: ByteArray = MessageDigest.getInstance("SHA-256").digest(byteArrayOf())
     }

@@ -669,7 +669,7 @@ loss remains a retryable connection error.
 
 Native facades call the Rust reducer through a manually owned C ABI with opaque
 engine handles, borrowed inputs, explicitly freed SDK-owned outputs, and stable
-numeric request/cancellation identity. UniFFI `0.32.0` remains a non-shipping
+numeric request/cancellation identity. UniFFI `0.32.1` remains a non-shipping
 comparison spike only. The shipping boundary uses versioned typed field-list
 packets; the JSON smoke envelope remains comparison tooling and is not a public
 serialization contract. The Apple, Android, and React Native facades are
