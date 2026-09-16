@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "sdkFamily": "bota-app-sdk",
   "sdkVersion": "1.2.0-beta.0",
-  "sourceRevision": "0962b92288fdd1867cff78e77dfb8d2cb4ffa598",
+  "sourceRevision": "33430d80e7709408f76e46df0dd4d98fed2b5631",
   "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.0",
@@ -49,9 +49,9 @@
       "name": "bota_flutter_sdk-1.2.0-beta.0.tar.gz",
       "ecosystem": "pub",
       "version": "1.2.0-beta.0",
-      "checksumSha256": "f880d3925dca2566a099f2eed8c15ec547e9fa2a4f4e7a4992d8f29eb74f834f",
-      "sourceRevision": "0962b92288fdd1867cff78e77dfb8d2cb4ffa598",
-      "normalizedArchiveSha256": "c3f5bd28a122938a26304ae04157620953f3cf1a563b74a5c8617a364cd73c11",
+      "checksumSha256": "1904d84ed37cdd78c3e375f65fb039db635521a0faf742757fe7f560d3e28129",
+      "sourceRevision": "33430d80e7709408f76e46df0dd4d98fed2b5631",
+      "normalizedArchiveSha256": "ffc53d282c266525355f7834ace655e822ec117eab473bc1642a5d92d1278d18",
       "generator": {
         "name": "pigeon",
         "version": "28.0.0"
@@ -59,13 +59,13 @@
       "packageInventory": [
         {
           "path": "AGENTS.md",
-          "byteLength": 4101,
-          "sha256": "f667c9adc844bc549f09cf25df42ee6dd60f72c24e812014f8fa79bf271e2e2e"
+          "byteLength": 4351,
+          "sha256": "a8999e17f77e236af2fd1e45abc63f6196df2353772147ba97dd6d0e845544b5"
         },
         {
           "path": "CHANGELOG.md",
-          "byteLength": 1077,
-          "sha256": "92afd7785f8d187a90c278f917cdc7c1a7a182255235ed85c77357b1c97bd011"
+          "byteLength": 1178,
+          "sha256": "b55b378e9070280ef6920aa8ef9a7e2f3fe91a15aa820f3fc9e5d9f962f41cef"
         },
         {
           "path": "LICENSE",
@@ -74,8 +74,8 @@
         },
         {
           "path": "README.md",
-          "byteLength": 9599,
-          "sha256": "0e0e0d8ee156db36455c5bc15a4dd78263fcec965d0a4b7e6cb6b9a893c84c50"
+          "byteLength": 10032,
+          "sha256": "0c73d6089a46a101ef4bb07bc33cfcf974dd7c7b18feb32b6b882663cdd183c3"
         },
         {
           "path": "analysis_options.yaml",
@@ -339,8 +339,8 @@
         },
         {
           "path": "test/workflow_conformance_test.dart",
-          "byteLength": 19983,
-          "sha256": "5dff0b968c9b7c3cf5cbafcbeede648a71c34890d281df680bcffc338f220a29"
+          "byteLength": 20995,
+          "sha256": "e36c39382a73aa1be62745b2b9ca5963b00f17df802e72370b2782bcc205bc99"
         }
       ],
       "capabilities": [
@@ -354,7 +354,9 @@
       "ecosystem": "npm",
       "version": "1.2.0-beta.0",
       "checksumSha256": "0000000000000000000000000000000000000000000000000000000000000000",
-      "capabilities": ["web_bluetooth_read_only"]
+      "capabilities": [
+        "web_bluetooth_read_only"
+      ]
     }
   ]
 }
