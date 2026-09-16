@@ -3,8 +3,8 @@
   "workflow": "factory-reset",
   "baseline": {
     "package": "@bota.dev/react-native-sdk",
-    "version": "0.0.65",
-    "revision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4"
+    "version": "0.0.67",
+    "revision": "e11fde5be40027ec6cf1985fc0eadb00ece23e65"
   },
   "scenarios": [
     {
@@ -54,7 +54,7 @@
       "name": "factory-reset-durable-resume",
       "classification": "resume",
       "sourceTest": "__tests__/DeviceManager.test.ts#resumes a replayed WIPED result without re-sending grant or opcode 0x06",
-      "rustTest": "factory_reset_workflow::resume_waits_for_exact_replay_then_sends_only_receipt",
+      "rustTest": "factory_reset_workflow::resume_repersist_exact_replay_before_sending_only_receipt",
       "command": "resume_factory_reset",
       "capabilities": ["ble", "timer", "persistence"],
       "inputs": ["subscribed", "wiped_replay", "receipt_written", "result_deleted"],

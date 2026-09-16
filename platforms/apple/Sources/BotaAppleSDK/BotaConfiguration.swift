@@ -13,12 +13,69 @@ public struct BotaConfiguration: @unchecked Sendable {
             let root = configuredDirectory ?? Self.defaultApplicationSupportDirectory()
             let bluetooth = CoreBluetoothHost(driver: CoreBluetoothDriver())
             let mapper = try CoreModelMapper()
+            let encryptedUploadV2Capabilities = EncryptedUploadV2CapabilityReader(
+                read: { peripheralID, serviceUUID, characteristicUUID in
+                    try await bluetooth.read(
+                        peripheralID: peripheralID,
+                        serviceUUID: serviceUUID,
+                        characteristicUUID: characteristicUUID
+                    )
+                },
+                decode: { try mapper.decodeEncryptedUploadV2Capabilities($0) }
+            )
             let connection = DeviceConnectionRegistry()
             let persistence = FilePersistenceHost(
                 rootDirectory: root.appendingPathComponent("State", isDirectory: true)
             )
             let network = URLSessionNetworkHost()
             let material = ApplicationMaterialHost()
+            let encryptedUploadV2Material = EncryptedUploadV2MaterialRegistry()
+            let encryptedUploadV2SignedBlobWriter = EncryptedUploadV2SignedBlobWriter(
+                bluetooth: bluetooth,
+                mapper: mapper
+            )
+            let encryptedUploadV2TransferControl = EncryptedUploadV2TransferControl(
+                bluetooth: bluetooth,
+                mapper: mapper
+            )
+            let encryptedUploadV2WriteIDs = EncryptedUploadV2WriteIDGenerator()
+            let currentPeripheralID: @Sendable () async throws -> String = {
+                guard let device = await connection.current else {
+                    throw NativeHostError.missingResource("encrypted upload v2 connection")
+                }
+                return device.id
+            }
+            let encryptedUploadV2Transfer = EncryptedUploadV2TransferHost(
+                rootDirectory: root.appendingPathComponent("EncryptedUploadV2", isDirectory: true),
+                mapper: mapper,
+                transferControl: encryptedUploadV2TransferControl,
+                resolvePeripheralID: currentPeripheralID,
+                services: .init(
+                    materialRegistry: encryptedUploadV2Material,
+                    sendSignedDocument: { kind, writeID, document, maximumDocumentBytes in
+                        try await encryptedUploadV2SignedBlobWriter.send(
+                            peripheralID: currentPeripheralID(),
+                            kind: kind,
+                            writeID: writeID,
+                            document: document,
+                            maximumDocumentBytes: maximumDocumentBytes
+                        )
+                    },
+                    uploadCiphertext: { request, fileURL in
+                        let (_, response) = try await URLSession.shared.upload(for: request, fromFile: fileURL)
+                        guard let response = response as? HTTPURLResponse,
+                              (200 ..< 300).contains(response.statusCode)
+                        else { throw NativeHostError.httpStatus((response as? HTTPURLResponse)?.statusCode ?? 0) }
+                    },
+                    confirmTransfer: { transportSessionID, frame in
+                        try await encryptedUploadV2TransferControl.confirmActiveTransferFrame(
+                            transportSessionID: transportSessionID,
+                            frame: frame
+                        )
+                    },
+                    nextWriteID: { encryptedUploadV2WriteIDs.next() }
+                )
+            )
             let recordingSink = FileRecordingSinkHost(
                 rootDirectory: root.appendingPathComponent("Recordings", isDirectory: true)
             )
@@ -30,7 +87,8 @@ public struct BotaConfiguration: @unchecked Sendable {
                 network: network,
                 material: material,
                 recordingSink: recordingSink,
-                firmwareBlob: firmwareBlob
+                firmwareBlob: firmwareBlob,
+                encryptedUploadV2: encryptedUploadV2Transfer
             )
             return DeviceRuntime(
                 engine: CoreEngineActor(abi: try CoreAbiClient(), host: executor),
@@ -102,6 +160,25 @@ public struct BotaConfiguration: @unchecked Sendable {
                         serviceUUID: serviceUUID,
                         characteristicUUID: characteristicUUID
                     )
+                },
+                readEncryptedUploadV2Capabilities: { peripheralID in
+                    try await encryptedUploadV2Capabilities.readFresh(peripheralID: peripheralID)
+                },
+                encryptedUploadV2Checkpoint: { serialNumber, recordingUUID, recordingGeneration in
+                    try await encryptedUploadV2Transfer.checkpoint(
+                        serialNumber: serialNumber,
+                        recordingUUID: recordingUUID,
+                        recordingGeneration: recordingGeneration
+                    )
+                },
+                encryptedUploadV2MaximumWriteLength: { peripheralID in
+                    try await bluetooth.maximumWriteValueLength(peripheralID: peripheralID)
+                },
+                registerEncryptedUploadV2Material: { id, material in
+                    try await encryptedUploadV2Material.register(id: id, provider: material.provider)
+                },
+                terminateEncryptedUploadV2Material: { id, outcome in
+                    try? await encryptedUploadV2Material.terminate(id: id, outcome: outcome)
                 },
                 parseRecordingState: { try mapper.parseRecordingState($0) },
                 parseRecordingControlResult: { try mapper.parseRecordingControlResult($0) },
@@ -220,6 +297,19 @@ public struct BotaConfiguration: @unchecked Sendable {
                 retryable: false,
                 detail: "Bluetooth authorization state is unsupported"
             )
+        }
+    }
+}
+
+private final class EncryptedUploadV2WriteIDGenerator: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: UInt32 = 0
+
+    func next() -> UInt32 {
+        lock.withLock {
+            value &+= 1
+            if value == 0 { value = 1 }
+            return value
         }
     }
 }

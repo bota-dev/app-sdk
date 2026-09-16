@@ -20,7 +20,7 @@ func awaitWorkflowCompletion(_ command: CoreCommand, runtime: DeviceRuntime) asy
             case .started, .deviceDiscovered, .connectionEstablished, .progress,
                  .retrying, .deviceUploadPreserved, .bleFallbackReady,
                  .firmwareProgress, .deviceLog, .streamingPaused, .streamingResumed,
-                 .streamingCompleted:
+                 .streamingCompleted, .encryptedUploadV2Staged:
                 break
             }
         }

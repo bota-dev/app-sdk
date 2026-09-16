@@ -4,6 +4,7 @@ internal interface JournalStore {
     suspend fun read(name: String): ByteArray?
     suspend fun write(name: String, value: ByteArray)
     suspend fun delete(name: String)
+    suspend fun names(): Set<String> = emptySet()
 }
 
 internal object HostFieldId {

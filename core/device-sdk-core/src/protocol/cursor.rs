@@ -34,6 +34,28 @@ impl<'a> Cursor<'a> {
         Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
     }
 
+    pub(super) fn u64_le(&self, offset: usize) -> Result<u64, DeviceSdkError> {
+        let bytes = self.slice(offset, 8)?;
+        Ok(u64::from_le_bytes(
+            bytes.try_into().expect("slice length is checked"),
+        ))
+    }
+
+    pub(super) fn require_exact(&self, expected: usize) -> Result<(), DeviceSdkError> {
+        self.require(expected)?;
+        if self.len() != expected {
+            return Err(
+                DeviceSdkError::new(ErrorCode::InvalidInput, Operation::Decode, false).with_detail(
+                    format!(
+                        "packet requires exactly {expected} bytes but has {}",
+                        self.len()
+                    ),
+                ),
+            );
+        }
+        Ok(())
+    }
+
     pub(super) fn slice(&self, offset: usize, length: usize) -> Result<&'a [u8], DeviceSdkError> {
         let end = offset
             .checked_add(length)

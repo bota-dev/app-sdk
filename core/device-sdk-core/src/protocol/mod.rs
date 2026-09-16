@@ -1,5 +1,6 @@
 mod cursor;
 mod encode;
+mod encrypted_upload_v2;
 mod logs;
 mod ota;
 mod provisioning;
@@ -10,6 +11,7 @@ mod status;
 mod transfer;
 
 pub use encode::*;
+pub use encrypted_upload_v2::*;
 pub use logs::*;
 pub use ota::*;
 pub use provisioning::*;

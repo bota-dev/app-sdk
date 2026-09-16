@@ -70,6 +70,67 @@ final class ProtocolCodecTests: XCTestCase {
         )
     }
 
+    func testEncryptedUploadV2StructuralVectorsUseSharedCore() throws {
+        let mapper = try CoreModelMapper()
+        var matched = 0
+
+        for fixtureCase in try Self.encryptedUploadV2Cases() {
+            let operation = try XCTUnwrap(fixtureCase["operation"] as? String)
+            guard Self.encryptedUploadV2Operations.contains(operation) else { continue }
+            let name = try XCTUnwrap(fixtureCase["name"] as? String)
+            let expectedError = fixtureCase["expectedError"] as? String
+            guard expectedError == nil || Self.structuralErrors.contains(name) else { continue }
+            matched += 1
+
+            do {
+                let inputHex = try XCTUnwrap(fixtureCase["inputHex"] as? String)
+                let input = Self.data(inputHex)
+                let value = try mapper.inspectEncryptedUploadV2(operation: operation, data: input)
+                XCTAssertNil(expectedError, name)
+                let expected = try XCTUnwrap(fixtureCase["expected"] as? [String: Any])
+                let normalized = expected["normalized"] as? [String: Any]
+                XCTAssertEqual(value.kind, Self.expectedEncryptedUploadV2Kind(operation), name)
+                if operation == "decodeSignedBlob" {
+                    XCTAssertEqual(value.messageType, input.first, name)
+                } else {
+                    XCTAssertEqual(value.messageType, (normalized?["messageType"] as? NSNumber)?.uint8Value, name)
+                }
+                XCTAssertEqual(value.flags, (normalized?["flags"] as? NSNumber)?.uint32Value, name)
+                XCTAssertEqual(
+                    value.transportSessionID,
+                    (normalized?["transportSessionId"] as? NSNumber)?.uint64Value,
+                    name
+                )
+            } catch let error as BotaSDKError {
+                XCTAssertNotNil(expectedError, "\(name): \(error)")
+                XCTAssertEqual(error.code, Self.expectedErrorCode(expectedError, name: name), name)
+            }
+        }
+
+        XCTAssertEqual(matched, 40)
+    }
+
+    func testEncryptedUploadV2CryptoOwnerCasesStayOpaqueAndDigestPinned() throws {
+        let cases = try Self.encryptedUploadV2Cases().filter {
+            !Self.encryptedUploadV2Operations.contains($0["operation"] as? String ?? "")
+        }
+        XCTAssertEqual(cases.count, 49)
+        for fixtureCase in cases {
+            let inputHex = try XCTUnwrap(fixtureCase["inputHex"] as? String)
+            XCTAssertEqual(Self.hex(Self.data(inputHex)), inputHex)
+        }
+
+        let digestURL = try XCTUnwrap(Bundle.module.url(
+            forResource: "encrypted-upload-v2",
+            withExtension: "sha256",
+            subdirectory: "EncryptedUploadV2Vectors"
+        ))
+        XCTAssertEqual(
+            try String(contentsOf: digestURL, encoding: .utf8),
+            "e9c7a41da6bfa8ab60d639a3c3f8e3fac4f8d525d61f5e407f1be599a63cf670\n"
+        )
+    }
+
     private func encode(_ fixtureCase: [String: Any], operation: String) throws -> Data? {
         let mapper = try CoreModelMapper()
         let input = fixtureCase["input"] as? [String: Any] ?? [:]
@@ -184,6 +245,39 @@ final class ProtocolCodecTests: XCTestCase {
         "createTransferCommand",
     ]
 
+    private static let encryptedUploadV2Operations = Set([
+        "decodeCapabilities",
+        "decodeSignedBlob",
+        "decodeTransfer",
+    ])
+
+    private static let structuralErrors = Set([
+        "ble-truncated-capability",
+        "ble-capability-trailing-byte",
+        "ble-capability-unknown-version",
+        "ble-capability-unknown-flag",
+        "ble-capability-nonzero-reserved",
+        "ble-truncated-blob-begin",
+        "ble-blob-nonzero-reserved",
+        "ble-trailing-start",
+        "ble-truncated-start",
+        "ble-nonzero-reserved",
+        "ble-unknown-message",
+        "ble-unknown-version",
+        "ble-unknown-flags",
+        "ble-window-count-mismatch",
+        "ble-data-length-mismatch",
+        "ble-zero-session",
+    ])
+
+    private static let truncatedErrors = Set([
+        "ble-truncated-capability",
+        "ble-truncated-blob-begin",
+        "ble-truncated-start",
+        "ble-window-count-mismatch",
+        "ble-data-length-mismatch",
+    ])
+
     private static func fixtureCases() throws -> [[String: Any]] {
         let names = [
             "connection-settings",
@@ -199,6 +293,34 @@ final class ProtocolCodecTests: XCTestCase {
             let url = try XCTUnwrap(Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "ProtocolFixtures"))
             let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
             return try XCTUnwrap(object["cases"] as? [[String: Any]])
+        }
+    }
+
+    private static func encryptedUploadV2Cases() throws -> [[String: Any]] {
+        let url = try XCTUnwrap(Bundle.module.url(
+            forResource: "encrypted-upload-v2",
+            withExtension: "json",
+            subdirectory: "EncryptedUploadV2Vectors"
+        ))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        return try XCTUnwrap(object["cases"] as? [[String: Any]])
+    }
+
+    private static func expectedEncryptedUploadV2Kind(_ operation: String) -> UInt8 {
+        switch operation {
+        case "decodeCapabilities": return 1
+        case "decodeSignedBlob": return 2
+        case "decodeTransfer": return 3
+        default: fatalError("unknown encrypted-upload-v2 operation \(operation)")
+        }
+    }
+
+    private static func expectedErrorCode(_ expectedError: String?, name: String) -> BotaSDKErrorCode? {
+        if truncatedErrors.contains(name) { return .truncatedPacket }
+        switch expectedError {
+        case "invalid_length", "noncanonical_encoding": return .invalidInput
+        case "unsupported_version": return .unknownPacket
+        default: return nil
         }
     }
 

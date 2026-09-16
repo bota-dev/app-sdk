@@ -40,6 +40,20 @@ internal enum class HostEventKind(val wireValue: Int) {
     StreamingSinkAccepted(0x0228),
     StreamingSinkFinalized(0x0229),
     StreamingSinkFailed(0x022a),
+    EncryptedUploadV2CheckpointLoaded(0x022b),
+    EncryptedUploadV2SinkTruncated(0x022c),
+    EncryptedUploadV2SessionPrepared(0x022d),
+    EncryptedUploadV2TransferStarted(0x022e),
+    EncryptedUploadV2ResumeRejected(0x022f),
+    EncryptedUploadV2WindowStaged(0x0230),
+    EncryptedUploadV2CheckpointSaved(0x0231),
+    EncryptedUploadV2WindowAcknowledged(0x0232),
+    EncryptedUploadV2TransferCompleted(0x0233),
+    EncryptedUploadV2ArtifactsStaged(0x0234),
+    EncryptedUploadV2ReceiptAccepted(0x0235),
+    EncryptedUploadV2RecordingConfirmed(0x0236),
+    EncryptedUploadV2MixedProfile(0x0237),
+    EncryptedUploadV2Failed(0x0238),
 }
 
 internal data class CoreHostEvent(

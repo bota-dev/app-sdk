@@ -14,7 +14,7 @@
       "required": ["package", "version", "revision"],
       "properties": {
         "package": { "const": "@bota.dev/react-native-sdk" },
-        "version": { "const": "0.0.65" },
+        "version": { "const": "0.0.67" },
         "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
       }
     },
@@ -45,6 +45,16 @@
         },
         "sourceTest": { "type": "string", "pattern": "^[^#\\n]+#[^#\\n]+$" },
         "rustTest": { "type": "string", "pattern": "^[a-z0-9_]+::[a-z0-9_]+$" },
+        "runtimeTests": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["apple", "android", "targetReactNative"],
+          "properties": {
+            "apple": { "type": "string", "pattern": "^[^#\\n]+#[^#\\n]+$" },
+            "android": { "type": "string", "pattern": "^[^#\\n]+#[^#\\n]+$" },
+            "targetReactNative": { "type": "string", "pattern": "^[^#\\n]+#[^#\\n]+$" }
+          }
+        },
         "command": {
           "enum": [
             "discover_devices",
@@ -52,6 +62,7 @@
             "reconnect",
             "provision",
             "transfer_recording",
+            "transfer_encrypted_recording",
             "upload_recording",
             "update_firmware",
             "read_device_logs",

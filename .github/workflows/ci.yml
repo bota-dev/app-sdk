@@ -1,9 +1,7 @@
 name: CI
 
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -20,11 +18,21 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Check out maintenance React Native workflow baseline
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: bota-dev/react-native-sdk
+          ref: e11fde5be40027ec6cf1985fc0eadb00ece23e65
+          path: .ci/react-native-workflow-baseline
+
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            .ci/react-native-workflow-baseline/package-lock.json
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
@@ -34,12 +42,21 @@ jobs:
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          cache-on-failure: true
 
       - name: Install Node.js dependencies
         run: npm ci
 
+      - name: Install maintenance React Native workflow dependencies
+        working-directory: .ci/react-native-workflow-baseline
+        run: npm ci
+
       - name: Test repository tooling
         run: npm run test:tooling
+
+      - name: Verify cross-SDK workflow evidence
+        run: npm run test:workflows -- --sdk-path .ci/react-native-workflow-baseline
 
       - name: Validate React Native public API contract
         run: node tools/baseline/react-native-api-contract.mjs validate --contract protocol/baseline/react-native-public-api-0.0.65.json --baseline-metadata protocol/baseline/react-native-sdk-0.0.65.json
@@ -89,6 +106,11 @@ jobs:
         with:
           toolchain: 1.98.0
 
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          cache-on-failure: true
+
       - name: Install repository tooling
         run: npm ci
 
@@ -107,10 +129,51 @@ jobs:
           npx --yes "npm@$NPM_CLI_VERSION" pack --pack-destination ../../target/react-native-release
 
       - name: Upload React Native candidate
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: react-native-ci-${{ github.sha }}
           path: target/react-native-release/
+          if-no-files-found: error
+          compression-level: 0
+
+  web:
+    name: Web SDK package and Vite consumer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            frameworks/web/package-lock.json
+            tests/consumers/web-vite/package-lock.json
+
+      - name: Set up Rust WebAssembly target
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.98.0
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          cache-on-failure: true
+
+      - name: Install pinned wasm-bindgen CLI
+        run: cargo install wasm-bindgen-cli --version 0.2.128 --locked
+
+      - name: Verify Web package and packed consumer
+        run: npm run web:verify
+
+      - name: Upload Web candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: web-ci-${{ github.sha }}
+          path: target/web-release/
           if-no-files-found: error
           compression-level: 0
 
@@ -122,7 +185,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up JDK 17
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: "17"
@@ -133,6 +196,9 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frameworks/react-native/package-lock.json
 
       - name: Set up Rust Android targets
         uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
@@ -142,6 +208,8 @@ jobs:
 
       - name: Cache Rust Android build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          cache-on-failure: true
 
       - name: Install pinned Android build tools
         run: |
@@ -175,10 +243,10 @@ jobs:
           tools/android/package-release.sh --check
           tools/android/install-release-repository.sh target/android-release target/android-m2
           platforms/android/gradlew -p platforms/android \
-            :sdk:testDebugUnitTest \
             :sdk:lintRelease \
             :sdk:assembleDebug \
             :sdk:assembleDebugAndroidTest
+          platforms/android/gradlew -p platforms/android :sdk:testDebugUnitTest
           tools/android/test-legacy-consumer.sh --mode source --compile-only \
             --repository target/android-m2
           tools/android/test-legacy-consumer.sh --mode binary --compile-only \
@@ -199,7 +267,7 @@ jobs:
         run: tools/android/test-emulator-lane.sh --api 35
 
       - name: Upload non-publishing Android evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: android-ci-${{ github.sha }}
           path: target/android-release/
@@ -224,6 +292,16 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: frameworks/react-native/package-lock.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.98.0
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          cache-on-failure: true
 
       - name: Install React Native package dependencies
         working-directory: frameworks/react-native
@@ -269,6 +347,11 @@ jobs:
         with:
           toolchain: 1.98.0
 
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          cache-on-failure: true
+
       - name: Run shipping Swift caller
         run: tools/ffi-smoke/run-native-swift-smoke.sh
 
@@ -311,10 +394,10 @@ jobs:
         run: node --test tools/release/generate-apple-*.test.mjs
 
       - name: Generate unpublished Apple release evidence
-        run: tools/apple/package-release.sh
+        run: tools/apple/package-release.sh --evidence-only
 
       - name: Upload unpublished Apple evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: apple-package-${{ github.sha }}
           path: target/apple-release/
@@ -340,7 +423,7 @@ jobs:
           cache: npm
 
       - name: Set up JDK 17
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: "17"
@@ -376,7 +459,7 @@ jobs:
             --inventory target/flutter-release/package-inventory.json
 
       - name: Upload Flutter candidate
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: flutter-ci-${{ github.sha }}
           path: target/flutter-release/
@@ -385,7 +468,7 @@ jobs:
 
   release-candidate:
     name: Release candidate inventory
-    needs: [android-native, apple, react-native, flutter]
+    needs: [android-native, apple, react-native, web, flutter]
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
@@ -397,25 +480,31 @@ jobs:
           node-version-file: .nvmrc
 
       - name: Download Android candidate
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: android-ci-${{ github.sha }}
           path: target/android-release/
 
       - name: Download Apple candidate
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: apple-package-${{ github.sha }}
           path: target/apple-release/
 
       - name: Download React Native candidate
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: react-native-ci-${{ github.sha }}
           path: target/react-native-release/
 
+      - name: Download Web candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: web-ci-${{ github.sha }}
+          path: target/web-release/
+
       - name: Download Flutter candidate
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: flutter-ci-${{ github.sha }}
           path: target/flutter-release/
@@ -426,7 +515,7 @@ jobs:
             --source-revision "$GITHUB_SHA" \
             --output target/release-candidate-files.json \
             target/apple-release target/android-release target/react-native-release \
-            target/flutter-release
+            target/web-release target/flutter-release
           sha256sum target/release-candidate-files.json \
             > target/release-candidate-files.json.sha256
           {
@@ -437,7 +526,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload candidate inventory
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-candidate-${{ github.sha }}
           path: |

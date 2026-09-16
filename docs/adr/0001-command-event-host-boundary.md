@@ -60,7 +60,7 @@ cleanup releases subscription state without an invalid BLE stop write.
 
 ## Native Binding Decision
 
-Milestone 2 compared a manually owned C ABI with UniFFI `0.32.0` and selected
+Milestone 2 compared a manually owned C ABI with UniFFI `0.32.1` and selected
 the C ABI for native facades. The boundary uses opaque handles, borrowed input
 spans, explicitly freed SDK-owned outputs, and numeric request/cancellation
 identity. Platform facades expose idiomatic Swift, Kotlin, C#, and Dart APIs

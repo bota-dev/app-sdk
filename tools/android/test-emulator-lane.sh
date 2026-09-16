@@ -72,7 +72,7 @@ for _ in $(seq 1 "$emulator_attach_attempts"); do
     adb_connected=true
     break
   fi
-  if ! kill -0 "$emulator_pid" 2>/dev/null; then
+  if ! jobs -pr | grep -qx "$emulator_pid"; then
     emulator_status=0
     wait "$emulator_pid" || emulator_status=$?
     report_emulator_failure \

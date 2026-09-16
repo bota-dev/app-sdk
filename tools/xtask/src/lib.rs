@@ -1,5 +1,6 @@
 use std::{ffi::OsString, path::PathBuf};
 
+pub mod encrypted_upload_v2;
 pub mod protocol;
 
 pub mod release {
@@ -237,6 +238,10 @@ pub mod release {
             &apple_pod_version,
             &expected.version,
         )?;
+
+        let web_package: PackageVersion =
+            parse_json_file(&root.join("frameworks/web/package.json"))?;
+        require_version("@bota.dev/web-sdk", &web_package.version, &expected.version)?;
 
         let core_path = root.join("core/device-sdk-core/Cargo.toml");
         let core: CargoManifest = parse_toml_file(&core_path)?;
@@ -764,6 +769,32 @@ pub mod release {
 pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
     let args: Vec<OsString> = args.into_iter().collect();
     match args.as_slice() {
+        [encrypted, vectors, generate]
+            if encrypted == "encrypted-upload-v2"
+                && vectors == "vectors"
+                && generate == "generate" =>
+        {
+            let root = std::env::current_dir()
+                .map_err(|error| format!("cannot resolve repository root: {error}"))?;
+            let changed = encrypted_upload_v2::generate(&root, false)?;
+            println!(
+                "encrypted upload v2 vectors {}",
+                if changed { "generated" } else { "already current" }
+            );
+            Ok(())
+        }
+        [encrypted, vectors, generate, check]
+            if encrypted == "encrypted-upload-v2"
+                && vectors == "vectors"
+                && generate == "generate"
+                && check == "--check" =>
+        {
+            let root = std::env::current_dir()
+                .map_err(|error| format!("cannot resolve repository root: {error}"))?;
+            encrypted_upload_v2::generate(&root, true)?;
+            println!("encrypted upload v2 vectors are current");
+            Ok(())
+        }
         [protocol, generate] if protocol == "protocol" && generate == "generate" => {
             let root = std::env::current_dir()
                 .map_err(|error| format!("cannot resolve repository root: {error}"))?;
@@ -806,7 +837,7 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), String> {
             Ok(())
         }
         _ => Err(
-            "usage: cargo xtask <protocol generate [--check] | release validate <manifest.json> | release verify-tag <vVERSION>>".to_owned(),
+            "usage: cargo xtask <protocol generate [--check] | encrypted-upload-v2 vectors generate [--check] | release validate <manifest.json> | release verify-tag <vVERSION>>".to_owned(),
         ),
     }
 }

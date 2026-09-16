@@ -18,6 +18,8 @@ internal class DeviceConnectionRegistry {
         synchronized(lock) { current = null }
     }
 
+    fun current(): ConnectedDevice? = synchronized(lock) { current }
+
     fun require(device: ConnectedDevice) {
         val matches = synchronized(lock) {
             current?.id == device.id && current?.serialNumber == device.serialNumber

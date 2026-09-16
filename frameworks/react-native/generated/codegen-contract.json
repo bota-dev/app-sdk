@@ -536,6 +536,354 @@
               }
             ]
           },
+          "NativeEncryptedUploadV2Capability": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "encodingVersion",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "transferProfileVersion",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "rawValueHex",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "sha256Hex",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "flags",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "maximumSignedBlobBytes",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "maximumManifestBytes",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "maximumDataPayloadBytes",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "maximumWindowPackets",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "durableCheckpointIntervalBlocks",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "maximumMissingSequences",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeEncryptedUploadV2Checkpoint": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "version",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "uploadSessionId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "ownerRevision",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "revision",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "nextCiphertextOffset",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "prefixSha256",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "highestContiguousSequence",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "transportSessionId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "sinkRegistrationId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "windowPackets",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "dataPayloadBytes",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeEncryptedUploadV2ProfileDecision": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "profile",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "uploadSessionId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "ownerRevision",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "securityPolicy",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "materialRegistrationId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeEncryptedUploadV2ProfileRequest": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "requestId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "operationId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "recording",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeEncryptedUploadV2Recording"
+                }
+              },
+              {
+                "name": "capability",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeEncryptedUploadV2Capability"
+                }
+              },
+              {
+                "name": "checkpoint",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeEncryptedUploadV2Checkpoint"
+                }
+              }
+            ]
+          },
+          "NativeEncryptedUploadV2Progress": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "operationId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "recordingUuid",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "phase",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "completedBytes",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "totalBytes",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "checkpointRevision",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "errorCode",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "retryable",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
+              },
+              {
+                "name": "protocolStatus",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeEncryptedUploadV2Recording": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "uuid",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "generation",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "ciphertextLength",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "ciphertextSha256",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
           "NativeFactoryResetCompletion": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -1488,6 +1836,28 @@
                 "typeAnnotation": {
                   "type": "TypeAliasTypeAnnotation",
                   "name": "NativeRecordingTransferProgress"
+                }
+              }
+            },
+            {
+              "name": "onEncryptedUploadV2ProfileRequested",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeEncryptedUploadV2ProfileRequest"
+                }
+              }
+            },
+            {
+              "name": "onEncryptedUploadV2Progress",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeEncryptedUploadV2Progress"
                 }
               }
             },
@@ -2714,6 +3084,103 @@
               }
             },
             {
+              "name": "syncEncryptedRecordingV2",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "recording",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeEncryptedUploadV2Recording"
+                    }
+                  },
+                  {
+                    "name": "operationId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "resolveEncryptedUploadV2Profile",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "decision",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeEncryptedUploadV2ProfileDecision"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "rejectEncryptedUploadV2Profile",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "errorCode",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
               "name": "confirmRecording",
               "optional": false,
               "typeAnnotation": {
@@ -3088,11 +3555,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "b912d5ffe70f8f2f0a3a67485e1752b883ba14a32d3f308e3bb1df106856f143"
+        "sha256": "82e288251f50d1c53d3640e979585242ef07eb838872f5db48c37e4cb3c839cd"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "26e6b3b6042638379c9b388ad61fa80315671cf86a704ab5ce8ebe331d927079"
+        "sha256": "d8f56a124885f1c415f263c729e2f6c436133745a7ad4ade3edf8360b2596f54"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -3104,23 +3571,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "585e18bf81788e3a73c95fab4cb0366b4fbfcc573e0ab1d2bb2aeaa1d96fcafc"
+        "sha256": "4b354a2d62aa5113c5eb78c395bb706ded19e5663d91a692e6e0c3f5cb7c4412"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "c412d5fb5bf5b9351a23773b767c47acd27f0b259a486f76f5f5c703ba3dd496"
+        "sha256": "1ed6a1cdf0005a89698fc1efb606feaa7b0f3a7db32ec044d03fe18a58eeafdb"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "a6c09a623935693e7b478cd2e0a84d6c4a84a6a6f026297834f395376cb66478"
+        "sha256": "b82ad40be5f970788d4ad43b4152c48ec389bb91d56cd7f50ae23741e4ead9c2"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "585e18bf81788e3a73c95fab4cb0366b4fbfcc573e0ab1d2bb2aeaa1d96fcafc"
+        "sha256": "4b354a2d62aa5113c5eb78c395bb706ded19e5663d91a692e6e0c3f5cb7c4412"
       }
     ]
   },
-  "contractDigest": "06dbb56e0342b45885891d92e4d4df3ba4abe724182b333ec915ec3a82763aec"
+  "contractDigest": "17e9bd69327cb8dac4b9d1f17afd6005619b4e5839d3c888f700f0f995c5eb55"
 }

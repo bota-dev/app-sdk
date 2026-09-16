@@ -3,8 +3,8 @@
   "workflow": "recording-transfer",
   "baseline": {
     "package": "@bota.dev/react-native-sdk",
-    "version": "0.0.65",
-    "revision": "44ac1221cb71eb01cafcdbfdf7a370847d3a10b4"
+    "version": "0.0.67",
+    "revision": "e11fde5be40027ec6cf1985fc0eadb00ece23e65"
   },
   "scenarios": [
     {

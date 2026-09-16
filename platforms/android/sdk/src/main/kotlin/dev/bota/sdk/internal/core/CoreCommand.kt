@@ -151,6 +151,38 @@ internal data class CoreCommand(
             CoreField.BooleanValue(124, confirmOnCompletion),
         )
 
+        fun transferEncryptedRecording(
+            request: EncryptedUploadV2CommandRequest,
+            cancellationId: UUID = UUID.randomUUID(),
+        ) = CoreCommand(
+            0x010c,
+            cancellationId,
+            listOf(
+                CoreField.Text(3, request.serialNumber),
+                CoreField.Text(13, request.recordingUuid),
+                CoreField.Unsigned(129, request.recordingGeneration.toULong()),
+                CoreField.Unsigned(147, request.storageFormat.toULong()),
+                CoreField.Bytes(132, request.uploadSessionId.toNetworkBytes()),
+                CoreField.Unsigned(165, request.ownerRevision.toULong()),
+                CoreField.Unsigned(128, request.transportSessionId),
+                CoreField.Text(12, request.materialId),
+                CoreField.Text(14, request.sinkId),
+                CoreField.Unsigned(166, 3u),
+                CoreField.Unsigned(167, request.securityPolicy),
+                CoreField.Unsigned(137, request.capabilities.flags.toULong()),
+                CoreField.Unsigned(138, request.capabilities.maximumSignedBlobBytes.toULong()),
+                CoreField.Unsigned(139, request.capabilities.maximumManifestBytes.toULong()),
+                CoreField.Unsigned(169, request.capabilities.maximumDataPayloadBytes.toULong()),
+                CoreField.Unsigned(170, request.capabilities.maximumWindowPackets.toULong()),
+                CoreField.Unsigned(140, request.capabilities.durableCheckpointIntervalBlocks.toULong()),
+                CoreField.Unsigned(141, request.capabilities.maximumMissingSequences.toULong()),
+                CoreField.Unsigned(134, request.windowPackets.toULong()),
+                CoreField.Unsigned(135, request.dataPayloadBytes.toULong()),
+                CoreField.Unsigned(130, request.ciphertextLength),
+                CoreField.Bytes(144, request.ciphertextSha256),
+            ),
+        )
+
         fun uploadRecording(
             serialNumber: String,
             recordingUuid: String,
@@ -247,6 +279,33 @@ internal data class CoreCommand(
                 "reconnect" -> reconnect(serial)
                 "provision" -> provision(serial, "material")
                 "transfer_recording" -> transferRecording(serial, recording, "sink", 1u)
+                "transfer_encrypted_recording" -> transferEncryptedRecording(
+                    EncryptedUploadV2CommandRequest(
+                        serialNumber = serial,
+                        recordingUuid = recording,
+                        recordingGeneration = 1u,
+                        storageFormat = 3u,
+                        uploadSessionId = UUID.fromString("00112233-4455-6677-8899-aabbccddeeff"),
+                        ownerRevision = 1u,
+                        transportSessionId = 1u,
+                        materialId = "material",
+                        sinkId = "sink",
+                        securityPolicy = 3u,
+                        capabilities = EncryptedUploadV2CapabilitiesValue(
+                            flags = 0x7fu,
+                            maximumSignedBlobBytes = 1_024u,
+                            maximumManifestBytes = 1_024u,
+                            maximumDataPayloadBytes = 180u,
+                            maximumWindowPackets = 8u,
+                            durableCheckpointIntervalBlocks = 4u,
+                            maximumMissingSequences = 3u,
+                        ),
+                        windowPackets = 4u,
+                        dataPayloadBytes = 160u,
+                        ciphertextLength = 330u,
+                        ciphertextSha256 = ByteArray(32) { 0x5a },
+                    ),
+                )
                 "upload_recording" -> uploadRecording(serial, recording, "upload", "destination")
                 "update_firmware" -> updateFirmware(serial, "1.0.0", 1u, 1u, 1u)
                 "read_device_logs" -> readDeviceLogs(serial)

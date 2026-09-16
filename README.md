@@ -32,17 +32,27 @@ pub.dev availability from the Apple, Android, or React Native release alone.
 
 ## Current Status
 
+The next synchronized candidate is `1.2.0-beta.0`. It adds the first
+`@bota.dev/web-sdk` package: an explicit, foreground Web Bluetooth picker,
+exact serial verification through the shared Rust/WASM workflow, explicit
+disconnect, and fresh read-only identity, device-status, and
+encrypted-upload-v2 capability snapshots. A packed-package gate installs the
+exact tarball in a clean Vite application. Recording, upload, provisioning,
+settings, control, OTA, logs, saved reconnect, and background browser behavior
+remain deferred.
+
 The App SDK has published synchronized beta release `1.1.0`: the repository has a generated
 protocol manifest, 64 language-neutral compatibility fixtures, bounded Rust
 decoders, byte-exact serializers, stable models/errors, and deterministic
 discovery, connection-recovery, provisioning, authenticated-reset, resumable
 recording-transfer, guarded upload-handoff, and resumable firmware-update
 reducers, plus exclusive device-log subscription ownership and line delivery.
-Twenty-nine canonical workflow scenarios are schema validated, pinned to the
-React Native `0.0.65` baseline, and backed by 25 executable Rust tests covering
-positive, rejection, cancellation, and resume or restart-recovery behavior.
-The same pinned SDK now has a semantic TypeScript compatibility contract for
-all 80 root exports, expanded type aliases, static factories, and reachable
+Thirty-three canonical workflow scenarios are schema validated, pinned to the
+React Native `0.0.67` executable workflow baseline, and backed by 29 executable
+Rust tests covering positive, rejection, cancellation, and resume or
+restart-recovery behavior. The separate `0.0.65` baseline remains the semantic
+TypeScript compatibility contract for all 80 root exports, expanded type
+aliases, static factories, and reachable
 public members; future React Native packages must match that digest in addition
 to the protocol and workflow gates. A private `frameworks/react-native`
 foundation now pins the apps' React Native 0.86.3 New Architecture floor,
@@ -123,7 +133,7 @@ settings, and expose stable machine-readable errors. A single-thread coroutine
 runtime now owns every Android JNI call, preserves 128-bit cancellation and
 host callback correlation, and maps all 10 commands, 30 effects, 34 events,
 and 12 notifications. API 35 instrumentation validates the generated resource
-covering all 29 canonical workflow scenarios. Its exhaustive host executor
+covering all 33 canonical workflow scenarios. Its exhaustive host executor
 routes every effect through a narrow typed native port, validates callback
 kinds and payload bounds, and preserves correlation while mapping platform
 failures to stable ABI events. The Android BluetoothGatt host now keeps
@@ -170,13 +180,119 @@ directory before enabling API 26 and API 35 consumer smoke tests. Uncertain
 deployments resume by UUID without another upload; confirmed failed deployments
 can be replaced only by uploading the exact preserved signed bundle.
 The native-boundary spike selected a manually owned C ABI after comparing it
-with pinned UniFFI `0.32.0`. The versioned shipping crate now maps every core
+with pinned UniFFI `0.32.1`. The versioned shipping crate now maps every core
 command, host event, host effect, and workflow notification through typed
 packets. Shared protocol decode/encode entry points cover the frozen status,
 recording list and control, transfer, OTA, provisioning, settings, and log fixtures. The Apple
 package and Android AAR are public platform distributions. The Flutter facade
-is implemented but not yet published; the remaining planned facades are also
-unpublished.
+and read-only Web candidate are implemented for `1.2.0-beta.0` but are not yet
+published; the remaining planned facades are also unpublished.
+Encrypted Upload v2 has an additive engine/ABI surface whose compatibility
+metadata remains contract-only while firmware, React Native, release, and
+hardware gates remain open. The surface provides profile-gated session
+coordination, opaque checkpoint metadata, staging
+evidence, and receipt-gated confirmation. Apple now maps its opaque command and
+all twelve effects through a dedicated internal host boundary and recognizes
+typed failures plus the staged notification. Apple also has an in-memory,
+opaque-ID provider registry for application-supplied authorization, staging
+requests, manifest submission, finalization, and receipt retrieval. It rejects
+wrong document sizes, non-HTTPS or body-bearing staging requests, duplicate
+registrations, and removes material on every modeled terminal outcome. The
+Apple runtime pins the separate `0406..040B` characteristic allocation and can
+perform an uncached `0406` capability read through the shared Rust decoder,
+returning the exact bytes, digest, and typed bounds internally. The production
+ABI also provides additive packet kind `0x0523` so native facades can encode
+authenticated signed-blob frames through the shared Rust codec instead of
+reconstructing them. Additive kind `0x0524` does the same for app-originated
+LIST, START, WINDOW_ACK, RESUME_REQUEST, CONFIRM, and ABORT frames, while
+rejecting device-originated transfer messages. Its normalized ABI keeps
+upload-session UUIDs as 16-byte values and missing sequences as one packed
+little-endian u32 byte field in both directions. The internal Apple mapper also
+uses that ABI for WINDOW_ACK/CONFIRM output and typed DATA, WINDOW_END,
+MANIFEST_CHUNK, EOF, and ERROR input. A bounded internal receiver now writes
+opaque DATA by offset to a protected native file, verifies resume prefixes and
+EOF evidence, requests exact missing sequences, and keeps clean WINDOW_ACK
+creation locked until the matching checkpoint is reported persisted. An
+internal transfer host now connects it to the retained `0409` stream for
+START/RESUME, DATA/window repair, manifest, EOF, abort, protected ciphertext
+file writes, and native checkpoint recovery. It emits structured staged
+evidence and sends only Rust-encoded ACK/repair frames through the exact owned
+transport session. Its phase-aware notification queue is capped at 1 MiB,
+premature post-window traffic fails closed, START/ABORT races cannot resurrect
+ownership, and checkpoint replacement or deletion flushes the file and parent
+directory before success. Optional internal completion services bind START to
+the prepared authorization and exact material-registration lease, upload the
+verified opaque native file before submitting the fixed manifest, and await the
+exact accepted receipt. It durably removes its local ciphertext and checkpoint
+before delivering that receipt and sending canonical CONFIRM, so a cleanup,
+receipt, material, or evidence failure cannot reach device deletion.
+Cancellation owns the routed task before entering the asynchronous v2 host
+callback. Once CONFIRM is written, cancellation or subscription-cleanup
+uncertainty cannot reverse completion; uncertain cleanup poisons BLE ownership
+until reconnect. Production configuration installs the internal host, and
+`RecordingManager.syncEncryptedRecordingV2` reads a fresh capability plus the
+matching native checkpoint before calling an application-owned provider for an
+explicit v2 decision. It never substitutes a legacy transfer after that
+selection; cancellation owns the operation before selection, records through
+engine startup, and reaches that exact workflow before it consumes output or
+cleanup begins. Its native checkpoint sidecar includes the
+session, sink, safe negotiated bounds, and highest contiguous sequence needed
+for exact resume and EOF validation.
+Apple's internal
+writer now
+serializes ownership, chunks
+against the current CoreBluetooth write-with-response limit capped at 512
+bytes, subscribes before BEGIN, checks cancellation between writes, and starts
+the exact-matching RESULT timeout after COMMIT. Its ABORT/unsubscribe cleanup
+is bounded and uncertain cleanup fails closed until confirmed disconnect. An
+internal transfer-control actor now subscribes to notify-only `0409` before
+writing Rust-encoded START or RESUME_REQUEST to `0408`, fails closed on
+foreign-session traffic, exactly validates successful reply identity,
+ciphertext and checkpoint context, and preserves device checkpoint data on
+rejection. Acceptance retains the live `0409` stream and serialized owner for
+the remaining transfer; cancellation and explicit abort use the same bounded,
+fail-closed cleanup.
+Android mirrors the native workflow through its established coroutine runtime
+and exhaustive host executor. `RecordingManager.syncEncryptedRecordingV2`
+owns cancellation before its first suspension, reads `0406` fresh, loads only
+exact non-secret resume metadata, asks the application to select material, and
+then starts only command `0x010c` with no legacy fallback. Dedicated
+`0407..0409` owners send only Rust-encoded signed documents and transfer
+controls. The collector is attached before START; the platform plus transfer
+queues share a one-MiB byte cap and reject overflow, cross-phase traffic, mixed
+profiles, and completion before EOF. A bounded `FileChannel` receiver repairs
+exact missing sequences, forces each clean window before its single AtomicFile
+checkpoint catalog is acknowledged, and verifies the fixed manifest plus EOF evidence. The application supplies an
+empty HTTPS PUT template, manifest submission, finalization, and receipt
+callbacks; OkHttp streams the verified native ciphertext body without a
+control-plane API call. The exact receipt gates canonical CONFIRM, and all
+pre-CONFIRM failure or cancellation paths retain the device copy and clean up
+opaque application material once. Effect emission and local cleanup do not yet
+cross the deletion boundary; once the native host actually attempts CONFIRM,
+cancellation cannot send ABORT and both native runtimes wait for the exact
+confirmation result, exposing completion or stable code 19 uncertainty. When
+cancellation races Apple engine startup return, only exact completion or code 19
+preserves terminal material; other claimed-cancellation errors remove it as
+cancelled. Android latches a successful driver write before releasing its
+transfer owner. Disconnect reset installs the replacement barrier, removes the
+exact control/writer owners under its DeviceRuntime mutex, then waits for
+settlement outside that mutex. It fails the exact old effect and joins its pump
+before replacement ownership can start. Android
+rejects phase-invalid frames when they arrive, broadcasts
+bounded notifications to each observer, resets poisoned ownership after either
+the exact current explicit or spontaneous GATT-generation disconnect, and
+merges every retired split checkpoint/index pair into an existing or recovered
+AtomicFile catalog. Cleanup uncertainty blocks
+replacement ownership until that disconnect/reset. Physical power-loss
+durability remains unverified.
+React Native now has an additive explicit encrypted-upload-v2
+selection/progress surface. Codegen carries only fresh capability, recording,
+checkpoint, session, progress, stable-error, and opaque native-registration
+metadata; native Apple and Android registries retain authorization, staging,
+manifest, receipt, file, and cryptographic material. Existing `BotaClient` and
+legacy-provider behavior is unchanged and there is no implicit fallback.
+Runtime compatibility metadata remains disabled until the outstanding
+firmware, release, and hardware gates pass.
 ABI v1 is frozen at the typed public header and verified by standalone C and
 Swift callers. Its exact ownership contract, artifact digests, packet coverage,
 and platform exclusions are recorded in
@@ -185,11 +301,14 @@ The Apple package shell now builds an iOS device, universal iOS simulator, and
 universal macOS XCFramework from that frozen header and proves a Swift package
 can import the real ABI. Its Swift value models and protocol codecs are fixture
 tested against the shared Rust implementation, including unknown wire values
-and Bota Note connection normalization. A serialized Swift actor now drives the
-real Rust workflow engine, preserves request/cancellation correlation, and
-checks all 29 canonical workflow traces from generated SwiftPM resources. Its
-host executor exhaustively routes all 30 ABI effect kinds through narrow native
-ports, bounds raw payloads, and isolates cancelled or late completions.
+and Bota Note connection normalization. A serialized Swift actor now establishes
+the ABI workflow owner and registers initially queued host effects before
+returning each stream, drives the real Rust workflow engine, preserves
+request/cancellation correlation, and checks all 33 canonical workflow traces
+from generated SwiftPM resources. Its
+host executor exhaustively routes the released effects plus all twelve additive
+Encrypted Upload v2 effects through narrow native ports, bounds raw payloads,
+and isolates cancelled or late completions.
 A concrete CoreBluetooth driver now owns Apple delegate state on one serial
 queue, while an actor host merges system-connected peripherals, deduplicates
 scan results, serializes operations per peripheral, and preempts background
@@ -225,8 +344,9 @@ skips before client configuration. The supervised Bota Pin and Bota Note matrix
 is not inferred from CI and remains a human release approval. The root Swift
 package distributes the Apple facade for iOS and macOS while keeping the Rust
 core in a checksummed XCFramework. This release does not replace the production
-React Native maintenance line or claim a published Flutter, Web, or Windows
-package.
+React Native maintenance line or claim published Flutter, Web, or Windows
+availability. Flutter and Web are available only as the scoped
+`1.2.0-beta.0` candidates described above.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and the
 [firmware compatibility matrix](protocol/compatibility/firmware-compatibility.json).
@@ -283,6 +403,41 @@ The first planned pub.dev release is `1.2.0-beta.0`; applications must opt into
 that exact prerelease only after pub.dev publication and public archive
 verification complete.
 
+## Web Beta Installation
+
+After the `1.2.0-beta.0` candidate is published, install the exact beta:
+
+```bash
+npm install @bota.dev/web-sdk@1.2.0-beta.0
+```
+
+Web Bluetooth requires a secure context and a browser implementation that
+supports it. Call `connect` directly from a user gesture so the browser may
+show its device picker. The serial number must come from the authenticated
+Portal device record; the SDK does not trust the advertised device name.
+
+```ts
+import { BotaDeviceClient } from '@bota.dev/web-sdk'
+
+const bota = await BotaDeviceClient.create()
+
+if (!bota.devices.isSupported) {
+  throw new Error('This browser does not support Web Bluetooth')
+}
+
+const device = await bota.devices.connect({
+  expectedSerialNumber: 'YOUR_DEVICE_SERIAL',
+})
+const snapshot = await bota.devices.readSnapshot()
+
+console.log(device.serialNumber, snapshot.status.batteryPercent)
+
+await bota.destroy()
+```
+
+The first Web beta is intentionally read-only after connection. It does not
+list, transfer, or upload recordings and does not call the Bota API.
+
 ## Development
 
 Requirements:
@@ -300,6 +455,7 @@ Requirements:
 npm ci
 npm run check
 npm run test:release
+npm run web:verify
 npm run baseline:react-native:api -- --sdk-path ../react-native-sdk
 npm run sync:android-fixtures
 npm run sync:apple-fixtures

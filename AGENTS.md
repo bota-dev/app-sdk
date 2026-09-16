@@ -1,6 +1,6 @@
 # AGENTS.md
 
-CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xtask manifest uses `toml` 1.x; validate future major changes with the full Rust and tooling workflow.
+CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep the CI and license workflows manual-only through `workflow_dispatch` so verification runs consume Actions minutes only when explicitly requested. Run Android unit tests separately from parallel lint and APK assembly. The xtask manifest uses `toml` 1.x; validate future major changes with the full Rust and tooling workflow. Keep root TypeScript on 6.x while `tools/baseline/react-native-api-contract.mjs` depends on its stable compiler API; TypeScript 7 exposes the replacement compiler API only through `typescript/unstable/*` and requires a deliberate contract-extractor migration. Async teardown and backpressure tests must wait for explicit actor or coroutine signals for each phase, including pump entry before asserting a flow's `finally` block and separate core/host cancellation completion, instead of sampling scheduling-dependent state. Use five-second test-only settlement watchdogs around those signals so loaded CI workers still expose real deadlocks without creating one-second scheduling races. Non-timeout transfer-control tests use a 30-second fixture cleanup deadline because they exercise multi-dispatcher teardown after the release build; dedicated timeout tests inject their own short deadline, and production retains its one-second cleanup contract.
 
 ## Repository Purpose
 
@@ -91,6 +91,115 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   source gates patch only disposable Swift package copies. The archive verifier
   must reject links, traversal, extras, credentials, generated/build output,
   and raw, normalized, or per-file checksum drift.
+- Keep `encryptedUploadV2` compatibility metadata at `contract_only` with
+  `runtimeWorkflow` and `firmwareAdvertised` false until the remaining
+  firmware, published-release, and hardware gates are complete. React Native
+  Codegen must not carry ciphertext, manifests, authorizations, or receipts.
+- Keep the frozen public API authority in `reactNativeBaseline` at maintenance
+  SDK `0.0.65`. Executable workflow evidence uses the separate
+  `reactNativeWorkflowBaseline` pinned to maintenance SDK `0.0.67`; CI and tag
+  verification must check out that exact revision and run its referenced tests.
+  Keep that checkout under the ignored `.ci/` scratch directory, never Cargo's
+  `target/`, because the Rust cache action recursively cleans `target/` on a
+  cache mismatch.
+- `core/device-sdk-core/src/model/upload_profile.rs` is a side-effect-free
+  policy/capability validator only. Its presence does not authorize a v2 START
+  or change `runtimeWorkflow`; historical P10 requires an observed header.
+- `core/device-sdk-core/src/workflow/encrypted_upload_v2.rs` now drives the
+  contract-only `WorkflowEngine` and additive C ABI v1 packet surface. It emits
+  byte-free native effects, versioned opaque checkpoint metadata, staging
+  evidence, and receipt-gated confirmation. The Apple facade maps the additive
+  command, all twelve effects, typed failures, and the staged notification to a
+  dedicated native host port. Its in-memory `EncryptedUploadV2MaterialRegistry`
+  validates the exact 408/580/336-byte opaque documents, bodyless HTTPS staging
+  requests, digest evidence, redacted descriptions, duplicate registration,
+  stale post-terminal callbacks, and remove-before-cancel terminal cleanup. The
+  configured Apple runtime also exposes an internal
+  `EncryptedUploadV2CapabilityReader`: every call reads `0406` again, decodes
+  the exact 24-byte value through Rust, and returns its SHA-256 with the typed
+  bounds. It does not infer support from firmware or model strings. Outbound
+  authorization and receipt blob frames must use the shared Rust encoder via
+  additive ABI packet kind `0x0523`; platform facades must not reconstruct
+  those authenticated frames. Additive kind `0x0524` similarly encodes only
+  app-originated v2 LIST, START, WINDOW_ACK, RESUME_REQUEST, CONFIRM, and ABORT
+  transfer frames. Transfer decode/encode keeps upload-session UUIDs as exact
+  16-byte fields, missing sequences as one packed little-endian u32 byte field,
+  and CONFIRM `owner_revision` under its dedicated field. Apple's internal
+  mapper exposes Rust-encoded WINDOW_ACK/CONFIRM plus typed Rust-decoded
+  DATA, WINDOW_END, MANIFEST_CHUNK, EOF, and ERROR values. The internal
+  `EncryptedUploadV2TransferReceiver` builds on that boundary without buffering
+  ciphertext: it writes DATA by offset to a protected native file, keeps only
+  bounded packet metadata, verifies prefix hashes, truncates unproved resume
+  tails, requests exact missing sequences, and will not create a clean
+  WINDOW_ACK until the matching native checkpoint, including its highest
+  contiguous sequence, is reported persisted. It also
+  bounds the manifest to the fixed 580-byte contract and verifies EOF evidence.
+  An internal `EncryptedUploadV2TransferHost` now connects that receiver to the
+  retained `0409` stream for START/RESUME, DATA/window repair, manifest, EOF,
+  abort, protected ciphertext-file writes, and a recoverable native checkpoint
+  catalog. It emits structured `WINDOW_STAGED` evidence to Rust and sends only
+  Rust-encoded ACK/repair frames through the exact owned transport session. Its
+  cancellation teardown closes owned resume and event channels before stopping
+  transfer jobs, including when the pump has been created but has not started.
+  The platform plus phase-aware transfer queues share a 1 MiB byte cap; overflow,
+  premature post-window traffic, mixed profiles, and pre-EOF completion fail
+  closed. START/ABORT races cannot resurrect ownership, and checkpoint lookup
+  plus metadata are replaced in one AtomicFile catalog whose file and parent
+  directory are flushed before success. Optional internal completion services bind START to the
+  prepared authorization and its exact material-registration lease, pass only
+  the verified native ciphertext file and fixed manifest to application-owned
+  staging/finalization callbacks, require the exact accepted receipt digest,
+  durably remove local staging state, deliver the receipt, and then send the
+  Rust-encoded CONFIRM. Cancellation ownership is registered before entering
+  the asynchronous v2 host callback. The live control actor releases its claimed
+  `0409` subscription only after that canonical CONFIRM write. Later
+  cancellation or subscription-cleanup uncertainty cannot reverse a successful
+  CONFIRM or send ABORT; uncertain cleanup instead poisons the BLE owner until
+  confirmed disconnect/reset. Physical power-loss behavior remains unverified. The
+  production configuration installs this host with the signed-blob writer,
+  transfer-control actor, material registry, and native staging upload service.
+  `RecordingManager.syncEncryptedRecordingV2` passes a fresh `0406` capability
+  snapshot and matching native checkpoint to an application-owned provider
+  before it starts the explicit v2 command. The manager owns cancellation
+  before any read or provider await, records cancellation while the Rust engine
+  starts and cancels that exact owner before it can consume output or clean up,
+  and reuses the checkpoint's exact session, sink, and
+  safe negotiated bounds only when its selected material matches. It never
+  infers or retries legacy behavior after v2 selection.
+  Apple's internal
+  `EncryptedUploadV2SignedBlobWriter` permits one owner, queries the actual
+  write-with-response limit capped at the 512-byte protocol maximum, subscribes
+  to `0407` before BEGIN, checks cancellation between writes, and starts the
+  exact kind/`write_id` RESULT timeout only after COMMIT. Cleanup is bounded:
+  it best-effort ABORTs plus unsubscribes on local failure, then fails closed
+  with `uploadOwnershipUnknown` until a confirmed disconnect if cleanup cannot
+  be proven. The internal `EncryptedUploadV2TransferControl` actor similarly
+  subscribes to notify-only `0409` before writing canonical START or
+  RESUME_REQUEST to `0408`, fails closed on a foreign transport-session ID,
+  verifies every echoed
+  recording/ciphertext/checkpoint field on START_ACK and RESUME_ACCEPT, and
+  preserves the device checkpoint reported by RESUME_REJECT or ERROR. It
+  retains the live `0409` stream and serialized owner after acceptance for the
+  remaining transfer, and uses bounded ABORT/unsubscribe cleanup with the same
+  fail-closed reconnect gate. Android mirrors the same wire ownership through a
+  coroutine-serialized signed-document writer and retained `0409` transfer
+  control, with every authenticated frame produced by the Rust mapper. Its
+  receiver writes bounded DATA windows through `FileChannel`, persists exact
+  non-secret resume sidecars with `AtomicFile`, streams only the verified
+  ciphertext file through an application-provided empty HTTPS PUT template,
+  and gates CONFIRM on manifest submission, finalization, and the exact receipt
+  digest. `RecordingManager.syncEncryptedRecordingV2` selects from a fresh
+  capability snapshot before command `0x010c`; cancellation owns provider,
+  START, staging, and terminal material cleanup without a legacy retry. These
+  native implementations do not complete the remaining release or firmware
+  gates, so runtime metadata stays false. React Native exposes the same
+  explicit selection through additive
+  `BotaDeviceSDK.recordings.syncEncryptedRecordingV2`; Codegen carries only
+  fresh capability, recording, checkpoint, session, progress, and stable-error
+  metadata. Applications register the complete v2 material once in the Apple
+  or Android `BotaDeviceSDKEncryptedUploadV2Materials` registry and return only
+  its opaque registration ID through JavaScript. Keep `BotaClient`, legacy
+   managers and events frozen, and never add an implicit legacy fallback.
 - React Native compatibility requires the frozen public API surface digest in
   addition to protocol fixtures and workflow traces. Internal legacy modules
   outside `src/index.ts` are not part of that public contract.
@@ -112,6 +221,16 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   consumers from an `npm pack` artifact, not a source symlink: Demo and Bota
   One must each produce release-mode iOS and Android Expo bundles before
   preview or production rollout.
+- `frameworks/web` is the first browser facade and publishes as
+  `@bota.dev/web-sdk`. Its initial surface is deliberately read-only: an
+  explicit Web Bluetooth picker, exact serial-number verification through the
+  shared Rust connection workflow, disconnect, and fresh identity, device
+  status, and encrypted-upload-v2 capability reads decoded by the WASM core.
+  Keep backend calls, recording list/transfer/upload, provisioning, settings,
+  recording control, OTA, logs, reconnect persistence, and background work out
+  of this increment. A missing Web Bluetooth implementation must fail as
+  `unsupported_browser` before opening the picker, and a snapshot must
+  re-verify the serial before returning data.
 - `RecordingManager` and `StreamingSession` preserve their frozen object model
   while Rust plus the Apple/Android hosts own recording bytes, live-transfer
   buffering, chunk uploads, finalization ordering, and cancellation. Codegen
@@ -247,6 +366,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   transfer E2E and optional SHA-256 metadata. Never infer relay ownership from
   the recording-list encryption flag. React Native batch sync retains the
   device copy and sends the exact native confirm only after upload succeeds.
+  The future three-profile migration is defined in
+  [`Encrypted Upload v2`](../internal-docs/device/Encrypted-Upload-v2.md): v2
+  selection must be explicit and capability-gated, bytes and manifests remain
+  opaque, and a failed v2 session never silently downgrades.
 - Keep React Native device-log stream ownership in
   `BotaDeviceSDKAndroidLogs`. It owns one native collector, contains
   asynchronous stream failures, and stops that collector during explicit
@@ -295,10 +418,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   x86_64 emulator lanes. `test-emulator-lane.sh` owns AVD creation, boot
   readiness, fresh installs, animation settings, shutdown, and deletion. It
   exports one lane-local `ANDROID_AVD_HOME` for both `avdmanager` and the
-  emulator, bounds ADB attachment, and prints the captured emulator output on
-  startup failure. Before either emulator starts, all source, frozen-binary,
+  emulator, bounds ADB attachment, detects exited background emulator jobs,
+  and prints the captured emulator output on startup failure. Before either
+  emulator starts, all source, frozen-binary,
   and clean Maven consumers must compile against the exact installed candidate
-  repository. Do not cache AVD state or put signing material in ordinary CI.
+  repository. Android JUnit instrumentation methods must return `Unit`
+  explicitly when an expression body could infer another return type. Do not
+  cache AVD state or put signing material in ordinary CI.
 - The protected `v1.1.0` publication uses only
   `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
   `SIGNING_IN_MEMORY_KEY`, and `SIGNING_IN_MEMORY_KEY_PASSWORD`. Persist the
@@ -312,14 +438,15 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   superseded only through `centralRecoveryMode=retry-failed`, which verifies
   the failed UUID and re-uploads the exact preserved ZIP under a fresh state
   record containing `retryOfDeploymentId`. Recovery also requires the original
-  tag workflow `releaseRunId`; it downloads all three native platform
-  artifacts, matches their subset of the four-platform candidate inventory,
+  tag workflow `releaseRunId`; it downloads the Apple, Android, React Native,
+  and Web platform artifacts, matches their subset of the five-platform
+  candidate inventory,
   then completes npm, the native-bootstrap GitHub prerelease, and the public
   Apple and Android consumer gates. Central recovery never rebuilds or publishes
   Flutter.
 - Create annotated release tags only from the `release-candidate-<commit>`
   inventory emitted by successful main CI. It binds Apple, Android, React
-  Native, and Flutter candidates. The tag workflow must retrieve that exact CI
+  Native, Web, and Flutter candidates. The tag workflow must retrieve that exact CI
   inventory, compare each rebuilt native and Flutter subset, and preserve its
   digest. Local builds are preflight evidence, not release identity.
 - Keep mutating Android release-readiness tests in independent temporary
@@ -353,7 +480,24 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 - Android runtime construction and destroy must attempt every owned close
   action even when one close fails. Preserve the first cleanup failure and add
   later failures as suppressed exceptions.
-- Keep Android `WorkflowFixtures` generated from all seven canonical workflow
+- Encrypted Upload v2 cancellation remains ordinary until the native host
+  atomically begins the canonical CONFIRM write. Only after that real boundary
+  do Apple and Android wait for exact completion or code-19 uncertainty without
+  invoking host rollback. When cancellation races the return from Apple engine
+  startup, only exact Completed or code 19 preserves terminal material; an
+  ordinary cancel failure after a pre-CONFIRM claim removes it as cancelled.
+  Android records a successful driver write in host state before releasing the
+  transfer owner. Confirmed-disconnect reset installs the host replacement
+  barrier before it enters the DeviceRuntime mutex to validate the generation
+  and remove the exact control/writer owners. It leaves that mutex before it
+  waits for confirmation settlement, detaches and fails the exact old channels,
+  and joins its opening/pump jobs before admitting a replacement. Android validates
+  transfer phase at notification arrival, broadcasts bounded platform
+  notifications to every active observer, and resets poisoned ownership on
+  an exact peripheral/GATT-generation confirmed disconnect. Its atomic checkpoint
+  catalog merges every valid earlier split checkpoint/index pair, including when
+  a catalog or only its AtomicFile backup already exists.
+- Keep Android `WorkflowFixtures` generated from all eight canonical workflow
   suites. `preDebugAndroidTestBuild` must reject stale protocol or workflow
   resources before packaged instrumentation runs.
 - Keep Android host effects exhaustive. Each effect routes to one typed native
@@ -408,14 +552,16 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   application context. It must never initiate Bluetooth, storage, or network
   work during process startup.
 - Native facades use the manually owned opaque C ABI selected in ADR 0001;
-  UniFFI `0.32.0` exists only in the non-published comparison spike.
+  UniFFI `0.32.1` exists only in the non-published comparison spike.
 - ABI v1 numeric meanings and ownership rules are frozen by
   `release/evidence/1.0.0-alpha.1-native-abi.md`; facade work may add Swift or
   Kotlin types but must not redesign the C boundary.
-- Apple workflow calls pass through one `CoreEngineActor`; host callbacks must
-  preserve the effect operation, request ID, and cancellation identity exactly.
+- Apple workflow calls pass through one `CoreEngineActor`; `run` establishes the
+  ABI workflow owner and drains initially queued effects through host
+  registration before returning its stream. Host callbacks preserve the effect
+  operation, request ID, and cancellation identity exactly.
 - Apple concurrency tests must await explicit callback handshakes; stream
-  completion does not order bookkeeping launched in a separate task.
+  completion does not order background host-effect bookkeeping.
 - `BotaDeviceClient.configure()` is idempotent until `destroy()`. Public device
   observation must finish on destroy, and status bytes must use the shared ABI
   decoder rather than a Swift parser.
@@ -423,8 +569,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
   user-selected peripheral learns its identity from the fresh GATT serial read;
   an explicitly supplied serial and every reconnect remain exact-match checks.
   The Apple facade never chooses a peripheral by name.
-- Apple provisioning and reset callbacks are registered by opaque material ID;
-  do not place callback results in checkpoints, logs, or public notifications.
+- Apple provisioning, reset, and Encrypted Upload v2 callbacks are registered
+  by opaque material ID; do not place callback results in checkpoints, logs, or
+  public notifications. V2 terminal cleanup removes the callback before any
+  best-effort backend cancellation can fail.
 - Persist the reset command ID and binding generation with the exact device
   result. Resume only the receipt workflow and reject a stale generation before
   starting Rust. Remove-only deprovision must never call factory reset.
@@ -478,6 +626,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. The xt
 npm ci
 npm run check
 npm run test:release
+npm run web:verify
 npm run baseline:react-native:api -- --sdk-path ../react-native-sdk
 npm run sync:android-fixtures
 npm run sync:apple-fixtures

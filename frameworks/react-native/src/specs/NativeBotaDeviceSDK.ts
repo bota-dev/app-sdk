@@ -151,6 +151,69 @@ export type NativeDeviceRecording = {
   isEncrypted: boolean;
 };
 
+export type NativeEncryptedUploadV2Recording = {
+  uuid: string;
+  generation: number;
+  ciphertextLength: string;
+  ciphertextSha256: string;
+};
+
+export type NativeEncryptedUploadV2Capability = {
+  encodingVersion: number;
+  transferProfileVersion: number;
+  rawValueHex: string;
+  sha256Hex: string;
+  flags: number;
+  maximumSignedBlobBytes: number;
+  maximumManifestBytes: number;
+  maximumDataPayloadBytes: number;
+  maximumWindowPackets: number;
+  durableCheckpointIntervalBlocks: number;
+  maximumMissingSequences: number;
+};
+
+export type NativeEncryptedUploadV2Checkpoint = {
+  version: number;
+  uploadSessionId: string;
+  ownerRevision: number;
+  revision: number;
+  nextCiphertextOffset: string;
+  prefixSha256: string;
+  highestContiguousSequence?: number;
+  transportSessionId: string;
+  sinkRegistrationId: string;
+  windowPackets: number;
+  dataPayloadBytes: number;
+};
+
+export type NativeEncryptedUploadV2ProfileRequest = {
+  requestId: string;
+  operationId: string;
+  recording: NativeEncryptedUploadV2Recording;
+  capability: NativeEncryptedUploadV2Capability;
+  checkpoint?: NativeEncryptedUploadV2Checkpoint;
+};
+
+export type NativeEncryptedUploadV2ProfileDecision = {
+  profile: string;
+  uploadSessionId: string;
+  ownerRevision: number;
+  securityPolicy: string;
+  materialRegistrationId: string;
+};
+
+export type NativeEncryptedUploadV2Progress = {
+  operationId: string;
+  recordingUuid: string;
+  phase: string;
+  completedBytes: string;
+  totalBytes: string;
+  checkpointRevision?: number;
+  errorCode?: string;
+  retryable?: boolean;
+  protocolStatus?: number;
+};
+
 export type NativeRecordingTransferProgress = {
   completedUnits: number;
   totalUnits: number;
@@ -299,6 +362,8 @@ export interface Spec extends TurboModule {
   readonly onFactoryResetGrantRequested: EventEmitter<NativeFactoryResetGrantRequest>;
   readonly onFactoryResetResultPersistenceRequested: EventEmitter<NativeFactoryResetPersistenceRequest>;
   readonly onRecordingTransferProgress: EventEmitter<NativeRecordingTransferProgress>;
+  readonly onEncryptedUploadV2ProfileRequested: EventEmitter<NativeEncryptedUploadV2ProfileRequest>;
+  readonly onEncryptedUploadV2Progress: EventEmitter<NativeEncryptedUploadV2Progress>;
   readonly onRecordingUploadProgress: EventEmitter<NativeRecordingUploadProgress>;
   readonly onStreamingProgress: EventEmitter<NativeStreamingProgress>;
   readonly onStreamingChunkDestinationRequested: EventEmitter<NativeStreamingChunkDestinationRequest>;
@@ -423,6 +488,19 @@ export interface Spec extends TurboModule {
     recording: NativeDeviceRecording,
     sinkId: string
   ) => Promise<NativeRecordingTransferResult>;
+  syncEncryptedRecordingV2: (
+    device: NativeConnectedDevice,
+    recording: NativeEncryptedUploadV2Recording,
+    operationId: string
+  ) => Promise<void>;
+  resolveEncryptedUploadV2Profile: (
+    requestId: string,
+    decision: NativeEncryptedUploadV2ProfileDecision
+  ) => Promise<void>;
+  rejectEncryptedUploadV2Profile: (
+    requestId: string,
+    errorCode: string
+  ) => Promise<void>;
   confirmRecording: (
     device: NativeConnectedDevice,
     recordingUuid: string

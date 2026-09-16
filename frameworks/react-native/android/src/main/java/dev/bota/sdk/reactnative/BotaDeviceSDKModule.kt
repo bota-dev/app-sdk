@@ -7,6 +7,7 @@ import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.module.annotations.ReactModule
 import dev.bota.sdk.DeviceReconnectHint
 import dev.bota.sdk.DeviceApiEnvironment
+import dev.bota.sdk.EncryptedUploadV2Recording
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -237,6 +238,54 @@ internal class BotaDeviceSDKModule(
                 emitOnRecordingTransferProgress(it.toWritableMap())
             }.toWritableMap()
         }
+    }
+
+    override fun syncEncryptedRecordingV2(
+        device: ReadableMap,
+        recording: ReadableMap,
+        operationId: String,
+        promise: Promise,
+    ) {
+        launchEncryptedUploadV2(promise) {
+            recordings.syncEncryptedRecordingV2(
+                device.toConnectedDevice(),
+                recording.toEncryptedUploadV2Recording(),
+                operationId,
+                onProfileRequest = {
+                    emitOnEncryptedUploadV2ProfileRequested(it.toWritableMap())
+                },
+                onProgress = { emitOnEncryptedUploadV2Progress(it.toWritableMap()) },
+            )
+        }
+    }
+
+    override fun resolveEncryptedUploadV2Profile(
+        requestId: String,
+        decision: ReadableMap,
+        promise: Promise,
+    ) {
+        launch(promise) {
+            recordings.resolveEncryptedUploadV2Profile(
+                requestId,
+                decision.getString("profile")
+                    ?: error("encrypted upload v2 profile is required"),
+                decision.getString("uploadSessionId")
+                    ?: error("encrypted upload v2 session ID is required"),
+                decision.getDouble("ownerRevision").toUnsignedInt(),
+                decision.getString("securityPolicy")
+                    ?: error("encrypted upload v2 security policy is required"),
+                decision.getString("materialRegistrationId")
+                    ?: error("encrypted upload v2 material registration is required"),
+            )
+        }
+    }
+
+    override fun rejectEncryptedUploadV2Profile(
+        requestId: String,
+        errorCode: String,
+        promise: Promise,
+    ) {
+        launch(promise) { recordings.rejectEncryptedUploadV2Profile(requestId, errorCode) }
     }
 
     override fun startStreaming(
@@ -589,9 +638,21 @@ internal class BotaDeviceSDKModule(
         }
     }
 
+    private fun launchEncryptedUploadV2(promise: Promise, operation: suspend () -> Unit) {
+        scope.launch {
+            try {
+                operation()
+                promise.resolve(null)
+            } catch (_: Throwable) {
+                promise.reject(ENCRYPTED_UPLOAD_V2_ERROR_CODE, "encrypted upload v2 failed")
+            }
+        }
+    }
+
     companion object {
         const val NAME = NativeBotaDeviceSDKSpec.NAME
         private const val ERROR_CODE = "android_sdk_error"
+        private const val ENCRYPTED_UPLOAD_V2_ERROR_CODE = "encrypted_upload_v2_failed"
     }
 }
 
@@ -635,6 +696,28 @@ private fun String.toDeviceApiEnvironment(): DeviceApiEnvironment = when (this) 
 private fun String.hexBytes(): ByteArray {
     require(length % 2 == 0 && all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
         "public key must be lowercase or uppercase hexadecimal"
+    }
+    return chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+}
+
+private fun ReadableMap.toEncryptedUploadV2Recording(): EncryptedUploadV2Recording {
+    val length = getString("ciphertextLength")
+        ?.takeIf { it.isNotEmpty() && it.all(Char::isDigit) }
+        ?.toULongOrNull()
+        ?: error("encrypted upload v2 ciphertext length must be an unsigned decimal integer")
+    val digest = getString("ciphertextSha256")?.sha256Bytes()
+        ?: error("encrypted upload v2 ciphertext SHA-256 is required")
+    return EncryptedUploadV2Recording(
+        getString("uuid") ?: error("encrypted upload v2 recording UUID is required"),
+        getDouble("generation").toUnsignedInt(),
+        length,
+        digest,
+    )
+}
+
+private fun String.sha256Bytes(): ByteArray {
+    require(length == 64 && all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
+        "encrypted upload v2 ciphertext SHA-256 must contain exactly 32 hexadecimal bytes"
     }
     return chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 }

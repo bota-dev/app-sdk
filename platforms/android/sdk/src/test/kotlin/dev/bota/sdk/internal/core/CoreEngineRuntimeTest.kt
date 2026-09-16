@@ -1,5 +1,7 @@
 package dev.bota.sdk.internal.core
 
+import dev.bota.sdk.BotaErrorCode
+import dev.bota.sdk.BotaSDKError
 import dev.bota.sdk.internal.jni.NativeCore
 import dev.bota.sdk.internal.jni.NativeCoreException
 import dev.bota.sdk.internal.jni.NativePacket
@@ -12,6 +14,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -21,6 +24,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+
+private const val AsyncSettlementTimeoutMilliseconds = 5_000L
 
 class CoreEngineRuntimeTest {
     @Test
@@ -92,7 +97,7 @@ class CoreEngineRuntimeTest {
 
         collector.cancelAndJoin()
         withContext(Dispatchers.Default) {
-            withTimeout(2_000) { core.cancelled.await() }
+            withTimeout(AsyncSettlementTimeoutMilliseconds) { core.cancelled.await() }
         }
         runtime.close()
 
@@ -101,11 +106,286 @@ class CoreEngineRuntimeTest {
         assertTrue(core.closed)
         assertFalse(core.cancelAfterClose)
     }
+
+    @Test
+    fun cancellationRegistersQueuedEffectsAndReachesCoreBeforeHostCancellation() = runTest {
+        val order = mutableListOf<String>()
+        val core = ScriptedCore(terminalOnStart = false, cancellationOrder = order)
+        val effectStarted = CompletableDeferred<Unit>()
+        val hostCancelled = CompletableDeferred<Unit>()
+        val handler = object : CoreEffectHandler {
+            override fun execute(effect: CoreEffect): kotlinx.coroutines.flow.Flow<CoreHostEvent> = callbackFlow {
+                order += "effect-started"
+                effectStarted.complete(Unit)
+                awaitClose {}
+            }
+
+            override suspend fun cancel(cancellationId: CoreCancellationId) {
+                order += "host-cancelled"
+                hostCancelled.complete(Unit)
+            }
+        }
+        val runtime = CoreEngineRuntime(core, handler)
+        val cancellationId = UUID.randomUUID()
+        val collector = launch {
+            runtime.run(
+                CoreCommand.discoverDevices(10_000u, false, cancellationId),
+                CoreCapabilities.Bluetooth + CoreCapabilities.Timer,
+            ).collect()
+        }
+        effectStarted.await()
+
+        collector.cancelAndJoin()
+        withContext(Dispatchers.Default) {
+            withTimeout(AsyncSettlementTimeoutMilliseconds) {
+                core.cancelled.await()
+                hostCancelled.await()
+            }
+        }
+
+        assertTrue(order.indexOf("effect-started") < order.indexOf("core-cancelled"))
+        assertTrue(order.indexOf("core-cancelled") < order.indexOf("host-cancelled"))
+        runtime.close()
+    }
+
+    @Test
+    fun hostCancellationFailureStillDrainsTheOldOwnerBeforeReplacementRun() = runTest {
+        val core = RestartableCore()
+        val handler = object : CoreEffectHandler {
+            override fun execute(effect: CoreEffect) = callbackFlow<CoreHostEvent> { awaitClose {} }
+
+            override suspend fun cancel(cancellationId: CoreCancellationId) {
+                throw IllegalStateException("application cleanup failed")
+            }
+        }
+        val runtime = CoreEngineRuntime(core, handler)
+        val firstId = UUID.randomUUID()
+        val first = async {
+            runtime.run(CoreCommand.discoverDevices(10_000u, false, firstId), CoreCapabilities.Bluetooth).toList()
+        }
+        core.started.await()
+
+        val cancellationFailure = runCatching { runtime.cancel(firstId) }.exceptionOrNull()
+        val second = runtime.run(
+            CoreCommand.discoverDevices(10_000u, false),
+            CoreCapabilities.Bluetooth,
+        ).toList()
+
+        assertEquals(listOf(CoreNotificationKind.Started, CoreNotificationKind.Cancelled), first.await().map { it.kind })
+        assertEquals("application cleanup failed", cancellationFailure?.message)
+        assertEquals(listOf(CoreNotificationKind.Started, CoreNotificationKind.Completed), second.map { it.kind })
+        assertEquals(0, core.pendingOutputCount)
+        runtime.close()
+    }
+
+    @Test
+    fun closeAlwaysClosesCoreWhenHostCancellationFails() = runTest {
+        val core = RestartableCore(completeReplacement = false)
+        val runtime = CoreEngineRuntime(core, object : CoreEffectHandler {
+            override fun execute(effect: CoreEffect) = callbackFlow<CoreHostEvent> { awaitClose {} }
+            override suspend fun cancel(cancellationId: CoreCancellationId) {
+                throw IllegalStateException("cleanup failed")
+            }
+        })
+        val collecting = launch {
+            runtime.run(CoreCommand.discoverDevices(10_000u, false), CoreCapabilities.Bluetooth).collect()
+        }
+        core.started.await()
+
+        runCatching { runtime.close() }
+
+        assertTrue(core.closed)
+        collecting.cancelAndJoin()
+    }
+
+    @Test
+    fun cancellationDuringConfirmationWaitsForTheExactHostCompletion() = runTest {
+        val core = DeferredConfirmationCore()
+        val confirmationEntered = CompletableDeferred<Unit>()
+        val confirmationRelease = CompletableDeferred<Unit>()
+        var hostCancellationCount = 0
+        val runtime = CoreEngineRuntime(core, object : CoreEffectHandler {
+            override fun execute(effect: CoreEffect) = flow {
+                confirmationEntered.complete(Unit)
+                confirmationRelease.await()
+                emit(CoreHostEvent.fromEffect(effect, HostEventKind.EncryptedUploadV2RecordingConfirmed))
+            }
+
+            override suspend fun cancel(cancellationId: CoreCancellationId) {
+                hostCancellationCount += 1
+            }
+
+            override suspend fun confirmationAttemptedOrClaimCancellation(
+                cancellationId: CoreCancellationId,
+            ) = true
+        })
+        val cancellationId = UUID.randomUUID()
+        val collecting = async {
+            runtime.run(
+                CoreCommand.discoverDevices(10_000u, false, cancellationId),
+                CoreCapabilities.Bluetooth,
+            ).toList()
+        }
+        confirmationEntered.await()
+
+        val cancelling = async { runtime.cancel(cancellationId) }
+        confirmationRelease.complete(Unit)
+        withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { cancelling.await() } }
+
+        assertEquals(0, hostCancellationCount)
+        assertEquals(
+            listOf(CoreNotificationKind.Started, CoreNotificationKind.Completed),
+            collecting.await().map { it.kind },
+        )
+        runtime.close()
+    }
+
+    @Test
+    fun cancellationDuringConfirmationSurfacesTheExactOwnershipUncertainty() = runTest {
+        val core = DeferredConfirmationCore(
+            terminal = listOf(
+                CoreField.Unsigned(47, 19u),
+                CoreField.BooleanValue(48, false),
+                CoreField.Text(50, "CONFIRM outcome is uncertain"),
+            ).toNativePacket(kind = 0x040c, operation = 8),
+        )
+        val confirmationEntered = CompletableDeferred<Unit>()
+        val confirmationRelease = CompletableDeferred<Unit>()
+        val runtime = CoreEngineRuntime(core, object : CoreEffectHandler {
+            override fun execute(effect: CoreEffect) = flow {
+                    confirmationEntered.complete(Unit)
+                    confirmationRelease.await()
+                    emit(CoreHostEvent.fromEffect(effect, HostEventKind.EncryptedUploadV2RecordingConfirmed))
+            }
+            override suspend fun confirmationAttemptedOrClaimCancellation(
+                cancellationId: CoreCancellationId,
+            ) = true
+        })
+        val cancellationId = UUID.randomUUID()
+        val collecting = async {
+            runtime.run(
+                CoreCommand.discoverDevices(10_000u, false, cancellationId),
+                CoreCapabilities.Bluetooth,
+            ).toList()
+        }
+        confirmationEntered.await()
+
+        val cancelling = async { runCatching { runtime.cancelAndReportExactSettlement(cancellationId) }.exceptionOrNull() }
+        confirmationRelease.complete(Unit)
+        try {
+            val failure = withContext(Dispatchers.Default) {
+                withTimeout(AsyncSettlementTimeoutMilliseconds) { cancelling.await() }
+            }
+            assertTrue(failure is BotaSDKError.Core)
+            failure as BotaSDKError.Core
+            assertEquals(BotaErrorCode.UploadOwnershipUnknown, failure.code)
+            assertEquals("CONFIRM outcome is uncertain", failure.detail)
+            assertEquals(CoreNotificationKind.Failed, collecting.await().last().kind)
+        } finally {
+            runtime.close()
+        }
+    }
+
+    @Test
+    fun collectorCancellationCanConsumeTheAlreadySettledExactConfirmation() = runTest {
+        val core = DeferredConfirmationCore()
+        val confirmationEntered = CompletableDeferred<Unit>()
+        val confirmationRelease = CompletableDeferred<Unit>()
+        var hostCancellationCount = 0
+        val runtime = CoreEngineRuntime(core, object : CoreEffectHandler {
+            override fun execute(effect: CoreEffect) = flow {
+                confirmationEntered.complete(Unit)
+                confirmationRelease.await()
+                emit(CoreHostEvent.fromEffect(effect, HostEventKind.EncryptedUploadV2RecordingConfirmed))
+            }
+
+            override suspend fun cancel(cancellationId: CoreCancellationId) {
+                hostCancellationCount += 1
+            }
+
+            override suspend fun confirmationAttemptedOrClaimCancellation(
+                cancellationId: CoreCancellationId,
+            ) = true
+        })
+        val cancellationId = UUID.randomUUID()
+        val collector = launch {
+            runtime.run(
+                CoreCommand.discoverDevices(10_000u, false, cancellationId),
+                CoreCapabilities.Bluetooth,
+            ).collect()
+        }
+        confirmationEntered.await()
+
+        collector.cancelAndJoin()
+        confirmationRelease.complete(Unit)
+        withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { core.settled.await() } }
+        val exactSettlement = runtime.cancelAndReportExactSettlement(cancellationId)
+
+        assertTrue(exactSettlement)
+        assertEquals(0, hostCancellationCount)
+        assertFalse(core.cancelEntered.isCompleted)
+        runtime.close()
+    }
+}
+
+private class DeferredConfirmationCore(
+    private val terminal: NativePacket = NativePacket(kind = 0x040a),
+) : NativeCore {
+    private val outputs = ArrayDeque<NativePacket>()
+    val cancelEntered = CompletableDeferred<Unit>()
+    val settled = CompletableDeferred<Unit>()
+
+    override fun start(command: NativePacket, capabilityBits: ULong) {
+        outputs += NativePacket(kind = 0x0401)
+        outputs += NativePacket(
+            kind = CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt.wireValue,
+            operation = 8,
+            requestIdBits = 1,
+            cancellationHighBits = command.cancellationHighBits,
+            cancellationLowBits = command.cancellationLowBits,
+        )
+    }
+
+    override fun poll(): NativePacket? = outputs.removeFirstOrNull()?.also {
+        if (it === terminal) settled.complete(Unit)
+    }
+    override fun dispatch(event: NativePacket) { outputs += terminal }
+    override fun cancel(cancellationHigh: ULong, cancellationLow: ULong) { cancelEntered.complete(Unit) }
+    override fun decode(packet: NativePacket): NativePacket = error("unused")
+    override fun encode(packet: NativePacket): NativePacket = error("unused")
+    override fun close() = Unit
+}
+
+private class RestartableCore(private val completeReplacement: Boolean = true) : NativeCore {
+    private val outputs = ArrayDeque<NativePacket>()
+    private var runCount = 0
+    val started = CompletableDeferred<Unit>()
+    var closed = false
+    val pendingOutputCount: Int get() = outputs.size
+
+    override fun start(command: NativePacket, capabilityBits: ULong) {
+        runCount += 1
+        outputs += packet(0x0401)
+        if (runCount > 1 && completeReplacement) outputs += packet(0x040a)
+        started.complete(Unit)
+    }
+
+    override fun poll(): NativePacket? = outputs.removeFirstOrNull()
+    override fun dispatch(event: NativePacket) = Unit
+    override fun cancel(cancellationHigh: ULong, cancellationLow: ULong) {
+        outputs += packet(0x040b)
+    }
+    override fun decode(packet: NativePacket): NativePacket = error("unused")
+    override fun encode(packet: NativePacket): NativePacket = error("unused")
+    override fun close() { closed = true }
+
+    private fun packet(kind: Int) = NativePacket(kind = kind)
 }
 
 private class ScriptedCore(
     private val terminalOnStart: Boolean,
     private var staleDispatchesRemaining: Int = 0,
+    private val cancellationOrder: MutableList<String>? = null,
 ) : NativeCore {
     private val outputs = ArrayDeque<NativePacket>()
     private var active = false
@@ -155,6 +435,7 @@ private class ScriptedCore(
         if (!active) throw NativeCoreException(9, 1, false, -1, "unexpected cancellation")
         cancelledHigh = cancellationHigh
         cancelledLow = cancellationLow
+        cancellationOrder?.add("core-cancelled")
         outputs += packet(0x040b)
         active = false
         cancelled.complete(Unit)

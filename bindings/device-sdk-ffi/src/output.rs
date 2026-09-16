@@ -1,13 +1,19 @@
 use crate::{BotaDeviceSdkPacketV1, error, field_id, packet_kind};
 use bota_device_sdk_core::{
     engine::{
-        BleEffect, Effect, EffectRequest, FirmwareBlobEffect, HostMaterialEffect, NetworkEffect,
-        PersistenceEffect, ProgressEffect, RecordingSinkEffect, SecureStorageEffect, TimerEffect,
-        UploadSource, WorkflowCheckpoint, WorkflowKind, WorkflowNotification,
+        BleEffect, Effect, EffectRequest, EncryptedUploadV2HostEffect, FirmwareBlobEffect,
+        HostMaterialEffect, NetworkEffect, PersistenceEffect, ProgressEffect, RecordingSinkEffect,
+        SecureStorageEffect, TimerEffect, UploadSource, WorkflowCheckpoint, WorkflowKind,
+        WorkflowNotification,
     },
     error::{DeviceSdkError, ErrorCode, Operation},
     model::{
-        ConnectionMode, DeviceCandidate, DeviceSerialNumber, FirmwareUpdatePhase, RecordingUuid,
+        ConnectionMode, DeviceCandidate, DeviceSerialNumber, FirmwareUpdatePhase,
+        RecordingUploadProfile, RecordingUuid, UploadSecurityPolicy,
+    },
+    workflow::{
+        EncryptedUploadV2BatchRequest, EncryptedUploadV2Checkpoint,
+        EncryptedUploadV2TransferEvidence,
     },
 };
 
@@ -33,6 +39,7 @@ pub(crate) fn packet_from_effect_request(
         Effect::HostMaterial(effect) => Ok(host_material(packet, effect)),
         Effect::RecordingSink(effect) => Ok(recording_sink(packet, effect)),
         Effect::FirmwareBlob(effect) => Ok(firmware_blob(packet, effect)),
+        Effect::EncryptedUploadV2(effect) => encrypted_upload_v2(packet, effect),
     }
 }
 
@@ -118,6 +125,42 @@ fn kind(effect: &Effect) -> u32 {
             packet_kind::HOST_EFFECT_STREAMING_SINK_DISCARD
         }
         Effect::FirmwareBlob(_) => packet_kind::HOST_EFFECT_FIRMWARE_BLOB_READ,
+        Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::LoadCheckpoint { .. }) => {
+            packet_kind::HOST_EFFECT_ENCRYPTED_UPLOAD_V2_LOAD_CHECKPOINT
+        }
+        Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::DeleteCheckpoint { .. }) => {
+            packet_kind::HOST_EFFECT_ENCRYPTED_UPLOAD_V2_DELETE_CHECKPOINT
+        }
+        Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::TruncateSink { .. }) => {
+            packet_kind::HOST_EFFECT_ENCRYPTED_UPLOAD_V2_TRUNCATE_SINK
+        }
+        Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::PrepareSession { .. }) => {
+            packet_kind::HOST_EFFECT_ENCRYPTED_UPLOAD_V2_PREPARE_SESSION
+        }
+        Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::StartTransfer { .. }) => {
+            packet_kind::HOST_EFFECT_ENCRYPTED_UPLOAD_V2_START_TRANSFER
+        }
+        Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::RepairWindow { .. }) => {
+            packet_kind::HOST_EFFECT_ENCRYPTED_UPLOAD_V2_REPAIR_WINDOW
+        }
+        Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::SaveCheckpoint { .. }) => {
+            packet_kind::HOST_EFFECT_ENCRYPTED_UPLOAD_V2_SAVE_CHECKPOINT
+        }
+        Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::AcknowledgeWindow { .. }) => {
+            packet_kind::HOST_EFFECT_ENCRYPTED_UPLOAD_V2_ACKNOWLEDGE_WINDOW
+        }
+        Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::StageArtifacts { .. }) => {
+            packet_kind::HOST_EFFECT_ENCRYPTED_UPLOAD_V2_STAGE_ARTIFACTS
+        }
+        Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::AwaitCompletionReceipt {
+            ..
+        }) => packet_kind::HOST_EFFECT_ENCRYPTED_UPLOAD_V2_AWAIT_RECEIPT,
+        Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::ConfirmWithReceipt { .. }) => {
+            packet_kind::HOST_EFFECT_ENCRYPTED_UPLOAD_V2_CONFIRM_WITH_RECEIPT
+        }
+        Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::AbortV2 { .. }) => {
+            packet_kind::HOST_EFFECT_ENCRYPTED_UPLOAD_V2_ABORT
+        }
     }
 }
 
@@ -339,6 +382,200 @@ fn firmware_blob(
     }
 }
 
+fn encrypted_upload_v2(
+    packet: BotaDeviceSdkPacketV1,
+    effect: EncryptedUploadV2HostEffect,
+) -> Result<BotaDeviceSdkPacketV1, DeviceSdkError> {
+    Ok(match effect {
+        EncryptedUploadV2HostEffect::LoadCheckpoint {
+            device,
+            recording,
+            recording_generation,
+            upload_session_uuid,
+            owner_revision,
+        } => packet
+            .with_text(field_id::SERIAL_NUMBER, device.as_str())
+            .with_text(field_id::RECORDING_UUID, recording.to_string())
+            .with_u64(
+                field_id::RECORDING_GENERATION,
+                u64::from(recording_generation),
+            )
+            .with_bytes(field_id::UPLOAD_SESSION_UUID, upload_session_uuid.to_vec())
+            .with_u64(field_id::OWNER_REVISION, u64::from(owner_revision)),
+        EncryptedUploadV2HostEffect::DeleteCheckpoint {
+            upload_session_uuid,
+        } => packet.with_bytes(field_id::UPLOAD_SESSION_UUID, upload_session_uuid.to_vec()),
+        EncryptedUploadV2HostEffect::TruncateSink {
+            sink_id,
+            next_ciphertext_offset,
+        } => packet
+            .with_text(field_id::SINK_ID, sink_id.as_str())
+            .with_u64(field_id::OFFSET, next_ciphertext_offset),
+        EncryptedUploadV2HostEffect::PrepareSession { material_id }
+        | EncryptedUploadV2HostEffect::AbortV2 { material_id } => {
+            packet.with_text(field_id::MATERIAL_ID, material_id.as_str())
+        }
+        EncryptedUploadV2HostEffect::StartTransfer {
+            request,
+            checkpoint,
+            authorization_sha256,
+        } => {
+            let mut packet = encrypted_upload_v2_request_fields(packet, *request).with_bytes(
+                field_id::AUTHORIZATION_SHA256,
+                authorization_sha256.to_vec(),
+            );
+            if let Some(checkpoint) = checkpoint {
+                packet = packet.with_bytes(
+                    field_id::CHECKPOINT,
+                    encode_encrypted_upload_v2_checkpoint(&checkpoint)?,
+                );
+            }
+            packet
+        }
+        EncryptedUploadV2HostEffect::RepairWindow { missing_sequences } => packet.with_bytes(
+            field_id::MISSING_SEQUENCE,
+            encode_missing_sequences(&missing_sequences),
+        ),
+        EncryptedUploadV2HostEffect::SaveCheckpoint { checkpoint }
+        | EncryptedUploadV2HostEffect::AcknowledgeWindow { checkpoint } => packet.with_bytes(
+            field_id::CHECKPOINT,
+            encode_encrypted_upload_v2_checkpoint(&checkpoint)?,
+        ),
+        EncryptedUploadV2HostEffect::StageArtifacts {
+            sink_id,
+            material_id,
+            evidence,
+        } => encrypted_upload_v2_evidence_fields(
+            packet
+                .with_text(field_id::SINK_ID, sink_id.as_str())
+                .with_text(field_id::MATERIAL_ID, material_id.as_str()),
+            evidence,
+        ),
+        EncryptedUploadV2HostEffect::AwaitCompletionReceipt {
+            material_id,
+            evidence,
+        } => encrypted_upload_v2_evidence_fields(
+            packet.with_text(field_id::MATERIAL_ID, material_id.as_str()),
+            evidence,
+        ),
+        EncryptedUploadV2HostEffect::ConfirmWithReceipt {
+            material_id,
+            receipt_sha256,
+        } => packet
+            .with_text(field_id::MATERIAL_ID, material_id.as_str())
+            .with_bytes(field_id::RECEIPT_SHA256, receipt_sha256.to_vec()),
+    })
+}
+
+fn encrypted_upload_v2_request_fields(
+    packet: BotaDeviceSdkPacketV1,
+    request: EncryptedUploadV2BatchRequest,
+) -> BotaDeviceSdkPacketV1 {
+    packet
+        .with_text(field_id::SERIAL_NUMBER, request.device.as_str())
+        .with_text(field_id::RECORDING_UUID, request.recording.to_string())
+        .with_u64(
+            field_id::RECORDING_GENERATION,
+            u64::from(request.recording_generation),
+        )
+        .with_u64(field_id::STORAGE_FORMAT, u64::from(request.storage_format))
+        .with_bytes(
+            field_id::UPLOAD_SESSION_UUID,
+            request.upload_session_uuid.to_vec(),
+        )
+        .with_u64(field_id::OWNER_REVISION, u64::from(request.owner_revision))
+        .with_u64(field_id::TRANSPORT_SESSION_ID, request.transport_session_id)
+        .with_text(field_id::MATERIAL_ID, request.material_id.as_str())
+        .with_text(field_id::SINK_ID, request.sink_id.as_str())
+        .with_u64(
+            field_id::UPLOAD_PROFILE,
+            upload_profile(request.selection.profile),
+        )
+        .with_u64(
+            field_id::UPLOAD_SECURITY_POLICY,
+            upload_policy(request.selection.policy),
+        )
+        .with_u64(
+            field_id::CAPABILITY_FLAGS,
+            u64::from(request.capabilities.flags),
+        )
+        .with_u64(
+            field_id::MAX_SIGNED_BLOB_BYTES,
+            u64::from(request.capabilities.maximum_signed_blob_bytes),
+        )
+        .with_u64(
+            field_id::MAX_MANIFEST_BYTES,
+            u64::from(request.capabilities.maximum_manifest_bytes),
+        )
+        .with_u64(
+            field_id::MAX_DATA_PAYLOAD_BYTES,
+            u64::from(request.capabilities.maximum_data_payload_bytes),
+        )
+        .with_u64(
+            field_id::MAX_WINDOW_PACKETS,
+            u64::from(request.capabilities.maximum_window_packets),
+        )
+        .with_u64(
+            field_id::CHECKPOINT_INTERVAL,
+            u64::from(request.capabilities.durable_checkpoint_interval_blocks),
+        )
+        .with_u64(
+            field_id::MAX_MISSING_SEQUENCES,
+            u64::from(request.capabilities.maximum_missing_sequences),
+        )
+        .with_u64(field_id::WINDOW_PACKETS, u64::from(request.window_packets))
+        .with_u64(
+            field_id::DATA_PAYLOAD_BYTES,
+            u64::from(request.data_payload_bytes),
+        )
+        .with_u64(field_id::CIPHERTEXT_LENGTH, request.ciphertext_length)
+        .with_bytes(
+            field_id::CIPHERTEXT_SHA256,
+            request.ciphertext_sha256.to_vec(),
+        )
+}
+
+fn encrypted_upload_v2_evidence_fields(
+    packet: BotaDeviceSdkPacketV1,
+    evidence: EncryptedUploadV2TransferEvidence,
+) -> BotaDeviceSdkPacketV1 {
+    packet
+        .with_u64(field_id::CIPHERTEXT_LENGTH, evidence.ciphertext_length)
+        .with_bytes(
+            field_id::CIPHERTEXT_SHA256,
+            evidence.ciphertext_sha256.to_vec(),
+        )
+        .with_u64(
+            field_id::MANIFEST_LENGTH,
+            u64::from(evidence.manifest_length),
+        )
+        .with_bytes(field_id::MANIFEST_SHA256, evidence.manifest_sha256.to_vec())
+        .with_u64(field_id::BLOCK_COUNT, u64::from(evidence.block_count))
+}
+
+fn encode_missing_sequences(sequences: &[u32]) -> Vec<u8> {
+    sequences
+        .iter()
+        .flat_map(|sequence| sequence.to_le_bytes())
+        .collect()
+}
+
+const fn upload_profile(profile: RecordingUploadProfile) -> u64 {
+    match profile {
+        RecordingUploadProfile::LegacyPlainV1 => 1,
+        RecordingUploadProfile::LegacyP10Relay => 2,
+        RecordingUploadProfile::EncryptedUploadV2 => 3,
+    }
+}
+
+const fn upload_policy(policy: UploadSecurityPolicy) -> u64 {
+    match policy {
+        UploadSecurityPolicy::LegacyAllowed => 1,
+        UploadSecurityPolicy::V2Preferred => 2,
+        UploadSecurityPolicy::V2Required => 3,
+    }
+}
+
 fn notification_kind(notification: &WorkflowNotification) -> u32 {
     match notification {
         WorkflowNotification::Started { .. } => packet_kind::NOTIFICATION_STARTED,
@@ -367,6 +604,9 @@ fn notification_kind(notification: &WorkflowNotification) -> u32 {
         WorkflowNotification::StreamingResumed => packet_kind::NOTIFICATION_STREAMING_RESUMED,
         WorkflowNotification::StreamingCompleted { .. } => {
             packet_kind::NOTIFICATION_STREAMING_COMPLETED
+        }
+        WorkflowNotification::EncryptedUploadV2Staged { .. } => {
+            packet_kind::NOTIFICATION_ENCRYPTED_UPLOAD_V2_STAGED
         }
         WorkflowNotification::Completed { .. } => packet_kind::NOTIFICATION_COMPLETED,
         WorkflowNotification::Cancelled { .. } => packet_kind::NOTIFICATION_CANCELLED,
@@ -440,6 +680,20 @@ fn notification(
             .with_u64(field_id::TOTAL_UNITS, total_units)
             .with_u64(field_id::UPLOADED_CHUNKS, u64::from(uploaded_chunks))
             .with_bool(field_id::ENCRYPTED, encrypted),
+        WorkflowNotification::EncryptedUploadV2Staged {
+            upload_session_uuid,
+            owner_revision,
+            ciphertext_length,
+            ciphertext_sha256,
+            manifest_length,
+            manifest_sha256,
+        } => packet
+            .with_bytes(field_id::UPLOAD_SESSION_UUID, upload_session_uuid.to_vec())
+            .with_u64(field_id::OWNER_REVISION, u64::from(owner_revision))
+            .with_u64(field_id::CIPHERTEXT_LENGTH, ciphertext_length)
+            .with_bytes(field_id::CIPHERTEXT_SHA256, ciphertext_sha256.to_vec())
+            .with_u64(field_id::MANIFEST_LENGTH, u64::from(manifest_length))
+            .with_bytes(field_id::MANIFEST_SHA256, manifest_sha256.to_vec()),
         WorkflowNotification::Failed { error } => {
             let mut packet = packet
                 .with_u64(
@@ -526,6 +780,66 @@ pub(crate) fn encode_checkpoint(
         push_bytes(&mut bytes, version.as_bytes())?;
     }
     Ok(bytes)
+}
+
+pub(crate) fn encode_encrypted_upload_v2_checkpoint(
+    checkpoint: &EncryptedUploadV2Checkpoint,
+) -> Result<Vec<u8>, DeviceSdkError> {
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(b"BOTAE2C1");
+    push_bytes(&mut bytes, checkpoint.device.as_str().as_bytes())?;
+    bytes.extend_from_slice(checkpoint.recording.as_bytes());
+    bytes.extend_from_slice(&checkpoint.recording_generation.to_le_bytes());
+    bytes.extend_from_slice(&checkpoint.upload_session_uuid);
+    bytes.extend_from_slice(&checkpoint.owner_revision.to_le_bytes());
+    bytes.extend_from_slice(&checkpoint.transport_session_id.to_le_bytes());
+    bytes.extend_from_slice(&checkpoint.checkpoint_revision.to_le_bytes());
+    bytes.extend_from_slice(&checkpoint.next_ciphertext_offset.to_le_bytes());
+    bytes.extend_from_slice(&checkpoint.prefix_sha256);
+    bytes.extend_from_slice(&checkpoint.window_packets.to_le_bytes());
+    bytes.extend_from_slice(&checkpoint.data_payload_bytes.to_le_bytes());
+    Ok(bytes)
+}
+
+pub(crate) fn decode_encrypted_upload_v2_checkpoint(
+    bytes: &[u8],
+) -> Result<EncryptedUploadV2Checkpoint, DeviceSdkError> {
+    let mut cursor = CheckpointCursor::new(bytes);
+    if cursor.take(8)? != b"BOTAE2C1" {
+        return Err(invalid_checkpoint(
+            "encrypted upload v2 checkpoint magic or version is invalid",
+        ));
+    }
+    let checkpoint = EncryptedUploadV2Checkpoint {
+        device: DeviceSerialNumber::new(cursor.string()?)?,
+        recording: RecordingUuid::from_bytes(
+            cursor
+                .take(16)?
+                .try_into()
+                .expect("recording UUID has a fixed length"),
+        ),
+        recording_generation: cursor.u32()?,
+        upload_session_uuid: cursor
+            .take(16)?
+            .try_into()
+            .expect("upload session UUID has a fixed length"),
+        owner_revision: cursor.u32()?,
+        transport_session_id: cursor.u64()?,
+        checkpoint_revision: cursor.u32()?,
+        next_ciphertext_offset: cursor.u64()?,
+        prefix_sha256: cursor
+            .take(32)?
+            .try_into()
+            .expect("prefix SHA-256 has a fixed length"),
+        window_packets: cursor.u16()?,
+        data_payload_bytes: cursor.u16()?,
+    };
+    if !cursor.is_empty() {
+        return Err(invalid_checkpoint(
+            "encrypted upload v2 checkpoint has trailing bytes",
+        ));
+    }
+    Ok(checkpoint)
 }
 
 pub(crate) fn decode_checkpoint(bytes: &[u8]) -> Result<WorkflowCheckpoint, DeviceSdkError> {
@@ -732,6 +1046,7 @@ mod tests {
             RecordingSinkId, RecordingUuid, UploadDestinationId, UploadSessionId,
         },
         protocol::DeviceLogEvent,
+        workflow::EncryptedUploadV2Checkpoint,
     };
     use std::slice;
 
@@ -1125,5 +1440,32 @@ mod tests {
         let bytes =
             unsafe { slice::from_raw_parts(fields[0].data.data, fields[0].data.len as usize) };
         assert!(bytes.starts_with(b"BOTACKP1"));
+    }
+
+    #[test]
+    fn encrypted_upload_v2_checkpoint_is_versioned_and_rejects_trailing_bytes() {
+        let checkpoint = EncryptedUploadV2Checkpoint {
+            device: DeviceSerialNumber::new("ABC123").unwrap(),
+            recording: RecordingUuid::from_bytes([0x11; 16]),
+            recording_generation: 9,
+            upload_session_uuid: [0x22; 16],
+            owner_revision: 3,
+            transport_session_id: 0x1122_3344_5566,
+            checkpoint_revision: 4,
+            next_ciphertext_offset: 1_024,
+            prefix_sha256: [0x33; 32],
+            window_packets: 16,
+            data_payload_bytes: 244,
+        };
+        let encoded = encode_encrypted_upload_v2_checkpoint(&checkpoint).unwrap();
+        assert!(encoded.starts_with(b"BOTAE2C1"));
+        assert_eq!(
+            decode_encrypted_upload_v2_checkpoint(&encoded).unwrap(),
+            checkpoint
+        );
+
+        let mut extended = encoded;
+        extended.push(0);
+        assert!(decode_encrypted_upload_v2_checkpoint(&extended).is_err());
     }
 }

@@ -35,6 +35,17 @@ export function validateWorkflowSuite(suite, schema) {
       errors.push(`${suite.workflow}: duplicate scenario name ${scenario.name}`);
     }
     names.add(scenario.name);
+    if (suite.workflow === 'encrypted-upload-v2') {
+      const requiredRuntimes = ['apple', 'android', 'targetReactNative'];
+      const missing = requiredRuntimes.filter(
+        (runtime) => !scenario.runtimeTests?.[runtime]
+      );
+      if (missing.length) {
+        errors.push(
+          `${suite.workflow}/${scenario.name}: missing cross-SDK runtime evidence: ${missing.join(', ')}`
+        );
+      }
+    }
   }
   return errors;
 }
@@ -44,6 +55,16 @@ export function readWorkflowSuites(directory) {
     .filter((file) => file.endsWith('.json') && file !== 'schema.json')
     .sort()
     .map((file) => readJson(join(directory, file)));
+}
+
+export function collectMaintenanceRuntimeTestFiles(suites) {
+  return [...new Set(
+    suites
+      .filter((suite) => suite.workflow === 'encrypted-upload-v2')
+      .flatMap((suite) =>
+        suite.scenarios.map((scenario) => scenario.sourceTest.split('#', 1)[0])
+      )
+  )].sort();
 }
 
 export function validateWorkflowDirectory(directory) {
@@ -94,7 +115,7 @@ function readReferencedFile(root, relativePath, label, errors) {
 
 export function validateWorkflowReferences(
   suites,
-  { sdkPath, rustTestsPath }
+  { sdkPath, rustTestsPath, repositoryPath }
 ) {
   const errors = [];
   for (const suite of suites) {
@@ -118,6 +139,29 @@ export function validateWorkflowReferences(
       const escapedName = testName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       if (rust !== null && !new RegExp(`\\bfn\\s+${escapedName}\\s*\\(`).test(rust)) {
         errors.push(`${label}: Rust test not found: ${scenario.rustTest}`);
+      }
+
+      for (const [runtime, reference] of Object.entries(
+        scenario.runtimeTests ?? {}
+      )) {
+        if (!repositoryPath) {
+          errors.push(`${label}: repository path is required for ${runtime} evidence`);
+          continue;
+        }
+        const runtimeSeparator = reference.indexOf('#');
+        const runtimePath = reference.slice(0, runtimeSeparator);
+        const runtimeAnchor = reference.slice(runtimeSeparator + 1);
+        const runtimeSource = readReferencedFile(
+          repositoryPath,
+          runtimePath,
+          `${label}/${runtime}`,
+          errors
+        );
+        if (runtimeSource !== null && !runtimeSource.includes(runtimeAnchor)) {
+          errors.push(
+            `${label}: ${runtime} anchor not found: ${runtimeAnchor}`
+          );
+        }
       }
     }
   }
@@ -160,6 +204,24 @@ export function validateWorkflowCompatibility(suites, compatibility) {
     errors.push(`${workflow}: compatibility claim has no workflow suite`);
   }
   return errors;
+}
+
+export function validateWorkflowBaseline(suites, compatibility) {
+  const baselines = new Set(
+    suites.map(
+      (suite) => `${suite.baseline.version}@${suite.baseline.revision}`
+    )
+  );
+  const declared = compatibility.reactNativeWorkflowBaseline;
+  const expected = declared
+    ? `${declared.version}@${declared.revision}`
+    : null;
+  if (baselines.size !== 1 || !expected || !baselines.has(expected)) {
+    return [
+      'workflow suites do not match compatibility reactNativeWorkflowBaseline',
+    ];
+  }
+  return [];
 }
 
 function expectedTrace(workflow, scenario) {
@@ -226,6 +288,7 @@ function parseArguments(args) {
     sdkPath: null,
     allowDirty: false,
     runRustTests: true,
+    runMaintenanceTests: true,
   };
   for (let index = 0; index < args.length; index += 1) {
     switch (args[index]) {
@@ -240,6 +303,9 @@ function parseArguments(args) {
         break;
       case '--skip-rust-tests':
         options.runRustTests = false;
+        break;
+      case '--skip-maintenance-tests':
+        options.runMaintenanceTests = false;
         break;
       default:
         throw new Error(`unknown argument ${args[index]}`);
@@ -269,6 +335,7 @@ export function verifyWorkflowEvidence(options) {
     join(repository, 'protocol/compatibility/firmware-compatibility.json')
   );
   errors.push(...validateWorkflowCompatibility(suites, compatibility));
+  errors.push(...validateWorkflowBaseline(suites, compatibility));
 
   const revisions = new Set(suites.map((suite) => suite.baseline.revision));
   const versions = new Set(suites.map((suite) => suite.baseline.version));
@@ -288,6 +355,7 @@ export function verifyWorkflowEvidence(options) {
     ...validateWorkflowReferences(suites, {
       sdkPath,
       rustTestsPath: join(repository, 'core/device-sdk-core/tests'),
+      repositoryPath: repository,
     })
   );
   if (errors.length) {
@@ -297,6 +365,14 @@ export function verifyWorkflowEvidence(options) {
   const rustTests = [...new Set(
     suites.flatMap((suite) => suite.scenarios.map((scenario) => scenario.rustTest))
   )].sort();
+  const maintenanceTests = collectMaintenanceRuntimeTestFiles(suites);
+  if (options.runMaintenanceTests && maintenanceTests.length) {
+    run(
+      'npm',
+      ['test', '--', '--runTestsByPath', ...maintenanceTests, '--runInBand'],
+      sdkPath
+    );
+  }
   if (options.runRustTests) {
     for (const rustTest of rustTests) {
       const [target, testName] = rustTest.split('::');
@@ -321,6 +397,7 @@ export function verifyWorkflowEvidence(options) {
     workflowSuites: suites.length,
     scenarios: suites.reduce((count, suite) => count + suite.scenarios.length, 0),
     rustTests: rustTests.length,
+    maintenanceRuntimeTests: maintenanceTests.length,
     reactNativeVersion: packageVersion,
     reactNativeRevision: sourceRevision,
     dirty: Boolean(dirty),

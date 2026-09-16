@@ -2,7 +2,15 @@ package dev.bota.sdk.reactnative
 
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableMap
+import dev.bota.sdk.BotaErrorCode
 import dev.bota.sdk.BotaDeviceClient
+import dev.bota.sdk.BotaSDKError
+import dev.bota.sdk.EncryptedUploadV2CapabilitySnapshot
+import dev.bota.sdk.EncryptedUploadV2Checkpoint
+import dev.bota.sdk.EncryptedUploadV2Material
+import dev.bota.sdk.EncryptedUploadV2ProfileProvider
+import dev.bota.sdk.EncryptedUploadV2ProviderContext
+import dev.bota.sdk.EncryptedUploadV2Recording
 import dev.bota.sdk.RecordingSyncEvent
 import dev.bota.sdk.RecordingTransferMetadata
 import dev.bota.sdk.UploadOwnershipEvent
@@ -33,6 +41,12 @@ internal interface BotaDeviceSDKAndroidRecordingClient {
     ): Flow<RecordingSyncEvent>
 
     fun transferMetadata(sinkId: String): RecordingTransferMetadata?
+
+    suspend fun syncEncryptedRecordingV2(
+        device: ConnectedDevice,
+        recording: EncryptedUploadV2Recording,
+        provider: EncryptedUploadV2ProfileProvider,
+    )
 
     suspend fun confirmRecording(device: ConnectedDevice, recordingUuid: String)
 
@@ -68,6 +82,61 @@ internal data class BotaStreamingProgress(
     val state: String,
     val bytesReceived: ULong,
     val chunksUploaded: UInt,
+)
+
+internal data class BotaEncryptedUploadV2Recording(
+    val uuid: String,
+    val generation: UInt,
+    val ciphertextLength: String,
+    val ciphertextSha256: String,
+)
+
+internal data class BotaEncryptedUploadV2Capability(
+    val encodingVersion: Int,
+    val transferProfileVersion: Int,
+    val rawValueHex: String,
+    val sha256Hex: String,
+    val flags: UInt,
+    val maximumSignedBlobBytes: UShort,
+    val maximumManifestBytes: UShort,
+    val maximumDataPayloadBytes: UShort,
+    val maximumWindowPackets: UShort,
+    val durableCheckpointIntervalBlocks: UInt,
+    val maximumMissingSequences: UShort,
+)
+
+internal data class BotaEncryptedUploadV2Checkpoint(
+    val version: Int,
+    val uploadSessionId: String,
+    val ownerRevision: UInt,
+    val revision: UInt,
+    val nextCiphertextOffset: String,
+    val prefixSha256: String,
+    val highestContiguousSequence: UInt?,
+    val transportSessionId: String,
+    val sinkRegistrationId: String,
+    val windowPackets: UShort,
+    val dataPayloadBytes: UShort,
+)
+
+internal data class BotaEncryptedUploadV2ProfileRequest(
+    val requestId: String,
+    val operationId: String,
+    val recording: BotaEncryptedUploadV2Recording,
+    val capability: BotaEncryptedUploadV2Capability,
+    val checkpoint: BotaEncryptedUploadV2Checkpoint?,
+)
+
+internal data class BotaEncryptedUploadV2Progress(
+    val operationId: String,
+    val recordingUuid: String,
+    val phase: String,
+    val completedBytes: String,
+    val totalBytes: String,
+    val checkpointRevision: UInt? = null,
+    val errorCode: String? = null,
+    val retryable: Boolean? = null,
+    val protocolStatus: UShort? = null,
 )
 
 internal data class BotaStreamingDestinationRequest(
@@ -109,6 +178,62 @@ internal fun BotaStreamingFinalizeRequest.toWritableMap(): WritableMap = Argumen
     putBoolean("encrypted", encrypted)
 }
 
+internal fun BotaEncryptedUploadV2ProfileRequest.toWritableMap(): WritableMap =
+    Arguments.createMap().apply {
+        putString("requestId", requestId)
+        putString("operationId", operationId)
+        putMap("recording", recording.toWritableMap())
+        putMap("capability", capability.toWritableMap())
+        checkpoint?.let { putMap("checkpoint", it.toWritableMap()) }
+    }
+
+internal fun BotaEncryptedUploadV2Progress.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putString("operationId", operationId)
+    putString("recordingUuid", recordingUuid)
+    putString("phase", phase)
+    putString("completedBytes", completedBytes)
+    putString("totalBytes", totalBytes)
+    checkpointRevision?.let { putDouble("checkpointRevision", it.toDouble()) }
+    errorCode?.let { putString("errorCode", it) }
+    retryable?.let { putBoolean("retryable", it) }
+    protocolStatus?.let { putDouble("protocolStatus", it.toDouble()) }
+}
+
+private fun BotaEncryptedUploadV2Recording.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putString("uuid", uuid)
+    putDouble("generation", generation.toDouble())
+    putString("ciphertextLength", ciphertextLength)
+    putString("ciphertextSha256", ciphertextSha256)
+}
+
+private fun BotaEncryptedUploadV2Capability.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putDouble("encodingVersion", encodingVersion.toDouble())
+    putDouble("transferProfileVersion", transferProfileVersion.toDouble())
+    putString("rawValueHex", rawValueHex)
+    putString("sha256Hex", sha256Hex)
+    putDouble("flags", flags.toDouble())
+    putDouble("maximumSignedBlobBytes", maximumSignedBlobBytes.toDouble())
+    putDouble("maximumManifestBytes", maximumManifestBytes.toDouble())
+    putDouble("maximumDataPayloadBytes", maximumDataPayloadBytes.toDouble())
+    putDouble("maximumWindowPackets", maximumWindowPackets.toDouble())
+    putDouble("durableCheckpointIntervalBlocks", durableCheckpointIntervalBlocks.toDouble())
+    putDouble("maximumMissingSequences", maximumMissingSequences.toDouble())
+}
+
+private fun BotaEncryptedUploadV2Checkpoint.toWritableMap(): WritableMap = Arguments.createMap().apply {
+    putDouble("version", version.toDouble())
+    putString("uploadSessionId", uploadSessionId)
+    putDouble("ownerRevision", ownerRevision.toDouble())
+    putDouble("revision", revision.toDouble())
+    putString("nextCiphertextOffset", nextCiphertextOffset)
+    putString("prefixSha256", prefixSha256)
+    highestContiguousSequence?.let { putDouble("highestContiguousSequence", it.toDouble()) }
+    putString("transportSessionId", transportSessionId)
+    putString("sinkRegistrationId", sinkRegistrationId)
+    putDouble("windowPackets", windowPackets.toDouble())
+    putDouble("dataPayloadBytes", dataPayloadBytes.toDouble())
+}
+
 internal class BotaDeviceSDKSharedAndroidRecordingClient(
     private val client: BotaDeviceClient = BotaDeviceClient.shared,
 ) : BotaDeviceSDKAndroidRecordingClient {
@@ -128,6 +253,14 @@ internal class BotaDeviceSDKSharedAndroidRecordingClient(
 
     override fun transferMetadata(sinkId: String): RecordingTransferMetadata? =
         client.recordings.transferMetadata(sinkId)
+
+    override suspend fun syncEncryptedRecordingV2(
+        device: ConnectedDevice,
+        recording: EncryptedUploadV2Recording,
+        provider: EncryptedUploadV2ProfileProvider,
+    ) {
+        client.recordings.syncEncryptedRecordingV2(device, recording, provider)
+    }
 
     override suspend fun confirmRecording(device: ConnectedDevice, recordingUuid: String) {
         client.recordings.confirmRecording(device, recordingUuid)
@@ -176,6 +309,12 @@ internal class BotaDeviceSDKAndroidRecordings(
         String,
         CompletableDeferred<StreamingUploadDestination>
     >()
+    private data class EncryptedUploadV2Request(
+        val recording: EncryptedUploadV2Recording,
+        val material: CompletableDeferred<EncryptedUploadV2Material>,
+    )
+    private val encryptedUploadV2Requests =
+        ConcurrentHashMap<String, EncryptedUploadV2Request>()
     private val finalizeRequests = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
     @Volatile private var activeStreamingSessionId: String? = null
 
@@ -208,6 +347,105 @@ internal class BotaDeviceSDKAndroidRecordings(
             metadata?.isE2EEncrypted ?: false,
             metadata?.contentSha256Hex,
         )
+    }
+
+    suspend fun syncEncryptedRecordingV2(
+        device: ConnectedDevice,
+        recording: EncryptedUploadV2Recording,
+        operationId: String,
+        onProfileRequest: (BotaEncryptedUploadV2ProfileRequest) -> Unit,
+        onProgress: (BotaEncryptedUploadV2Progress) -> Unit,
+    ) {
+        try {
+            client.syncEncryptedRecordingV2(
+                device,
+                recording,
+                EncryptedUploadV2ProfileProvider { context ->
+                    val completedBytes = context.checkpoint?.nextCiphertextOffset?.toString() ?: "0"
+                    val checkpointRevision = context.checkpoint?.revision
+                    onProgress(BotaEncryptedUploadV2Progress(
+                        operationId,
+                        recording.uuid,
+                        "profile_requested",
+                        completedBytes,
+                        recording.ciphertextLength.toString(),
+                        checkpointRevision,
+                    ))
+                    val material = requestEncryptedUploadV2Profile(
+                        operationId,
+                        context,
+                        onProfileRequest,
+                    )
+                    onProgress(BotaEncryptedUploadV2Progress(
+                        operationId,
+                        recording.uuid,
+                        "transferring",
+                        completedBytes,
+                        recording.ciphertextLength.toString(),
+                        checkpointRevision,
+                    ))
+                    material
+                },
+            )
+            onProgress(BotaEncryptedUploadV2Progress(
+                operationId,
+                recording.uuid,
+                "completed",
+                recording.ciphertextLength.toString(),
+                recording.ciphertextLength.toString(),
+            ))
+        } catch (error: Throwable) {
+            val failure = error.encryptedUploadV2Failure()
+            onProgress(BotaEncryptedUploadV2Progress(
+                operationId,
+                recording.uuid,
+                "failed",
+                "0",
+                recording.ciphertextLength.toString(),
+                errorCode = failure.code,
+                retryable = failure.retryable,
+                protocolStatus = failure.protocolStatus,
+            ))
+            throw error
+        }
+    }
+
+    fun resolveEncryptedUploadV2Profile(
+        requestId: String,
+        profile: String,
+        uploadSessionId: String,
+        ownerRevision: UInt,
+        securityPolicy: String,
+        materialRegistrationId: String,
+    ) {
+        val request = encryptedUploadV2Requests.remove(requestId)
+            ?: error("encrypted upload v2 profile request is no longer pending")
+        runCatching {
+            require(profile == "encrypted_upload_v2") {
+                "encrypted upload v2 requires an explicit matching profile"
+            }
+            BotaDeviceSDKEncryptedUploadV2Materials.consume(
+                materialRegistrationId,
+                request.recording,
+                UUID.fromString(uploadSessionId),
+                ownerRevision,
+                securityPolicy,
+            )
+        }.onSuccess { request.material.complete(it) }
+            .onFailure { request.material.completeExceptionally(it) }
+            .getOrThrow()
+    }
+
+    fun rejectEncryptedUploadV2Profile(requestId: String, errorCode: String) {
+        val request = encryptedUploadV2Requests.remove(requestId)
+            ?: error("encrypted upload v2 profile request is no longer pending")
+        val error = if (errorCode == "application_material_rejected") {
+            IllegalStateException("encrypted upload v2 material was rejected")
+        } else {
+            IllegalArgumentException("encrypted upload v2 rejection code is unsupported")
+        }
+        request.material.completeExceptionally(error)
+        if (errorCode != "application_material_rejected") throw error
     }
 
     suspend fun observeUploadOwnership(
@@ -354,6 +592,32 @@ internal class BotaDeviceSDKAndroidRecordings(
         }
     }
 
+    private suspend fun requestEncryptedUploadV2Profile(
+        operationId: String,
+        context: EncryptedUploadV2ProviderContext,
+        onRequest: (BotaEncryptedUploadV2ProfileRequest) -> Unit,
+    ): EncryptedUploadV2Material {
+        val requestId = UUID.randomUUID().toString()
+        val deferred = CompletableDeferred<EncryptedUploadV2Material>()
+        val request = EncryptedUploadV2Request(
+            context.recording,
+            deferred,
+        )
+        encryptedUploadV2Requests[requestId] = request
+        onRequest(BotaEncryptedUploadV2ProfileRequest(
+            requestId,
+            operationId,
+            context.recording.toBridgeValue(),
+            context.capability.toBridgeValue(),
+            context.checkpoint?.toBridgeValue(),
+        ))
+        return try {
+            deferred.await()
+        } finally {
+            encryptedUploadV2Requests.remove(requestId, request)
+        }
+    }
+
     private suspend fun requestFinalize(
         sessionId: String,
         metadata: StreamingFinalizeMetadata,
@@ -379,12 +643,100 @@ internal class BotaDeviceSDKAndroidRecordings(
 
     private fun rejectPendingRequests(message: String) {
         val error = IllegalStateException(message)
+        encryptedUploadV2Requests.values.forEach { it.material.completeExceptionally(error) }
         destinationRequests.values.forEach { it.completeExceptionally(error) }
         finalizeRequests.values.forEach { it.completeExceptionally(error) }
         destinationRequests.clear()
         finalizeRequests.clear()
+        encryptedUploadV2Requests.clear()
     }
 }
+
+private fun EncryptedUploadV2Recording.toBridgeValue(): BotaEncryptedUploadV2Recording =
+    BotaEncryptedUploadV2Recording(
+        uuid,
+        generation,
+        ciphertextLength.toString(),
+        ciphertextSha256.toHex(),
+    )
+
+private fun EncryptedUploadV2CapabilitySnapshot.toBridgeValue(): BotaEncryptedUploadV2Capability {
+    val values = capabilities
+    return BotaEncryptedUploadV2Capability(
+        rawValue.getOrElse(0) { 0 }.toUByte().toInt(),
+        rawValue.getOrElse(1) { 0 }.toUByte().toInt(),
+        rawValue.toHex(),
+        sha256.toHex(),
+        values.flags,
+        values.maximumSignedBlobBytes,
+        values.maximumManifestBytes,
+        values.maximumDataPayloadBytes,
+        values.maximumWindowPackets,
+        values.durableCheckpointIntervalBlocks,
+        values.maximumMissingSequences,
+    )
+}
+
+private fun EncryptedUploadV2Checkpoint.toBridgeValue(): BotaEncryptedUploadV2Checkpoint =
+    BotaEncryptedUploadV2Checkpoint(
+        1,
+        uploadSessionId.toString(),
+        ownerRevision,
+        revision,
+        nextCiphertextOffset.toString(),
+        prefixSha256.toHex(),
+        highestContiguousSequence,
+        transportSessionId.toString(),
+        sinkId,
+        windowPackets,
+        dataPayloadBytes,
+    )
+
+private data class EncryptedUploadV2Failure(
+    val code: String,
+    val retryable: Boolean,
+    val protocolStatus: UShort?,
+)
+
+private fun Throwable.encryptedUploadV2Failure(): EncryptedUploadV2Failure = when (this) {
+    is BotaSDKError.Core -> EncryptedUploadV2Failure(
+        code.stableName(),
+        retryable,
+        protocolStatus,
+    )
+    is BotaSDKError.AuthorizationRequired ->
+        EncryptedUploadV2Failure("authorization_required", false, null)
+    is kotlinx.coroutines.CancellationException ->
+        EncryptedUploadV2Failure("cancelled", false, null)
+    else -> EncryptedUploadV2Failure("application_material_rejected", false, null)
+}
+
+private fun BotaErrorCode.stableName(): String = when (this) {
+    BotaErrorCode.InvalidInput -> "invalid_input"
+    BotaErrorCode.TruncatedPacket -> "truncated_packet"
+    BotaErrorCode.UnknownPacket -> "unknown_packet"
+    BotaErrorCode.PayloadTooLarge -> "payload_too_large"
+    BotaErrorCode.UnsupportedCapability -> "unsupported_capability"
+    BotaErrorCode.UnsupportedOperation -> "unsupported_operation"
+    BotaErrorCode.FeatureUnavailable -> "feature_unavailable"
+    BotaErrorCode.OperationInProgress -> "operation_in_progress"
+    BotaErrorCode.UnexpectedEvent -> "unexpected_event"
+    BotaErrorCode.DeviceNotFound -> "device_not_found"
+    BotaErrorCode.IdentityMismatch -> "identity_mismatch"
+    BotaErrorCode.ConnectionFailed -> "connection_failed"
+    BotaErrorCode.PersistenceFailed -> "persistence_failed"
+    BotaErrorCode.NotConnected -> "not_connected"
+    BotaErrorCode.Timeout -> "timeout"
+    BotaErrorCode.Cancelled -> "cancelled"
+    BotaErrorCode.ProtocolRejected -> "protocol_rejected"
+    BotaErrorCode.IntegrityFailed -> "integrity_failed"
+    BotaErrorCode.UploadOwnershipUnknown -> "upload_ownership_unknown"
+    BotaErrorCode.DownloadFailed -> "download_failed"
+    BotaErrorCode.Internal -> "internal"
+    is BotaErrorCode.Unknown -> "unknown"
+}
+
+private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
 private fun streamingProgress(
     sessionId: String,

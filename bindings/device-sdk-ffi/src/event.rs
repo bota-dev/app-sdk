@@ -2,9 +2,12 @@ use crate::{
     ABI_VERSION, BotaDeviceSdkPacketViewV1, command::PacketFields, field_id, output, packet_kind,
 };
 use bota_device_sdk_core::{
-    engine::{BleEvent, HostEvent, HostEventKind, NetworkEvent, RequestId},
+    engine::{
+        BleEvent, EncryptedUploadV2HostEvent, HostEvent, HostEventKind, NetworkEvent, RequestId,
+    },
     error::{DeviceSdkError, ErrorCode, Operation},
-    model::{DeviceCandidate, ProvisioningMaterial},
+    model::{DeviceCandidate, DeviceSerialNumber, ProvisioningMaterial, RecordingUuid},
+    workflow::{EncryptedUploadV2Checkpoint, EncryptedUploadV2TransferEvidence},
 };
 
 pub(crate) unsafe fn host_event_from_packet(
@@ -275,6 +278,147 @@ pub(crate) unsafe fn host_event_from_packet(
                 status_code: optional_u16(&fields, field_id::STATUS_CODE)?,
             })
         }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_CHECKPOINT_LOADED => {
+            fields.validate_allowed(&[field_id::CHECKPOINT])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::CheckpointLoaded(
+                fields
+                    .optional_bytes(field_id::CHECKPOINT)?
+                    .as_deref()
+                    .map(output::decode_encrypted_upload_v2_checkpoint)
+                    .transpose()?,
+            ))
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_SINK_TRUNCATED => {
+            fields.validate_allowed(&[])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::SinkTruncated)
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_SESSION_PREPARED => {
+            fields.validate_allowed(&[field_id::AUTHORIZATION_SHA256])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::SessionPrepared {
+                authorization_sha256: fields
+                    .required_fixed_bytes(field_id::AUTHORIZATION_SHA256)?,
+            })
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_TRANSFER_STARTED => {
+            fields.validate_allowed(&[])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::TransferStarted)
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_RESUME_REJECTED => {
+            fields.validate_allowed(&[])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::ResumeRejected)
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_WINDOW_STAGED => {
+            fields.validate_allowed(&[
+                field_id::CHECKPOINT,
+                field_id::SERIAL_NUMBER,
+                field_id::RECORDING_UUID,
+                field_id::RECORDING_GENERATION,
+                field_id::UPLOAD_SESSION_UUID,
+                field_id::OWNER_REVISION,
+                field_id::TRANSPORT_SESSION_ID,
+                field_id::CHECKPOINT_REVISION,
+                field_id::OFFSET,
+                field_id::PREFIX_SHA256,
+                field_id::WINDOW_PACKETS,
+                field_id::DATA_PAYLOAD_BYTES,
+                field_id::MISSING_SEQUENCE,
+            ])?;
+            let opaque_checkpoint = fields.optional_bytes(field_id::CHECKPOINT)?;
+            let has_structured_checkpoint =
+                fields.optional_text(field_id::SERIAL_NUMBER)?.is_some()
+                    || fields.optional_text(field_id::RECORDING_UUID)?.is_some()
+                    || fields
+                        .optional_u64(field_id::RECORDING_GENERATION)?
+                        .is_some()
+                    || fields
+                        .optional_bytes(field_id::UPLOAD_SESSION_UUID)?
+                        .is_some()
+                    || fields.optional_u64(field_id::OWNER_REVISION)?.is_some()
+                    || fields
+                        .optional_u64(field_id::TRANSPORT_SESSION_ID)?
+                        .is_some()
+                    || fields
+                        .optional_u64(field_id::CHECKPOINT_REVISION)?
+                        .is_some()
+                    || fields.optional_u64(field_id::OFFSET)?.is_some()
+                    || fields.optional_bytes(field_id::PREFIX_SHA256)?.is_some()
+                    || fields.optional_u64(field_id::WINDOW_PACKETS)?.is_some()
+                    || fields.optional_u64(field_id::DATA_PAYLOAD_BYTES)?.is_some();
+            if opaque_checkpoint.is_some() == has_structured_checkpoint {
+                return Err(invalid(
+                    "window-staged event requires exactly one checkpoint representation",
+                ));
+            }
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::WindowStaged {
+                checkpoint: match opaque_checkpoint {
+                    Some(checkpoint) => output::decode_encrypted_upload_v2_checkpoint(&checkpoint)?,
+                    None => structured_encrypted_upload_v2_checkpoint(&fields)?,
+                },
+                missing_sequences: fields
+                    .optional_bytes(field_id::MISSING_SEQUENCE)?
+                    .map(|bytes| decode_missing_sequences(&bytes))
+                    .transpose()?
+                    .unwrap_or_default(),
+            })
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_CHECKPOINT_SAVED => {
+            fields.validate_allowed(&[])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::CheckpointSaved)
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_WINDOW_ACKNOWLEDGED => {
+            fields.validate_allowed(&[field_id::CHECKPOINT])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::WindowAcknowledged {
+                checkpoint: output::decode_encrypted_upload_v2_checkpoint(
+                    &fields.required_bytes(field_id::CHECKPOINT)?,
+                )?,
+            })
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_TRANSFER_COMPLETED => {
+            fields.validate_allowed(&encrypted_upload_v2_evidence_field_ids())?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::TransferCompleted(
+                encrypted_upload_v2_evidence(&fields)?,
+            ))
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_ARTIFACTS_STAGED => {
+            fields.validate_allowed(&[])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::ArtifactsStaged)
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_RECEIPT_ACCEPTED => {
+            fields.validate_allowed(&[field_id::RECEIPT_SHA256])?;
+            HostEventKind::EncryptedUploadV2(
+                EncryptedUploadV2HostEvent::CompletionReceiptAccepted {
+                    receipt_sha256: fields.required_fixed_bytes(field_id::RECEIPT_SHA256)?,
+                },
+            )
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_RECORDING_CONFIRMED => {
+            fields.validate_allowed(&[])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::RecordingConfirmed)
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_MIXED_PROFILE => {
+            fields.validate_allowed(&[])?;
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::MixedProfile)
+        }
+        packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_FAILED => {
+            fields.validate_allowed(&[
+                field_id::ERROR_CODE,
+                field_id::RETRYABLE,
+                field_id::PROTOCOL_STATUS,
+                field_id::ERROR_DETAIL,
+            ])?;
+            let mut error = DeviceSdkError::new(
+                error_code(fields.required_u64(field_id::ERROR_CODE)?)?,
+                Operation::TransferRecording,
+                fields.required_bool(field_id::RETRYABLE)?,
+            );
+            if let Some(status) = optional_u16(&fields, field_id::PROTOCOL_STATUS)? {
+                error = error.with_protocol_status(status);
+            }
+            if let Some(detail) = fields.optional_text(field_id::ERROR_DETAIL)? {
+                error = error.with_detail(detail);
+            }
+            HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::Failed { error })
+        }
         _ => {
             return Err(
                 DeviceSdkError::new(ErrorCode::UnknownPacket, Operation::Decode, false)
@@ -290,6 +434,40 @@ pub(crate) unsafe fn host_event_from_packet(
         request_id: RequestId::from_u64(packet.request_id),
         kind,
     })
+}
+
+fn structured_encrypted_upload_v2_checkpoint(
+    fields: &PacketFields<'_>,
+) -> Result<EncryptedUploadV2Checkpoint, DeviceSdkError> {
+    Ok(EncryptedUploadV2Checkpoint {
+        device: DeviceSerialNumber::new(fields.required_text(field_id::SERIAL_NUMBER)?)?,
+        recording: fields
+            .required_text(field_id::RECORDING_UUID)?
+            .parse::<RecordingUuid>()?,
+        recording_generation: required_u32(fields, field_id::RECORDING_GENERATION)?,
+        upload_session_uuid: fields.required_fixed_bytes(field_id::UPLOAD_SESSION_UUID)?,
+        owner_revision: required_u32(fields, field_id::OWNER_REVISION)?,
+        transport_session_id: fields.required_u64(field_id::TRANSPORT_SESSION_ID)?,
+        checkpoint_revision: required_u32(fields, field_id::CHECKPOINT_REVISION)?,
+        next_ciphertext_offset: fields.required_u64(field_id::OFFSET)?,
+        prefix_sha256: fields.required_fixed_bytes(field_id::PREFIX_SHA256)?,
+        window_packets: required_u16(fields, field_id::WINDOW_PACKETS)?,
+        data_payload_bytes: required_u16(fields, field_id::DATA_PAYLOAD_BYTES)?,
+    })
+}
+
+fn required_u16(fields: &PacketFields<'_>, id: u32) -> Result<u16, DeviceSdkError> {
+    fields
+        .required_u64(id)?
+        .try_into()
+        .map_err(|_| invalid(format!("field {id} does not fit in 16 bits")))
+}
+
+fn required_u32(fields: &PacketFields<'_>, id: u32) -> Result<u32, DeviceSdkError> {
+    fields
+        .required_u64(id)?
+        .try_into()
+        .map_err(|_| invalid(format!("field {id} does not fit in 32 bits")))
 }
 
 fn candidate(fields: &PacketFields<'_>) -> Result<DeviceCandidate, DeviceSdkError> {
@@ -315,6 +493,74 @@ fn optional_u16(fields: &PacketFields<'_>, id: u32) -> Result<Option<u16>, Devic
         .transpose()
 }
 
+const fn encrypted_upload_v2_evidence_field_ids() -> [u32; 5] {
+    [
+        field_id::CIPHERTEXT_LENGTH,
+        field_id::CIPHERTEXT_SHA256,
+        field_id::MANIFEST_LENGTH,
+        field_id::MANIFEST_SHA256,
+        field_id::BLOCK_COUNT,
+    ]
+}
+
+fn encrypted_upload_v2_evidence(
+    fields: &PacketFields<'_>,
+) -> Result<EncryptedUploadV2TransferEvidence, DeviceSdkError> {
+    Ok(EncryptedUploadV2TransferEvidence {
+        ciphertext_length: fields.required_u64(field_id::CIPHERTEXT_LENGTH)?,
+        ciphertext_sha256: fields.required_fixed_bytes(field_id::CIPHERTEXT_SHA256)?,
+        manifest_length: fields
+            .required_u64(field_id::MANIFEST_LENGTH)?
+            .try_into()
+            .map_err(|_| invalid("manifest length does not fit in 16 bits"))?,
+        manifest_sha256: fields.required_fixed_bytes(field_id::MANIFEST_SHA256)?,
+        block_count: fields
+            .required_u64(field_id::BLOCK_COUNT)?
+            .try_into()
+            .map_err(|_| invalid("block count does not fit in 32 bits"))?,
+    })
+}
+
+fn decode_missing_sequences(bytes: &[u8]) -> Result<Vec<u32>, DeviceSdkError> {
+    let (sequences, remainder) = bytes.as_chunks::<4>();
+    if !remainder.is_empty() {
+        return Err(invalid(
+            "missing-sequence byte field length must be a multiple of four",
+        ));
+    }
+    Ok(sequences
+        .iter()
+        .map(|sequence| u32::from_le_bytes(*sequence))
+        .collect())
+}
+
+fn error_code(value: u64) -> Result<ErrorCode, DeviceSdkError> {
+    match value {
+        1 => Ok(ErrorCode::InvalidInput),
+        2 => Ok(ErrorCode::TruncatedPacket),
+        3 => Ok(ErrorCode::UnknownPacket),
+        4 => Ok(ErrorCode::PayloadTooLarge),
+        5 => Ok(ErrorCode::UnsupportedCapability),
+        6 => Ok(ErrorCode::UnsupportedOperation),
+        7 => Ok(ErrorCode::FeatureUnavailable),
+        8 => Ok(ErrorCode::OperationInProgress),
+        9 => Ok(ErrorCode::UnexpectedEvent),
+        10 => Ok(ErrorCode::DeviceNotFound),
+        11 => Ok(ErrorCode::IdentityMismatch),
+        12 => Ok(ErrorCode::ConnectionFailed),
+        13 => Ok(ErrorCode::PersistenceFailed),
+        14 => Ok(ErrorCode::NotConnected),
+        15 => Ok(ErrorCode::Timeout),
+        16 => Ok(ErrorCode::Cancelled),
+        17 => Ok(ErrorCode::ProtocolRejected),
+        18 => Ok(ErrorCode::IntegrityFailed),
+        19 => Ok(ErrorCode::UploadOwnershipUnknown),
+        20 => Ok(ErrorCode::DownloadFailed),
+        21 => Ok(ErrorCode::Internal),
+        _ => Err(invalid("error code is invalid")),
+    }
+}
+
 fn invalid(detail: impl Into<String>) -> DeviceSdkError {
     DeviceSdkError::new(ErrorCode::InvalidInput, Operation::Decode, false).with_detail(detail)
 }
@@ -333,6 +579,80 @@ mod tests {
             .with_operation(4)
             .with_request_id(1)
             .with_cancellation_id(2, 3)
+    }
+
+    #[test]
+    fn window_staged_accepts_structured_checkpoint_fields_from_native_hosts() {
+        let packet = event(packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_WINDOW_STAGED)
+            .with_text(field_id::SERIAL_NUMBER, "EVFXXW67KP")
+            .with_text(
+                field_id::RECORDING_UUID,
+                "ffeeddcc-bbaa-9988-7766-554433221100",
+            )
+            .with_u64(field_id::RECORDING_GENERATION, 7)
+            .with_bytes(
+                field_id::UPLOAD_SESSION_UUID,
+                (0_u8..16).collect::<Vec<_>>(),
+            )
+            .with_u64(field_id::OWNER_REVISION, 9)
+            .with_u64(field_id::TRANSPORT_SESSION_ID, 11)
+            .with_u64(field_id::CHECKPOINT_REVISION, 2)
+            .with_u64(field_id::OFFSET, 200)
+            .with_bytes(field_id::PREFIX_SHA256, vec![0x44; 32])
+            .with_u64(field_id::WINDOW_PACKETS, 4)
+            .with_u64(field_id::DATA_PAYLOAD_BYTES, 160)
+            .with_bytes(field_id::MISSING_SEQUENCE, 7_u32.to_le_bytes().to_vec());
+
+        let decoded = unsafe { host_event_from_packet(&packet.view()) }.unwrap();
+
+        let HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::WindowStaged {
+            checkpoint,
+            missing_sequences,
+        }) = decoded.kind
+        else {
+            panic!("expected encrypted upload v2 window event");
+        };
+        assert_eq!(checkpoint.device.as_str(), "EVFXXW67KP");
+        assert_eq!(checkpoint.recording_generation, 7);
+        assert_eq!(
+            checkpoint.upload_session_uuid,
+            std::array::from_fn(|index| index as u8)
+        );
+        assert_eq!(checkpoint.owner_revision, 9);
+        assert_eq!(checkpoint.transport_session_id, 11);
+        assert_eq!(checkpoint.checkpoint_revision, 2);
+        assert_eq!(checkpoint.next_ciphertext_offset, 200);
+        assert_eq!(checkpoint.prefix_sha256, [0x44; 32]);
+        assert_eq!(checkpoint.window_packets, 4);
+        assert_eq!(checkpoint.data_payload_bytes, 160);
+        assert_eq!(missing_sequences, vec![7]);
+    }
+
+    #[test]
+    fn window_staged_rejects_mixed_checkpoint_representations() {
+        let checkpoint = EncryptedUploadV2Checkpoint {
+            device: DeviceSerialNumber::new("EVFXXW67KP").unwrap(),
+            recording: "ffeeddcc-bbaa-9988-7766-554433221100".parse().unwrap(),
+            recording_generation: 7,
+            upload_session_uuid: [0x11; 16],
+            owner_revision: 9,
+            transport_session_id: 11,
+            checkpoint_revision: 2,
+            next_ciphertext_offset: 200,
+            prefix_sha256: [0x44; 32],
+            window_packets: 4,
+            data_payload_bytes: 160,
+        };
+        let packet = event(packet_kind::HOST_EVENT_ENCRYPTED_UPLOAD_V2_WINDOW_STAGED)
+            .with_bytes(
+                field_id::CHECKPOINT,
+                output::encode_encrypted_upload_v2_checkpoint(&checkpoint).unwrap(),
+            )
+            .with_u64(field_id::RECORDING_GENERATION, 7);
+
+        let decoded = unsafe { host_event_from_packet(&packet.view()) };
+
+        assert!(decoded.is_err());
     }
 
     #[test]

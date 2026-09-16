@@ -5,6 +5,7 @@
 .idea/
 .vscode/
 .worktrees/
+/.ci/
 *.iml
 *.log
 
@@ -28,6 +29,11 @@
 /frameworks/flutter/bota_flutter_sdk/example/ios/Flutter/
 /frameworks/flutter/bota_flutter_sdk/example/ios/Runner/GeneratedPluginRegistrant.h
 /frameworks/flutter/bota_flutter_sdk/example/ios/Runner/GeneratedPluginRegistrant.m
+/frameworks/web/node_modules/
+/frameworks/web/dist/
+/frameworks/web/src/generated/
+/tests/consumers/web-vite/node_modules/
+/tests/consumers/web-vite/dist/
 
 # Platform build outputs
 /.build/

@@ -6,6 +6,10 @@ import type {
   NativeDeviceConnectionSettings,
   NativeDeviceRecording,
   NativeDiscoveredDevice,
+  NativeEncryptedUploadV2Capability,
+  NativeEncryptedUploadV2Checkpoint,
+  NativeEncryptedUploadV2Progress,
+  NativeEncryptedUploadV2Recording,
   NativeFactoryResetCompletion,
   NativeFactoryResetGrantRequest,
   NativeFirmwareUpdateProgress,
@@ -189,6 +193,52 @@ export type BotaRecordingTransferProgress = {
   totalBytes: number;
 };
 
+export type BotaEncryptedUploadV2Recording = NativeEncryptedUploadV2Recording;
+
+export type BotaEncryptedUploadV2Capability = NativeEncryptedUploadV2Capability;
+
+export type BotaEncryptedUploadV2Checkpoint = NativeEncryptedUploadV2Checkpoint;
+
+export type BotaEncryptedUploadV2ProviderContext = {
+  recording: BotaEncryptedUploadV2Recording;
+  capability: BotaEncryptedUploadV2Capability;
+  checkpoint?: BotaEncryptedUploadV2Checkpoint;
+};
+
+export type BotaEncryptedUploadV2SecurityPolicy =
+  | 'legacy_allowed'
+  | 'v2_preferred'
+  | 'v2_required';
+
+export type BotaEncryptedUploadV2ProfileDecision = {
+  profile: 'encrypted_upload_v2';
+  uploadSessionId: string;
+  ownerRevision: number;
+  securityPolicy: BotaEncryptedUploadV2SecurityPolicy;
+  materialRegistrationId: string;
+};
+
+export type BotaEncryptedUploadV2ProfileProvider = (
+  context: BotaEncryptedUploadV2ProviderContext
+) => Promise<BotaEncryptedUploadV2ProfileDecision>;
+
+export type BotaEncryptedUploadV2ProgressPhase =
+  | 'profile_requested'
+  | 'transferring'
+  | 'completed'
+  | 'failed';
+
+export type BotaEncryptedUploadV2Progress = {
+  recordingUuid: string;
+  phase: BotaEncryptedUploadV2ProgressPhase;
+  completedBytes: string;
+  totalBytes: string;
+  checkpointRevision?: number;
+  errorCode?: string;
+  retryable?: boolean;
+  protocolStatus?: number;
+};
+
 export type BotaUploadOwnershipRequest = {
   recordingUuid: string;
   uploadId: string;
@@ -270,6 +320,12 @@ export type BotaDeviceSDKRecordingClient = {
     e2eEncrypted: boolean;
     contentSha256?: string;
   }>;
+  syncEncryptedRecordingV2(
+    device: ConnectedDevice,
+    recording: BotaEncryptedUploadV2Recording,
+    provider: BotaEncryptedUploadV2ProfileProvider,
+    onProgress?: (progress: BotaEncryptedUploadV2Progress) => void
+  ): Promise<void>;
   confirmRecording(
     device: ConnectedDevice,
     recordingUuid: string
@@ -528,6 +584,23 @@ const mapRecordingProgress = (
 ): BotaRecordingTransferProgress => ({
   completedBytes: progress.completedUnits,
   totalBytes: progress.totalUnits,
+});
+
+const mapEncryptedUploadV2Progress = (
+  progress: NativeEncryptedUploadV2Progress
+): BotaEncryptedUploadV2Progress => ({
+  recordingUuid: progress.recordingUuid,
+  phase: progress.phase as BotaEncryptedUploadV2ProgressPhase,
+  completedBytes: progress.completedBytes,
+  totalBytes: progress.totalBytes,
+  ...(progress.checkpointRevision === undefined
+    ? {}
+    : { checkpointRevision: progress.checkpointRevision }),
+  ...(progress.errorCode === undefined ? {} : { errorCode: progress.errorCode }),
+  ...(progress.retryable === undefined ? {} : { retryable: progress.retryable }),
+  ...(progress.protocolStatus === undefined
+    ? {}
+    : { protocolStatus: progress.protocolStatus }),
 });
 
 const mapFirmwareProgress = (
@@ -996,6 +1069,55 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
         );
       } finally {
         subscription.remove();
+      }
+    },
+
+    async syncEncryptedRecordingV2(device, recording, provider, onProgress) {
+      const module = requireNativeModule();
+      const operationId = createOpaqueId();
+      const profileSubscription = module.onEncryptedUploadV2ProfileRequested(
+        (request) => {
+          if (request.operationId !== operationId) return;
+          void (async () => {
+            try {
+              const decision = await provider({
+                recording: request.recording,
+                capability: request.capability,
+                ...(request.checkpoint === undefined
+                  ? {}
+                  : { checkpoint: request.checkpoint }),
+              });
+              if (decision.profile !== 'encrypted_upload_v2') {
+                throw new Error('encrypted upload v2 requires an explicit v2 profile');
+              }
+              await module.resolveEncryptedUploadV2Profile(
+                request.requestId,
+                decision
+              );
+            } catch (error) {
+              await module.rejectEncryptedUploadV2Profile(
+                request.requestId,
+                'application_material_rejected'
+              );
+            }
+          })().catch(() => {});
+        }
+      );
+      const progressSubscription = module.onEncryptedUploadV2Progress(
+        (progress) => {
+          if (progress.operationId !== operationId) return;
+          onProgress?.(mapEncryptedUploadV2Progress(progress));
+        }
+      );
+      try {
+        await module.syncEncryptedRecordingV2(
+          toNativeConnectedDevice(device),
+          recording,
+          operationId
+        );
+      } finally {
+        profileSubscription.remove();
+        progressSubscription.remove();
       }
     },
 

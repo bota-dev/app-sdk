@@ -56,7 +56,13 @@ actor CoreBluetoothHost: BluetoothHost {
                      .streamingSinkAppendPlaintext, .streamingSinkBeginEncrypted,
                      .streamingSinkAppendEncrypted, .streamingSinkFinalize,
                      .streamingSinkDiscard,
-                     .firmwareBlobRead:
+                     .firmwareBlobRead, .encryptedUploadV2LoadCheckpoint,
+                     .encryptedUploadV2DeleteCheckpoint, .encryptedUploadV2TruncateSink,
+                     .encryptedUploadV2PrepareSession, .encryptedUploadV2StartTransfer,
+                     .encryptedUploadV2RepairWindow, .encryptedUploadV2SaveCheckpoint,
+                     .encryptedUploadV2AcknowledgeWindow, .encryptedUploadV2StageArtifacts,
+                     .encryptedUploadV2AwaitReceipt, .encryptedUploadV2ConfirmWithReceipt,
+                     .encryptedUploadV2Abort:
                     throw invalid(effect, "non-Bluetooth effect reached CoreBluetoothHost")
                 }
                 pair.continuation.finish()
@@ -115,6 +121,12 @@ actor CoreBluetoothHost: BluetoothHost {
                 data: data,
                 withResponse: true
             )
+        }
+    }
+
+    func maximumWriteValueLength(peripheralID: String) async throws -> Int {
+        try await serialized(peripheralID) {
+            try await driver.maximumWriteValueLength(peripheralID: peripheralID, withResponse: true)
         }
     }
 

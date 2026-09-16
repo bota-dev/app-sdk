@@ -8,6 +8,7 @@ actor FakeCentralDriver: CentralDriver {
     var operationDelayNanoseconds: UInt64
     var discoveryDelayNanoseconds: UInt64 = 0
     private(set) var log: [String] = []
+    private(set) var characteristicLog: [String] = []
     private(set) var maximumConcurrentByPeripheral: [String: Int] = [:]
     private(set) var maximumGlobalConcurrency = 0
     private(set) var disconnectCount = 0
@@ -15,6 +16,7 @@ actor FakeCentralDriver: CentralDriver {
     private var concurrentByPeripheral: [String: Int] = [:]
     private var globalConcurrency = 0
     private var suspendReads = false
+    private var subscriptionNotifications = [Data([2])]
     private var pendingReads: [CheckedContinuation<Data, Error>] = []
 
     init(
@@ -76,6 +78,11 @@ actor FakeCentralDriver: CentralDriver {
         return Data([1])
     }
 
+    func maximumWriteValueLength(peripheralID: String, withResponse: Bool) async throws -> Int {
+        log.append("maximumWriteValueLength:\(peripheralID):\(withResponse)")
+        return 512
+    }
+
     func write(
         peripheralID: String,
         serviceUUID: String,
@@ -83,6 +90,9 @@ actor FakeCentralDriver: CentralDriver {
         data: Data,
         withResponse: Bool
     ) async throws {
+        characteristicLog.append(
+            "write:\(serviceUUID):\(characteristicUUID):\(withResponse)"
+        )
         try await operation("write", peripheralID: peripheralID)
     }
 
@@ -91,14 +101,17 @@ actor FakeCentralDriver: CentralDriver {
         serviceUUID: String,
         characteristicUUID: String
     ) async throws -> AsyncThrowingStream<Data, Error> {
+        characteristicLog.append("subscribe:\(serviceUUID):\(characteristicUUID)")
         try await operation("subscribe", peripheralID: peripheralID)
+        let values = subscriptionNotifications
         return AsyncThrowingStream { continuation in
-            continuation.yield(Data([2]))
+            values.forEach { continuation.yield($0) }
             continuation.finish()
         }
     }
 
     func unsubscribe(peripheralID: String, serviceUUID: String, characteristicUUID: String) async throws {
+        characteristicLog.append("unsubscribe:\(serviceUUID):\(characteristicUUID)")
         try await operation("unsubscribe", peripheralID: peripheralID)
     }
 
@@ -122,5 +135,6 @@ actor FakeCentralDriver: CentralDriver {
     }
 
     func setReadsSuspended(_ value: Bool) { suspendReads = value }
+    func setSubscriptionNotifications(_ values: [Data]) { subscriptionNotifications = values }
     var pendingReadCount: Int { pendingReads.count }
 }

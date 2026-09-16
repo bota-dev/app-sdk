@@ -7,19 +7,243 @@ import dev.bota.sdk.model.StreamingUploadDestination
 import dev.bota.sdk.model.StreamingUploadMethod
 import dev.bota.sdk.model.StreamingRecordingEvent
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RecordingManagerTest {
+    @Test
+    fun encryptedV2SelectsFromFreshCapabilitiesBeforeStartingAndNeverFallsBack() = runTest {
+        val runner = ManagerWorkflowRunner(responses = { listOf(completedNotification(operation = 8)) })
+        val fixture = ManagerRuntimeFixture(runner)
+        val manager = RecordingManager()
+        manager.attach(fixture.runtime)
+        val calls = mutableListOf<String>()
+        fixture.encryptedV2Calls = calls
+        val cancelled = AtomicInteger()
+        val material = encryptedMaterial(cancelled)
+
+        manager.syncEncryptedRecordingV2(
+            fixture.device,
+            EncryptedUploadV2Recording(fixture.recording.uuid, 4u, 4_096u, ByteArray(32) { 0x5a }),
+        ) { context ->
+            calls += "provider"
+            assertEquals(157u.toUShort(), context.capability.capabilities.maximumDataPayloadBytes)
+            material
+        }
+
+        assertEquals(listOf("capability", "checkpoint", "maximum-write", "provider", "register", "terminate-Completed"), calls)
+        assertEquals(0x010c, runner.commands.single().kind)
+        assertEquals(0, cancelled.get())
+
+        val providerFailure = runCatching {
+            manager.syncEncryptedRecordingV2(
+                fixture.device,
+                EncryptedUploadV2Recording(fixture.recording.uuid, 4u, 4_096u, ByteArray(32) { 0x5a }),
+            ) { throw IllegalStateException("selection failed") }
+        }.exceptionOrNull()
+        assertTrue(providerFailure is BotaSDKError)
+        assertEquals(1, runner.commands.size)
+        manager.detach()
+    }
+
+    @Test
+    fun encryptedV2CancellationDuringLateProviderCleanupNeverStartsCore() = runTest {
+        val runner = ManagerWorkflowRunner()
+        val fixture = ManagerRuntimeFixture(runner)
+        val manager = RecordingManager()
+        manager.attach(fixture.runtime)
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val cancelled = AtomicInteger()
+        val operation = async {
+            manager.syncEncryptedRecordingV2(
+                fixture.device,
+                EncryptedUploadV2Recording(fixture.recording.uuid, 4u, 4_096u, ByteArray(32) { 0x5a }),
+            ) {
+                entered.complete(Unit)
+                withContext(NonCancellable) { release.await() }
+                encryptedMaterial(cancelled)
+            }
+        }
+        entered.await()
+
+        operation.cancel()
+        release.complete(Unit)
+        runCatching { operation.await() }
+
+        assertTrue(runner.commands.isEmpty())
+        assertEquals(1, cancelled.get())
+        manager.detach()
+    }
+
+    @Test
+    fun encryptedV2DetachCancelsTheAtomicallyRegisteredStartupTask() = runTest {
+        val runner = ManagerWorkflowRunner()
+        val fixture = ManagerRuntimeFixture(runner)
+        val manager = RecordingManager()
+        manager.attach(fixture.runtime)
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        fixture.encryptedV2CapabilityGate = {
+            entered.complete(Unit)
+            withContext(NonCancellable) { release.await() }
+        }
+        val operation = async {
+            runCatching {
+                manager.syncEncryptedRecordingV2(
+                    fixture.device,
+                    EncryptedUploadV2Recording(fixture.recording.uuid, 4u, 4_096u, ByteArray(32)),
+                ) { encryptedMaterial(AtomicInteger()) }
+            }
+        }
+        entered.await()
+
+        manager.detach()
+        release.complete(Unit)
+        val error = runCatching { operation.await() }.exceptionOrNull()
+
+        assertTrue(error is CancellationException)
+        assertTrue(runner.commands.isEmpty())
+    }
+
+    @Test
+    fun encryptedV2CleanupFailureIsSuppressedBehindTheProtocolFailure() = runTest {
+        val runner = ManagerWorkflowRunner(
+            responses = {
+                listOf(
+                    managerNotification(
+                        CoreNotificationKind.Failed,
+                        operation = 8,
+                        fields = listOf(
+                            CoreField.Unsigned(47, 18u),
+                            CoreField.BooleanValue(48, false),
+                            CoreField.Text(50, "ciphertext digest mismatch"),
+                        ),
+                    ),
+                )
+            },
+        )
+        val fixture = ManagerRuntimeFixture(runner)
+        fixture.encryptedV2TerminateFailure = IllegalStateException("cleanup callback failed")
+        val manager = RecordingManager()
+        manager.attach(fixture.runtime)
+
+        val error = runCatching {
+            manager.syncEncryptedRecordingV2(
+                fixture.device,
+                EncryptedUploadV2Recording(fixture.recording.uuid, 4u, 4_096u, ByteArray(32)),
+            ) { encryptedMaterial(AtomicInteger()) }
+        }.exceptionOrNull() as BotaSDKError.Core
+
+        assertEquals(BotaErrorCode.IntegrityFailed, error.code)
+        assertEquals("ciphertext digest mismatch", error.detail)
+        assertTrue(error.suppressed.any { it.message == "cleanup callback failed" })
+        fixture.encryptedV2TerminateFailure = null
+        manager.detach()
+    }
+
+    @Test
+    fun encryptedV2CancelDuringConfirmationSettlesExactCompletionBeforeTaskCancellation() = runTest {
+        val runner = ManagerWorkflowRunner(keepOpen = { it.kind == 0x010c }).also {
+            it.cancellationSettlement = completedNotification(operation = 8)
+        }
+        val fixture = ManagerRuntimeFixture(runner)
+        val manager = RecordingManager()
+        manager.attach(fixture.runtime)
+        val calls = mutableListOf<String>()
+        fixture.encryptedV2Calls = calls
+        val operation = async {
+            manager.syncEncryptedRecordingV2(
+                fixture.device,
+                EncryptedUploadV2Recording(fixture.recording.uuid, 4u, 4_096u, ByteArray(32)),
+            ) { encryptedMaterial(AtomicInteger()) }
+        }
+        withTimeout(1_000) { while (runner.commands.isEmpty()) delay(1) }
+
+        manager.cancelCurrentOperation()
+        operation.await()
+
+        assertEquals(runner.commands.single().cancellationId, runner.cancelledIds.single())
+        assertTrue(calls.contains("terminate-Completed"))
+        assertTrue("terminate-Cancelled" !in calls)
+        manager.detach()
+    }
+
+    @Test
+    fun encryptedV2CancelDuringUncertainConfirmationSurfacesCode19AndRetainsMaterial() = runTest {
+        val runner = ManagerWorkflowRunner(keepOpen = { it.kind == 0x010c }).also {
+            it.cancellationSettlement = managerNotification(
+                CoreNotificationKind.Failed,
+                operation = 8,
+                fields = listOf(
+                    CoreField.Unsigned(47, 19u),
+                    CoreField.BooleanValue(48, false),
+                    CoreField.Text(50, "CONFIRM outcome is uncertain"),
+                ),
+            )
+        }
+        val fixture = ManagerRuntimeFixture(runner)
+        val manager = RecordingManager()
+        manager.attach(fixture.runtime)
+        val calls = mutableListOf<String>()
+        fixture.encryptedV2Calls = calls
+        val operation = async {
+            runCatching {
+                manager.syncEncryptedRecordingV2(
+                    fixture.device,
+                    EncryptedUploadV2Recording(fixture.recording.uuid, 4u, 4_096u, ByteArray(32)),
+                ) { encryptedMaterial(AtomicInteger()) }
+            }.exceptionOrNull()
+        }
+        withTimeout(1_000) { while (runner.commands.isEmpty()) delay(1) }
+
+        val cancellationFailure = runCatching { manager.cancelCurrentOperation() }.exceptionOrNull()
+        val operationFailure = operation.await()
+
+        assertTrue(cancellationFailure is BotaSDKError.Core)
+        assertEquals(BotaErrorCode.UploadOwnershipUnknown, (cancellationFailure as BotaSDKError.Core).code)
+        assertTrue(operationFailure is BotaSDKError.Core)
+        assertEquals(BotaErrorCode.UploadOwnershipUnknown, (operationFailure as BotaSDKError.Core).code)
+        assertTrue(calls.none { it == "terminate-Cancelled" || it == "terminate-Failed" })
+        manager.detach()
+    }
+
+    @Test
+    fun encryptedV2CoroutineCancellationAfterConfirmationAttemptDoesNotRollbackExactSuccess() = runTest {
+        val runner = ManagerWorkflowRunner(
+            failure = { if (it.kind == 0x010c) CancellationException("caller cancelled") else null },
+        ).also {
+            it.cancellationSettlement = completedNotification(operation = 8)
+        }
+        val fixture = ManagerRuntimeFixture(runner)
+        val manager = RecordingManager()
+        manager.attach(fixture.runtime)
+        val calls = mutableListOf<String>()
+        fixture.encryptedV2Calls = calls
+
+        manager.syncEncryptedRecordingV2(
+            fixture.device,
+            EncryptedUploadV2Recording(fixture.recording.uuid, 4u, 4_096u, ByteArray(32)),
+        ) { encryptedMaterial(AtomicInteger()) }
+
+        assertTrue(calls.none { it == "terminate-Cancelled" || it == "terminate-Failed" })
+        manager.detach()
+    }
+
     @Test
     fun listSubscribesBeforeWriteAndUsesTheSharedDecoder() = runTest {
         val fixture = ManagerRuntimeFixture(ManagerWorkflowRunner())
@@ -263,4 +487,18 @@ class RecordingManagerTest {
         assertEquals("unsubscribe", fixture.actions.last())
         manager.detach()
     }
+
+    private fun encryptedMaterial(cancelled: AtomicInteger) = EncryptedUploadV2Material(
+        materialId = "material-1",
+        recordingId = "recording-1",
+        uploadSessionId = UUID.fromString("00112233-4455-6677-8899-aabbccddeeff"),
+        ownerRevision = 2u,
+        policy = EncryptedUploadV2SecurityPolicy.V2Required,
+        authorization = ByteArray(408),
+        stagingRequest = { Request.Builder().url("https://example.test/upload").put(byteArrayOf().toRequestBody()).build() },
+        submitManifest = { _, _ -> },
+        finalize = {},
+        completionReceipt = { ByteArray(336) },
+        cancel = { cancelled.incrementAndGet() },
+    )
 }

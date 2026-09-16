@@ -7,7 +7,7 @@ ARTIFACTS="$PACKAGE_ROOT/Artifacts"
 OUTPUT="$ARTIFACTS/BotaDeviceSDKCore.xcframework"
 HEADER_DIR="$ROOT/bindings/device-sdk-ffi/include"
 HEADER="$HEADER_DIR/bota_device_sdk.h"
-EVIDENCE="$ROOT/release/evidence/1.0.0-alpha.1-native-abi.md"
+HEADER_DIGEST="$ROOT/bindings/device-sdk-ffi/bota_device_sdk.h.sha256"
 SWIFT_SOURCE="$PACKAGE_ROOT/Sources/BotaAppleSDK/BotaAppleSDK.swift"
 mkdir -p "$ROOT/target"
 BUILD_ROOT=$(mktemp -d "$ROOT/target/apple-xcframework.XXXXXX")
@@ -28,7 +28,7 @@ trap cleanup EXIT HUP INT TERM
 
 SDK_VERSION=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' "$ROOT/sdk-version.toml")
 SWIFT_VERSION=$(sed -n 's/.*current = "\([^"]*\)".*/\1/p' "$SWIFT_SOURCE")
-EXPECTED_HEADER_SHA=$(sed -n 's/^| Header SHA-256 | `\([0-9a-f]*\)` |$/\1/p' "$EVIDENCE")
+EXPECTED_HEADER_SHA=$(awk '{print $1}' "$HEADER_DIGEST")
 ACTUAL_HEADER_SHA=$(shasum -a 256 "$HEADER" | awk '{print $1}')
 
 if [ -z "$SDK_VERSION" ] || [ "$SDK_VERSION" != "$SWIFT_VERSION" ]; then
@@ -38,7 +38,7 @@ if [ -z "$SDK_VERSION" ] || [ "$SDK_VERSION" != "$SWIFT_VERSION" ]; then
 fi
 
 if [ -z "$EXPECTED_HEADER_SHA" ] || [ "$ACTUAL_HEADER_SHA" != "$EXPECTED_HEADER_SHA" ]; then
-    printf 'Native ABI header digest %s does not match frozen evidence %s\n' \
+    printf 'Native ABI header digest %s does not match current ABI lock %s\n' \
         "$ACTUAL_HEADER_SHA" "${EXPECTED_HEADER_SHA:-missing}" >&2
     exit 1
 fi

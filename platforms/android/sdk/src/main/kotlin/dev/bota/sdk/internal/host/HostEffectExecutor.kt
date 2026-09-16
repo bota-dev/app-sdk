@@ -1,5 +1,8 @@
 package dev.bota.sdk.internal.host
 
+import dev.bota.sdk.BotaErrorCode
+import dev.bota.sdk.BotaSDKError
+import dev.bota.sdk.internal.bluetooth.BluetoothTransportException
 import dev.bota.sdk.internal.core.CoreCancellationId
 import dev.bota.sdk.internal.core.CoreEffect
 import dev.bota.sdk.internal.core.CoreEffectHandler
@@ -27,6 +30,7 @@ internal class HostEffectExecutor(
     private val material: MaterialHost,
     private val recordingSink: RecordingSinkHost,
     private val firmwareBlob: FirmwareBlobHost,
+    private val encryptedUploadV2: EncryptedUploadV2Host = UnavailableEncryptedUploadV2Host(),
     private val progress: suspend (completed: ULong, total: ULong) -> Unit = { _, _ -> },
 ) : CoreEffectHandler {
     private data class TimerOwner(
@@ -86,6 +90,19 @@ internal class HostEffectExecutor(
             )
         CoreEffectKind.FirmwareBlobRead ->
             route(effect, firmwareBlob.execute(effect), HostEventKind.FirmwareBlobFailed)
+        CoreEffectKind.EncryptedUploadV2LoadCheckpoint,
+        CoreEffectKind.EncryptedUploadV2DeleteCheckpoint,
+        CoreEffectKind.EncryptedUploadV2TruncateSink,
+        CoreEffectKind.EncryptedUploadV2PrepareSession,
+        CoreEffectKind.EncryptedUploadV2StartTransfer,
+        CoreEffectKind.EncryptedUploadV2RepairWindow,
+        CoreEffectKind.EncryptedUploadV2SaveCheckpoint,
+        CoreEffectKind.EncryptedUploadV2AcknowledgeWindow,
+        CoreEffectKind.EncryptedUploadV2StageArtifacts,
+        CoreEffectKind.EncryptedUploadV2AwaitReceipt,
+        CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt,
+        CoreEffectKind.EncryptedUploadV2Abort ->
+            route(effect, encryptedUploadV2.execute(effect), HostEventKind.EncryptedUploadV2Failed)
     }
 
     override suspend fun cancel(cancellationId: CoreCancellationId) {
@@ -95,7 +112,12 @@ internal class HostEffectExecutor(
             owned
         }
         jobs.forEach(Job::cancel)
+        encryptedUploadV2.cancel(cancellationId)
     }
+
+    override suspend fun confirmationAttemptedOrClaimCancellation(
+        cancellationId: CoreCancellationId,
+    ): Boolean = encryptedUploadV2.confirmationAttemptedOrClaimCancellation(cancellationId)
 
     private fun route(
         effect: CoreEffect,
@@ -185,6 +207,14 @@ internal class HostEffectExecutor(
                 add(CoreField.Unsigned(59, transferId))
                 hostError?.httpStatus?.let { add(CoreField.Unsigned(60, it.toULong())) }
             }
+        } else if (kind == HostEventKind.EncryptedUploadV2Failed) {
+            val hostError = encryptedUploadV2Failure(error)
+            buildList<CoreField> {
+                add(CoreField.Unsigned(47, hostError.errorCode.toULong()))
+                add(CoreField.BooleanValue(48, hostError.retryable))
+                hostError.protocolStatus?.let { add(CoreField.Unsigned(49, it.toULong())) }
+                error.message?.let { add(CoreField.Text(50, it)) }
+            }
         } else {
             val platformCode = -(hostError?.platformCode ?: 1).toLong().absoluteValue
             listOf(CoreField.Signed(52, platformCode))
@@ -195,6 +225,48 @@ internal class HostEffectExecutor(
     private fun failedFlow(detail: String): Flow<CoreHostEvent> = flow {
         throw NativeHostException(1, detail)
     }
+
+    private fun encryptedUploadV2Failure(error: Throwable): EncryptedUploadV2HostException = when (error) {
+        is EncryptedUploadV2HostException -> error
+        is BotaSDKError.Core -> EncryptedUploadV2HostException(
+            error.code.encryptedUploadV2Code(), error.retryable, error.protocolStatus, error.detail,
+        )
+        is BluetoothTransportException -> EncryptedUploadV2HostException(
+            12u, true, message = error.message ?: "Bluetooth transport failed",
+        )
+        is IllegalArgumentException -> EncryptedUploadV2HostException(
+            1u, false, message = error.message ?: "invalid encrypted upload v2 input",
+        )
+        else -> error.cause?.takeIf { it !== error }?.let(::encryptedUploadV2Failure)
+            ?: EncryptedUploadV2HostException(
+                21u, false, message = error.message ?: "encrypted upload v2 host failed",
+            )
+    }
+}
+
+private fun BotaErrorCode.encryptedUploadV2Code(): UInt = when (this) {
+    BotaErrorCode.InvalidInput -> 1u
+    BotaErrorCode.TruncatedPacket -> 2u
+    BotaErrorCode.UnknownPacket -> 3u
+    BotaErrorCode.PayloadTooLarge -> 4u
+    BotaErrorCode.UnsupportedCapability -> 5u
+    BotaErrorCode.UnsupportedOperation -> 6u
+    BotaErrorCode.FeatureUnavailable -> 7u
+    BotaErrorCode.OperationInProgress -> 8u
+    BotaErrorCode.UnexpectedEvent -> 9u
+    BotaErrorCode.DeviceNotFound -> 10u
+    BotaErrorCode.IdentityMismatch -> 11u
+    BotaErrorCode.ConnectionFailed -> 12u
+    BotaErrorCode.PersistenceFailed -> 13u
+    BotaErrorCode.NotConnected -> 14u
+    BotaErrorCode.Timeout -> 15u
+    BotaErrorCode.Cancelled -> 16u
+    BotaErrorCode.ProtocolRejected -> 17u
+    BotaErrorCode.IntegrityFailed -> 18u
+    BotaErrorCode.UploadOwnershipUnknown -> 19u
+    BotaErrorCode.DownloadFailed -> 20u
+    BotaErrorCode.Internal -> 21u
+    is BotaErrorCode.Unknown -> 21u
 }
 
 private fun List<CoreField>.rawByteCount(): Int = sumOf { field ->
@@ -241,6 +313,18 @@ private fun allowsMultipleEvents(kind: CoreEffectKind): Boolean = when (kind) {
     CoreEffectKind.StreamingSinkFinalize,
     CoreEffectKind.StreamingSinkDiscard,
     CoreEffectKind.FirmwareBlobRead -> false
+    CoreEffectKind.EncryptedUploadV2LoadCheckpoint,
+    CoreEffectKind.EncryptedUploadV2DeleteCheckpoint,
+    CoreEffectKind.EncryptedUploadV2TruncateSink,
+    CoreEffectKind.EncryptedUploadV2PrepareSession,
+    CoreEffectKind.EncryptedUploadV2RepairWindow,
+    CoreEffectKind.EncryptedUploadV2SaveCheckpoint,
+    CoreEffectKind.EncryptedUploadV2AcknowledgeWindow,
+    CoreEffectKind.EncryptedUploadV2StageArtifacts,
+    CoreEffectKind.EncryptedUploadV2AwaitReceipt,
+    CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt,
+    CoreEffectKind.EncryptedUploadV2Abort -> false
+    CoreEffectKind.EncryptedUploadV2StartTransfer -> true
 }
 
 private fun expectedEventKinds(kind: CoreEffectKind): Set<HostEventKind> = when (kind) {
@@ -292,6 +376,33 @@ private fun expectedEventKinds(kind: CoreEffectKind): Set<HostEventKind> = when 
     CoreEffectKind.StreamingSinkFinalize -> setOf(HostEventKind.StreamingSinkFinalized)
     CoreEffectKind.StreamingSinkDiscard -> emptySet()
     CoreEffectKind.FirmwareBlobRead -> setOf(HostEventKind.FirmwareChunkRead)
+    CoreEffectKind.EncryptedUploadV2LoadCheckpoint ->
+        setOf(HostEventKind.EncryptedUploadV2CheckpointLoaded)
+    CoreEffectKind.EncryptedUploadV2DeleteCheckpoint,
+    CoreEffectKind.EncryptedUploadV2Abort -> emptySet()
+    CoreEffectKind.EncryptedUploadV2TruncateSink ->
+        setOf(HostEventKind.EncryptedUploadV2SinkTruncated)
+    CoreEffectKind.EncryptedUploadV2PrepareSession ->
+        setOf(HostEventKind.EncryptedUploadV2SessionPrepared)
+    CoreEffectKind.EncryptedUploadV2StartTransfer -> setOf(
+        HostEventKind.EncryptedUploadV2TransferStarted,
+        HostEventKind.EncryptedUploadV2ResumeRejected,
+        HostEventKind.EncryptedUploadV2WindowStaged,
+        HostEventKind.EncryptedUploadV2TransferCompleted,
+        HostEventKind.EncryptedUploadV2MixedProfile,
+    )
+    CoreEffectKind.EncryptedUploadV2RepairWindow ->
+        setOf(HostEventKind.EncryptedUploadV2WindowStaged)
+    CoreEffectKind.EncryptedUploadV2SaveCheckpoint ->
+        setOf(HostEventKind.EncryptedUploadV2CheckpointSaved)
+    CoreEffectKind.EncryptedUploadV2AcknowledgeWindow ->
+        setOf(HostEventKind.EncryptedUploadV2WindowAcknowledged)
+    CoreEffectKind.EncryptedUploadV2StageArtifacts ->
+        setOf(HostEventKind.EncryptedUploadV2ArtifactsStaged)
+    CoreEffectKind.EncryptedUploadV2AwaitReceipt ->
+        setOf(HostEventKind.EncryptedUploadV2ReceiptAccepted)
+    CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt ->
+        setOf(HostEventKind.EncryptedUploadV2RecordingConfirmed)
 }
 
 private val CoreEffectKind.isStreamingSink: Boolean

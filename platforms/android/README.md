@@ -89,6 +89,27 @@ Upload ownership emits only device-completed, device-preserved, or authorized
 Bluetooth-fallback identifiers; applications still own backend destination
 resolution.
 
+`RecordingManager.syncEncryptedRecordingV2` is a separate, explicit profile.
+It reads the dedicated `0406` capability immediately before invoking the
+application provider, loads only exact non-secret resume metadata, and starts
+only Rust command `0x010c`; it never falls back to the legacy transfer after
+selection. The application provides opaque authorization, an empty HTTPS PUT
+request template, fixed-manifest submission, finalization, and receipt
+callbacks. Native code keeps those documents and credentials out of Rust,
+checkpoints, logs, and bridges. Rust encodes every authenticated `0407` and
+`0408` frame.
+
+The retained `0409` receiver writes ciphertext directly by offset into a
+bounded native `FileChannel`, repairs exact missing sequences, forces a clean
+window before persisting its `AtomicFile` checkpoint, and verifies manifest and
+EOF evidence before staging. OkHttp replaces the empty request body with a
+stream over that verified native file and makes no Bota control-plane call.
+Only the exact application receipt permits canonical CONFIRM; every earlier
+failure or cancellation retains the device copy and removes the opaque
+material registration exactly once. This runtime does not change the
+`contract_only`, `runtimeWorkflow=false`, or `firmwareAdvertised=false`
+compatibility metadata and does not claim physical-device support.
+
 `OTAManager` accepts a `FirmwareImage` containing an OkHttp `Request`. The URL,
 headers, downloaded image, and blob path remain in Android hosts; Rust receives
 only the opaque download ID, the CRC32 calculated from the durable native file,
@@ -145,8 +166,8 @@ fixture, then rerun the check above.
 
 One closeable, single-thread coroutine runtime owns every JNI engine call. It
 preserves 128-bit cancellation IDs, lets Rust reject concurrent commands, and
-converts all 10 commands, 30 host effects, 34 host events, and 12 notifications
-without a Kotlin workflow implementation. The 29 canonical workflow scenarios
+converts the additive command set, 47 host effects, 51 host events, and 16
+notification kinds without a Kotlin workflow implementation. The 29 canonical workflow scenarios
 are mirrored into Android instrumentation assets:
 
 ```bash
@@ -160,11 +181,34 @@ with `node tools/android/sync-workflow-fixtures.mjs` after changing a canonical
 workflow suite.
 
 `HostEffectExecutor` routes every effect through typed Bluetooth, persistence,
-secure-storage, network, application-material, recording-sink, or
-firmware-blob ports. It owns timers, bounds returned bytes, allows multi-event
-streams only for scan, subscribe, download, and upload, and converts platform
-failures to correlated ABI events. Additions to ABI effect or event kinds must
-extend its exhaustive tests before a host implementation changes.
+secure-storage, network, application-material, recording-sink, firmware-blob,
+or Encrypted Upload v2 ports. It owns timers, bounds returned bytes, allows
+multi-event streams only for scan, subscribe, download, upload, and v2 START,
+and converts platform failures to correlated ABI events. Additions to ABI effect
+or event kinds must extend its exhaustive tests before a host implementation
+changes.
+
+Encrypted Upload v2 subscribes to `0409` before START and keeps the combined
+platform/transfer backlog within one MiB. Overflow, traffic from a later phase,
+mixed-profile frames, and completion before EOF fail closed. Resume metadata is
+stored as one atomic checkpoint catalog with parent-directory sync. Bounded
+ABORT/unsubscribe cleanup and CONFIRM-attempt state retain ownership when the
+outcome is uncertain; only a confirmed disconnect/reset admits a replacement.
+Physical power-loss durability is not verified by JVM or Android host tests.
+Phase validation happens when each notification arrives, and the platform
+delivers a bounded copy to every active observer instead of load-balancing one
+channel between collectors. The catalog migrates the retired split
+checkpoint/index pairs into an existing catalog, recovers backup-only AtomicFile
+state, and retains an empty atomic record as the delete marker. CONFIRM effect
+emission and local cleanup remain cancellable; only the actual write attempt
+waits for exact completion or code 19. A successful driver write is latched in
+host state before the control owner can be released. Explicit and spontaneous
+disconnects carry exact peripheral/GATT generation. Reset installs the host
+replacement barrier, removes the exact control/writer owners under the
+DeviceRuntime mutex, releases that mutex before awaiting any CONFIRM settlement,
+fails the exact old effect channels, and joins old opening/pump jobs before it
+clears poison or admits replacement ownership.
+Pre-CONFIRM material is failed rather than reported completed.
 
 `BluetoothGattHost` implements the Bluetooth port with one HandlerThread-owned
 Android platform adapter. GATT operations are serialized per peripheral, not

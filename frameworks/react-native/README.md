@@ -54,6 +54,39 @@ await BotaClient.waitForBluetooth();
 The `BotaClient.devices`, `BotaClient.recordings`, and `BotaClient.ota`
 managers become available after configuration completes.
 
+## Encrypted upload v2
+
+The target encrypted-upload-v2 runtime is an additive `BotaDeviceSDK` API; it
+does not change the legacy `BotaClient` recording providers or events:
+
+```ts
+import { BotaDeviceSDK } from '@bota.dev/react-native-sdk';
+
+await BotaDeviceSDK.recordings.syncEncryptedRecordingV2(
+  device,
+  recording,
+  async (request) => selectNativeEncryptedUploadV2(request),
+  (progress) => updateUploadProgress(progress),
+);
+```
+
+The provider receives a fresh native capability snapshot, immutable recording
+identity, and optional versioned checkpoint. It returns only the upload
+session, owner revision, security policy, and an opaque native material
+registration ID. Before returning that ID, application-native Swift or Kotlin
+code must register the complete material once with
+`BotaDeviceSDKEncryptedUploadV2Materials.register(...)`. Authorization,
+manifest, receipt, staging URL/header/credentials, native file bytes/paths,
+keys, nonces, tags, ciphertext, and plaintext must remain in that native
+adapter and never cross JavaScript or Codegen. Selection is explicit and never
+downgrades to a legacy profile.
+
+Runtime compatibility metadata remains disabled until the separate firmware,
+release, and hardware gates pass; this API does not advertise device support.
+Its target-facade tests and the maintenance SDK `0.0.67` runtime tests are
+cross-referenced by the same canonical v2 workflow evidence in CI and tagged
+release verification. The frozen public compatibility surface remains `0.0.65`.
+
 ## Documentation
 
 See [docs.bota.dev](https://docs.bota.dev) for pairing, provisioning,

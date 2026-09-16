@@ -3,7 +3,11 @@ use crate::{
     error::Operation,
     model::{
         DeviceCandidate, DevicePublicKey, DeviceSerialNumber, DurableFactoryResetResult,
-        FactoryResetCommandId, HostMaterialId, ProvisioningNonce, RecordingSinkId,
+        FactoryResetCommandId, HostMaterialId, ProvisioningNonce, RecordingSinkId, RecordingUuid,
+    },
+    workflow::{
+        EncryptedUploadV2BatchRequest, EncryptedUploadV2Checkpoint,
+        EncryptedUploadV2TransferEvidence,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -57,6 +61,7 @@ pub enum Effect {
     HostMaterial(HostMaterialEffect),
     RecordingSink(RecordingSinkEffect),
     FirmwareBlob(FirmwareBlobEffect),
+    EncryptedUploadV2(EncryptedUploadV2HostEffect),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -214,5 +219,56 @@ pub enum FirmwareBlobEffect {
         download_id: u64,
         offset: u64,
         max_length: u16,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum EncryptedUploadV2HostEffect {
+    LoadCheckpoint {
+        device: DeviceSerialNumber,
+        recording: RecordingUuid,
+        recording_generation: u32,
+        upload_session_uuid: [u8; 16],
+        owner_revision: u32,
+    },
+    DeleteCheckpoint {
+        upload_session_uuid: [u8; 16],
+    },
+    TruncateSink {
+        sink_id: RecordingSinkId,
+        next_ciphertext_offset: u64,
+    },
+    PrepareSession {
+        material_id: HostMaterialId,
+    },
+    StartTransfer {
+        request: Box<EncryptedUploadV2BatchRequest>,
+        checkpoint: Option<EncryptedUploadV2Checkpoint>,
+        authorization_sha256: [u8; 32],
+    },
+    RepairWindow {
+        missing_sequences: Vec<u32>,
+    },
+    SaveCheckpoint {
+        checkpoint: EncryptedUploadV2Checkpoint,
+    },
+    AcknowledgeWindow {
+        checkpoint: EncryptedUploadV2Checkpoint,
+    },
+    StageArtifacts {
+        sink_id: RecordingSinkId,
+        material_id: HostMaterialId,
+        evidence: EncryptedUploadV2TransferEvidence,
+    },
+    AwaitCompletionReceipt {
+        material_id: HostMaterialId,
+        evidence: EncryptedUploadV2TransferEvidence,
+    },
+    ConfirmWithReceipt {
+        material_id: HostMaterialId,
+        receipt_sha256: [u8; 32],
+    },
+    AbortV2 {
+        material_id: HostMaterialId,
     },
 }

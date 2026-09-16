@@ -30,7 +30,7 @@ test('the synchronized release example includes every publishable facade', () =>
       platform,
       packageIdentifier,
     ]),
-    packagePairs.slice(0, 4),
+    packagePairs.slice(0, 5),
   );
 });
 

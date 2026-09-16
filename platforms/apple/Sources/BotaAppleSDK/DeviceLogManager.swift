@@ -76,7 +76,7 @@ public actor DeviceLogManager {
                 case .started, .deviceDiscovered, .connectionEstablished, .progress,
                      .retrying, .deviceUploadPreserved, .bleFallbackReady,
                      .firmwareProgress, .streamingPaused, .streamingResumed,
-                     .streamingCompleted, .completed:
+                     .streamingCompleted, .encryptedUploadV2Staged, .completed:
                     break
                 }
             }

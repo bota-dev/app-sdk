@@ -38,6 +38,8 @@ import dev.bota.sdk.model.DeviceWiFiScanResult
 import dev.bota.sdk.model.WifiRadioStatus
 import dev.bota.sdk.model.WireValue
 import java.time.Instant
+import java.nio.ByteBuffer
+import java.util.UUID
 
 internal class CoreModelMapper(
     private val core: NativeCore = NativeCoreBridge(),
@@ -442,6 +444,347 @@ internal class CoreModelMapper(
         ),
     )
 
+    fun inspectEncryptedUploadV2(operation: String, data: ByteArray): EncryptedUploadV2ContractValue {
+        val packetKind = when (operation) {
+            "decodeCapabilities" -> EncryptedUploadV2Protocol.Kind.DecodeCapability
+            "decodeSignedBlob" -> EncryptedUploadV2Protocol.Kind.DecodeSignedBlob
+            "decodeTransfer" -> EncryptedUploadV2Protocol.Kind.DecodeTransferOrStatus
+            else -> throw invalid("unknown encrypted-upload-v2 operation $operation")
+        }
+        val fields = decode(packetKind, data)
+        return EncryptedUploadV2ContractValue(
+            kind = fields.requiredUByte(EncryptedUploadV2Protocol.Field.ProtocolVariant),
+            messageType = fields.optionalUByte(EncryptedUploadV2Protocol.Field.MessageType),
+            flags = fields.optionalUInt(EncryptedUploadV2Protocol.Field.CapabilityFlags)
+                ?: fields.optionalUInt(EncryptedUploadV2Protocol.Field.Flags),
+            transportSessionId = fields.optionalULong(EncryptedUploadV2Protocol.Field.TransportSessionId),
+            recordingUuid = fields.text(EncryptedUploadV2Protocol.Field.RecordingUuid),
+            recordingGeneration = fields.optionalUInt(EncryptedUploadV2Protocol.Field.RecordingGeneration),
+            sequence = fields.optionalUInt(EncryptedUploadV2Protocol.Field.Sequence),
+            offset = fields.optionalULong(EncryptedUploadV2Protocol.Field.Offset),
+            length = fields.optionalULong(EncryptedUploadV2Protocol.Field.BodyLength)
+                ?: fields.optionalULong(EncryptedUploadV2Protocol.Field.CiphertextLength)
+                ?: fields.optionalULong(EncryptedUploadV2Protocol.Field.PlaintextLength),
+            result = fields.optionalUShort(EncryptedUploadV2Protocol.Field.DetailCode),
+            authorizationSha256 = fields.optionalBytes(EncryptedUploadV2Protocol.Field.AuthorizationSha256),
+            ciphertextSha256 = fields.optionalBytes(EncryptedUploadV2Protocol.Field.CiphertextSha256),
+            prefixSha256 = fields.optionalBytes(EncryptedUploadV2Protocol.Field.PrefixSha256),
+            manifestSha256 = fields.optionalBytes(EncryptedUploadV2Protocol.Field.ManifestSha256),
+            receiptSha256 = fields.optionalBytes(EncryptedUploadV2Protocol.Field.ReceiptSha256),
+        )
+    }
+
+    fun decodeEncryptedUploadV2Capabilities(data: ByteArray): EncryptedUploadV2CapabilitiesValue {
+        val fields = decode(EncryptedUploadV2Protocol.Kind.DecodeCapability, data)
+        return EncryptedUploadV2CapabilitiesValue(
+            flags = fields.requiredUInt(EncryptedUploadV2Protocol.Field.CapabilityFlags),
+            maximumSignedBlobBytes = fields.requiredUShort(EncryptedUploadV2Protocol.Field.MaximumSignedBlobBytes),
+            maximumManifestBytes = fields.requiredUShort(EncryptedUploadV2Protocol.Field.MaximumManifestBytes),
+            maximumDataPayloadBytes = fields.requiredUShort(EncryptedUploadV2Protocol.Field.DataPayloadBytes),
+            maximumWindowPackets = fields.requiredUShort(EncryptedUploadV2Protocol.Field.WindowPackets),
+            durableCheckpointIntervalBlocks = fields.requiredUInt(EncryptedUploadV2Protocol.Field.CheckpointInterval),
+            maximumMissingSequences = fields.requiredUShort(EncryptedUploadV2Protocol.Field.MaximumMissingSequences),
+        )
+    }
+
+    fun createEncryptedUploadV2SignedBlobBegin(
+        kind: UByte,
+        writeId: UInt,
+        totalLength: UShort,
+        sha256: ByteArray,
+    ): ByteArray = encode(
+        EncryptedUploadV2Protocol.Kind.EncodeSignedBlob,
+        listOf(
+            Field.unsigned(EncryptedUploadV2Protocol.Field.MessageType, 0x60u),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.BlobKind, kind.toULong()),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.WriteId, writeId.toULong()),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.BodyLength, totalLength.toULong()),
+            Field.bytes(123, sha256),
+        ),
+    )
+
+    fun createEncryptedUploadV2SignedBlobData(
+        kind: UByte,
+        writeId: UInt,
+        offset: UShort,
+        data: ByteArray,
+    ): ByteArray = encode(
+        EncryptedUploadV2Protocol.Kind.EncodeSignedBlob,
+        listOf(
+            Field.unsigned(EncryptedUploadV2Protocol.Field.MessageType, 0x61u),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.BlobKind, kind.toULong()),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.WriteId, writeId.toULong()),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.Offset, offset.toULong()),
+            Field.bytes(EncryptedUploadV2Protocol.Field.Value, data),
+        ),
+    )
+
+    fun createEncryptedUploadV2SignedBlobCommit(kind: UByte, writeId: UInt): ByteArray =
+        signedBlobTerminal(0x62u, kind, writeId)
+
+    fun createEncryptedUploadV2SignedBlobAbort(kind: UByte, writeId: UInt): ByteArray =
+        signedBlobTerminal(0x63u, kind, writeId)
+
+    fun decodeEncryptedUploadV2SignedBlobResult(data: ByteArray): EncryptedUploadV2SignedBlobResult {
+        val fields = decode(EncryptedUploadV2Protocol.Kind.DecodeSignedBlob, data)
+        if (fields.requiredUByte(EncryptedUploadV2Protocol.Field.MessageType) != 0x64.toUByte()) {
+            throw invalid("encrypted-upload-v2 signed-blob notification is not a result")
+        }
+        return EncryptedUploadV2SignedBlobResult(
+            fields.requiredUByte(EncryptedUploadV2Protocol.Field.BlobKind),
+            fields.requiredUInt(EncryptedUploadV2Protocol.Field.WriteId),
+            fields.requiredUShort(EncryptedUploadV2Protocol.Field.DetailCode),
+        )
+    }
+
+    fun createEncryptedUploadV2Start(
+        transportSessionId: ULong,
+        uploadSessionId: UUID,
+        recordingUuid: String,
+        recordingGeneration: UInt,
+        authorizationSha256: ByteArray,
+        checkpointRevision: UInt,
+        nextCiphertextOffset: ULong,
+        prefixSha256: ByteArray,
+        windowPackets: UShort,
+        dataPayloadBytes: UShort,
+    ): ByteArray = encode(
+        EncryptedUploadV2Protocol.Kind.EncodeTransfer,
+        transferIdentityFields(
+            0x20u,
+            transportSessionId,
+            uploadSessionId,
+            recordingUuid,
+            recordingGeneration,
+        ) + listOf(
+            Field.bytes(EncryptedUploadV2Protocol.Field.AuthorizationSha256, authorizationSha256),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.CheckpointRevision, checkpointRevision.toULong()),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.Offset, nextCiphertextOffset),
+            Field.bytes(EncryptedUploadV2Protocol.Field.PrefixSha256, prefixSha256),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.WindowPackets, windowPackets.toULong()),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.DataPayloadBytes, dataPayloadBytes.toULong()),
+        ),
+    )
+
+    fun createEncryptedUploadV2ResumeRequest(request: EncryptedUploadV2ResumeRequest): ByteArray = encode(
+        EncryptedUploadV2Protocol.Kind.EncodeTransfer,
+        transferIdentityFields(
+            0x22u,
+            request.transportSessionId,
+            request.uploadSessionId,
+            request.recordingUuid,
+            request.recordingGeneration,
+        ) + listOf(
+            Field.unsigned(EncryptedUploadV2Protocol.Field.CheckpointRevision, request.checkpointRevision.toULong()),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.Offset, request.nextCiphertextOffset),
+            Field.bytes(EncryptedUploadV2Protocol.Field.PrefixSha256, request.prefixSha256),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.WindowPackets, request.windowPackets.toULong()),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.DataPayloadBytes, request.dataPayloadBytes.toULong()),
+        ),
+    )
+
+    fun createEncryptedUploadV2WindowAcknowledgement(
+        transportSessionId: ULong,
+        windowIndex: UInt,
+        highestContiguousSequence: UInt,
+        nextCiphertextOffset: ULong,
+        prefixSha256: ByteArray,
+        checkpointRevision: UInt,
+        missingSequences: List<UInt>,
+    ): ByteArray = encode(
+        EncryptedUploadV2Protocol.Kind.EncodeTransfer,
+        listOf(
+            Field.unsigned(EncryptedUploadV2Protocol.Field.MessageType, 0x21u),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.TransportSessionId, transportSessionId),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.WindowIndex, windowIndex.toULong()),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.Sequence, highestContiguousSequence.toULong()),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.Offset, nextCiphertextOffset),
+            Field.bytes(EncryptedUploadV2Protocol.Field.PrefixSha256, prefixSha256),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.CheckpointRevision, checkpointRevision.toULong()),
+            Field.bytes(EncryptedUploadV2Protocol.Field.MissingSequence, packUInts(missingSequences)),
+        ),
+    )
+
+    fun createEncryptedUploadV2Confirm(
+        transportSessionId: ULong,
+        uploadSessionId: UUID,
+        recordingUuid: String,
+        recordingGeneration: UInt,
+        ownerRevision: UInt,
+        receiptSha256: ByteArray,
+    ): ByteArray = encode(
+        EncryptedUploadV2Protocol.Kind.EncodeTransfer,
+        transferIdentityFields(
+            0x23u,
+            transportSessionId,
+            uploadSessionId,
+            recordingUuid,
+            recordingGeneration,
+        ) + listOf(
+            Field.unsigned(EncryptedUploadV2Protocol.Field.OwnerRevision, ownerRevision.toULong()),
+            Field.bytes(EncryptedUploadV2Protocol.Field.ReceiptSha256, receiptSha256),
+        ),
+    )
+
+    fun createEncryptedUploadV2Abort(transportSessionId: ULong, reason: UShort): ByteArray = encode(
+        EncryptedUploadV2Protocol.Kind.EncodeTransfer,
+        listOf(
+            Field.unsigned(EncryptedUploadV2Protocol.Field.MessageType, 0x24u),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.TransportSessionId, transportSessionId),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.DetailCode, reason.toULong()),
+        ),
+    )
+
+    fun decodeEncryptedUploadV2TransferControl(data: ByteArray): EncryptedUploadV2TransferControlValue {
+        val fields = transferFields(data)
+        val sessionId = fields.requiredULong(EncryptedUploadV2Protocol.Field.TransportSessionId)
+        return when (fields.requiredUByte(EncryptedUploadV2Protocol.Field.MessageType).toInt()) {
+            0x40 -> EncryptedUploadV2TransferControlValue.StartAccepted(
+                EncryptedUploadV2StartAcknowledgement(
+                    sessionId,
+                    uuid(fields.requiredBytes(EncryptedUploadV2Protocol.Field.UploadSessionUuid)),
+                    fields.requiredText(EncryptedUploadV2Protocol.Field.RecordingUuid),
+                    fields.requiredUInt(EncryptedUploadV2Protocol.Field.RecordingGeneration),
+                    fields.requiredULong(EncryptedUploadV2Protocol.Field.CiphertextLength),
+                    fields.requiredBytes(EncryptedUploadV2Protocol.Field.CiphertextSha256),
+                    fields.requiredUShort(EncryptedUploadV2Protocol.Field.WindowPackets),
+                    fields.requiredUShort(EncryptedUploadV2Protocol.Field.DataPayloadBytes),
+                    fields.requiredUInt(EncryptedUploadV2Protocol.Field.CheckpointInterval),
+                    fields.requiredUInt(EncryptedUploadV2Protocol.Field.CheckpointRevision),
+                    fields.requiredULong(EncryptedUploadV2Protocol.Field.Offset),
+                    fields.requiredBytes(EncryptedUploadV2Protocol.Field.PrefixSha256),
+                ),
+            )
+            0x45 -> EncryptedUploadV2TransferControlValue.ResumeAccepted(
+                EncryptedUploadV2ResumeValue(
+                    sessionId,
+                    uuid(fields.requiredBytes(EncryptedUploadV2Protocol.Field.UploadSessionUuid)),
+                    fields.requiredText(EncryptedUploadV2Protocol.Field.RecordingUuid),
+                    fields.requiredUInt(EncryptedUploadV2Protocol.Field.RecordingGeneration),
+                    fields.requiredUInt(EncryptedUploadV2Protocol.Field.CheckpointRevision),
+                    fields.requiredULong(EncryptedUploadV2Protocol.Field.Offset),
+                    fields.requiredBytes(EncryptedUploadV2Protocol.Field.PrefixSha256),
+                    fields.requiredUShort(EncryptedUploadV2Protocol.Field.WindowPackets),
+                    fields.requiredUShort(EncryptedUploadV2Protocol.Field.DataPayloadBytes),
+                ),
+            )
+            0x46 -> EncryptedUploadV2TransferControlValue.ResumeRejected(
+                EncryptedUploadV2ResumeRejection(
+                    sessionId,
+                    fields.requiredUShort(EncryptedUploadV2Protocol.Field.DetailCode),
+                    fields.requiredUInt(EncryptedUploadV2Protocol.Field.CheckpointRevision),
+                    fields.requiredULong(EncryptedUploadV2Protocol.Field.Offset),
+                    fields.requiredBytes(EncryptedUploadV2Protocol.Field.PrefixSha256),
+                ),
+            )
+            0x4f -> EncryptedUploadV2TransferControlValue.Error(transferError(fields, sessionId))
+            else -> throw invalid("encrypted-upload-v2 notification is not a control reply")
+        }
+    }
+
+    fun decodeEncryptedUploadV2TransferPayload(data: ByteArray): EncryptedUploadV2TransferPayload {
+        val fields = transferFields(data)
+        val sessionId = fields.requiredULong(EncryptedUploadV2Protocol.Field.TransportSessionId)
+        return when (fields.requiredUByte(EncryptedUploadV2Protocol.Field.MessageType).toInt()) {
+            0x41 -> {
+                val bytes = fields.requiredBytes(EncryptedUploadV2Protocol.Field.Value)
+                if (fields.requiredULong(EncryptedUploadV2Protocol.Field.BodyLength) != bytes.size.toULong()) {
+                    throw invalid("encrypted-upload-v2 DATA length does not match its payload")
+                }
+                EncryptedUploadV2TransferPayload.Data(
+                    EncryptedUploadV2DataValue(
+                        sessionId,
+                        fields.requiredUInt(EncryptedUploadV2Protocol.Field.Sequence),
+                        fields.requiredULong(EncryptedUploadV2Protocol.Field.Offset),
+                        bytes,
+                    ),
+                )
+            }
+            0x42 -> EncryptedUploadV2TransferPayload.WindowEnd(
+                EncryptedUploadV2WindowEndValue(
+                    sessionId,
+                    fields.requiredUInt(EncryptedUploadV2Protocol.Field.WindowIndex),
+                    fields.requiredUInt(EncryptedUploadV2Protocol.Field.FirstSequence),
+                    fields.requiredUInt(EncryptedUploadV2Protocol.Field.LastSequence),
+                    fields.requiredULong(EncryptedUploadV2Protocol.Field.Offset),
+                    fields.requiredBytes(EncryptedUploadV2Protocol.Field.PrefixSha256),
+                    fields.requiredUInt(EncryptedUploadV2Protocol.Field.CheckpointRevision),
+                ),
+            )
+            0x43 -> {
+                val bytes = fields.requiredBytes(EncryptedUploadV2Protocol.Field.Value)
+                if (fields.requiredULong(EncryptedUploadV2Protocol.Field.BodyLength) != bytes.size.toULong()) {
+                    throw invalid("encrypted-upload-v2 manifest chunk length does not match its payload")
+                }
+                EncryptedUploadV2TransferPayload.ManifestChunk(
+                    EncryptedUploadV2ManifestChunkValue(
+                        sessionId,
+                        fields.requiredUShort(EncryptedUploadV2Protocol.Field.MaximumManifestBytes),
+                        fields.requiredUShort(EncryptedUploadV2Protocol.Field.Offset),
+                        fields.requiredBytes(EncryptedUploadV2Protocol.Field.ManifestSha256),
+                        bytes,
+                    ),
+                )
+            }
+            0x44 -> EncryptedUploadV2TransferPayload.Eof(
+                EncryptedUploadV2EofValue(
+                    sessionId,
+                    fields.requiredUInt(EncryptedUploadV2Protocol.Field.Sequence),
+                    fields.requiredUInt(EncryptedUploadV2Protocol.Field.BlockCount),
+                    fields.requiredULong(EncryptedUploadV2Protocol.Field.CiphertextLength),
+                    fields.requiredBytes(EncryptedUploadV2Protocol.Field.CiphertextSha256),
+                    fields.requiredBytes(EncryptedUploadV2Protocol.Field.ManifestSha256),
+                ),
+            )
+            0x4f -> EncryptedUploadV2TransferPayload.Error(transferError(fields, sessionId))
+            else -> throw invalid("encrypted-upload-v2 notification is not a transfer payload")
+        }
+    }
+
+    private fun signedBlobTerminal(messageType: ULong, kind: UByte, writeId: UInt): ByteArray = encode(
+        EncryptedUploadV2Protocol.Kind.EncodeSignedBlob,
+        listOf(
+            Field.unsigned(EncryptedUploadV2Protocol.Field.MessageType, messageType),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.BlobKind, kind.toULong()),
+            Field.unsigned(EncryptedUploadV2Protocol.Field.WriteId, writeId.toULong()),
+        ),
+    )
+
+    private fun transferFields(data: ByteArray): PacketFields {
+        val fields = decode(EncryptedUploadV2Protocol.Kind.DecodeTransferOrStatus, data)
+        if (fields.requiredUByte(EncryptedUploadV2Protocol.Field.ProtocolVariant) != 3.toUByte()) {
+            throw BotaSDKError.Core(
+                BotaErrorCode.ProtocolRejected,
+                BotaOperation.Decode,
+                false,
+                null,
+                MixedEncryptedUploadProfile,
+            )
+        }
+        return fields
+    }
+
+    private fun transferError(fields: PacketFields, sessionId: ULong) = EncryptedUploadV2TransferErrorValue(
+        sessionId,
+        fields.requiredUShort(EncryptedUploadV2Protocol.Field.DetailCode),
+        fields.requiredUByte(EncryptedUploadV2Protocol.Field.Command),
+        fields.requiredUInt(EncryptedUploadV2Protocol.Field.CheckpointRevision),
+    )
+
+    private fun transferIdentityFields(
+        messageType: ULong,
+        transportSessionId: ULong,
+        uploadSessionId: UUID,
+        recordingUuid: String,
+        recordingGeneration: UInt,
+    ) = listOf(
+        Field.unsigned(EncryptedUploadV2Protocol.Field.MessageType, messageType),
+        Field.unsigned(EncryptedUploadV2Protocol.Field.TransportSessionId, transportSessionId),
+        Field.bytes(EncryptedUploadV2Protocol.Field.UploadSessionUuid, uuidBytes(uploadSessionId)),
+        Field.text(EncryptedUploadV2Protocol.Field.RecordingUuid, recordingUuid),
+        Field.unsigned(EncryptedUploadV2Protocol.Field.RecordingGeneration, recordingGeneration.toULong()),
+    )
+
     override fun close() {
         core.close()
     }
@@ -469,6 +812,8 @@ internal class CoreModelMapper(
         dataValues = fields.map(Field::dataValue).toTypedArray(),
     )
 }
+
+internal const val MixedEncryptedUploadProfile = "encrypted_upload_v2_mixed_profile"
 
 internal object BotaProtocolConstants {
     fun byteNamed(name: String): Byte = when (name) {
@@ -526,6 +871,8 @@ private class PacketFields(private val packet: NativePacket) {
 
     fun requiredBoolean(id: Int): Boolean = boolean(id) ?: throw invalid("missing Boolean field $id")
     fun requiredBytes(id: Int): ByteArray = packet.bytes(id) ?: throw invalid("missing bytes field $id")
+    fun requiredText(id: Int): String = text(id) ?: throw invalid("missing text field $id")
+    fun optionalBytes(id: Int): ByteArray? = packet.bytes(id)
     fun requiredUByte(id: Int): UByte = unsigneds(id).firstOrNull()?.toUByteExact("field $id")
         ?: throw invalid("missing UByte field $id")
     fun optionalUByte(id: Int): UByte? = unsigneds(id).firstOrNull()?.toUByteExact("field $id")
@@ -535,6 +882,8 @@ private class PacketFields(private val packet: NativePacket) {
     fun requiredUInt(id: Int): UInt = unsigneds(id).firstOrNull()?.toUIntExact("field $id")
         ?: throw invalid("missing UInt field $id")
     fun optionalUInt(id: Int): UInt? = unsigneds(id).firstOrNull()?.toUIntExact("field $id")
+    fun optionalULong(id: Int): ULong? = unsigneds(id).firstOrNull()
+    fun requiredULong(id: Int): ULong = optionalULong(id) ?: throw invalid("missing ULong field $id")
     fun requiredInt(id: Int): Int = unsigneds(id).firstOrNull()?.toIntExact("field $id")
         ?: throw invalid("missing integer field $id")
     fun optionalInt(id: Int): Int? = unsigneds(id).firstOrNull()?.toIntExact("field $id")
@@ -543,6 +892,22 @@ private class PacketFields(private val packet: NativePacket) {
         it.toInt()
     } ?: throw invalid("missing signed field $id")
 }
+
+private fun uuidBytes(value: UUID): ByteArray = ByteBuffer.allocate(16)
+    .putLong(value.mostSignificantBits)
+    .putLong(value.leastSignificantBits)
+    .array()
+
+private fun uuid(value: ByteArray): UUID {
+    if (value.size != 16) throw invalid("upload session UUID must be 16 bytes")
+    val bytes = ByteBuffer.wrap(value)
+    return UUID(bytes.long, bytes.long)
+}
+
+private fun packUInts(values: List<UInt>): ByteArray = ByteBuffer.allocate(values.size * UInt.SIZE_BYTES)
+    .order(java.nio.ByteOrder.LITTLE_ENDIAN)
+    .also { buffer -> values.forEach { buffer.putInt(it.toInt()) } }
+    .array()
 
 private fun deviceState(raw: UByte): WireValue<DeviceState> = when (raw.toInt()) {
     0 -> WireValue.Known(DeviceState.Idle)

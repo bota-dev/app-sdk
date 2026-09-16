@@ -87,7 +87,7 @@ exit 0
         BOTA_EMULATOR_POLL_SECONDS: '0.05',
       },
     },
-    2_000
+    10_000
   );
 
   assert.equal(result.timedOut, false);

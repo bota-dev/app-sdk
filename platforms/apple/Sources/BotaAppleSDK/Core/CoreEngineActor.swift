@@ -12,6 +12,8 @@ actor CoreEngineActor {
     private var active: ActiveWorkflow?
     private var isDraining = false
     private var drainRequested = false
+    private var terminals: [CoreCancellationID: CoreNotification] = [:]
+    private var terminalWaiters: [CoreCancellationID: [CheckedContinuation<CoreNotification?, Never>]] = [:]
 
     init(abi: CoreAbiClient, host: any CoreHost) {
         self.abi = abi
@@ -22,35 +24,55 @@ actor CoreEngineActor {
         _ command: CoreCommand,
         capabilities: CoreCapabilities
     ) async -> AsyncThrowingStream<CoreNotification, Error> {
-        AsyncThrowingStream { continuation in
-            Task {
-                await self.start(command, capabilities: capabilities, continuation: continuation)
-            }
-        }
-    }
-
-    func cancel(_ id: UUID) async throws {
-        let cancellation = CoreCancellationID(id)
-        await host.cancel(cancellation)
-        try abi.cancel(cancellationHigh: cancellation.high, cancellationLow: cancellation.low)
-        await drain()
-    }
-
-    private func start(
-        _ command: CoreCommand,
-        capabilities: CoreCapabilities,
-        continuation: AsyncThrowingStream<CoreNotification, Error>.Continuation
-    ) async {
+        let pair = AsyncThrowingStream<CoreNotification, Error>.makeStream()
         do {
             try abi.start(command.packet, capabilities: capabilities.rawValue)
             active = ActiveWorkflow(
                 cancellationID: CoreCancellationID(command.cancellationID),
-                continuation: continuation
+                continuation: pair.continuation
             )
+            terminals.removeAll()
             await drain()
         } catch {
-            continuation.finish(throwing: error)
+            pair.continuation.finish(throwing: error)
         }
+        return pair.stream
+    }
+
+    func cancel(_ id: UUID) async throws {
+        _ = try await cancelAndReportExactSettlement(id)
+    }
+
+    func cancelAndReportExactSettlement(_ id: UUID) async throws -> Bool {
+        let cancellation = CoreCancellationID(id)
+        let confirmationAttempted = await host.confirmationAttemptedOrClaimCancellation(cancellation)
+        if confirmationAttempted {
+            guard let terminal = await waitForTerminal(cancellation) else {
+                throw BotaSDKError(
+                    code: .uploadOwnershipUnknown,
+                    operation: .transferRecording,
+                    retryable: false,
+                    detail: "CONFIRM was attempted but its exact terminal settlement is unavailable"
+                )
+            }
+            switch terminal.kind {
+            case .completed:
+                return true
+            case .failed:
+                throw workflowError(terminal)
+            default:
+                throw BotaSDKError(
+                    code: .uploadOwnershipUnknown,
+                    operation: .transferRecording,
+                    retryable: false,
+                    detail: "CONFIRM did not settle as completed or ownership-uncertain"
+                )
+            }
+        }
+        try abi.cancel(cancellationHigh: cancellation.high, cancellationLow: cancellation.low)
+        await host.cancel(cancellation)
+        await drain()
+        return false
     }
 
     private func drain() async {
@@ -70,7 +92,7 @@ actor CoreEngineActor {
                         active?.continuation.yield(notification)
                         if notification.isTerminal {
                             active?.continuation.finish()
-                            active = nil
+                            finishActive(notification)
                         }
                         continue
                     }
@@ -83,7 +105,7 @@ actor CoreEngineActor {
             } while drainRequested
         } catch {
             active?.continuation.finish(throwing: error)
-            active = nil
+            finishActive(nil)
         }
     }
 
@@ -125,6 +147,21 @@ actor CoreEngineActor {
     private func fail(_ error: Error, cancellationID: CoreCancellationID) {
         guard active?.cancellationID == cancellationID else { return }
         active?.continuation.finish(throwing: error)
+        finishActive(nil)
+    }
+
+    private func waitForTerminal(_ cancellationID: CoreCancellationID) async -> CoreNotification? {
+        if let terminal = terminals[cancellationID] { return terminal }
+        guard active?.cancellationID == cancellationID else { return nil }
+        return await withCheckedContinuation { continuation in
+            terminalWaiters[cancellationID, default: []].append(continuation)
+        }
+    }
+
+    private func finishActive(_ terminal: CoreNotification?) {
+        guard let cancellationID = active?.cancellationID else { return }
         active = nil
+        if let terminal { terminals[cancellationID] = terminal }
+        terminalWaiters.removeValue(forKey: cancellationID)?.forEach { $0.resume(returning: terminal) }
     }
 }

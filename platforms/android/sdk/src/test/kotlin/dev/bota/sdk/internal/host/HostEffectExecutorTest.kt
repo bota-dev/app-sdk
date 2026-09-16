@@ -1,9 +1,15 @@
 package dev.bota.sdk.internal.host
 
+import dev.bota.sdk.BotaErrorCode
+import dev.bota.sdk.BotaOperation
+import dev.bota.sdk.BotaSDKError
+import dev.bota.sdk.internal.bluetooth.BluetoothTransportException
+import dev.bota.sdk.internal.bluetooth.EncryptedUploadV2TransferReceiverException
 import dev.bota.sdk.internal.core.CoreCancellationId
 import dev.bota.sdk.internal.core.CoreEffect
 import dev.bota.sdk.internal.core.CoreEffectKind
 import dev.bota.sdk.internal.core.CoreField
+import dev.bota.sdk.internal.core.CoreHostEvent
 import dev.bota.sdk.internal.core.HostEventKind
 import dev.bota.sdk.internal.jni.NativePacket
 import kotlinx.coroutines.async
@@ -20,7 +26,7 @@ import org.junit.Test
 
 class HostEffectExecutorTest {
     @Test
-    fun routesAllThirtyEffectsAndPreservesCorrelation() = runTest {
+    fun routesEveryEffectIncludingAllTwelveV2EffectsAndPreservesCorrelation() = runTest {
         val calls = mutableListOf<Pair<String, CoreEffectKind>>()
         val progress = mutableListOf<Pair<ULong, ULong>>()
         val ports = ports(calls) { effect -> successPayload(effect.kind)?.let(::flowOf) ?: emptyFlow() }
@@ -32,6 +38,7 @@ class HostEffectExecutorTest {
             ports.material,
             ports.recordingSink,
             ports.firmwareBlob,
+            ports.encryptedUploadV2,
         ) { completed, total -> progress += completed to total }
 
         CoreEffectKind.entries.forEachIndexed { index, kind ->
@@ -115,6 +122,64 @@ class HostEffectExecutorTest {
         assertTrue(executor.execute(effect(CoreEffectKind.TimerCancel)).toList().isEmpty())
         assertTrue(scheduled.await().isEmpty())
     }
+
+    @Test
+    fun mapsEveryCoreV2FailureToItsStableExistingAbiCategory() = runTest {
+        val categories = listOf(
+            BotaErrorCode.InvalidInput to 1uL,
+            BotaErrorCode.TruncatedPacket to 2uL,
+            BotaErrorCode.UnknownPacket to 3uL,
+            BotaErrorCode.PayloadTooLarge to 4uL,
+            BotaErrorCode.UnsupportedCapability to 5uL,
+            BotaErrorCode.UnsupportedOperation to 6uL,
+            BotaErrorCode.FeatureUnavailable to 7uL,
+            BotaErrorCode.OperationInProgress to 8uL,
+            BotaErrorCode.UnexpectedEvent to 9uL,
+            BotaErrorCode.DeviceNotFound to 10uL,
+            BotaErrorCode.IdentityMismatch to 11uL,
+            BotaErrorCode.ConnectionFailed to 12uL,
+            BotaErrorCode.PersistenceFailed to 13uL,
+            BotaErrorCode.NotConnected to 14uL,
+            BotaErrorCode.Timeout to 15uL,
+            BotaErrorCode.Cancelled to 16uL,
+            BotaErrorCode.ProtocolRejected to 17uL,
+            BotaErrorCode.IntegrityFailed to 18uL,
+            BotaErrorCode.UploadOwnershipUnknown to 19uL,
+            BotaErrorCode.DownloadFailed to 20uL,
+            BotaErrorCode.Internal to 21uL,
+            BotaErrorCode.Unknown(99u) to 21uL,
+        )
+
+        for ((code, expected) in categories) {
+            val failure = BotaSDKError.Core(code, BotaOperation.Decode, false, 42u.toUShort(), "deterministic")
+            val event = v2Failure(failure)
+            assertEquals(code.toString(), expected, event.packet.requiredUnsigned(47))
+            assertEquals(code.toString(), false, event.packet.requiredBoolean(48))
+            assertEquals(code.toString(), 42uL, event.packet.requiredUnsigned(49))
+        }
+    }
+
+    @Test
+    fun mapsDeterministicAndTransportV2FailuresWithoutRetryabilityDrift() = runTest {
+        val cases = listOf(
+            EncryptedUploadV2TransferReceiverException("prefix mismatch") to (18uL to false),
+            EncryptedUploadV2MaterialRegistryException("invalid receipt", 18u) to (18uL to false),
+            IllegalArgumentException("malformed framing") to (1uL to false),
+            BluetoothTransportException(133, "GATT failed") to (12uL to true),
+            IllegalStateException("unclassified") to (21uL to false),
+        )
+
+        for ((failure, expected) in cases) {
+            val event = v2Failure(failure)
+            assertEquals(failure::class.java.name, expected.first, event.packet.requiredUnsigned(47))
+            assertEquals(failure::class.java.name, expected.second, event.packet.requiredBoolean(48))
+        }
+    }
+}
+
+private suspend fun v2Failure(failure: Throwable): CoreHostEvent {
+    val ports = ports(mutableListOf()) { flow { throw failure } }
+    return executor(ports).execute(effect(CoreEffectKind.EncryptedUploadV2StartTransfer)).toList().single()
 }
 
 private data class Ports(
@@ -125,6 +190,7 @@ private data class Ports(
     val material: MaterialHost,
     val recordingSink: RecordingSinkHost,
     val firmwareBlob: FirmwareBlobHost,
+    val encryptedUploadV2: EncryptedUploadV2Host,
 )
 
 private fun ports(
@@ -138,6 +204,7 @@ private fun ports(
     MaterialHost { effect -> calls += "material" to effect.kind; output(effect) },
     RecordingSinkHost { effect -> calls += "sink" to effect.kind; output(effect) },
     FirmwareBlobHost { effect -> calls += "firmware" to effect.kind; output(effect) },
+    EncryptedUploadV2Host { effect -> calls += "encrypted-v2" to effect.kind; output(effect) },
 )
 
 private fun executor(ports: Ports) = HostEffectExecutor(
@@ -148,6 +215,7 @@ private fun executor(ports: Ports) = HostEffectExecutor(
     ports.material,
     ports.recordingSink,
     ports.firmwareBlob,
+    ports.encryptedUploadV2,
 )
 
 private fun effect(
@@ -221,6 +289,28 @@ private fun successPayload(kind: CoreEffectKind): CoreHostEventPayload? = when (
     CoreEffectKind.StreamingSinkAppendEncrypted -> CoreHostEventPayload(HostEventKind.StreamingSinkAccepted)
     CoreEffectKind.StreamingSinkFinalize -> CoreHostEventPayload(HostEventKind.StreamingSinkFinalized)
     CoreEffectKind.FirmwareBlobRead -> CoreHostEventPayload(HostEventKind.FirmwareChunkRead)
+    CoreEffectKind.EncryptedUploadV2LoadCheckpoint ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2CheckpointLoaded)
+    CoreEffectKind.EncryptedUploadV2DeleteCheckpoint,
+    CoreEffectKind.EncryptedUploadV2Abort -> null
+    CoreEffectKind.EncryptedUploadV2TruncateSink ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2SinkTruncated)
+    CoreEffectKind.EncryptedUploadV2PrepareSession ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2SessionPrepared)
+    CoreEffectKind.EncryptedUploadV2StartTransfer ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2TransferStarted)
+    CoreEffectKind.EncryptedUploadV2RepairWindow ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2WindowStaged)
+    CoreEffectKind.EncryptedUploadV2SaveCheckpoint ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2CheckpointSaved)
+    CoreEffectKind.EncryptedUploadV2AcknowledgeWindow ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2WindowAcknowledged)
+    CoreEffectKind.EncryptedUploadV2StageArtifacts ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2ArtifactsStaged)
+    CoreEffectKind.EncryptedUploadV2AwaitReceipt ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2ReceiptAccepted)
+    CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt ->
+        CoreHostEventPayload(HostEventKind.EncryptedUploadV2RecordingConfirmed)
 }
 
 private fun isPortEffect(kind: CoreEffectKind): Boolean =

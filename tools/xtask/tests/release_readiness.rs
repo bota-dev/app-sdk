@@ -85,6 +85,7 @@ fn release_metadata_fixture() -> PathBuf {
         "tools/xtask/Cargo.toml",
         "frameworks/react-native/package.json",
         "frameworks/react-native/package-lock.json",
+        "frameworks/web/package.json",
         "frameworks/flutter/bota_flutter_sdk/pubspec.yaml",
         "frameworks/flutter/bota_flutter_sdk/android/sdk-version.toml",
         "frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Package.swift",
@@ -101,7 +102,7 @@ fn release_metadata_fixture() -> PathBuf {
 }
 
 #[test]
-fn version_tag_publishable_metadata_and_flutter_android_package_are_synchronized() {
+fn version_tag_and_publishable_metadata_are_synchronized() {
     let release = xtask::release::verify_release(&root(), "v1.2.0-beta.0").unwrap();
 
     assert_eq!(release.version, "1.2.0-beta.0");
@@ -123,6 +124,11 @@ fn every_public_package_version_copy_fails_closed_on_drift() {
         ),
         (
             "frameworks/react-native/package-lock.json",
+            "\"version\": \"1.2.0-beta.0\"",
+            "\"version\": \"1.2.0-beta.1\"",
+        ),
+        (
+            "frameworks/web/package.json",
             "\"version\": \"1.2.0-beta.0\"",
             "\"version\": \"1.2.0-beta.1\"",
         ),
@@ -193,7 +199,7 @@ fn compatibility_metadata_reports_apple_and_the_android_release_candidate() {
 #[test]
 fn mismatched_or_unprefixed_tags_are_rejected() {
     let wrong_version = xtask::release::verify_release(&root(), "v1.0.0-alpha.1").unwrap_err();
-    let missing_prefix = xtask::release::verify_release(&root(), "1.1.0").unwrap_err();
+    let missing_prefix = xtask::release::verify_release(&root(), "1.2.0-beta.0").unwrap_err();
 
     assert!(wrong_version.contains("does not match"));
     assert!(missing_prefix.contains("must start with v"));
@@ -209,6 +215,26 @@ fn ci_workflow_validates_the_current_release_manifest() {
 
     assert!(contents.contains(&expected));
     assert!(!contents.contains("release/examples/1.0.0.json"));
+}
+
+#[test]
+fn verification_workflows_are_manual_only() {
+    for path in [
+        ".github/workflows/ci.yml",
+        ".github/workflows/license-gate.yml",
+    ] {
+        let contents = fs::read_to_string(root().join(path)).unwrap();
+        let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
+        let triggers = workflow["on"].as_mapping().unwrap();
+
+        assert_eq!(triggers.len(), 1, "{path} must remain manual-only");
+        assert!(
+            triggers.contains_key(&serde_yaml_ng::Value::String(
+                "workflow_dispatch".to_owned()
+            )),
+            "{path} must expose workflow_dispatch"
+        );
+    }
 }
 
 #[test]
@@ -296,7 +322,7 @@ fn release_workflow_packs_publishes_and_verifies_the_react_native_package() {
 
     let publish = &workflow["jobs"]["publish"];
     assert_eq!(publish["permissions"]["id-token"].as_str(), Some("write"));
-    assert!(contents.contains("needs: [verify, apple, android, react-native]"));
+    assert!(contents.contains("needs: [verify, apple, android, react-native, web]"));
     assert!(contents.contains("registry-url: https://registry.npmjs.org"));
     assert!(contents.contains("target/react-native-release"));
     assert!(
@@ -309,6 +335,77 @@ fn release_workflow_packs_publishes_and_verifies_the_react_native_package() {
     );
     assert!(!contents.contains("NPM_TOKEN"));
     assert!(!contents.contains("NODE_AUTH_TOKEN"));
+}
+
+#[test]
+fn web_package_version_and_release_artifact_are_synchronized() {
+    let sdk_version: toml::Value =
+        toml::from_str(&fs::read_to_string(root().join("sdk-version.toml")).unwrap()).unwrap();
+    let expected = sdk_version["version"].as_str().unwrap();
+    let package: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(root().join("frameworks/web/package.json")).unwrap(),
+    )
+    .unwrap();
+    let manifest: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(
+            root()
+                .join("release/examples")
+                .join(format!("{expected}.json")),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+
+    assert_eq!(package["version"], expected);
+    assert!(
+        manifest["artifacts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|artifact| {
+                artifact["platform"] == "web"
+                    && artifact["packageIdentifier"] == "@bota.dev/web-sdk"
+                    && artifact["version"] == expected
+            })
+    );
+}
+
+#[test]
+fn workflows_build_and_preserve_the_exact_web_candidate() {
+    let ci_contents = fs::read_to_string(root().join(".github/workflows/ci.yml")).unwrap();
+    let ci: serde_yaml_ng::Value = serde_yaml_ng::from_str(&ci_contents).unwrap();
+    assert_eq!(ci["jobs"]["web"]["runs-on"].as_str(), Some("ubuntu-latest"));
+    assert!(ci_contents.contains("npm run web:verify"));
+    assert!(ci_contents.contains("name: web-ci-${{ github.sha }}"));
+    assert!(ci_contents.contains("path: target/web-release/"));
+    assert_eq!(
+        ci["jobs"]["release-candidate"]["needs"],
+        serde_yaml_ng::from_str::<serde_yaml_ng::Value>(
+            "[android-native, apple, react-native, web, flutter]"
+        )
+        .unwrap()
+    );
+    assert!(ci_contents.contains("target/web-release target/flutter-release"));
+
+    let release_contents =
+        fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
+    let release: serde_yaml_ng::Value = serde_yaml_ng::from_str(&release_contents).unwrap();
+    assert_eq!(
+        release["jobs"]["web"]["runs-on"].as_str(),
+        Some("ubuntu-latest")
+    );
+    assert!(release_contents.contains("name: web-release-${{ github.ref_name }}"));
+    assert!(release_contents.contains("path: target/web-release/"));
+    assert!(release_contents.contains("@bota.dev/web-sdk@$RELEASE_VERSION"));
+    let inventory_command = release["jobs"]["publish"]["steps"]
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .find(|step| step["name"] == "Verify annotated tag and candidate inventory")
+        .unwrap()["run"]
+        .as_str()
+        .unwrap();
+    assert!(inventory_command.contains("target/web-release"));
 }
 
 #[test]
@@ -379,7 +476,7 @@ fn ci_emits_the_exact_release_candidate_inventory_used_for_tagging() {
     assert_eq!(
         workflow["jobs"]["release-candidate"]["needs"],
         serde_yaml_ng::from_str::<serde_yaml_ng::Value>(
-            "[android-native, apple, react-native, flutter]"
+            "[android-native, apple, react-native, web, flutter]"
         )
         .unwrap()
     );
@@ -388,6 +485,7 @@ fn ci_emits_the_exact_release_candidate_inventory_used_for_tagging() {
     assert!(contents.contains("name: apple-package-${{ github.sha }}"));
     assert!(contents.contains("name: flutter-ci-${{ github.sha }}"));
     assert!(contents.contains("path: target/flutter-release/"));
+    assert!(contents.contains("name: web-ci-${{ github.sha }}"));
     assert!(contents.contains("tools/release/write-candidate-inventory.sh"));
     assert!(contents.contains("release-candidate-files.json.sha256"));
     assert!(contents.contains("name: release-candidate-${{ github.sha }}"));
@@ -666,7 +764,7 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     assert!(contents.contains("central-portal-state.json"));
     assert!(contents.contains("central-bundle-files.json"));
     assert!(contents.contains("central-bundle.zip"));
-    assert!(contents.contains("needs: [verify, apple, android, react-native]"));
+    assert!(contents.contains("needs: [verify, apple, android, react-native, web]"));
     assert!(contents.contains("matrix:\n        api: [26, 35]"));
     assert!(contents.contains("tools/android/test-public-consumer.sh --api ${{ matrix.api }}"));
     assert!(!contents.contains("echo \"published=false\""));
@@ -701,7 +799,7 @@ fn release_workflow_never_publishes_npm_without_the_beta_tag() {
         .filter(|line| line.contains("npm@$NPM_CLI_VERSION") && line.contains(" publish "))
         .collect::<Vec<_>>();
 
-    assert_eq!(npm_publish_lines.len(), 2);
+    assert_eq!(npm_publish_lines.len(), 4);
     for line in npm_publish_lines {
         assert!(line.contains("--tag \"$NPM_DIST_TAG\""), "{line}");
     }

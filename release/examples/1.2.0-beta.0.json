@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "sdkFamily": "bota-app-sdk",
   "sdkVersion": "1.2.0-beta.0",
-  "sourceRevision": "2a65e43ee462b3231546e07274abf3561c1503eb",
+  "sourceRevision": "0962b92288fdd1867cff78e77dfb8d2cb4ffa598",
   "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.0",
@@ -16,7 +16,7 @@
       "name": "BotaDeviceSDKCore.xcframework.zip",
       "ecosystem": "swiftpm",
       "version": "1.2.0-beta.0",
-      "checksumSha256": "0ffff173028b50902328771221e7c7b129665111de3101484b289d23c494f82e",
+      "checksumSha256": "fff9a356fe8b0f1ad66df4a99b5842e6c7ba5b80990fca02b38b47bfcff4df2a",
       "capabilities": [
         "apple_device_sdk"
       ]
@@ -50,7 +50,7 @@
       "ecosystem": "pub",
       "version": "1.2.0-beta.0",
       "checksumSha256": "f880d3925dca2566a099f2eed8c15ec547e9fa2a4f4e7a4992d8f29eb74f834f",
-      "sourceRevision": "2a65e43ee462b3231546e07274abf3561c1503eb",
+      "sourceRevision": "0962b92288fdd1867cff78e77dfb8d2cb4ffa598",
       "normalizedArchiveSha256": "c3f5bd28a122938a26304ae04157620953f3cf1a563b74a5c8617a364cd73c11",
       "generator": {
         "name": "pigeon",
@@ -346,6 +346,15 @@
       "capabilities": [
         "flutter_sdk"
       ]
+    },
+    {
+      "platform": "web",
+      "packageIdentifier": "@bota.dev/web-sdk",
+      "name": "bota.dev-web-sdk-1.2.0-beta.0.tgz",
+      "ecosystem": "npm",
+      "version": "1.2.0-beta.0",
+      "checksumSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "capabilities": ["web_bluetooth_read_only"]
     }
   ]
 }

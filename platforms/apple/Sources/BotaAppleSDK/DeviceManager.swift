@@ -53,6 +53,14 @@ protocol CoreWorkflowRunning: Sendable {
         capabilities: CoreCapabilities
     ) async -> AsyncThrowingStream<CoreNotification, Error>
     func cancel(_ id: UUID) async throws
+    func cancelAndReportExactSettlement(_ id: UUID) async throws -> Bool
+}
+
+extension CoreWorkflowRunning {
+    func cancelAndReportExactSettlement(_ id: UUID) async throws -> Bool {
+        try await cancel(id)
+        return false
+    }
 }
 
 extension CoreEngineActor: CoreWorkflowRunning {}
@@ -70,6 +78,11 @@ struct DeviceRuntime: Sendable {
     let directWrite: @Sendable (String, String, String, Data) async throws -> Void
     let directSubscribe: @Sendable (String, String, String) async throws -> AsyncThrowingStream<Data, Error>
     let directUnsubscribe: @Sendable (String, String, String) async throws -> Void
+    let readEncryptedUploadV2Capabilities: @Sendable (String) async throws -> EncryptedUploadV2CapabilitySnapshot
+    let encryptedUploadV2Checkpoint: @Sendable (String, String, UInt32) async throws -> EncryptedUploadV2Checkpoint?
+    let encryptedUploadV2MaximumWriteLength: @Sendable (String) async throws -> Int
+    let registerEncryptedUploadV2Material: @Sendable (String, EncryptedUploadV2Material) async throws -> Void
+    let terminateEncryptedUploadV2Material: @Sendable (String, EncryptedUploadV2TerminalOutcome) async -> Void
     let delay: @Sendable (UInt64) async throws -> Void
     let parseRecordingState: @Sendable (Data) throws -> RecordingState
     let parseRecordingControlResult: @Sendable (Data) throws -> RecordingControlResult
@@ -134,6 +147,19 @@ struct DeviceRuntime: Sendable {
             throw NativeHostError.missingResource("direct device subscription")
         },
         directUnsubscribe: @escaping @Sendable (String, String, String) async throws -> Void = { _, _, _ in },
+        readEncryptedUploadV2Capabilities: @escaping @Sendable
+            (String) async throws -> EncryptedUploadV2CapabilitySnapshot = { _ in
+            throw NativeHostError.missingResource("encrypted upload v2 capabilities")
+        },
+        encryptedUploadV2Checkpoint: @escaping @Sendable
+            (String, String, UInt32) async throws -> EncryptedUploadV2Checkpoint? = { _, _, _ in nil },
+        encryptedUploadV2MaximumWriteLength: @escaping @Sendable (String) async throws -> Int = { _ in
+            throw NativeHostError.missingResource("encrypted upload v2 write limit")
+        },
+        registerEncryptedUploadV2Material: @escaping @Sendable
+            (String, EncryptedUploadV2Material) async throws -> Void = { _, _ in },
+        terminateEncryptedUploadV2Material: @escaping @Sendable
+            (String, EncryptedUploadV2TerminalOutcome) async -> Void = { _, _ in },
         delay: @escaping @Sendable (UInt64) async throws -> Void = { milliseconds in
             try await Task.sleep(nanoseconds: milliseconds * 1_000_000)
         },
@@ -229,6 +255,11 @@ struct DeviceRuntime: Sendable {
         self.directWrite = directWrite
         self.directSubscribe = directSubscribe
         self.directUnsubscribe = directUnsubscribe
+        self.readEncryptedUploadV2Capabilities = readEncryptedUploadV2Capabilities
+        self.encryptedUploadV2Checkpoint = encryptedUploadV2Checkpoint
+        self.encryptedUploadV2MaximumWriteLength = encryptedUploadV2MaximumWriteLength
+        self.registerEncryptedUploadV2Material = registerEncryptedUploadV2Material
+        self.terminateEncryptedUploadV2Material = terminateEncryptedUploadV2Material
         self.delay = delay
         self.parseRecordingState = parseRecordingState
         self.parseRecordingControlResult = parseRecordingControlResult
@@ -338,7 +369,7 @@ public actor DeviceManager {
                     case .started, .connectionEstablished, .progress, .retrying,
                          .deviceUploadPreserved, .bleFallbackReady, .firmwareProgress,
                          .deviceLog, .streamingPaused, .streamingResumed, .streamingCompleted,
-                         .completed, .cancelled:
+                         .encryptedUploadV2Staged, .completed, .cancelled:
                         break
                     }
                 }
@@ -508,7 +539,7 @@ public actor DeviceManager {
                 case .started, .deviceDiscovered, .progress, .retrying,
                      .deviceUploadPreserved, .bleFallbackReady, .firmwareProgress,
                      .deviceLog, .streamingPaused, .streamingResumed, .streamingCompleted,
-                     .completed, .cancelled:
+                     .encryptedUploadV2Staged, .completed, .cancelled:
                     break
                 }
             }

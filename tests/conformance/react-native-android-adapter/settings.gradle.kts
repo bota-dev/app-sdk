@@ -14,11 +14,16 @@ includeBuild("../../../frameworks/react-native/node_modules/@react-native/gradle
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
+        exclusiveContent {
+            forRepository {
+                maven {
+                    url = uri(providers.gradleProperty("botaSdkRepository").get())
+                }
+            }
+            filter { includeGroup("dev.bota") }
+        }
         google()
         mavenCentral()
-        maven {
-            url = uri(providers.gradleProperty("botaSdkRepository").get())
-        }
     }
 }
 

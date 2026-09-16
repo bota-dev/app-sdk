@@ -118,7 +118,19 @@ internal class BluetoothGattHost(
             CoreEffectKind.StreamingSinkAppendEncrypted,
             CoreEffectKind.StreamingSinkFinalize,
             CoreEffectKind.StreamingSinkDiscard,
-            CoreEffectKind.FirmwareBlobRead -> invalid("non-Bluetooth effect reached BluetoothGattHost")
+            CoreEffectKind.FirmwareBlobRead,
+            CoreEffectKind.EncryptedUploadV2LoadCheckpoint,
+            CoreEffectKind.EncryptedUploadV2DeleteCheckpoint,
+            CoreEffectKind.EncryptedUploadV2TruncateSink,
+            CoreEffectKind.EncryptedUploadV2PrepareSession,
+            CoreEffectKind.EncryptedUploadV2StartTransfer,
+            CoreEffectKind.EncryptedUploadV2RepairWindow,
+            CoreEffectKind.EncryptedUploadV2SaveCheckpoint,
+            CoreEffectKind.EncryptedUploadV2AcknowledgeWindow,
+            CoreEffectKind.EncryptedUploadV2StageArtifacts,
+            CoreEffectKind.EncryptedUploadV2AwaitReceipt,
+            CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt,
+            CoreEffectKind.EncryptedUploadV2Abort -> invalid("non-Bluetooth effect reached BluetoothGattHost")
         }
     }
 

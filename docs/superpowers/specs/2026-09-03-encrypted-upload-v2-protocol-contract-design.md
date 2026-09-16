@@ -1,8 +1,15 @@
 # Encrypted Upload v2 Protocol Contract Design
 
-**Status:** Approved; protocol-contract implementation pending
+**Status:** Approved; canonical contract and inspection implemented, runtime workflow pending
 
 **Approved:** 2026-09-03
+
+**Implementation snapshot (2026-09-03):** The machine-readable manifest,
+generated constants, bounds-checked Rust codecs, canonical vectors, Apple and
+Android internal inspection, and React Native byte/runtime boundary gates are
+implemented. Profile selection, transfer orchestration, staging, completion,
+receipt-gated deletion, and firmware capability advertisement remain
+unimplemented.
 
 ## Decision
 
@@ -739,9 +746,9 @@ legacy retry when the selected operation was v2.
 
 New firmware rejecting the exact legacy START because `v2_required` is durably
 applied sends the existing legacy ERROR packet shape on
-`CHAR_RECORDING_TRANSFER` with additive legacy error code `0x21`
+`CHAR_RECORDING_TRANSFER` with additive legacy error code `0x22`
 (`ENCRYPTED_UPLOAD_V2_REQUIRED`). It never sends a v2 ERROR to an old
-characteristic. Updated SDKs map `0x21` to a stable non-retryable policy error;
+characteristic. Updated SDKs map `0x22` to a stable non-retryable policy error;
 older SDKs may surface an unknown device error but still receive no new format.
 
 ## SDK Selection and Public Boundary

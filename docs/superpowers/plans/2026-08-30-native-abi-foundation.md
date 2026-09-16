@@ -196,7 +196,7 @@ Packet kind ranges are fixed:
 0x0201-0x0220 host events
 0x0301-0x0340 host effects
 0x0401-0x0420 workflow notifications
-0x0501-0x0520 protocol values
+0x0501-0x05ff protocol values (the foundation slice initially allocated through 0x0520)
 ```
 
 The view layout is:
@@ -454,7 +454,7 @@ git commit -m "feat: dispatch typed native host events" \
 
 **Interfaces:**
 - Consumes: core status, recording-list, transfer, OTA, provisioning, settings, and log codecs.
-- Produces: `bota_device_sdk_v1_protocol_decode` and `bota_device_sdk_v1_protocol_encode` using packet kinds `0x0501` through `0x0520`.
+- Produces: `bota_device_sdk_v1_protocol_decode` and `bota_device_sdk_v1_protocol_encode` using the initial packet-kind allocation within `0x0501` through `0x0520`; later additive protocol inspection kinds remain in the reserved `0x05xx` range.
 
 - [ ] **Step 1: Write failing codec parity tests**
 
