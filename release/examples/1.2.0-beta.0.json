@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "sdkFamily": "bota-app-sdk",
   "sdkVersion": "1.2.0-beta.0",
-  "sourceRevision": "33430d80e7709408f76e46df0dd4d98fed2b5631",
+  "sourceRevision": "a2ebd8a4806dff4fda038f5f24ff6c510dcc785d",
   "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.0",
@@ -50,7 +50,7 @@
       "ecosystem": "pub",
       "version": "1.2.0-beta.0",
       "checksumSha256": "1904d84ed37cdd78c3e375f65fb039db635521a0faf742757fe7f560d3e28129",
-      "sourceRevision": "33430d80e7709408f76e46df0dd4d98fed2b5631",
+      "sourceRevision": "a2ebd8a4806dff4fda038f5f24ff6c510dcc785d",
       "normalizedArchiveSha256": "ffc53d282c266525355f7834ace655e822ec117eab473bc1642a5d92d1278d18",
       "generator": {
         "name": "pigeon",
