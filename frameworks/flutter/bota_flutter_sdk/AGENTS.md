@@ -45,7 +45,9 @@ The Swift Package and CocoaPods integrations compile the same adapter source in
 Swift 5 language mode. Public metadata resolves the exact synchronized
 `BotaAppleSDK` and contains no local override. Local adapter and consumer tools
 patch only disposable copies of the Swift manifest to use the nested Apple
-source package; never add `BOTA_APPLE_SDK_PACKAGE_PATH` to public package files.
+source package. Those overrides must retain the public package identity
+`app-sdk`; `BotaAppleSDK` is the product name. Never add
+`BOTA_APPLE_SDK_PACKAGE_PATH` to public package files.
 
 ## Release Candidate
 
@@ -59,6 +61,11 @@ normalized inventory, lock, manifest, and evidence under
 `target/flutter-release/`. The archive verifier rejects hidden/local files,
 build outputs, credentials, links, unsafe paths, extras, and checksum drift.
 The command prepares evidence only; it must never publish a package.
+
+Automatic PR/main CI uses `tools/flutter/package-release.sh --ci` to run the
+same verification. Occupied beta.0 returns `candidate-ready=false` without a
+release directory; later synchronized versions return `candidate-ready=true`
+and preserve the deterministic candidate.
 
 ## Example
 
@@ -75,8 +82,10 @@ Run from the repository root:
 ```bash
 tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
 tools/flutter/test-android-adapter.sh
+tools/flutter/test-apple-adapter.sh
 tools/flutter/test-consumers.sh
 npm run flutter:verify
+tools/flutter/package-release.sh --ci
 tools/flutter/package-release.sh --check
 tools/flutter/run-dart.sh format --output=none --set-exit-if-changed \
   frameworks/flutter/bota_flutter_sdk/lib \

@@ -232,7 +232,7 @@ SWIFT_MANIFEST="$local_plugin_root/ios/bota_flutter_sdk/Package.swift" \
       url: "https://github.com/bota-dev/app-sdk.git",
       exact: "${process.env.SDK_VERSION}"
     ),`;
-    const replacement = `.package(name: "BotaAppleSDK", path: ${JSON.stringify(process.env.APPLE_PACKAGE)}),`;
+    const replacement = `.package(name: "app-sdk", path: ${JSON.stringify(process.env.APPLE_PACKAGE)}),`;
     if (!source.includes(marker)) throw new Error("public BotaAppleSDK dependency marker changed");
     fs.writeFileSync(path, source.replace(marker, replacement));
   '
