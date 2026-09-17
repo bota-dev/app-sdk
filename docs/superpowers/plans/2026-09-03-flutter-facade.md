@@ -10,6 +10,19 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-03-flutter-facade-design.md`
 
+## Execution Status (2026-09-16)
+
+Tasks 1-8 and Task 9's implementation, review, evidence, and local verification
+steps are complete. The detailed checkboxes below preserve the original
+test-first execution recipe; completion evidence is recorded in
+`release/evidence/1.2.0-beta.0-flutter-review.md` and the branch history.
+
+The implementation is ready for local integration. Remote push, tagging, and
+publication are deliberately excluded from this run. Publication also remains
+blocked because immutable `v1.2.0-beta.0` identifies earlier non-Flutter
+source; a repository owner must select a new synchronized version before the
+strict release gate may create a Flutter candidate.
+
 ## Global Constraints
 
 - The package is `bota_flutter_sdk` at `frameworks/flutter/bota_flutter_sdk/` with native namespace `dev.bota.sdk.flutter`.

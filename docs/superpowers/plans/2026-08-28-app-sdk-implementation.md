@@ -959,7 +959,11 @@ Implement in separate plans because capability and lifecycle contracts differ:
   identity/status/capability snapshots. Foreground recording transfer, upload,
   resumable errors, Electron validation, and physical-browser acceptance remain
   open;
-- Flutter: native facade delegation on Apple and Android before desktop support;
+- Flutter: the Apple/Android native-delegating facade, typed Pigeon bridge,
+  lifecycle ownership, release-mode consumers, package verification, and
+  publication tooling are implemented and locally verified. Publication waits
+  for a new synchronized version because immutable `v1.2.0-beta.0` predates
+  the Flutter source. Desktop support remains a later slice;
 - Windows: C# facade plus WinRT GATT, followed by Flutter Windows integration.
 
 Never advertise unsupported background scan or reconnect behavior as parity.
