@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.0-beta.1 (unreleased)
+
+- Selected the first synchronized Flutter-bearing candidate after immutable
+  non-Flutter `v1.2.0-beta.0` occupied the original identity.
+- Synchronized Apple, Android, React Native, Flutter, Web, Rust, protocol, and
+  release metadata for local candidate verification. This entry does not claim
+  publication on pub.dev or any other registry.
+
 ## 1.2.0-beta.0 (historical unpublished Flutter metadata)
 
 - Projected adapter-only bridge failures into sanitized stable Dart error codes

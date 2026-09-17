@@ -92,7 +92,7 @@ fn release_metadata_fixture() -> PathBuf {
         "platforms/android/gradle.properties",
         "platforms/apple/BotaAppleSDK.podspec",
         "protocol/compatibility/firmware-compatibility.json",
-        "release/examples/1.2.0-beta.0.json",
+        "release/examples/1.2.0-beta.1.json",
     ] {
         let destination = temp_root.join(path);
         fs::create_dir_all(destination.parent().unwrap()).unwrap();
@@ -101,11 +101,48 @@ fn release_metadata_fixture() -> PathBuf {
     temp_root
 }
 
+fn occupied_flutter_release_fixture() -> PathBuf {
+    let temp_root = std::env::temp_dir().join(format!(
+        "bota-flutter-occupied-release-test-{}-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+        NEXT_ANDROID_FIXTURE_ID.fetch_add(1, Ordering::Relaxed),
+    ));
+    let script = temp_root.join("tools/flutter/package-release.sh");
+    fs::create_dir_all(script.parent().unwrap()).unwrap();
+    fs::copy(root().join("tools/flutter/package-release.sh"), &script).unwrap();
+    fs::write(
+        temp_root.join("sdk-version.toml"),
+        "version = \"1.2.0-beta.0\"\n",
+    )
+    .unwrap();
+
+    for args in [
+        vec!["init", "--quiet"],
+        vec!["config", "user.email", "test@example.com"],
+        vec!["config", "user.name", "Release Test"],
+        vec!["add", "."],
+        vec!["commit", "--quiet", "-m", "fixture"],
+    ] {
+        let status = Command::new("git")
+            .args(args)
+            .current_dir(&temp_root)
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
+
+    temp_root
+}
+
 #[test]
 fn version_tag_and_publishable_metadata_are_synchronized() {
-    let release = xtask::release::verify_release(&root(), "v1.2.0-beta.0").unwrap();
+    let release = xtask::release::verify_release(&root(), "v1.2.0-beta.1").unwrap();
 
-    assert_eq!(release.version, "1.2.0-beta.0");
+    assert_eq!(release.version, "1.2.0-beta.1");
     assert_eq!(release.crate_name, "bota-device-sdk-core");
 }
 
@@ -114,43 +151,43 @@ fn every_public_package_version_copy_fails_closed_on_drift() {
     for (path, needle, replacement) in [
         (
             "package-lock.json",
-            "\"version\": \"1.2.0-beta.0\"",
             "\"version\": \"1.2.0-beta.1\"",
+            "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/react-native/package.json",
-            "\"version\": \"1.2.0-beta.0\"",
             "\"version\": \"1.2.0-beta.1\"",
+            "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/react-native/package-lock.json",
-            "\"version\": \"1.2.0-beta.0\"",
             "\"version\": \"1.2.0-beta.1\"",
+            "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/web/package.json",
-            "\"version\": \"1.2.0-beta.0\"",
             "\"version\": \"1.2.0-beta.1\"",
+            "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/flutter/bota_flutter_sdk/pubspec.yaml",
-            "version: 1.2.0-beta.0",
             "version: 1.2.0-beta.1",
+            "version: 1.2.0-beta.2",
         ),
         (
             "frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Package.swift",
-            "exact: \"1.2.0-beta.0\"",
             "exact: \"1.2.0-beta.1\"",
+            "exact: \"1.2.0-beta.2\"",
         ),
         (
             "platforms/android/gradle.properties",
-            "VERSION_NAME=1.2.0-beta.0",
             "VERSION_NAME=1.2.0-beta.1",
+            "VERSION_NAME=1.2.0-beta.2",
         ),
         (
             "platforms/apple/BotaAppleSDK.podspec",
-            "spec.version = \"1.2.0-beta.0\"",
             "spec.version = \"1.2.0-beta.1\"",
+            "spec.version = \"1.2.0-beta.2\"",
         ),
     ] {
         let fixture = release_metadata_fixture();
@@ -159,7 +196,7 @@ fn every_public_package_version_copy_fails_closed_on_drift() {
         assert!(contents.contains(needle));
         fs::write(&target, contents.replacen(needle, replacement, 1)).unwrap();
 
-        let error = xtask::release::verify_release(&fixture, "v1.2.0-beta.0").unwrap_err();
+        let error = xtask::release::verify_release(&fixture, "v1.2.0-beta.1").unwrap_err();
         assert!(
             error.contains("version") || error.contains("Version"),
             "{path}: {error}"
@@ -199,7 +236,7 @@ fn compatibility_metadata_reports_apple_and_the_android_release_candidate() {
 #[test]
 fn mismatched_or_unprefixed_tags_are_rejected() {
     let wrong_version = xtask::release::verify_release(&root(), "v1.0.0-alpha.1").unwrap_err();
-    let missing_prefix = xtask::release::verify_release(&root(), "1.2.0-beta.0").unwrap_err();
+    let missing_prefix = xtask::release::verify_release(&root(), "1.2.0-beta.1").unwrap_err();
 
     assert!(wrong_version.contains("does not match"));
     assert!(missing_prefix.contains("must start with v"));
@@ -207,7 +244,7 @@ fn mismatched_or_unprefixed_tags_are_rejected() {
 
 #[test]
 fn ci_workflow_validates_the_current_release_manifest() {
-    let release = xtask::release::verify_release(&root(), "v1.2.0-beta.0").unwrap();
+    let release = xtask::release::verify_release(&root(), "v1.2.0-beta.1").unwrap();
     let path = root().join(".github/workflows/ci.yml");
     let contents = fs::read_to_string(path).unwrap();
     let _: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
@@ -593,10 +630,14 @@ fn flutter_ci_verifies_occupied_versions_and_only_uploads_releasable_candidates(
 #[test]
 fn flutter_candidate_tooling_refuses_the_occupied_beta_zero_identity() {
     let contents = fs::read_to_string(root().join("tools/flutter/package-release.sh")).unwrap();
-    let output = Command::new(root().join("tools/flutter/package-release.sh"))
+    let fixture = occupied_flutter_release_fixture();
+    let output = Command::new("bash")
+        .arg(fixture.join("tools/flutter/package-release.sh"))
         .arg("--check")
         .output()
         .unwrap();
+
+    fs::remove_dir_all(fixture).unwrap();
 
     assert_eq!(output.status.code(), Some(1));
     assert_eq!(

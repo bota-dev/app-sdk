@@ -28,7 +28,7 @@ The already-published `1.1.0` artifacts are reclassified operationally:
 
 The historical next-release target `1.2.0-beta.0` is now occupied by an
 immutable annotated tag and must not be reused for different source. The next
-synchronized App SDK version requires an explicit owner decision. A prerelease
+synchronized App SDK version is selected as `1.2.0-beta.1`. A prerelease
 must not be created for the already-finalized `1.1.0` tuple because that would move
 semantic-version precedence backward.
 

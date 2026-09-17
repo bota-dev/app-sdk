@@ -9,7 +9,7 @@ to WebAssembly.
 ## Install
 
 ```bash
-npm install @bota.dev/web-sdk@1.2.0-beta.0
+npm install @bota.dev/web-sdk@1.2.0-beta.1
 ```
 
 Use a secure context and a browser that implements Web Bluetooth. The initial

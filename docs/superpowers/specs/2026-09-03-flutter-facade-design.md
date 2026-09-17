@@ -12,9 +12,9 @@ stack, another workflow engine, or a backend API client.
 
 The original first Flutter-bearing synchronized release target was
 `1.2.0-beta.0`. That identity is now occupied by an immutable annotated tag for
-non-Flutter source and must not be reused. A replacement version is an explicit
-owner decision; Apple, Android, React Native, Flutter, and Web must still use
-the same selected version from `sdk-version.toml`.
+non-Flutter source and must not be reused. The selected replacement is
+`1.2.0-beta.1`; Apple, Android, React Native, Flutter, and Web use that same
+version from `sdk-version.toml`.
 
 ## Scope
 
@@ -228,8 +228,8 @@ identifier `bota_flutter_sdk` only after these gates pass.
 
 pub.dev requires a package's first version to be published interactively. The
 occupied `1.2.0-beta.0` identity cannot be that first Flutter publication. Once
-an owner selects a new synchronized version and explicitly authorizes its
-first-publish mechanism, the fail-closed sequence remains:
+selected `1.2.0-beta.1` receives explicit authorization for its first-publish
+mechanism, the fail-closed sequence remains:
 
 1. CI builds and preserves the exact Flutter candidate from the annotated tag.
 2. The protected release environment pauses before public publication.

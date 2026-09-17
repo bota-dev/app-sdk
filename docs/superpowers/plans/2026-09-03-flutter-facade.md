@@ -19,17 +19,17 @@ test-first execution recipe; completion evidence is recorded in
 
 The implementation was fast-forwarded into local `main` after all local gates
 passed. Remote push, tagging, and publication are deliberately excluded from
-this run. Publication also remains blocked because immutable
-`v1.2.0-beta.0` identifies earlier non-Flutter source; a repository owner must
-select a new synchronized version before the strict release gate may create a
-Flutter candidate.
+this run. Immutable `v1.2.0-beta.0` identifies earlier non-Flutter source;
+`1.2.0-beta.1` is now selected for the synchronized Flutter-bearing candidate.
+The strict local release gate may prepare it, but tagging and publication still
+require separate authorization.
 
 ## Global Constraints
 
 - The package is `bota_flutter_sdk` at `frameworks/flutter/bota_flutter_sdk/` with native namespace `dev.bota.sdk.flutter`.
 - Consumer floors are Dart `>=3.11.0 <4.0.0`, Flutter `>=3.41.0`, iOS 15, and Android API 26.
 - CI pins Flutter 3.47.2, Dart 3.13.2, and Pigeon 28.0.0 exactly.
-- The first synchronized Flutter release is `1.2.0-beta.0`; every platform version comes from `sdk-version.toml`.
+- The original first synchronized Flutter release target was `1.2.0-beta.0`; selected replacement `1.2.0-beta.1` and every platform version come from `sdk-version.toml`.
 - Flutter supports iOS and Android only in this slice; live audio streaming is excluded and must not be advertised.
 - Dart never implements BLE, reducers, encryption, persistence, firmware download, or recording byte transfer.
 - Recording and firmware bodies, raw BLE packets, device-private material, and native Bluetooth objects never cross a Flutter channel. Application-supplied WiFi credentials and one-shot provisioning/reset material may cross request-bound commands or callbacks; they never appear in stream events, logs, or plugin persistence.

@@ -14,8 +14,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "BotaDeviceSDKC",
-            url: "https://github.com/bota-dev/app-sdk/releases/download/v1.2.0-beta.0/BotaDeviceSDKCore.xcframework.zip",
-            checksum: "fff9a356fe8b0f1ad66df4a99b5842e6c7ba5b80990fca02b38b47bfcff4df2a"
+            url: "https://github.com/bota-dev/app-sdk/releases/download/v1.2.0-beta.1/BotaDeviceSDKCore.xcframework.zip",
+            checksum: "7ac4c8a5b2faa8330c85e77d604f107f79fa63616192c2b1f7b2ef833176c010"
         ),
         .target(
             name: "BotaAppleSDK",

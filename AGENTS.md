@@ -87,13 +87,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   remote native substitute.
 - `tools/flutter/package-release.sh --ci` is the automatic PR/main verification
   path. It runs the complete non-publishing Flutter and fresh-consumer gates,
-  emits `candidate-ready=false`, and leaves no Flutter release directory while
-  synchronized `1.2.0-beta.0` remains occupied. For any later synchronized
-  version it emits `candidate-ready=true` and preserves the candidate.
+  emits `candidate-ready=false`, and leaves no Flutter release directory only
+  for occupied `1.2.0-beta.0`. Selected synchronized `1.2.0-beta.1` emits
+  `candidate-ready=true` and preserves the candidate.
   `tools/flutter/package-release.sh --check` is the strict non-publishing
-  release gate after an owner-selected synchronized version replaces occupied
-  beta.0; it must refuse beta.0. It preserves only deterministic archive, inventory, lock,
-  license, dry-run, consumer, and manifest evidence under
+  release gate for beta.1 and later; it must refuse beta.0. It preserves only
+  deterministic archive, inventory, lock, license, dry-run, consumer, and
+  manifest evidence under
   `target/flutter-release`. Public Flutter Apple metadata has no local override;
   source gates patch only disposable Swift package copies. The archive verifier
   must reject links, traversal, extras, credentials, generated/build output,
@@ -452,12 +452,12 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   Apple and Android consumer gates. Central recovery never rebuilds or publishes
   Flutter.
 - Create annotated release tags only from the `release-candidate-<commit>`
-  inventory emitted by successful main CI. While beta.0 remains occupied, that
-  inventory intentionally omits Flutter and is not taggable. After synchronized
-  version replacement it binds Apple, Android, React Native, Web, and Flutter
-  candidates. The tag workflow must retrieve that exact CI
-  inventory, compare each rebuilt native and Flutter subset, and preserve its
-  digest. Local builds are preflight evidence, not release identity.
+  inventory emitted by successful main CI. The beta.0 inventory intentionally
+  omits Flutter and is not taggable. The selected beta.1 inventory binds Apple,
+  Android, React Native, Web, and Flutter candidates. The tag workflow must
+  retrieve that exact CI inventory, compare each rebuilt native and Flutter
+  subset, and preserve its digest. Local builds are preflight evidence, not
+  release identity.
 - Keep mutating Android release-readiness tests in independent temporary
   fixtures. They run in parallel, so fixture names require an atomic uniqueness
   component in addition to wall-clock time.
@@ -698,9 +698,10 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
 - Read `docs/releasing.md` before creating or pushing a release tag.
 - Prepared `1.2.0-beta.0` metadata and evidence do not claim publication. That
   identity is occupied by immutable non-Flutter source and must not be reused.
-  The next synchronized version requires an explicit owner decision; later
-  betas use the protected OIDC workflow and verify occupied versions instead
-  of attempting to replace them.
+  `1.2.0-beta.1` is the selected synchronized candidate; its local preparation
+  does not authorize tagging or publication. It and later betas use the
+  protected release workflows and verify occupied versions instead of
+  attempting to replace them.
 - The public Apple package is the root `Package.swift`; keep the nested
   `platforms/apple/Package.swift` for local development against the generated
   XCFramework.

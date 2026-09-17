@@ -30,13 +30,14 @@ gates, but no Flutter version has been published yet. `1.2.0-beta.0` is occupied
 by an immutable annotated tag for earlier non-Flutter source; it must not be reused
 for this Flutter-bearing tree. Flutter applications must not infer
 pub.dev availability from the Apple, Android, or React Native release.
-Automatic PR/main CI still runs the complete Flutter verification and fresh
-consumer builds, but withholds the Flutter candidate until an owner-selected
-synchronized version replaces the occupied identity.
+`1.2.0-beta.1` is the selected synchronized replacement candidate. Automatic
+PR/main CI runs the complete Flutter verification and fresh consumer builds and
+may preserve that candidate, but publication remains a separate protected
+release action.
 
 ## Current Status
 
-The next synchronized version has not been selected. The prepared source adds
+The next synchronized version is `1.2.0-beta.1`. The prepared source adds
 the first `@bota.dev/web-sdk` package: an explicit, foreground Web Bluetooth picker,
 exact serial verification through the shared Rust/WASM workflow, explicit
 disconnect, and fresh read-only identity, device-status, and
@@ -350,8 +351,8 @@ is not inferred from CI and remains a human release approval. The root Swift
 package distributes the Apple facade for iOS and macOS while keeping the Rust
 core in a checksummed XCFramework. This release does not replace the production
 React Native maintenance line or claim published Flutter, Web, or Windows
-availability. Flutter is available only from an exact source revision until an
-owner-selected synchronized version is prepared and published.
+availability. Flutter is available only from an exact source revision until
+`1.2.0-beta.1` is published and verified on pub.dev.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and the
 [firmware compatibility matrix](protocol/compatibility/firmware-compatibility.json).
@@ -404,16 +405,16 @@ reconnect, retained encrypted batch handoff, WiFi, OTA, remove-only
 deprovision, authenticated reset, and unsupported targets.
 
 The historical `1.2.0-beta.0` preparation cannot be published from this source
-because that immutable tag identifies non-Flutter source. An owner must select
-a new synchronized prerelease and update every version authority before
-candidate packaging or publication can resume.
+because that immutable tag identifies non-Flutter source. `1.2.0-beta.1` is the
+selected synchronized prerelease and every version authority is prepared for
+local candidate verification. This does not claim publication.
 
 ## Web Beta Installation
 
-After the `1.2.0-beta.0` candidate is published, install the exact beta:
+After the `1.2.0-beta.1` candidate is published, install the exact beta:
 
 ```bash
-npm install @bota.dev/web-sdk@1.2.0-beta.0
+npm install @bota.dev/web-sdk@1.2.0-beta.1
 ```
 
 Web Bluetooth requires a secure context and a browser implementation that
@@ -499,7 +500,7 @@ tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
 tools/flutter/test-android-adapter.sh
 tools/flutter/test-consumers.sh
 npm run flutter:verify
-# After an owner-selected synchronized version replaces occupied beta.0:
+# For the selected synchronized beta.1 candidate:
 tools/flutter/package-release.sh --check
 ```
 

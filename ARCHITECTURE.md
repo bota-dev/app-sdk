@@ -76,9 +76,9 @@ registry `dist.shasum`, and does not move `latest`.
 The Flutter facade is implemented in source, but it is not part of the
 immutable `1.1.0` public release and has not been published. The historical
 `1.2.0-beta.0` candidate identity is occupied by immutable non-Flutter source
-and cannot identify this tree. A future candidate binds its exact source
-revision, Pigeon identity, raw and normalized archive digests, and every file's
-digest only after an owner selects a new synchronized version.
+and cannot identify this tree. Selected replacement `1.2.0-beta.1` binds its
+exact source revision, Pigeon identity, raw and normalized archive digests, and
+every file's digest before it can be tagged or published.
 
 ## Migration Rule
 
@@ -685,14 +685,14 @@ published for `v1.1.0`; the remaining planned facades are not yet published. See
 [`FFI evaluation`](docs/spikes/ffi-boundary-evaluation.md).
 
 Main CI always runs the complete Flutter source, package, and fresh-consumer
-verification. While the synchronized version is occupied beta.0, it withholds
-the Flutter release directory and emits a transitional four-platform inventory
-that must not be tagged. Once an owner selects a new synchronized version, the
-same CI path adds Flutter and produces the taggable five-platform inventory from
-one source revision. An annotated tag records that inventory digest. The tag workflow
-downloads the CI inventory, compares its native subset before any publication,
-publishes and verifies the immutable Apple asset and CocoaPod, runs clean public
-SwiftPM, CocoaPods, and Maven consumers, then rebuilds and compares the Flutter
+verification. For occupied beta.0, it withholds the Flutter release directory
+and emits a transitional four-platform inventory that must not be tagged. For
+selected beta.1, the same CI path adds Flutter and produces the taggable
+five-platform inventory from one source revision. An annotated tag records that
+inventory digest. The tag workflow downloads the CI inventory, compares its
+native subset before any publication, publishes and verifies the immutable
+Apple asset and CocoaPod, runs clean public SwiftPM, CocoaPods, and Maven
+consumers, then rebuilds and compares the Flutter
 subset. The first pub.dev version pauses for a protected clean-tag interactive
 bootstrap; later betas wait for the ordered Flutter artifact before invoking
 Dart's OIDC reusable workflow. Public archive normalization and per-file hashes

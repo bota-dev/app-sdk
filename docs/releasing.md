@@ -4,7 +4,9 @@ Published synchronized beta `1.1.0` includes the Apple `BotaAppleSDK` Swift
 package for iOS 15+ and macOS 13+, the Android Maven package, and the React
 Native package. `1.2.0-beta.0` is occupied by an immutable annotated tag for
 non-Flutter source; it must not be reused for the prepared Flutter facade. No
-replacement synchronized version has been selected. Apple consumers add
+artifact at that identity may be replaced. `1.2.0-beta.1` is the selected
+synchronized replacement candidate and is prepared locally but not published.
+Apple consumers add
 `https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
 compiles the Swift facade source and downloads a checksummed
 `BotaDeviceSDKCore.xcframework.zip` from the matching GitHub Release.
@@ -32,8 +34,8 @@ The synchronized line is beta. New versions must match `1.x.y-beta.n`, npm
 publication must use dist-tag `beta`, and GitHub Releases remain prereleases.
 SwiftPM and Maven Central consumers pin the exact synchronized beta version.
 Historical immutable `1.1.0` is the one recovery exception; do not rename,
-unpublish, or recreate it. The next synchronized release requires an explicit
-owner decision; do not move, delete, recreate, or reuse `v1.2.0-beta.0`.
+unpublish, or recreate it. The next synchronized release is selected as
+`1.2.0-beta.1`; do not move, delete, recreate, or reuse `v1.2.0-beta.0`.
 Before that first Web publication, configure the npm trusted publisher for
 `@bota.dev/web-sdk` against the protected `release` environment and this
 repository's release workflow. The workflow intentionally has no token-based
@@ -123,9 +125,9 @@ tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
 tools/flutter/test-android-adapter.sh
 tools/flutter/test-consumers.sh
 npm run flutter:verify
-# Automatic CI verification; beta.0 is verified without a release candidate.
+# Automatic CI-equivalent verification; beta.1 preserves a release candidate.
 tools/flutter/package-release.sh --ci
-# Expected to refuse while sdk-version.toml remains occupied beta.0.
+# Strict local release gate for selected beta.1; occupied beta.0 still refuses.
 tools/flutter/package-release.sh --check
 node --test tools/flutter/verify-publication.test.mjs tools/release/*.test.mjs
 cargo deny check
@@ -259,8 +261,8 @@ never release evidence by themselves. A consumer failure must not fall back to
 an earlier application build, cached native candidate, remote Maven artifact,
 or remote Apple package.
 
-The first Flutter beta may be published only after an owner selects a new
-synchronized version, every version authority changes together, and the Apple
+The first Flutter beta may be published only after every `1.2.0-beta.1` version
+authority changes together and the Apple
 and Android artifacts at that exact version are public with passing no-override
 consumers. The initial pub.dev publication mechanism must be deliberately
 authorized for that selected version; the workflow no longer prints a beta.0
@@ -269,12 +271,13 @@ publication is downloaded and compared with the candidate's exact file hashes
 and normalized archive SHA-256 before release completion.
 
 `tools/flutter/package-release.sh --check` refuses occupied
-`1.2.0-beta.0`. After a synchronized owner-selected version update, it writes
-only deterministic evidence to `target/flutter-release/`: the candidate archive, exact package inventory,
-v2 release manifest, dependency lock and graph, hosted-package license hashes,
-normalized dry-run output, and fixed verification record. It rejects unsafe or
-hidden paths, links, credentials, generated/build outputs, local Apple
-overrides, unreviewed extras, and raw, normalized, or per-file checksum drift.
+`1.2.0-beta.0`. For selected `1.2.0-beta.1`, it writes
+only deterministic evidence to `target/flutter-release/`: the candidate
+archive, exact package inventory, v2 release manifest, dependency lock and
+graph, hosted-package license hashes, normalized dry-run output, and fixed
+verification record. It rejects unsafe or hidden paths, links, credentials,
+generated/build outputs, local Apple overrides, unreviewed extras, and raw,
+normalized, or per-file checksum drift.
 The checked release example freezes the tooling-generated preparation
 revision; check mode permits only that revision field to differ from a runtime
 candidate, which always records the current Git revision. Do not hand-edit a
@@ -284,9 +287,9 @@ Automatic PR/main CI uses `tools/flutter/package-release.sh --ci`. That mode
 runs the same analysis, tests, license audit, publication dry run, and fresh
 Android/iOS consumer builds. For occupied beta.0 it reports
 `candidate-ready=false`, removes any stale Flutter candidate directory, and
-succeeds without creating release bytes. For a later synchronized version it
-reports `candidate-ready=true` and creates the same deterministic candidate as
-check mode.
+succeeds without creating release bytes. For beta.1 and later synchronized
+versions it reports `candidate-ready=true` and creates the same deterministic
+candidate as check mode.
 
 ## Publish
 
@@ -366,8 +369,8 @@ install its own Node.js dependencies before running repository tooling.
 9. Rebuilds the exact Flutter candidate only after the public Apple and Android
    consumers pass and compares it to the Flutter subset of the CI inventory
    named in the annotated tag.
-10. Refuses the occupied `1.2.0-beta.0` identity. After the owner selects and
-    prepares a new synchronized version, its explicitly authorized first-publish
+10. Refuses the occupied `1.2.0-beta.0` identity. For selected
+    `1.2.0-beta.1`, its explicitly authorized first-publish
     procedure must consume the ordered candidate artifact; later beta tags use
     Dart's official reusable OIDC publisher.
 11. Downloads the public pub.dev archive, compares its complete normalized

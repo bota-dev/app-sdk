@@ -52,8 +52,8 @@ source package. Those overrides must retain the public package identity
 ## Release Candidate
 
 `tools/flutter/package-release.sh --check` is the complete local publication
-gate after an owner-selected synchronized version replaces occupied
-`1.2.0-beta.0`; it must fail closed while beta.0 remains selected. It verifies
+gate for selected synchronized `1.2.0-beta.1`; it must fail closed for occupied
+`1.2.0-beta.0`. It verifies
 synchronized metadata, Pigeon drift, formatting, analysis,
 all Dart tests, hosted dependency licenses, `flutter pub publish --dry-run`,
 and fresh Android and iOS consumers before preserving a deterministic archive,
@@ -64,8 +64,8 @@ The command prepares evidence only; it must never publish a package.
 
 Automatic PR/main CI uses `tools/flutter/package-release.sh --ci` to run the
 same verification. Occupied beta.0 returns `candidate-ready=false` without a
-release directory; later synchronized versions return `candidate-ready=true`
-and preserve the deterministic candidate.
+release directory; beta.1 and later synchronized versions return
+`candidate-ready=true` and preserve the deterministic candidate.
 
 ## Example
 

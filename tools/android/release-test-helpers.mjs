@@ -3,7 +3,7 @@ import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 export const coordinate = 'dev.bota:bota-android-sdk';
-export const version = '1.2.0-beta.0';
+export const version = '1.2.0-beta.1';
 
 const checksumAlgorithms = ['md5', 'sha1', 'sha256', 'sha512'];
 

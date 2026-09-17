@@ -961,9 +961,10 @@ Implement in separate plans because capability and lifecycle contracts differ:
   open;
 - Flutter: the Apple/Android native-delegating facade, typed Pigeon bridge,
   lifecycle ownership, release-mode consumers, package verification, and
-  publication tooling are implemented and locally verified. Publication waits
-  for a new synchronized version because immutable `v1.2.0-beta.0` predates
-  the Flutter source. Desktop support remains a later slice;
+  publication tooling are implemented and locally verified. Synchronized
+  `1.2.0-beta.1` is selected because immutable `v1.2.0-beta.0` predates the
+  Flutter source; publication still requires separate authorization. Desktop
+  support remains a later slice;
 - Windows: C# facade plus WinRT GATT, followed by Flutter Windows integration.
 
 Never advertise unsupported background scan or reconnect behavior as parity.
