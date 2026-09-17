@@ -627,7 +627,11 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
             bindingGeneration: bindingGeneration
         ))
         if let persistResult {
-            try await persistResult(.init(localRecordingsDeleted: 7))
+            try await persistResult(.init(
+                commandID: commandID,
+                bindingGeneration: bindingGeneration,
+                localRecordingsDeleted: 7
+            ))
             factoryResetPersistenceCompletions += 1
         }
         return .init(commandID: commandID, bindingGeneration: bindingGeneration)
@@ -653,7 +657,11 @@ private actor TestAppleSecurityClient: BotaDeviceSDKAppleSecurityClient {
         persistResult: @escaping FactoryResetResultPersister
     ) async throws -> FactoryResetCompletion {
         unjournaledResumeBindingGenerations.append(bindingGeneration)
-        try await persistResult(.init(localRecordingsDeleted: 7))
+        try await persistResult(.init(
+            commandID: commandID,
+            bindingGeneration: bindingGeneration,
+            localRecordingsDeleted: 7
+        ))
         return .init(commandID: commandID, bindingGeneration: bindingGeneration)
     }
 
