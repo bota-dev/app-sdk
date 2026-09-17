@@ -17,11 +17,12 @@ steps are complete. The detailed checkboxes below preserve the original
 test-first execution recipe; completion evidence is recorded in
 `release/evidence/1.2.0-beta.0-flutter-review.md` and the branch history.
 
-The implementation is ready for local integration. Remote push, tagging, and
-publication are deliberately excluded from this run. Publication also remains
-blocked because immutable `v1.2.0-beta.0` identifies earlier non-Flutter
-source; a repository owner must select a new synchronized version before the
-strict release gate may create a Flutter candidate.
+The implementation was fast-forwarded into local `main` after all local gates
+passed. Remote push, tagging, and publication are deliberately excluded from
+this run. Publication also remains blocked because immutable
+`v1.2.0-beta.0` identifies earlier non-Flutter source; a repository owner must
+select a new synchronized version before the strict release gate may create a
+Flutter candidate.
 
 ## Global Constraints
 
