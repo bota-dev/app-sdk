@@ -30,6 +30,9 @@ gates, but no Flutter version has been published yet. `1.2.0-beta.0` is occupied
 by an immutable annotated tag for earlier non-Flutter source; it must not be reused
 for this Flutter-bearing tree. Flutter applications must not infer
 pub.dev availability from the Apple, Android, or React Native release.
+Automatic PR/main CI still runs the complete Flutter verification and fresh
+consumer builds, but withholds the Flutter candidate until an owner-selected
+synchronized version replaces the occupied identity.
 
 ## Current Status
 

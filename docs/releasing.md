@@ -123,6 +123,8 @@ tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
 tools/flutter/test-android-adapter.sh
 tools/flutter/test-consumers.sh
 npm run flutter:verify
+# Automatic CI verification; beta.0 is verified without a release candidate.
+tools/flutter/package-release.sh --ci
 # Expected to refuse while sdk-version.toml remains occupied beta.0.
 tools/flutter/package-release.sh --check
 node --test tools/flutter/verify-publication.test.mjs tools/release/*.test.mjs
@@ -278,6 +280,14 @@ revision; check mode permits only that revision field to differ from a runtime
 candidate, which always records the current Git revision. Do not hand-edit a
 source revision, archive checksum, file inventory, or root Swift checksum.
 
+Automatic PR/main CI uses `tools/flutter/package-release.sh --ci`. That mode
+runs the same analysis, tests, license audit, publication dry run, and fresh
+Android/iOS consumer builds. For occupied beta.0 it reports
+`candidate-ready=false`, removes any stale Flutter candidate directory, and
+succeeds without creating release bytes. For a later synchronized version it
+reports `candidate-ready=true` and creates the same deterministic candidate as
+check mode.
+
 ## Publish
 
 Before tagging, configure npm trusted publishers for both
@@ -294,8 +304,11 @@ candidate `dist.shasum`, and proves that `latest` is unchanged.
 
 After the release commit is on `main`, wait for its `CI` workflow to complete.
 The `Release candidate inventory` job downloads the Apple, Android, React
-Native, Web, and Flutter artifacts built on the same runner classes as the tag
-workflow and uploads `release-candidate-<commit>`. Use that artifact's
+Native, Web, and, when `candidate-ready=true`, Flutter artifacts built on the
+same runner classes as the tag workflow and uploads
+`release-candidate-<commit>`. An inventory without Flutter is transitional
+verification evidence for occupied beta.0 and must not be tagged. Use a
+five-platform artifact's
 `release-candidate-files.json.sha256` value in the annotated tag; do not derive
 the tag hash from locally built payloads. The Android Javadoc archive omits
 Dokka's nondeterministic aggregate `deprecated.html` page so repeated clean CI

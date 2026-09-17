@@ -85,9 +85,14 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   fresh release outputs. The `dev.bota` Maven group must be exclusive to the
   fresh local repository. Never weaken the gate to accept stale output or a
   remote native substitute.
-- `tools/flutter/package-release.sh --check` is the non-publishing Flutter
+- `tools/flutter/package-release.sh --ci` is the automatic PR/main verification
+  path. It runs the complete non-publishing Flutter and fresh-consumer gates,
+  emits `candidate-ready=false`, and leaves no Flutter release directory while
+  synchronized `1.2.0-beta.0` remains occupied. For any later synchronized
+  version it emits `candidate-ready=true` and preserves the candidate.
+  `tools/flutter/package-release.sh --check` is the strict non-publishing
   release gate after an owner-selected synchronized version replaces occupied
-  `1.2.0-beta.0`; it must refuse beta.0. It preserves only deterministic archive, inventory, lock,
+  beta.0; it must refuse beta.0. It preserves only deterministic archive, inventory, lock,
   license, dry-run, consumer, and manifest evidence under
   `target/flutter-release`. Public Flutter Apple metadata has no local override;
   source gates patch only disposable Swift package copies. The archive verifier
@@ -447,8 +452,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   Apple and Android consumer gates. Central recovery never rebuilds or publishes
   Flutter.
 - Create annotated release tags only from the `release-candidate-<commit>`
-  inventory emitted by successful main CI. It binds Apple, Android, React
-  Native, Web, and Flutter candidates. The tag workflow must retrieve that exact CI
+  inventory emitted by successful main CI. While beta.0 remains occupied, that
+  inventory intentionally omits Flutter and is not taggable. After synchronized
+  version replacement it binds Apple, Android, React Native, Web, and Flutter
+  candidates. The tag workflow must retrieve that exact CI
   inventory, compare each rebuilt native and Flutter subset, and preserve its
   digest. Local builds are preflight evidence, not release identity.
 - Keep mutating Android release-readiness tests in independent temporary

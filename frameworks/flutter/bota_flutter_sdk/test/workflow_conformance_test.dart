@@ -532,7 +532,7 @@ final class _WorkflowHostApi extends BotaHostApi {
   }
 
   PlatformException _platformError(String code) =>
-      PlatformException(code: 'bota_sdk', details: _errorMessage(code));
+      PlatformException(code: 'bota_sdk_error', details: _errorMessage(code));
 
   BotaErrorMessage _errorMessage(String code) => BotaErrorMessage(
     code: BotaErrorCodeMessage(name: code),

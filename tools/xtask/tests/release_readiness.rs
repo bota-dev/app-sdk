@@ -405,7 +405,16 @@ fn workflows_build_and_preserve_the_exact_web_candidate() {
         )
         .unwrap()
     );
-    assert!(ci_contents.contains("target/web-release target/flutter-release"));
+    let ci_inventory_command = ci["jobs"]["release-candidate"]["steps"]
+        .as_sequence()
+        .unwrap()
+        .iter()
+        .find(|step| step["name"] == "Write candidate inventory")
+        .unwrap()["run"]
+        .as_str()
+        .unwrap();
+    assert!(ci_inventory_command.contains("target/web-release"));
+    assert!(ci_inventory_command.contains("\"${candidate_roots[@]}\""));
 
     let release_contents =
         fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
@@ -521,26 +530,64 @@ fn ci_emits_the_exact_release_candidate_inventory_used_for_tagging() {
 }
 
 #[test]
-fn flutter_ci_builds_and_uploads_the_deterministic_candidate() {
+fn flutter_ci_verifies_occupied_versions_and_only_uploads_releasable_candidates() {
     let contents = fs::read_to_string(root().join(".github/workflows/ci.yml")).unwrap();
     let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
     let flutter = &workflow["jobs"]["flutter"];
 
     assert_eq!(flutter["runs-on"].as_str(), Some("macos-15"));
-    let commands = flutter["steps"]
-        .as_sequence()
-        .unwrap()
-        .iter()
-        .filter_map(|step| step["run"].as_str())
-        .collect::<Vec<_>>();
-    assert!(
-        commands
-            .iter()
-            .any(|command| { command.contains("tools/flutter/package-release.sh --check") })
+    assert_eq!(
+        flutter["outputs"]["candidate-ready"].as_str(),
+        Some("${{ steps.package.outputs.candidate-ready }}")
     );
-    assert!(commands.iter().any(|command| {
-        command.contains("tools/flutter/verify-publication.mjs verify-candidate")
-    }));
+    let steps = flutter["steps"].as_sequence().unwrap();
+    let package = steps
+        .iter()
+        .find(|step| step["id"].as_str() == Some("package"))
+        .unwrap();
+    assert_eq!(
+        package["run"].as_str(),
+        Some("tools/flutter/package-release.sh --ci")
+    );
+
+    for name in [
+        "Verify preserved Flutter candidate",
+        "Upload Flutter candidate",
+    ] {
+        let step = steps
+            .iter()
+            .find(|step| step["name"].as_str() == Some(name))
+            .unwrap();
+        assert_eq!(
+            step["if"].as_str(),
+            Some("steps.package.outputs.candidate-ready == 'true'"),
+            "{name}"
+        );
+    }
+
+    let candidate_steps = workflow["jobs"]["release-candidate"]["steps"]
+        .as_sequence()
+        .unwrap();
+    let download = candidate_steps
+        .iter()
+        .find(|step| step["name"].as_str() == Some("Download Flutter candidate"))
+        .unwrap();
+    assert_eq!(
+        download["if"].as_str(),
+        Some("needs.flutter.outputs.candidate-ready == 'true'")
+    );
+    let inventory = candidate_steps
+        .iter()
+        .find(|step| step["name"].as_str() == Some("Write candidate inventory"))
+        .unwrap();
+    assert_eq!(
+        inventory["env"]["FLUTTER_CANDIDATE_READY"].as_str(),
+        Some("${{ needs.flutter.outputs.candidate-ready }}")
+    );
+    let inventory_command = inventory["run"].as_str().unwrap();
+    assert!(inventory_command.contains("candidate_roots=("));
+    assert!(inventory_command.contains("candidate_roots+=(target/flutter-release)"));
+    assert!(inventory_command.contains("\"${candidate_roots[@]}\""));
 }
 
 #[test]

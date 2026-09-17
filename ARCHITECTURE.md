@@ -684,9 +684,12 @@ published for `v1.1.0`; the remaining planned facades are not yet published. See
 [`ADR 0001`](docs/adr/0001-command-event-host-boundary.md) and the
 [`FFI evaluation`](docs/spikes/ffi-boundary-evaluation.md).
 
-The synchronized candidate inventory is produced by main CI and covers Apple,
-Android, React Native, Web, and Flutter release directories from one source
-revision. An annotated tag records that inventory digest. The tag workflow
+Main CI always runs the complete Flutter source, package, and fresh-consumer
+verification. While the synchronized version is occupied beta.0, it withholds
+the Flutter release directory and emits a transitional four-platform inventory
+that must not be tagged. Once an owner selects a new synchronized version, the
+same CI path adds Flutter and produces the taggable five-platform inventory from
+one source revision. An annotated tag records that inventory digest. The tag workflow
 downloads the CI inventory, compares its native subset before any publication,
 publishes and verifies the immutable Apple asset and CocoaPod, runs clean public
 SwiftPM, CocoaPods, and Maven consumers, then rebuilds and compares the Flutter

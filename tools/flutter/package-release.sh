@@ -8,23 +8,28 @@ OUTPUT="$ROOT/target/flutter-release"
 MODE="${1:-}"
 OCCUPIED_VERSION="1.2.0-beta.0"
 
-if [[ "$MODE" != "--check" && "$MODE" != "--write-example" ]] || [[ $# -ne 1 ]]; then
-  echo "usage: $0 <--check|--write-example>" >&2
+if [[ "$MODE" != "--check" && "$MODE" != "--ci" && "$MODE" != "--write-example" ]] || [[ $# -ne 1 ]]; then
+  echo "usage: $0 <--check|--ci|--write-example>" >&2
   exit 2
 fi
 
 sdk_version="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' "$ROOT/sdk-version.toml")"
 source_revision="$(git -C "$ROOT" rev-parse HEAD)"
-if [[ "$sdk_version" == "$OCCUPIED_VERSION" ]]; then
-  echo "Flutter release version $sdk_version is occupied by an immutable tag and must not be reused" >&2
-  exit 1
-fi
 if [[ -z "$sdk_version" ]] || [[ ! "$source_revision" =~ ^[0-9a-f]{40}$ ]]; then
   echo "Flutter release metadata is not synchronized" >&2
   exit 1
 fi
+
+candidate_ready=true
+if [[ "$sdk_version" == "$OCCUPIED_VERSION" && "$MODE" == "--ci" ]]; then
+  candidate_ready=false
+  rm -rf "$OUTPUT"
+elif [[ "$sdk_version" == "$OCCUPIED_VERSION" ]]; then
+  echo "Flutter release version $sdk_version is occupied by an immutable tag and must not be reused" >&2
+  exit 1
+fi
 EXAMPLE_MANIFEST="$ROOT/release/examples/$sdk_version.json"
-if [[ ! -f "$EXAMPLE_MANIFEST" ]]; then
+if [[ "$candidate_ready" == true && ! -f "$EXAMPLE_MANIFEST" ]]; then
   echo "Flutter release example is missing for synchronized version $sdk_version" >&2
   exit 1
 fi
@@ -144,6 +149,15 @@ const evidence = {
 await writeFile(output, `${JSON.stringify(evidence, null, 2)}\n`);
 NODE
 
+if [[ "$candidate_ready" == false ]]; then
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    printf 'candidate-ready=false\n' >>"$GITHUB_OUTPUT"
+  fi
+  printf 'Flutter package %s is verified; candidate creation is withheld because the version is occupied\n' \
+    "$sdk_version"
+  exit 0
+fi
+
 git -C "$ROOT" ls-files --cached -- "$PACKAGE_PATH" \
   | sed "s#^$PACKAGE_PATH/##" \
   | awk -F/ '!/^\./ { hidden = 0; for (i = 1; i <= NF; i++) if ($i ~ /^\./) hidden = 1; if (!hidden) print }' \
@@ -194,5 +208,8 @@ for file in \
 do
   cp "$temporary/$file" "$OUTPUT/$file"
 done
+if [[ "$MODE" == "--ci" && -n "${GITHUB_OUTPUT:-}" ]]; then
+  printf 'candidate-ready=true\n' >>"$GITHUB_OUTPUT"
+fi
 printf 'Flutter candidate %s (%s) is preserved at %s\n' \
   "$sdk_version" "$(shasum -a 256 "$OUTPUT/$(basename "$archive")" | awk '{print $1}')" "$OUTPUT"
