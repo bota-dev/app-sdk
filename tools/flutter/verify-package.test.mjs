@@ -6,6 +6,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -20,6 +21,16 @@ import { fileURLToPath } from 'node:url';
 import { verifyFlutterPackage } from './verify-package.mjs';
 
 const workspaceRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+
+test('Flutter consumer verification uses tools available on macOS runners', () => {
+  const script = readFileSync(
+    join(workspaceRoot, 'tools/flutter/test-consumers.sh'),
+    'utf8'
+  );
+
+  assert.doesNotMatch(script, /(^|\s)rg\s/m);
+  assert.match(script, /\|\s*grep\s+-Eq/);
+});
 
 const packageFiles = [
   '.pubignore',

@@ -84,7 +84,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   local Apple and Android artifacts, uses an isolated Gradle cache, and requires
   fresh release outputs. The `dev.bota` Maven group must be exclusive to the
   fresh local repository. Never weaken the gate to accept stale output or a
-  remote native substitute.
+  remote native substitute. GitHub's pinned macOS runner does not provide
+  ripgrep, so this shell gate must use runner-provided tools such as `grep` or
+  install any additional command explicitly in the workflow.
 - `tools/flutter/package-release.sh --ci` is the automatic PR/main verification
   path. It runs the complete non-publishing Flutter and fresh-consumer gates,
   emits `candidate-ready=false`, and leaves no Flutter release directory only

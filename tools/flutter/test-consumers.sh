@@ -84,7 +84,7 @@ validate_permissions() {
     android.permission.BLUETOOTH_ADMIN \
     android.permission.ACCESS_FINE_LOCATION
   do
-    printf '%s' "$flattened" | rg -q \
+    printf '%s' "$flattened" | grep -Eq \
       "uses-permission[^>]*android:name=\"$permission\"[^>]*android:maxSdkVersion=\"30\"" || {
         echo "Flutter Android example must cap $permission at API 30" >&2
         return 1
@@ -94,13 +94,13 @@ validate_permissions() {
     android.permission.BLUETOOTH_SCAN \
     android.permission.BLUETOOTH_CONNECT
   do
-    printf '%s' "$flattened" | rg -q \
+    printf '%s' "$flattened" | grep -Eq \
       "uses-permission[^>]*android:name=\"$permission\"" || {
         echo "Flutter Android example is missing $permission" >&2
         return 1
       }
   done
-  printf '%s' "$flattened" | rg -q \
+  printf '%s' "$flattened" | grep -Eq \
     'uses-permission[^>]*android:name="android.permission.BLUETOOTH_SCAN"[^>]*android:usesPermissionFlags="neverForLocation"' || {
       echo "Flutter Android example must mark BLE scans neverForLocation" >&2
       return 1
@@ -132,7 +132,8 @@ if validate_permissions "$info_plist" "$bad_manifest" >/dev/null 2>&1; then
   exit 1
 fi
 
-if rg -n '\b(debugPrint|print|log)\s*\(' "$example_root/lib/main.dart" >/dev/null; then
+if grep -En '(^|[^[:alnum:]_])(debugPrint|print|log)[[:space:]]*\(' \
+  "$example_root/lib/main.dart" >/dev/null; then
   echo "Flutter example must not log callback material, grants, or credentials" >&2
   exit 1
 fi
@@ -148,7 +149,7 @@ swift package dump-package \
   echo "Fresh local BotaAppleSDK artifact is missing" >&2
   exit 1
 }
-if ! rg -q "spec.version = \"$sdk_version\"" \
+if ! grep -Eq "spec.version = \"$sdk_version\"" \
   "$apple_package/BotaAppleSDK.podspec"; then
   echo "Local BotaAppleSDK pod does not match $sdk_version" >&2
   exit 1
@@ -178,7 +179,7 @@ SWIFT_MANIFEST="$local_plugin_root/ios/bota_flutter_sdk/Package.swift" \
 swift package dump-package \
   --package-path "$local_plugin_root/ios/bota_flutter_sdk" \
   >"$consumer_root/flutter-plugin-package.json"
-if ! rg -F -q "$apple_package" "$consumer_root/flutter-plugin-package.json"; then
+if ! grep -Fq "$apple_package" "$consumer_root/flutter-plugin-package.json"; then
   echo "Flutter iOS plugin did not resolve the local BotaAppleSDK package" >&2
   exit 1
 fi
@@ -193,7 +194,7 @@ android_aar="$android_candidate_dir/bota-android-sdk-$sdk_version.aar"
 android_pom="$android_candidate_dir/bota-android-sdk-$sdk_version.pom"
 require_file "$android_aar"
 require_file "$android_pom"
-if ! rg -q "<version>$sdk_version</version>" "$android_pom"; then
+if ! grep -Eq "<version>$sdk_version</version>" "$android_pom"; then
   echo "Local Android candidate POM does not match $sdk_version" >&2
   exit 1
 fi
@@ -273,7 +274,7 @@ GRADLE_USER_HOME="$consumer_gradle_home" \
   --configuration releaseRuntimeClasspath \
   --dependency dev.bota:bota-android-sdk \
   >"$consumer_root/android-dependency.txt"
-if ! rg -F -q "dev.bota:bota-android-sdk:$sdk_version" \
+if ! grep -Fq "dev.bota:bota-android-sdk:$sdk_version" \
   "$consumer_root/android-dependency.txt"; then
   echo "Flutter Android release did not resolve bota-android-sdk $sdk_version" >&2
   exit 1
