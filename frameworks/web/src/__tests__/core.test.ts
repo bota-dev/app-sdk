@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 import { createCoreLoader } from '../core.ts'
+import type { CoreBridge } from '../core.ts'
 import { BotaSDKError, normalizeCoreError } from '../errors.ts'
 import { createWasmCore } from '../wasmCore.ts'
 
@@ -154,7 +155,7 @@ function assertOwnership(envelope: EffectEnvelopeUnderTest, operation: string): 
   assert.deepEqual(envelope.cancellationId, CANCELLATION_ID)
 }
 
-const bridge = {
+const bridge: CoreBridge = {
   startExactConnection: () => [],
   startReconnect: () => [],
   startProvisioning: () => [],
@@ -194,6 +195,53 @@ const bridge = {
     maximumWindowPackets: 16,
     durableCheckpointIntervalBlocks: 8,
     maximumMissingSequences: 4,
+  }),
+  decodeRecordingList: () => [],
+  encodeRecordingListCommand: () => new Uint8Array(),
+  encodeRecordingConfirm: () => new Uint8Array(),
+  encodeDeprovisionCommand: () => new Uint8Array(),
+  decodeDeprovisionResult: () => ({ success: true }),
+  decodeConnectionSettings: () => ({
+    enabledConnections: { wifi: true, cellular: true },
+    heartbeatEnabledConnections: { wifi: true, cellular: true },
+    uploadNetworkPreference: ['wifi', 'ble', 'cellular'],
+    powerManagement: {
+      cellularIdleTimeoutSeconds: 180,
+      wifiIdleTimeoutSeconds: 180,
+    },
+    streamingEnabled: true,
+    streamingFlushIntervalSeconds: 60,
+    supportedVersion: true,
+  }),
+  encodeConnectionSettings: () => new Uint8Array(),
+  encodeWiFiGrant: () => new Uint8Array(),
+  encodeWiFiCredentials: () => new Uint8Array(),
+  encodeWiFiScanCommand: () => new Uint8Array(),
+  decodeWiFiConfigResult: () => ({ success: true }),
+  decodeWiFiStatus: () => ({ status: 'idle', statusRaw: 0 }),
+  decodeWiFiScanUpdate: () => ({ kind: 'pending', statusRaw: 1 }),
+  encodeRecordingControlCommand: () => new Uint8Array(),
+  decodeRecordingControlResult: () => ({ success: true }),
+  decodeEncryptedUploadV2Transfer: () => ({
+    kind: 'list',
+    flags: 0,
+    transportSessionId: 1n,
+  }),
+  encodeEncryptedUploadV2Transfer: () => new Uint8Array(),
+  decodeEncryptedUploadV2Status: () => ({
+    phase: 0,
+    result: 0,
+    transportSessionId: 1n,
+    durableCiphertextBytes: 0n,
+    progressPercent: 0,
+    transportProfile: 2,
+  }),
+  encodeEncryptedUploadV2SignedBlob: () => new Uint8Array(),
+  createIntegrityHasher: () => ({
+    update: () => undefined,
+    length: () => 0n,
+    crc32: () => 0,
+    sha256Snapshot: () => new Uint8Array(32),
   }),
 }
 

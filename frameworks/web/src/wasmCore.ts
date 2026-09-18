@@ -1,24 +1,55 @@
 import initWasm, {
   WebCoreBridge as GeneratedWebCoreBridge,
+  WebIntegrityHasher as GeneratedWebIntegrityHasher,
+  decodeConnectionSettings as decodeGeneratedConnectionSettings,
+  decodeDeprovisionResult as decodeGeneratedDeprovisionResult,
   decodeDeviceStatus as decodeGeneratedDeviceStatus,
   decodeEncryptedUploadV2Capabilities as decodeGeneratedCapabilities,
+  decodeEncryptedUploadV2Status as decodeGeneratedEncryptedUploadV2Status,
+  decodeEncryptedUploadV2Transfer as decodeGeneratedEncryptedUploadV2Transfer,
+  decodeRecordingControlResult as decodeGeneratedRecordingControlResult,
+  decodeRecordingList as decodeGeneratedRecordingList,
+  decodeWiFiConfigResult as decodeGeneratedWiFiConfigResult,
+  decodeWiFiScanUpdate as decodeGeneratedWiFiScanUpdate,
+  decodeWiFiStatus as decodeGeneratedWiFiStatus,
+  encodeConnectionSettings as encodeGeneratedConnectionSettings,
+  encodeDeprovisionCommand as encodeGeneratedDeprovisionCommand,
+  encodeEncryptedUploadV2SignedBlob as encodeGeneratedEncryptedUploadV2SignedBlob,
+  encodeEncryptedUploadV2Transfer as encodeGeneratedEncryptedUploadV2Transfer,
+  encodeRecordingConfirm as encodeGeneratedRecordingConfirm,
+  encodeRecordingControlCommand as encodeGeneratedRecordingControlCommand,
+  encodeRecordingListCommand as encodeGeneratedRecordingListCommand,
+  encodeWiFiCredentials as encodeGeneratedWiFiCredentials,
+  encodeWiFiGrant as encodeGeneratedWiFiGrant,
+  encodeWiFiScanCommand as encodeGeneratedWiFiScanCommand,
 } from './generated/bota_device_sdk_core.js'
 
 import type {
   CoreBridge,
   CoreCheckpointPhase,
+  CoreConnectionSettings,
+  CoreDecodedConnectionSettings,
   CoreDeviceCandidate,
+  CoreDeviceRecording,
   CoreEffect,
   CoreEffectEnvelope,
   CoreEncryptedUploadV2Checkpoint,
   CoreEncryptedUploadV2Evidence,
   CoreEncryptedUploadV2Input,
+  CoreEncryptedUploadV2OutboundTransferFrame,
+  CoreEncryptedUploadV2SignedBlobFrame,
+  CoreEncryptedUploadV2Status,
+  CoreEncryptedUploadV2TransferFrame,
   CoreHostEvent,
+  CoreIntegrityHasher,
+  CoreOperationResult,
   CoreNotification,
   CoreOperation,
   CoreWorkflowCheckpoint,
   CoreWorkflowKind,
   CoreWorkflowStatus,
+  CoreWiFiScanUpdate,
+  CoreWiFiStatusInfo,
 } from './core.ts'
 import { createCoreLoader } from './core.ts'
 import {
@@ -215,6 +246,177 @@ class WasmCoreAdapter implements CoreBridge {
       throw normalizeCoreError(error, 'read_snapshot')
     }
   }
+
+  decodeRecordingList(bytesValue: Uint8Array): CoreDeviceRecording[] {
+    try {
+      return normalizeRecordingList(decodeGeneratedRecordingList(bytesValue))
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'decode')
+    }
+  }
+
+  encodeRecordingListCommand(): Uint8Array {
+    try {
+      return bytes(encodeGeneratedRecordingListCommand())
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'encode')
+    }
+  }
+
+  encodeRecordingConfirm(recordingUuid: string): Uint8Array {
+    try {
+      return bytes(encodeGeneratedRecordingConfirm(recordingUuid))
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'encode')
+    }
+  }
+
+  encodeDeprovisionCommand(): Uint8Array {
+    try {
+      return bytes(encodeGeneratedDeprovisionCommand())
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'encode')
+    }
+  }
+
+  decodeDeprovisionResult(bytesValue: Uint8Array): CoreOperationResult {
+    try {
+      return normalizeOperationResult(decodeGeneratedDeprovisionResult(bytesValue))
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'decode')
+    }
+  }
+
+  decodeConnectionSettings(bytesValue: Uint8Array): CoreDecodedConnectionSettings {
+    try {
+      return normalizeConnectionSettings(decodeGeneratedConnectionSettings(bytesValue))
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'decode')
+    }
+  }
+
+  encodeConnectionSettings(
+    settings: CoreConnectionSettings,
+    model: Parameters<CoreBridge['encodeConnectionSettings']>[1],
+  ): Uint8Array {
+    try {
+      return bytes(encodeGeneratedConnectionSettings(settings, model))
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'encode')
+    }
+  }
+
+  encodeWiFiGrant(grant: string, capacity: number): Uint8Array {
+    try {
+      return bytes(encodeGeneratedWiFiGrant(grant, capacity))
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'encode')
+    }
+  }
+
+  encodeWiFiCredentials(ssid: string, password: string): Uint8Array {
+    try {
+      return bytes(encodeGeneratedWiFiCredentials(ssid, password))
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'encode')
+    }
+  }
+
+  encodeWiFiScanCommand(): Uint8Array {
+    try {
+      return bytes(encodeGeneratedWiFiScanCommand())
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'encode')
+    }
+  }
+
+  decodeWiFiConfigResult(bytesValue: Uint8Array): CoreOperationResult {
+    try {
+      return normalizeOperationResult(decodeGeneratedWiFiConfigResult(bytesValue))
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'decode')
+    }
+  }
+
+  decodeWiFiStatus(bytesValue: Uint8Array): CoreWiFiStatusInfo {
+    try {
+      return normalizeWiFiStatus(decodeGeneratedWiFiStatus(bytesValue))
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'decode')
+    }
+  }
+
+  decodeWiFiScanUpdate(bytesValue: Uint8Array): CoreWiFiScanUpdate {
+    try {
+      return normalizeWiFiScanUpdate(decodeGeneratedWiFiScanUpdate(bytesValue))
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'decode')
+    }
+  }
+
+  encodeRecordingControlCommand(action: 'start' | 'stop'): Uint8Array {
+    try {
+      return bytes(encodeGeneratedRecordingControlCommand(action))
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'encode')
+    }
+  }
+
+  decodeRecordingControlResult(bytesValue: Uint8Array): CoreOperationResult {
+    try {
+      return normalizeOperationResult(decodeGeneratedRecordingControlResult(bytesValue))
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'decode')
+    }
+  }
+
+  decodeEncryptedUploadV2Transfer(
+    bytesValue: Uint8Array,
+  ): CoreEncryptedUploadV2TransferFrame {
+    try {
+      return normalizeEncryptedUploadV2Transfer(
+        decodeGeneratedEncryptedUploadV2Transfer(bytesValue),
+      )
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'decode')
+    }
+  }
+
+  encodeEncryptedUploadV2Transfer(
+    frame: CoreEncryptedUploadV2OutboundTransferFrame,
+  ): Uint8Array {
+    try {
+      return bytes(encodeGeneratedEncryptedUploadV2Transfer(rawCodecFrame(frame)))
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'encode')
+    }
+  }
+
+  decodeEncryptedUploadV2Status(
+    bytesValue: Uint8Array,
+  ): CoreEncryptedUploadV2Status {
+    try {
+      return normalizeEncryptedUploadV2Status(
+        decodeGeneratedEncryptedUploadV2Status(bytesValue),
+      )
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'decode')
+    }
+  }
+
+  encodeEncryptedUploadV2SignedBlob(
+    frame: CoreEncryptedUploadV2SignedBlobFrame,
+  ): Uint8Array {
+    try {
+      return bytes(encodeGeneratedEncryptedUploadV2SignedBlob(rawCodecFrame(frame)))
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'encode')
+    }
+  }
+
+  createIntegrityHasher(): CoreIntegrityHasher {
+    return new GeneratedWebIntegrityHasher()
+  }
 }
 
 function rawReconnectHint(
@@ -247,6 +449,312 @@ function rawUploadPolicy(policy: CoreEncryptedUploadV2Input['policy']): string {
     case 'v2_preferred': return 'V2Preferred'
     case 'v2_required': return 'V2Required'
     default: throw internalBridgeError()
+  }
+}
+
+function rawCodecFrame(value: object): UnknownRecord {
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, rawCodecValue(item)]),
+  )
+}
+
+function rawCodecValue(value: unknown): unknown {
+  if (value instanceof Uint8Array) return rawBytes(value)
+  if (Array.isArray(value)) return value.map(rawCodecValue)
+  if (value !== null && typeof value === 'object') return rawCodecFrame(value)
+  return value
+}
+
+function normalizeRecordingList(value: unknown): CoreDeviceRecording[] {
+  if (!Array.isArray(value)) throw internalBridgeError()
+  return value.map((item) => {
+    const recording = record(item)
+    const codec = stringUnion(recording.codec, [
+      'pcm_16k',
+      'pcm_8k',
+      'opus_16k',
+      'opus_8k',
+      'unknown',
+    ] as const)
+    const normalized: CoreDeviceRecording = {
+      uuid: string(recording.uuid),
+      startedAtTimestampSeconds: number(recording.startedAtTimestampSeconds),
+      durationMilliseconds: bigint(recording.durationMilliseconds),
+      fileSizeBytes: bigint(recording.fileSizeBytes),
+      codec,
+      encrypted: boolean(recording.encrypted),
+    }
+    const codecRaw = optionalNumber(recording.codecRaw)
+    if (codecRaw !== null) normalized.codecRaw = byte(codecRaw)
+    return normalized
+  })
+}
+
+function normalizeOperationResult(value: unknown): CoreOperationResult {
+  const raw = record(value)
+  const result: CoreOperationResult = { success: boolean(raw.success) }
+  const error = optionalString(raw.error)
+  const errorRaw = optionalNumber(raw.errorRaw)
+  if (error !== null) result.error = error
+  if (errorRaw !== null) result.errorRaw = byte(errorRaw)
+  return result
+}
+
+function normalizeConnectionSettings(value: unknown): CoreDecodedConnectionSettings {
+  const raw = record(value)
+  const enabled = record(raw.enabledConnections)
+  const heartbeat = record(raw.heartbeatEnabledConnections)
+  const power = record(raw.powerManagement)
+  if (!Array.isArray(raw.uploadNetworkPreference)) throw internalBridgeError()
+  return {
+    enabledConnections: {
+      wifi: boolean(enabled.wifi),
+      cellular: boolean(enabled.cellular),
+    },
+    heartbeatEnabledConnections: {
+      wifi: boolean(heartbeat.wifi),
+      cellular: boolean(heartbeat.cellular),
+    },
+    uploadNetworkPreference: raw.uploadNetworkPreference.map((connection) =>
+      stringUnion(connection, ['wifi', 'ble', 'cellular', 'unknown'] as const)
+    ),
+    powerManagement: {
+      cellularIdleTimeoutSeconds: number(power.cellularIdleTimeoutSeconds),
+      wifiIdleTimeoutSeconds: number(power.wifiIdleTimeoutSeconds),
+    },
+    streamingEnabled: boolean(raw.streamingEnabled),
+    streamingFlushIntervalSeconds: byte(raw.streamingFlushIntervalSeconds),
+    supportedVersion: boolean(raw.supportedVersion),
+  }
+}
+
+function normalizeWiFiStatus(value: unknown): CoreWiFiStatusInfo {
+  const raw = record(value)
+  const result: CoreWiFiStatusInfo = {
+    status: stringUnion(raw.status, [
+      'idle',
+      'connecting',
+      'connected',
+      'failed',
+      'disconnected',
+      'unknown',
+    ] as const),
+    statusRaw: byte(raw.statusRaw),
+  }
+  const signalStrength = optionalNumber(raw.signalStrength)
+  const ssid = optionalString(raw.ssid)
+  const lastError = optionalString(raw.lastError)
+  if (signalStrength !== null) result.signalStrength = byte(signalStrength)
+  if (ssid !== null) result.ssid = ssid
+  if (lastError !== null) result.lastError = lastError
+  return result
+}
+
+function normalizeWiFiScanUpdate(value: unknown): CoreWiFiScanUpdate {
+  const raw = record(value)
+  const kind = string(raw.kind)
+  if (kind === 'pending') {
+    return { kind, statusRaw: byte(raw.statusRaw) }
+  }
+  if (kind === 'done') {
+    if (!Array.isArray(raw.networks)) throw internalBridgeError()
+    return {
+      kind,
+      networks: raw.networks.map((item) => {
+        const network = record(item)
+        return {
+          ssid: string(network.ssid),
+          quality: byte(network.quality),
+          isCurrent: boolean(network.isCurrent),
+          isOpen: boolean(network.isOpen),
+        }
+      }),
+      currentSsid: optionalString(raw.currentSsid),
+    }
+  }
+  throw internalBridgeError()
+}
+
+function normalizeEncryptedUploadV2Status(
+  value: unknown,
+): CoreEncryptedUploadV2Status {
+  const raw = record(value)
+  return {
+    phase: byte(raw.phase),
+    result: u16(raw.result),
+    transportSessionId: bigint(raw.transportSessionId),
+    durableCiphertextBytes: bigint(raw.durableCiphertextBytes),
+    progressPercent: byte(raw.progressPercent),
+    transportProfile: byte(raw.transportProfile),
+  }
+}
+
+function normalizeEncryptedUploadV2Transfer(
+  value: unknown,
+): CoreEncryptedUploadV2TransferFrame {
+  const raw = record(value)
+  const common = {
+    flags: u16(raw.flags),
+    transportSessionId: bigint(raw.transportSessionId),
+  }
+  switch (string(raw.kind)) {
+    case 'list':
+      return { kind: 'list', ...common }
+    case 'recording_entry':
+      return {
+        kind: 'recording_entry',
+        ...common,
+        recordingUuid: string(raw.recordingUuid),
+        recordingGeneration: u32(raw.recordingGeneration),
+        storageFormat: byte(raw.storageFormat),
+        completionState: byte(raw.completionState),
+        startedAt: bigint(raw.startedAt),
+        durationSeconds: u32(raw.durationSeconds),
+        plaintextLength: bigint(raw.plaintextLength),
+        ciphertextLength: bigint(raw.ciphertextLength),
+        ciphertextSha256: bytes(raw.ciphertextSha256, 32),
+      }
+    case 'recording_list_end':
+      return {
+        kind: 'recording_list_end',
+        ...common,
+        count: u32(raw.count),
+        listRevision: u32(raw.listRevision),
+        listSha256: bytes(raw.listSha256, 32),
+      }
+    case 'start':
+      return {
+        kind: 'start',
+        ...common,
+        uploadSessionUuid: string(raw.uploadSessionUuid),
+        recordingUuid: string(raw.recordingUuid),
+        recordingGeneration: u32(raw.recordingGeneration),
+        authorizationSha256: bytes(raw.authorizationSha256, 32),
+        checkpointRevision: u32(raw.checkpointRevision),
+        nextCiphertextOffset: bigint(raw.nextCiphertextOffset),
+        prefixSha256: bytes(raw.prefixSha256, 32),
+        windowPackets: u16(raw.windowPackets),
+        dataPayloadBytes: u16(raw.dataPayloadBytes),
+      }
+    case 'start_ack':
+      return {
+        kind: 'start_ack',
+        ...common,
+        uploadSessionUuid: string(raw.uploadSessionUuid),
+        recordingUuid: string(raw.recordingUuid),
+        recordingGeneration: u32(raw.recordingGeneration),
+        ciphertextLength: bigint(raw.ciphertextLength),
+        ciphertextSha256: bytes(raw.ciphertextSha256, 32),
+        windowPackets: u16(raw.windowPackets),
+        dataPayloadBytes: u16(raw.dataPayloadBytes),
+        checkpointIntervalBlocks: u32(raw.checkpointIntervalBlocks),
+        checkpointRevision: u32(raw.checkpointRevision),
+        nextCiphertextOffset: bigint(raw.nextCiphertextOffset),
+        prefixSha256: bytes(raw.prefixSha256, 32),
+      }
+    case 'data':
+      return {
+        kind: 'data',
+        ...common,
+        sequence: u32(raw.sequence),
+        offset: bigint(raw.offset),
+        data: bytes(raw.data),
+      }
+    case 'window_end':
+      return {
+        kind: 'window_end',
+        ...common,
+        windowIndex: u32(raw.windowIndex),
+        firstSequence: u32(raw.firstSequence),
+        lastSequence: u32(raw.lastSequence),
+        nextCiphertextOffset: bigint(raw.nextCiphertextOffset),
+        prefixSha256: bytes(raw.prefixSha256, 32),
+        checkpointRevision: u32(raw.checkpointRevision),
+      }
+    case 'window_ack':
+      return {
+        kind: 'window_ack',
+        ...common,
+        windowIndex: u32(raw.windowIndex),
+        highestContiguousSequence: u32(raw.highestContiguousSequence),
+        nextCiphertextOffset: bigint(raw.nextCiphertextOffset),
+        prefixSha256: bytes(raw.prefixSha256, 32),
+        checkpointRevision: u32(raw.checkpointRevision),
+        missingSequences: numbers(raw.missingSequences).map(u32Value),
+      }
+    case 'manifest_chunk':
+      return {
+        kind: 'manifest_chunk',
+        ...common,
+        totalManifestLength: u16(raw.totalManifestLength),
+        chunkOffset: u16(raw.chunkOffset),
+        manifestSha256: bytes(raw.manifestSha256, 32),
+        chunk: bytes(raw.chunk),
+      }
+    case 'eof':
+      return {
+        kind: 'eof',
+        ...common,
+        finalSequence: u32(raw.finalSequence),
+        blockCount: u32(raw.blockCount),
+        ciphertextLength: bigint(raw.ciphertextLength),
+        ciphertextSha256: bytes(raw.ciphertextSha256, 32),
+        manifestSha256: bytes(raw.manifestSha256, 32),
+      }
+    case 'resume_request':
+      return normalizeResumeFrame('resume_request', raw, common)
+    case 'resume_accept':
+      return normalizeResumeFrame('resume_accept', raw, common)
+    case 'resume_reject':
+      return {
+        kind: 'resume_reject',
+        ...common,
+        reason: u16(raw.reason),
+        checkpointRevision: u32(raw.checkpointRevision),
+        nextCiphertextOffset: bigint(raw.nextCiphertextOffset),
+        prefixSha256: bytes(raw.prefixSha256, 32),
+      }
+    case 'confirm':
+      return {
+        kind: 'confirm',
+        ...common,
+        uploadSessionUuid: string(raw.uploadSessionUuid),
+        recordingUuid: string(raw.recordingUuid),
+        recordingGeneration: u32(raw.recordingGeneration),
+        ownerRevision: u32(raw.ownerRevision),
+        receiptSha256: bytes(raw.receiptSha256, 32),
+      }
+    case 'abort':
+      return { kind: 'abort', ...common, reason: u16(raw.reason) }
+    case 'error':
+      return {
+        kind: 'error',
+        ...common,
+        result: u16(raw.result),
+        failedMessageType: byte(raw.failedMessageType),
+        checkpointRevision: u32(raw.checkpointRevision),
+      }
+    default:
+      throw internalBridgeError()
+  }
+}
+
+function normalizeResumeFrame(
+  kind: 'resume_request' | 'resume_accept',
+  raw: UnknownRecord,
+  common: { flags: number; transportSessionId: bigint },
+): CoreEncryptedUploadV2TransferFrame {
+  return {
+    kind,
+    ...common,
+    uploadSessionUuid: string(raw.uploadSessionUuid),
+    recordingUuid: string(raw.recordingUuid),
+    recordingGeneration: u32(raw.recordingGeneration),
+    checkpointRevision: u32(raw.checkpointRevision),
+    nextCiphertextOffset: bigint(raw.nextCiphertextOffset),
+    prefixSha256: bytes(raw.prefixSha256, 32),
+    windowPackets: u16(raw.windowPackets),
+    dataPayloadBytes: u16(raw.dataPayloadBytes),
   }
 }
 
@@ -1136,6 +1644,15 @@ function string(value: unknown): string {
   return value
 }
 
+function stringUnion<const Values extends readonly string[]>(
+  value: unknown,
+  values: Values,
+): Values[number] {
+  const result = string(value)
+  if (!values.includes(result)) throw internalBridgeError()
+  return result as Values[number]
+}
+
 function optionalString(value: unknown): string | null {
   return value === undefined || value === null ? null : string(value)
 }
@@ -1183,6 +1700,21 @@ function byte(value: unknown): number {
   const result = number(value)
   if (result < 0 || result > 255) throw internalBridgeError()
   return result
+}
+
+function u16(value: unknown): number {
+  const result = number(value)
+  if (result < 0 || result > 0xffff) throw internalBridgeError()
+  return result
+}
+
+function u32(value: unknown): number {
+  return u32Value(number(value))
+}
+
+function u32Value(value: number): number {
+  if (value < 0 || value > 0xffff_ffff) throw internalBridgeError()
+  return value
 }
 
 function numbers(value: unknown): number[] {

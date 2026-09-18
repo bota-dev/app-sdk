@@ -12,6 +12,7 @@ publish = false
 bota-device-sdk-core = { path = "../../core/device-sdk-core", version = "1.2.0-beta.1" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde-wasm-bindgen = "=0.6.5"
+sha2 = "0.11.0"
 wasm-bindgen = "=0.2.128"
 
 [lib]

@@ -6,10 +6,12 @@ use bota_device_sdk_core::{
     error::{DeviceSdkError, ErrorCode, Operation},
     generated::protocol,
     model::{ReconnectHint, UploadSecurityPolicy},
-    protocol::EncryptedUploadV2Capabilities,
+    protocol::{DeprovisionFailure, EncryptedUploadV2Capabilities},
 };
 use bota_device_sdk_wasm::{
-    BridgeCore, decode_device_status_dto, decode_encrypted_upload_v2_capabilities_dto,
+    BridgeCore, WebIntegrityHasher, decode_deprovision_result_dto, decode_device_status_dto,
+    decode_encrypted_upload_v2_capabilities_dto, decode_recording_list_dto,
+    encode_deprovision_command, encode_recording_confirm, encode_recording_list_command,
 };
 
 const SERIAL: &str = "EVFXXW67KP";
@@ -360,4 +362,52 @@ fn malformed_status_is_rejected_by_the_shared_decoder() {
 
     assert_eq!(error.code.as_str(), "truncated_packet");
     assert_eq!(error.operation.as_str(), "decode");
+}
+
+#[test]
+fn codecs_delegate_legacy_packets_to_the_shared_rust_authority() {
+    let recordings = decode_recording_list_dto(&[
+        0xa1, 0xb2, 0xc3, 0xd4, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0xf1, 0x53, 0x65, 0x0c, 0x00, 0x04, 0x00,
+    ])
+    .expect("recording fixture should decode");
+
+    assert_eq!(recordings.len(), 1);
+    assert_eq!(recordings[0].uuid, "a1b2c3d4-0000-0000-0000-000000000000");
+    assert_eq!(encode_recording_list_command().unwrap(), [0x01]);
+    assert_eq!(
+        encode_recording_confirm("a1b2c3d4-0000-0000-0000-000000000000").unwrap(),
+        [
+            0x07, 0xa1, 0xb2, 0xc3, 0xd4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00,
+        ]
+    );
+    assert!(encode_recording_confirm("not-a-uuid").is_err());
+    assert_eq!(encode_deprovision_command().unwrap(), [0x05]);
+
+    let unknown = decode_deprovision_result_dto(&[0xfe]).unwrap();
+    assert!(!unknown.success);
+    assert_eq!(unknown.error, Some(DeprovisionFailure::Unknown(0xfe)));
+    assert!(decode_deprovision_result_dto(&[]).is_err());
+    assert!(decode_deprovision_result_dto(&[0, 0]).is_err());
+}
+
+#[test]
+fn codecs_integrity_hasher_streams_without_consuming_snapshots() {
+    let mut hasher = WebIntegrityHasher::new();
+    hasher.update(b"1234");
+    let prefix = hasher.sha256_snapshot();
+    hasher.update(b"56789");
+
+    assert_eq!(hasher.length(), 9);
+    assert_eq!(hasher.crc32(), 0xcbf4_3926);
+    assert_eq!(
+        hasher.sha256_snapshot(),
+        [
+            0x15, 0xe2, 0xb0, 0xd3, 0xc3, 0x38, 0x91, 0xeb, 0xb0, 0xf1, 0xef, 0x60, 0x9e, 0xc4,
+            0x19, 0x42, 0x0c, 0x20, 0xe3, 0x20, 0xce, 0x94, 0xc6, 0x5f, 0xbc, 0x8c, 0x33, 0x12,
+            0x44, 0x8e, 0xb2, 0x25,
+        ]
+    );
+    assert_ne!(prefix, hasher.sha256_snapshot());
 }

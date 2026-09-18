@@ -426,6 +426,233 @@ export type CoreWorkflowStatus =
   | { kind: 'cancelled'; operation: CoreOperation }
   | { kind: 'failed'; error: unknown }
 
+export interface CoreDeviceRecording {
+  uuid: string
+  startedAtTimestampSeconds: number
+  durationMilliseconds: bigint
+  fileSizeBytes: bigint
+  codec: 'pcm_16k' | 'pcm_8k' | 'opus_16k' | 'opus_8k' | 'unknown'
+  codecRaw?: number
+  encrypted: boolean
+}
+
+export type CoreConnectionType = 'wifi' | 'ble' | 'cellular' | 'unknown'
+
+export interface CoreConnectionSettings {
+  enabledConnections: { wifi: boolean; cellular: boolean }
+  heartbeatEnabledConnections: { wifi: boolean; cellular: boolean }
+  uploadNetworkPreference: CoreConnectionType[]
+  powerManagement: {
+    cellularIdleTimeoutSeconds: number
+    wifiIdleTimeoutSeconds: number
+  }
+  streamingEnabled: boolean
+  streamingFlushIntervalSeconds: number
+}
+
+export interface CoreDecodedConnectionSettings extends CoreConnectionSettings {
+  supportedVersion: boolean
+}
+
+export type CoreDeviceModel = 'pin' | 'pin_4g' | 'note'
+
+export interface CoreOperationResult {
+  success: boolean
+  error?: string
+  errorRaw?: number
+}
+
+export interface CoreWiFiStatusInfo {
+  status: 'idle' | 'connecting' | 'connected' | 'failed' | 'disconnected' | 'unknown'
+  statusRaw: number
+  signalStrength?: number
+  ssid?: string
+  lastError?: string
+}
+
+export interface CoreWiFiScanNetwork {
+  ssid: string
+  quality: number
+  isCurrent: boolean
+  isOpen: boolean
+}
+
+export type CoreWiFiScanUpdate =
+  | { kind: 'pending'; statusRaw: number }
+  | {
+      kind: 'done'
+      networks: CoreWiFiScanNetwork[]
+      currentSsid: string | null
+    }
+
+interface CoreEncryptedUploadV2Common {
+  flags: number
+  transportSessionId: bigint
+}
+
+interface CoreEncryptedUploadV2ResumeFrame extends CoreEncryptedUploadV2Common {
+  uploadSessionUuid: string
+  recordingUuid: string
+  recordingGeneration: number
+  checkpointRevision: number
+  nextCiphertextOffset: bigint
+  prefixSha256: Uint8Array
+  windowPackets: number
+  dataPayloadBytes: number
+}
+
+export type CoreEncryptedUploadV2TransferFrame =
+  | (CoreEncryptedUploadV2Common & { kind: 'list' })
+  | (CoreEncryptedUploadV2Common & {
+      kind: 'recording_entry'
+      recordingUuid: string
+      recordingGeneration: number
+      storageFormat: number
+      completionState: number
+      startedAt: bigint
+      durationSeconds: number
+      plaintextLength: bigint
+      ciphertextLength: bigint
+      ciphertextSha256: Uint8Array
+    })
+  | (CoreEncryptedUploadV2Common & {
+      kind: 'recording_list_end'
+      count: number
+      listRevision: number
+      listSha256: Uint8Array
+    })
+  | (CoreEncryptedUploadV2Common & {
+      kind: 'start'
+      uploadSessionUuid: string
+      recordingUuid: string
+      recordingGeneration: number
+      authorizationSha256: Uint8Array
+      checkpointRevision: number
+      nextCiphertextOffset: bigint
+      prefixSha256: Uint8Array
+      windowPackets: number
+      dataPayloadBytes: number
+    })
+  | (CoreEncryptedUploadV2Common & {
+      kind: 'start_ack'
+      uploadSessionUuid: string
+      recordingUuid: string
+      recordingGeneration: number
+      ciphertextLength: bigint
+      ciphertextSha256: Uint8Array
+      windowPackets: number
+      dataPayloadBytes: number
+      checkpointIntervalBlocks: number
+      checkpointRevision: number
+      nextCiphertextOffset: bigint
+      prefixSha256: Uint8Array
+    })
+  | (CoreEncryptedUploadV2Common & {
+      kind: 'data'
+      sequence: number
+      offset: bigint
+      data: Uint8Array
+    })
+  | (CoreEncryptedUploadV2Common & {
+      kind: 'window_end'
+      windowIndex: number
+      firstSequence: number
+      lastSequence: number
+      nextCiphertextOffset: bigint
+      prefixSha256: Uint8Array
+      checkpointRevision: number
+    })
+  | (CoreEncryptedUploadV2Common & {
+      kind: 'window_ack'
+      windowIndex: number
+      highestContiguousSequence: number
+      nextCiphertextOffset: bigint
+      prefixSha256: Uint8Array
+      checkpointRevision: number
+      missingSequences: number[]
+    })
+  | (CoreEncryptedUploadV2Common & {
+      kind: 'manifest_chunk'
+      totalManifestLength: number
+      chunkOffset: number
+      manifestSha256: Uint8Array
+      chunk: Uint8Array
+    })
+  | (CoreEncryptedUploadV2Common & {
+      kind: 'eof'
+      finalSequence: number
+      blockCount: number
+      ciphertextLength: bigint
+      ciphertextSha256: Uint8Array
+      manifestSha256: Uint8Array
+    })
+  | (CoreEncryptedUploadV2ResumeFrame & { kind: 'resume_request' })
+  | (CoreEncryptedUploadV2ResumeFrame & { kind: 'resume_accept' })
+  | (CoreEncryptedUploadV2Common & {
+      kind: 'resume_reject'
+      reason: number
+      checkpointRevision: number
+      nextCiphertextOffset: bigint
+      prefixSha256: Uint8Array
+    })
+  | (CoreEncryptedUploadV2Common & {
+      kind: 'confirm'
+      uploadSessionUuid: string
+      recordingUuid: string
+      recordingGeneration: number
+      ownerRevision: number
+      receiptSha256: Uint8Array
+    })
+  | (CoreEncryptedUploadV2Common & { kind: 'abort'; reason: number })
+  | (CoreEncryptedUploadV2Common & {
+      kind: 'error'
+      result: number
+      failedMessageType: number
+      checkpointRevision: number
+    })
+
+export type CoreEncryptedUploadV2OutboundTransferFrame = Extract<
+  CoreEncryptedUploadV2TransferFrame,
+  { kind: 'list' | 'start' | 'window_ack' | 'resume_request' | 'confirm' | 'abort' }
+>
+
+export interface CoreEncryptedUploadV2Status {
+  phase: number
+  result: number
+  transportSessionId: bigint
+  durableCiphertextBytes: bigint
+  progressPercent: number
+  transportProfile: number
+}
+
+export type CoreEncryptedUploadV2SignedBlobFrame =
+  | {
+      kind: 'begin'
+      blobKind: 'authorization' | 'receipt'
+      writeId: number
+      totalLength: number
+      sha256: Uint8Array
+    }
+  | {
+      kind: 'data'
+      blobKind: 'authorization' | 'receipt'
+      writeId: number
+      offset: number
+      data: Uint8Array
+    }
+  | {
+      kind: 'commit' | 'abort'
+      blobKind: 'authorization' | 'receipt'
+      writeId: number
+    }
+
+export interface CoreIntegrityHasher {
+  update(bytes: Uint8Array): void
+  length(): bigint
+  crc32(): number
+  sha256Snapshot(): Uint8Array
+}
+
 export interface CoreBridge {
   startExactConnection(input: CoreConnectionInput): CoreEffectEnvelope[]
   startReconnect(input: CoreReconnectInput): CoreEffectEnvelope[]
@@ -441,6 +668,35 @@ export interface CoreBridge {
   decodeEncryptedUploadV2Capabilities(
     bytes: Uint8Array,
   ): EncryptedUploadV2Capabilities
+  decodeRecordingList(bytes: Uint8Array): CoreDeviceRecording[]
+  encodeRecordingListCommand(): Uint8Array
+  encodeRecordingConfirm(recordingUuid: string): Uint8Array
+  encodeDeprovisionCommand(): Uint8Array
+  decodeDeprovisionResult(bytes: Uint8Array): CoreOperationResult
+  decodeConnectionSettings(bytes: Uint8Array): CoreDecodedConnectionSettings
+  encodeConnectionSettings(
+    settings: CoreConnectionSettings,
+    model: CoreDeviceModel,
+  ): Uint8Array
+  encodeWiFiGrant(grant: string, capacity: number): Uint8Array
+  encodeWiFiCredentials(ssid: string, password: string): Uint8Array
+  encodeWiFiScanCommand(): Uint8Array
+  decodeWiFiConfigResult(bytes: Uint8Array): CoreOperationResult
+  decodeWiFiStatus(bytes: Uint8Array): CoreWiFiStatusInfo
+  decodeWiFiScanUpdate(bytes: Uint8Array): CoreWiFiScanUpdate
+  encodeRecordingControlCommand(action: 'start' | 'stop'): Uint8Array
+  decodeRecordingControlResult(bytes: Uint8Array): CoreOperationResult
+  decodeEncryptedUploadV2Transfer(
+    bytes: Uint8Array,
+  ): CoreEncryptedUploadV2TransferFrame
+  encodeEncryptedUploadV2Transfer(
+    frame: CoreEncryptedUploadV2OutboundTransferFrame,
+  ): Uint8Array
+  decodeEncryptedUploadV2Status(bytes: Uint8Array): CoreEncryptedUploadV2Status
+  encodeEncryptedUploadV2SignedBlob(
+    frame: CoreEncryptedUploadV2SignedBlobFrame,
+  ): Uint8Array
+  createIntegrityHasher(): CoreIntegrityHasher
 }
 
 export type CoreLoader = () => Promise<CoreBridge>

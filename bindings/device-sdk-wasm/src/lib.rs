@@ -7,7 +7,10 @@ use bota_device_sdk_core::{
     },
 };
 
+mod codecs;
 mod workflows;
+
+pub use codecs::*;
 
 #[derive(Default)]
 pub struct BridgeCore {
