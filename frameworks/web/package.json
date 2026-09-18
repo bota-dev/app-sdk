@@ -37,6 +37,7 @@
   "devDependencies": {
     "@types/node": "22.20.3",
     "@types/web-bluetooth": "0.0.21",
+    "fake-indexeddb": "6.2.5",
     "typescript": "6.0.3"
   }
 }
