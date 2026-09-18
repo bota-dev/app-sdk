@@ -4,6 +4,7 @@ import test from 'node:test'
 
 import { BotaSDKError } from '../errors.ts'
 import { DeviceManager } from '../deviceManager.ts'
+import { FOREGROUND_GATT_SERVICES } from '../gatt.ts'
 import { createWasmCore } from '../wasmCore.ts'
 import { WebBluetoothTransport } from '../webBluetoothTransport.ts'
 import { FakeBrowserBluetoothTransport } from './fakeBluetooth.ts'
@@ -32,6 +33,27 @@ test('unsupported browsers fail before opening the device picker', async () => {
     },
   )
   assert.deepEqual(transport.calls, [])
+})
+
+test('browser capabilities are returned as one immutable manager snapshot', async () => {
+  const transport = new FakeBrowserBluetoothTransport()
+  transport.supportsAuthorizedDevices = false
+  const { manager } = await createManager(transport)
+
+  const capabilities = manager.getCapabilities()
+
+  assert.deepEqual(capabilities, {
+    bluetooth: true,
+    authorizedDeviceReconnect: false,
+    durableStorage: false,
+    largeRecordingSync: false,
+    firmwareUpdate: false,
+  })
+  assert.equal(Object.isFrozen(capabilities), true)
+
+  transport.supportsAuthorizedDevices = true
+  assert.equal(manager.getCapabilities(), capabilities)
+  assert.equal(manager.getCapabilities().authorizedDeviceReconnect, false)
 })
 
 test('invalid expected identity fails before opening the device picker', async () => {
@@ -112,11 +134,7 @@ test('the browser picker requests the read-only device services', async () => {
     assert.equal(selected.id, nativeDevice.id)
     assert.deepEqual(options, {
       filters: [{ namePrefix: 'Bota' }],
-      optionalServices: [
-        '0000180a-0000-1000-8000-00805f9b34fb',
-        'b07a0002-0000-1000-8000-00805f9b34fb',
-        'b07a0004-0000-1000-8000-00805f9b34fb',
-      ],
+      optionalServices: [...FOREGROUND_GATT_SERVICES],
     })
   } finally {
     if (originalNavigator) {

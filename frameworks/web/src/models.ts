@@ -82,3 +82,11 @@ export interface DeviceSnapshot {
 export interface ConnectOptions {
   expectedSerialNumber: string
 }
+
+export interface BrowserCapabilities {
+  readonly bluetooth: boolean
+  readonly authorizedDeviceReconnect: boolean
+  readonly durableStorage: boolean
+  readonly largeRecordingSync: boolean
+  readonly firmwareUpdate: boolean
+}

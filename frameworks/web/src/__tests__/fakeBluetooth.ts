@@ -1,14 +1,23 @@
 import type {
   BrowserBluetoothTransport,
   BrowserDeviceHandle,
+  BrowserNotification,
+  BrowserSubscription,
 } from '../transport.ts'
+import {
+  canonicalGattUuid,
+  DEVICE_INFORMATION_SERVICE,
+  SERIAL_NUMBER_CHARACTERISTIC,
+} from '../gatt.ts'
 
 function readKey(serviceUuid: string, characteristicUuid: string): string {
-  return `${serviceUuid}:${characteristicUuid}`
+  return `${canonicalGattUuid(serviceUuid)}:${canonicalGattUuid(characteristicUuid)}`
 }
 
 export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport {
   isSupported = true
+  supportsAuthorizedDevices = true
+  readonly maximumWriteValueLength = 128
   readonly calls: string[] = []
   readonly device: BrowserDeviceHandle = {
     id: 'browser-peripheral-1',
@@ -29,6 +38,11 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
     if (this.pickerGate) await this.pickerGate
     if (this.pickerError) throw this.pickerError
     return this.device
+  }
+
+  async getAuthorizedDevices(): Promise<BrowserDeviceHandle[]> {
+    this.calls.push('get_authorized_devices')
+    return [this.device]
   }
 
   async connect(device: BrowserDeviceHandle): Promise<void> {
@@ -52,10 +66,44 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
     if (error) throw error
     const value = this.readValues.get(key)
     if (value) return value.slice()
-    if (serviceUuid === '180A' && characteristicUuid === '2A25') {
+    if (
+      canonicalGattUuid(serviceUuid) === DEVICE_INFORMATION_SERVICE &&
+      canonicalGattUuid(characteristicUuid) === SERIAL_NUMBER_CHARACTERISTIC
+    ) {
       return new TextEncoder().encode(this.serialNumber)
     }
     throw new Error(`unexpected read ${serviceUuid}/${characteristicUuid}`)
+  }
+
+  async write(
+    device: BrowserDeviceHandle,
+    serviceUuid: string,
+    characteristicUuid: string,
+    _value: Uint8Array,
+    withResponse: boolean,
+  ): Promise<void> {
+    this.calls.push(
+      `write:${device.id}:${serviceUuid}:${characteristicUuid}:${withResponse}`,
+    )
+  }
+
+  async subscribe(
+    device: BrowserDeviceHandle,
+    serviceUuid: string,
+    characteristicUuid: string,
+    _listener: (notification: BrowserNotification) => void,
+  ): Promise<BrowserSubscription> {
+    this.calls.push(`subscribe:${device.id}:${serviceUuid}:${characteristicUuid}`)
+    let removed = false
+    return {
+      remove: async () => {
+        if (removed) return
+        removed = true
+        this.calls.push(
+          `unsubscribe:${device.id}:${serviceUuid}:${characteristicUuid}`,
+        )
+      },
+    }
   }
 
   async disconnect(device: BrowserDeviceHandle): Promise<void> {

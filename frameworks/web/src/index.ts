@@ -7,6 +7,7 @@ export type {
   BotaSDKErrorCode,
 } from './errors.ts'
 export type {
+  BrowserCapabilities,
   ConnectOptions,
   ConnectedDevice,
   DeviceFlags,

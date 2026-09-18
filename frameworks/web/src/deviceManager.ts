@@ -1,6 +1,19 @@
 import type { CoreBridge, CoreEffectEnvelope, CoreHostEvent } from './core.ts'
+import { detectBrowserCapabilities } from './capabilities.ts'
 import { BotaSDKError, normalizeCoreError } from './errors.ts'
+import {
+  BOTA_CONTROL_SERVICE,
+  BOTA_STORAGE_SERVICE,
+  DEVICE_INFORMATION_SERVICE,
+  DEVICE_STATUS_CHARACTERISTIC,
+  FIRMWARE_REVISION_CHARACTERISTIC,
+  HARDWARE_REVISION_CHARACTERISTIC,
+  MODEL_NUMBER_CHARACTERISTIC,
+  SERIAL_NUMBER_CHARACTERISTIC,
+  STORAGE_TRANSFER_CAPABILITIES_V2_CHARACTERISTIC,
+} from './gatt.ts'
 import type {
+  BrowserCapabilities,
   ConnectOptions,
   ConnectedDevice,
   DeviceSnapshot,
@@ -13,19 +26,11 @@ import {
 } from './transport.ts'
 
 const SERIAL_PATTERN = /^[A-Za-z0-9]{1,64}$/
-const DEVICE_INFORMATION_SERVICE = '180A'
-const SERIAL_NUMBER = '2A25'
-const MODEL_NUMBER = '2A24'
-const HARDWARE_REVISION = '2A27'
-const FIRMWARE_REVISION = '2A26'
-const CONTROL_SERVICE = 'B07A0002-0000-1000-8000-00805F9B34FB'
-const DEVICE_STATUS = 'B07A0002-0001-1000-8000-00805F9B34FB'
-const STORAGE_SERVICE = 'B07A0004-0000-1000-8000-00805F9B34FB'
-const V2_CAPABILITIES = 'B07A0004-0006-1000-8000-00805F9B34FB'
 
 export class DeviceManager {
   private readonly core: CoreBridge
   private readonly transport: BrowserBluetoothTransport
+  private readonly capabilities: BrowserCapabilities
   private activeDevice: BrowserDeviceHandle | null = null
   private verifiedDevice: ConnectedDevice | null = null
   private removeDisconnectListener: (() => void) | null = null
@@ -38,6 +43,7 @@ export class DeviceManager {
   constructor(core: CoreBridge, transport: BrowserBluetoothTransport) {
     this.core = core
     this.transport = transport
+    this.capabilities = detectBrowserCapabilities(transport)
   }
 
   get isSupported(): boolean {
@@ -46,6 +52,10 @@ export class DeviceManager {
 
   get connectedDevice(): ConnectedDevice | null {
     return this.verifiedDevice
+  }
+
+  getCapabilities(): BrowserCapabilities {
+    return this.capabilities
   }
 
   async connect(options: ConnectOptions): Promise<ConnectedDevice> {
@@ -125,7 +135,7 @@ export class DeviceManager {
       const serialNumber = await this.readRequiredText(
         device,
         DEVICE_INFORMATION_SERVICE,
-        SERIAL_NUMBER,
+        SERIAL_NUMBER_CHARACTERISTIC,
       )
       if (serialNumber !== connected.serialNumber) {
         await this.disconnect()
@@ -135,19 +145,23 @@ export class DeviceManager {
       const modelNumber = await this.readOptionalText(
         device,
         DEVICE_INFORMATION_SERVICE,
-        MODEL_NUMBER,
+        MODEL_NUMBER_CHARACTERISTIC,
       )
       const hardwareRevision = await this.readOptionalText(
         device,
         DEVICE_INFORMATION_SERVICE,
-        HARDWARE_REVISION,
+        HARDWARE_REVISION_CHARACTERISTIC,
       )
       const firmwareRevision = await this.readOptionalText(
         device,
         DEVICE_INFORMATION_SERVICE,
-        FIRMWARE_REVISION,
+        FIRMWARE_REVISION_CHARACTERISTIC,
       )
-      const statusBytes = await this.read(device, CONTROL_SERVICE, DEVICE_STATUS)
+      const statusBytes = await this.read(
+        device,
+        BOTA_CONTROL_SERVICE,
+        DEVICE_STATUS_CHARACTERISTIC,
+      )
       const status = this.core.decodeDeviceStatus(statusBytes)
       const encryptedUploadV2 = await this.readCapabilities(device)
 
@@ -240,7 +254,11 @@ export class DeviceManager {
     device: BrowserDeviceHandle,
   ): Promise<EncryptedUploadV2Capabilities | null> {
     try {
-      const bytes = await this.read(device, STORAGE_SERVICE, V2_CAPABILITIES)
+      const bytes = await this.read(
+        device,
+        BOTA_STORAGE_SERVICE,
+        STORAGE_TRANSFER_CAPABILITIES_V2_CHARACTERISTIC,
+      )
       return this.core.decodeEncryptedUploadV2Capabilities(bytes)
     } catch (error) {
       if (
@@ -405,6 +423,14 @@ export class DeviceManager {
 }
 
 function pickerError(error: unknown): BotaSDKError {
+  if (error instanceof BrowserTransportError) {
+    if (error.code === 'picker_cancelled') {
+      return new BotaSDKError('picker_cancelled', 'connect', { cause: error })
+    }
+    if (error.code === 'permission_denied') {
+      return new BotaSDKError('permission_denied', 'connect', { cause: error })
+    }
+  }
   const name = typeof error === 'object' && error !== null && 'name' in error
     ? String(error.name)
     : ''
