@@ -1,12 +1,13 @@
 use bota_device_sdk_core::{
     model::{ConnectionType, DeviceState},
     protocol::{
-        DeprovisionFailure, DeviceLogDecoder, ParsedConnectionSettings, TransferPacket,
-        WiFiConfigResult, WiFiScanUpdate, WiFiStatus, parse_connection_settings,
-        parse_deprovision_result, parse_device_status, parse_ota_status,
-        parse_recording_control_result, parse_recording_list, parse_recording_state,
-        parse_transfer_packet, parse_trigger_upload_response, parse_wifi_config_result,
-        parse_wifi_scan_result, parse_wifi_status_info,
+        DeprovisionFailure, DeviceLogDecoder, ParsedConnectionSettings, RecordingControlCommand,
+        TransferPacket, WiFiConfigResult, WiFiScanUpdate, WiFiStatus,
+        encode_recording_control_command, parse_connection_settings, parse_deprovision_result,
+        parse_device_status, parse_ota_status, parse_recording_control_result,
+        parse_recording_list, parse_recording_state, parse_transfer_packet,
+        parse_trigger_upload_response, parse_wifi_config_result, parse_wifi_scan_result,
+        parse_wifi_status_info,
     },
 };
 use serde_json::{Map, Value, json};
@@ -35,11 +36,15 @@ fn decode_fixtures_match_react_native_compatibility_values() {
             if fixture_case.get("expectedError").is_some() {
                 assert!(actual.is_err(), "{name} unexpectedly succeeded");
             } else {
-                assert_eq!(actual.unwrap(), fixture_case["expected"], "{name}");
+                let expected = fixture_case
+                    .get("expected")
+                    .or_else(|| fixture_case.get("expectedHex"))
+                    .unwrap();
+                assert_eq!(actual.unwrap(), *expected, "{name}");
             }
         }
     }
-    assert_eq!(matched, 39);
+    assert_eq!(matched, 41);
 }
 
 #[test]
@@ -116,6 +121,12 @@ fn decode_fixture(fixture_case: &Value) -> Option<Result<Value, String>> {
             }
             Value::Object(value)
         }),
+        "encodeRecordingControlStart" => Ok(Value::String(hex_encode(
+            &encode_recording_control_command(RecordingControlCommand::Start),
+        ))),
+        "encodeRecordingControlStop" => Ok(Value::String(hex_encode(
+            &encode_recording_control_command(RecordingControlCommand::Stop),
+        ))),
         "parseTransferPacket" => parse_transfer_packet(&bytes).map(transfer_json),
         "parseTriggerDeviceUploadResponse" => {
             parse_trigger_upload_response(&bytes).map(|response| match response {

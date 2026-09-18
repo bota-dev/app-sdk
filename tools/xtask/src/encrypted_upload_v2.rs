@@ -50,6 +50,8 @@ const EXPIRES_AT: u64 = 2_000_003_600;
 const NOW: u64 = 2_000_000_060;
 const BLOCK_SIZE: u32 = 4096;
 const TRANSPORT_SESSION_ID: u64 = 0x0000_1122_3344_5566;
+const WIDE_U64: u64 = 0x0102_0304_0506_0708;
+const STATUS_SESSION_ID: u64 = 0x1112_1314_1516_1718;
 
 const DOMAIN_LOCAL_WRAP: &[u8] = b"bota/enc-v2/local-wrap/v1";
 const DOMAIN_WRAPPED_KEY_AAD: &[u8] = b"bota/enc-v2/wrapped-key-aad/v1";
@@ -68,7 +70,7 @@ const DOMAIN_PUBLICATION: &[u8] = b"bota/enc-v2/publication/v1";
 
 type HpkeKem = X25519HkdfSha256;
 type HpkeAead = HpkeChaCha20Poly1305;
-type TransferFixture = (&'static str, &'static str, Vec<u8>);
+type TransferFixture = (&'static str, &'static str, Vec<u8>, Option<Value>);
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1365,30 +1367,54 @@ fn add_ble_cases(
     let prefix_empty = sha256(&[]);
     let prefix_first = sha256(&storage.bytes[..64.min(storage.bytes.len())]);
     let frames = transfer_frames(storage, documents, &prefix_empty, &prefix_first)?;
-    for (name, decoded_type, frame) in frames {
+    for (name, decoded_type, frame, transfer_dto) in frames {
         decode_encrypted_upload_v2_transfer(&frame)
             .map_err(|error| format!("generated {name} rejected: {error}"))?;
+        let mut expected = json!({
+            "decodedType": decoded_type,
+            "encodedHex": hex(&frame),
+            "normalized": {
+                "messageType": frame[0],
+                "transportSessionId": TRANSPORT_SESSION_ID,
+                "flags": 0
+            }
+        });
+        if let Some(transfer_dto) = transfer_dto {
+            expected
+                .as_object_mut()
+                .expect("transfer expectation is an object")
+                .insert("transferDto".to_owned(), transfer_dto);
+        }
         cases.push(valid_case(
             name,
             "ble",
             "decodeTransfer",
             &frame,
             json!({ "expectedTransportSessionId": TRANSPORT_SESSION_ID }),
-            json!({
-                "decodedType": decoded_type,
-                "encodedHex": hex(&frame),
-                "normalized": {
-                    "messageType": frame[0],
-                    "transportSessionId": TRANSPORT_SESSION_ID,
-                    "flags": 0
-                }
-            }),
+            expected,
         ));
     }
 
     let status = status_value();
     decode_encrypted_upload_v2_status(&status)
         .map_err(|error| format!("generated status rejected: {error}"))?;
+    cases.push(valid_case(
+        "ble-transfer-status",
+        "ble",
+        "decodeStatus",
+        &status,
+        json!({}),
+        json!({
+            "statusDto": {
+                "phase": 0xfe,
+                "result": 0x1234,
+                "transportSessionId": STATUS_SESSION_ID.to_string(),
+                "durableCiphertextBytes": WIDE_U64.to_string(),
+                "progressPercent": 57,
+                "transportProfile": 3
+            }
+        }),
+    ));
 
     let malformed_capabilities = [
         (
@@ -1610,59 +1636,187 @@ fn transfer_frames(
     let list_digest = sha256(&entry[12..96]);
     let manifest_digest = sha256(&documents.manifest);
     Ok(vec![
-        ("ble-list", "list", list_frame()),
-        ("ble-recording-entry", "recordingEntry", entry),
+        ("ble-list", "list", list_frame(), None),
+        (
+            "ble-recording-entry",
+            "recordingEntry",
+            entry,
+            Some(json!({
+                "kind": "recording_entry",
+                "flags": 0,
+                "transportSessionId": TRANSPORT_SESSION_ID.to_string(),
+                "recordingUuid": uuid(&RECORDING_UUID),
+                "recordingGeneration": RECORDING_GENERATION,
+                "storageFormat": 3,
+                "completionState": 1,
+                "startedAt": WIDE_U64.to_string(),
+                "durationSeconds": 37,
+                "plaintextLength": storage.plaintext_length.to_string(),
+                "ciphertextLength": storage.bytes.len().to_string(),
+                "ciphertextSha256": storage.ciphertext_sha256.to_vec()
+            })),
+        ),
         (
             "ble-recording-list-end",
             "recordingListEnd",
             recording_list_end(&list_digest),
+            None,
         ),
         (
             "ble-fresh-transfer",
             "start",
             fresh_start(&documents.authorization, prefix_empty),
+            None,
         ),
         (
             "ble-start-ack",
             "startAck",
             start_ack(storage, prefix_empty),
+            Some(json!({
+                "kind": "start_ack",
+                "flags": 0,
+                "transportSessionId": TRANSPORT_SESSION_ID.to_string(),
+                "uploadSessionUuid": uuid(&UPLOAD_SESSION_UUID),
+                "recordingUuid": uuid(&RECORDING_UUID),
+                "recordingGeneration": RECORDING_GENERATION,
+                "ciphertextLength": storage.bytes.len().to_string(),
+                "ciphertextSha256": storage.ciphertext_sha256.to_vec(),
+                "windowPackets": 16,
+                "dataPayloadBytes": 244,
+                "checkpointIntervalBlocks": 8,
+                "checkpointRevision": 0,
+                "nextCiphertextOffset": "0",
+                "prefixSha256": prefix_empty.to_vec()
+            })),
         ),
-        ("ble-data", "data", data_frame(storage)),
-        ("ble-window-end", "windowEnd", window_end(prefix_first)),
+        (
+            "ble-data",
+            "data",
+            data_frame(storage),
+            Some(json!({
+                "kind": "data",
+                "flags": 0,
+                "transportSessionId": TRANSPORT_SESSION_ID.to_string(),
+                "sequence": 1,
+                "offset": "0",
+                "data": storage.bytes[..32.min(storage.bytes.len())].to_vec()
+            })),
+        ),
+        (
+            "ble-window-end",
+            "windowEnd",
+            window_end(prefix_first),
+            Some(json!({
+                "kind": "window_end",
+                "flags": 0,
+                "transportSessionId": TRANSPORT_SESSION_ID.to_string(),
+                "windowIndex": 2,
+                "firstSequence": 1,
+                "lastSequence": 16,
+                "nextCiphertextOffset": "64",
+                "prefixSha256": prefix_first.to_vec(),
+                "checkpointRevision": 4
+            })),
+        ),
         (
             "ble-window-clean-ack",
             "windowAck",
             clean_window_ack(prefix_first),
+            None,
         ),
         (
             "ble-window-repair",
             "windowAck",
             repair_window_ack(prefix_first),
+            None,
         ),
         (
             "ble-manifest-chunk",
             "manifestChunk",
             manifest_chunk(&documents.manifest, &manifest_digest)?,
+            Some(json!({
+                "kind": "manifest_chunk",
+                "flags": 0,
+                "transportSessionId": TRANSPORT_SESSION_ID.to_string(),
+                "totalManifestLength": 580,
+                "chunkOffset": 0,
+                "manifestSha256": manifest_digest.to_vec(),
+                "chunk": documents.manifest[..64].to_vec()
+            })),
         ),
-        ("ble-eof", "eof", eof_frame(storage, &manifest_digest)),
+        (
+            "ble-eof",
+            "eof",
+            eof_frame(storage, &manifest_digest),
+            Some(json!({
+                "kind": "eof",
+                "flags": 0,
+                "transportSessionId": TRANSPORT_SESSION_ID.to_string(),
+                "finalSequence": 17,
+                "blockCount": storage.block_count,
+                "ciphertextLength": storage.bytes.len().to_string(),
+                "ciphertextSha256": storage.ciphertext_sha256.to_vec(),
+                "manifestSha256": manifest_digest.to_vec()
+            })),
+        ),
         (
             "ble-resume-request",
             "resumeRequest",
             resume_request(prefix_first),
+            None,
         ),
         (
             "ble-resume-accepted",
             "resumeAccept",
             resume_accept(prefix_first),
+            Some(json!({
+                "kind": "resume_accept",
+                "flags": 0,
+                "transportSessionId": TRANSPORT_SESSION_ID.to_string(),
+                "uploadSessionUuid": uuid(&UPLOAD_SESSION_UUID),
+                "recordingUuid": uuid(&RECORDING_UUID),
+                "recordingGeneration": RECORDING_GENERATION,
+                "checkpointRevision": 3,
+                "nextCiphertextOffset": "64",
+                "prefixSha256": prefix_first.to_vec(),
+                "windowPackets": 16,
+                "dataPayloadBytes": 244
+            })),
         ),
         (
             "ble-resume-reject",
             "resumeReject",
             resume_reject(prefix_first),
+            Some(json!({
+                "kind": "resume_reject",
+                "flags": 0,
+                "transportSessionId": TRANSPORT_SESSION_ID.to_string(),
+                "reason": 15,
+                "checkpointRevision": 3,
+                "nextCiphertextOffset": "64",
+                "prefixSha256": prefix_first.to_vec()
+            })),
         ),
-        ("ble-confirm", "confirm", confirm_frame(&documents.receipt)),
-        ("ble-abort", "abort", abort_frame()),
-        ("ble-error", "error", error_frame()),
+        (
+            "ble-confirm",
+            "confirm",
+            confirm_frame(&documents.receipt),
+            None,
+        ),
+        ("ble-abort", "abort", abort_frame(), None),
+        (
+            "ble-error",
+            "error",
+            error_frame(),
+            Some(json!({
+                "kind": "error",
+                "flags": 0,
+                "transportSessionId": TRANSPORT_SESSION_ID.to_string(),
+                "result": 15,
+                "failedMessageType": 34,
+                "checkpointRevision": 3
+            })),
+        ),
     ])
 }
 
@@ -1699,7 +1853,7 @@ fn recording_entry(storage: &StorageFixture) -> Vec<u8> {
     put_u32(&mut bytes, 28, RECORDING_GENERATION);
     bytes[32] = 3;
     bytes[33] = 1;
-    put_u64(&mut bytes, 36, 1_999_999_000);
+    put_u64(&mut bytes, 36, WIDE_U64);
     put_u32(&mut bytes, 44, 37);
     put_u64(&mut bytes, 48, storage.plaintext_length);
     put_u64(&mut bytes, 56, storage.bytes.len() as u64);
@@ -1867,10 +2021,11 @@ fn error_frame() -> Vec<u8> {
 fn status_value() -> [u8; 24] {
     let mut bytes = [0_u8; 24];
     bytes[0] = 2;
-    bytes[1] = 3;
-    put_u64(&mut bytes, 4, TRANSPORT_SESSION_ID);
-    put_u64(&mut bytes, 12, 64);
-    bytes[20] = 37;
+    bytes[1] = 0xfe;
+    put_u16(&mut bytes, 2, 0x1234);
+    put_u64(&mut bytes, 4, STATUS_SESSION_ID);
+    put_u64(&mut bytes, 12, WIDE_U64);
+    bytes[20] = 57;
     bytes[21] = 3;
     bytes
 }

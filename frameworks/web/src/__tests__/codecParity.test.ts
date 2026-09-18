@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
+import { CoreBridgeError } from '../errors.ts'
 import { createWasmCore } from '../wasmCore.ts'
 
 type JsonRecord = Record<string, unknown>
@@ -134,7 +135,10 @@ test('legacy recording codecs match committed fixtures and reject bad identifier
     )),
     fixtureHex(confirm, 'expectedHex'),
   )
-  assert.throws(() => bridge.encodeRecordingConfirm('not-a-uuid'))
+  assertCoreBridgeError(
+    () => bridge.encodeRecordingConfirm('not-a-uuid'),
+    coreError('invalid_input', 'validate'),
+  )
 })
 
 test('deprovision codec preserves released meanings and unknown status bytes', async () => {
@@ -167,8 +171,14 @@ test('deprovision codec preserves released meanings and unknown status bytes', a
     error: 'unknown',
     errorRaw: 0xfe,
   })
-  assert.throws(() => bridge.decodeDeprovisionResult(new Uint8Array()))
-  assert.throws(() => bridge.decodeDeprovisionResult(hex('0000')))
+  assertCoreBridgeError(
+    () => bridge.decodeDeprovisionResult(new Uint8Array()),
+    coreError('truncated_packet', 'decode'),
+  )
+  assertCoreBridgeError(
+    () => bridge.decodeDeprovisionResult(hex('0000')),
+    coreError('invalid_input', 'decode'),
+  )
 })
 
 test('connection settings codecs use fixture bytes, Rust defaults, and model normalization', async () => {
@@ -224,17 +234,23 @@ test('connection settings codecs use fixture bytes, Rust defaults, and model nor
       supportedVersion: false,
     },
   )
-  assert.throws(() => bridge.encodeConnectionSettings({
-    ...settings,
-    powerManagement: {
-      cellularIdleTimeoutSeconds:
-        Number((invalid.input as JsonRecord).power_management
-          && ((invalid.input as JsonRecord).power_management as JsonRecord)
-            .cellular_idle_timeout_seconds),
-      wifiIdleTimeoutSeconds: 180,
-    },
-  }, 'pin_4g'))
-  assert.throws(() => bridge.encodeConnectionSettings(settings, 'unsupported'))
+  assertCoreBridgeError(
+    () => bridge.encodeConnectionSettings({
+      ...settings,
+      powerManagement: {
+        cellularIdleTimeoutSeconds:
+          Number((invalid.input as JsonRecord).power_management
+            && ((invalid.input as JsonRecord).power_management as JsonRecord)
+              .cellular_idle_timeout_seconds),
+        wifiIdleTimeoutSeconds: 180,
+      },
+    }, 'pin_4g'),
+    coreError('invalid_input', 'validate'),
+  )
+  assertCoreBridgeError(
+    () => bridge.encodeConnectionSettings(settings, 'unsupported'),
+    coreError('invalid_input', 'encode'),
+  )
 })
 
 test('WiFi codecs match committed fixture packets and reject malformed input', async () => {
@@ -256,7 +272,10 @@ test('WiFi codecs match committed fixture packets and reject malformed input', a
     )),
     fixtureHex(grant, 'expectedHex'),
   )
-  assert.throws(() => bridge.encodeWiFiGrant('grant.test', 9))
+  assertCoreBridgeError(
+    () => bridge.encodeWiFiGrant('grant.test', 9),
+    coreError('payload_too_large', 'encode'),
+  )
   assert.equal(
     hexString(bridge.encodeWiFiCredentials(
       String((credentials.input as JsonRecord).ssid),
@@ -271,8 +290,14 @@ test('WiFi codecs match committed fixture packets and reject malformed input', a
     )),
     fixtureHex(disconnect, 'expectedHex'),
   )
-  assert.throws(() => bridge.encodeWiFiCredentials('Bota\0Guest', 'secret'))
-  assert.throws(() => bridge.encodeWiFiCredentials('', 'secret'))
+  assertCoreBridgeError(
+    () => bridge.encodeWiFiCredentials('Bota\0Guest', 'secret'),
+    coreError('invalid_input', 'encode'),
+  )
+  assertCoreBridgeError(
+    () => bridge.encodeWiFiCredentials('', 'secret'),
+    coreError('invalid_input', 'encode'),
+  )
   assert.equal(
     hexString(bridge.encodeWiFiScanCommand()),
     fixtureHex(scan, 'expectedHex'),
@@ -281,7 +306,10 @@ test('WiFi codecs match committed fixture packets and reject malformed input', a
     bridge.decodeWiFiConfigResult(hex(fixtureHex(config, 'inputHex'))),
     config.expected,
   )
-  assert.throws(() => bridge.decodeWiFiConfigResult(new Uint8Array()))
+  assertCoreBridgeError(
+    () => bridge.decodeWiFiConfigResult(new Uint8Array()),
+    coreError('truncated_packet', 'decode'),
+  )
   assert.deepEqual(
     bridge.decodeWiFiStatus(hex(fixtureHex(status, 'inputHex'))),
     {
@@ -291,7 +319,10 @@ test('WiFi codecs match committed fixture packets and reject malformed input', a
       ssid: 'Bota',
     },
   )
-  assert.throws(() => bridge.decodeWiFiStatus(hex('0257ff')))
+  assertCoreBridgeError(
+    () => bridge.decodeWiFiStatus(hex('0257ff')),
+    coreError('invalid_input', 'decode'),
+  )
   assert.deepEqual(
     bridge.decodeWiFiScanUpdate(hex(fixtureHex(pending, 'inputHex'))),
     { kind: 'pending', statusRaw: 1 },
@@ -300,8 +331,9 @@ test('WiFi codecs match committed fixture packets and reject malformed input', a
     bridge.decodeWiFiScanUpdate(hex(fixtureHex(done, 'inputHex'))),
     { kind: 'done', ...(done.expected as JsonRecord) },
   )
-  assert.throws(() =>
-    bridge.decodeWiFiScanUpdate(hex(fixtureHex(failed, 'inputHex')))
+  assertCoreBridgeError(
+    () => bridge.decodeWiFiScanUpdate(hex(fixtureHex(failed, 'inputHex'))),
+    coreError('protocol_rejected', 'decode', true, 3),
   )
 })
 
@@ -319,11 +351,26 @@ test('recording-control codecs preserve released results and reject unknown comm
     'recording-control.json',
     'recording-control-empty-response',
   )
+  const start = await fixture(
+    'recording-control.json',
+    'recording-control-start-command',
+  )
+  const stop = await fixture(
+    'recording-control.json',
+    'recording-control-stop-command',
+  )
 
-  assert.equal(hexString(bridge.encodeRecordingControlCommand('start')), '10')
-  assert.equal(hexString(bridge.encodeRecordingControlCommand('stop')), '11')
-  assert.throws(() =>
-    bridge.encodeRecordingControlCommand('pause' as 'start')
+  assert.equal(
+    hexString(bridge.encodeRecordingControlCommand('start')),
+    fixtureHex(start, 'expectedHex'),
+  )
+  assert.equal(
+    hexString(bridge.encodeRecordingControlCommand('stop')),
+    fixtureHex(stop, 'expectedHex'),
+  )
+  assertCoreBridgeError(
+    () => bridge.encodeRecordingControlCommand('pause' as 'start'),
+    coreError('invalid_input', 'encode'),
   )
   assert.deepEqual(
     bridge.decodeRecordingControlResult(hex(fixtureHex(success, 'inputHex'))),
@@ -369,6 +416,17 @@ test('encrypted-upload-v2 transfer codecs decode vectors and round-trip app fram
     'ble-confirm',
     'ble-abort',
   ]
+  const deviceFrameNames = [
+    'ble-recording-entry',
+    'ble-start-ack',
+    'ble-data',
+    'ble-window-end',
+    'ble-manifest-chunk',
+    'ble-eof',
+    'ble-resume-accepted',
+    'ble-resume-reject',
+    'ble-error',
+  ]
 
   for (const name of validNames) {
     const fixture = await vector(name)
@@ -391,35 +449,71 @@ test('encrypted-upload-v2 transfer codecs decode vectors and round-trip app fram
     )
   }
 
+  for (const name of deviceFrameNames) {
+    const fixture = await vector(name)
+    const decoded = bridge.decodeEncryptedUploadV2Transfer(
+      hex(fixtureHex(fixture, 'inputHex')),
+    )
+    const expected = fixture.expected as JsonRecord
+    const transferDto = expected.transferDto
+    assert.ok(transferDto, `${name} has no committed transfer DTO`)
+    assert.deepEqual(jsonCodecValue(decoded), transferDto, name)
+    if (name === 'ble-recording-entry') {
+      assert.ok(
+        BigInt(String((transferDto as JsonRecord).startedAt))
+          > BigInt(Number.MAX_SAFE_INTEGER),
+        `${name} does not exercise a u64 above Number.MAX_SAFE_INTEGER`,
+      )
+    }
+  }
+
   const malformed = await vector('ble-truncated-start')
-  assert.throws(() => bridge.decodeEncryptedUploadV2Transfer(
-    hex(fixtureHex(malformed, 'inputHex')),
-  ))
+  assertCoreBridgeError(
+    () => bridge.decodeEncryptedUploadV2Transfer(
+      hex(fixtureHex(malformed, 'inputHex')),
+    ),
+    coreError('truncated_packet', 'decode'),
+  )
+  const unknown = await vector('ble-unknown-message')
+  assertCoreBridgeError(
+    () => bridge.decodeEncryptedUploadV2Transfer(
+      hex(fixtureHex(unknown, 'inputHex')),
+    ),
+    coreError('unknown_packet', 'decode', false, 0x7e),
+  )
   const deviceFrame = bridge.decodeEncryptedUploadV2Transfer(
     hex(fixtureHex(await vector('ble-data'), 'inputHex')),
   )
-  assert.throws(() => bridge.encodeEncryptedUploadV2Transfer(deviceFrame))
+  assertCoreBridgeError(
+    () => bridge.encodeEncryptedUploadV2Transfer(deviceFrame),
+    coreError('invalid_input', 'encode'),
+  )
 })
 
 test('encrypted-upload-v2 status decoder rejects noncanonical lengths', async () => {
   const bridge = await core
-  const status = hex('02fe34120900000000000000080706050403020139030000')
+  const statusVector = await vector('ble-transfer-status')
+  const status = hex(fixtureHex(statusVector, 'inputHex'))
+  const expected = statusVector.expected as JsonRecord
 
-  assert.deepEqual(bridge.decodeEncryptedUploadV2Status(status), {
-    phase: 0xfe,
-    result: 0x1234,
-    transportSessionId: 9n,
-    durableCiphertextBytes: 0x0102_0304_0506_0708n,
-    progressPercent: 57,
-    transportProfile: 3,
-  })
-  assert.throws(() =>
-    bridge.decodeEncryptedUploadV2Status(status.slice(0, -1))
+  assert.deepEqual(
+    jsonCodecValue(bridge.decodeEncryptedUploadV2Status(status)),
+    expected.statusDto,
   )
-  assert.throws(() =>
-    bridge.decodeEncryptedUploadV2Status(
+  assert.ok(
+    BigInt(String((expected.statusDto as JsonRecord).durableCiphertextBytes))
+      > BigInt(Number.MAX_SAFE_INTEGER),
+    'status vector does not exercise a u64 above Number.MAX_SAFE_INTEGER',
+  )
+  assertCoreBridgeError(
+    () => bridge.decodeEncryptedUploadV2Status(status.slice(0, -1)),
+    coreError('truncated_packet', 'decode'),
+  )
+  assertCoreBridgeError(
+    () => bridge.decodeEncryptedUploadV2Status(
       Uint8Array.from([...status, 0]),
-    )
+    ),
+    coreError('invalid_input', 'decode'),
   )
 })
 
@@ -477,10 +571,13 @@ test('encrypted-upload-v2 signed-blob encoders match committed vectors', async (
       fixture.name,
     )
   }
-  assert.throws(() => bridge.encodeEncryptedUploadV2SignedBlob({
-    ...frames[0]?.frame,
-    sha256: new Uint8Array(31),
-  }))
+  assertCoreBridgeError(
+    () => bridge.encodeEncryptedUploadV2SignedBlob({
+      ...frames[0]?.frame,
+      sha256: new Uint8Array(31),
+    }),
+    coreError('invalid_input', 'encode'),
+  )
 })
 
 test('integrity hashing is incremental, snapshot-safe, and uses IEEE CRC-32', async () => {
@@ -508,4 +605,47 @@ test('integrity hashing is incremental, snapshot-safe, and uses IEEE CRC-32', as
 
 function snakeCase(value: string): string {
   return value.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+}
+
+function jsonCodecValue(value: unknown): unknown {
+  if (typeof value === 'bigint') return value.toString()
+  if (value instanceof Uint8Array) return Array.from(value)
+  if (Array.isArray(value)) return value.map(jsonCodecValue)
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, jsonCodecValue(item)]),
+    )
+  }
+  return value
+}
+
+function coreError(
+  code: CoreBridgeError['code'],
+  operation: CoreBridgeError['operation'],
+  retryable = false,
+  protocolStatus: number | null = null,
+): Pick<CoreBridgeError, 'code' | 'operation' | 'retryable' | 'protocolStatus'> {
+  return { code, operation, retryable, protocolStatus }
+}
+
+function assertCoreBridgeError(
+  run: () => unknown,
+  expected: Pick<
+    CoreBridgeError,
+    'code' | 'operation' | 'retryable' | 'protocolStatus'
+  >,
+): void {
+  let caught: unknown
+  try {
+    run()
+  } catch (error) {
+    caught = error
+  }
+  assert.ok(caught instanceof CoreBridgeError, 'expected CoreBridgeError')
+  assert.deepEqual({
+    code: caught.code,
+    operation: caught.operation,
+    retryable: caught.retryable,
+    protocolStatus: caught.protocolStatus,
+  }, expected)
 }
