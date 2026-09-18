@@ -237,6 +237,7 @@ const client = await BotaDeviceClient.create({
     provisioning,
     recordingUpload,
     recordingControl,
+    firmwareDownload,
   },
 })
 
@@ -334,12 +335,15 @@ ota.resumeFirmwareUpdate(operationId)
 ota.cancelFirmwareUpdate(operationId)
 ```
 
-The image descriptor contains an HTTPS source, exact size, version, and
-integrity metadata. The browser adapter downloads to OPFS, validates the
-artifact before the first device write, and serves bounded chunks to the Rust
-workflow. Reboot reconnect uses the already authorized browser device when
-available. A reload resumes only from a durable compatible checkpoint and the
-same verified artifact.
+The image descriptor contains a stable image ID, exact size, version, and
+integrity metadata. The host `firmwareDownload` provider resolves that ID to a
+fresh operation-scoped HTTPS request; its URL and headers stay memory-only.
+The browser adapter downloads to OPFS, validates the artifact before the first
+device write, and serves bounded chunks to the Rust workflow. Reboot reconnect
+uses the already authorized browser device when available. A reload resumes
+from a durable compatible checkpoint and the same verified artifact; when an
+incomplete download must continue, the provider resolves a fresh source for
+the same image ID.
 
 ### Device Logs
 
