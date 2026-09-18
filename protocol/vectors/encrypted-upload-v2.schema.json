@@ -141,6 +141,7 @@
         "kind": {
           "enum": [
             "recording_entry",
+            "recording_list_end",
             "start_ack",
             "data",
             "window_end",
@@ -162,6 +163,9 @@
         "plaintextLength": { "$ref": "#/$defs/uint64String" },
         "ciphertextLength": { "$ref": "#/$defs/uint64String" },
         "ciphertextSha256": { "$ref": "#/$defs/byteArray" },
+        "count": { "$ref": "#/$defs/safeInteger" },
+        "listRevision": { "$ref": "#/$defs/safeInteger" },
+        "listSha256": { "$ref": "#/$defs/byteArray" },
         "uploadSessionUuid": { "$ref": "#/$defs/uuid" },
         "windowPackets": { "$ref": "#/$defs/safeInteger" },
         "dataPayloadBytes": { "$ref": "#/$defs/safeInteger" },

@@ -418,6 +418,7 @@ test('encrypted-upload-v2 transfer codecs decode vectors and round-trip app fram
   ]
   const deviceFrameNames = [
     'ble-recording-entry',
+    'ble-recording-list-end',
     'ble-start-ack',
     'ble-data',
     'ble-window-end',

@@ -1660,7 +1660,14 @@ fn transfer_frames(
             "ble-recording-list-end",
             "recordingListEnd",
             recording_list_end(&list_digest),
-            None,
+            Some(json!({
+                "kind": "recording_list_end",
+                "flags": 0,
+                "transportSessionId": TRANSPORT_SESSION_ID.to_string(),
+                "count": 1,
+                "listRevision": 17,
+                "listSha256": list_digest.to_vec()
+            })),
         ),
         (
             "ble-fresh-transfer",
