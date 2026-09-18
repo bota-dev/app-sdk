@@ -1,6 +1,7 @@
 # Bota SDK for Web Foundation Design
 
-**Status:** Approved for implementation
+**Status:** Implemented; extended by
+[`2026-09-17-web-sdk-foreground-workflows-design.md`](./2026-09-17-web-sdk-foreground-workflows-design.md)
 
 **Date:** 2026-09-15
 

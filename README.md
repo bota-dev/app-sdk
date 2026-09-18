@@ -2,8 +2,9 @@
 
 Source monorepo for the **Bota App SDK** family. The repository provides a
 shared Rust protocol and workflow core with platform-native Bluetooth
-transports and Apple, Android, React Native, and Flutter facades. Web and
-Windows facades remain planned.
+transports and Apple, Android, React Native, Flutter, and Web facades. The Web
+facade currently exposes its read-only beta foundation; foreground workflow
+parity is the next approved increment. The Windows facade remains planned.
 
 `@bota.dev/react-native-sdk@1.1.0`, `BotaAppleSDK`, and
 `dev.bota:bota-android-sdk:1.1.0` are the first synchronized public App SDK
