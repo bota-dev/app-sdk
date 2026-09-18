@@ -17,13 +17,17 @@ interface ConnectedDeviceCache {
   readonly server: BluetoothRemoteGATTServer
   readonly services: Map<string, BluetoothRemoteGATTService>
   readonly characteristics: Map<string, BluetoothRemoteGATTCharacteristic>
-  readonly subscriptions: Set<WebBluetoothSubscription>
+  readonly notificationSessions: Map<
+    BluetoothRemoteGATTCharacteristic,
+    WebBluetoothNotificationSession
+  >
   readonly disconnectedListener: EventListener
 }
 
 export class WebBluetoothTransport implements BrowserBluetoothTransport {
   readonly maximumWriteValueLength = MAXIMUM_WRITE_VALUE_LENGTH
   private readonly connections = new Map<string, ConnectedDeviceCache>()
+  private readonly connectionTeardowns = new Map<string, Promise<void>>()
 
   get isSupported(): boolean {
     return typeof browserBluetooth()?.requestDevice === 'function'
@@ -82,7 +86,7 @@ export class WebBluetoothTransport implements BrowserBluetoothTransport {
         server,
         services: new Map(),
         characteristics: new Map(),
-        subscriptions: new Set(),
+        notificationSessions: new Map(),
         disconnectedListener,
       }
       this.connections.set(device.id, cache)
@@ -161,17 +165,28 @@ export class WebBluetoothTransport implements BrowserBluetoothTransport {
         characteristicUuid,
       )
       this.assertCurrent(device.id, cache)
-      subscription = new WebBluetoothSubscription(
-        characteristic,
-        listener,
-        () => cache.subscriptions.delete(subscription!),
-      )
-      cache.subscriptions.add(subscription)
-      await subscription.start()
+      let session = cache.notificationSessions.get(characteristic)
+      if (session?.isStopping) {
+        await session.teardown()
+        this.assertCurrent(device.id, cache)
+        session = undefined
+      }
+      if (!session) {
+        let created!: WebBluetoothNotificationSession
+        created = new WebBluetoothNotificationSession(characteristic, () => {
+          if (cache.notificationSessions.get(characteristic) === created) {
+            cache.notificationSessions.delete(characteristic)
+          }
+        })
+        cache.notificationSessions.set(characteristic, created)
+        session = created
+      }
+      subscription = session.add(listener)
+      await session.start()
       this.assertCurrent(device.id, cache)
       return subscription
     } catch (error) {
-      subscription?.invalidate()
+      await subscription?.remove().catch(() => undefined)
       throw sanitizeDomError(error, 'characteristic')
     }
   }
@@ -179,10 +194,22 @@ export class WebBluetoothTransport implements BrowserBluetoothTransport {
   async disconnect(device: BrowserDeviceHandle): Promise<void> {
     const native = nativeDevice(device)
     const cache = this.connections.get(device.id)
-    const subscriptions = cache ? this.detachConnection(device.id, cache) : []
+    const teardown = cache
+      ? this.detachConnection(device.id, cache)
+      : this.connectionTeardowns.get(device.id)
+    let teardownError: unknown = null
+    try {
+      await teardown
+    } catch (error) {
+      teardownError = error
+    }
 
-    await Promise.allSettled(subscriptions.map((subscription) => subscription.stop()))
-    native.gatt?.disconnect()
+    try {
+      native.gatt?.disconnect()
+    } catch (error) {
+      if (!teardownError) teardownError = sanitizeDomError(error, 'gatt')
+    }
+    if (teardownError) throw teardownError
   }
 
   onDisconnected(device: BrowserDeviceHandle, listener: () => void): () => void {
@@ -232,48 +259,75 @@ export class WebBluetoothTransport implements BrowserBluetoothTransport {
 
   private invalidateConnection(deviceId: string): void {
     const cache = this.connections.get(deviceId)
-    if (cache) this.detachConnection(deviceId, cache)
+    if (!cache) return
+    void this.detachConnection(deviceId, cache).catch(() => undefined)
   }
 
   private detachConnection(
     deviceId: string,
     cache: ConnectedDeviceCache,
-  ): WebBluetoothSubscription[] {
-    if (this.connections.get(deviceId) !== cache) return []
+  ): Promise<void> {
+    if (this.connections.get(deviceId) !== cache) {
+      return this.connectionTeardowns.get(deviceId) ?? Promise.resolve()
+    }
     this.connections.delete(deviceId)
     cache.native.removeEventListener(
       'gattserverdisconnected',
       cache.disconnectedListener,
     )
-    const subscriptions = [...cache.subscriptions]
-    for (const subscription of subscriptions) subscription.invalidate()
-    cache.subscriptions.clear()
+    const teardowns = [...cache.notificationSessions.values()].map((session) =>
+      session.teardown()
+    )
+    const teardown = Promise.allSettled(teardowns).then((outcomes) => {
+      const failure = outcomes.find((outcome) => outcome.status === 'rejected')
+      if (failure?.status === 'rejected') throw failure.reason
+    })
+    this.connectionTeardowns.set(deviceId, teardown)
+    void teardown.then(
+      () => this.clearConnectionTeardown(deviceId, teardown),
+      () => this.clearConnectionTeardown(deviceId, teardown),
+    )
+    cache.notificationSessions.clear()
     cache.characteristics.clear()
     cache.services.clear()
-    return subscriptions
+    return teardown
+  }
+
+  private clearConnectionTeardown(
+    deviceId: string,
+    teardown: Promise<void>,
+  ): void {
+    if (this.connectionTeardowns.get(deviceId) === teardown) {
+      this.connectionTeardowns.delete(deviceId)
+    }
   }
 }
 
-class WebBluetoothSubscription implements BrowserSubscription {
+class WebBluetoothNotificationSession {
   private readonly characteristic: BluetoothRemoteGATTCharacteristic
-  private readonly onRemove: () => void
-  private active = true
-  private started = false
+  private readonly onStopped: () => void
+  private readonly listeners = new Map<
+    WebBluetoothSubscription,
+    (notification: BrowserNotification) => void
+  >()
   private readonly eventListener: EventListener
+  private startPromise: Promise<void> | null = null
+  private stopPromise: Promise<void> | null = null
 
   constructor(
     characteristic: BluetoothRemoteGATTCharacteristic,
-    listener: (notification: BrowserNotification) => void,
-    onRemove: () => void,
+    onStopped: () => void,
   ) {
     this.characteristic = characteristic
-    this.onRemove = onRemove
+    this.onStopped = onStopped
     this.eventListener = () => {
-      if (!this.active || !this.characteristic.value) return
-      listener({
-        characteristicUuid: this.characteristic.uuid,
-        value: cloneDataView(this.characteristic.value),
-      })
+      if (!this.characteristic.value) return
+      for (const listener of [...this.listeners.values()]) {
+        listener({
+          characteristicUuid: this.characteristic.uuid,
+          value: cloneDataView(this.characteristic.value),
+        })
+      }
     }
     characteristic.addEventListener(
       'characteristicvaluechanged',
@@ -281,36 +335,72 @@ class WebBluetoothSubscription implements BrowserSubscription {
     )
   }
 
-  async start(): Promise<void> {
-    await this.characteristic.startNotifications()
-    this.started = true
-    if (!this.active) await this.stop().catch(() => undefined)
+  get isStopping(): boolean {
+    return this.stopPromise !== null
   }
 
-  async remove(): Promise<void> {
-    if (!this.invalidate()) return
-    try {
-      await this.stop()
-    } catch (error) {
-      throw sanitizeDomError(error, 'gatt')
-    }
+  add(
+    listener: (notification: BrowserNotification) => void,
+  ): WebBluetoothSubscription {
+    if (this.stopPromise) throw new BrowserTransportError('unavailable')
+    const subscription = new WebBluetoothSubscription(this)
+    this.listeners.set(subscription, listener)
+    return subscription
   }
 
-  invalidate(): boolean {
-    if (!this.active) return false
-    this.active = false
+  start(): Promise<void> {
+    this.startPromise ??= this.characteristic.startNotifications()
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        throw sanitizeDomError(error, 'characteristic')
+      })
+    return this.startPromise
+  }
+
+  remove(subscription: WebBluetoothSubscription): Promise<void> {
+    this.listeners.delete(subscription)
+    if (this.listeners.size > 0) return Promise.resolve()
+    return this.teardown()
+  }
+
+  teardown(): Promise<void> {
+    if (this.stopPromise) return this.stopPromise
     this.characteristic.removeEventListener(
       'characteristicvaluechanged',
       this.eventListener,
     )
-    this.onRemove()
-    return true
+    const stopping = this.startPromise
+      ? this.startPromise.then(() => this.characteristic.stopNotifications())
+      : Promise.resolve()
+    this.stopPromise = stopping
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        throw sanitizeDomError(error, 'gatt')
+      })
+      .finally(this.onStopped)
+    for (const subscription of this.listeners.keys()) {
+      subscription.useTeardown(this.stopPromise)
+    }
+    this.listeners.clear()
+    return this.stopPromise
+  }
+}
+
+class WebBluetoothSubscription implements BrowserSubscription {
+  private readonly session: WebBluetoothNotificationSession
+  private removePromise: Promise<void> | null = null
+
+  constructor(session: WebBluetoothNotificationSession) {
+    this.session = session
   }
 
-  async stop(): Promise<void> {
-    if (!this.started) return
-    this.started = false
-    await this.characteristic.stopNotifications()
+  remove(): Promise<void> {
+    this.removePromise ??= this.session.remove(this)
+    return this.removePromise
+  }
+
+  useTeardown(teardown: Promise<void>): void {
+    this.removePromise ??= teardown
   }
 }
 
@@ -355,7 +445,7 @@ function sanitizeDomError(error: unknown, context: DomErrorContext): unknown {
   if (name === 'NotReadableError' || name === 'NotSupportedError') {
     return new BrowserTransportError('unavailable', { cause: error })
   }
-  return error
+  return new BrowserTransportError('unavailable', { cause: error })
 }
 
 function domErrorName(error: unknown): string {

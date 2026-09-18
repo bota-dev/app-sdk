@@ -224,6 +224,100 @@ test('notifications are copied and removal is exact and idempotent', async () =>
   }
 })
 
+test('subscriptions on one characteristic share native notification ownership', async () => {
+  const fixture = createBluetoothFixture()
+  const restore = installNavigator({ bluetooth: fixture.bluetooth })
+  const transport = new WebBluetoothTransport()
+  const handle = await transport.requestDevice()
+  const firstValues: number[] = []
+  const secondValues: number[] = []
+
+  try {
+    await transport.connect(handle)
+    const first = await transport.subscribe(
+      handle,
+      BOTA_CONTROL_SERVICE,
+      DEVICE_STATUS_CHARACTERISTIC,
+      ({ value }) => firstValues.push(value[0] ?? -1),
+    )
+    const second = await transport.subscribe(
+      handle,
+      BOTA_CONTROL_SERVICE,
+      DEVICE_STATUS_CHARACTERISTIC,
+      ({ value }) => secondValues.push(value[0] ?? -1),
+    )
+
+    fixture.characteristic.emitValue(Uint8Array.of(1))
+    await first.remove()
+    fixture.characteristic.emitValue(Uint8Array.of(2))
+
+    assert.equal(fixture.characteristic.startNotificationsCalls, 1)
+    assert.equal(fixture.characteristic.stopNotificationsCalls, 0)
+    assert.deepEqual(firstValues, [1])
+    assert.deepEqual(secondValues, [1, 2])
+
+    await second.remove()
+    assert.equal(fixture.characteristic.stopNotificationsCalls, 1)
+    assert.equal(fixture.characteristic.listenerCount, 0)
+  } finally {
+    await transport.disconnect(handle).catch(() => undefined)
+    restore()
+  }
+})
+
+test('concurrent removal and disconnect share one memoized teardown outcome', async () => {
+  const fixture = createBluetoothFixture()
+  const restore = installNavigator({ bluetooth: fixture.bluetooth })
+  const transport = new WebBluetoothTransport()
+  const handle = await transport.requestDevice()
+  const privateError = new DOMException('private stop detail', 'OperationError')
+  let releaseStop!: () => void
+  fixture.characteristic.stopGate = new Promise<void>((resolve) => {
+    releaseStop = resolve
+  })
+  fixture.characteristic.stopError = privateError
+
+  try {
+    await transport.connect(handle)
+    const subscription = await transport.subscribe(
+      handle,
+      BOTA_CONTROL_SERVICE,
+      DEVICE_STATUS_CHARACTERISTIC,
+      () => undefined,
+    )
+
+    const firstRemoval = subscription.remove()
+    const repeatedRemoval = subscription.remove()
+    await fixture.characteristic.stopEntered
+    const disconnecting = transport.disconnect(handle)
+    const racingDisconnect = transport.disconnect(handle)
+    const outcomes = Promise.allSettled([
+      firstRemoval,
+      repeatedRemoval,
+      disconnecting,
+      racingDisconnect,
+    ])
+    releaseStop()
+
+    const [first, repeated, disconnect, racing] = await outcomes
+    assert.equal(firstRemoval, repeatedRemoval)
+    const firstError = rejectionReason(first)
+    assert.equal(rejectionReason(repeated), firstError)
+    assert.equal(rejectionReason(disconnect), firstError)
+    assert.equal(rejectionReason(racing), firstError)
+    assert.ok(firstError instanceof BrowserTransportError)
+    assert.equal(firstError.code, 'unavailable')
+    assert.equal(firstError.message, 'unavailable')
+    assert.equal(firstError.cause, privateError)
+    assert.doesNotMatch(String(firstError), /private stop detail/)
+    assert.equal(fixture.characteristic.stopNotificationsCalls, 1)
+  } finally {
+    releaseStop()
+    await transport.disconnect(handle).catch(() => undefined)
+    restore()
+  }
+})
+
 test('disconnect invalidates cached characteristics and rejects late callbacks', async () => {
   const fixture = createBluetoothFixture()
   const restore = installNavigator({ bluetooth: fixture.bluetooth })
@@ -331,6 +425,33 @@ test('known picker DOM failures are sanitized with the original private cause', 
         assert.equal(error.message, 'permission_denied')
         assert.equal(error.cause, privateError)
         assert.doesNotMatch(error.message, /private browser detail/)
+        return true
+      },
+    )
+  } finally {
+    restore()
+  }
+})
+
+test('unknown browser failures use fixed transport text and a private cause', async () => {
+  const privateError = new DOMException('private unknown detail', 'OperationError')
+  const restore = installNavigator({
+    bluetooth: {
+      requestDevice: async () => {
+        throw privateError
+      },
+    },
+  })
+
+  try {
+    await assert.rejects(
+      new WebBluetoothTransport().requestDevice(),
+      (error: unknown) => {
+        assert.ok(error instanceof BrowserTransportError)
+        assert.equal(error.code, 'unavailable')
+        assert.equal(error.message, 'unavailable')
+        assert.equal(error.cause, privateError)
+        assert.doesNotMatch(String(error), /private unknown detail/)
         return true
       },
     )
@@ -491,11 +612,16 @@ class FakeCharacteristic extends EventTarget {
   startNotificationsCalls = 0
   stopNotificationsCalls = 0
   startGate: Promise<void> | null = null
+  stopGate: Promise<void> | null = null
+  stopError: unknown = null
   readonly startEntered: Promise<void>
+  readonly stopEntered: Promise<void>
   readonly writesWithResponse: Uint8Array[] = []
   readonly writesWithoutResponse: Uint8Array[] = []
   private listeners = new Set<EventListenerOrEventListenerObject>()
   private readonly markStartEntered: () => void
+  private readonly markStopEntered: () => void
+  private notificationsActive = false
   value?: DataView
 
   constructor(uuid: string) {
@@ -506,6 +632,11 @@ class FakeCharacteristic extends EventTarget {
       markStartEntered = resolve
     })
     this.markStartEntered = markStartEntered
+    let markStopEntered!: () => void
+    this.stopEntered = new Promise<void>((resolve) => {
+      markStopEntered = resolve
+    })
+    this.markStopEntered = markStopEntered
   }
 
   get listenerCount(): number {
@@ -532,11 +663,16 @@ class FakeCharacteristic extends EventTarget {
     this.startNotificationsCalls += 1
     this.markStartEntered()
     if (this.startGate) await this.startGate
+    this.notificationsActive = true
     return this as unknown as BluetoothRemoteGATTCharacteristic
   }
 
   async stopNotifications(): Promise<BluetoothRemoteGATTCharacteristic> {
     this.stopNotificationsCalls += 1
+    this.markStopEntered()
+    if (this.stopGate) await this.stopGate
+    if (this.stopError) throw this.stopError
+    this.notificationsActive = false
     return this as unknown as BluetoothRemoteGATTCharacteristic
   }
 
@@ -559,10 +695,16 @@ class FakeCharacteristic extends EventTarget {
   }
 
   emitValue(value: Uint8Array): void {
+    if (!this.notificationsActive) return
     const copy = Uint8Array.from(value)
     this.value = new DataView(copy.buffer)
     this.dispatchEvent(new Event('characteristicvaluechanged'))
   }
+}
+
+function rejectionReason(result: PromiseSettledResult<void>): unknown {
+  if (result.status !== 'rejected') throw new Error('expected rejection')
+  return result.reason
 }
 
 function copyBufferSource(source: BufferSource): Uint8Array {
