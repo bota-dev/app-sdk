@@ -14,6 +14,7 @@ import {
 import {
   BrowserTransportError,
   type BrowserBluetoothTransport,
+  type BrowserSubscription,
 } from '../transport.ts'
 import { WebBluetoothTransport } from '../webBluetoothTransport.ts'
 
@@ -260,6 +261,125 @@ test('subscriptions on one characteristic share native notification ownership', 
     assert.equal(fixture.characteristic.stopNotificationsCalls, 1)
     assert.equal(fixture.characteristic.listenerCount, 0)
   } finally {
+    await transport.disconnect(handle).catch(() => undefined)
+    restore()
+  }
+})
+
+test('concurrent subscribers share one replacement after a gated stop', async () => {
+  const fixture = createBluetoothFixture()
+  const restore = installNavigator({ bluetooth: fixture.bluetooth })
+  const transport = new WebBluetoothTransport()
+  const handle = await transport.requestDevice()
+  const firstValues: number[] = []
+  const secondValues: number[] = []
+  let initial: BrowserSubscription | null = null
+  let first: BrowserSubscription | null = null
+  let second: BrowserSubscription | null = null
+  let releaseStop!: () => void
+  fixture.characteristic.stopGate = new Promise<void>((resolve) => {
+    releaseStop = resolve
+  })
+
+  try {
+    await transport.connect(handle)
+    initial = await transport.subscribe(
+      handle,
+      BOTA_CONTROL_SERVICE,
+      DEVICE_STATUS_CHARACTERISTIC,
+      () => undefined,
+    )
+    const initialRemoval = initial.remove()
+    await fixture.characteristic.stopEntered
+
+    const firstSubscribing = transport.subscribe(
+      handle,
+      BOTA_CONTROL_SERVICE,
+      DEVICE_STATUS_CHARACTERISTIC,
+      ({ value }) => firstValues.push(value[0] ?? -1),
+    )
+    const secondSubscribing = transport.subscribe(
+      handle,
+      BOTA_CONTROL_SERVICE,
+      DEVICE_STATUS_CHARACTERISTIC,
+      ({ value }) => secondValues.push(value[0] ?? -1),
+    )
+    await Promise.resolve()
+    assert.equal(fixture.characteristic.startNotificationsCalls, 1)
+
+    releaseStop()
+    await initialRemoval
+    const [firstReplacement, secondReplacement] = await Promise.all([
+      firstSubscribing,
+      secondSubscribing,
+    ])
+    first = firstReplacement
+    second = secondReplacement
+
+    assert.equal(fixture.characteristic.startNotificationsCalls, 2)
+    assert.equal(fixture.characteristic.stopNotificationsCalls, 1)
+    assert.equal(fixture.characteristic.listenerCount, 1)
+
+    fixture.characteristic.emitValue(Uint8Array.of(1))
+    await first.remove()
+    fixture.characteristic.emitValue(Uint8Array.of(2))
+
+    assert.equal(fixture.characteristic.stopNotificationsCalls, 1)
+    assert.deepEqual(firstValues, [1])
+    assert.deepEqual(secondValues, [1, 2])
+
+    await second.remove()
+    assert.equal(fixture.characteristic.stopNotificationsCalls, 2)
+    assert.equal(fixture.characteristic.listenerCount, 0)
+  } finally {
+    releaseStop()
+    await initial?.remove().catch(() => undefined)
+    await first?.remove().catch(() => undefined)
+    await second?.remove().catch(() => undefined)
+    await transport.disconnect(handle).catch(() => undefined)
+    restore()
+  }
+})
+
+test('listener failures do not block later notification subscribers', async () => {
+  const fixture = createBluetoothFixture()
+  const restore = installNavigator({ bluetooth: fixture.bluetooth })
+  const transport = new WebBluetoothTransport()
+  const handle = await transport.requestDevice()
+  const received: Uint8Array[] = []
+  let throwingCalls = 0
+  let first: BrowserSubscription | null = null
+  let second: BrowserSubscription | null = null
+
+  try {
+    await transport.connect(handle)
+    first = await transport.subscribe(
+      handle,
+      BOTA_CONTROL_SERVICE,
+      DEVICE_STATUS_CHARACTERISTIC,
+      () => {
+        throwingCalls += 1
+        throw new Error('private listener failure')
+      },
+    )
+    second = await transport.subscribe(
+      handle,
+      BOTA_CONTROL_SERVICE,
+      DEVICE_STATUS_CHARACTERISTIC,
+      ({ value }) => received.push(value),
+    )
+
+    assert.doesNotThrow(() => fixture.characteristic.emitValue(Uint8Array.of(3, 4)))
+    const emittedView = fixture.characteristic.value
+    assert.ok(emittedView)
+    new Uint8Array(emittedView.buffer, emittedView.byteOffset, emittedView.byteLength)[0] = 0
+
+    assert.equal(throwingCalls, 1)
+    assert.deepEqual(received, [Uint8Array.of(3, 4)])
+    assert.notEqual(received[0]?.buffer, emittedView.buffer)
+  } finally {
+    await first?.remove().catch(() => undefined)
+    await second?.remove().catch(() => undefined)
     await transport.disconnect(handle).catch(() => undefined)
     restore()
   }

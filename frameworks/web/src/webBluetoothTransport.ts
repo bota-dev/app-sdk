@@ -169,7 +169,7 @@ export class WebBluetoothTransport implements BrowserBluetoothTransport {
       if (session?.isStopping) {
         await session.teardown()
         this.assertCurrent(device.id, cache)
-        session = undefined
+        session = cache.notificationSessions.get(characteristic)
       }
       if (!session) {
         let created!: WebBluetoothNotificationSession
@@ -323,10 +323,14 @@ class WebBluetoothNotificationSession {
     this.eventListener = () => {
       if (!this.characteristic.value) return
       for (const listener of [...this.listeners.values()]) {
-        listener({
-          characteristicUuid: this.characteristic.uuid,
-          value: cloneDataView(this.characteristic.value),
-        })
+        try {
+          listener({
+            characteristicUuid: this.characteristic.uuid,
+            value: cloneDataView(this.characteristic.value),
+          })
+        } catch {
+          // A consumer callback cannot block or escape the shared DOM listener.
+        }
       }
     }
     characteristic.addEventListener(
