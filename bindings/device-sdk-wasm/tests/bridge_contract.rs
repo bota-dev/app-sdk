@@ -1,13 +1,137 @@
 use bota_device_sdk_core::{
     engine::{
-        BleEffect, BleEvent, Effect, HostEvent, HostEventKind, PersistenceEffect,
-        WorkflowNotification, WorkflowStatus,
+        BleEffect, BleEvent, Effect, EncryptedUploadV2HostEffect, HostEvent, HostEventKind,
+        PersistenceEffect, WorkflowNotification, WorkflowStatus,
     },
+    error::{DeviceSdkError, ErrorCode, Operation},
+    generated::protocol,
+    model::{ReconnectHint, UploadSecurityPolicy},
     protocol::EncryptedUploadV2Capabilities,
 };
 use bota_device_sdk_wasm::{
     BridgeCore, decode_device_status_dto, decode_encrypted_upload_v2_capabilities_dto,
 };
+
+const SERIAL: &str = "EVFXXW67KP";
+const CANCELLATION_ID: [u8; 16] = [0x11; 16];
+const RECORDING_UUID: [u8; 16] = [0x22; 16];
+
+#[derive(Clone, Copy, Debug)]
+enum WorkflowCase {
+    Reconnect,
+    Provisioning,
+    RecordingTransfer,
+    EncryptedUploadV2,
+    FirmwareUpdate,
+    DeviceLogs,
+}
+
+impl WorkflowCase {
+    const ALL: [Self; 6] = [
+        Self::Reconnect,
+        Self::Provisioning,
+        Self::RecordingTransfer,
+        Self::EncryptedUploadV2,
+        Self::FirmwareUpdate,
+        Self::DeviceLogs,
+    ];
+
+    const fn operation(self) -> Operation {
+        match self {
+            Self::Reconnect => Operation::Reconnect,
+            Self::Provisioning => Operation::Provision,
+            Self::RecordingTransfer | Self::EncryptedUploadV2 => Operation::TransferRecording,
+            Self::FirmwareUpdate => Operation::UpdateFirmware,
+            Self::DeviceLogs => Operation::ReadDeviceLogs,
+        }
+    }
+
+    fn start(
+        self,
+        bridge: &mut BridgeCore,
+        serial: &str,
+    ) -> Result<Vec<bota_device_sdk_core::engine::EffectRequest>, DeviceSdkError> {
+        match self {
+            Self::Reconnect => bridge.start_reconnect(
+                serial,
+                ReconnectHint {
+                    stored_peripheral_id: Some("browser-peripheral-1".to_owned()),
+                    advertised_address: Some("001122334455".to_owned()),
+                    stored_name: Some("Bota Pin".to_owned()),
+                    scan_timeout_ms: 5_000,
+                    connection_timeout_ms: 15_000,
+                },
+                CANCELLATION_ID,
+            ),
+            Self::Provisioning => {
+                bridge.start_provisioning(serial, "web-material-1", CANCELLATION_ID)
+            }
+            Self::RecordingTransfer => bridge.start_recording_transfer(
+                serial,
+                RECORDING_UUID,
+                "web-sink-1",
+                4_096,
+                CANCELLATION_ID,
+            ),
+            Self::EncryptedUploadV2 => bridge.start_encrypted_upload_v2(
+                serial,
+                RECORDING_UUID,
+                9,
+                protocol::STORAGE_FORMAT_BOTA_ENC_V2,
+                [0x44; 16],
+                3,
+                0x1122_3344_5566,
+                "web-v2-material-1",
+                "web-v2-sink-1",
+                UploadSecurityPolicy::V2Preferred,
+                encrypted_upload_v2_capabilities(),
+                16,
+                244,
+                330,
+                [0x33; 32],
+                CANCELLATION_ID,
+            ),
+            Self::FirmwareUpdate => bridge.start_firmware_update(
+                serial,
+                "1.0.18",
+                1_024,
+                0x1234_5678,
+                41,
+                ReconnectHint::default(),
+                CANCELLATION_ID,
+            ),
+            Self::DeviceLogs => bridge.start_device_logs(serial, CANCELLATION_ID),
+        }
+    }
+
+    fn first_semantic_effect_matches(self, effect: &Effect) -> bool {
+        match self {
+            Self::Reconnect => matches!(effect, Effect::Ble(BleEffect::StartScan { .. })),
+            Self::Provisioning => matches!(effect, Effect::Ble(BleEffect::Read { .. })),
+            Self::RecordingTransfer | Self::FirmwareUpdate => matches!(
+                effect,
+                Effect::Persistence(PersistenceEffect::LoadCheckpoint)
+            ),
+            Self::EncryptedUploadV2 => matches!(
+                effect,
+                Effect::EncryptedUploadV2(EncryptedUploadV2HostEffect::LoadCheckpoint { .. })
+            ),
+            Self::DeviceLogs => matches!(effect, Effect::Ble(BleEffect::Subscribe { .. })),
+        }
+    }
+}
+
+fn encrypted_upload_v2_capabilities() -> EncryptedUploadV2Capabilities {
+    EncryptedUploadV2Capabilities {
+        flags: 0x7f,
+        maximum_signed_blob_bytes: 1_024,
+        maximum_manifest_bytes: 1_024,
+        maximum_data_payload_bytes: 244,
+        maximum_window_packets: 16,
+        durable_checkpoint_interval_blocks: 8,
+        maximum_missing_sequences: 16,
+    }
+}
 
 fn request_id_for(
     effects: &[bota_device_sdk_core::engine::EffectRequest],
@@ -18,6 +142,87 @@ fn request_id_for(
         .find(|request| predicate(&request.effect))
         .map(|request| request.request_id)
         .expect("expected effect")
+}
+
+#[test]
+fn included_workflow_starts_supply_capabilities_and_preserve_ownership() {
+    for workflow in WorkflowCase::ALL {
+        let mut bridge = BridgeCore::default();
+
+        let effects = workflow
+            .start(&mut bridge, SERIAL)
+            .unwrap_or_else(|error| panic!("{workflow:?} should start: {error}"));
+
+        assert!(workflow.first_semantic_effect_matches(&effects[1].effect));
+        assert!(effects.iter().all(|request| {
+            request.operation == workflow.operation()
+                && request.cancellation_id.as_bytes() == &CANCELLATION_ID
+        }));
+        assert!(matches!(
+            bridge.status(),
+            WorkflowStatus::Running {
+                operation,
+                cancellation_id,
+            } if *operation == workflow.operation()
+                && cancellation_id.as_bytes() == &CANCELLATION_ID
+        ));
+    }
+}
+
+#[test]
+fn recording_transfer_starts_without_device_confirmation() {
+    let effects = BridgeCore::default()
+        .start_recording_transfer(SERIAL, RECORDING_UUID, "web-sink-1", 4096, CANCELLATION_ID)
+        .unwrap();
+    assert!(matches!(
+        effects[1].effect,
+        Effect::Persistence(PersistenceEffect::LoadCheckpoint)
+    ));
+}
+
+#[test]
+fn included_workflow_starts_return_structured_invalid_input_errors() {
+    for workflow in WorkflowCase::ALL {
+        let error = workflow
+            .start(&mut BridgeCore::default(), "invalid serial!")
+            .expect_err("invalid serial must fail before workflow ownership");
+
+        assert_eq!(error.code, ErrorCode::InvalidInput, "{workflow:?}");
+        assert_eq!(error.operation, Operation::Validate, "{workflow:?}");
+    }
+}
+
+#[test]
+fn included_workflows_enforce_one_exact_cancellation_owner() {
+    for workflow in WorkflowCase::ALL {
+        let mut bridge = BridgeCore::default();
+        workflow.start(&mut bridge, SERIAL).unwrap();
+
+        let second_owner = workflow
+            .start(&mut bridge, SERIAL)
+            .expect_err("a second workflow owner must be rejected");
+        assert_eq!(second_owner.code, ErrorCode::OperationInProgress);
+        assert_eq!(second_owner.operation, workflow.operation());
+
+        let wrong_owner = bridge
+            .cancel([0x12; 16])
+            .expect_err("a different cancellation ID must be rejected");
+        assert_eq!(wrong_owner.code, ErrorCode::UnexpectedEvent);
+        assert_eq!(wrong_owner.operation, workflow.operation());
+
+        let effects = bridge
+            .cancel(CANCELLATION_ID)
+            .expect("the exact cancellation owner should settle the workflow");
+        assert!(effects.iter().all(|request| {
+            request.operation == workflow.operation()
+                && request.cancellation_id.as_bytes() == &CANCELLATION_ID
+        }));
+        assert!(matches!(
+            bridge.status(),
+            WorkflowStatus::Cancelled { operation } if *operation == workflow.operation()
+        ));
+        assert!(bridge.cancel(CANCELLATION_ID).unwrap().is_empty());
+    }
 }
 
 #[test]

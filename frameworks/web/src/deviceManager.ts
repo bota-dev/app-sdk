@@ -1,4 +1,4 @@
-import type { CoreBridge, CoreEffect, CoreHostEvent } from './core.ts'
+import type { CoreBridge, CoreEffectEnvelope, CoreHostEvent } from './core.ts'
 import { BotaSDKError, normalizeCoreError } from './errors.ts'
 import type {
   ConnectOptions,
@@ -175,7 +175,7 @@ export class DeviceManager {
     await this.disconnect()
   }
 
-  private async executeEffects(initial: CoreEffect[]): Promise<void> {
+  private async executeEffects(initial: CoreEffectEnvelope[]): Promise<void> {
     const queue = [...initial]
     while (queue.length > 0) {
       const effect = queue.shift()
@@ -253,8 +253,9 @@ export class DeviceManager {
     }
   }
 
-  private async executeEffect(effect: CoreEffect): Promise<CoreEffect[]> {
+  private async executeEffect(envelope: CoreEffectEnvelope): Promise<CoreEffectEnvelope[]> {
     const device = this.activeDevice
+    const { effect, requestId } = envelope
     switch (effect.kind) {
       case 'notify':
         if (effect.notification.kind === 'failed') {
@@ -262,8 +263,8 @@ export class DeviceManager {
         }
         if (effect.notification.kind === 'connection_established') {
           this.verifiedDevice = {
-            id: effect.notification.peripheralId,
-            name: effect.notification.name,
+            id: effect.notification.candidate.peripheralId,
+            name: effect.notification.candidate.name,
             serialNumber: effect.notification.serialNumber,
           }
         }
@@ -273,7 +274,7 @@ export class DeviceManager {
         try {
           await this.transport.connect(device)
         } catch (error) {
-          return this.dispatchBleFailure(effect.requestId, error)
+          return this.dispatchBleFailure(requestId, error)
         }
         if (this.destroyed || this.activeDevice !== device) {
           await this.transport.disconnect(device).catch(() => undefined)
@@ -281,7 +282,7 @@ export class DeviceManager {
         }
         this.transportConnected = true
         return this.dispatchCore({
-          requestId: effect.requestId,
+          requestId,
           kind: 'ble_connected',
           peripheralId: device.id,
         })
@@ -290,31 +291,31 @@ export class DeviceManager {
         try {
           await this.transport.discoverServices(device)
           return this.dispatchCore({
-            requestId: effect.requestId,
+            requestId,
             kind: 'ble_services_discovered',
             peripheralId: device.id,
           })
         } catch (error) {
-          return this.dispatchBleFailure(effect.requestId, error)
+          return this.dispatchBleFailure(requestId, error)
         }
       case 'ble_read':
         if (!device) throw new BotaSDKError('device_disconnected', 'connect')
         try {
           const value = await this.transport.read(device, effect.serviceUuid, effect.characteristicUuid)
           return this.dispatchCore({
-            requestId: effect.requestId,
+            requestId,
             kind: 'ble_read_completed',
             value,
           })
         } catch (error) {
-          return this.dispatchBleFailure(effect.requestId, error)
+          return this.dispatchBleFailure(requestId, error)
         }
       case 'ble_disconnect':
         if (!device || device.id !== effect.peripheralId) throw new BotaSDKError('internal_error', 'connect')
         await this.transport.disconnect(device)
         this.transportConnected = false
         return this.dispatchCore({
-          requestId: effect.requestId,
+          requestId,
           kind: 'ble_disconnected',
           peripheralId: device.id,
           reasonCode: null,
@@ -324,7 +325,7 @@ export class DeviceManager {
         const timer = setTimeout(() => {
           this.timers.delete(effect.timerId)
           void this.executeDispatchedEvent({
-            requestId: effect.requestId,
+            requestId,
             kind: 'timer_fired',
             timerId: effect.timerId,
           })
@@ -345,17 +346,18 @@ export class DeviceManager {
         // workflow that the shared core has already closed.
         return []
       case 'persistence_save_connection_identity':
-        if (!device || effect.peripheralId !== device.id) throw new BotaSDKError('internal_error', 'connect')
+        if (!device || effect.candidate.peripheralId !== device.id) throw new BotaSDKError('internal_error', 'connect')
         return this.dispatchCore({
-          requestId: effect.requestId,
+          requestId,
           kind: 'connection_identity_saved',
         })
       case 'persistence_delete_checkpoint':
         return []
     }
+    throw new BotaSDKError('internal_error', 'connect')
   }
 
-  private async dispatchBleFailure(requestId: bigint, error: unknown): Promise<CoreEffect[]> {
+  private async dispatchBleFailure(requestId: bigint, error: unknown): Promise<CoreEffectEnvelope[]> {
     return this.dispatchCore({
       requestId,
       kind: 'ble_failed',
@@ -363,7 +365,7 @@ export class DeviceManager {
     })
   }
 
-  private async dispatchCore(event: CoreHostEvent): Promise<CoreEffect[]> {
+  private async dispatchCore(event: CoreHostEvent): Promise<CoreEffectEnvelope[]> {
     const result = this.coreDispatchTail.then(() => this.core.dispatch(event))
     this.coreDispatchTail = result.then(
       () => undefined,
