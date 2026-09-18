@@ -107,6 +107,38 @@ function encryptedUploadV2Input() {
   }
 }
 
+function reconnectInput(cancellationId = CANCELLATION_ID) {
+  return {
+    expectedSerialNumber: 'EVFXXW67KP',
+    hint: {
+      storedPeripheralId: 'browser-peripheral-1',
+      advertisedAddress: '001122334455',
+      storedName: 'Bota Pin',
+      scanTimeoutMs: 5_000n,
+      connectionTimeoutMs: 15_000n,
+    },
+    cancellationId,
+  }
+}
+
+function assertPrivateCoreError(
+  error: unknown,
+  code: string,
+  operation: string,
+): boolean {
+  assert.ok(error instanceof Error)
+  assert.ok(!(error instanceof BotaSDKError))
+  const structured = error as Error & {
+    code?: unknown
+    operation?: unknown
+    retryable?: unknown
+  }
+  assert.equal(structured.code, code)
+  assert.equal(structured.operation, operation)
+  assert.equal(structured.retryable, false)
+  return true
+}
+
 function effect(
   effects: EffectEnvelopeUnderTest[],
   kind: string,
@@ -295,6 +327,34 @@ test('the additional WASM workflow starts return typed first effects', async () 
   }
 })
 
+test('WASM preserves OperationInProgress and Reconnect for a second owner', async () => {
+  const core = await createWorkflowBridge()
+  core.startReconnect(reconnectInput())
+
+  assert.throws(
+    () => core.startReconnect(reconnectInput()),
+    (error: unknown) => assertPrivateCoreError(
+      error,
+      'operation_in_progress',
+      'reconnect',
+    ),
+  )
+})
+
+test('WASM preserves UnexpectedEvent and Reconnect for a wrong cancellation owner', async () => {
+  const core = await createWorkflowBridge()
+  core.startReconnect(reconnectInput())
+
+  assert.throws(
+    () => core.cancel(new Uint8Array(16).fill(0x12)),
+    (error: unknown) => assertPrivateCoreError(
+      error,
+      'unexpected_event',
+      'reconnect',
+    ),
+  )
+})
+
 test('WASM workflow envelopes preserve bigint, fixed bytes, and ownership', async () => {
   const core = await createWorkflowBridge()
   const started = core.startEncryptedUploadV2(encryptedUploadV2Input())
@@ -462,20 +522,12 @@ test('WASM workflow inputs reject malformed fixed-length byte arrays', async () 
       ...encryptedUploadV2Input(),
       ciphertextSha256: new Uint8Array(31),
     }),
-    (error: unknown) => {
-      assert.ok(error instanceof BotaSDKError)
-      assert.equal(error.code, 'invalid_input')
-      return true
-    },
+    (error: unknown) => assertPrivateCoreError(error, 'invalid_input', 'validate'),
   )
 
   assert.throws(
     () => core.cancel(new Uint8Array(17)),
-    (error: unknown) => {
-      assert.ok(error instanceof BotaSDKError)
-      assert.equal(error.code, 'invalid_input')
-      return true
-    },
+    (error: unknown) => assertPrivateCoreError(error, 'invalid_input', 'validate'),
   )
 })
 

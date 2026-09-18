@@ -21,7 +21,11 @@ import type {
   CoreWorkflowStatus,
 } from './core.ts'
 import { createCoreLoader } from './core.ts'
-import { BotaSDKError, normalizeCoreError } from './errors.ts'
+import {
+  BotaSDKError,
+  normalizeCoreError,
+  normalizePrivateCoreError,
+} from './errors.ts'
 import type {
   DeviceState,
   DeviceStatus,
@@ -78,7 +82,7 @@ class WasmCoreAdapter implements CoreBridge {
         cancellation_id: rawBytes(input.cancellationId),
       }))
     } catch (error) {
-      throw normalizeCoreError(error, 'unknown')
+      throw normalizePrivateCoreError(error, 'reconnect')
     }
   }
 
@@ -92,7 +96,7 @@ class WasmCoreAdapter implements CoreBridge {
         cancellation_id: rawBytes(input.cancellationId),
       }))
     } catch (error) {
-      throw normalizeCoreError(error, 'unknown')
+      throw normalizePrivateCoreError(error, 'provision')
     }
   }
 
@@ -108,7 +112,7 @@ class WasmCoreAdapter implements CoreBridge {
         cancellation_id: rawBytes(input.cancellationId),
       }))
     } catch (error) {
-      throw normalizeCoreError(error, 'unknown')
+      throw normalizePrivateCoreError(error, 'transfer_recording')
     }
   }
 
@@ -135,7 +139,7 @@ class WasmCoreAdapter implements CoreBridge {
         cancellation_id: rawBytes(input.cancellationId),
       }))
     } catch (error) {
-      throw normalizeCoreError(error, 'unknown')
+      throw normalizePrivateCoreError(error, 'transfer_recording')
     }
   }
 
@@ -153,7 +157,7 @@ class WasmCoreAdapter implements CoreBridge {
         cancellation_id: rawBytes(input.cancellationId),
       }))
     } catch (error) {
-      throw normalizeCoreError(error, 'unknown')
+      throw normalizePrivateCoreError(error, 'update_firmware')
     }
   }
 
@@ -166,7 +170,7 @@ class WasmCoreAdapter implements CoreBridge {
         cancellation_id: rawBytes(input.cancellationId),
       }))
     } catch (error) {
-      throw normalizeCoreError(error, 'unknown')
+      throw normalizePrivateCoreError(error, 'read_device_logs')
     }
   }
 
@@ -174,7 +178,7 @@ class WasmCoreAdapter implements CoreBridge {
     try {
       return normalizeEffects(this.generated.cancel(cancellationId))
     } catch (error) {
-      throw normalizeCoreError(error, 'unknown')
+      throw normalizePrivateCoreError(error, 'unknown')
     }
   }
 
@@ -182,7 +186,7 @@ class WasmCoreAdapter implements CoreBridge {
     try {
       return normalizeEffects(this.generated.dispatch(rawHostEvent(event)))
     } catch (error) {
-      throw normalizeCoreError(error, 'unknown')
+      throw normalizePrivateCoreError(error, 'unknown')
     }
   }
 
@@ -190,7 +194,7 @@ class WasmCoreAdapter implements CoreBridge {
     try {
       return normalizeStatus(this.generated.status())
     } catch (error) {
-      throw normalizeCoreError(error, 'unknown')
+      throw normalizePrivateCoreError(error, 'unknown')
     }
   }
 

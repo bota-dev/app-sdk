@@ -453,7 +453,7 @@ impl WorkflowReducer for ConnectionWorkflow {
                 self.record_candidate(candidate.clone());
                 if exact {
                     self.active_candidate = Some(candidate);
-                    self.verify_serial = false;
+                    self.verify_serial = true;
                     Ok(self.stop_scan(context))
                 } else {
                     Ok(Vec::new())
@@ -470,7 +470,7 @@ impl WorkflowReducer for ConnectionWorkflow {
             {
                 self.stop_scan_request_id = None;
                 if let Some(candidate) = self.active_candidate.clone() {
-                    Ok(self.begin_connection(candidate, false, context))
+                    Ok(self.begin_connection(candidate, true, context))
                 } else {
                     self.prepare_probe_candidates();
                     Ok(self.begin_next_probe(context))

@@ -87,7 +87,7 @@ impl Command {
         &self,
         capabilities: &CapabilitySet,
     ) -> Result<AuthorizedCommand, DeviceSdkError> {
-        for capability in self.required_capabilities() {
+        for capability in self.required_capability_slice() {
             if !capabilities.contains(*capability) {
                 return Err(DeviceSdkError::new(
                     ErrorCode::UnsupportedCapability,
@@ -98,6 +98,10 @@ impl Command {
             }
         }
         Ok(AuthorizedCommand(self.clone()))
+    }
+
+    pub fn required_capabilities(&self) -> CapabilitySet {
+        self.required_capability_slice().iter().copied().collect()
     }
 
     pub const fn operation(&self) -> Operation {
@@ -117,7 +121,7 @@ impl Command {
         }
     }
 
-    const fn required_capabilities(&self) -> &'static [Capability] {
+    const fn required_capability_slice(&self) -> &'static [Capability] {
         match self {
             Self::DiscoverDevices { .. } => &[Capability::Ble, Capability::Timer],
             Self::Connect { .. } | Self::ConnectSelected { .. } | Self::Reconnect { .. } => {

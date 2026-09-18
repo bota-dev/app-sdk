@@ -1,6 +1,6 @@
 use crate::BridgeCore;
 use bota_device_sdk_core::{
-    engine::{CancellationId, Capability, CapabilitySet, Command, EffectRequest, Event},
+    engine::{CancellationId, Command, EffectRequest, Event},
     error::DeviceSdkError,
     model::{
         DeviceCandidate, DeviceSerialNumber, FirmwareImage, HostMaterialId, ReconnectHint,
@@ -29,7 +29,6 @@ impl BridgeCore {
                     rssi: 0,
                 },
             },
-            CapabilitySet::from([Capability::Ble, Capability::Timer, Capability::Persistence]),
             cancellation_id,
         )
     }
@@ -45,7 +44,6 @@ impl BridgeCore {
                 device: DeviceSerialNumber::new(expected_serial)?,
                 hint,
             },
-            CapabilitySet::from([Capability::Ble, Capability::Timer, Capability::Persistence]),
             cancellation_id,
         )
     }
@@ -61,12 +59,6 @@ impl BridgeCore {
                 device: DeviceSerialNumber::new(serial_number)?,
                 material_id: HostMaterialId::new(material_id)?,
             },
-            CapabilitySet::from([
-                Capability::Ble,
-                Capability::Timer,
-                Capability::Persistence,
-                Capability::HostMaterial,
-            ]),
             cancellation_id,
         )
     }
@@ -87,13 +79,6 @@ impl BridgeCore {
                 total_units,
                 confirm_on_completion: false,
             },
-            CapabilitySet::from([
-                Capability::Ble,
-                Capability::Persistence,
-                Capability::Progress,
-                Capability::RecordingSink,
-                Capability::Timer,
-            ]),
             cancellation_id,
         )
     }
@@ -141,14 +126,6 @@ impl BridgeCore {
                     ciphertext_sha256,
                 },
             },
-            CapabilitySet::from([
-                Capability::Ble,
-                Capability::Persistence,
-                Capability::Progress,
-                Capability::HostMaterial,
-                Capability::RecordingSink,
-                Capability::NetworkTransfer,
-            ]),
             cancellation_id,
         )
     }
@@ -175,14 +152,6 @@ impl BridgeCore {
                 download_id,
                 reconnect_hint,
             },
-            CapabilitySet::from([
-                Capability::Ble,
-                Capability::NetworkTransfer,
-                Capability::Persistence,
-                Capability::Progress,
-                Capability::Timer,
-                Capability::FirmwareBlob,
-            ]),
             cancellation_id,
         )
     }
@@ -196,7 +165,6 @@ impl BridgeCore {
             Command::ReadDeviceLogs {
                 device: DeviceSerialNumber::new(serial_number)?,
             },
-            CapabilitySet::from([Capability::Ble]),
             cancellation_id,
         )
     }
@@ -213,13 +181,107 @@ impl BridgeCore {
     fn start(
         &mut self,
         command: Command,
-        capabilities: CapabilitySet,
         cancellation_id: [u8; 16],
     ) -> Result<Vec<EffectRequest>, DeviceSdkError> {
+        let capabilities = command.required_capabilities();
+        #[cfg(test)]
+        {
+            self.observed_start_capabilities = Some(capabilities.clone());
+            self.observed_start_command = Some(command.clone());
+        }
         self.engine.start(
             command,
             &capabilities,
             CancellationId::from_bytes(cancellation_id),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SERIAL: &str = "EVFXXW67KP";
+    const CANCELLATION_ID: [u8; 16] = [0x11; 16];
+    const RECORDING_UUID: [u8; 16] = [0x22; 16];
+
+    fn assert_start_capabilities(
+        start: impl FnOnce(&mut BridgeCore) -> Result<Vec<EffectRequest>, DeviceSdkError>,
+    ) {
+        let mut bridge = BridgeCore::default();
+        start(&mut bridge).expect("typed workflow start should succeed");
+        let expected = bridge
+            .observed_start_command
+            .as_ref()
+            .expect("typed start records its command")
+            .required_capabilities();
+        assert_eq!(bridge.observed_start_capabilities.as_ref(), Some(&expected));
+    }
+
+    #[test]
+    fn typed_starts_supply_only_their_exact_required_capabilities() {
+        assert_start_capabilities(|bridge| {
+            bridge.start_exact_connection(
+                SERIAL,
+                "browser-peripheral-1",
+                Some("Bota Pin"),
+                CANCELLATION_ID,
+            )
+        });
+        assert_start_capabilities(|bridge| {
+            bridge.start_reconnect(SERIAL, ReconnectHint::default(), CANCELLATION_ID)
+        });
+        assert_start_capabilities(|bridge| {
+            bridge.start_provisioning(SERIAL, "web-material-1", CANCELLATION_ID)
+        });
+        assert_start_capabilities(|bridge| {
+            bridge.start_recording_transfer(
+                SERIAL,
+                RECORDING_UUID,
+                "web-sink-1",
+                4_096,
+                CANCELLATION_ID,
+            )
+        });
+        assert_start_capabilities(|bridge| {
+            bridge.start_encrypted_upload_v2(
+                SERIAL,
+                RECORDING_UUID,
+                9,
+                bota_device_sdk_core::generated::protocol::STORAGE_FORMAT_BOTA_ENC_V2,
+                [0x44; 16],
+                3,
+                0x1122_3344_5566,
+                "web-v2-material-1",
+                "web-v2-sink-1",
+                UploadSecurityPolicy::V2Preferred,
+                EncryptedUploadV2Capabilities {
+                    flags: 0x7f,
+                    maximum_signed_blob_bytes: 1_024,
+                    maximum_manifest_bytes: 1_024,
+                    maximum_data_payload_bytes: 244,
+                    maximum_window_packets: 16,
+                    durable_checkpoint_interval_blocks: 8,
+                    maximum_missing_sequences: 16,
+                },
+                16,
+                244,
+                330,
+                [0x33; 32],
+                CANCELLATION_ID,
+            )
+        });
+        assert_start_capabilities(|bridge| {
+            bridge.start_firmware_update(
+                SERIAL,
+                "1.0.18",
+                1_024,
+                0x1234_5678,
+                41,
+                ReconnectHint::default(),
+                CANCELLATION_ID,
+            )
+        });
+        assert_start_capabilities(|bridge| bridge.start_device_logs(SERIAL, CANCELLATION_ID));
     }
 }

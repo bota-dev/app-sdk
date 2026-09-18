@@ -12,6 +12,10 @@ mod workflows;
 #[derive(Default)]
 pub struct BridgeCore {
     engine: WorkflowEngine,
+    #[cfg(test)]
+    observed_start_capabilities: Option<bota_device_sdk_core::engine::CapabilitySet>,
+    #[cfg(test)]
+    observed_start_command: Option<bota_device_sdk_core::engine::Command>,
 }
 
 impl BridgeCore {
