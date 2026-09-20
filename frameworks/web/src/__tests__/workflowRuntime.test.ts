@@ -621,6 +621,65 @@ test('an unknown effect fails closed instead of reaching a later completion', as
   )
 })
 
+test('a failed new start cannot inherit an older completion handoff', async () => {
+  let status: CoreWorkflowStatus = { kind: 'idle' }
+  let cancelCalls = 0
+  let oldHandoffs = 0
+  let newHandoffs = 0
+  const core = scriptedCore({
+    status: () => status,
+    cancel: (cancellationId) => {
+      cancelCalls += 1
+      assert.deepEqual(cancellationId, OTHER_CANCELLATION_ID)
+      return [envelope(3n, {
+        kind: 'notify',
+        notification: { kind: 'cancelled', operation: 'reconnect' },
+      }, OTHER_CANCELLATION_ID)]
+    },
+  })
+  const runtime = new BrowserWorkflowRuntime(
+    core,
+    new FakeBrowserBluetoothTransport(),
+  )
+
+  await runtime.run(
+    'reconnect:completed-owner',
+    CANCELLATION_ID,
+    () => {
+      status = { kind: 'completed', operation: 'reconnect' }
+      return [envelope(1n, {
+        kind: 'notify',
+        notification: { kind: 'completed', operation: 'reconnect' },
+      })]
+    },
+    { persistence: noOpHost() },
+    undefined,
+    async () => {
+      oldHandoffs += 1
+    },
+  )
+
+  await assert.rejects(
+    runtime.run(
+      'reconnect:failed-new-owner',
+      OTHER_CANCELLATION_ID,
+      () => {
+        throw new BotaSDKError('internal_error', 'reconnect')
+      },
+      { persistence: noOpHost() },
+      undefined,
+      async () => {
+        newHandoffs += 1
+      },
+    ),
+    errorWith('internal_error', 'reconnect'),
+  )
+
+  assert.equal(oldHandoffs, 1)
+  assert.equal(newHandoffs, 0)
+  assert.equal(cancelCalls, 1)
+})
+
 test('cancellation removes subscriptions, cancels hosts, and ignores late completions', async () => {
   const transport = new FakeBrowserBluetoothTransport()
   const dispatched: string[] = []

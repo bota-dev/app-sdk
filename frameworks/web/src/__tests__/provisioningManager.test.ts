@@ -33,7 +33,7 @@ import type {
   ProvisioningProvider,
 } from '../providers.ts'
 import { ProvisioningManager } from '../provisioningManager.ts'
-import type { ProvisioningJournal } from '../storage.ts'
+import type { BrowserSdkStorage, ProvisioningJournal } from '../storage.ts'
 import { createWasmCore } from '../wasmCore.ts'
 import { BrowserWorkflowRuntime } from '../workflowRuntime.ts'
 import { FakeBrowserBluetoothTransport } from './fakeBluetooth.ts'
@@ -52,8 +52,9 @@ const wasmBytes = readFile(
 )
 
 interface ProviderPrepareRecord {
-  snapshot: ProvisioningPrepareContext
+  snapshot: Omit<ProvisioningPrepareContext, 'signal'>
   references: ProvisioningPrepareContext
+  signal: AbortSignal
 }
 
 interface ProviderAbortRecord {
@@ -97,6 +98,7 @@ class FakeProvisioningProvider implements ProvisioningProvider {
         devicePublicKey: context.devicePublicKey.slice(),
       },
       references: context,
+      signal: context.signal,
     })
     const material = await this.prepareHandler(context)
     this.materials.push(material)
@@ -143,7 +145,7 @@ class FakeProvisioningStorage extends FakeRecordingStorage {
     this.provisioningJournals.set(journal.attemptId, { ...journal })
   }
 
-  override async listProvisioningJournals(): Promise<ProvisioningJournal[]> {
+  async listProvisioningJournals(): Promise<ProvisioningJournal[]> {
     return [...this.provisioningJournals.values()].map((journal) => ({ ...journal }))
   }
 
@@ -730,6 +732,92 @@ test('a pre-material prepared journal retains typed fail-closed recovery', async
   assert.deepEqual(harness.transport.writes, [])
 })
 
+test('exact-attempt recovery supports a base custom storage adapter without journal listing', async () => {
+  const harness = await createHarness()
+  const attemptId = 'base-storage-confirm-recovery'
+  harness.storage.provisioningJournals.set(attemptId, {
+    schemaVersion: 1,
+    attemptId,
+    materialId: 'material-base-storage-confirm-recovery',
+    serialNumber: SERIAL,
+    phase: 'device_applied',
+    updatedAtEpochMs: 1_700_000_000_000,
+  })
+  const storage = new Proxy(harness.storage, {
+    get(target, property) {
+      if (property === 'listProvisioningJournals') return undefined
+      const value: unknown = Reflect.get(target, property, target)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  }) as BrowserSdkStorage
+  const manager = new ProvisioningManager({
+    core: harness.core,
+    transport: harness.transport,
+    runtime: harness.runtime,
+    devices: harness.devices,
+    storage,
+    provider: harness.provider,
+  })
+
+  await manager.provision({ attemptId })
+
+  assert.deepEqual(harness.provider.prepares, [])
+  assert.deepEqual(harness.provider.confirms, [{
+    attemptId,
+    serialNumber: SERIAL,
+  }])
+  assert.equal(
+    harness.storage.provisioningJournals.get(attemptId)?.phase,
+    'backend_confirmed',
+  )
+  assert.deepEqual(harness.transport.writes, [])
+})
+
+test('prepared recovery identity mismatch disconnects stale state and permits reconnect', async () => {
+  const harness = await createHarness()
+  const attemptId = 'prepared-identity-mismatch'
+  harness.storage.provisioningJournals.set(attemptId, {
+    schemaVersion: 1,
+    attemptId,
+    materialId: 'web-22222222222222222222222222222222',
+    serialNumber: SERIAL,
+    phase: 'prepared',
+    updatedAtEpochMs: 1_700_000_000_000,
+  })
+  harness.transport.serialNumber = OTHER_SERIAL
+
+  await assert.rejects(
+    harness.manager.provision({ attemptId }),
+    (error: unknown) => error instanceof BotaSDKError
+      && error.code === 'identity_mismatch'
+      && error.operation === 'provision',
+  )
+
+  assert.equal(
+    harness.transport.calls.filter((call) => call.startsWith('disconnect:')).length,
+    1,
+  )
+  assert.equal(harness.devices.connectedDevice, null)
+  assert.equal(harness.runtime.connectedDeviceHandle, null)
+  await assert.rejects(
+    harness.manager.readConnectionSettings(),
+    (error: unknown) => error instanceof BotaSDKError
+      && error.code === 'device_disconnected'
+      && error.operation === 'settings',
+  )
+
+  harness.transport.serialNumber = SERIAL
+  const reconnected = await harness.devices.reconnect({
+    expectedSerialNumber: SERIAL,
+  })
+  assert.equal(reconnected.serialNumber, SERIAL)
+  assert.equal(
+    (harness.devices.connectedDevice as { serialNumber: string } | null)
+      ?.serialNumber,
+    SERIAL,
+  )
+})
+
 test('a blocked confirm is joined on cancel and destroy before another attempt can own the runtime', async () => {
   const harness = await createHarness()
   const oldConfirmEntered = deferred<void>()
@@ -821,12 +909,23 @@ test('a blocked confirm is joined on cancel and destroy before another attempt c
   )
 })
 
-test('cancelled late prepare cannot dispatch into or mutate a newer attempt', async () => {
+test('cancellation joins the exact provider prepare before abort, scrubbing, or reuse', async () => {
   const events: string[] = []
   const provider = new FakeProvisioningProvider(events)
-  const latePrepare = deferred<ProvisioningMaterial>()
+  const prepareGate = deferred<void>()
+  let observedNonce: Uint8Array | null = null
+  let observedDevicePublicKey: Uint8Array | null = null
+  let lateMaterial: ProvisioningMaterial | null = null
   provider.prepareHandler = async (context) => {
-    if (context.attemptId === 'old-attempt') return await latePrepare.promise
+    if (context.attemptId === 'old-attempt') {
+      events.push('provider:prepare:waiting')
+      await prepareGate.promise
+      observedNonce = context.nonce.slice()
+      observedDevicePublicKey = context.devicePublicKey.slice()
+      lateMaterial = materialFor(context.materialId, 0x22, 0xee)
+      events.push('provider:prepare:settled')
+      return lateMaterial
+    }
     return materialFor(
       context.materialId,
       0x31,
@@ -834,24 +933,72 @@ test('cancelled late prepare cannot dispatch into or mutate a newer attempt', as
     )
   }
   const harness = await createHarness({ provider })
-  provider.events.splice(0, provider.events.length, ...harness.events)
+  const sibling = new ProvisioningManager({
+    core: harness.core,
+    transport: harness.transport,
+    runtime: harness.runtime,
+    devices: harness.devices,
+    storage: harness.storage,
+    provider,
+  })
   const controller = new AbortController()
 
+  let oldSettled = false
   const oldProvision = harness.manager.provision({
     attemptId: 'old-attempt',
     signal: controller.signal,
+  }).finally(() => {
+    oldSettled = true
   })
   const oldRejected = assert.rejects(oldProvision, cancelled('provision'))
   await eventually(() => provider.prepares.length === 1)
+  const prepare = provider.prepares[0]
+  assert.ok(prepare)
   controller.abort()
-  await settleWithWatchdog(oldRejected, 'old provisioning cancellation')
+  let destroySettled = false
+  const destroying = harness.manager.destroy().then(() => {
+    destroySettled = true
+  })
+  await settleReducer()
 
-  const newProvision = harness.manager.provision({ attemptId: 'new-attempt' })
+  try {
+    assert.equal(oldSettled, false)
+    assert.equal(destroySettled, false)
+    assert.equal(prepare.signal.aborted, true)
+    assert.deepEqual(prepare.references.nonce, NONCE)
+    assert.deepEqual(prepare.references.devicePublicKey, DEVICE_PUBLIC_KEY)
+    assert.equal(provider.aborts.length, 0)
+    await assert.rejects(
+      sibling.provision({ attemptId: 'new-attempt' }),
+      operationInProgress('provision'),
+    )
+  } finally {
+    prepareGate.resolve(undefined)
+  }
+
+  await settleWithWatchdog(destroying, 'prepare-joining manager destroy')
+  await settleWithWatchdog(oldRejected, 'old provisioning cancellation')
+  assert.deepEqual(observedNonce, NONCE)
+  assert.deepEqual(observedDevicePublicKey, DEVICE_PUBLIC_KEY)
+  assertBufferWasScrubbed(prepare.references.nonce, 'cancelled provider nonce')
+  assertBufferWasScrubbed(
+    prepare.references.devicePublicKey,
+    'cancelled provider public key',
+  )
+  const settledMaterial = lateMaterial as ProvisioningMaterial | null
+  assert.ok(settledMaterial)
+  assert.ok(allZero(settledMaterial.apiEndpoint))
+  assert.ok(allZero(settledMaterial.deviceToken))
+  assert.equal(provider.aborts.filter((call) =>
+    call.attemptId === 'old-attempt'
+  ).length, 1)
+  assert.ok(
+    eventIndex(events, 'provider:prepare:settled')
+      < eventIndex(events, 'provider:abort:old-attempt:cancelled'),
+  )
+
+  const newProvision = sibling.provision({ attemptId: 'new-attempt' })
   await eventually(() => provider.prepares.length === 2)
-  const staleMaterial = materialFor('old-attempt', 0x22, 0xee)
-  latePrepare.resolve(staleMaterial)
-  await eventually(() => allZero(staleMaterial.apiEndpoint)
-    && allZero(staleMaterial.deviceToken))
   await completePhysicalProvisioning(harness)
   await newProvision
 
@@ -863,12 +1010,10 @@ test('cancelled late prepare cannot dispatch into or mutate a newer attempt', as
     harness.storage.provisioningJournals.get('new-attempt')?.phase,
     'backend_confirmed',
   )
-  assert.equal(provider.aborts.filter((call) =>
-    call.attemptId === 'old-attempt'
-  ).length, 1)
+  assert.equal(provider.prepares[1]?.snapshot.attemptId, 'new-attempt')
 })
 
-test('client destruction cancels provisioning, scrubs inputs, and rejects a late provider result', async () => {
+test('client destruction joins provider prepare before scrubbing and aborting', async () => {
   const core = await createWasmCore(await wasmBytes)
   const transport = new FakeBrowserBluetoothTransport()
   transport.setRead(BOTA_AUTH_SERVICE, AUTH_NONCE_CHARACTERISTIC, NONCE)
@@ -884,8 +1029,17 @@ test('client destruction cancels provisioning, scrubs inputs, and rejects a late
   )
   const storage = new FakeProvisioningStorage()
   const provider = new FakeProvisioningProvider()
-  const latePrepare = deferred<ProvisioningMaterial>()
-  provider.prepareHandler = async () => await latePrepare.promise
+  const prepareGate = deferred<void>()
+  let observedNonce: Uint8Array | null = null
+  let observedDevicePublicKey: Uint8Array | null = null
+  let lateMaterial: ProvisioningMaterial | null = null
+  provider.prepareHandler = async (context) => {
+    await prepareGate.promise
+    observedNonce = context.nonce.slice()
+    observedDevicePublicKey = context.devicePublicKey.slice()
+    lateMaterial = materialFor(context.materialId, 0x44, 0xdd)
+    return lateMaterial
+  }
   const client = await BotaDeviceClient.create({
     coreLoader: async () => core,
     transport,
@@ -899,21 +1053,42 @@ test('client destruction cancels provisioning, scrubs inputs, and rejects a late
   })
   const rejected = assert.rejects(provision, cancelled('provision'))
   await eventually(() => provider.prepares.length === 1)
-  await settleWithWatchdog(client.destroy(), 'client destruction')
+  const prepare = provider.prepares[0]
+  assert.ok(prepare)
+  let destroySettled = false
+  const destroying = client.destroy().then(() => {
+    destroySettled = true
+  })
+  await settleReducer()
+  try {
+    assert.equal(destroySettled, false)
+    assert.equal(prepare.signal.aborted, true)
+    assert.deepEqual(prepare.references.nonce, NONCE)
+    assert.deepEqual(prepare.references.devicePublicKey, DEVICE_PUBLIC_KEY)
+    assert.equal(provider.aborts.length, 0)
+  } finally {
+    prepareGate.resolve(undefined)
+  }
+  await settleWithWatchdog(destroying, 'client destruction')
   await rejected
 
+  assert.deepEqual(observedNonce, NONCE)
+  assert.deepEqual(observedDevicePublicKey, DEVICE_PUBLIC_KEY)
   assertBufferWasScrubbed(
-    provider.prepares[0]?.references.nonce,
+    prepare.references.nonce,
     'destroyed provider nonce',
   )
   assertBufferWasScrubbed(
-    provider.prepares[0]?.references.devicePublicKey,
+    prepare.references.devicePublicKey,
     'destroyed provider public key',
   )
-  const staleMaterial = materialFor('destroyed-attempt', 0x44, 0xdd)
-  latePrepare.resolve(staleMaterial)
-  await eventually(() => allZero(staleMaterial.apiEndpoint)
-    && allZero(staleMaterial.deviceToken))
+  const settledMaterial = lateMaterial as ProvisioningMaterial | null
+  assert.ok(settledMaterial)
+  assert.ok(allZero(settledMaterial.apiEndpoint))
+  assert.ok(allZero(settledMaterial.deviceToken))
+  assert.equal(provider.aborts.filter((call) =>
+    call.attemptId === 'destroyed-attempt'
+  ).length, 1)
   assert.equal(
     storage.provisioningJournals.has('destroyed-attempt'),
     false,

@@ -115,7 +115,7 @@ export interface BrowserSdkStorage {
   deleteRecordingJournal(operationId: string): Promise<void>
   loadProvisioningJournal(attemptId: string): Promise<ProvisioningJournal | null>
   saveProvisioningJournal(journal: ProvisioningJournal): Promise<void>
-  listProvisioningJournals(): Promise<ProvisioningJournal[]>
+  listProvisioningJournals?(): Promise<ProvisioningJournal[]>
   deleteProvisioningJournal(attemptId: string): Promise<void>
   loadFirmwareJournal(operationId: string): Promise<FirmwareJournal | null>
   saveFirmwareJournal(journal: FirmwareJournal): Promise<void>

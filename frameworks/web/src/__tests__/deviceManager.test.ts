@@ -69,7 +69,6 @@ function memoryStorage(initialHint: VerifiedDeviceHint | null = null):
     deleteRecordingJournal: async () => undefined,
     loadProvisioningJournal: async () => null,
     saveProvisioningJournal: async () => undefined,
-    listProvisioningJournals: async () => [],
     deleteProvisioningJournal: async () => undefined,
     loadFirmwareJournal: async () => null,
     saveFirmwareJournal: async () => undefined,

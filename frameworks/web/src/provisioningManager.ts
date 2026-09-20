@@ -135,6 +135,10 @@ export class ProvisioningManager {
 
     try {
       await this.runProvision(request.attemptId, active)
+    } catch (error) {
+      const normalized = managerError(error, 'provision')
+      if (normalized.code === 'identity_mismatch') await this.disconnectMismatch()
+      throw normalized
     } finally {
       request.signal?.removeEventListener('abort', cancel)
       if (this.activeProvision === active) this.activeProvision = null
@@ -256,10 +260,13 @@ export class ProvisioningManager {
     let journal: ProvisioningJournal | null
     let journals: ProvisioningJournal[]
     try {
-      [journal, journals] = await Promise.all([
+      const listJournals = storage.listProvisioningJournals
+      const loaded = await Promise.all([
         storage.loadProvisioningJournal(attemptId),
-        storage.listProvisioningJournals(),
+        listJournals ? listJournals.call(storage) : Promise.resolve([]),
       ])
+      journal = loaded[0]
+      journals = loaded[1]
     } catch (error) {
       throw managerError(error, 'provision')
     }
@@ -349,9 +356,6 @@ export class ProvisioningManager {
             retryable: true,
           })
         }
-      }
-      if (normalized.code === 'identity_mismatch') {
-        await this.disconnectMismatch()
       }
       throw normalized
     } finally {
@@ -595,9 +599,11 @@ class ProvisioningMaterialHost implements WorkflowEffectHost {
   private readonly transport: BrowserBluetoothTransport
   private readonly runtime: BrowserWorkflowRuntime
   private readonly now: () => number
+  private readonly prepareAbortController = new AbortController()
   private cancelled = false
   private currentContext: ProvisioningPrepareContext | null = null
   private currentMaterial: ProvisioningMaterial | null = null
+  private prepareSettlement: Promise<void> | null = null
   private durableSettlement: Promise<void> | null = null
   private abortPromise: Promise<void> | null = null
   private didStartPrepare = false
@@ -645,10 +651,12 @@ class ProvisioningMaterialHost implements WorkflowEffectHost {
       serialNumber: this.serialNumber,
       nonce: effect.nonce.slice(),
       devicePublicKey: effect.devicePublicKey.slice(),
+      signal: this.prepareAbortController.signal,
     }
     effect.nonce.fill(0)
     effect.devicePublicKey.fill(0)
     this.currentContext = providerContext
+    const prepareLifecycle = deferredVoid()
 
     try {
       if (effect.materialId !== this.materialId) {
@@ -672,6 +680,7 @@ class ProvisioningMaterialHost implements WorkflowEffectHost {
       providerContext.serialNumber = freshSerial
 
       this.didStartPrepare = true
+      this.prepareSettlement = prepareLifecycle.promise
       const prepared = await settled(this.provider.prepare(providerContext))
       if (prepared.kind === 'failed') {
         return {
@@ -721,14 +730,17 @@ class ProvisioningMaterialHost implements WorkflowEffectHost {
       if (this.currentContext === providerContext) this.currentContext = null
       if (this.currentMaterial) scrubMaterial(this.currentMaterial)
       this.currentMaterial = null
+      prepareLifecycle.resolve()
     }
   }
 
   async cancel(): Promise<void> {
     this.cancelled = true
+    this.prepareAbortController.abort()
+    await this.prepareSettlement
+    await this.durableSettlement
     if (this.currentContext) scrubContext(this.currentContext)
     if (this.currentMaterial) scrubMaterial(this.currentMaterial)
-    await this.durableSettlement
   }
 
   abort(reason: BotaSDKErrorCode): Promise<void> {
@@ -918,6 +930,14 @@ async function settled<T>(promise: Promise<T>): Promise<Settled<T>> {
     (value) => ({ kind: 'completed', value }),
     (error: unknown) => ({ kind: 'failed', error }),
   )
+}
+
+function deferredVoid(): { promise: Promise<void>; resolve(): void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
 }
 
 function managerError(error: unknown, operation: BotaOperation): BotaSDKError {

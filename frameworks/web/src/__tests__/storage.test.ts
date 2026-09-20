@@ -509,7 +509,7 @@ test('pre-material provisioning journals preserve an explicitly unknown identity
     { ...journal, materialId: null },
   )
   assert.deepEqual(
-    await storage.listProvisioningJournals(),
+    await storage.listProvisioningJournals?.(),
     [{ ...journal, materialId: null }],
   )
 })
@@ -1275,7 +1275,7 @@ test('reopening recovers every durable record and blob size without secret path 
     await reopened.loadProvisioningJournal(provisioning.attemptId),
     provisioning,
   )
-  assert.deepEqual(await reopened.listProvisioningJournals(), [provisioning])
+  assert.deepEqual(await reopened.listProvisioningJournals?.(), [provisioning])
   assert.deepEqual(await reopened.loadFirmwareJournal(firmware.operationId), firmware)
   assert.equal(await (await reopened.openBlob(blobId)).size(), 4)
 

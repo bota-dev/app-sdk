@@ -10,6 +10,7 @@ export interface ProvisioningPrepareContext {
   serialNumber: string
   nonce: Uint8Array
   devicePublicKey: Uint8Array
+  signal: AbortSignal
 }
 
 export interface ProvisioningMaterial {

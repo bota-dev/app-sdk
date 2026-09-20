@@ -402,3 +402,164 @@ identity; endpoint and token bytes remain excluded.
   memory copies outside those owned references.
 - No physical Chromium/device/backend acceptance run was performed. Tasks 13
   and 14 remain the owners of physical evidence and final protocol-gap status.
+
+## Fix Round 2
+
+### Status and Scope
+
+- Starting HEAD: `3a1f8bf1354b76b3e40060550429728ab5736682`
+  (verified clean).
+- Commit subject: `fix(web): fence provisioning recovery`.
+- Scope remains Task 8 only. No Task 9 behavior, Rust protocol change,
+  firmware/backend implementation, publish, push, or physical-device operation
+  was performed.
+
+### Resolved SDK Behavior
+
+- `ProvisioningPrepareContext` now carries an `AbortSignal`. Cancellation
+  aborts that signal but does not assume provider cooperation: the exact
+  `prepare` lifecycle remains joined while its nonce and device-public-key
+  buffers stay intact. Only after provider settlement does the SDK scrub the
+  context and returned material, cancel the Rust workflow, invoke backend
+  abort where preparation started, clear the active attempt, and admit a new
+  owner. Provider abort remains memoized and occurs exactly once.
+- Workflow completion handoff no longer consults terminal status by operation
+  name inside the failure path. Completion evidence is captured only from a
+  dispatch belonging to the current owner and is bound to its request ID,
+  cancellation ID, and generation. A failed new start cannot inherit an older
+  completed workflow's handoff; current-owner physical completion still runs
+  the durable `device_applied` and backend-confirm handoff.
+- `BrowserSdkStorage.listProvisioningJournals` is optional again, preserving
+  the pre-Task-8 custom storage contract. Exact-attempt journal recovery always
+  uses `loadProvisioningJournal`; adapters that implement listing retain
+  cross-attempt conflict detection, and the default IndexedDB implementation
+  continues to provide listing.
+- Every provisioning identity mismatch, including the prepared-reconciliation
+  path, now exits through the same deterministic disconnect path. Both
+  `DeviceManager.connectedDevice` and the shared runtime connection are
+  invalidated before rejection, one transport disconnect is issued, and a
+  later authorized reconnect remains available.
+- Fix Round 1 behavior remains covered: material binding, post-success durable
+  ownership, joined GATT writes and provider confirmation, post-write result
+  freshness, SDK-owned byte zeroing, stable redacted errors, and fail-closed
+  prepared recovery.
+
+### Files Changed
+
+- `.superpowers/sdd/2026-09-17-web-sdk-foreground-workflows/task-8-report.md`
+- `frameworks/web/src/providers.ts`
+- `frameworks/web/src/provisioningManager.ts`
+- `frameworks/web/src/storage.ts`
+- `frameworks/web/src/workflowRuntime.ts`
+- `frameworks/web/src/__tests__/provisioningManager.test.ts`
+- `frameworks/web/src/__tests__/workflowRuntime.test.ts`
+- `frameworks/web/src/__tests__/storage.test.ts`
+- `frameworks/web/src/__tests__/deviceManager.test.ts`
+- `frameworks/web/src/__tests__/fakeProviders.ts`
+
+No Rust source, WASM bridge source, generated protocol source, or wire codec
+changed.
+
+### RED Evidence
+
+The Fix Round 2 probes were added before production changes:
+
+```text
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  node --test src/__tests__/provisioningManager.test.ts \
+    src/__tests__/workflowRuntime.test.ts
+Working directory: frameworks/web
+Result: expected RED, 37 passed and 5 failed out of 42.
+Failures proved that custom storage without listing became internal_error,
+prepared recovery mismatch left the stale connection published, cancel and
+destroy settled while provider prepare remained unresolved, and a failed new
+start invoked an older operation-name-only completion handoff.
+```
+
+### GREEN Evidence
+
+```text
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  node --test src/__tests__/provisioningManager.test.ts \
+    src/__tests__/workflowRuntime.test.ts \
+    src/__tests__/storage.test.ts src/__tests__/deviceManager.test.ts
+Working directory: frameworks/web
+Result: PASS, 124 passed, 0 failed, 0 cancelled, 0 skipped.
+
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH npm test
+Working directory: frameworks/web
+Result: PASS, 251 passed, 0 failed, 0 cancelled, 0 skipped.
+
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH npm run type-check
+Working directory: frameworks/web
+Result: PASS; the WASM build and `tsc --noEmit` completed without errors.
+
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH npm run build
+Working directory: frameworks/web
+Result: PASS; the WASM asset, ESM JavaScript, and declarations were emitted.
+
+git diff --check
+Result: PASS, no whitespace errors.
+```
+
+No separate Rust test was required because no Rust or WASM bridge source
+changed. The full Web test, type-check, and build gates each rebuilt the WASM
+artifact and retained the existing Rust-codec parity tests.
+
+### Self-Review
+
+- Confirmed an ignored provider signal cannot release runtime ownership: cancel
+  and destroy wait for the exact prepare call and host cleanup. The provider can
+  read the original nonce and public key after an asynchronous wait; all
+  provider and SDK-owned secret arrays are zero after the terminal path.
+- Confirmed backend abort is absent while prepare is unresolved, follows the
+  known prepare outcome, and occurs once. A sibling manager receives
+  `operation_in_progress` until the old attempt is fully terminal.
+- Confirmed completion handoff evidence cannot cross owner generation, request,
+  or cancellation identity. Stale operation-name status is no longer evidence.
+- Confirmed adapters without journal listing can resume the exact
+  `device_applied` attempt without prepare or device I/O. Default IndexedDB
+  enumeration and its storage tests remain intact.
+- Confirmed prepared-recovery mismatch performs one disconnect, removes both
+  published connection views, rejects with the stable `identity_mismatch`, and
+  permits exact authorized reconnect.
+- Confirmed no endpoint, token, nonce, public key, raw packet, or provider error
+  is persisted, logged, or exposed through a public error.
+- Confirmed no Task 9 symbol or behavior was added.
+
+### Documentation Impact
+
+Changed-token searches covered App SDK `docs/`, `.superpowers`, all repository
+`AGENTS.md`, `ARCHITECTURE.md`, and non-dependency `README.md` files, plus the
+workspace `internal-docs/` and public `docs/` repositories. Tokens included
+`ProvisioningPrepareContext`, `listProvisioningJournals`,
+`WorkflowCompletionHandoff`, `reconciliation_required`, and `device_applied`.
+
+No published Web SDK guide currently documents these private storage/runtime
+details or the provider contract. The approved plan remains the design record;
+this report records the added provider cancellation signal and compatibility
+correction. Task 14 still owns public capability and physical-evidence status.
+
+### Residual Firmware and Target-Contract Gaps
+
+- Released firmware still exposes a one-byte provisioning/deprovision result
+  with no exact action, command, attempt, material, or nonce identity. The SDK
+  provides only the bounded post-write freshness window documented in Fix
+  Round 1 and does not claim exact command-bound correlation.
+- Current firmware still cannot prove whether an exact prepared material was
+  durably applied after a crash before `device_applied`. Recovery therefore
+  remains typed, retryable, and fail-closed as `reconciliation_required`; it
+  does not claim backend-unbound or device-unapplied state and never rewrites or
+  confirms ambiguous material. Exact recovery depends on firmware exposing an
+  action-bound durable result through Rust.
+- The provider contract still returns raw `apiEndpoint` and `deviceToken`
+  arrays. The target requires an opaque, versioned payload protected to trusted
+  `PK_D` and bound to the exact nonce/attempt. That firmware/backend/provider
+  migration remains outside this SDK-only round.
+- A legacy custom storage adapter without listing cannot discover a different
+  unresolved attempt after process restart. Exact-attempt recovery remains
+  safe, and in-process overlap remains fenced by active manager/runtime
+  ownership; cross-attempt durable discovery requires the optional listing
+  capability supplied by the default IndexedDB adapter.
+- No physical Chromium/device/backend acceptance run was performed. Tasks 13
+  and 14 remain responsible for physical evidence and protocol-gap closure.

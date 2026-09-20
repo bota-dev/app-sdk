@@ -243,10 +243,6 @@ export class FakeRecordingStorage implements BrowserSdkStorage {
 
   async saveProvisioningJournal(_journal: ProvisioningJournal): Promise<void> {}
 
-  async listProvisioningJournals(): Promise<ProvisioningJournal[]> {
-    return []
-  }
-
   async deleteProvisioningJournal(_attemptId: string): Promise<void> {}
 
   async loadFirmwareJournal(_operationId: string): Promise<FirmwareJournal | null> {

@@ -5,7 +5,6 @@ import type {
   CoreNotification,
   CoreOperation,
   CoreWorkflowCheckpoint,
-  CoreWorkflowStatus,
 } from './core.ts'
 import {
   BotaSDKError,
@@ -83,6 +82,10 @@ interface RequestOwner {
   cancellationId: Uint8Array
 }
 
+interface CompletionEvidence extends RequestOwner {
+  requestId: bigint
+}
+
 interface RuntimeSubscription {
   serviceUuid: string
   characteristicUuid: string
@@ -128,6 +131,7 @@ interface WorkflowOwner {
   pendingGattSetups: Set<Promise<void>>
   pendingGattWrites: Set<Promise<void>>
   completionHandoff: WorkflowCompletionHandoff | undefined
+  completionEvidence: CompletionEvidence | null
   completing: boolean
   completionPromise: Promise<void> | null
   completionFailure: { error: unknown } | null
@@ -271,6 +275,7 @@ export class BrowserWorkflowRuntime {
       pendingGattSetups: new Set(),
       pendingGattWrites: new Set(),
       completionHandoff,
+      completionEvidence: null,
       completing: false,
       completionPromise: null,
       completionFailure: null,
@@ -431,7 +436,7 @@ export class BrowserWorkflowRuntime {
         || status.kind === 'cancelled'
         || status.kind === 'failed'
       ) return []
-      return this.core.dispatch({
+      return this.dispatchCurrentOwnerEvent(owner, generation, {
         requestId,
         kind: 'ble_disconnected',
         peripheralId: deviceId,
@@ -498,6 +503,9 @@ export class BrowserWorkflowRuntime {
     const status = this.core.status()
     switch (status.kind) {
       case 'completed':
+        if (!this.hasCompletionEvidence(owner)) {
+          throw new BotaSDKError('internal_error', owner.operation)
+        }
         await this.finishSuccess(owner)
         return
       case 'cancelled':
@@ -701,7 +709,7 @@ export class BrowserWorkflowRuntime {
       ) {
         return []
       }
-      return this.core.dispatch(event)
+      return this.dispatchCurrentOwnerEvent(owner, generation, event)
     })
     if (owner.terminal || generation !== owner.generation) return
     this.enqueueEffects(owner, effects, generation)
@@ -1362,6 +1370,41 @@ export class BrowserWorkflowRuntime {
     return await result
   }
 
+  private dispatchCurrentOwnerEvent(
+    owner: WorkflowOwner,
+    generation: number,
+    event: CoreHostEvent,
+  ): CoreEffectEnvelope[] {
+    const effects = this.core.dispatch(event)
+    const status = this.core.status()
+    if (
+      status.kind === 'completed'
+      && publicOperation(status.operation) === owner.operation
+    ) {
+      const request = owner.requests.get(event.requestId)
+      if (
+        request
+        && request.generation === generation
+        && equalBytes(request.cancellationId, owner.cancellationId)
+      ) {
+        owner.completionEvidence = {
+          requestId: event.requestId,
+          generation,
+          cancellationId: request.cancellationId.slice(),
+        }
+      }
+    }
+    return effects
+  }
+
+  private hasCompletionEvidence(owner: WorkflowOwner): boolean {
+    const evidence = owner.completionEvidence
+    return evidence !== null
+      && evidence.generation === owner.generation
+      && owner.requests.has(evidence.requestId)
+      && equalBytes(evidence.cancellationId, owner.cancellationId)
+  }
+
   private enterCancellation(owner: WorkflowOwner): Promise<void> {
     if (owner.cancelPromise) return owner.cancelPromise
     const cancellation = deferred<void>()
@@ -1478,16 +1521,7 @@ export class BrowserWorkflowRuntime {
 
   private failOwner(owner: WorkflowOwner, error: unknown): Promise<void> {
     if (owner.terminal) return Promise.resolve()
-    let status: CoreWorkflowStatus | null = null
-    try {
-      status = this.core.status()
-    } catch {
-      // Preserve the originating failure if the bridge cannot report status.
-    }
-    if (
-      status?.kind === 'completed'
-      && publicOperation(status.operation) === owner.operation
-    ) {
+    if (this.hasCompletionEvidence(owner)) {
       return this.finishSuccess(owner, error)
     }
     if (owner.failurePromise) return owner.failurePromise
