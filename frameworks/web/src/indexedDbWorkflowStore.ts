@@ -199,7 +199,16 @@ export class IndexedDbWorkflowStore {
           throw resumeRejected()
         }
         assertNondecreasingTimestamp(previous, sanitized)
-        assertEstablishedEvidence(previous.uploadId, sanitized.uploadId)
+        const reconciledNotUploaded =
+          previous.profile === 'legacy'
+          && previous.phase === 'uploading'
+          && sanitized.phase === 'staged'
+          && sanitized.uploadId === null
+          && sanitized.cloudCompletionId === null
+          && sanitized.confirmationDigestHex === null
+        if (!reconciledNotUploaded) {
+          assertEstablishedEvidence(previous.uploadId, sanitized.uploadId)
+        }
         assertEstablishedEvidence(
           previous.cloudCompletionId,
           sanitized.cloudCompletionId,
@@ -208,7 +217,9 @@ export class IndexedDbWorkflowStore {
           previous.confirmationDigestHex,
           sanitized.confirmationDigestHex,
         )
-        assertNextPhase(RECORDING_PHASES, previous.phase, sanitized.phase)
+        if (!reconciledNotUploaded) {
+          assertNextPhase(RECORDING_PHASES, previous.phase, sanitized.phase)
+        }
       },
       () => {
         if (sanitized.phase !== 'prepared') throw resumeRejected()

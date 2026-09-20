@@ -186,7 +186,13 @@ export class BrowserWorkflowRuntime {
   }
 
   markDeviceDisconnected(deviceId: string): void {
-    if (this.connectedDevice?.id === deviceId) this.connectedDevice = null
+    if (this.connectedDevice?.id !== deviceId) return
+    this.connectedDevice = null
+    const owner = this.activeOwner
+    if (!owner || owner.kind === 'direct') return
+    void this.dispatchDeviceDisconnected(owner, deviceId).catch((error: unknown) => {
+      void this.failOwner(owner, error)
+    })
   }
 
   run(
@@ -331,6 +337,25 @@ export class BrowserWorkflowRuntime {
     if (owner.inlineEffects === null) this.ensurePump(owner)
   }
 
+  private async dispatchDeviceDisconnected(
+    owner: WorkflowOwner,
+    deviceId: string,
+  ): Promise<void> {
+    if (owner.terminal || this.activeOwner !== owner) return
+    const requestId = owner.subscriptions.keys().next().value
+      ?? owner.requests.keys().next().value
+    if (requestId === undefined) {
+      throw new BotaSDKError('device_disconnected', owner.operation)
+    }
+    const effects = await this.serializedCoreCall(() => this.core.dispatch({
+      requestId,
+      kind: 'ble_disconnected',
+      peripheralId: deviceId,
+      reasonCode: null,
+    }))
+    this.enqueueEffects(owner, effects, owner.generation)
+  }
+
   private validateEnvelope(
     owner: WorkflowOwner,
     envelope: CoreEffectEnvelope,
@@ -369,6 +394,30 @@ export class BrowserWorkflowRuntime {
       const queued = owner.queue.shift()
       if (!queued || queued.generation !== owner.generation) continue
       await this.executeEffect(owner, queued)
+    }
+    if (!owner.terminal && owner.queue.length === 0) {
+      await this.finishFromCoreStatus(owner)
+    }
+  }
+
+  private async finishFromCoreStatus(owner: WorkflowOwner): Promise<void> {
+    const status = this.core.status()
+    switch (status.kind) {
+      case 'completed':
+        await this.finishSuccess(owner)
+        return
+      case 'cancelled':
+        await this.finishCancelled(owner)
+        return
+      case 'failed':
+        await this.finishFailure(
+          owner,
+          normalizeCoreError(status.error, owner.operation),
+        )
+        return
+      case 'idle':
+      case 'running':
+        return
     }
   }
 
@@ -807,6 +856,7 @@ export class BrowserWorkflowRuntime {
       await this.dispatchBleFailure(context, envelope.requestId, null)
       return
     }
+    const characteristicUuid = envelope.effect.characteristicUuid
     const pendingSubscription = this.trackGattSetup(
       owner,
       generation,
@@ -818,7 +868,7 @@ export class BrowserWorkflowRuntime {
           void context.dispatch({
             requestId: envelope.requestId,
             kind: 'ble_notification',
-            characteristicUuid: notification.characteristicUuid,
+            characteristicUuid,
             value: notification.value,
           }).catch((error: unknown) => {
             void this.failOwner(owner, error)

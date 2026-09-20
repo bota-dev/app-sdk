@@ -313,6 +313,30 @@ test('recording journals follow only the exact monotonic phase state machine', a
   )
 })
 
+test('a reconciled not-uploaded legacy operation may return to staged exactly once', async () => {
+  const storage = await (await storageFixture()).open('upload-recovery-tenant')
+  const prepared = recordingJournal('upload-recovery-operation')
+
+  await storage.saveRecordingJournal(prepared)
+  await storage.saveRecordingJournal({ ...prepared, phase: 'transferring' })
+  await storage.saveRecordingJournal({ ...prepared, phase: 'staged' })
+  await storage.saveRecordingJournal({
+    ...prepared,
+    phase: 'uploading',
+    uploadId: 'ambiguous-upload-1',
+  })
+  await storage.saveRecordingJournal({
+    ...prepared,
+    phase: 'staged',
+    uploadId: null,
+  })
+
+  assert.deepEqual(
+    await storage.loadRecordingJournal(prepared.operationId),
+    { ...prepared, phase: 'staged', uploadId: null },
+  )
+})
+
 test('journal timestamps cannot regress', async (t) => {
   await t.test('recording journal', async () => {
     const storage = await (await storageFixture()).open('recording-time-tenant')

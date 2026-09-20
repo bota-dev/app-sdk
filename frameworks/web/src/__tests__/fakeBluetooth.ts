@@ -19,6 +19,14 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
   supportsAuthorizedDevices = true
   readonly maximumWriteValueLength = 128
   readonly calls: string[] = []
+  readonly writes: Array<{
+    deviceId: string
+    serviceUuid: string
+    characteristicUuid: string
+    value: Uint8Array
+    withResponse: boolean
+  }> = []
+  eventLog: string[] | null = null
   readonly device: BrowserDeviceHandle = {
     id: 'browser-peripheral-1',
     name: 'Bota Pin',
@@ -83,7 +91,9 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
     serviceUuid: string,
     characteristicUuid: string,
   ): Promise<Uint8Array> {
-    this.calls.push(`read:${device.id}:${serviceUuid}:${characteristicUuid}`)
+    const call = `read:${device.id}:${serviceUuid}:${characteristicUuid}`
+    this.calls.push(call)
+    this.eventLog?.push(call)
     const key = readKey(serviceUuid, characteristicUuid)
     const error = this.readErrors.get(key)
     if (error) throw error
@@ -104,12 +114,20 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
     device: BrowserDeviceHandle,
     serviceUuid: string,
     characteristicUuid: string,
-    _value: Uint8Array,
+    value: Uint8Array,
     withResponse: boolean,
   ): Promise<void> {
-    this.calls.push(
-      `write:${device.id}:${serviceUuid}:${characteristicUuid}:${withResponse}`,
-    )
+    const call =
+      `write:${device.id}:${serviceUuid}:${characteristicUuid}:${withResponse}`
+    this.calls.push(call)
+    this.eventLog?.push(`${call}:${bytesHex(value)}`)
+    this.writes.push({
+      deviceId: device.id,
+      serviceUuid,
+      characteristicUuid,
+      value: value.slice(),
+      withResponse,
+    })
     this.onWrite?.()
     if (this.writeGate) await this.writeGate
   }
@@ -120,7 +138,9 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
     characteristicUuid: string,
     listener: (notification: BrowserNotification) => void,
   ): Promise<BrowserSubscription> {
-    this.calls.push(`subscribe:${device.id}:${serviceUuid}:${characteristicUuid}`)
+    const call = `subscribe:${device.id}:${serviceUuid}:${characteristicUuid}`
+    this.calls.push(call)
+    this.eventLog?.push(call)
     const key = `${device.id}:${readKey(serviceUuid, characteristicUuid)}`
     const listeners = this.notificationListeners.get(key) ?? new Set()
     listeners.add(listener)
@@ -139,9 +159,10 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
         if (this.unsubscribeGate) await this.unsubscribeGate
         listeners.delete(listener)
         if (listeners.size === 0) this.notificationListeners.delete(key)
-        this.calls.push(
-          `unsubscribe:${device.id}:${serviceUuid}:${characteristicUuid}`,
-        )
+        const call =
+          `unsubscribe:${device.id}:${serviceUuid}:${characteristicUuid}`
+        this.calls.push(call)
+        this.eventLog?.push(call)
       },
     }
   }
@@ -203,4 +224,8 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
       listener({ characteristicUuid, value: value.slice() })
     }
   }
+}
+
+function bytesHex(value: Uint8Array): string {
+  return Array.from(value, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }

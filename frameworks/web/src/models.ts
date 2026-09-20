@@ -1,3 +1,5 @@
+import type { RecordingJournalPhase } from './storage.ts'
+
 export type DeviceState =
   | 'idle'
   | 'recording'
@@ -93,4 +95,50 @@ export interface BrowserCapabilities {
   readonly durableStorage: boolean
   readonly largeRecordingSync: boolean
   readonly firmwareUpdate: boolean
+}
+
+export interface DeviceRecording {
+  uuid: string
+  startedAtTimestampSeconds: number
+  durationMilliseconds: bigint
+  fileSizeBytes: bigint
+  codec: 'pcm_16k' | 'pcm_8k' | 'opus_16k' | 'opus_8k' | 'unknown'
+  codecRaw?: number
+  encrypted: boolean
+  encryptedUploadV2: {
+    generation: number
+    storageFormat: number
+    plaintextLength: bigint
+    ciphertextLength: bigint
+    ciphertextSha256: Uint8Array
+  } | null
+}
+
+export interface RecordingSyncProgress {
+  phase: RecordingJournalPhase
+  completedBytes: bigint
+  totalBytes: bigint
+}
+
+export interface RecordingSyncResult {
+  operationId: string
+  recordingUuid: string
+  profile: 'legacy' | 'encrypted_upload_v2'
+  cloudCompletionId: string
+}
+
+export interface RecordingSyncOptions {
+  profile: 'legacy' | 'encrypted_upload_v2'
+  operationId?: string
+  signal?: AbortSignal
+  onProgress?: (progress: RecordingSyncProgress) => void
+}
+
+export interface RecordingJournalSummary {
+  operationId: string
+  serialNumber: string
+  recordingUuid: string
+  profile: 'legacy' | 'encrypted_upload_v2'
+  phase: RecordingJournalPhase
+  updatedAtEpochMs: number
 }
