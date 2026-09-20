@@ -23,15 +23,29 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
     id: 'browser-peripheral-1',
     name: 'Bota Pin',
   }
+  authorizedDevices: BrowserDeviceHandle[] = [this.device]
   pickerError: unknown = null
+  authorizedDevicesError: unknown = null
   pickerGate: Promise<void> | null = null
+  authorizedDevicesGate: Promise<void> | null = null
   connectGate: Promise<void> | null = null
   discoverGate: Promise<void> | null = null
+  onConnect: (() => void) | null = null
+  onSubscribe: (() => void) | null = null
   emitDisconnectedOnDisconnect = false
   serialNumber = 'GDPPSBZJN6'
+  readonly serialNumbers = new Map<string, string>()
   readonly readValues = new Map<string, Uint8Array>()
   readonly readErrors = new Map<string, unknown>()
   private disconnectListeners = new Set<() => void>()
+  private notificationListeners = new Map<
+    string,
+    Set<(notification: BrowserNotification) => void>
+  >()
+  private notificationListenerHistory = new Map<
+    string,
+    Array<(notification: BrowserNotification) => void>
+  >()
 
   async requestDevice(): Promise<BrowserDeviceHandle> {
     this.calls.push('request_device')
@@ -42,11 +56,14 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
 
   async getAuthorizedDevices(): Promise<BrowserDeviceHandle[]> {
     this.calls.push('get_authorized_devices')
-    return [this.device]
+    if (this.authorizedDevicesGate) await this.authorizedDevicesGate
+    if (this.authorizedDevicesError) throw this.authorizedDevicesError
+    return [...this.authorizedDevices]
   }
 
   async connect(device: BrowserDeviceHandle): Promise<void> {
     this.calls.push(`connect:${device.id}`)
+    this.onConnect?.()
     if (this.connectGate) await this.connectGate
   }
 
@@ -70,7 +87,9 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
       canonicalGattUuid(serviceUuid) === DEVICE_INFORMATION_SERVICE &&
       canonicalGattUuid(characteristicUuid) === SERIAL_NUMBER_CHARACTERISTIC
     ) {
-      return new TextEncoder().encode(this.serialNumber)
+      return new TextEncoder().encode(
+        this.serialNumbers.get(device.id) ?? this.serialNumber,
+      )
     }
     throw new Error(`unexpected read ${serviceUuid}/${characteristicUuid}`)
   }
@@ -91,14 +110,24 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
     device: BrowserDeviceHandle,
     serviceUuid: string,
     characteristicUuid: string,
-    _listener: (notification: BrowserNotification) => void,
+    listener: (notification: BrowserNotification) => void,
   ): Promise<BrowserSubscription> {
     this.calls.push(`subscribe:${device.id}:${serviceUuid}:${characteristicUuid}`)
+    const key = `${device.id}:${readKey(serviceUuid, characteristicUuid)}`
+    const listeners = this.notificationListeners.get(key) ?? new Set()
+    listeners.add(listener)
+    this.notificationListeners.set(key, listeners)
+    const history = this.notificationListenerHistory.get(key) ?? []
+    history.push(listener)
+    this.notificationListenerHistory.set(key, history)
+    this.onSubscribe?.()
     let removed = false
     return {
       remove: async () => {
         if (removed) return
         removed = true
+        listeners.delete(listener)
+        if (listeners.size === 0) this.notificationListeners.delete(key)
         this.calls.push(
           `unsubscribe:${device.id}:${serviceUuid}:${characteristicUuid}`,
         )
@@ -137,5 +166,29 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
     error: unknown,
   ): void {
     this.readErrors.set(readKey(serviceUuid, characteristicUuid), error)
+  }
+
+  emitNotification(
+    device: BrowserDeviceHandle,
+    serviceUuid: string,
+    characteristicUuid: string,
+    value: Uint8Array,
+  ): void {
+    const key = `${device.id}:${readKey(serviceUuid, characteristicUuid)}`
+    for (const listener of this.notificationListeners.get(key) ?? []) {
+      listener({ characteristicUuid, value: value.slice() })
+    }
+  }
+
+  emitLateNotification(
+    device: BrowserDeviceHandle,
+    serviceUuid: string,
+    characteristicUuid: string,
+    value: Uint8Array,
+  ): void {
+    const key = `${device.id}:${readKey(serviceUuid, characteristicUuid)}`
+    for (const listener of this.notificationListenerHistory.get(key) ?? []) {
+      listener({ characteristicUuid, value: value.slice() })
+    }
   }
 }

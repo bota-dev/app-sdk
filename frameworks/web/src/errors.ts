@@ -13,12 +13,31 @@ export type BotaSDKErrorCode =
   | 'protocol_error'
   | 'cancelled'
   | 'internal_error'
+  | 'unsupported_capability'
+  | 'picker_required'
+  | 'storage_unavailable'
+  | 'storage_quota_exceeded'
+  | 'authorization_expired'
+  | 'resume_rejected'
+  | 'integrity_failed'
+  | 'upload_failed'
+  | 'firmware_rejected'
 
 export type BotaOperation =
   | 'initialize'
   | 'connect'
+  | 'reconnect'
   | 'disconnect'
   | 'read_snapshot'
+  | 'provision'
+  | 'deprovision'
+  | 'settings'
+  | 'wifi'
+  | 'recording_control'
+  | 'transfer_recording'
+  | 'upload'
+  | 'update_firmware'
+  | 'read_device_logs'
   | 'unknown'
 
 const MESSAGES: Record<BotaSDKErrorCode, string> = {
@@ -34,6 +53,15 @@ const MESSAGES: Record<BotaSDKErrorCode, string> = {
   protocol_error: 'The device returned invalid protocol data.',
   cancelled: 'The operation was cancelled.',
   internal_error: 'The SDK could not complete the operation.',
+  unsupported_capability: 'This browser or device does not support the operation.',
+  picker_required: 'Select the device again to continue.',
+  storage_unavailable: 'Durable browser storage is unavailable.',
+  storage_quota_exceeded: 'Durable browser storage quota was exceeded.',
+  authorization_expired: 'The operation authorization has expired.',
+  resume_rejected: 'The saved operation cannot be resumed.',
+  integrity_failed: 'The operation failed an integrity check.',
+  upload_failed: 'The upload could not be completed.',
+  firmware_rejected: 'The device rejected the firmware update.',
 }
 
 export class BotaSDKError extends Error {
@@ -219,6 +247,16 @@ const CORE_CODES: Record<string, BotaSDKErrorCode> = {
   invalid_input: 'invalid_input',
   OperationInProgress: 'operation_in_progress',
   operation_in_progress: 'operation_in_progress',
+  UnsupportedCapability: 'unsupported_capability',
+  unsupported_capability: 'unsupported_capability',
+  UnsupportedOperation: 'unsupported_capability',
+  unsupported_operation: 'unsupported_capability',
+  FeatureUnavailable: 'unsupported_capability',
+  feature_unavailable: 'unsupported_capability',
+  UnexpectedEvent: 'protocol_error',
+  unexpected_event: 'protocol_error',
+  DeviceNotFound: 'connection_failed',
+  device_not_found: 'connection_failed',
   IdentityMismatch: 'identity_mismatch',
   identity_mismatch: 'identity_mismatch',
   ConnectionFailed: 'connection_failed',
@@ -231,6 +269,18 @@ const CORE_CODES: Record<string, BotaSDKErrorCode> = {
   unknown_packet: 'protocol_error',
   ProtocolRejected: 'protocol_error',
   protocol_rejected: 'protocol_error',
+  PayloadTooLarge: 'protocol_error',
+  payload_too_large: 'protocol_error',
+  PersistenceFailed: 'storage_unavailable',
+  persistence_failed: 'storage_unavailable',
+  Timeout: 'connection_failed',
+  timeout: 'connection_failed',
+  IntegrityFailed: 'integrity_failed',
+  integrity_failed: 'integrity_failed',
+  UploadOwnershipUnknown: 'upload_failed',
+  upload_ownership_unknown: 'upload_failed',
+  DownloadFailed: 'upload_failed',
+  download_failed: 'upload_failed',
   Cancelled: 'cancelled',
   cancelled: 'cancelled',
 }
@@ -238,6 +288,18 @@ const CORE_CODES: Record<string, BotaSDKErrorCode> = {
 const CORE_OPERATIONS: Record<string, BotaOperation> = {
   Connect: 'connect',
   connect: 'connect',
+  Reconnect: 'reconnect',
+  reconnect: 'reconnect',
+  Provision: 'provision',
+  provision: 'provision',
+  TransferRecording: 'transfer_recording',
+  transfer_recording: 'transfer_recording',
+  Upload: 'upload',
+  upload: 'upload',
+  UpdateFirmware: 'update_firmware',
+  update_firmware: 'update_firmware',
+  ReadDeviceLogs: 'read_device_logs',
+  read_device_logs: 'read_device_logs',
   Decode: 'read_snapshot',
   decode: 'read_snapshot',
   Validate: 'unknown',
@@ -253,11 +315,15 @@ export function normalizeCoreError(
   if (typeof error === 'object' && error !== null) {
     const structured = error as StructuredCoreError
     if (typeof structured.code === 'string') {
-      const code = CORE_CODES[structured.code] ?? 'internal_error'
       const operation =
         typeof structured.operation === 'string'
           ? (CORE_OPERATIONS[structured.operation] ?? fallbackOperation)
           : fallbackOperation
+      const code = operation === 'update_firmware'
+        && (structured.code === 'ProtocolRejected'
+          || structured.code === 'protocol_rejected')
+        ? 'firmware_rejected'
+        : (CORE_CODES[structured.code] ?? 'internal_error')
       return new BotaSDKError(code, operation, {
         retryable: structured.retryable === true,
         protocolStatus:

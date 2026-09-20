@@ -16,4 +16,5 @@ export type {
   DeviceStatus,
   EncryptedUploadV2Capabilities,
   ModemInfo,
+  ReconnectOptions,
 } from './models.ts'

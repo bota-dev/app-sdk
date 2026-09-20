@@ -2,21 +2,80 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
+import { BotaDeviceClient } from '../client.ts'
 import { BotaSDKError } from '../errors.ts'
 import { DeviceManager } from '../deviceManager.ts'
 import { FOREGROUND_GATT_SERVICES } from '../gatt.ts'
 import { createWasmCore } from '../wasmCore.ts'
 import { WebBluetoothTransport } from '../webBluetoothTransport.ts'
+import type {
+  BrowserSdkStorage,
+  VerifiedDeviceHint,
+} from '../storage.ts'
 import { FakeBrowserBluetoothTransport } from './fakeBluetooth.ts'
 
 async function createManager(
   transport = new FakeBrowserBluetoothTransport(),
-): Promise<{ manager: DeviceManager; transport: FakeBrowserBluetoothTransport }> {
+  storage: BrowserSdkStorage | null = null,
+): Promise<{
+  manager: DeviceManager
+  transport: FakeBrowserBluetoothTransport
+}> {
   const wasm = await readFile(
     new URL('../generated/bota_device_sdk_core_bg.wasm', import.meta.url),
   )
   const core = await createWasmCore(wasm)
-  return { manager: new DeviceManager(core, transport), transport }
+  return {
+    manager: new DeviceManager(core, transport, { storage }),
+    transport,
+  }
+}
+
+function memoryStorage(initialHint: VerifiedDeviceHint | null = null):
+  BrowserSdkStorage & { savedHints: VerifiedDeviceHint[] } {
+  const verifiedDevices = new Map<string, VerifiedDeviceHint>()
+  if (initialHint) verifiedDevices.set(initialHint.serialNumber, initialHint)
+  const checkpoints = new Map<string, unknown>()
+  const savedHints: VerifiedDeviceHint[] = []
+  return {
+    namespace: 'test-tenant',
+    savedHints,
+    loadVerifiedDevice: async (serialNumber) =>
+      verifiedDevices.get(serialNumber) ?? null,
+    saveVerifiedDevice: async (hint) => {
+      const copy = { ...hint }
+      savedHints.push(copy)
+      verifiedDevices.set(hint.serialNumber, copy)
+    },
+    deleteVerifiedDevice: async (serialNumber) => {
+      verifiedDevices.delete(serialNumber)
+    },
+    loadWorkflowCheckpoint: async (operationId) =>
+      checkpoints.get(operationId) ?? null,
+    saveWorkflowCheckpoint: async (operationId, checkpoint) => {
+      checkpoints.set(operationId, checkpoint)
+    },
+    deleteWorkflowCheckpoint: async (operationId) => {
+      checkpoints.delete(operationId)
+    },
+    loadEncryptedUploadV2Checkpoint: async () => null,
+    saveEncryptedUploadV2Checkpoint: async () => undefined,
+    deleteEncryptedUploadV2Checkpoint: async () => undefined,
+    loadRecordingJournal: async () => null,
+    saveRecordingJournal: async () => undefined,
+    listRecordingJournals: async () => [],
+    deleteRecordingJournal: async () => undefined,
+    loadProvisioningJournal: async () => null,
+    saveProvisioningJournal: async () => undefined,
+    deleteProvisioningJournal: async () => undefined,
+    loadFirmwareJournal: async () => null,
+    saveFirmwareJournal: async () => undefined,
+    deleteFirmwareJournal: async () => undefined,
+    openBlob: async () => {
+      throw new Error('blob access is outside this test')
+    },
+    clear: async () => undefined,
+  }
 }
 
 test('unsupported browsers fail before opening the device picker', async () => {
@@ -162,6 +221,168 @@ test('a verified serial completes the shared Rust connection workflow', async ()
     'read:browser-peripheral-1:180A:2A25',
   ])
   assert.deepEqual(manager.connectedDevice, connected)
+})
+
+test('a verified picker connection durably saves its exact browser identity', async () => {
+  const storage = memoryStorage()
+  const { manager, transport } = await createManager(
+    new FakeBrowserBluetoothTransport(),
+    storage,
+  )
+
+  await manager.connect({ expectedSerialNumber: 'GDPPSBZJN6' })
+
+  assert.equal(
+    transport.calls.indexOf('read:browser-peripheral-1:180A:2A25')
+      < transport.calls.length,
+    true,
+  )
+  assert.deepEqual(storage.savedHints.map(({ updatedAtEpochMs: _, ...hint }) => hint), [
+    {
+      schemaVersion: 1,
+      serialNumber: 'GDPPSBZJN6',
+      browserDeviceId: 'browser-peripheral-1',
+      name: 'Bota Pin',
+    },
+  ])
+})
+
+test('the public client composes picker persistence through the shared runtime', async () => {
+  const wasm = await readFile(
+    new URL('../generated/bota_device_sdk_core_bg.wasm', import.meta.url),
+  )
+  const core = await createWasmCore(wasm)
+  const storage = memoryStorage()
+  const transport = new FakeBrowserBluetoothTransport()
+  const client = await BotaDeviceClient.create({
+    coreLoader: async () => core,
+    transport,
+    storage,
+  })
+
+  await client.devices.connect({ expectedSerialNumber: 'GDPPSBZJN6' })
+
+  assert.equal(storage.savedHints.at(-1)?.browserDeviceId, transport.device.id)
+  await client.destroy()
+})
+
+test('reconnect enumerates authorized devices and selects only the persisted browser ID', async () => {
+  const storage = memoryStorage({
+    schemaVersion: 1,
+    serialNumber: 'GDPPSBZJN6',
+    browserDeviceId: 'browser-peripheral-1',
+    name: 'Bota Pin',
+    updatedAtEpochMs: 1,
+  })
+  const transport = new FakeBrowserBluetoothTransport()
+  const sameName = { id: 'browser-peripheral-2', name: 'Bota Pin' }
+  transport.authorizedDevices = [sameName, transport.device]
+  transport.serialNumbers.set(sameName.id, 'GDPPSBZJN6')
+  const { manager } = await createManager(transport, storage)
+
+  const connected = await manager.reconnect({
+    expectedSerialNumber: 'GDPPSBZJN6',
+  })
+
+  assert.deepEqual(connected, {
+    id: 'browser-peripheral-1',
+    name: 'Bota Pin',
+    serialNumber: 'GDPPSBZJN6',
+  })
+  assert.equal(transport.calls[0], 'get_authorized_devices')
+  assert.equal(transport.calls.includes('request_device'), false)
+  assert.equal(
+    transport.calls.includes('connect:browser-peripheral-2'),
+    false,
+  )
+  assert.ok(
+    transport.calls.includes('read:browser-peripheral-1:180A:2A25'),
+  )
+  assert.equal(storage.savedHints.at(-1)?.browserDeviceId, 'browser-peripheral-1')
+})
+
+test('reconnect without getDevices requires the picker without opening it', async () => {
+  const storage = memoryStorage({
+    schemaVersion: 1,
+    serialNumber: 'GDPPSBZJN6',
+    browserDeviceId: 'browser-peripheral-1',
+    name: 'Bota Pin',
+    updatedAtEpochMs: 1,
+  })
+  const transport = new FakeBrowserBluetoothTransport()
+  transport.supportsAuthorizedDevices = false
+  const { manager } = await createManager(transport, storage)
+
+  await assert.rejects(
+    manager.reconnect({ expectedSerialNumber: 'GDPPSBZJN6' }),
+    (error: unknown) => {
+      assert.ok(error instanceof BotaSDKError)
+      assert.equal(error.code, 'picker_required')
+      assert.equal(error.operation, 'reconnect')
+      return true
+    },
+  )
+  assert.deepEqual(transport.calls, [])
+})
+
+test('reconnect never probes an authorized same-name device with another browser ID', async () => {
+  const storage = memoryStorage({
+    schemaVersion: 1,
+    serialNumber: 'GDPPSBZJN6',
+    browserDeviceId: 'browser-peripheral-1',
+    name: 'Bota Pin',
+    updatedAtEpochMs: 1,
+  })
+  const transport = new FakeBrowserBluetoothTransport()
+  transport.authorizedDevices = [{
+    id: 'browser-peripheral-2',
+    name: 'Bota Pin',
+  }]
+  const { manager } = await createManager(transport, storage)
+
+  await assert.rejects(
+    manager.reconnect({ expectedSerialNumber: 'GDPPSBZJN6' }),
+    (error: unknown) => {
+      assert.ok(error instanceof BotaSDKError)
+      assert.equal(error.code, 'connection_failed')
+      assert.equal(error.operation, 'reconnect')
+      return true
+    },
+  )
+  assert.deepEqual(transport.calls, ['get_authorized_devices'])
+})
+
+test('reconnect rejects a wrong serial without falling back to a same-name browser ID', async () => {
+  const storage = memoryStorage({
+    schemaVersion: 1,
+    serialNumber: 'GDPPSBZJN6',
+    browserDeviceId: 'browser-peripheral-1',
+    name: 'Bota Pin',
+    updatedAtEpochMs: 1,
+  })
+  const transport = new FakeBrowserBluetoothTransport()
+  const sameName = { id: 'browser-peripheral-2', name: 'Bota Pin' }
+  transport.authorizedDevices = [transport.device, sameName]
+  transport.serialNumbers.set(transport.device.id, 'OTHERDEVICE1')
+  transport.serialNumbers.set(sameName.id, 'GDPPSBZJN6')
+  const { manager } = await createManager(transport, storage)
+
+  await assert.rejects(
+    manager.reconnect({ expectedSerialNumber: 'GDPPSBZJN6' }),
+    (error: unknown) => {
+      assert.ok(error instanceof BotaSDKError)
+      assert.equal(error.code, 'connection_failed')
+      assert.equal(error.operation, 'reconnect')
+      return true
+    },
+  )
+  assert.ok(
+    transport.calls.includes('read:browser-peripheral-1:180A:2A25'),
+  )
+  assert.equal(
+    transport.calls.includes('connect:browser-peripheral-2'),
+    false,
+  )
 })
 
 test('identity mismatch disconnects the selected device before rejection', async () => {

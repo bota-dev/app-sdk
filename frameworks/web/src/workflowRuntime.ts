@@ -1,0 +1,1321 @@
+import type {
+  CoreBridge,
+  CoreEffectEnvelope,
+  CoreHostEvent,
+  CoreNotification,
+  CoreOperation,
+  CoreWorkflowCheckpoint,
+} from './core.ts'
+import {
+  BotaSDKError,
+  normalizeCoreError,
+  type BotaOperation,
+} from './errors.ts'
+import {
+  BrowserStorageError,
+  type BrowserSdkStorage,
+} from './storage.ts'
+import {
+  BrowserTransportError,
+  type BrowserBluetoothTransport,
+  type BrowserDeviceHandle,
+  type BrowserSubscription,
+} from './transport.ts'
+
+export interface WorkflowResult {
+  notifications: CoreNotification[]
+}
+
+export interface WorkflowEffectContext {
+  operationId: string
+  cancellationId: Uint8Array
+  signal: AbortSignal
+  dispatch(event: CoreHostEvent): Promise<void>
+  addCleanup(cleanup: () => Promise<void>): void
+}
+
+export interface WorkflowEffectHost {
+  execute(
+    effect: CoreEffectEnvelope,
+    context: WorkflowEffectContext,
+  ): Promise<CoreHostEvent | readonly CoreHostEvent[] | null>
+  cancel(): Promise<void>
+}
+
+export interface WorkflowObserver {
+  onNotification?(notification: CoreNotification): void
+  onProgress?(completedUnits: bigint, totalUnits: bigint): void
+}
+
+export interface WorkflowEffectHosts {
+  persistence: WorkflowEffectHost
+  recordingSink?: WorkflowEffectHost
+  network?: WorkflowEffectHost
+  firmwareBlob?: WorkflowEffectHost
+  hostMaterial?: WorkflowEffectHost
+  encryptedUploadV2?: WorkflowEffectHost
+}
+
+interface Deferred<T> {
+  promise: Promise<T>
+  resolve(value: T): void
+  reject(error: unknown): void
+}
+
+type OwnerStepResult<T> =
+  | { kind: 'completed'; value: T }
+  | { kind: 'failed'; error: unknown }
+  | { kind: 'cancelled' }
+
+interface QueuedEffect {
+  envelope: CoreEffectEnvelope
+  generation: number
+}
+
+interface RequestOwner {
+  generation: number
+  cancellationId: Uint8Array
+}
+
+interface RuntimeSubscription {
+  serviceUuid: string
+  characteristicUuid: string
+  subscription: BrowserSubscription
+  remove(): Promise<void>
+}
+
+interface WorkflowOwner {
+  kind: 'workflow'
+  operationId: string
+  operation: BotaOperation
+  cancellationId: Uint8Array
+  abortController: AbortController
+  hosts: WorkflowEffectHosts
+  observer: WorkflowObserver | undefined
+  result: Deferred<WorkflowResult>
+  notifications: CoreNotification[]
+  queue: QueuedEffect[]
+  requests: Map<bigint, RequestOwner>
+  subscriptions: Map<bigint, RuntimeSubscription>
+  timers: Map<bigint, ReturnType<typeof setTimeout>>
+  cleanups: Array<() => Promise<void>>
+  generation: number
+  pumping: boolean
+  terminal: boolean
+  cancelling: boolean
+  cancelPromise: Promise<void> | null
+  cleanupPromise: Promise<void> | null
+  lastProgress: { completedUnits: bigint; totalUnits: bigint } | null
+  authorizedScanExhausted: boolean
+}
+
+interface DirectOwner {
+  kind: 'direct'
+  operation: BotaOperation
+  abortController: AbortController
+  settled: Promise<void>
+}
+
+type MutationOwner = WorkflowOwner | DirectOwner
+
+export class BrowserWorkflowRuntime {
+  private readonly core: CoreBridge
+  private readonly transport: BrowserBluetoothTransport
+  private readonly devices = new Map<string, BrowserDeviceHandle>()
+  private activeOwner: MutationOwner | null = null
+  private connectedDevice: BrowserDeviceHandle | null = null
+  private destroyed = false
+  private destroyPromise: Promise<void> | null = null
+  private coreDispatchTail: Promise<void> = Promise.resolve()
+  private nextConnectionAttempt = 0
+  private readonly connectionAttempts = new Map<string, number>()
+  private readonly pendingConnectionSettlements = new Map<
+    string,
+    Promise<void>
+  >()
+
+  constructor(core: CoreBridge, transport: BrowserBluetoothTransport) {
+    this.core = core
+    this.transport = transport
+  }
+
+  get connectedDeviceHandle(): BrowserDeviceHandle | null {
+    return this.connectedDevice
+  }
+
+  registerDevice(device: BrowserDeviceHandle): void {
+    this.devices.set(device.id, device)
+  }
+
+  registeredDevice(deviceId: string): BrowserDeviceHandle | null {
+    return this.devices.get(deviceId) ?? null
+  }
+
+  async waitForPendingConnection(deviceId: string): Promise<void> {
+    await this.pendingConnectionSettlements.get(deviceId)
+  }
+
+  unregisterDevice(deviceId: string): void {
+    this.devices.delete(deviceId)
+    if (this.connectedDevice?.id === deviceId) this.connectedDevice = null
+  }
+
+  markDeviceDisconnected(deviceId: string): void {
+    if (this.connectedDevice?.id === deviceId) this.connectedDevice = null
+  }
+
+  run(
+    operationId: string,
+    cancellationId: Uint8Array,
+    start: () => CoreEffectEnvelope[],
+    hosts: WorkflowEffectHosts,
+    observer?: WorkflowObserver,
+  ): Promise<WorkflowResult> {
+    const operation = operationFromId(operationId)
+    if (this.destroyed) {
+      return Promise.reject(new BotaSDKError('cancelled', operation))
+    }
+    if (this.activeOwner || this.pendingConnectionSettlements.size > 0) {
+      return Promise.reject(new BotaSDKError('operation_in_progress', operation))
+    }
+    if (operationId.length === 0 || cancellationId.byteLength !== 16) {
+      return Promise.reject(new BotaSDKError('invalid_input', operation))
+    }
+
+    const result = deferred<WorkflowResult>()
+    const owner: WorkflowOwner = {
+      kind: 'workflow',
+      operationId,
+      operation,
+      cancellationId: cancellationId.slice(),
+      abortController: new AbortController(),
+      hosts,
+      observer,
+      result,
+      notifications: [],
+      queue: [],
+      requests: new Map(),
+      subscriptions: new Map(),
+      timers: new Map(),
+      cleanups: [],
+      generation: 0,
+      pumping: false,
+      terminal: false,
+      cancelling: false,
+      cancelPromise: null,
+      cleanupPromise: null,
+      lastProgress: null,
+      authorizedScanExhausted: false,
+    }
+    this.activeOwner = owner
+
+    try {
+      this.enqueueEffects(owner, start(), owner.generation)
+    } catch (error) {
+      void this.failOwner(owner, error)
+    }
+    return result.promise
+  }
+
+  async cancel(operationId: string): Promise<void> {
+    const owner = this.activeOwner
+    if (
+      !owner
+      || owner.kind !== 'workflow'
+      || owner.operationId !== operationId
+      || owner.terminal
+    ) {
+      return
+    }
+    if (!owner.cancelPromise) {
+      owner.cancelPromise = this.cancelOwner(owner)
+    }
+    await owner.cancelPromise
+  }
+
+  async runExclusive<T>(
+    operation: BotaOperation,
+    body: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    if (this.destroyed) throw new BotaSDKError('cancelled', operation)
+    if (this.activeOwner || this.pendingConnectionSettlements.size > 0) {
+      throw new BotaSDKError('operation_in_progress', operation)
+    }
+
+    const abortController = new AbortController()
+    let settle!: () => void
+    const settled = new Promise<void>((resolve) => {
+      settle = resolve
+    })
+    const owner: DirectOwner = {
+      kind: 'direct',
+      operation,
+      abortController,
+      settled,
+    }
+    this.activeOwner = owner
+
+    try {
+      const value = await body(abortController.signal)
+      if (abortController.signal.aborted || this.destroyed) {
+        throw new BotaSDKError('cancelled', operation)
+      }
+      return value
+    } catch (error) {
+      if (abortController.signal.aborted || this.destroyed) {
+        throw new BotaSDKError('cancelled', operation, { cause: error })
+      }
+      throw normalizeRuntimeError(error, operation)
+    } finally {
+      if (this.activeOwner === owner) this.activeOwner = null
+      settle()
+    }
+  }
+
+  destroy(): Promise<void> {
+    if (this.destroyPromise) return this.destroyPromise
+    this.destroyed = true
+    this.destroyPromise = (async () => {
+      const owner = this.activeOwner
+      if (!owner) return
+      if (owner.kind === 'workflow') {
+        await this.cancel(owner.operationId)
+        return
+      }
+      owner.abortController.abort()
+      await owner.settled
+    })()
+    return this.destroyPromise
+  }
+
+  private enqueueEffects(
+    owner: WorkflowOwner,
+    effects: readonly CoreEffectEnvelope[],
+    generation: number,
+  ): void {
+    if (owner.terminal || generation !== owner.generation) return
+    for (const effect of effects) {
+      this.validateEnvelope(owner, effect, generation)
+      owner.queue.push({ envelope: effect, generation })
+    }
+    this.ensurePump(owner)
+  }
+
+  private validateEnvelope(
+    owner: WorkflowOwner,
+    envelope: CoreEffectEnvelope,
+    generation: number,
+  ): void {
+    if (!equalBytes(envelope.cancellationId, owner.cancellationId)) {
+      throw new BotaSDKError('internal_error', owner.operation)
+    }
+    const operation = publicOperation(envelope.operation)
+    if (owner.operation === 'unknown') owner.operation = operation
+    if (operation !== 'unknown' && owner.operation !== operation) {
+      throw new BotaSDKError('internal_error', owner.operation)
+    }
+    if (owner.requests.has(envelope.requestId)) {
+      throw new BotaSDKError('internal_error', owner.operation)
+    }
+    owner.requests.set(envelope.requestId, {
+      generation,
+      cancellationId: envelope.cancellationId.slice(),
+    })
+  }
+
+  private ensurePump(owner: WorkflowOwner): void {
+    if (owner.pumping || owner.terminal) return
+    owner.pumping = true
+    void this.pump(owner).catch(async (error: unknown) => {
+      await this.failOwner(owner, error)
+    }).finally(() => {
+      owner.pumping = false
+      if (owner.queue.length > 0 && !owner.terminal) this.ensurePump(owner)
+    })
+  }
+
+  private async pump(owner: WorkflowOwner): Promise<void> {
+    while (owner.queue.length > 0 && !owner.terminal) {
+      const queued = owner.queue.shift()
+      if (!queued || queued.generation !== owner.generation) continue
+      await this.executeEffect(owner, queued)
+    }
+  }
+
+  private async executeEffect(
+    owner: WorkflowOwner,
+    queued: QueuedEffect,
+  ): Promise<void> {
+    const { envelope, generation } = queued
+    const context = this.effectContext(owner, envelope, generation)
+    const { effect } = envelope
+
+    switch (effect.kind) {
+      case 'notify':
+        await this.handleNotification(owner, effect.notification)
+        return
+      case 'ble_start_scan':
+        await this.startAuthorizedScan(owner, envelope, context, generation)
+        return
+      case 'ble_stop_scan':
+        await context.dispatch({
+          requestId: envelope.requestId,
+          kind: 'ble_scan_stopped',
+        })
+        return
+      case 'ble_connect':
+        await this.connectDevice(owner, envelope, context, generation)
+        return
+      case 'ble_discover_services':
+        await this.discoverServices(owner, envelope, context, generation)
+        return
+      case 'ble_disconnect':
+        await this.disconnectDevice(envelope, context)
+        return
+      case 'ble_read':
+        await this.readCharacteristic(owner, envelope, context, generation)
+        return
+      case 'ble_write':
+        await this.writeCharacteristic(owner, envelope, context, generation)
+        return
+      case 'ble_subscribe':
+        await this.subscribe(owner, envelope, context, generation)
+        return
+      case 'ble_unsubscribe':
+        await this.unsubscribe(owner, effect.serviceUuid, effect.characteristicUuid)
+        return
+      case 'timer_schedule':
+        await this.scheduleTimer(owner, envelope, context, generation)
+        return
+      case 'timer_cancel':
+        this.cancelTimer(owner, effect.timerId)
+        return
+      case 'progress':
+        this.reportProgress(owner, effect.completedUnits, effect.totalUnits)
+        return
+      case 'persistence_load_checkpoint':
+      case 'persistence_save_checkpoint':
+      case 'persistence_delete_checkpoint':
+      case 'persistence_save_connection_identity':
+        await this.executeHost(
+          owner,
+          owner.hosts.persistence,
+          envelope,
+          context,
+          generation,
+        )
+        return
+      case 'host_material_prepare_provisioning':
+        await this.executeHost(
+          owner,
+          owner.hosts.hostMaterial,
+          envelope,
+          context,
+          generation,
+        )
+        return
+      case 'recording_sink_truncate':
+      case 'recording_sink_append':
+      case 'recording_sink_finalize':
+      case 'recording_sink_discard':
+        await this.executeHost(
+          owner,
+          owner.hosts.recordingSink,
+          envelope,
+          context,
+          generation,
+        )
+        return
+      case 'network_download':
+        await this.executeHost(
+          owner,
+          owner.hosts.network,
+          envelope,
+          context,
+          generation,
+        )
+        return
+      case 'firmware_blob_read_chunk':
+        await this.executeHost(
+          owner,
+          owner.hosts.firmwareBlob,
+          envelope,
+          context,
+          generation,
+        )
+        return
+      case 'encrypted_upload_v2_load_checkpoint':
+      case 'encrypted_upload_v2_delete_checkpoint':
+      case 'encrypted_upload_v2_truncate_sink':
+      case 'encrypted_upload_v2_prepare_session':
+      case 'encrypted_upload_v2_start_transfer':
+      case 'encrypted_upload_v2_repair_window':
+      case 'encrypted_upload_v2_save_checkpoint':
+      case 'encrypted_upload_v2_acknowledge_window':
+      case 'encrypted_upload_v2_stage_artifacts':
+      case 'encrypted_upload_v2_await_completion_receipt':
+      case 'encrypted_upload_v2_confirm_with_receipt':
+      case 'encrypted_upload_v2_abort':
+        await this.executeHost(
+          owner,
+          owner.hosts.encryptedUploadV2,
+          envelope,
+          context,
+          generation,
+        )
+        return
+    }
+
+    const unhandledEffect: never = effect
+    void unhandledEffect
+    throw new BotaSDKError('internal_error', owner.operation)
+  }
+
+  private effectContext(
+    owner: WorkflowOwner,
+    envelope: CoreEffectEnvelope,
+    generation: number,
+  ): WorkflowEffectContext {
+    const context: WorkflowEffectContext = {
+      operationId: owner.operationId,
+      cancellationId: owner.cancellationId.slice(),
+      signal: owner.abortController.signal,
+      dispatch: async (event) => {
+        await this.dispatchFromContext(owner, envelope, generation, context, event)
+      },
+      addCleanup: (cleanup) => {
+        if (owner.terminal || generation !== owner.generation) {
+          void cleanup().catch(() => undefined)
+          return
+        }
+        owner.cleanups.push(cleanup)
+      },
+    }
+    return context
+  }
+
+  private async dispatchFromContext(
+    owner: WorkflowOwner,
+    envelope: CoreEffectEnvelope,
+    generation: number,
+    context: WorkflowEffectContext,
+    event: CoreHostEvent,
+  ): Promise<void> {
+    if (owner.terminal || generation !== owner.generation) return
+    if (
+      event.requestId !== envelope.requestId
+      || !equalBytes(context.cancellationId, owner.cancellationId)
+    ) {
+      throw new BotaSDKError('internal_error', owner.operation)
+    }
+    const request = owner.requests.get(event.requestId)
+    if (
+      !request
+      || request.generation !== generation
+      || !equalBytes(request.cancellationId, owner.cancellationId)
+    ) {
+      throw new BotaSDKError('internal_error', owner.operation)
+    }
+
+    const effects = await this.serializedCoreCall(() => {
+      if (owner.terminal || generation !== owner.generation) return []
+      const status = this.core.status()
+      if (
+        status.kind === 'completed'
+        || status.kind === 'cancelled'
+        || status.kind === 'failed'
+      ) {
+        return []
+      }
+      return this.core.dispatch(event)
+    })
+    if (owner.terminal || generation !== owner.generation) return
+    this.enqueueEffects(owner, effects, generation)
+  }
+
+  private async startAuthorizedScan(
+    owner: WorkflowOwner,
+    envelope: CoreEffectEnvelope,
+    context: WorkflowEffectContext,
+    generation: number,
+  ): Promise<void> {
+    if (!this.transport.supportsAuthorizedDevices) {
+      throw new BotaSDKError('picker_required', owner.operation)
+    }
+    const authorizedResult = await this.awaitOwnerStep(
+      owner,
+      generation,
+      this.transport.getAuthorizedDevices(),
+    )
+    if (authorizedResult.kind === 'cancelled') return
+    if (authorizedResult.kind === 'failed') throw authorizedResult.error
+    const authorized = authorizedResult.value
+    if (owner.terminal || generation !== owner.generation) return
+    let forwarded = 0
+    for (const device of authorized) {
+      if (!this.devices.has(device.id)) continue
+      this.devices.set(device.id, device)
+      forwarded += 1
+      await context.dispatch({
+        requestId: envelope.requestId,
+        kind: 'ble_scan_result',
+        candidate: {
+          peripheralId: device.id,
+          name: device.name,
+          advertisedAddress: null,
+          rssi: 0,
+        },
+      })
+    }
+    owner.authorizedScanExhausted = forwarded === 0
+  }
+
+  private async connectDevice(
+    owner: WorkflowOwner,
+    envelope: CoreEffectEnvelope,
+    context: WorkflowEffectContext,
+    generation: number,
+  ): Promise<void> {
+    if (envelope.effect.kind !== 'ble_connect') return
+    const device = this.devices.get(envelope.effect.peripheralId)
+    if (!device) {
+      await this.dispatchBleFailure(context, envelope.requestId, null)
+      return
+    }
+    const attempt = ++this.nextConnectionAttempt
+    this.connectionAttempts.set(device.id, attempt)
+    const pendingConnection = this.transport.connect(device)
+    const connection = await this.awaitOwnerStep(
+      owner,
+      generation,
+      pendingConnection,
+    )
+    if (connection.kind === 'cancelled') {
+      let settlement!: Promise<void>
+      settlement = pendingConnection.then(
+        async () => {
+          if (
+            this.connectionAttempts.get(device.id) === attempt
+            && this.connectedDevice?.id !== device.id
+          ) {
+            await this.transport.disconnect(device).catch(() => undefined)
+          }
+        },
+        () => undefined,
+      ).finally(() => {
+        if (this.connectionAttempts.get(device.id) === attempt) {
+          this.connectionAttempts.delete(device.id)
+        }
+        if (this.pendingConnectionSettlements.get(device.id) === settlement) {
+          this.pendingConnectionSettlements.delete(device.id)
+        }
+      })
+      this.pendingConnectionSettlements.set(device.id, settlement)
+      return
+    }
+    if (this.connectionAttempts.get(device.id) === attempt) {
+      this.connectionAttempts.delete(device.id)
+    }
+    if (connection.kind === 'failed') {
+      await this.dispatchBleFailure(
+        context,
+        envelope.requestId,
+        connection.error,
+      )
+      return
+    }
+    if (
+      owner.terminal
+      || generation !== owner.generation
+      || owner.abortController.signal.aborted
+    ) {
+      await this.transport.disconnect(device).catch(() => undefined)
+      return
+    }
+    this.connectedDevice = device
+    await context.dispatch({
+      requestId: envelope.requestId,
+      kind: 'ble_connected',
+      peripheralId: device.id,
+    })
+  }
+
+  private async discoverServices(
+    owner: WorkflowOwner,
+    envelope: CoreEffectEnvelope,
+    context: WorkflowEffectContext,
+    generation: number,
+  ): Promise<void> {
+    if (envelope.effect.kind !== 'ble_discover_services') return
+    const device = this.devices.get(envelope.effect.peripheralId)
+    if (!device || this.connectedDevice?.id !== device.id) {
+      await this.dispatchBleFailure(context, envelope.requestId, null)
+      return
+    }
+    const discovery = await this.awaitOwnerStep(
+      owner,
+      generation,
+      this.transport.discoverServices(device),
+    )
+    if (discovery.kind === 'cancelled') return
+    if (discovery.kind === 'completed') {
+      await context.dispatch({
+        requestId: envelope.requestId,
+        kind: 'ble_services_discovered',
+        peripheralId: device.id,
+      })
+    } else {
+      await this.dispatchBleFailure(
+        context,
+        envelope.requestId,
+        discovery.error,
+      )
+    }
+  }
+
+  private async disconnectDevice(
+    envelope: CoreEffectEnvelope,
+    context: WorkflowEffectContext,
+  ): Promise<void> {
+    if (envelope.effect.kind !== 'ble_disconnect') return
+    const device = this.devices.get(envelope.effect.peripheralId)
+    try {
+      if (device && this.connectedDevice?.id === device.id) {
+        await this.transport.disconnect(device)
+      }
+      if (this.connectedDevice?.id === envelope.effect.peripheralId) {
+        this.connectedDevice = null
+      }
+      await context.dispatch({
+        requestId: envelope.requestId,
+        kind: 'ble_disconnected',
+        peripheralId: envelope.effect.peripheralId,
+        reasonCode: null,
+      })
+    } catch (error) {
+      await this.dispatchBleFailure(context, envelope.requestId, error)
+    }
+  }
+
+  private async readCharacteristic(
+    owner: WorkflowOwner,
+    envelope: CoreEffectEnvelope,
+    context: WorkflowEffectContext,
+    generation: number,
+  ): Promise<void> {
+    if (envelope.effect.kind !== 'ble_read') return
+    const device = this.connectedDevice
+    if (!device) {
+      await this.dispatchBleFailure(context, envelope.requestId, null)
+      return
+    }
+    const read = await this.awaitOwnerStep(
+      owner,
+      generation,
+      this.transport.read(
+        device,
+        envelope.effect.serviceUuid,
+        envelope.effect.characteristicUuid,
+      ),
+    )
+    if (read.kind === 'cancelled') return
+    if (read.kind === 'completed') {
+      await context.dispatch({
+        requestId: envelope.requestId,
+        kind: 'ble_read_completed',
+        value: read.value,
+      })
+    } else {
+      await this.dispatchBleFailure(context, envelope.requestId, read.error)
+    }
+  }
+
+  private async writeCharacteristic(
+    owner: WorkflowOwner,
+    envelope: CoreEffectEnvelope,
+    context: WorkflowEffectContext,
+    generation: number,
+  ): Promise<void> {
+    if (envelope.effect.kind !== 'ble_write') return
+    const device = this.connectedDevice
+    if (!device) {
+      await this.dispatchBleFailure(context, envelope.requestId, null)
+      return
+    }
+    const write = await this.awaitOwnerStep(
+      owner,
+      generation,
+      this.transport.write(
+        device,
+        envelope.effect.serviceUuid,
+        envelope.effect.characteristicUuid,
+        envelope.effect.payload,
+        envelope.effect.withResponse,
+      ),
+    )
+    if (write.kind === 'cancelled') return
+    if (write.kind === 'completed') {
+      await context.dispatch({
+        requestId: envelope.requestId,
+        kind: 'ble_write_completed',
+      })
+    } else {
+      await this.dispatchBleFailure(context, envelope.requestId, write.error)
+    }
+  }
+
+  private async subscribe(
+    owner: WorkflowOwner,
+    envelope: CoreEffectEnvelope,
+    context: WorkflowEffectContext,
+    generation: number,
+  ): Promise<void> {
+    if (envelope.effect.kind !== 'ble_subscribe') return
+    const device = this.connectedDevice
+    if (!device) {
+      await this.dispatchBleFailure(context, envelope.requestId, null)
+      return
+    }
+    const subscribed = await this.awaitOwnerStep(
+      owner,
+      generation,
+      this.transport.subscribe(
+        device,
+        envelope.effect.serviceUuid,
+        envelope.effect.characteristicUuid,
+        (notification) => {
+          void context.dispatch({
+            requestId: envelope.requestId,
+            kind: 'ble_notification',
+            characteristicUuid: notification.characteristicUuid,
+            value: notification.value,
+          }).catch((error: unknown) => {
+            void this.failOwner(owner, error)
+          })
+        },
+      ),
+      async (subscription) => subscription.remove(),
+    )
+    if (subscribed.kind === 'cancelled') return
+    if (subscribed.kind === 'failed') {
+      await this.dispatchBleFailure(
+        context,
+        envelope.requestId,
+        subscribed.error,
+      )
+      return
+    }
+    const subscription = subscribed.value
+    if (owner.terminal || generation !== owner.generation) {
+      await subscription.remove()
+      return
+    }
+    try {
+      let removal: Promise<void> | null = null
+      const runtimeSubscription: RuntimeSubscription = {
+        serviceUuid: envelope.effect.serviceUuid,
+        characteristicUuid: envelope.effect.characteristicUuid,
+        subscription,
+        remove: () => {
+          removal ??= subscription.remove()
+          return removal
+        },
+      }
+      owner.subscriptions.set(envelope.requestId, runtimeSubscription)
+      context.addCleanup(runtimeSubscription.remove)
+      await context.dispatch({
+        requestId: envelope.requestId,
+        kind: 'ble_subscribed',
+        characteristicUuid: envelope.effect.characteristicUuid,
+      })
+    } catch (error) {
+      await this.dispatchBleFailure(context, envelope.requestId, error)
+    }
+  }
+
+  private async unsubscribe(
+    owner: WorkflowOwner,
+    serviceUuid: string,
+    characteristicUuid: string,
+  ): Promise<void> {
+    const matches = [...owner.subscriptions.entries()].filter(([, value]) =>
+      value.serviceUuid === serviceUuid
+      && value.characteristicUuid === characteristicUuid
+    )
+    for (const [requestId, value] of matches) {
+      await value.remove()
+      owner.subscriptions.delete(requestId)
+    }
+  }
+
+  private async scheduleTimer(
+    owner: WorkflowOwner,
+    envelope: CoreEffectEnvelope,
+    context: WorkflowEffectContext,
+    generation: number,
+  ): Promise<void> {
+    if (envelope.effect.kind !== 'timer_schedule') return
+    const effect = envelope.effect
+    const delayMs = Number(effect.delayMs)
+    if (
+      !Number.isSafeInteger(delayMs)
+      || delayMs < 0
+      || delayMs > 2_147_483_647
+    ) {
+      throw new BotaSDKError('internal_error', owner.operation)
+    }
+    this.cancelTimer(owner, effect.timerId)
+    if (owner.authorizedScanExhausted) {
+      owner.authorizedScanExhausted = false
+      await context.dispatch({
+        requestId: envelope.requestId,
+        kind: 'timer_fired',
+        timerId: effect.timerId,
+      })
+      return
+    }
+    const timer = setTimeout(() => {
+      owner.timers.delete(effect.timerId)
+      if (owner.terminal || generation !== owner.generation) return
+      void context.dispatch({
+        requestId: envelope.requestId,
+        kind: 'timer_fired',
+        timerId: effect.timerId,
+      }).catch((error: unknown) => {
+        void this.failOwner(owner, error)
+      })
+    }, delayMs)
+    owner.timers.set(effect.timerId, timer)
+    context.addCleanup(async () => {
+      clearTimeout(timer)
+      owner.timers.delete(effect.timerId)
+    })
+  }
+
+  private cancelTimer(owner: WorkflowOwner, timerId: bigint): void {
+    const timer = owner.timers.get(timerId)
+    if (timer) clearTimeout(timer)
+    owner.timers.delete(timerId)
+  }
+
+  private async executeHost(
+    owner: WorkflowOwner,
+    host: WorkflowEffectHost | undefined,
+    envelope: CoreEffectEnvelope,
+    context: WorkflowEffectContext,
+    generation: number,
+  ): Promise<void> {
+    if (!host) {
+      throw new BotaSDKError('unsupported_capability', publicOperation(envelope.operation))
+    }
+    const executed = await this.awaitOwnerStep(
+      owner,
+      generation,
+      host.execute(envelope, context),
+    )
+    if (executed.kind === 'cancelled') return
+    if (executed.kind === 'failed') throw executed.error
+    if (!executed.value) return
+    const events = Array.isArray(executed.value)
+      ? executed.value
+      : [executed.value]
+    for (const event of events) await context.dispatch(event)
+  }
+
+  private async awaitOwnerStep<T>(
+    owner: WorkflowOwner,
+    generation: number,
+    promise: Promise<T>,
+    onLateCompletion?: (value: T) => Promise<void> | void,
+  ): Promise<OwnerStepResult<T>> {
+    const settled = promise.then<OwnerStepResult<T>, OwnerStepResult<T>>(
+      (value) => ({ kind: 'completed', value }),
+      (error: unknown) => ({ kind: 'failed', error }),
+    )
+    const handleLateCompletion = (result: OwnerStepResult<T>): void => {
+      if (result.kind !== 'completed' || !onLateCompletion) return
+      void Promise.resolve(onLateCompletion(result.value)).catch(() => undefined)
+    }
+    if (
+      owner.terminal
+      || generation !== owner.generation
+      || owner.abortController.signal.aborted
+    ) {
+      void settled.then(handleLateCompletion)
+      return { kind: 'cancelled' }
+    }
+
+    let resolveCancellation!: () => void
+    const cancellation = new Promise<OwnerStepResult<T>>((resolve) => {
+      resolveCancellation = () => resolve({ kind: 'cancelled' })
+    })
+    const signal = owner.abortController.signal
+    signal.addEventListener('abort', resolveCancellation, { once: true })
+    const result = await Promise.race([settled, cancellation])
+    signal.removeEventListener('abort', resolveCancellation)
+    if (result.kind === 'cancelled') void settled.then(handleLateCompletion)
+    return result
+  }
+
+  private async handleNotification(
+    owner: WorkflowOwner,
+    notification: CoreNotification,
+  ): Promise<void> {
+    owner.notifications.push(notification)
+    try {
+      owner.observer?.onNotification?.(notification)
+    } catch {
+      // Observer failures do not change device workflow state.
+    }
+    if (notification.kind === 'progress') {
+      this.reportProgress(
+        owner,
+        notification.completedUnits,
+        notification.totalUnits,
+      )
+    } else if (notification.kind === 'firmware_progress') {
+      this.reportProgress(
+        owner,
+        notification.completedBytes,
+        notification.totalBytes,
+      )
+    }
+
+    switch (notification.kind) {
+      case 'completed':
+        await this.finishSuccess(owner)
+        return
+      case 'cancelled':
+        await this.finishCancelled(owner)
+        return
+      case 'failed':
+        await this.failOwner(
+          owner,
+          normalizeCoreError(notification.error, owner.operation),
+        )
+        return
+      default:
+        return
+    }
+  }
+
+  private reportProgress(
+    owner: WorkflowOwner,
+    completedUnits: bigint,
+    totalUnits: bigint,
+  ): void {
+    if (
+      completedUnits < 0n
+      || totalUnits < 0n
+      || completedUnits > totalUnits
+      || (owner.lastProgress !== null
+        && (completedUnits < owner.lastProgress.completedUnits
+          || totalUnits !== owner.lastProgress.totalUnits))
+    ) {
+      throw new BotaSDKError('protocol_error', owner.operation)
+    }
+    owner.lastProgress = { completedUnits, totalUnits }
+    try {
+      owner.observer?.onProgress?.(completedUnits, totalUnits)
+    } catch {
+      // Observer failures do not change device workflow state.
+    }
+  }
+
+  private async dispatchBleFailure(
+    context: WorkflowEffectContext,
+    requestId: bigint,
+    error: unknown,
+  ): Promise<void> {
+    await context.dispatch({
+      requestId,
+      kind: 'ble_failed',
+      platformCode: platformCode(error),
+    })
+  }
+
+  private async serializedCoreCall<T>(body: () => T): Promise<T> {
+    const result = this.coreDispatchTail.then(body)
+    this.coreDispatchTail = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return await result
+  }
+
+  private async cancelOwner(owner: WorkflowOwner): Promise<void> {
+    if (owner.terminal) return
+    owner.cancelling = true
+    owner.generation += 1
+    owner.abortController.abort()
+
+    let cleanupError: unknown = null
+    try {
+      await this.cleanupOwner(owner, true)
+    } catch (error) {
+      cleanupError = error
+    }
+
+    let effects: CoreEffectEnvelope[]
+    try {
+      effects = await this.serializedCoreCall(() =>
+        this.core.cancel(owner.cancellationId.slice())
+      )
+      this.enqueueEffects(owner, effects, owner.generation)
+    } catch (error) {
+      await this.failOwner(owner, cleanupError ?? error)
+    }
+
+    try {
+      await owner.result.promise
+    } catch (error) {
+      if (
+        cleanupError === null
+        && error instanceof BotaSDKError
+        && error.code === 'cancelled'
+      ) {
+        return
+      }
+      throw cleanupError ?? error
+    }
+  }
+
+  private async finishSuccess(owner: WorkflowOwner): Promise<void> {
+    if (owner.terminal) return
+    owner.terminal = true
+    owner.queue.length = 0
+    try {
+      await this.cleanupOwner(owner, false)
+      this.releaseOwner(owner)
+      owner.result.resolve({ notifications: [...owner.notifications] })
+    } catch (error) {
+      this.releaseOwner(owner)
+      owner.result.reject(normalizeRuntimeError(error, owner.operation))
+    }
+  }
+
+  private async finishCancelled(owner: WorkflowOwner): Promise<void> {
+    if (owner.terminal) return
+    owner.terminal = true
+    owner.queue.length = 0
+    try {
+      await this.cleanupOwner(owner, true)
+      this.releaseOwner(owner)
+      owner.result.reject(new BotaSDKError('cancelled', owner.operation))
+    } catch (error) {
+      this.releaseOwner(owner)
+      owner.result.reject(normalizeRuntimeError(error, owner.operation))
+    }
+  }
+
+  private async failOwner(owner: WorkflowOwner, error: unknown): Promise<void> {
+    if (owner.terminal) return
+    owner.terminal = true
+    owner.generation += 1
+    owner.abortController.abort()
+    owner.queue.length = 0
+    await this.cleanupOwner(owner, true).catch(() => undefined)
+    await this.serializedCoreCall(() =>
+      this.core.cancel(owner.cancellationId.slice())
+    ).catch(() => undefined)
+    this.releaseOwner(owner)
+    owner.result.reject(normalizeRuntimeError(error, owner.operation))
+  }
+
+  private cleanupOwner(
+    owner: WorkflowOwner,
+    cancelHosts: boolean,
+  ): Promise<void> {
+    if (owner.cleanupPromise) return owner.cleanupPromise
+    owner.cleanupPromise = (async () => {
+      const failures: unknown[] = []
+      if (cancelHosts) {
+        const hosts = uniqueHosts(owner.hosts)
+        for (const host of hosts) {
+          try {
+            await host.cancel()
+          } catch (error) {
+            failures.push(error)
+          }
+        }
+      }
+      for (const cleanup of [...owner.cleanups].reverse()) {
+        try {
+          await cleanup()
+        } catch (error) {
+          failures.push(error)
+        }
+      }
+      owner.cleanups.length = 0
+      for (const timer of owner.timers.values()) clearTimeout(timer)
+      owner.timers.clear()
+      owner.subscriptions.clear()
+      if (failures.length > 0) throw failures[0]
+    })()
+    return owner.cleanupPromise
+  }
+
+  private releaseOwner(owner: WorkflowOwner): void {
+    if (this.activeOwner === owner) this.activeOwner = null
+  }
+}
+
+export function createBrowserPersistenceHost(
+  storage: BrowserSdkStorage | null,
+  now: () => number = Date.now,
+): WorkflowEffectHost {
+  return {
+    execute: async (envelope, context) => {
+      switch (envelope.effect.kind) {
+        case 'persistence_load_checkpoint': {
+          const checkpoint = storage
+            ? await storage.loadWorkflowCheckpoint(context.operationId)
+            : null
+          return {
+            requestId: envelope.requestId,
+            kind: 'checkpoint_loaded',
+            checkpoint: checkpoint as CoreWorkflowCheckpoint | null,
+          }
+        }
+        case 'persistence_save_checkpoint':
+          if (storage) {
+            await storage.saveWorkflowCheckpoint(
+              context.operationId,
+              envelope.effect.checkpoint,
+            )
+          }
+          return { requestId: envelope.requestId, kind: 'checkpoint_saved' }
+        case 'persistence_delete_checkpoint':
+          if (storage) {
+            await storage.deleteWorkflowCheckpoint(context.operationId)
+          }
+          return null
+        case 'persistence_save_connection_identity':
+          if (storage) {
+            await storage.saveVerifiedDevice({
+              schemaVersion: 1,
+              serialNumber: envelope.effect.serialNumber,
+              browserDeviceId: envelope.effect.candidate.peripheralId,
+              name: envelope.effect.candidate.name,
+              updatedAtEpochMs: now(),
+            })
+          }
+          return {
+            requestId: envelope.requestId,
+            kind: 'connection_identity_saved',
+          }
+        default:
+          throw new BotaSDKError(
+            'internal_error',
+            publicOperation(envelope.operation),
+          )
+      }
+    },
+    cancel: async () => undefined,
+  }
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
+function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) return false
+  }
+  return true
+}
+
+function platformCode(error: unknown): number | null {
+  if (
+    typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && typeof error.code === 'number'
+  ) {
+    return error.code
+  }
+  return null
+}
+
+function uniqueHosts(hosts: WorkflowEffectHosts): WorkflowEffectHost[] {
+  return [...new Set([
+    hosts.persistence,
+    hosts.recordingSink,
+    hosts.network,
+    hosts.firmwareBlob,
+    hosts.hostMaterial,
+    hosts.encryptedUploadV2,
+  ].filter((host): host is WorkflowEffectHost => host !== undefined))]
+}
+
+function publicOperation(operation: CoreOperation): BotaOperation {
+  switch (operation) {
+    case 'connect':
+      return 'connect'
+    case 'reconnect':
+      return 'reconnect'
+    case 'provision':
+      return 'provision'
+    case 'transfer_recording':
+      return 'transfer_recording'
+    case 'upload':
+      return 'upload'
+    case 'update_firmware':
+      return 'update_firmware'
+    case 'read_device_logs':
+      return 'read_device_logs'
+    default:
+      return 'unknown'
+  }
+}
+
+function operationFromId(operationId: string): BotaOperation {
+  const prefix = operationId.split(':', 1)[0]
+  switch (prefix) {
+    case 'connect':
+      return 'connect'
+    case 'reconnect':
+      return 'reconnect'
+    case 'provision':
+      return 'provision'
+    case 'transfer_recording':
+      return 'transfer_recording'
+    case 'upload':
+      return 'upload'
+    case 'update_firmware':
+      return 'update_firmware'
+    case 'read_device_logs':
+      return 'read_device_logs'
+    default:
+      return 'unknown'
+  }
+}
+
+function normalizeRuntimeError(
+  error: unknown,
+  operation: BotaOperation,
+): BotaSDKError {
+  if (error instanceof BotaSDKError) return error
+  if (error instanceof BrowserStorageError) {
+    return new BotaSDKError(error.code, operation, { cause: error })
+  }
+  if (error instanceof BrowserTransportError) {
+    const code = error.code === 'disconnected'
+      ? 'device_disconnected'
+      : error.code === 'permission_denied'
+        ? 'permission_denied'
+        : error.code === 'picker_cancelled'
+          ? 'picker_cancelled'
+          : 'bluetooth_unavailable'
+    return new BotaSDKError(code, operation, { cause: error })
+  }
+  return normalizeCoreError(error, operation)
+}

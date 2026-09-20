@@ -83,6 +83,10 @@ export interface ConnectOptions {
   expectedSerialNumber: string
 }
 
+export interface ReconnectOptions {
+  expectedSerialNumber: string
+}
+
 export interface BrowserCapabilities {
   readonly bluetooth: boolean
   readonly authorizedDeviceReconnect: boolean
