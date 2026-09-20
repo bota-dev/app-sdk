@@ -943,6 +943,186 @@ test('failure cancellation drains later effects after one cleanup effect rejects
   ])
 })
 
+test('failure cleanup shares one cancellation entry with cancel and destroy', async (t) => {
+  for (const entryPoint of ['cancel', 'destroy'] as const) {
+    await t.test(entryPoint, async () => {
+      const transport = new FakeBrowserBluetoothTransport()
+      const operationId = `reconnect:shared-${entryPoint}`
+      const cancellationSequence: string[] = []
+      let cancelCalls = 0
+      let discardCalls = 0
+      let gatedCalls = 0
+      let deleteCalls = 0
+      let notificationCalls = 0
+      let gateStarted!: () => void
+      const atGate = new Promise<void>((resolve) => {
+        gateStarted = resolve
+      })
+      let releaseGate!: () => void
+      const gate = new Promise<void>((resolve) => {
+        releaseGate = resolve
+      })
+      let gatedSignal: AbortSignal | undefined
+      const core = scriptedCore({
+        dispatch: (event) => {
+          if (event.kind === 'ble_connected') {
+            return [envelope(2n, {
+              kind: 'persistence_save_checkpoint',
+              checkpoint: CHECKPOINT,
+            })]
+          }
+          throw new Error(`unexpected event ${event.kind}`)
+        },
+        cancel: () => {
+          cancelCalls += 1
+          if (cancelCalls > 1) return []
+          return [
+            envelope(3n, {
+              kind: 'recording_sink_discard',
+              sinkId: 'recording-sink-1',
+            }),
+            envelope(4n, { kind: 'network_download', downloadId: 7n }),
+            envelope(5n, { kind: 'persistence_delete_checkpoint' }),
+            envelope(6n, {
+              kind: 'notify',
+              notification: { kind: 'cancelled', operation: 'reconnect' },
+            }),
+          ]
+        },
+      })
+      const persistence: WorkflowEffectHost = {
+        execute: async (effect) => {
+          if (effect.effect.kind === 'persistence_save_checkpoint') {
+            throw new BrowserStorageError('storage_quota_exceeded')
+          }
+          assert.equal(effect.effect.kind, 'persistence_delete_checkpoint')
+          deleteCalls += 1
+          cancellationSequence.push('checkpoint_deleted')
+          return null
+        },
+        cancel: async () => undefined,
+      }
+      const recordingSink: WorkflowEffectHost = {
+        execute: async (effect) => {
+          assert.equal(effect.effect.kind, 'recording_sink_discard')
+          discardCalls += 1
+          cancellationSequence.push('sink_discard_rejected')
+          throw new Error('private cleanup failure')
+        },
+        cancel: async () => undefined,
+      }
+      const network: WorkflowEffectHost = {
+        execute: async (effect, context) => {
+          assert.equal(effect.effect.kind, 'network_download')
+          gatedCalls += 1
+          gatedSignal = context.signal
+          cancellationSequence.push('gated_cleanup_started')
+          gateStarted()
+          await gate
+          cancellationSequence.push('gated_cleanup_settled')
+          return null
+        },
+        cancel: async () => undefined,
+      }
+      const runtime = new BrowserWorkflowRuntime(core, transport)
+      runtime.registerDevice(transport.device)
+
+      let workflowSettled = false
+      const running = runtime.run(
+        operationId,
+        CANCELLATION_ID,
+        () => [envelope(1n, {
+          kind: 'ble_connect',
+          peripheralId: transport.device.id,
+        })],
+        { persistence, recordingSink, network },
+        {
+          onNotification: (notification) => {
+            if (notification.kind === 'cancelled') {
+              notificationCalls += 1
+              cancellationSequence.push('cancelled_notification')
+            }
+          },
+        },
+      ).then(
+        () => {
+          workflowSettled = true
+          return null
+        },
+        (reason: unknown) => {
+          workflowSettled = true
+          return reason
+        },
+      )
+      await settleWithWatchdog(atGate, `${entryPoint} cleanup gate start`)
+
+      let entrySettled = false
+      const entry = (
+        entryPoint === 'cancel'
+          ? runtime.cancel(operationId)
+          : runtime.destroy()
+      ).then(
+        () => {
+          entrySettled = true
+          cancellationSequence.push('entry_settled')
+          return null
+        },
+        (reason: unknown) => {
+          entrySettled = true
+          cancellationSequence.push('entry_settled')
+          return reason
+        },
+      )
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      const entrySettledBeforeRelease = entrySettled
+      const workflowSettledBeforeRelease = workflowSettled
+      const signalAbortedBeforeRelease = gatedSignal?.aborted
+      const cancelCallsBeforeRelease = cancelCalls
+      let secondBodyCalls = 0
+      const secondOwner = await runtime.runExclusive('settings', async () => {
+        secondBodyCalls += 1
+      }).then(
+        () => null,
+        (reason: unknown) => reason,
+      )
+
+      releaseGate()
+      const [entryResult, workflowError] = await Promise.all([
+        settleWithWatchdog(entry, `${entryPoint} failure cleanup`),
+        settleWithWatchdog(running, `${entryPoint} failed workflow`),
+      ])
+
+      assert.equal(entrySettledBeforeRelease, false)
+      assert.equal(workflowSettledBeforeRelease, false)
+      assert.equal(signalAbortedBeforeRelease, false)
+      assert.equal(cancelCallsBeforeRelease, 1)
+      assert.ok(secondOwner instanceof BotaSDKError)
+      assert.equal(
+        secondOwner.code,
+        entryPoint === 'cancel' ? 'operation_in_progress' : 'cancelled',
+      )
+      assert.equal(secondBodyCalls, 0)
+      assert.equal(entryResult, null)
+      assert.ok(workflowError instanceof BotaSDKError)
+      assert.equal(workflowError.code, 'storage_quota_exceeded')
+      assert.equal(workflowError.operation, 'reconnect')
+      assert.equal(cancelCalls, 1)
+      assert.equal(discardCalls, 1)
+      assert.equal(gatedCalls, 1)
+      assert.equal(deleteCalls, 1)
+      assert.equal(notificationCalls, 1)
+      assert.deepEqual(cancellationSequence, [
+        'sink_discard_rejected',
+        'gated_cleanup_started',
+        'gated_cleanup_settled',
+        'checkpoint_deleted',
+        'cancelled_notification',
+        'entry_settled',
+      ])
+    })
+  }
+})
+
 test('firmware progress allows canonical phase resets', async () => {
   const progress: Array<[bigint, bigint]> = []
   const runtime = new BrowserWorkflowRuntime(

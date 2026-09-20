@@ -259,10 +259,7 @@ export class BrowserWorkflowRuntime {
     ) {
       return
     }
-    if (!owner.cancelPromise) {
-      owner.cancelPromise = this.cancelOwner(owner)
-    }
-    await owner.cancelPromise
+    await this.enterCancellation(owner)
   }
 
   async runExclusive<T>(
@@ -1188,6 +1185,20 @@ export class BrowserWorkflowRuntime {
     return await result
   }
 
+  private enterCancellation(owner: WorkflowOwner): Promise<void> {
+    if (owner.cancelPromise) return owner.cancelPromise
+    const cancellation = deferred<void>()
+    owner.cancelPromise = cancellation.promise
+    const started = owner.failure
+      ? this.cancelAfterFailure(owner, owner.failure.error)
+      : this.cancelOwner(owner)
+    void started.then(
+      () => cancellation.resolve(undefined),
+      cancellation.reject,
+    )
+    return cancellation.promise
+  }
+
   private async cancelOwner(owner: WorkflowOwner): Promise<void> {
     if (owner.terminal) return
     this.beginCancellation(owner)
@@ -1269,7 +1280,7 @@ export class BrowserWorkflowRuntime {
     owner.failure = { error }
     owner.failurePromise = owner.cancelling
       ? this.finishFailure(owner, error)
-      : this.cancelAfterFailure(owner, error)
+      : this.enterCancellation(owner)
     return owner.failurePromise
   }
 
