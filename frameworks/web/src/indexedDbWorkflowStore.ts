@@ -92,6 +92,7 @@ export class IndexedDbWorkflowStore {
   private readonly keyRange: typeof IDBKeyRange
   private readonly namespacePrefix: string
   private databasePromise: Promise<IDBDatabase> | null = null
+  private databaseInvalidated = false
 
   constructor(
     namespace: string,
@@ -434,13 +435,16 @@ export class IndexedDbWorkflowStore {
   }
 
   private async database(): Promise<IDBDatabase> {
+    if (this.databaseInvalidated) throw resumeRejected()
     if (!this.databasePromise) {
       this.databasePromise = this.openDatabase().catch((error: unknown) => {
         this.databasePromise = null
         throw error
       })
     }
-    return await this.databasePromise
+    const database = await this.databasePromise
+    if (this.databaseInvalidated) throw resumeRejected()
+    return database
   }
 
   private async openDatabase(): Promise<IDBDatabase> {
@@ -458,7 +462,11 @@ export class IndexedDbWorkflowStore {
           const database = request.result
           try {
             assertCompatibleDatabase(database)
-            database.addEventListener('versionchange', () => database.close())
+            database.addEventListener('versionchange', () => {
+              this.databaseInvalidated = true
+              this.databasePromise = null
+              database.close()
+            })
             resolve(database)
           } catch (error) {
             database.close()

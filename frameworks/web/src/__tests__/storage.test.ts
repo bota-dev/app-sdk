@@ -733,6 +733,20 @@ test('OPFS rejects unsafe file sizes and range arithmetic', async (t) => {
   })
 })
 
+test('a live IndexedDB version change invalidates the cached connection', async () => {
+  const fixture = await storageFixture()
+  const storage = await fixture.open('live-version-change-tenant')
+  const operationId = 'live-version-change-operation'
+  await storage.saveWorkflowCheckpoint(operationId, { phase: 'prepared' })
+
+  await createDatabase(fixture.indexedDB, 2, () => undefined)
+
+  await expectStorageError(
+    storage.loadWorkflowCheckpoint(operationId),
+    'resume_rejected',
+  )
+})
+
 test('incompatible IndexedDB versions and store shapes fail closed', async (t) => {
   await t.test('newer database version', async () => {
     const indexedDB = new FakeIDBFactory()
