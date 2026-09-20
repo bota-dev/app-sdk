@@ -33,15 +33,26 @@ const FIXED_MESSAGES = {
   storage_unavailable: 'Durable browser storage is unavailable.',
 } as const
 
+const DATABASE_NAME = 'bota-app-sdk'
+const REQUIRED_STORE_NAMES = [
+  'verified_devices',
+  'workflow_checkpoints',
+  'encrypted_upload_v2_checkpoints',
+  'recording_journals',
+  'provisioning_journals',
+  'firmware_journals',
+] as const
+
 interface StorageFixture {
   indexedDB: IDBFactory
   opfs: FakeOpfs
   open(namespace: string): Promise<BrowserSdkStorage>
 }
 
-async function storageFixture(): Promise<StorageFixture> {
-  const indexedDB = new FakeIDBFactory()
-  const opfs = new FakeOpfs()
+async function storageFixture(
+  indexedDB: IDBFactory = new FakeIDBFactory(),
+  opfs: FakeOpfs = new FakeOpfs(),
+): Promise<StorageFixture> {
   const bridge = await core
   return {
     indexedDB,
@@ -134,6 +145,64 @@ test('storage namespaces reject empty, whitespace-only, and overlong values', as
 
   const maximum = await fixture.open('x'.repeat(256))
   assert.equal(maximum.namespace, 'x'.repeat(256))
+})
+
+test('ill-formed UTF-16 cannot alias tenant namespaces or durable object IDs', async (t) => {
+  const replacement = '\ufffd'
+  const loneSurrogates = ['\ud800', '\udc00']
+
+  await t.test('tenant namespace', async () => {
+    const fixture = await storageFixture()
+    const valid = await fixture.open(`tenant-${replacement}`)
+    await valid.saveWorkflowCheckpoint('operation-1', { owner: 'valid-tenant' })
+
+    for (const loneSurrogate of loneSurrogates) {
+      await expectStorageError(
+        fixture.open(`tenant-${loneSurrogate}`),
+        'invalid_input',
+      )
+    }
+    assert.deepEqual(
+      await valid.loadWorkflowCheckpoint('operation-1'),
+      { owner: 'valid-tenant' },
+    )
+  })
+
+  await t.test('IndexedDB logical ID', async () => {
+    const storage = await (await storageFixture()).open('unicode-id-tenant')
+    const validId = `operation-${replacement}`
+    await storage.saveWorkflowCheckpoint(validId, { owner: 'valid-object' })
+
+    for (const loneSurrogate of loneSurrogates) {
+      const malformedId = `operation-${loneSurrogate}`
+      await expectStorageError(
+        storage.saveWorkflowCheckpoint(malformedId, { owner: 'malformed-object' }),
+        'invalid_input',
+      )
+      await expectStorageError(
+        storage.loadWorkflowCheckpoint(malformedId),
+        'invalid_input',
+      )
+    }
+    assert.deepEqual(
+      await storage.loadWorkflowCheckpoint(validId),
+      { owner: 'valid-object' },
+    )
+  })
+
+  await t.test('OPFS logical ID', async () => {
+    const storage = await (await storageFixture()).open('unicode-blob-tenant')
+    const validBlob = await storage.openBlob(`blob-${replacement}`)
+    await validBlob.write(0, Uint8Array.of(1, 2, 3))
+
+    for (const loneSurrogate of loneSurrogates) {
+      await expectStorageError(
+        storage.openBlob(`blob-${loneSurrogate}`),
+        'invalid_input',
+      )
+    }
+    assert.deepEqual(await validBlob.read(0, 8), Uint8Array.of(1, 2, 3))
+  })
 })
 
 test('missing IndexedDB or OPFS maps to fixed storage_unavailable errors', async () => {
@@ -244,6 +313,228 @@ test('recording journals follow only the exact monotonic phase state machine', a
   )
 })
 
+test('journal timestamps cannot regress', async (t) => {
+  await t.test('recording journal', async () => {
+    const storage = await (await storageFixture()).open('recording-time-tenant')
+    const journal = recordingJournal('recording-time-operation')
+    await storage.saveRecordingJournal(journal)
+
+    await expectStorageError(
+      storage.saveRecordingJournal({
+        ...journal,
+        updatedAtEpochMs: journal.updatedAtEpochMs - 1,
+      }),
+      'resume_rejected',
+    )
+  })
+
+  await t.test('provisioning journal', async () => {
+    const storage = await (await storageFixture()).open('provisioning-time-tenant')
+    const journal = provisioningJournal()
+    await storage.saveProvisioningJournal(journal)
+
+    await expectStorageError(
+      storage.saveProvisioningJournal({
+        ...journal,
+        updatedAtEpochMs: journal.updatedAtEpochMs - 1,
+      }),
+      'resume_rejected',
+    )
+  })
+
+  await t.test('firmware journal', async () => {
+    const storage = await (await storageFixture()).open('firmware-time-tenant')
+    const journal = firmwareJournal()
+    await storage.saveFirmwareJournal(journal)
+
+    await expectStorageError(
+      storage.saveFirmwareJournal({
+        ...journal,
+        updatedAtEpochMs: journal.updatedAtEpochMs - 1,
+      }),
+      'resume_rejected',
+    )
+  })
+})
+
+test('recording evidence is phase-bound, immutable, and same-phase idempotent', async (t) => {
+  await t.test('legacy upload and cloud evidence are required at their phases', async () => {
+    const storage = await (await storageFixture()).open('legacy-evidence-tenant')
+    const prepared = recordingJournal('legacy-evidence-operation')
+    await storage.saveRecordingJournal(prepared)
+    await storage.saveRecordingJournal({
+      ...prepared,
+      phase: 'transferring',
+      updatedAtEpochMs: prepared.updatedAtEpochMs + 1,
+    })
+    await storage.saveRecordingJournal({
+      ...prepared,
+      phase: 'staged',
+      updatedAtEpochMs: prepared.updatedAtEpochMs + 2,
+    })
+
+    await expectStorageError(
+      storage.saveRecordingJournal({
+        ...prepared,
+        phase: 'uploading',
+        updatedAtEpochMs: prepared.updatedAtEpochMs + 3,
+      }),
+      'resume_rejected',
+    )
+
+    const uploading = {
+      ...prepared,
+      phase: 'uploading' as const,
+      uploadId: 'upload-1',
+      updatedAtEpochMs: prepared.updatedAtEpochMs + 3,
+    }
+    await storage.saveRecordingJournal(uploading)
+    await expectStorageError(
+      storage.saveRecordingJournal({
+        ...uploading,
+        phase: 'cloud_completed',
+        updatedAtEpochMs: prepared.updatedAtEpochMs + 4,
+      }),
+      'resume_rejected',
+    )
+    await expectStorageError(
+      storage.saveRecordingJournal({
+        ...uploading,
+        phase: 'cloud_completed',
+        cloudCompletionId: 'cloud-1',
+        confirmationDigestHex: '11'.repeat(32),
+        updatedAtEpochMs: prepared.updatedAtEpochMs + 4,
+      }),
+      'resume_rejected',
+    )
+  })
+
+  await t.test('v2 confirmation evidence appears only after cloud completion', async () => {
+    const storage = await (await storageFixture()).open('v2-evidence-tenant')
+    const prepared = {
+      ...recordingJournal('v2-evidence-operation'),
+      profile: 'encrypted_upload_v2' as const,
+    }
+
+    await expectStorageError(
+      storage.saveRecordingJournal({
+        ...prepared,
+        confirmationDigestHex: '22'.repeat(32),
+      }),
+      'resume_rejected',
+    )
+
+    await storage.saveRecordingJournal(prepared)
+    await storage.saveRecordingJournal({
+      ...prepared,
+      phase: 'transferring',
+      updatedAtEpochMs: prepared.updatedAtEpochMs + 1,
+    })
+    await storage.saveRecordingJournal({
+      ...prepared,
+      phase: 'staged',
+      updatedAtEpochMs: prepared.updatedAtEpochMs + 2,
+    })
+    await storage.saveRecordingJournal({
+      ...prepared,
+      phase: 'uploading',
+      updatedAtEpochMs: prepared.updatedAtEpochMs + 3,
+    })
+    await expectStorageError(
+      storage.saveRecordingJournal({
+        ...prepared,
+        phase: 'cloud_completed',
+        updatedAtEpochMs: prepared.updatedAtEpochMs + 4,
+      }),
+      'resume_rejected',
+    )
+  })
+
+  for (const evidence of [
+    { key: 'uploadId', phase: 'uploading', value: 'upload-1', replacement: 'upload-2' },
+    {
+      key: 'cloudCompletionId',
+      phase: 'cloud_completed',
+      value: 'cloud-1',
+      replacement: 'cloud-2',
+    },
+    {
+      key: 'confirmationDigestHex',
+      phase: 'cloud_completed',
+      value: '33'.repeat(32),
+      replacement: '44'.repeat(32),
+    },
+  ] as const) {
+    await t.test(`${evidence.key} cannot be cleared or changed`, async () => {
+      const storage = await (await storageFixture()).open(`${evidence.key}-tenant`)
+      const profile: RecordingJournal['profile'] = evidence.key === 'confirmationDigestHex'
+        ? 'encrypted_upload_v2'
+        : 'legacy'
+      const prepared: RecordingJournal = {
+        ...recordingJournal(`${evidence.key}-operation`),
+        profile,
+      }
+      const transferring: RecordingJournal = {
+        ...prepared,
+        phase: 'transferring' as const,
+        updatedAtEpochMs: prepared.updatedAtEpochMs + 1,
+      }
+      const staged: RecordingJournal = {
+        ...prepared,
+        phase: 'staged' as const,
+        updatedAtEpochMs: prepared.updatedAtEpochMs + 2,
+      }
+      const uploading: RecordingJournal = {
+        ...prepared,
+        phase: 'uploading' as const,
+        uploadId: profile === 'legacy' ? 'upload-1' : null,
+        updatedAtEpochMs: prepared.updatedAtEpochMs + 3,
+      }
+      const cloudCompleted: RecordingJournal = {
+        ...uploading,
+        phase: 'cloud_completed' as const,
+        cloudCompletionId: profile === 'legacy' ? 'cloud-1' : null,
+        confirmationDigestHex: profile === 'encrypted_upload_v2'
+          ? '33'.repeat(32)
+          : null,
+        updatedAtEpochMs: prepared.updatedAtEpochMs + 4,
+      }
+
+      await storage.saveRecordingJournal(prepared)
+      await storage.saveRecordingJournal(transferring)
+      await storage.saveRecordingJournal(staged)
+      await storage.saveRecordingJournal(uploading)
+      if (evidence.phase === 'cloud_completed') {
+        await storage.saveRecordingJournal(cloudCompleted)
+      }
+      const established: RecordingJournal = evidence.phase === 'uploading'
+        ? uploading
+        : cloudCompleted
+
+      await storage.saveRecordingJournal({
+        ...established,
+        updatedAtEpochMs: established.updatedAtEpochMs + 1,
+      })
+      await expectStorageError(
+        storage.saveRecordingJournal({
+          ...established,
+          [evidence.key]: null,
+          updatedAtEpochMs: established.updatedAtEpochMs + 2,
+        }),
+        'resume_rejected',
+      )
+      await expectStorageError(
+        storage.saveRecordingJournal({
+          ...established,
+          [evidence.key]: evidence.replacement,
+          updatedAtEpochMs: established.updatedAtEpochMs + 2,
+        }),
+        'resume_rejected',
+      )
+    })
+  }
+})
+
 test('unknown durable-record schema versions fail closed as resume_rejected', async () => {
   const fixture = await storageFixture()
   const storage = await fixture.open('schema-tenant')
@@ -301,6 +592,84 @@ test('concurrent firmware saves cannot replace newer durable progress', async ()
   )
 })
 
+test('concurrent same-offset OPFS appends commit one complete suffix without losing the prefix', async () => {
+  const fixture = await storageFixture()
+  const firstStorage = await fixture.open('concurrent-blob-tenant')
+  const secondStorage = await fixture.open('concurrent-blob-tenant')
+  const first = await firstStorage.openBlob('shared-blob')
+  const second = await secondStorage.openBlob('shared-blob')
+  const prefix = Uint8Array.of(1, 2, 3)
+  const firstSuffix = Uint8Array.of(4, 5)
+  const secondSuffix = Uint8Array.of(6, 7)
+  await first.write(0, prefix)
+
+  const results = await Promise.allSettled([
+    first.write(prefix.byteLength, firstSuffix),
+    second.write(prefix.byteLength, secondSuffix),
+  ])
+
+  assert.equal(results.filter(({ status }) => status === 'fulfilled').length, 1)
+  assert.equal(results.filter(({ status }) => status === 'rejected').length, 1)
+  const rejection = results.find(({ status }) => status === 'rejected')
+  assert.ok(rejection && rejection.status === 'rejected')
+  assert.equal(rejection.reason instanceof BrowserStorageError, true)
+  assert.equal((rejection.reason as BrowserStorageError).code, 'resume_rejected')
+  const bytes = await first.read(0, 16)
+  assert.equal(
+    [
+      Uint8Array.of(...prefix, ...firstSuffix),
+      Uint8Array.of(...prefix, ...secondSuffix),
+    ].some((expected) => Buffer.from(expected).equals(Buffer.from(bytes))),
+    true,
+  )
+})
+
+test('OPFS mutations use one deterministic hashed Web Lock name when available', async () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis.navigator, 'locks')
+  const lockNames: string[] = []
+  const lockManager = {
+    request: async (
+      name: string,
+      callback: (lock: null) => unknown,
+    ): Promise<unknown> => {
+      lockNames.push(name)
+      return await callback(null)
+    },
+  } as unknown as LockManager
+  Object.defineProperty(globalThis.navigator, 'locks', {
+    configurable: true,
+    value: lockManager,
+  })
+
+  try {
+    const namespace = 'web-lock-tenant'
+    const blobId = 'web-lock-blob'
+    const storage = await (await storageFixture()).open(namespace)
+    const first = await storage.openBlob(blobId)
+    const second = await storage.openBlob(blobId)
+
+    await first.write(0, Uint8Array.of(1))
+    await second.write(1, Uint8Array.of(2))
+    await first.truncate(1)
+    await second.delete()
+
+    assert.equal(lockNames.length, 4)
+    assert.equal(new Set(lockNames).size, 1)
+    assert.match(
+      lockNames[0] ?? '',
+      /^bota-app-sdk:v1:[0-9a-f]{64}:[0-9a-f]{64}$/,
+    )
+    assert.equal(lockNames[0]?.includes(namespace), false)
+    assert.equal(lockNames[0]?.includes(blobId), false)
+  } finally {
+    if (original) {
+      Object.defineProperty(globalThis.navigator, 'locks', original)
+    } else {
+      Reflect.deleteProperty(globalThis.navigator, 'locks')
+    }
+  }
+})
+
 test('OPFS appends are offset-exact and reads, streams, truncation, and delete are bounded', async () => {
   const storage = await (await storageFixture()).open('blob-tenant')
   const blob = await storage.openBlob('recording-body')
@@ -328,6 +697,190 @@ test('OPFS appends are offset-exact and reads, streams, truncation, and delete a
 
   await blob.delete()
   await blob.delete()
+})
+
+test('OPFS rejects unsafe file sizes and range arithmetic', async (t) => {
+  for (const reportedSize of [-1, Number.MAX_SAFE_INTEGER + 1]) {
+    await t.test(`reported file size ${reportedSize}`, async () => {
+      const fixture = await storageFixture()
+      const blob = await (await fixture.open('file-size-tenant')).openBlob('body')
+      fixture.opfs.reportNextFileSize(reportedSize)
+
+      await expectStorageError(blob.size(), 'resume_rejected')
+    })
+  }
+
+  await t.test('read offset plus maximum length overflow', async () => {
+    const fixture = await storageFixture()
+    const blob = await (await fixture.open('read-range-tenant')).openBlob('body')
+
+    await expectStorageError(
+      blob.read(Number.MAX_SAFE_INTEGER, 1),
+      'invalid_input',
+    )
+    assert.deepEqual(fixture.opfs.paths(), [])
+  })
+
+  await t.test('write offset plus byte length overflow', async () => {
+    const fixture = await storageFixture()
+    const blob = await (await fixture.open('write-range-tenant')).openBlob('body')
+
+    await expectStorageError(
+      blob.write(Number.MAX_SAFE_INTEGER, Uint8Array.of(1)),
+      'invalid_input',
+    )
+    assert.deepEqual(fixture.opfs.paths(), [])
+  })
+})
+
+test('incompatible IndexedDB versions and store shapes fail closed', async (t) => {
+  await t.test('newer database version', async () => {
+    const indexedDB = new FakeIDBFactory()
+    await createDatabase(indexedDB, 2, (database) => {
+      for (const storeName of REQUIRED_STORE_NAMES) database.createObjectStore(storeName)
+    })
+    const storage = await (await storageFixture(indexedDB)).open('newer-schema-tenant')
+
+    await expectStorageError(
+      storage.loadWorkflowCheckpoint('operation-1'),
+      'resume_rejected',
+    )
+  })
+
+  const malformedSchemas = [
+    {
+      name: 'missing required store',
+      configure(database: IDBDatabase): void {
+        for (const storeName of REQUIRED_STORE_NAMES.slice(1)) {
+          database.createObjectStore(storeName)
+        }
+      },
+    },
+    {
+      name: 'extra store',
+      configure(database: IDBDatabase): void {
+        for (const storeName of REQUIRED_STORE_NAMES) database.createObjectStore(storeName)
+        database.createObjectStore('unexpected_store')
+      },
+    },
+    {
+      name: 'required store with an inline key',
+      configure(database: IDBDatabase): void {
+        for (const storeName of REQUIRED_STORE_NAMES) {
+          database.createObjectStore(
+            storeName,
+            storeName === 'workflow_checkpoints' ? { keyPath: 'id' } : undefined,
+          )
+        }
+      },
+    },
+    {
+      name: 'required store with an index',
+      configure(database: IDBDatabase, transaction: IDBTransaction): void {
+        for (const storeName of REQUIRED_STORE_NAMES) database.createObjectStore(storeName)
+        transaction.objectStore('workflow_checkpoints').createIndex('by_id', 'operationId')
+      },
+    },
+  ] as const
+
+  for (const schema of malformedSchemas) {
+    await t.test(schema.name, async () => {
+      const indexedDB = new FakeIDBFactory()
+      await createDatabase(indexedDB, 1, schema.configure)
+      const storage = await (await storageFixture(indexedDB)).open('malformed-schema-tenant')
+
+      await expectStorageError(
+        storage.loadWorkflowCheckpoint('operation-1'),
+        'resume_rejected',
+      )
+    })
+  }
+})
+
+test('loaded structured identities must match their requested durable keys', async (t) => {
+  const cases = [
+    {
+      name: 'verified-device serial',
+      storeName: 'verified_devices',
+      save: async (storage: BrowserSdkStorage) => await storage.saveVerifiedDevice(verifiedDevice()),
+      corrupt: (value: unknown) => ({ ...recordValue(value), serialNumber: 'OTHER-SERIAL' }),
+      load: async (storage: BrowserSdkStorage) =>
+        await storage.loadVerifiedDevice(verifiedDevice().serialNumber),
+    },
+    {
+      name: 'workflow operation ID',
+      storeName: 'workflow_checkpoints',
+      save: async (storage: BrowserSdkStorage) =>
+        await storage.saveWorkflowCheckpoint('workflow-operation', { phase: 'prepared' }),
+      corrupt: (value: unknown) => ({ ...recordValue(value), operationId: 'other-operation' }),
+      load: async (storage: BrowserSdkStorage) =>
+        await storage.loadWorkflowCheckpoint('workflow-operation'),
+    },
+    {
+      name: 'encrypted-upload operation ID',
+      storeName: 'encrypted_upload_v2_checkpoints',
+      save: async (storage: BrowserSdkStorage) =>
+        await storage.saveEncryptedUploadV2Checkpoint('v2-operation', { phase: 'prepared' }),
+      corrupt: (value: unknown) => ({ ...recordValue(value), operationId: 'other-operation' }),
+      load: async (storage: BrowserSdkStorage) =>
+        await storage.loadEncryptedUploadV2Checkpoint('v2-operation'),
+    },
+    {
+      name: 'recording operation ID',
+      storeName: 'recording_journals',
+      save: async (storage: BrowserSdkStorage) =>
+        await storage.saveRecordingJournal(recordingJournal('recording-operation')),
+      corrupt: (value: unknown) => ({ ...recordValue(value), operationId: 'other-operation' }),
+      load: async (storage: BrowserSdkStorage) =>
+        await storage.loadRecordingJournal('recording-operation'),
+    },
+    {
+      name: 'provisioning attempt ID',
+      storeName: 'provisioning_journals',
+      save: async (storage: BrowserSdkStorage) =>
+        await storage.saveProvisioningJournal(provisioningJournal()),
+      corrupt: (value: unknown) => ({ ...recordValue(value), attemptId: 'other-attempt' }),
+      load: async (storage: BrowserSdkStorage) =>
+        await storage.loadProvisioningJournal(provisioningJournal().attemptId),
+    },
+    {
+      name: 'firmware operation ID',
+      storeName: 'firmware_journals',
+      save: async (storage: BrowserSdkStorage) =>
+        await storage.saveFirmwareJournal(firmwareJournal()),
+      corrupt: (value: unknown) => ({ ...recordValue(value), operationId: 'other-operation' }),
+      load: async (storage: BrowserSdkStorage) =>
+        await storage.loadFirmwareJournal(firmwareJournal().operationId),
+    },
+  ] as const
+
+  for (const identityCase of cases) {
+    await t.test(identityCase.name, async () => {
+      const fixture = await storageFixture()
+      const storage = await fixture.open(`${identityCase.storeName}-identity-tenant`)
+      await identityCase.save(storage)
+      await replaceFirstRecord(
+        fixture.indexedDB,
+        identityCase.storeName,
+        identityCase.corrupt,
+      )
+
+      await expectStorageError(identityCase.load(storage), 'resume_rejected')
+    })
+  }
+
+  await t.test('recording enumeration binds each value to its durable key', async () => {
+    const fixture = await storageFixture()
+    const storage = await fixture.open('recording-list-identity-tenant')
+    await storage.saveRecordingJournal(recordingJournal('recording-operation'))
+    await replaceFirstRecord(
+      fixture.indexedDB,
+      'recording_journals',
+      (value) => ({ ...recordValue(value), operationId: 'other-operation' }),
+    )
+
+    await expectStorageError(storage.listRecordingJournals(), 'resume_rejected')
+  })
 })
 
 test('quota failure preserves the existing checkpoint and committed blob prefix', async () => {
@@ -494,6 +1047,23 @@ async function replaceFirstRecord(
   } finally {
     database.close()
   }
+}
+
+async function createDatabase(
+  indexedDB: IDBFactory,
+  version: number,
+  configure: (database: IDBDatabase, transaction: IDBTransaction) => void,
+): Promise<void> {
+  const database = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open(DATABASE_NAME, version)
+    request.addEventListener('upgradeneeded', () => {
+      assert.ok(request.transaction)
+      configure(request.result, request.transaction)
+    })
+    request.addEventListener('success', () => resolve(request.result), { once: true })
+    request.addEventListener('error', () => reject(request.error), { once: true })
+  })
+  database.close()
 }
 
 async function openOnlyDatabase(indexedDB: IDBFactory): Promise<IDBDatabase> {

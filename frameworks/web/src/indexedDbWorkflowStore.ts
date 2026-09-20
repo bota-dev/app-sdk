@@ -36,6 +36,7 @@ export function mapBrowserStorageError(error: unknown): BrowserStorageError {
   if (domExceptionName(error) === 'QuotaExceededError') {
     return new BrowserStorageError('storage_quota_exceeded', { cause: error })
   }
+  if (domExceptionName(error) === 'VersionError') return resumeRejected()
   return new BrowserStorageError('storage_unavailable', { cause: error })
 }
 
@@ -44,9 +45,21 @@ export function validateStorageNamespace(namespace: string): void {
     typeof namespace !== 'string'
     || namespace.trim().length === 0
     || namespace.length > 256
+    || !isWellFormedUtf16(namespace)
   ) {
     throw new BrowserStorageError('invalid_input')
   }
+}
+
+export function validateStorageIdentifier(value: string): string {
+  if (
+    typeof value !== 'string'
+    || value.length === 0
+    || !isWellFormedUtf16(value)
+  ) {
+    throw new BrowserStorageError('invalid_input')
+  }
+  return value
 }
 
 const DATABASE_NAME = 'bota-app-sdk'
@@ -85,6 +98,7 @@ export class IndexedDbWorkflowStore {
     indexedDB: IDBFactory,
     keyRange: typeof IDBKeyRange,
   ) {
+    validateStorageNamespace(namespace)
     this.namespace = namespace
     this.indexedDB = indexedDB
     this.keyRange = keyRange
@@ -95,7 +109,10 @@ export class IndexedDbWorkflowStore {
     serialNumber: string,
   ): Promise<VerifiedDeviceHint | null> {
     const value = await this.get('verified_devices', serialNumber)
-    return value === undefined ? null : verifiedDevice(value)
+    if (value === undefined) return null
+    const hint = verifiedDevice(value)
+    if (hint.serialNumber !== serialNumber) throw resumeRejected()
+    return hint
   }
 
   async saveVerifiedDevice(value: VerifiedDeviceHint): Promise<void> {
@@ -157,7 +174,10 @@ export class IndexedDbWorkflowStore {
     operationId: string,
   ): Promise<RecordingJournal | null> {
     const value = await this.get('recording_journals', operationId)
-    return value === undefined ? null : recordingJournal(value)
+    if (value === undefined) return null
+    const journal = recordingJournal(value)
+    if (journal.operationId !== operationId) throw resumeRejected()
+    return journal
   }
 
   async saveRecordingJournal(journal: RecordingJournal): Promise<void> {
@@ -169,13 +189,24 @@ export class IndexedDbWorkflowStore {
       (existing) => {
         const previous = recordingJournal(existing)
         if (
-          previous.serialNumber !== sanitized.serialNumber
+          previous.operationId !== sanitized.operationId
+          || previous.serialNumber !== sanitized.serialNumber
           || previous.recordingUuid !== sanitized.recordingUuid
           || previous.profile !== sanitized.profile
           || previous.sinkId !== sanitized.sinkId
         ) {
           throw resumeRejected()
         }
+        assertNondecreasingTimestamp(previous, sanitized)
+        assertEstablishedEvidence(previous.uploadId, sanitized.uploadId)
+        assertEstablishedEvidence(
+          previous.cloudCompletionId,
+          sanitized.cloudCompletionId,
+        )
+        assertEstablishedEvidence(
+          previous.confirmationDigestHex,
+          sanitized.confirmationDigestHex,
+        )
         assertNextPhase(RECORDING_PHASES, previous.phase, sanitized.phase)
       },
       () => {
@@ -185,9 +216,13 @@ export class IndexedDbWorkflowStore {
   }
 
   async listRecordingJournals(): Promise<RecordingJournal[]> {
-    const values = await this.getAll('recording_journals')
-    return values
-      .map(recordingJournal)
+    const entries = await this.getAll('recording_journals')
+    return entries
+      .map(({ key, value }) => {
+        const journal = recordingJournal(value)
+        if (key !== this.key(journal.operationId)) throw resumeRejected()
+        return journal
+      })
       .sort((left, right) => left.operationId.localeCompare(right.operationId))
   }
 
@@ -199,7 +234,10 @@ export class IndexedDbWorkflowStore {
     attemptId: string,
   ): Promise<ProvisioningJournal | null> {
     const value = await this.get('provisioning_journals', attemptId)
-    return value === undefined ? null : provisioningJournal(value)
+    if (value === undefined) return null
+    const journal = provisioningJournal(value)
+    if (journal.attemptId !== attemptId) throw resumeRejected()
+    return journal
   }
 
   async saveProvisioningJournal(journal: ProvisioningJournal): Promise<void> {
@@ -210,9 +248,13 @@ export class IndexedDbWorkflowStore {
       sanitized,
       (existing) => {
         const previous = provisioningJournal(existing)
-        if (previous.serialNumber !== sanitized.serialNumber) {
+        if (
+          previous.attemptId !== sanitized.attemptId
+          || previous.serialNumber !== sanitized.serialNumber
+        ) {
           throw resumeRejected()
         }
+        assertNondecreasingTimestamp(previous, sanitized)
         if (previous.phase === sanitized.phase) return
         const permitted =
           (previous.phase === 'prepared'
@@ -233,7 +275,10 @@ export class IndexedDbWorkflowStore {
 
   async loadFirmwareJournal(operationId: string): Promise<FirmwareJournal | null> {
     const value = await this.get('firmware_journals', operationId)
-    return value === undefined ? null : firmwareJournal(value)
+    if (value === undefined) return null
+    const journal = firmwareJournal(value)
+    if (journal.operationId !== operationId) throw resumeRejected()
+    return journal
   }
 
   async saveFirmwareJournal(journal: FirmwareJournal): Promise<void> {
@@ -245,7 +290,8 @@ export class IndexedDbWorkflowStore {
       (value) => {
         const existing = firmwareJournal(value)
         if (
-          existing.serialNumber !== sanitized.serialNumber
+          existing.operationId !== sanitized.operationId
+          || existing.serialNumber !== sanitized.serialNumber
           || existing.imageId !== sanitized.imageId
           || existing.downloadId !== sanitized.downloadId
           || existing.version !== sanitized.version
@@ -258,6 +304,7 @@ export class IndexedDbWorkflowStore {
         ) {
           throw resumeRejected()
         }
+        assertNondecreasingTimestamp(existing, sanitized)
       },
       () => undefined,
     )
@@ -283,11 +330,12 @@ export class IndexedDbWorkflowStore {
   }
 
   private async get(storeName: StoreName, id: string): Promise<unknown | undefined> {
+    const key = this.key(id)
     try {
       const database = await this.database()
       const transaction = database.transaction(storeName, 'readonly')
       const completion = transactionCompletion(transaction)
-      const request = requestResult(transaction.objectStore(storeName).get(this.key(id)))
+      const request = requestResult(transaction.objectStore(storeName).get(key))
       const [value] = await Promise.all([request, completion])
       return value
     } catch (error) {
@@ -295,27 +343,38 @@ export class IndexedDbWorkflowStore {
     }
   }
 
-  private async getAll(storeName: StoreName): Promise<unknown[]> {
+  private async getAll(
+    storeName: StoreName,
+  ): Promise<Array<{ key: IDBValidKey, value: unknown }>> {
     try {
       const database = await this.database()
       const transaction = database.transaction(storeName, 'readonly')
       const completion = transactionCompletion(transaction)
-      const request = requestResult(
-        transaction.objectStore(storeName).getAll(this.namespaceRange()),
-      )
-      const [values] = await Promise.all([request, completion])
-      return values
+      const store = transaction.objectStore(storeName)
+      const range = this.namespaceRange()
+      const [keys, values] = await Promise.all([
+        requestResult(store.getAllKeys(range)),
+        requestResult(store.getAll(range)),
+        completion,
+      ])
+      if (keys.length !== values.length) throw resumeRejected()
+      return values.map((value, index) => {
+        const key = keys[index]
+        if (key === undefined) throw resumeRejected()
+        return { key, value }
+      })
     } catch (error) {
       throw mapBrowserStorageError(error)
     }
   }
 
   private async put(storeName: StoreName, id: string, value: unknown): Promise<void> {
+    const key = this.key(id)
     try {
       const database = await this.database()
       const transaction = database.transaction(storeName, 'readwrite')
       const completion = transactionCompletion(transaction)
-      transaction.objectStore(storeName).put(value, this.key(id))
+      transaction.objectStore(storeName).put(value, key)
       await completion
     } catch (error) {
       throw mapBrowserStorageError(error)
@@ -323,11 +382,12 @@ export class IndexedDbWorkflowStore {
   }
 
   private async delete(storeName: StoreName, id: string): Promise<void> {
+    const key = this.key(id)
     try {
       const database = await this.database()
       const transaction = database.transaction(storeName, 'readwrite')
       const completion = transactionCompletion(transaction)
-      transaction.objectStore(storeName).delete(this.key(id))
+      transaction.objectStore(storeName).delete(key)
       await completion
     } catch (error) {
       throw mapBrowserStorageError(error)
@@ -341,16 +401,17 @@ export class IndexedDbWorkflowStore {
     validateExisting: (existing: unknown) => void,
     validateInitial: () => void,
   ): Promise<void> {
+    const key = this.key(id)
     try {
       const database = await this.database()
       const transaction = database.transaction(storeName, 'readwrite')
       const completion = transactionCompletion(transaction)
       const store = transaction.objectStore(storeName)
       try {
-        const existing = await requestResult(store.get(this.key(id)))
+        const existing = await requestResult(store.get(key))
         if (existing === undefined) validateInitial()
         else validateExisting(existing)
-        store.put(value, this.key(id))
+        store.put(value, key)
       } catch (error) {
         await completion.catch(() => undefined)
         throw error
@@ -395,8 +456,14 @@ export class IndexedDbWorkflowStore {
         })
         request.addEventListener('success', () => {
           const database = request.result
-          database.addEventListener('versionchange', () => database.close())
-          resolve(database)
+          try {
+            assertCompatibleDatabase(database)
+            database.addEventListener('versionchange', () => database.close())
+            resolve(database)
+          } catch (error) {
+            database.close()
+            reject(error)
+          }
         }, { once: true })
         request.addEventListener('error', () => reject(request.error), { once: true })
         request.addEventListener('blocked', () => {
@@ -405,6 +472,35 @@ export class IndexedDbWorkflowStore {
       })
     } catch (error) {
       throw mapBrowserStorageError(error)
+    }
+  }
+}
+
+function assertCompatibleDatabase(database: IDBDatabase): void {
+  const actualStoreNames = Array.from(database.objectStoreNames)
+  if (
+    database.version !== DATABASE_VERSION
+    || actualStoreNames.length !== STORE_NAMES.length
+    || STORE_NAMES.some((storeName) => !database.objectStoreNames.contains(storeName))
+  ) {
+    throw resumeRejected()
+  }
+
+  let transaction: IDBTransaction
+  try {
+    transaction = database.transaction([...STORE_NAMES], 'readonly')
+  } catch {
+    throw resumeRejected()
+  }
+  for (const storeName of STORE_NAMES) {
+    const store = transaction.objectStore(storeName)
+    if (
+      store.name !== storeName
+      || store.keyPath !== null
+      || store.autoIncrement
+      || store.indexNames.length !== 0
+    ) {
+      throw resumeRejected()
     }
   }
 }
@@ -455,7 +551,7 @@ function recordingJournal(value: unknown): RecordingJournal {
   if (profile !== 'legacy' && profile !== 'encrypted_upload_v2') {
     throw resumeRejected()
   }
-  return {
+  const journal: RecordingJournal = {
     schemaVersion: 1,
     operationId: recordString(record, 'operationId'),
     serialNumber: recordString(record, 'serialNumber'),
@@ -468,6 +564,8 @@ function recordingJournal(value: unknown): RecordingJournal {
     confirmationDigestHex: nullableDigest(record.confirmationDigestHex),
     updatedAtEpochMs: safeNonnegativeInteger(record.updatedAtEpochMs),
   }
+  assertRecordingEvidence(journal)
+  return journal
 }
 
 function provisioningJournal(value: unknown): ProvisioningJournal {
@@ -530,14 +628,17 @@ function recordString(record: UnknownRecord, key: string): string {
 }
 
 function validIdentifier(value: string): string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new BrowserStorageError('invalid_input')
-  }
-  return value
+  return validateStorageIdentifier(value)
 }
 
 function validPersistedIdentifier(value: unknown): string {
-  if (typeof value !== 'string' || value.length === 0) throw resumeRejected()
+  if (
+    typeof value !== 'string'
+    || value.length === 0
+    || !isWellFormedUtf16(value)
+  ) {
+    throw resumeRejected()
+  }
   return value
 }
 
@@ -587,13 +688,78 @@ function assertNextPhase<T extends string>(
   }
 }
 
+function assertNondecreasingTimestamp(
+  previous: { updatedAtEpochMs: number },
+  next: { updatedAtEpochMs: number },
+): void {
+  if (next.updatedAtEpochMs < previous.updatedAtEpochMs) throw resumeRejected()
+}
+
+function assertEstablishedEvidence(
+  previous: string | null,
+  next: string | null,
+): void {
+  if (previous !== null && previous !== next) throw resumeRejected()
+}
+
+function assertRecordingEvidence(journal: RecordingJournal): void {
+  const phaseIndex = RECORDING_PHASES.indexOf(journal.phase)
+  const uploadingIndex = RECORDING_PHASES.indexOf('uploading')
+  const cloudCompletedIndex = RECORDING_PHASES.indexOf('cloud_completed')
+
+  if (phaseIndex < uploadingIndex && journal.uploadId !== null) {
+    throw resumeRejected()
+  }
+  if (
+    phaseIndex < cloudCompletedIndex
+    && (journal.cloudCompletionId !== null || journal.confirmationDigestHex !== null)
+  ) {
+    throw resumeRejected()
+  }
+
+  if (journal.profile === 'legacy') {
+    if (phaseIndex >= uploadingIndex && journal.uploadId === null) {
+      throw resumeRejected()
+    }
+    if (phaseIndex >= cloudCompletedIndex && journal.cloudCompletionId === null) {
+      throw resumeRejected()
+    }
+    if (journal.confirmationDigestHex !== null) throw resumeRejected()
+    return
+  }
+
+  if (
+    phaseIndex >= cloudCompletedIndex
+    && journal.confirmationDigestHex === null
+  ) {
+    throw resumeRejected()
+  }
+}
+
 function encodeKeyPart(value: string): string {
+  if (!isWellFormedUtf16(value)) {
+    throw new BrowserStorageError('invalid_input')
+  }
   const bytes = new TextEncoder().encode(value)
   const hex = Array.from(
     bytes,
     (byte) => byte.toString(16).padStart(2, '0'),
   ).join('')
   return `${bytes.byteLength}:${hex}`
+}
+
+function isWellFormedUtf16(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index)
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+      const next = value.charCodeAt(index + 1)
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return false
+      index += 1
+    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+      return false
+    }
+  }
+  return true
 }
 
 async function requestResult<T>(request: IDBRequest<T>): Promise<T> {

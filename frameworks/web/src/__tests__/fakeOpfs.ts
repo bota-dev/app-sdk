@@ -5,6 +5,7 @@ export class FakeOpfs {
 
   private readonly rootDirectory: FakeDirectory
   private quotaFailurePending = false
+  private reportedFileSize: number | undefined
 
   constructor() {
     this.rootDirectory = new FakeDirectory('', null, this)
@@ -19,6 +20,16 @@ export class FakeOpfs {
     if (!this.quotaFailurePending) return
     this.quotaFailurePending = false
     throw new DOMException('private quota detail', 'QuotaExceededError')
+  }
+
+  reportNextFileSize(size: number): void {
+    this.reportedFileSize = size
+  }
+
+  consumeReportedFileSize(): number | undefined {
+    const size = this.reportedFileSize
+    this.reportedFileSize = undefined
+    return size
   }
 
   paths(): string[] {
@@ -136,7 +147,12 @@ class FakeFile {
 
   async getFile(): Promise<File> {
     const copy = new Uint8Array(this.bytes)
-    return new File([copy.buffer], this.name)
+    const file = new File([copy.buffer], this.name)
+    const reportedSize = this.owner.consumeReportedFileSize()
+    if (reportedSize !== undefined) {
+      Object.defineProperty(file, 'size', { value: reportedSize })
+    }
+    return file
   }
 
   async createWritable(
