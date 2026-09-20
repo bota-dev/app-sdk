@@ -1256,6 +1256,55 @@ test('reopening recovers every durable record and blob size without secret path 
   assert.equal(keys.some((key) => key.includes('workflow-operation-1')), false)
 })
 
+test('encrypted upload v2 operation metadata and journal commit and delete atomically', async () => {
+  const fixture = await storageFixture()
+  const storage = await fixture.open('v2-atomic-operation')
+  const operationId = 'v2-atomic-operation-1'
+  const checkpoint = {
+    operationId,
+    materialId: 'material-v2-1',
+    coreCheckpoint: null,
+  }
+  const journal: RecordingJournal = {
+    ...recordingJournal(operationId),
+    profile: 'encrypted_upload_v2',
+  }
+
+  await storage.saveEncryptedUploadV2Operation(
+    operationId,
+    checkpoint,
+    journal,
+  )
+  assert.deepEqual(
+    await storage.loadEncryptedUploadV2Checkpoint(operationId),
+    checkpoint,
+  )
+  assert.deepEqual(await storage.loadRecordingJournal(operationId), journal)
+
+  await storage.deleteEncryptedUploadV2Operation(operationId)
+  assert.equal(
+    await storage.loadEncryptedUploadV2Checkpoint(operationId),
+    null,
+  )
+  assert.equal(await storage.loadRecordingJournal(operationId), null)
+
+  const invalidOperationId = 'v2-invalid-atomic-operation'
+  await assert.rejects(
+    storage.saveEncryptedUploadV2Operation(
+      invalidOperationId,
+      checkpoint,
+      { ...journal, operationId: 'different-operation' },
+    ),
+    (error: unknown) =>
+      error instanceof BrowserStorageError && error.code === 'resume_rejected',
+  )
+  assert.equal(
+    await storage.loadEncryptedUploadV2Checkpoint(invalidOperationId),
+    null,
+  )
+  assert.equal(await storage.loadRecordingJournal(invalidOperationId), null)
+})
+
 async function allIndexedDbKeys(indexedDB: IDBFactory): Promise<string[]> {
   const database = await openOnlyDatabase(indexedDB)
 

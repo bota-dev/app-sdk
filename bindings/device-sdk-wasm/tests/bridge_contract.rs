@@ -10,9 +10,9 @@ use bota_device_sdk_core::{
 };
 use bota_device_sdk_wasm::{
     BridgeCore, WebIntegrityHasher, decode_deprovision_result_dto, decode_device_status_dto,
-    decode_encrypted_upload_v2_capabilities_dto, decode_recording_list_dto,
-    decode_encrypted_upload_v2_signed_blob_result_dto, encode_deprovision_command,
-    encode_recording_confirm, encode_recording_list_command,
+    decode_encrypted_upload_v2_capabilities_dto, decode_encrypted_upload_v2_signed_blob_result_dto,
+    decode_recording_list_dto, encode_deprovision_command, encode_recording_confirm,
+    encode_recording_list_command,
 };
 
 const SERIAL: &str = "EVFXXW67KP";
@@ -355,6 +355,32 @@ fn encrypted_upload_capability_decoder_preserves_exact_bounds() {
             maximum_missing_sequences: 4,
         }
     );
+}
+
+#[test]
+fn encrypted_upload_profile_probe_is_side_effect_free_and_authoritative() {
+    let bridge = BridgeCore::default();
+    let valid = encrypted_upload_v2_capabilities();
+
+    assert!(bridge.supports_encrypted_upload_v2_batch(valid));
+
+    for flags in [0, 0x01, 0x3f] {
+        assert!(
+            !bridge.supports_encrypted_upload_v2_batch(EncryptedUploadV2Capabilities {
+                flags,
+                ..valid
+            })
+        );
+    }
+
+    bridge
+        .validate_encrypted_upload_v2_profile(valid, 9, protocol::STORAGE_FORMAT_BOTA_ENC_V2)
+        .expect("the exact v2 profile should validate");
+    let wrong_format = bridge
+        .validate_encrypted_upload_v2_profile(valid, 9, 1)
+        .expect_err("a non-v2 storage format must be rejected");
+    assert_eq!(wrong_format.code, ErrorCode::UnsupportedCapability);
+    assert!(matches!(bridge.status(), WorkflowStatus::Idle));
 }
 
 #[test]

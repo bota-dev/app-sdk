@@ -131,7 +131,10 @@ export class RecordingManager {
       'transfer_recording',
       async ({ device }, signal) => {
         const capability = await this.readOptionalV2Capability(device, signal)
-        if (capability) {
+        if (
+          capability
+          && this.core.supportsEncryptedUploadV2Batch(capability)
+        ) {
           const control = new EncryptedUploadV2TransferControl(
             this.core,
             this.transport,
@@ -366,7 +369,8 @@ export class RecordingManager {
     const journal = await storage.loadRecordingJournal(operationId)
     if (!journal) return
     if (
-      journal.profile === 'legacy'
+      (journal.profile === 'legacy'
+        || journal.profile === 'encrypted_upload_v2')
       && (journal.phase === 'prepared' || journal.phase === 'transferring')
     ) {
       await this.deleteUnverifiedState(journal)
@@ -446,6 +450,11 @@ export class RecordingManager {
     }
     const capability = await this.readFreshV2Capability(signal)
     const metadata = requireEncryptedUploadV2Metadata(recording)
+    this.core.validateEncryptedUploadV2Profile(
+      capability.decoded,
+      metadata.generation,
+      metadata.storageFormat,
+    )
     const bounds = negotiatedEncryptedUploadV2Bounds(
       capability.decoded,
       this.transport.maximumWriteValueLength,
@@ -516,9 +525,11 @@ export class RecordingManager {
         highestContiguousSequence: null,
         evidence: null,
       }
-      await storage.saveEncryptedUploadV2Checkpoint(operationId, state)
-      throwIfAborted(signal, 'transfer_recording')
-      await storage.saveRecordingJournal(journal)
+      await storage.saveEncryptedUploadV2Operation(
+        operationId,
+        state,
+        journal,
+      )
       throwIfAborted(signal, 'transfer_recording')
       const transferring = await this.saveJournal(journal, {
         phase: 'transferring',
@@ -536,9 +547,11 @@ export class RecordingManager {
     } catch (error) {
       if (materialOwnedHere) {
         await destroyEncryptedUploadV2Material(material).catch(() => undefined)
-        await storage.deleteEncryptedUploadV2Checkpoint(operationId)
-          .catch(() => undefined)
-        await storage.deleteRecordingJournal(operationId).catch(() => undefined)
+        const current = await storage.loadRecordingJournal(operationId)
+          .catch(() => null)
+        if (current) {
+          await this.deleteUnverifiedState(current).catch(() => undefined)
+        }
       }
       throw recordingError(error, 'transfer_recording')
     }
@@ -561,6 +574,11 @@ export class RecordingManager {
       capability.connection.serialNumber !== state.serialNumber
       || hex(capability.sha256) !== state.capabilitySha256Hex
     ) throw new BotaSDKError('integrity_failed', 'transfer_recording')
+    this.core.validateEncryptedUploadV2Profile(
+      capability.decoded,
+      state.recording.generation,
+      state.recording.storageFormat,
+    )
     const bounds = negotiatedEncryptedUploadV2Bounds(
       capability.decoded,
       this.transport.maximumWriteValueLength,
@@ -740,7 +758,15 @@ export class RecordingManager {
             .catch(() => undefined)
         }
       }
-      throw recordingError(error, 'transfer_recording')
+      const normalized = recordingError(error, 'transfer_recording')
+      if (normalized.code === 'cancelled') {
+        const current = await storage.loadRecordingJournal(state.operationId)
+          .catch(() => null)
+        if (current) {
+          await this.deleteUnverifiedState(current).catch(() => undefined)
+        }
+      }
+      throw normalized
     }
   }
 
@@ -1064,9 +1090,10 @@ export class RecordingManager {
     await (await storage.openBlob(journal.sinkId)).delete()
     await storage.deleteWorkflowCheckpoint(journal.operationId)
     if (journal.profile === 'encrypted_upload_v2') {
-      await storage.deleteEncryptedUploadV2Checkpoint(journal.operationId)
+      await storage.deleteEncryptedUploadV2Operation(journal.operationId)
+    } else {
+      await storage.deleteRecordingJournal(journal.operationId)
     }
-    await storage.deleteRecordingJournal(journal.operationId)
     return resultFromJournal(journal)
   }
 
@@ -1162,6 +1189,25 @@ export class RecordingManager {
   private async deleteUnverifiedState(journal: RecordingJournal): Promise<void> {
     if (journal.phase !== 'prepared' && journal.phase !== 'transferring') return
     const storage = this.requireStorage()
+    if (journal.profile === 'encrypted_upload_v2') {
+      const rawState = await storage.loadEncryptedUploadV2Checkpoint(
+        journal.operationId,
+      )
+      if (rawState) {
+        const state = parsePersistedEncryptedUploadV2State(rawState)
+        validateEncryptedUploadV2JournalState(journal, state)
+        state.coreCheckpoint = null
+        state.highestContiguousSequence = null
+        await storage.saveEncryptedUploadV2Checkpoint(
+          journal.operationId,
+          state,
+        )
+      }
+      await (await storage.openBlob(journal.sinkId)).delete()
+      await storage.deleteWorkflowCheckpoint(journal.operationId)
+      await storage.deleteEncryptedUploadV2Operation(journal.operationId)
+      return
+    }
     await (await storage.openBlob(journal.sinkId)).delete()
     await storage.deleteWorkflowCheckpoint(journal.operationId)
     await storage.deleteRecordingJournal(journal.operationId)
@@ -1503,8 +1549,6 @@ function negotiatedEncryptedUploadV2Bounds(
     maximumMissingSequences <= 0
     || windowPackets <= 0
     || dataPayloadBytes <= 0
-    || capabilities.maximumSignedBlobBytes < 408
-    || capabilities.maximumManifestBytes < 580
   ) throw new BotaSDKError('unsupported_capability', 'transfer_recording')
   return { windowPackets, dataPayloadBytes, maximumMissingSequences }
 }

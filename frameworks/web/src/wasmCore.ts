@@ -249,6 +249,34 @@ class WasmCoreAdapter implements CoreBridge {
     }
   }
 
+  supportsEncryptedUploadV2Batch(
+    capabilities: EncryptedUploadV2Capabilities,
+  ): boolean {
+    try {
+      return this.generated.supportsEncryptedUploadV2Batch(
+        rawCapabilities(capabilities),
+      )
+    } catch (error) {
+      throw normalizeCoreError(error, 'transfer_recording')
+    }
+  }
+
+  validateEncryptedUploadV2Profile(
+    capabilities: EncryptedUploadV2Capabilities,
+    recordingGeneration: number,
+    storageFormat: number,
+  ): void {
+    try {
+      this.generated.validateEncryptedUploadV2Profile(
+        rawCapabilities(capabilities),
+        recordingGeneration,
+        storageFormat,
+      )
+    } catch (error) {
+      throw normalizeCoreError(error, 'transfer_recording')
+    }
+  }
+
   decodeRecordingList(bytesValue: Uint8Array): CoreDeviceRecording[] {
     try {
       return normalizeRecordingList(decodeGeneratedRecordingList(bytesValue))

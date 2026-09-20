@@ -171,6 +171,73 @@ export class IndexedDbWorkflowStore {
     await this.delete('encrypted_upload_v2_checkpoints', operationId)
   }
 
+  async saveEncryptedUploadV2Operation(
+    operationId: string,
+    checkpoint: unknown,
+    journal: RecordingJournal,
+  ): Promise<void> {
+    const id = validIdentifier(operationId)
+    const sanitizedJournal = recordingJournal(journal)
+    if (
+      sanitizedJournal.operationId !== id
+      || sanitizedJournal.profile !== 'encrypted_upload_v2'
+      || sanitizedJournal.phase !== 'prepared'
+    ) throw resumeRejected()
+    const checkpointRecord: EncryptedUploadV2CheckpointRecord = {
+      schemaVersion: 1,
+      operationId: id,
+      checkpoint,
+    }
+    const key = this.key(id)
+    try {
+      const database = await this.database()
+      const transaction = database.transaction(
+        ['encrypted_upload_v2_checkpoints', 'recording_journals'],
+        'readwrite',
+      )
+      const completion = transactionCompletion(transaction)
+      const checkpointStore = transaction.objectStore(
+        'encrypted_upload_v2_checkpoints',
+      )
+      const journalStore = transaction.objectStore('recording_journals')
+      try {
+        const [existingCheckpoint, existingJournal] = await Promise.all([
+          requestResult(checkpointStore.get(key)),
+          requestResult(journalStore.get(key)),
+        ])
+        if (existingCheckpoint !== undefined || existingJournal !== undefined) {
+          throw resumeRejected()
+        }
+        checkpointStore.put(checkpointRecord, key)
+        journalStore.put(sanitizedJournal, key)
+      } catch (error) {
+        transaction.abort()
+        await completion.catch(() => undefined)
+        throw error
+      }
+      await completion
+    } catch (error) {
+      throw mapBrowserStorageError(error)
+    }
+  }
+
+  async deleteEncryptedUploadV2Operation(operationId: string): Promise<void> {
+    const key = this.key(operationId)
+    try {
+      const database = await this.database()
+      const transaction = database.transaction(
+        ['encrypted_upload_v2_checkpoints', 'recording_journals'],
+        'readwrite',
+      )
+      const completion = transactionCompletion(transaction)
+      transaction.objectStore('encrypted_upload_v2_checkpoints').delete(key)
+      transaction.objectStore('recording_journals').delete(key)
+      await completion
+    } catch (error) {
+      throw mapBrowserStorageError(error)
+    }
+  }
+
   async loadRecordingJournal(
     operationId: string,
   ): Promise<RecordingJournal | null> {

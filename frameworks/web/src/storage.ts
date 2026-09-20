@@ -102,6 +102,12 @@ export interface BrowserSdkStorage {
     checkpoint: unknown,
   ): Promise<void>
   deleteEncryptedUploadV2Checkpoint(operationId: string): Promise<void>
+  saveEncryptedUploadV2Operation(
+    operationId: string,
+    checkpoint: unknown,
+    journal: RecordingJournal,
+  ): Promise<void>
+  deleteEncryptedUploadV2Operation(operationId: string): Promise<void>
   loadRecordingJournal(operationId: string): Promise<RecordingJournal | null>
   saveRecordingJournal(journal: RecordingJournal): Promise<void>
   listRecordingJournals(): Promise<RecordingJournal[]>

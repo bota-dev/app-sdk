@@ -230,6 +230,32 @@ mod wasm {
             to_js(&effects)
         }
 
+        #[wasm_bindgen(js_name = supportsEncryptedUploadV2Batch)]
+        pub fn supports_encrypted_upload_v2_batch(
+            &self,
+            capabilities: JsValue,
+        ) -> Result<bool, JsValue> {
+            let capabilities: EncryptedUploadV2Capabilities = from_js(capabilities)?;
+            Ok(self.inner.supports_encrypted_upload_v2_batch(capabilities))
+        }
+
+        #[wasm_bindgen(js_name = validateEncryptedUploadV2Profile)]
+        pub fn validate_encrypted_upload_v2_profile(
+            &self,
+            capabilities: JsValue,
+            recording_generation: u32,
+            storage_format: u8,
+        ) -> Result<(), JsValue> {
+            let capabilities: EncryptedUploadV2Capabilities = from_js(capabilities)?;
+            self.inner
+                .validate_encrypted_upload_v2_profile(
+                    capabilities,
+                    recording_generation,
+                    storage_format,
+                )
+                .map_err(error_to_js)
+        }
+
         #[wasm_bindgen(js_name = startFirmwareUpdate)]
         pub fn start_firmware_update(&mut self, input: JsValue) -> Result<JsValue, JsValue> {
             let input: FirmwareUpdateInput = from_js(input)?;

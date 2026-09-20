@@ -674,6 +674,14 @@ export interface CoreBridge {
   decodeEncryptedUploadV2Capabilities(
     bytes: Uint8Array,
   ): EncryptedUploadV2Capabilities
+  supportsEncryptedUploadV2Batch(
+    capabilities: EncryptedUploadV2Capabilities,
+  ): boolean
+  validateEncryptedUploadV2Profile(
+    capabilities: EncryptedUploadV2Capabilities,
+    recordingGeneration: number,
+    storageFormat: number,
+  ): void
   decodeRecordingList(bytes: Uint8Array): CoreDeviceRecording[]
   encodeRecordingListCommand(): Uint8Array
   encodeRecordingConfirm(recordingUuid: string): Uint8Array

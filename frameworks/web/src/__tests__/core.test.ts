@@ -196,6 +196,8 @@ const bridge: CoreBridge = {
     durableCheckpointIntervalBlocks: 8,
     maximumMissingSequences: 4,
   }),
+  supportsEncryptedUploadV2Batch: () => false,
+  validateEncryptedUploadV2Profile: () => undefined,
   decodeRecordingList: () => [],
   encodeRecordingListCommand: () => new Uint8Array(),
   encodeRecordingConfirm: () => new Uint8Array(),

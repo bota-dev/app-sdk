@@ -5,13 +5,42 @@ use bota_device_sdk_core::{
     model::{
         DeviceCandidate, DeviceSerialNumber, FirmwareImage, HostMaterialId, ReconnectHint,
         RecordingSinkId, RecordingUploadProfile, RecordingUuid, UploadProfileSelection,
-        UploadSecurityPolicy,
+        UploadProfileSelectionEvidence, UploadSecurityPolicy, supports_encrypted_upload_v2_batch,
+        validate_upload_profile_selection,
     },
     protocol::EncryptedUploadV2Capabilities,
     workflow::EncryptedUploadV2BatchRequest,
 };
 
 impl BridgeCore {
+    pub fn supports_encrypted_upload_v2_batch(
+        &self,
+        capabilities: EncryptedUploadV2Capabilities,
+    ) -> bool {
+        supports_encrypted_upload_v2_batch(capabilities)
+    }
+
+    pub fn validate_encrypted_upload_v2_profile(
+        &self,
+        capabilities: EncryptedUploadV2Capabilities,
+        recording_generation: u32,
+        storage_format: u8,
+    ) -> Result<(), DeviceSdkError> {
+        validate_upload_profile_selection(
+            UploadProfileSelection {
+                policy: UploadSecurityPolicy::V2Preferred,
+                profile: RecordingUploadProfile::EncryptedUploadV2,
+            },
+            UploadProfileSelectionEvidence {
+                encrypted_upload_v2_capabilities: Some(capabilities),
+                recording_generation: Some(recording_generation),
+                recording_storage_format: Some(storage_format),
+                historical_p10_header_observed: false,
+            },
+        )?;
+        Ok(())
+    }
+
     pub fn start_exact_connection(
         &mut self,
         expected_serial: &str,

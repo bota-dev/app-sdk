@@ -13,6 +13,7 @@ import type {
   RecordingJournal,
   VerifiedDeviceHint,
 } from '../storage.ts'
+import { BrowserStorageError } from '../storage.ts'
 
 export interface Deferred<T> {
   promise: Promise<T>
@@ -190,6 +191,30 @@ export class FakeRecordingStorage implements BrowserSdkStorage {
   async deleteEncryptedUploadV2Checkpoint(operationId: string): Promise<void> {
     this.events.push('v2-checkpoint:delete')
     this.encryptedUploadV2Checkpoints.delete(operationId)
+  }
+
+  async saveEncryptedUploadV2Operation(
+    operationId: string,
+    checkpoint: unknown,
+    journal: RecordingJournal,
+  ): Promise<void> {
+    if (
+      journal.operationId !== operationId
+      || journal.profile !== 'encrypted_upload_v2'
+      || journal.phase !== 'prepared'
+      || this.encryptedUploadV2Checkpoints.has(operationId)
+      || this.recordingJournals.has(operationId)
+    ) throw new BrowserStorageError('resume_rejected')
+    this.events.push('v2-operation:save')
+    this.encryptedUploadV2Checkpoints.set(operationId, checkpoint)
+    this.recordingJournals.set(operationId, { ...journal })
+    this.onSaveRecordingJournal?.({ ...journal })
+  }
+
+  async deleteEncryptedUploadV2Operation(operationId: string): Promise<void> {
+    this.events.push('v2-operation:delete')
+    this.encryptedUploadV2Checkpoints.delete(operationId)
+    this.recordingJournals.delete(operationId)
   }
 
   async loadRecordingJournal(operationId: string): Promise<RecordingJournal | null> {

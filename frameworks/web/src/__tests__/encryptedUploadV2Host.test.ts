@@ -8,6 +8,7 @@ import {
   EncryptedUploadV2TransferControl,
   EncryptedUploadV2TransferReceiver,
   parsePersistedEncryptedUploadV2State,
+  type EncryptedUploadV2TransferRequest,
   type PersistedEncryptedUploadV2State,
 } from '../encryptedUploadV2Host.ts'
 import { BotaSDKError } from '../errors.ts'
@@ -146,6 +147,272 @@ test('signed-document cancellation aborts the exact write and releases its subsc
     event.startsWith('unsubscribe:')
   )
   assert.ok(abortWrite >= 0 && abortWrite < unsubscribe)
+})
+
+test('signed-document cancellation joins a blocked BEGIN before ABORT and terminal zero-fill', async () => {
+  const bridge = await core
+  const transport = new FakeBrowserBluetoothTransport()
+  const events: string[] = []
+  transport.eventLog = events
+  const beginGate = deferred<void>()
+  transport.writeGate = beginGate.promise
+  const writer = new EncryptedUploadV2SignedBlobWriter(
+    bridge,
+    transport,
+    transport.device,
+  )
+  const authorization = bytes(
+    (await vector('authorization-development')).inputHex,
+  )
+  const pending = writer.send(
+    'authorization',
+    0x01020304,
+    authorization,
+    408,
+    undefined,
+    () => authorization.fill(0),
+  )
+  await waitForWrites(transport, 1)
+
+  let cancellationSettled = false
+  const cancellation = writer.cancel().then(() => {
+    cancellationSettled = true
+  })
+  await settleAsyncWork()
+
+  assert.equal(cancellationSettled, false)
+  assert.equal(transport.writes.length, 1)
+  assert.ok(authorization.some((value) => value !== 0))
+
+  beginGate.resolve(undefined)
+  await withWatchdog(cancellation)
+  await assert.rejects(withWatchdog(pending), (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'cancelled'
+  )
+
+  assert.deepEqual(transport.writes.map(({ value }) => value[0]), [0x60, 0x63])
+  assert.ok(authorization.every((value) => value === 0))
+  const beginSettled = events.findIndex((event) =>
+    event.startsWith('write_settled:60')
+  )
+  const abortWrite = events.findIndex((event) =>
+    event.startsWith('write:') && event.split(':').at(-1)?.startsWith('63')
+  )
+  assert.ok(beginSettled >= 0 && beginSettled < abortWrite)
+})
+
+test('an unjoined signed BEGIN poisons ownership and defers zero-fill until cleanup settles', async () => {
+  const bridge = await core
+  const transport = new FakeBrowserBluetoothTransport()
+  const beginGate = deferred<void>()
+  transport.writeGate = beginGate.promise
+  let poisonCalls = 0
+  const writer = new EncryptedUploadV2SignedBlobWriter(
+    bridge,
+    transport,
+    transport.device,
+    () => { poisonCalls += 1 },
+    { cleanupTimeoutMs: 10 },
+  )
+  const authorization = bytes(
+    (await vector('authorization-development')).inputHex,
+  )
+  const pending = writer.send(
+    'authorization',
+    0x01020304,
+    authorization,
+    408,
+    undefined,
+    () => authorization.fill(0),
+  )
+  const rejected = assert.rejects(pending, (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'cancelled'
+  )
+  await waitForWrites(transport, 1)
+
+  await assert.rejects(withWatchdog(writer.cancel()), (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'integrity_failed'
+  )
+  assert.equal(poisonCalls, 1)
+  assert.ok(authorization.some((value) => value !== 0))
+  await assert.rejects(
+    writer.send('authorization', 0x01020305, authorization, 408),
+    (error: unknown) =>
+      error instanceof BotaSDKError && error.code === 'operation_in_progress',
+  )
+
+  beginGate.resolve(undefined)
+  await withWatchdog(rejected)
+  await settleAsyncWork()
+  assert.ok(authorization.every((value) => value === 0))
+  assert.deepEqual(transport.writes.map(({ value }) => value[0]), [0x60, 0x63])
+})
+
+test('a signed RESULT before COMMIT is stale and cannot pre-satisfy the owner', async () => {
+  const bridge = await core
+  const transport = new FakeBrowserBluetoothTransport()
+  const beginGate = deferred<void>()
+  transport.writeGate = beginGate.promise
+  const writer = new EncryptedUploadV2SignedBlobWriter(
+    bridge,
+    transport,
+    transport.device,
+  )
+  const authorization = bytes(
+    (await vector('authorization-development')).inputHex,
+  )
+  const exact = bytes((await vector('ble-blob-result')).inputHex)
+  let settled = false
+  const pending = writer.send(
+    'authorization',
+    0x01020304,
+    authorization,
+    408,
+  ).then(() => {
+    settled = true
+  })
+  await waitForWrites(transport, 1)
+
+  transport.emitNotification(
+    transport.device,
+    BOTA_STORAGE_SERVICE,
+    TRANSFER_SIGNED_BLOB_V2_CHARACTERISTIC,
+    exact,
+  )
+  beginGate.resolve(undefined)
+  await waitForWrites(transport, 6)
+  await settleAsyncWork()
+
+  assert.equal(settled, false)
+  transport.emitNotification(
+    transport.device,
+    BOTA_STORAGE_SERVICE,
+    TRANSFER_SIGNED_BLOB_V2_CHARACTERISTIC,
+    exact,
+  )
+  await withWatchdog(pending)
+})
+
+test('a matching signed RESULT racing the COMMIT write is accepted', async () => {
+  const bridge = await core
+  const transport = new FakeBrowserBluetoothTransport()
+  const writer = new EncryptedUploadV2SignedBlobWriter(
+    bridge,
+    transport,
+    transport.device,
+  )
+  const authorization = bytes(
+    (await vector('authorization-development')).inputHex,
+  )
+  const exact = bytes((await vector('ble-blob-result')).inputHex)
+  transport.onWrite = () => {
+    if (transport.writes.at(-1)?.value[0] === 0x62) {
+      transport.emitNotification(
+        transport.device,
+        BOTA_STORAGE_SERVICE,
+        TRANSFER_SIGNED_BLOB_V2_CHARACTERISTIC,
+        exact,
+      )
+    }
+  }
+
+  await withWatchdog(writer.send(
+    'authorization',
+    0x01020304,
+    authorization,
+    408,
+  ))
+})
+
+test('receipt bytes stay intact until a blocked COMMIT and its cleanup are joined', async () => {
+  const bridge = await core
+  const transport = new FakeBrowserBluetoothTransport()
+  const commitEntered = deferred<void>()
+  const commitGate = deferred<void>()
+  transport.onWrite = () => {
+    if (transport.writes.at(-1)?.value[0] === 0x62) {
+      transport.writeGate = commitGate.promise
+      commitEntered.resolve(undefined)
+    }
+  }
+  const writer = new EncryptedUploadV2SignedBlobWriter(
+    bridge,
+    transport,
+    transport.device,
+  )
+  const receipt = bytes((await vector('completion-receipt')).inputHex)
+  const pending = writer.send(
+    'receipt',
+    0x01020306,
+    receipt,
+    1024,
+    undefined,
+    () => receipt.fill(0),
+  )
+  const rejected = assert.rejects(pending, (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'cancelled'
+  )
+  await commitEntered.promise
+
+  let cancellationSettled = false
+  const cancellation = writer.cancel().then(() => {
+    cancellationSettled = true
+  })
+  await settleAsyncWork()
+  assert.equal(cancellationSettled, false)
+  assert.ok(receipt.some((value) => value !== 0))
+
+  commitGate.resolve(undefined)
+  await withWatchdog(cancellation)
+  await withWatchdog(rejected)
+  assert.ok(receipt.every((value) => value === 0))
+  assert.equal(transport.writes.at(-1)?.value[0], 0x63)
+})
+
+test('a foreign signed RESULT cannot stop the bounded post-COMMIT timeout or teardown', async () => {
+  const bridge = await core
+  const transport = new FakeBrowserBluetoothTransport()
+  const events: string[] = []
+  transport.eventLog = events
+  const writer = new EncryptedUploadV2SignedBlobWriter(
+    bridge,
+    transport,
+    transport.device,
+    () => undefined,
+    { resultTimeoutMs: 10 },
+  )
+  const authorization = bytes(
+    (await vector('authorization-development')).inputHex,
+  )
+  const foreign = bytes((await vector('ble-blob-result')).inputHex)
+  foreign[4] = 0x05
+  const pending = writer.send(
+    'authorization',
+    0x01020304,
+    authorization,
+    408,
+  )
+  await waitForWrites(transport, 6)
+  transport.emitNotification(
+    transport.device,
+    BOTA_STORAGE_SERVICE,
+    TRANSFER_SIGNED_BLOB_V2_CHARACTERISTIC,
+    foreign,
+  )
+
+  await assert.rejects(withWatchdog(pending), (error: unknown) =>
+    error instanceof BotaSDKError
+      && error.code === 'connection_failed'
+      && error.retryable
+  )
+  assert.equal(transport.writes.at(-1)?.value[0], 0x63)
+  const abortSettled = events.findIndex((event) =>
+    event.startsWith('write_settled:63')
+  )
+  const unsubscribe = events.findIndex((event) =>
+    event.startsWith('unsubscribe:')
+  )
+  assert.ok(abortSettled >= 0 && abortSettled < unsubscribe)
 })
 
 test('a failed signed BEGIN write still sends the Rust ABORT before release', async () => {
@@ -495,6 +762,118 @@ test('cancellation after the START subscription but before its write only releas
     error instanceof BotaSDKError && error.code === 'cancelled'
   )
   assert.equal(transport.writes.length, 0)
+})
+
+for (const blocked of [
+  {
+    name: 'START',
+    checkpoint: null,
+    messageType: 0x20,
+  },
+  {
+    name: 'RESUME',
+    checkpoint: {
+      revision: 1,
+      nextCiphertextOffset: 330n,
+      prefixSha256: CIPHERTEXT_SHA256,
+      highestContiguousSequence: 3,
+    },
+    messageType: 0x22,
+  },
+] as const) {
+  test(`transfer cancellation joins a blocked ${blocked.name} before ABORT and unsubscribe`, async () => {
+    const bridge = await core
+    const transport = new FakeBrowserBluetoothTransport()
+    const events: string[] = []
+    transport.eventLog = events
+    const writeGate = deferred<void>()
+    transport.writeGate = writeGate.promise
+    const control = new EncryptedUploadV2TransferControl(
+      bridge,
+      transport,
+      transport.device,
+    )
+    const controller = new AbortController()
+    const pending = control.open(
+      transferRequest(),
+      blocked.checkpoint,
+      controller.signal,
+    )
+    await waitForWrites(transport, 1)
+
+    controller.abort()
+    let cancellationSettled = false
+    const cancellation = control.cancel().then(() => {
+      cancellationSettled = true
+    })
+    await settleAsyncWork()
+
+    assert.equal(cancellationSettled, false)
+    assert.equal(transport.writes.length, 1)
+    assert.equal(transport.writes[0]?.value[0], blocked.messageType)
+
+    writeGate.resolve(undefined)
+    await withWatchdog(cancellation)
+    await assert.rejects(withWatchdog(pending), (error: unknown) =>
+      error instanceof BotaSDKError && error.code === 'cancelled'
+    )
+
+    assert.deepEqual(
+      transport.writes.map(({ value }) => value[0]),
+      [blocked.messageType, 0x24],
+    )
+    const initialSettled = events.findIndex((event) =>
+      event.startsWith(`write_settled:${blocked.messageType.toString(16)}`)
+    )
+    const abortWrite = events.findIndex((event) =>
+      event.startsWith('write:') && event.split(':').at(-1)?.startsWith('24')
+    )
+    const abortSettled = events.findIndex((event) =>
+      event.startsWith('write_settled:24')
+    )
+    const unsubscribe = events.findIndex((event) =>
+      event.startsWith('unsubscribe:')
+    )
+    assert.ok(initialSettled >= 0 && initialSettled < abortWrite)
+    assert.ok(abortSettled >= 0 && abortSettled < unsubscribe)
+  })
+}
+
+test('a blocked transfer write that cannot be joined poisons BLE ownership', async () => {
+  const bridge = await core
+  const transport = new FakeBrowserBluetoothTransport()
+  const writeGate = deferred<void>()
+  transport.writeGate = writeGate.promise
+  let poisonCalls = 0
+  const control = new EncryptedUploadV2TransferControl(
+    bridge,
+    transport,
+    transport.device,
+    () => { poisonCalls += 1 },
+    { cleanupTimeoutMs: 10 },
+  )
+  const controller = new AbortController()
+  const pending = control.open(transferRequest(), null, controller.signal)
+  await waitForWrites(transport, 1)
+
+  controller.abort()
+  await assert.rejects(withWatchdog(control.cancel()), (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'integrity_failed'
+  )
+  assert.equal(poisonCalls, 1)
+  assert.equal(transport.writes.length, 1)
+  await assert.rejects(
+    control.open(transferRequest(), null),
+    (error: unknown) =>
+      error instanceof BotaSDKError && error.code === 'operation_in_progress',
+  )
+
+  writeGate.resolve(undefined)
+  await assert.rejects(withWatchdog(pending), (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'cancelled'
+  )
+  await settleAsyncWork()
+  assert.deepEqual(transport.writes.map(({ value }) => value[0]), [0x20, 0x24])
 })
 
 test('an exact device START error releases ownership without another terminal frame', async () => {
@@ -852,6 +1231,21 @@ test('persisted v2 state binds its checkpoint exactly and drops unknown material
     (error: unknown) =>
       error instanceof BotaSDKError && error.code === 'integrity_failed',
   )
+
+  const completedWithoutTransferCheckpoint = parsePersistedEncryptedUploadV2State({
+    ...state,
+    coreCheckpoint: null,
+    highestContiguousSequence: null,
+    evidence: {
+      ciphertextLength: state.recording.ciphertextLength,
+      ciphertextSha256: state.recording.ciphertextSha256.slice(),
+      manifestLength: 580,
+      manifestSha256: new Uint8Array(32).fill(0x44),
+      blockCount: 1,
+    },
+  })
+  assert.equal(completedWithoutTransferCheckpoint.coreCheckpoint, null)
+  assert.equal(completedWithoutTransferCheckpoint.evidence?.manifestLength, 580)
 })
 
 function persistedState(): PersistedEncryptedUploadV2State {
@@ -894,6 +1288,21 @@ function persistedState(): PersistedEncryptedUploadV2State {
     },
     highestContiguousSequence: 3,
     evidence: null,
+  }
+}
+
+function transferRequest(): EncryptedUploadV2TransferRequest {
+  return {
+    transportSessionId: TRANSPORT_SESSION_ID,
+    uploadSessionUuid: '10111213-1415-1617-1819-1a1b1c1d1e1f',
+    recordingUuid: '00112233-4455-6677-8899-aabbccddeeff',
+    recordingGeneration: 9,
+    authorizationSha256: new Uint8Array(32).fill(0x55),
+    expectedCiphertextLength: 330n,
+    expectedCiphertextSha256: CIPHERTEXT_SHA256,
+    expectedCheckpointIntervalBlocks: 8,
+    windowPackets: 16,
+    dataPayloadBytes: 100,
   }
 }
 
@@ -989,6 +1398,24 @@ async function waitForWrites(
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
   assert.fail(`timed out waiting for ${count} writes`)
+}
+
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve(value: T): void
+  reject(error: unknown): void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
+async function settleAsyncWork(): Promise<void> {
+  await new Promise<void>((resolve) => setImmediate(resolve))
 }
 
 async function withWatchdog<T>(promise: Promise<T>): Promise<T> {

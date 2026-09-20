@@ -126,14 +126,43 @@ const MAXIMUM_QUEUED_BYTES = 1024 * 1024
 const MANIFEST_LENGTH = 580
 const EMPTY_SHA256_HEX =
   'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+const SIGNED_RESULT_TIMEOUT_MS = 10_000
+const BLE_CLEANUP_TIMEOUT_MS = 1_000
+let signedBlobWriteIdValue: number | null = null
+
+interface BleOwnerTimingOptions {
+  resultTimeoutMs?: number
+  cleanupTimeoutMs?: number
+}
+
+function nextSignedBlobWriteId(): number {
+  if (signedBlobWriteIdValue === null) {
+    const seed = crypto.getRandomValues(new Uint32Array(1))[0] ?? 1
+    signedBlobWriteIdValue = seed === 0 ? 1 : seed
+  }
+  const value = signedBlobWriteIdValue
+  signedBlobWriteIdValue = value === 0xffff_ffff ? 1 : value + 1
+  return value
+}
+
+interface SignedBlobOperation {
+  abort: AbortController
+  terminal: ReturnType<typeof deferred<void>>
+  terminalCallback: () => void
+  terminalSettled: boolean
+  poisoned: boolean
+}
 
 export class EncryptedUploadV2SignedBlobWriter {
   private readonly core: CoreBridge
   private readonly transport: BrowserBluetoothTransport
   private readonly device: BrowserDeviceHandle
   private readonly onOwnershipUncertain: () => void
+  private readonly resultTimeoutMs: number
+  private readonly cleanupTimeoutMs: number
+  private readonly writes = new SerializedGattWrites()
   private active = false
-  private activeAbort: AbortController | null = null
+  private operation: SignedBlobOperation | null = null
   private cancelled = false
 
   constructor(
@@ -141,21 +170,31 @@ export class EncryptedUploadV2SignedBlobWriter {
     transport: BrowserBluetoothTransport,
     device: BrowserDeviceHandle,
     onOwnershipUncertain: () => void = () => undefined,
+    timing: BleOwnerTimingOptions = {},
   ) {
     this.core = core
     this.transport = transport
     this.device = device
     this.onOwnershipUncertain = onOwnershipUncertain
+    this.resultTimeoutMs = positiveTimeout(
+      timing.resultTimeoutMs,
+      SIGNED_RESULT_TIMEOUT_MS,
+    )
+    this.cleanupTimeoutMs = positiveTimeout(
+      timing.cleanupTimeoutMs,
+      BLE_CLEANUP_TIMEOUT_MS,
+    )
   }
 
-  async send(
+  send(
     blobKind: SignedBlobKind,
     writeId: number,
     value: Uint8Array,
     maximumBlobBytes: number,
     signal?: AbortSignal,
+    terminalCallback: () => void = () => undefined,
   ): Promise<void> {
-    if (this.active) throw operationInProgress()
+    if (this.active) return Promise.reject(operationInProgress())
     if (
       this.cancelled
       || signal?.aborted
@@ -165,19 +204,43 @@ export class EncryptedUploadV2SignedBlobWriter {
       || value.byteLength > maximumBlobBytes
       || value.byteLength > 0xffff
     ) {
-      throw this.cancelled || signal?.aborted
+      terminalCallback()
+      return Promise.reject(this.cancelled || signal?.aborted
         ? cancelled()
-        : protocolFailure()
+        : protocolFailure())
     }
     this.active = true
-    const ownedAbort = new AbortController()
-    this.activeAbort = ownedAbort
+    const operation: SignedBlobOperation = {
+      abort: new AbortController(),
+      terminal: deferred<void>(),
+      terminalCallback,
+      terminalSettled: false,
+      poisoned: false,
+    }
+    this.operation = operation
+    return this.runSend(
+      operation,
+      blobKind,
+      writeId,
+      value,
+      signal,
+    )
+  }
+
+  private async runSend(
+    operation: SignedBlobOperation,
+    blobKind: SignedBlobKind,
+    writeId: number,
+    value: Uint8Array,
+    signal?: AbortSignal,
+  ): Promise<void> {
     const activeSignal = signal
-      ? AbortSignal.any([signal, ownedAbort.signal])
-      : ownedAbort.signal
+      ? AbortSignal.any([signal, operation.abort.signal])
+      : operation.abort.signal
     let subscription: BrowserSubscription | null = null
     let began = false
     let terminalResultReceived = false
+    let resultWindowOpen = false
     let primary: unknown = null
     const result = deferred<void>()
     let unmatchedResults = 0
@@ -190,6 +253,7 @@ export class EncryptedUploadV2SignedBlobWriter {
         ({ characteristicUuid, value: notification }) => {
           if (characteristicUuid.toLowerCase()
             !== TRANSFER_SIGNED_BLOB_V2_CHARACTERISTIC) return
+          if (!resultWindowOpen) return
           try {
             const decoded = this.core.decodeEncryptedUploadV2SignedBlobResult(
               notification,
@@ -251,11 +315,19 @@ export class EncryptedUploadV2SignedBlobWriter {
         kind: 'commit',
         blobKind,
         writeId,
-      }), frameLimit)
-      await abortable(result.promise, activeSignal)
+      }), frameLimit, () => {
+        resultWindowOpen = true
+      })
+      await rejectAfter(
+        abortable(result.promise, activeSignal),
+        this.resultTimeoutMs,
+        signedResultTimeout,
+      )
     } catch (error) {
       primary = error
-    } finally {
+    }
+
+    const cleanup = (async (): Promise<void> => {
       let cleanupError: unknown = null
       if (primary !== null && began && !terminalResultReceived) {
         try {
@@ -277,17 +349,59 @@ export class EncryptedUploadV2SignedBlobWriter {
       } catch (error) {
         cleanupError ??= error
       }
-      this.active = false
-      if (this.activeAbort === ownedAbort) this.activeAbort = null
-      if (cleanupError !== null) this.onOwnershipUncertain()
-      if (primary !== null) throw normalizeHostError(primary)
-      if (cleanupError !== null) throw ownershipUnknown(cleanupError)
+      if (cleanupError !== null) throw cleanupError
+    })()
+    const cleanupSettlement = settle(cleanup)
+    const bounded = await boundedSettlement(
+      cleanupSettlement,
+      this.cleanupTimeoutMs,
+    )
+    if (bounded === null) {
+      this.poison(operation)
+      void cleanupSettlement.then((settlement) => {
+        this.finishOperation(operation)
+        if (settlement.error !== null) this.poison(operation)
+      })
+      throw ownershipUnknown()
     }
+    this.finishOperation(operation)
+    if (bounded.error !== null) {
+      this.poison(operation)
+      throw ownershipUnknown(bounded.error)
+    }
+    if (primary !== null) throw normalizeHostError(primary)
   }
 
   async cancel(): Promise<void> {
     this.cancelled = true
-    this.activeAbort?.abort()
+    const operation = this.operation
+    if (!operation) return
+    operation.abort.abort()
+    const terminal = settle(operation.terminal.promise)
+    const bounded = await boundedSettlement(terminal, this.cleanupTimeoutMs)
+    if (bounded === null) {
+      this.poison(operation)
+      throw ownershipUnknown()
+    }
+    if (bounded.error !== null) throw ownershipUnknown(bounded.error)
+  }
+
+  private finishOperation(operation: SignedBlobOperation): void {
+    if (operation.terminalSettled) return
+    operation.terminalSettled = true
+    try {
+      operation.terminalCallback()
+    } finally {
+      operation.terminal.resolve(undefined)
+      if (this.operation === operation) this.operation = null
+      this.active = false
+    }
+  }
+
+  private poison(operation: SignedBlobOperation): void {
+    if (operation.poisoned) return
+    operation.poisoned = true
+    this.onOwnershipUncertain()
   }
 
   private largestChunk(
@@ -320,15 +434,22 @@ export class EncryptedUploadV2SignedBlobWriter {
     return best
   }
 
-  private async write(frame: Uint8Array, frameLimit: number): Promise<void> {
+  private async write(
+    frame: Uint8Array,
+    frameLimit: number,
+    onInitiated?: () => void,
+  ): Promise<void> {
     if (frame.byteLength > frameLimit) throw protocolFailure()
-    await this.transport.write(
-      this.device,
-      BOTA_STORAGE_SERVICE,
-      TRANSFER_SIGNED_BLOB_V2_CHARACTERISTIC,
-      frame,
-      true,
-    )
+    await this.writes.run(async () => {
+      onInitiated?.()
+      await this.transport.write(
+        this.device,
+        BOTA_STORAGE_SERVICE,
+        TRANSFER_SIGNED_BLOB_V2_CHARACTERISTIC,
+        frame,
+        true,
+      )
+    })
   }
 }
 
@@ -337,6 +458,8 @@ export class EncryptedUploadV2TransferControl {
   private readonly transport: BrowserBluetoothTransport
   private readonly device: BrowserDeviceHandle
   private readonly onOwnershipUncertain: () => void
+  private readonly cleanupTimeoutMs: number
+  private readonly writes = new SerializedGattWrites()
   private active = false
   private session: TransferSession | null = null
 
@@ -345,11 +468,16 @@ export class EncryptedUploadV2TransferControl {
     transport: BrowserBluetoothTransport,
     device: BrowserDeviceHandle,
     onOwnershipUncertain: () => void = () => undefined,
+    timing: BleOwnerTimingOptions = {},
   ) {
     this.core = core
     this.transport = transport
     this.device = device
     this.onOwnershipUncertain = onOwnershipUncertain
+    this.cleanupTimeoutMs = positiveTimeout(
+      timing.cleanupTimeoutMs,
+      BLE_CLEANUP_TIMEOUT_MS,
+    )
   }
 
   async open(
@@ -372,9 +500,20 @@ export class EncryptedUploadV2TransferControl {
       repairSequences: null,
       confirmationAttempted: false,
       confirmationSucceeded: false,
+      abort: new AbortController(),
+      opening: true,
+      writeAttempted: false,
+      abortRequested: false,
+      abortReason: 0x00ff,
+      releasePromise: null,
+      terminal: deferred<void>(),
+      poisoned: false,
     }
     this.session = session
-    let writeAttempted = false
+    void session.terminal.promise.catch(() => undefined)
+    const activeSignal = signal
+      ? AbortSignal.any([signal, session.abort.signal])
+      : session.abort.signal
     try {
       session.subscription = await this.transport.subscribe(
         this.device,
@@ -413,7 +552,7 @@ export class EncryptedUploadV2TransferControl {
           }
         },
       )
-      throwIfCancelled(false, signal)
+      throwIfCancelled(false, activeSignal)
       const frame = checkpoint
         ? this.core.encodeEncryptedUploadV2Transfer({
             kind: 'resume_request',
@@ -443,9 +582,9 @@ export class EncryptedUploadV2TransferControl {
             dataPayloadBytes: request.dataPayloadBytes,
           })
       session.phase = 'awaiting_control'
-      writeAttempted = true
+      session.writeAttempted = true
       await this.writeControl(frame)
-      const response = await abortable(control.promise, signal)
+      const response = await abortable(control.promise, activeSignal)
       if (response.kind === 'resume_reject') {
         if (
           !checkpoint
@@ -454,7 +593,8 @@ export class EncryptedUploadV2TransferControl {
           || response.nextCiphertextOffset !== checkpoint.nextCiphertextOffset
           || !equalBytes(response.prefixSha256, checkpoint.prefixSha256)
         ) throw identityFailure()
-        await this.release(false)
+        session.opening = false
+        await this.releaseSession(session, false)
         return { kind: 'resume_rejected' }
       }
       if (response.kind === 'error') {
@@ -467,7 +607,8 @@ export class EncryptedUploadV2TransferControl {
           'transfer_recording',
           { protocolStatus: response.result },
         )
-        await this.release(false)
+        session.opening = false
+        await this.releaseSession(session, false)
         throw rejection
       }
       if (checkpoint) {
@@ -489,9 +630,14 @@ export class EncryptedUploadV2TransferControl {
         )
       }
       session.pendingNotificationBytes = 0
+      session.opening = false
       return { kind: 'opened', notifications: queue }
     } catch (error) {
-      await this.release(writeAttempted).catch(() => undefined)
+      try {
+        await this.releaseSession(session, session.writeAttempted)
+      } catch (cleanupError) {
+        throw normalizeHostError(cleanupError)
+      }
       throw normalizeHostError(error)
     }
   }
@@ -536,7 +682,7 @@ export class EncryptedUploadV2TransferControl {
       session.confirmationSucceeded = true
       await writeSucceeded()
       session.phase = 'confirmed'
-      await this.release(false, true)
+      await this.releaseSession(session, false, true)
     } catch (error) {
       this.onOwnershipUncertain()
       throw ownershipUnknown(error)
@@ -551,12 +697,32 @@ export class EncryptedUploadV2TransferControl {
       || session.phase === 'confirming'
       || session.phase === 'confirmed'
     ) return true
-    session.phase = 'cleaning'
+    session.abortRequested = true
     return false
   }
 
   async abort(reason = 0x00ff): Promise<void> {
-    await this.release(true, false, reason)
+    const session = this.session
+    if (!session) return
+    if (session.phase === 'confirming' || session.phase === 'confirmed') {
+      throw ownershipUnknown()
+    }
+    session.abortRequested = true
+    session.abortReason = reason
+    session.abort.abort()
+    if (!session.opening) {
+      await this.releaseSession(session, true, false, reason)
+      return
+    }
+    const bounded = await boundedSettlement(
+      settle(session.terminal.promise),
+      this.cleanupTimeoutMs,
+    )
+    if (bounded === null) {
+      this.poison(session)
+      throw ownershipUnknown()
+    }
+    if (bounded.error !== null) throw ownershipUnknown(bounded.error)
   }
 
   async cancel(): Promise<void> {
@@ -614,41 +780,68 @@ export class EncryptedUploadV2TransferControl {
     return session
   }
 
-  private async release(
+  private async releaseSession(
+    session: TransferSession,
     abort: boolean,
     confirmed = false,
     reason = 0x00ff,
   ): Promise<void> {
-    const session = this.session
-    if (!session) return
     if (
       !confirmed
       && (session.phase === 'confirming' || session.phase === 'confirmed')
     ) throw ownershipUnknown()
-    let failure: unknown = null
-    if (abort) {
-      try {
-        await this.writeControl(this.core.encodeEncryptedUploadV2Transfer({
-          kind: 'abort',
-          flags: 0,
-          transportSessionId: session.request.transportSessionId,
-          reason,
-        }))
-      } catch (error) {
-        failure = error
-      }
+    session.abortRequested ||= abort
+    if (abort) session.abortReason = reason
+    session.opening = false
+    if (!session.releasePromise) {
+      session.phase = 'cleaning'
+      session.releasePromise = (async () => {
+        let failure: unknown = null
+        if (session.abortRequested && session.writeAttempted) {
+          try {
+            await this.writeControl(this.core.encodeEncryptedUploadV2Transfer({
+              kind: 'abort',
+              flags: 0,
+              transportSessionId: session.request.transportSessionId,
+              reason: session.abortReason,
+            }))
+          } catch (error) {
+            failure = error
+          }
+        }
+        try {
+          await session.subscription?.remove()
+        } catch (error) {
+          failure ??= error
+        }
+        session.queue.close()
+        if (failure === null) {
+          session.terminal.resolve(undefined)
+          if (this.session === session) this.session = null
+          return
+        }
+        session.terminal.reject(failure)
+        throw failure
+      })()
     }
-    try {
-      await session.subscription?.remove()
-    } catch (error) {
-      failure ??= error
+    const bounded = await boundedSettlement(
+      settle(session.releasePromise),
+      this.cleanupTimeoutMs,
+    )
+    if (bounded === null) {
+      this.poison(session)
+      throw ownershipUnknown()
     }
-    session.queue.close()
-    if (this.session === session && failure === null) this.session = null
-    if (failure !== null) {
-      this.onOwnershipUncertain()
-      throw ownershipUnknown(failure)
+    if (bounded.error !== null) {
+      this.poison(session)
+      throw ownershipUnknown(bounded.error)
     }
+  }
+
+  private poison(session: TransferSession): void {
+    if (session.poisoned) return
+    session.poisoned = true
+    this.onOwnershipUncertain()
   }
 
   async list(
@@ -743,18 +936,35 @@ export class EncryptedUploadV2TransferControl {
     } catch (error) {
       primary = error
     }
-    let cleanupError: unknown = null
-    for (const subscription of [errorSubscription, listSubscription]) {
-      try {
-        await subscription?.remove()
-      } catch (error) {
-        cleanupError ??= error
+    const cleanup = (async (): Promise<void> => {
+      let cleanupError: unknown = null
+      for (const subscription of [errorSubscription, listSubscription]) {
+        try {
+          await subscription?.remove()
+        } catch (error) {
+          cleanupError ??= error
+        }
       }
+      if (cleanupError !== null) throw cleanupError
+    })()
+    const cleanupSettlement = settle(cleanup)
+    const bounded = await boundedSettlement(
+      cleanupSettlement,
+      this.cleanupTimeoutMs,
+    )
+    if (bounded === null) {
+      this.onOwnershipUncertain()
+      void cleanupSettlement.then(() => {
+        this.active = false
+      })
+      throw ownershipUnknown()
     }
     this.active = false
-    if (cleanupError !== null) this.onOwnershipUncertain()
+    if (bounded.error !== null) {
+      this.onOwnershipUncertain()
+      throw ownershipUnknown(bounded.error)
+    }
     if (primary !== null) throw normalizeHostError(primary)
-    if (cleanupError !== null) throw ownershipUnknown(cleanupError)
     if (!result) throw protocolFailure()
     return result
   }
@@ -764,13 +974,13 @@ export class EncryptedUploadV2TransferControl {
       this.transport.maximumWriteValueLength,
       MAXIMUM_FRAME_BYTES,
     )) throw protocolFailure()
-    await this.transport.write(
+    await this.writes.run(async () => await this.transport.write(
       this.device,
       BOTA_STORAGE_SERVICE,
       TRANSFER_CONTROL_V2_CHARACTERISTIC,
       frame,
       true,
-    )
+    ))
   }
 }
 
@@ -799,6 +1009,14 @@ interface TransferSession {
   repairSequences: Set<number> | null
   confirmationAttempted: boolean
   confirmationSucceeded: boolean
+  abort: AbortController
+  opening: boolean
+  writeAttempted: boolean
+  abortRequested: boolean
+  abortReason: number
+  releasePromise: Promise<void> | null
+  terminal: ReturnType<typeof deferred<void>>
+  poisoned: boolean
 }
 
 class BoundedFrameQueue implements AsyncIterable<CoreEncryptedUploadV2TransferFrame> {
@@ -952,8 +1170,8 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
   private startBoundaryTarget: ((event: BoundaryEvent) => Promise<void>) | null = null
   private pumpPromise: Promise<void> | null = null
   private preparedAuthorizationSha256: Uint8Array | null = null
-  private nextWriteIdValue = 1
   private cancelledValue = false
+  private abortPromise: Promise<void> | null = null
 
   constructor(options: EncryptedUploadV2HostOptions) {
     this.core = options.core
@@ -1007,8 +1225,9 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
         }
         this.state.coreCheckpoint = null
         this.state.highestContiguousSequence = null
-        await this.storage.deleteEncryptedUploadV2Checkpoint(
+        await this.storage.saveEncryptedUploadV2Checkpoint(
           this.state.operationId,
+          copyPersistedState(this.state),
         )
         return null
       case 'encrypted_upload_v2_truncate_sink': {
@@ -1026,25 +1245,20 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
         if (effect.materialId !== this.state.materialId) throw identityFailure()
         const source = this.material.authorization
         if (source.byteLength !== 408) throw protocolFailure()
-        const authorization = source.slice()
-        source.fill(0)
-        try {
-          const digest = sha256(this.core, authorization)
-          await this.signedWriter.send(
-            'authorization',
-            this.nextWriteId(),
-            authorization,
-            this.state.maximumSignedBlobBytes,
-            context.signal,
-          )
-          this.preparedAuthorizationSha256 = digest
-          return {
-            requestId: envelope.requestId,
-            kind: 'encrypted_upload_v2_session_prepared',
-            authorizationSha256: digest.slice(),
-          }
-        } finally {
-          authorization.fill(0)
+        const digest = sha256(this.core, source)
+        await this.signedWriter.send(
+          'authorization',
+          nextSignedBlobWriteId(),
+          source,
+          this.state.maximumSignedBlobBytes,
+          context.signal,
+          () => source.fill(0),
+        )
+        this.preparedAuthorizationSha256 = digest
+        return {
+          requestId: envelope.requestId,
+          kind: 'encrypted_upload_v2_session_prepared',
+          authorizationSha256: digest.slice(),
         }
       }
       case 'encrypted_upload_v2_start_transfer':
@@ -1318,8 +1532,7 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
       receipt.fill(0)
       throw integrityFailure()
     }
-    this.acceptedReceipt = receipt.slice()
-    receipt.fill(0)
+    this.acceptedReceipt = receipt
     this.acceptedReceiptSha256 = digest
     await this.callbacks.cloudCompleted(digest.slice())
     return {
@@ -1342,17 +1555,17 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
       || !equalBytes(receiptSha256, this.acceptedReceiptSha256)
     ) throw integrityFailure()
     const receipt = this.acceptedReceipt
-    try {
-      await this.signedWriter.send(
-        'receipt',
-        this.nextWriteId(),
-        receipt,
-        this.state.maximumSignedBlobBytes,
-      )
-    } finally {
-      receipt.fill(0)
-      this.acceptedReceipt = null
-    }
+    await this.signedWriter.send(
+      'receipt',
+      nextSignedBlobWriteId(),
+      receipt,
+      this.state.maximumSignedBlobBytes,
+      undefined,
+      () => {
+        receipt.fill(0)
+        if (this.acceptedReceipt === receipt) this.acceptedReceipt = null
+      },
+    )
     const frame: Extract<
       CoreEncryptedUploadV2OutboundTransferFrame,
       { kind: 'confirm' }
@@ -1562,32 +1775,37 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
   }
 
   private async abortState(): Promise<void> {
-    if (this.cancelledValue) return
+    if (this.abortPromise) return await this.abortPromise
     this.cancelledValue = true
-    this.uploadAbort.abort()
-    this.boundaryGate?.resolve(undefined)
-    this.material.authorization.fill(0)
-    this.acceptedReceipt?.fill(0)
-    this.acceptedReceipt = null
-    await this.signedWriter.cancel().catch(() => undefined)
-    let failure: unknown = null
-    try {
-      await this.transferControl.abort()
-    } catch (error) {
-      failure = error
-    }
-    try {
-      await this.material.cancel()
-    } catch (error) {
-      failure ??= error
-    }
-    if (failure !== null) throw normalizeHostError(failure)
-  }
-
-  private nextWriteId(): number {
-    const value = this.nextWriteIdValue
-    this.nextWriteIdValue = value === 0xffffffff ? 1 : value + 1
-    return value
+    this.abortPromise = (async () => {
+      this.uploadAbort.abort()
+      this.boundaryGate?.resolve(undefined)
+      let failure: unknown = null
+      let signedTerminalJoined = false
+      try {
+        await this.signedWriter.cancel()
+        signedTerminalJoined = true
+      } catch (error) {
+        failure = error
+      }
+      if (signedTerminalJoined) {
+        this.material.authorization.fill(0)
+        this.acceptedReceipt?.fill(0)
+        this.acceptedReceipt = null
+      }
+      try {
+        await this.transferControl.abort()
+      } catch (error) {
+        failure ??= error
+      }
+      try {
+        await this.material.cancel()
+      } catch (error) {
+        failure ??= error
+      }
+      if (failure !== null) throw normalizeHostError(failure)
+    })()
+    return await this.abortPromise
   }
 }
 
@@ -2367,9 +2585,19 @@ function validatePersistedStateBindings(
 ): void {
   const checkpoint = state.coreCheckpoint
   if (!checkpoint) {
-    if (state.highestContiguousSequence !== null || state.evidence !== null) {
+    if (state.highestContiguousSequence !== null) {
       throw integrityFailure()
     }
+    if (
+      state.evidence
+      && (
+        state.evidence.ciphertextLength !== state.recording.ciphertextLength
+        || !equalBytes(
+          state.evidence.ciphertextSha256,
+          state.recording.ciphertextSha256,
+        )
+      )
+    ) throw integrityFailure()
     return
   }
   if (
@@ -2565,6 +2793,71 @@ function abortable<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
   })
 }
 
+interface PromiseSettlement {
+  error: unknown | null
+}
+
+class SerializedGattWrites {
+  private tail: Promise<void> = Promise.resolve()
+
+  run(write: () => Promise<void>): Promise<void> {
+    const result = this.tail.then(write)
+    this.tail = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return result
+  }
+}
+
+function settle(promise: Promise<unknown>): Promise<PromiseSettlement> {
+  return promise.then(
+    () => ({ error: null }),
+    (error: unknown) => ({ error }),
+  )
+}
+
+async function boundedSettlement(
+  settlement: Promise<PromiseSettlement>,
+  timeoutMs: number,
+): Promise<PromiseSettlement | null> {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), timeoutMs)
+  })
+  const result = await Promise.race([settlement, timeout])
+  if (timer !== null) clearTimeout(timer)
+  return result
+}
+
+function rejectAfter<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  error: () => unknown,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(error()), timeoutMs)
+    void promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (reason) => {
+        clearTimeout(timer)
+        reject(reason)
+      },
+    )
+  })
+}
+
+function positiveTimeout(value: number | undefined, fallback: number): number {
+  return value !== undefined
+    && Number.isFinite(value)
+    && value > 0
+    ? value
+    : fallback
+}
+
 function deferred<T>(): {
   promise: Promise<T>
   resolve(value: T): void
@@ -2617,4 +2910,12 @@ function operationInProgress(): BotaSDKError {
 
 function ownershipUnknown(cause?: unknown): BotaSDKError {
   return new BotaSDKError('integrity_failed', 'transfer_recording', { cause })
+}
+
+function signedResultTimeout(): BotaSDKError {
+  return new BotaSDKError(
+    'connection_failed',
+    'transfer_recording',
+    { retryable: true },
+  )
 }

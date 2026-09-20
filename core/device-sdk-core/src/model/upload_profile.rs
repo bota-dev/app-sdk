@@ -82,7 +82,7 @@ pub fn validate_upload_profile_selection(
     Ok(selection)
 }
 
-fn supports_encrypted_upload_v2_batch(capabilities: EncryptedUploadV2Capabilities) -> bool {
+pub fn supports_encrypted_upload_v2_batch(capabilities: EncryptedUploadV2Capabilities) -> bool {
     const REQUIRED_FLAGS: u32 = protocol::ENCRYPTED_UPLOAD_V2_CAP_TRANSFER_FRAMING
         | protocol::ENCRYPTED_UPLOAD_V2_CAP_STORAGE
         | protocol::ENCRYPTED_UPLOAD_V2_CAP_FULL_RECORDING_IDENTITY

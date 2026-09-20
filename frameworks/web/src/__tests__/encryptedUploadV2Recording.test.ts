@@ -7,6 +7,7 @@ import { DeviceManager } from '../deviceManager.ts'
 import {
   BOTA_STORAGE_SERVICE,
   ENCRYPTED_UPLOAD_V2_CAPABILITY_CHARACTERISTIC,
+  RECORDING_LIST_CHARACTERISTIC,
   RECORDING_LIST_V2_CHARACTERISTIC,
   RECORDING_TRANSFER_V2_CHARACTERISTIC,
   TRANSFER_CONTROL_V2_CHARACTERISTIC,
@@ -20,8 +21,11 @@ import type {
 } from '../providers.ts'
 import { RecordingManager } from '../recordingManager.ts'
 import { BotaSDKError } from '../errors.ts'
-import type { PersistedEncryptedUploadV2State } from '../encryptedUploadV2Host.ts'
-import type { RecordingJournal } from '../storage.ts'
+import {
+  parsePersistedEncryptedUploadV2State,
+  type PersistedEncryptedUploadV2State,
+} from '../encryptedUploadV2Host.ts'
+import { BrowserStorageError, type RecordingJournal } from '../storage.ts'
 import { createWasmCore } from '../wasmCore.ts'
 import { BrowserWorkflowRuntime } from '../workflowRuntime.ts'
 import { BrowserTransportError } from '../transport.ts'
@@ -98,6 +102,51 @@ test('v2 capability transport failure never falls back to legacy LIST', async ()
     error instanceof BotaSDKError && error.code === 'device_disconnected'
   )
   assert.equal(harness.transport.writes.length, 0)
+})
+
+test('LIST selects v2 only after the Rust capability probe accepts the exact contract', async () => {
+  for (const flags of [0, 0x01, 0x3f]) {
+    const harness = await createHarness()
+    const capability = CAPABILITY.slice()
+    u32(capability, 4, flags)
+    harness.transport.setRead(
+      BOTA_STORAGE_SERVICE,
+      ENCRYPTED_UPLOAD_V2_CAPABILITY_CHARACTERISTIC,
+      capability,
+    )
+
+    const pending = harness.manager.list()
+    await waitForAnyWrite(harness.transport)
+    const first = harness.transport.writes[0]?.value
+    if (first?.[0] === 0x25) {
+      const session = latestSession(harness.transport, 0x25)
+      const frames = listFrames(
+        harness.core,
+        bytes((await vector('ble-recording-entry')).inputHex),
+        bytes((await vector('ble-recording-list-end')).inputHex),
+        session,
+      )
+      emitTransfer(
+        harness.transport,
+        RECORDING_LIST_V2_CHARACTERISTIC,
+        frames.entry,
+      )
+      emitTransfer(
+        harness.transport,
+        RECORDING_LIST_V2_CHARACTERISTIC,
+        frames.end,
+      )
+    } else {
+      emitTransfer(
+        harness.transport,
+        RECORDING_LIST_CHARACTERISTIC,
+        bytes('a1b2c3d401000000000000000000000000f153650c000400'),
+      )
+    }
+    const listed = await pending
+    assert.deepEqual(first, harness.core.encodeRecordingListCommand())
+    assert.equal(listed[0]?.encryptedUploadV2, null)
+  }
 })
 
 test('uncertain v2 LIST cleanup poisons shared BLE ownership', async () => {
@@ -309,6 +358,47 @@ test('explicit v2 sync binds fresh capability, stages ciphertext, persists recei
   assert.equal(harness.storage.encryptedUploadV2Checkpoints.size, 0)
 })
 
+test('signed-document correlation IDs do not repeat across v2 host instances', async () => {
+  const harness = await createHarness()
+  const ciphertext = bytes((await vector('storage-partial-block')).inputHex)
+  const manifest = bytes((await vector('manifest-hpke')).inputHex)
+  harness.setFetch(async () => new Response(null, { status: 200 }))
+
+  for (const suffix of [1, 2]) {
+    const authorization = bytes(
+      (await vector('authorization-development')).inputHex,
+    )
+    harness.provider.encryptedUploadV2Material = inertMaterial(
+      authorization,
+      () => undefined,
+    )
+    installSuccessfulDeviceFlow(
+      harness,
+      ciphertext,
+      manifest,
+      sha256(harness.core, manifest),
+    )
+    await withWatchdog(harness.manager.sync(recording(), {
+      profile: 'encrypted_upload_v2',
+      operationId: `v2-correlation-${suffix}`,
+    }))
+  }
+
+  const writeIds = harness.transport.writes
+    .filter(({ characteristicUuid, value }) =>
+      characteristicUuid === TRANSFER_SIGNED_BLOB_V2_CHARACTERISTIC
+        && value[0] === 0x60
+    )
+    .map(({ value }) => new DataView(
+      value.buffer,
+      value.byteOffset,
+      value.byteLength,
+    ).getUint32(4, true))
+  assert.equal(writeIds.length, 4)
+  assert.equal(new Set(writeIds).size, writeIds.length)
+  assert.ok(writeIds.every((writeId) => writeId !== 0))
+})
+
 test('v2 provider failure leaves no orphaned state and never falls back to legacy', async () => {
   const harness = await createHarness()
   const capabilityReads = capabilityReadCount(harness.transport)
@@ -329,6 +419,55 @@ test('v2 provider failure leaves no orphaned state and never falls back to legac
   assert.equal(harness.transport.writes.length, 0)
   assert.equal(harness.storage.recordingJournals.size, 0)
   assert.equal(harness.storage.encryptedUploadV2Checkpoints.size, 0)
+})
+
+test('Rust profile validation rejects invalid capability flags before provider or durable state', async () => {
+  for (const flags of [0, 0x01, 0x3f]) {
+    const harness = await createHarness()
+    const capability = CAPABILITY.slice()
+    u32(capability, 4, flags)
+    harness.transport.setRead(
+      BOTA_STORAGE_SERVICE,
+      ENCRYPTED_UPLOAD_V2_CAPABILITY_CHARACTERISTIC,
+      capability,
+    )
+
+    await assert.rejects(
+      harness.manager.sync(recording(), {
+        profile: 'encrypted_upload_v2',
+        operationId: `v2-invalid-flags-${flags}`,
+      }),
+      (error: unknown) =>
+        error instanceof BotaSDKError
+          && error.code === 'unsupported_capability',
+    )
+
+    assert.equal(harness.provider.encryptedUploadV2Prepared.length, 0)
+    assert.equal(harness.storage.recordingJournals.size, 0)
+    assert.equal(harness.storage.encryptedUploadV2Checkpoints.size, 0)
+    assert.equal(harness.storage.blobs.size, 0)
+  }
+})
+
+test('Rust profile validation rejects a wrong storage format before provider or durable state', async () => {
+  const harness = await createHarness()
+  const wrongFormat = recording()
+  assert.ok(wrongFormat.encryptedUploadV2)
+  wrongFormat.encryptedUploadV2.storageFormat = 1
+
+  await assert.rejects(
+    harness.manager.sync(wrongFormat, {
+      profile: 'encrypted_upload_v2',
+      operationId: 'v2-wrong-storage-format',
+    }),
+    (error: unknown) =>
+      error instanceof BotaSDKError && error.code === 'unsupported_capability',
+  )
+
+  assert.equal(harness.provider.encryptedUploadV2Prepared.length, 0)
+  assert.equal(harness.storage.recordingJournals.size, 0)
+  assert.equal(harness.storage.encryptedUploadV2Checkpoints.size, 0)
+  assert.equal(harness.storage.blobs.size, 0)
 })
 
 test('poisoned v2 BLE ownership blocks work until confirmed disconnect', async () => {
@@ -363,15 +502,16 @@ test('cancellation after provider material prevents START and destroys unowned m
   )
   const entered = deferred<void>()
   const release = deferred<void>()
-  const saveCheckpoint = harness.storage.saveEncryptedUploadV2Checkpoint
+  const saveOperation = harness.storage.saveEncryptedUploadV2Operation
     .bind(harness.storage)
-  harness.storage.saveEncryptedUploadV2Checkpoint = async (
+  harness.storage.saveEncryptedUploadV2Operation = async (
     operationId,
     checkpoint,
+    journal,
   ) => {
     entered.resolve(undefined)
     await release.promise
-    await saveCheckpoint(operationId, checkpoint)
+    await saveOperation(operationId, checkpoint, journal)
   }
   const controller = new AbortController()
   const sync = harness.manager.sync(recording(), {
@@ -660,6 +800,225 @@ test('cancellation after START aborts the v2 owner and never invokes legacy sync
   assert.equal(hasWriteType(harness.transport, 0x24), true)
   assert.equal(hasWriteType(harness.transport, 0x23), false)
   assert.equal(harness.provider.prepared.length, 0)
+  assert.equal(harness.storage.recordingJournals.size, 0)
+  assert.equal(harness.storage.encryptedUploadV2Checkpoints.size, 0)
+})
+
+test('runtime cancellation joins a blocked signed BEGIN before owner release and zero-fill', async () => {
+  const harness = await createHarness()
+  const authorization = bytes(
+    (await vector('authorization-development')).inputHex,
+  )
+  harness.provider.encryptedUploadV2Material = inertMaterial(
+    authorization,
+    () => undefined,
+  )
+  const beginEntered = deferred<void>()
+  const beginGate = deferred<void>()
+  harness.transport.onWrite = () => {
+    const write = harness.transport.writes.at(-1)
+    if (
+      write?.characteristicUuid === TRANSFER_SIGNED_BLOB_V2_CHARACTERISTIC
+      && write.value[0] === 0x60
+    ) {
+      harness.transport.writeGate = beginGate.promise
+      beginEntered.resolve(undefined)
+    }
+  }
+  const operationId = 'v2-cancel-blocked-begin'
+  const sync = harness.manager.sync(recording(), {
+    profile: 'encrypted_upload_v2',
+    operationId,
+  })
+  const syncRejected = assert.rejects(sync, (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'cancelled'
+  )
+  await beginEntered.promise
+
+  let cancellationSettled = false
+  const cancellation = harness.manager.cancel(operationId).then(() => {
+    cancellationSettled = true
+  })
+  await settleAsyncWork()
+
+  assert.equal(cancellationSettled, false)
+  assert.ok(authorization.some((value) => value !== 0))
+  await assert.rejects(
+    harness.runtime.runExclusive('read_snapshot', async () => undefined),
+    (error: unknown) =>
+      error instanceof BotaSDKError && error.code === 'operation_in_progress',
+  )
+
+  beginGate.resolve(undefined)
+  await withWatchdog(cancellation)
+  await withWatchdog(syncRejected)
+  assert.ok(authorization.every((value) => value === 0))
+  assert.deepEqual(
+    harness.transport.writes
+      .filter(({ characteristicUuid }) =>
+        characteristicUuid === TRANSFER_SIGNED_BLOB_V2_CHARACTERISTIC
+      )
+      .map(({ value }) => value[0]),
+    [0x60, 0x63],
+  )
+})
+
+test('resume cancellation removes v2 journal, metadata, checkpoint, and ciphertext together', async () => {
+  const harness = await createHarness()
+  const operationId = 'v2-resume-cancel'
+  const state = persistedTransferState(harness, operationId, null)
+  const journal = transferringV2Journal(operationId, state)
+  await harness.storage.saveEncryptedUploadV2Checkpoint(operationId, state)
+  await harness.storage.saveRecordingJournal(journal)
+  const blob = await harness.storage.openBlob(state.sinkId)
+  blob.seed(Uint8Array.of(1, 2, 3, 4))
+  const providerEntered = deferred<void>()
+  const providerResult = deferred<EncryptedUploadV2Material>()
+  harness.provider.prepareEncryptedUploadV2 = async () => {
+    providerEntered.resolve(undefined)
+    return await providerResult.promise
+  }
+  const authorization = bytes(
+    (await vector('authorization-development')).inputHex,
+  )
+  const controller = new AbortController()
+  const resumed = harness.manager.resume(operationId, {
+    signal: controller.signal,
+  })
+  const rejected = assert.rejects(resumed, (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'cancelled'
+  )
+  await providerEntered.promise
+
+  controller.abort()
+  await withWatchdog(rejected)
+  providerResult.resolve(inertMaterial(authorization, () => undefined))
+  await settleAsyncWork()
+
+  assert.equal(await harness.storage.loadRecordingJournal(operationId), null)
+  assert.equal(
+    await harness.storage.loadEncryptedUploadV2Checkpoint(operationId),
+    null,
+  )
+  assert.equal(blob.snapshot().byteLength, 0)
+  assert.ok(authorization.every((value) => value === 0))
+})
+
+test('inactive v2 cancellation removes the complete unconfirmed operation', async () => {
+  const harness = await createHarness()
+  const operationId = 'v2-inactive-cancel'
+  const state = persistedTransferState(harness, operationId, null)
+  const journal = transferringV2Journal(operationId, state)
+  await harness.storage.saveEncryptedUploadV2Checkpoint(operationId, state)
+  await harness.storage.saveRecordingJournal(journal)
+  const blob = await harness.storage.openBlob(state.sinkId)
+  blob.seed(Uint8Array.of(1, 2, 3, 4))
+
+  await harness.manager.cancel(operationId)
+
+  assert.equal(await harness.storage.loadRecordingJournal(operationId), null)
+  assert.equal(
+    await harness.storage.loadEncryptedUploadV2Checkpoint(operationId),
+    null,
+  )
+  assert.equal(blob.snapshot().byteLength, 0)
+})
+
+test('ResumeRejected persists checkpoint removal before a crashing sink truncate', async () => {
+  const harness = await createHarness()
+  const operationId = 'v2-resume-rejected-crash'
+  const ciphertext = bytes((await vector('storage-partial-block')).inputHex)
+  const prefix = ciphertext.slice(0, 100)
+  const checkpoint = {
+    revision: 1,
+    nextCiphertextOffset: 100n,
+    prefixSha256: sha256(harness.core, prefix),
+    highestContiguousSequence: 0,
+  }
+  const state = persistedTransferState(harness, operationId, checkpoint)
+  const journal = transferringV2Journal(operationId, state)
+  await harness.storage.saveEncryptedUploadV2Checkpoint(operationId, state)
+  await harness.storage.saveRecordingJournal(journal)
+  const blob = await harness.storage.openBlob(state.sinkId)
+  blob.seed(ciphertext.slice(0, 120))
+  const truncate = blob.truncate.bind(blob)
+  blob.truncate = async (size) => {
+    if (size === 0) throw new Error('simulated crash before restart truncate')
+    await truncate(size)
+  }
+  const authorization = bytes(
+    (await vector('authorization-development')).inputHex,
+  )
+  harness.provider.encryptedUploadV2Material = inertMaterial(
+    authorization,
+    () => undefined,
+  )
+  installResumeRejectDeviceFlow(harness, checkpoint)
+
+  await assert.rejects(withWatchdog(harness.manager.resume(operationId)))
+
+  const durable = harness.storage.encryptedUploadV2Checkpoints.get(operationId)
+  assert.ok(durable)
+  const parsed = parsePersistedEncryptedUploadV2State(durable)
+  assert.equal(parsed.operationId, operationId)
+  assert.equal(parsed.materialId, state.materialId)
+  assert.equal(parsed.coreCheckpoint, null)
+  assert.equal(parsed.highestContiguousSequence, null)
+  assert.equal(
+    (await harness.storage.loadRecordingJournal(operationId))?.phase,
+    'transferring',
+  )
+  assert.equal(blob.snapshot().byteLength, 100)
+})
+
+test('ResumeRejected save failure retains the prior recoverable checkpoint pair', async () => {
+  const harness = await createHarness()
+  const operationId = 'v2-resume-rejected-save-failure'
+  const ciphertext = bytes((await vector('storage-partial-block')).inputHex)
+  const prefix = ciphertext.slice(0, 100)
+  const checkpoint = {
+    revision: 1,
+    nextCiphertextOffset: 100n,
+    prefixSha256: sha256(harness.core, prefix),
+    highestContiguousSequence: 0,
+  }
+  const state = persistedTransferState(harness, operationId, checkpoint)
+  const journal = transferringV2Journal(operationId, state)
+  await harness.storage.saveEncryptedUploadV2Checkpoint(operationId, state)
+  await harness.storage.saveRecordingJournal(journal)
+  const blob = await harness.storage.openBlob(state.sinkId)
+  blob.seed(ciphertext.slice(0, 120))
+  const saveCheckpoint = harness.storage.saveEncryptedUploadV2Checkpoint
+    .bind(harness.storage)
+  harness.storage.saveEncryptedUploadV2Checkpoint = async (id, next) => {
+    const parsed = parsePersistedEncryptedUploadV2State(next)
+    if (parsed.coreCheckpoint === null) {
+      throw new BrowserStorageError('storage_unavailable')
+    }
+    await saveCheckpoint(id, next)
+  }
+  const authorization = bytes(
+    (await vector('authorization-development')).inputHex,
+  )
+  harness.provider.encryptedUploadV2Material = inertMaterial(
+    authorization,
+    () => undefined,
+  )
+  installResumeRejectDeviceFlow(harness, checkpoint)
+
+  await assert.rejects(withWatchdog(harness.manager.resume(operationId)))
+
+  const durable = harness.storage.encryptedUploadV2Checkpoints.get(operationId)
+  assert.ok(durable)
+  const parsed = parsePersistedEncryptedUploadV2State(durable)
+  assert.equal(parsed.operationId, operationId)
+  assert.equal(parsed.coreCheckpoint?.checkpointRevision, 1)
+  assert.equal(parsed.coreCheckpoint?.nextCiphertextOffset, 100n)
+  assert.equal(
+    (await harness.storage.loadRecordingJournal(operationId))?.phase,
+    'transferring',
+  )
+  assert.equal(blob.snapshot().byteLength, 100)
 })
 
 test('late staging response after cancellation cannot submit or finalize artifacts', async () => {
@@ -1020,6 +1379,52 @@ function installStartOnlyDeviceFlow(harness: Harness): void {
   }
 }
 
+function installResumeRejectDeviceFlow(
+  harness: Harness,
+  checkpoint: {
+    revision: number
+    nextCiphertextOffset: bigint
+    prefixSha256: Uint8Array
+  },
+): void {
+  harness.transport.onWrite = () => {
+    const write = harness.transport.writes.at(-1)
+    if (!write) return
+    const type = write.value[0]
+    if (
+      write.characteristicUuid === TRANSFER_SIGNED_BLOB_V2_CHARACTERISTIC
+      && type === 0x62
+    ) {
+      queueMicrotask(() => emitTransfer(
+        harness.transport,
+        TRANSFER_SIGNED_BLOB_V2_CHARACTERISTIC,
+        signedResult(write.value),
+      ))
+      return
+    }
+    if (
+      write.characteristicUuid === TRANSFER_CONTROL_V2_CHARACTERISTIC
+      && type === 0x22
+    ) {
+      const transportSessionId = new DataView(
+        write.value.buffer,
+        write.value.byteOffset,
+        write.value.byteLength,
+      ).getBigUint64(4, true)
+      const rejected = commonFrame(0x46, 60, transportSessionId)
+      u16(rejected, 12, 15)
+      u32(rejected, 16, checkpoint.revision)
+      u64(rejected, 20, checkpoint.nextCiphertextOffset)
+      rejected.set(checkpoint.prefixSha256, 28)
+      queueMicrotask(() => emitTransfer(
+        harness.transport,
+        RECORDING_TRANSFER_V2_CHARACTERISTIC,
+        rejected,
+      ))
+    }
+  }
+}
+
 function recording(): DeviceRecording {
   return {
     uuid: RECORDING_UUID,
@@ -1035,6 +1440,81 @@ function recording(): DeviceRecording {
       ciphertextLength: 330n,
       ciphertextSha256: CIPHERTEXT_SHA256.slice(),
     },
+  }
+}
+
+function persistedTransferState(
+  harness: Harness,
+  operationId: string,
+  checkpoint: {
+    revision: number
+    nextCiphertextOffset: bigint
+    prefixSha256: Uint8Array
+    highestContiguousSequence: number
+  } | null,
+): PersistedEncryptedUploadV2State {
+  const transportSessionId = 18_838_586_676_582n
+  return {
+    schemaVersion: 1,
+    operationId,
+    serialNumber: SERIAL,
+    recording: {
+      uuid: RECORDING_UUID,
+      generation: 9,
+      storageFormat: 3,
+      ciphertextLength: 330n,
+      ciphertextSha256: CIPHERTEXT_SHA256.slice(),
+    },
+    materialId: 'material-v2-1',
+    recordingId: 'cloud-recording-v2-1',
+    uploadSessionId: UPLOAD_SESSION_UUID,
+    ownerRevision: 3,
+    policy: 'v2_required',
+    transportSessionId,
+    sinkId: `recording:${operationId}`,
+    windowPackets: 15,
+    dataPayloadBytes: 100,
+    maximumSignedBlobBytes: 1024,
+    maximumMissingSequences: 15,
+    checkpointIntervalBlocks: 8,
+    capabilitySha256Hex: hexString(sha256(harness.core, CAPABILITY)),
+    coreCheckpoint: checkpoint
+      ? {
+          serialNumber: SERIAL,
+          recordingUuid: uuidBytes(RECORDING_UUID),
+          recordingGeneration: 9,
+          uploadSessionId: uuidBytes(UPLOAD_SESSION_UUID),
+          ownerRevision: 3,
+          transportSessionId,
+          checkpointRevision: checkpoint.revision,
+          nextCiphertextOffset: checkpoint.nextCiphertextOffset,
+          prefixSha256: checkpoint.prefixSha256.slice(),
+          windowPackets: 15,
+          dataPayloadBytes: 100,
+        }
+      : null,
+    highestContiguousSequence: checkpoint?.highestContiguousSequence ?? null,
+    evidence: null,
+  }
+}
+
+function transferringV2Journal(
+  operationId: string,
+  state: PersistedEncryptedUploadV2State,
+): RecordingJournal {
+  return {
+    schemaVersion: 1,
+    operationId,
+    serialNumber: state.serialNumber,
+    recordingUuid: state.recording.uuid,
+    profile: 'encrypted_upload_v2',
+    phase: 'transferring',
+    sinkId: state.sinkId,
+    uploadId: null,
+    cloudCompletionId: null,
+    confirmationDigestHex: null,
+    devicePlaintextSha256Hex: null,
+    updatedAtEpochMs: 1_700_000_000_000,
   }
 }
 
@@ -1269,6 +1749,16 @@ async function waitForWriteType(
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
   assert.fail(`timed out waiting for write type ${type}`)
+}
+
+async function waitForAnyWrite(
+  transport: FakeBrowserBluetoothTransport,
+): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (transport.writes.length > 0) return
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+  assert.fail('timed out waiting for a write')
 }
 
 async function waitForEvent(events: string[], expected: string): Promise<void> {
