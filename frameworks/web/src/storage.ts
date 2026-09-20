@@ -30,6 +30,7 @@ export interface RecordingJournal {
   uploadId: string | null
   cloudCompletionId: string | null
   confirmationDigestHex: string | null
+  devicePlaintextSha256Hex: string | null
   updatedAtEpochMs: number
 }
 

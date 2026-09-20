@@ -81,6 +81,7 @@ function recordingJournal(
     uploadId: null,
     cloudCompletionId: null,
     confirmationDigestHex: null,
+    devicePlaintextSha256Hex: null,
     updatedAtEpochMs: 1_789_000_000_000,
   }
 }
@@ -382,6 +383,51 @@ test('journal timestamps cannot regress', async (t) => {
 })
 
 test('recording evidence is phase-bound, immutable, and same-phase idempotent', async (t) => {
+  await t.test('device plaintext digest begins at staging and is immutable', async () => {
+    const storage = await (await storageFixture()).open('legacy-digest-tenant')
+    const prepared = recordingJournal('legacy-digest-operation')
+    await expectStorageError(
+      storage.saveRecordingJournal({
+        ...prepared,
+        devicePlaintextSha256Hex: '55'.repeat(32),
+      }),
+      'resume_rejected',
+    )
+    await storage.saveRecordingJournal(prepared)
+    await storage.saveRecordingJournal({
+      ...prepared,
+      phase: 'transferring',
+      updatedAtEpochMs: prepared.updatedAtEpochMs + 1,
+    })
+    const staged: RecordingJournal = {
+      ...prepared,
+      phase: 'staged',
+      devicePlaintextSha256Hex: '55'.repeat(32),
+      updatedAtEpochMs: prepared.updatedAtEpochMs + 2,
+    }
+    await storage.saveRecordingJournal(staged)
+    await storage.saveRecordingJournal({
+      ...staged,
+      updatedAtEpochMs: prepared.updatedAtEpochMs + 3,
+    })
+    await expectStorageError(
+      storage.saveRecordingJournal({
+        ...staged,
+        devicePlaintextSha256Hex: null,
+        updatedAtEpochMs: prepared.updatedAtEpochMs + 4,
+      }),
+      'resume_rejected',
+    )
+    await expectStorageError(
+      storage.saveRecordingJournal({
+        ...staged,
+        devicePlaintextSha256Hex: '66'.repeat(32),
+        updatedAtEpochMs: prepared.updatedAtEpochMs + 4,
+      }),
+      'resume_rejected',
+    )
+  })
+
   await t.test('legacy upload and cloud evidence are required at their phases', async () => {
     const storage = await (await storageFixture()).open('legacy-evidence-tenant')
     const prepared = recordingJournal('legacy-evidence-operation')

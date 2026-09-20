@@ -138,6 +138,7 @@ interface DirectOwner {
   kind: 'direct'
   operation: BotaOperation
   abortController: AbortController
+  terminalError: BotaSDKError | null
   settled: Promise<void>
 }
 
@@ -189,8 +190,22 @@ export class BrowserWorkflowRuntime {
     if (this.connectedDevice?.id !== deviceId) return
     this.connectedDevice = null
     const owner = this.activeOwner
-    if (!owner || owner.kind === 'direct') return
-    void this.dispatchDeviceDisconnected(owner, deviceId).catch((error: unknown) => {
+    if (!owner) return
+    if (owner.kind === 'direct') {
+      if (owner.operation === 'disconnect') return
+      owner.terminalError ??= new BotaSDKError(
+        'device_disconnected',
+        owner.operation,
+      )
+      owner.abortController.abort()
+      return
+    }
+    const generation = owner.generation
+    void this.dispatchDeviceDisconnected(
+      owner,
+      deviceId,
+      generation,
+    ).catch((error: unknown) => {
       void this.failOwner(owner, error)
     })
   }
@@ -286,21 +301,29 @@ export class BrowserWorkflowRuntime {
       kind: 'direct',
       operation,
       abortController,
+      terminalError: null,
       settled,
     }
     this.activeOwner = owner
 
     try {
       const value = await body(abortController.signal)
+      if (owner.terminalError) throw owner.terminalError
       if (abortController.signal.aborted || this.destroyed) {
         throw new BotaSDKError('cancelled', operation)
       }
       return value
     } catch (error) {
-      if (abortController.signal.aborted || this.destroyed) {
-        throw new BotaSDKError('cancelled', operation, { cause: error })
+      const normalized = normalizeRuntimeError(error, operation)
+      if (owner.terminalError) {
+        throw normalized.code === 'cancelled'
+          ? owner.terminalError
+          : normalized
       }
-      throw normalizeRuntimeError(error, operation)
+      if (abortController.signal.aborted || this.destroyed) {
+        throw new BotaSDKError('cancelled', operation)
+      }
+      throw normalized
     } finally {
       if (this.activeOwner === owner) this.activeOwner = null
       settle()
@@ -340,20 +363,43 @@ export class BrowserWorkflowRuntime {
   private async dispatchDeviceDisconnected(
     owner: WorkflowOwner,
     deviceId: string,
+    generation: number,
   ): Promise<void> {
-    if (owner.terminal || this.activeOwner !== owner) return
+    if (
+      owner.terminal
+      || this.activeOwner !== owner
+      || owner.generation !== generation
+    ) return
     const requestId = owner.subscriptions.keys().next().value
       ?? owner.requests.keys().next().value
     if (requestId === undefined) {
       throw new BotaSDKError('device_disconnected', owner.operation)
     }
-    const effects = await this.serializedCoreCall(() => this.core.dispatch({
-      requestId,
-      kind: 'ble_disconnected',
-      peripheralId: deviceId,
-      reasonCode: null,
-    }))
-    this.enqueueEffects(owner, effects, owner.generation)
+    const effects = await this.serializedCoreCall(() => {
+      if (
+        owner.terminal
+        || this.activeOwner !== owner
+        || owner.generation !== generation
+      ) return []
+      const status = this.core.status()
+      if (
+        status.kind === 'completed'
+        || status.kind === 'cancelled'
+        || status.kind === 'failed'
+      ) return []
+      return this.core.dispatch({
+        requestId,
+        kind: 'ble_disconnected',
+        peripheralId: deviceId,
+        reasonCode: null,
+      })
+    })
+    if (
+      owner.terminal
+      || this.activeOwner !== owner
+      || owner.generation !== generation
+    ) return
+    this.enqueueEffects(owner, effects, generation)
   }
 
   private validateEnvelope(

@@ -106,6 +106,7 @@ export class FakeRecordingStorage implements BrowserSdkStorage {
   readonly blobs = new Map<string, FakeRecordingBlob>()
   readonly workflowCheckpoints = new Map<string, unknown>()
   readonly recordingJournals = new Map<string, RecordingJournal>()
+  readonly verifiedDevices = new Map<string, VerifiedDeviceHint>()
   onSaveRecordingJournal: ((journal: RecordingJournal) => void) | null = null
   openBlobCalls = 0
 
@@ -117,13 +118,18 @@ export class FakeRecordingStorage implements BrowserSdkStorage {
     this.events = events
   }
 
-  async loadVerifiedDevice(_serialNumber: string): Promise<VerifiedDeviceHint | null> {
-    return null
+  async loadVerifiedDevice(serialNumber: string): Promise<VerifiedDeviceHint | null> {
+    const hint = this.verifiedDevices.get(serialNumber)
+    return hint ? { ...hint } : null
   }
 
-  async saveVerifiedDevice(_value: VerifiedDeviceHint): Promise<void> {}
+  async saveVerifiedDevice(value: VerifiedDeviceHint): Promise<void> {
+    this.verifiedDevices.set(value.serialNumber, { ...value })
+  }
 
-  async deleteVerifiedDevice(_serialNumber: string): Promise<void> {}
+  async deleteVerifiedDevice(serialNumber: string): Promise<void> {
+    this.verifiedDevices.delete(serialNumber)
+  }
 
   async loadWorkflowCheckpoint(operationId: string): Promise<unknown | null> {
     this.events.push('workflow:load')
@@ -202,6 +208,7 @@ export class FakeRecordingStorage implements BrowserSdkStorage {
   }
 
   async clear(): Promise<void> {
+    this.verifiedDevices.clear()
     this.workflowCheckpoints.clear()
     this.recordingJournals.clear()
     this.blobs.clear()

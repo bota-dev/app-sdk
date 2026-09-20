@@ -38,6 +38,32 @@ const SHA256_PACKET = Uint8Array.of(
   0x04,
   ...Array.from({ length: 32 }, (_, index) => index),
 )
+const ENCRYPTED_START_PACKET = Uint8Array.of(
+  0x05,
+  ...Array.from({ length: 32 }, (_, index) => 0x20 + index),
+  0xaa,
+  0xbb,
+  0xcc,
+  0xdd,
+)
+const ENCRYPTED_CHUNK = Uint8Array.of(
+  ...Array.from({ length: 17 }, (_, index) => 0x80 + index),
+)
+const ENCRYPTED_DATA_PACKET = Uint8Array.of(
+  0x81,
+  0x00,
+  0x00,
+  ENCRYPTED_CHUNK.byteLength,
+  0x00,
+  ...ENCRYPTED_CHUNK,
+)
+const ENCRYPTED_EOF_PACKET = Uint8Array.of(0x82, 0x01, 0x00, 0, 0, 0, 0)
+const ENCRYPTED_STAGED_BODY = Uint8Array.of(
+  ...ENCRYPTED_START_PACKET.slice(1),
+  0x00,
+  0x01,
+  ...ENCRYPTED_CHUNK,
+)
 
 const wasmBytes = readFile(
   new URL('../generated/bota_device_sdk_core_bg.wasm', import.meta.url),
@@ -142,6 +168,31 @@ test('LIST subscribes before its write, decodes one list, and always unsubscribe
   ))
 })
 
+test('disconnect after the LIST write aborts the direct owner, unsubscribes, and permits reconnect', async () => {
+  const harness = await createHarness()
+  const list = harness.manager.list()
+  const rejected = assert.rejects(list, (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'device_disconnected'
+  )
+  await waitForWrite(
+    harness.transport,
+    await transferFixture('list-command'),
+  )
+
+  harness.transport.emitDisconnected()
+  await settleWithWatchdog(rejected, 'LIST disconnect cleanup')
+
+  assert.ok(harness.events.some((event) =>
+    event.startsWith('unsubscribe:')
+      && event.includes(RECORDING_LIST_CHARACTERISTIC)
+  ))
+  const reconnected = await settleWithWatchdog(
+    harness.devices.reconnect({ expectedSerialNumber: SERIAL }),
+    'authorized reconnect after LIST disconnect',
+  )
+  assert.equal(reconnected.serialNumber, SERIAL)
+})
+
 test('legacy sync durably stages before upload and persists cloud completion before CONFIRM', async () => {
   const harness = await createHarness()
   const writeGate = deferred<void>()
@@ -203,6 +254,102 @@ test('legacy sync durably stages before upload and persists cloud completion bef
   assert.equal(blob.deleteCalls, 1)
   assert.equal(harness.provider.prepared.length, 1)
   assert.equal(harness.provider.completed.length, 1)
+})
+
+test('encrypted legacy sync preserves the device plaintext digest separately from staged wire integrity', async () => {
+  const harness = await createHarness()
+  const prepareEntered = deferred<void>()
+  const prepareGate = deferred<void>()
+  harness.provider.prepareLegacyUpload = async (context) => {
+    harness.events.push('provider:prepare')
+    harness.provider.prepared.push(context)
+    prepareEntered.resolve(undefined)
+    await prepareGate.promise
+    return {
+      uploadId: 'upload-encrypted',
+      request: { ...harness.provider.request },
+    }
+  }
+  const stagedHasher = harness.core.createIntegrityHasher()
+  stagedHasher.update(ENCRYPTED_STAGED_BODY)
+  const expectedPlaintextSha256Hex = bytesHex(SHA256_PACKET.slice(1))
+  const expectedStagedBodySha256Hex = bytesHex(stagedHasher.sha256Snapshot())
+  assert.notEqual(expectedPlaintextSha256Hex, expectedStagedBodySha256Hex)
+  harness.setFetch(async (_input, init) => {
+    assert.ok(init?.body instanceof ReadableStream)
+    const reader = init.body.getReader()
+    let uploadedBytes = 0
+    while (true) {
+      const next = await reader.read()
+      if (next.done) break
+      uploadedBytes += next.value.byteLength
+    }
+    assert.equal(uploadedBytes, ENCRYPTED_STAGED_BODY.byteLength)
+    return new Response(null, { status: 200 })
+  })
+
+  const sync = harness.manager.sync(
+    recording(BigInt(ENCRYPTED_STAGED_BODY.byteLength), true),
+    { profile: 'legacy', operationId: OPERATION_ID },
+  )
+  await waitForWrite(harness.transport, await transferFixture('start-command'))
+  await settleReducer()
+  harness.transport.emitNotification(
+    harness.transport.device,
+    BOTA_STORAGE_SERVICE,
+    RECORDING_TRANSFER_CHARACTERISTIC,
+    ENCRYPTED_START_PACKET,
+  )
+  await eventually(() => harness.events.includes('blob:write_durable:36'))
+  harness.transport.emitNotification(
+    harness.transport.device,
+    BOTA_STORAGE_SERVICE,
+    RECORDING_TRANSFER_CHARACTERISTIC,
+    ENCRYPTED_DATA_PACKET,
+  )
+  await eventually(() => harness.events.includes(
+    `blob:write_durable:${ENCRYPTED_STAGED_BODY.byteLength}`,
+  ))
+  harness.transport.emitNotification(
+    harness.transport.device,
+    BOTA_STORAGE_SERVICE,
+    RECORDING_TRANSFER_CHARACTERISTIC,
+    ENCRYPTED_EOF_PACKET,
+  )
+  harness.transport.emitNotification(
+    harness.transport.device,
+    BOTA_STORAGE_SERVICE,
+    RECORDING_TRANSFER_CHARACTERISTIC,
+    SHA256_PACKET,
+  )
+  await prepareEntered.promise
+
+  const staged = await harness.storage.loadRecordingJournal(OPERATION_ID)
+  assert.equal(staged?.phase, 'staged')
+  assert.equal(
+    staged?.devicePlaintextSha256Hex,
+    expectedPlaintextSha256Hex,
+  )
+  assert.equal(
+    harness.provider.prepared[0]?.plaintextSha256Hex,
+    expectedPlaintextSha256Hex,
+  )
+  assert.equal(
+    harness.provider.prepared[0]?.stagedBodySha256Hex,
+    expectedStagedBodySha256Hex,
+  )
+  assert.equal('sha256Hex' in (harness.provider.prepared[0] ?? {}), false)
+
+  prepareGate.resolve(undefined)
+  await sync
+  assert.equal(
+    harness.provider.completed[0]?.plaintextSha256Hex,
+    expectedPlaintextSha256Hex,
+  )
+  assert.equal(
+    harness.provider.completed[0]?.stagedBodySha256Hex,
+    expectedStagedBodySha256Hex,
+  )
 })
 
 test('CRC failure sends NACK, skips every upload destination, and preserves the device recording', async () => {
@@ -281,6 +428,70 @@ test('an ambiguous upload reconciles before retry and never persists URL or head
   assert.ok(harness.events.includes('journal:staged'))
 })
 
+test('cancellation after a successful fetch preserves ambiguous upload evidence for reconciliation', async () => {
+  const harness = await createHarness()
+  const completionEntered = deferred<void>()
+  const completionGate = deferred<void>()
+  harness.provider.completeLegacyUpload = async (context) => {
+    harness.events.push('provider:complete')
+    harness.provider.completed.push(context)
+    completionEntered.resolve(undefined)
+    await completionGate.promise
+    return { cloudCompletionId: 'late-cloud-completion' }
+  }
+
+  const sync = harness.manager.sync(recording(9n), {
+    profile: 'legacy',
+    operationId: OPERATION_ID,
+  })
+  const rejected = assert.rejects(sync, (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'cancelled'
+  )
+  await waitForWrite(harness.transport, await transferFixture('start-command'))
+  await settleReducer()
+  await sendData(harness)
+  await finishTransfer(harness, false)
+  await completionEntered.promise
+
+  await harness.manager.cancel(OPERATION_ID)
+  await rejected
+
+  const ambiguous = await harness.storage.loadRecordingJournal(OPERATION_ID)
+  assert.equal(ambiguous?.phase, 'uploading')
+  assert.equal(ambiguous?.uploadId, 'upload-1')
+  assert.equal(
+    ambiguous?.devicePlaintextSha256Hex,
+    bytesHex(SHA256_PACKET.slice(1)),
+  )
+  assert.equal(await (await harness.storage.openBlob(SINK_ID)).size(), 9)
+  assert.equal(hasConfirmWrite(harness.transport), false)
+
+  completionGate.resolve(undefined)
+  harness.provider.reconcileResult = {
+    state: 'cloud_completed',
+    cloudCompletionId: 'reconciled-cloud-completion',
+  }
+  harness.events.length = 0
+  harness.transport.writes.length = 0
+  const resumed = harness.manager.resume(OPERATION_ID)
+  await answerNextList(harness)
+  const result = await resumed
+
+  assert.equal(result.cloudCompletionId, 'reconciled-cloud-completion')
+  assert.equal(
+    harness.provider.reconciled[0]?.plaintextSha256Hex,
+    bytesHex(SHA256_PACKET.slice(1)),
+  )
+  assert.ok(
+    indexOf(harness.events, 'provider:reconcile')
+      < writeIndex(
+        harness.transport,
+        await transferFixture('confirm-command'),
+        harness.events,
+      ),
+  )
+})
+
 test('confirm rejects non-cloud phases and confirmed recovery only removes local state', async () => {
   const harness = await createHarness()
   const disallowed: RecordingJournalPhase[] = [
@@ -334,6 +545,103 @@ test('confirm rejects non-cloud phases and confirmed recovery only removes local
   assert.equal(hasConfirmWrite(harness.transport), false)
   assert.equal(confirmedBlob.deleteCalls, 1)
   assert.equal(harness.storage.recordingJournals.has(confirmedOperation), false)
+})
+
+test('cancellation before CONFIRM starts prevents the destructive write', async () => {
+  const harness = await createHarness()
+  const operationId = 'confirm-cancel-before-write'
+  const stored = journal(
+    operationId,
+    'cloud_completed',
+    'upload-before-write',
+    'cloud-before-write',
+  )
+  harness.storage.recordingJournals.set(operationId, stored)
+  const readEntered = deferred<void>()
+  const readGate = deferred<void>()
+  const read = harness.transport.read.bind(harness.transport)
+  harness.transport.read = async (...args) => {
+    readEntered.resolve(undefined)
+    await readGate.promise
+    return await read(...args)
+  }
+
+  const confirmation = harness.manager.confirm(operationId)
+  const rejected = assert.rejects(confirmation, (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'cancelled'
+  )
+  await readEntered.promise
+  const cancelled = harness.manager.cancel(operationId)
+  readGate.resolve(undefined)
+
+  await settleWithWatchdog(
+    Promise.all([cancelled, rejected]).then(() => undefined),
+    'pre-CONFIRM cancellation',
+  )
+  assert.equal(hasConfirmWrite(harness.transport), false)
+  assert.equal(
+    (await harness.storage.loadRecordingJournal(operationId))?.phase,
+    'cloud_completed',
+  )
+})
+
+test('cancel and destroy wait for an in-flight CONFIRM and retain its actual success', async (t) => {
+  for (const mode of ['cancel', 'destroy'] as const) {
+    await t.test(mode, async () => {
+      const harness = await createHarness()
+      const operationId = `confirm-in-flight-${mode}`
+      const stored = journal(
+        operationId,
+        'cloud_completed',
+        `upload-${mode}`,
+        `cloud-${mode}`,
+      )
+      harness.storage.recordingJournals.set(operationId, stored)
+      const blob = await harness.storage.openBlob(stored.sinkId)
+      blob.seed(PAYLOAD)
+      const writeGate = deferred<void>()
+      harness.transport.writeGate = writeGate.promise
+      const confirmation = harness.manager.confirm(operationId).then(
+        () => 'confirmed' as const,
+        (error: unknown) => error,
+      )
+      await eventually(() => hasConfirmWrite(harness.transport))
+
+      let terminationSettled = false
+      const termination = (
+        mode === 'cancel'
+          ? harness.manager.cancel(operationId)
+          : harness.manager.destroy()
+      ).then(() => {
+        terminationSettled = true
+        harness.events.push('manager:terminated')
+      })
+      await settleReducer()
+      const settledBeforeWrite = terminationSettled
+      writeGate.resolve(undefined)
+      const [outcome] = await settleWithWatchdog(
+        Promise.all([confirmation, termination]),
+        `in-flight CONFIRM ${mode}`,
+      )
+
+      assert.equal(settledBeforeWrite, false)
+      assert.equal(outcome, 'confirmed')
+      assert.equal(
+        harness.storage.recordingJournals.has(operationId),
+        false,
+      )
+      assert.equal(blob.deleteCalls, 1)
+      assert.ok(
+        indexOf(
+          harness.events,
+          `write_settled:${bytesHex(await transferFixture('confirm-command'))}`,
+        ) < indexOf(harness.events, 'manager:terminated'),
+      )
+      const writesAfterTermination = harness.transport.writes.length
+      await settleReducer()
+      assert.equal(harness.transport.writes.length, writesAfterTermination)
+    })
+  }
 })
 
 test('pending operations expose journal summaries without upload or sink evidence', async () => {
@@ -454,6 +762,38 @@ test('transferring recovery truncates legacy state to zero before an explicit re
   await resumed
 })
 
+test('cancellation owns recovery LIST before a resumed legacy START', async () => {
+  const harness = await createHarness()
+  const operationId = 'cancel-resume-list'
+  const stored = journal(operationId, 'transferring')
+  harness.storage.recordingJournals.set(operationId, stored)
+  const blob = await harness.storage.openBlob(stored.sinkId)
+  blob.seed(Uint8Array.of(1, 2, 3, 4))
+  const resumed = harness.manager.resume(operationId)
+  const rejected = assert.rejects(resumed, (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'cancelled'
+  )
+  await waitForWrite(harness.transport, await transferFixture('list-command'))
+
+  await settleWithWatchdog(
+    Promise.all([
+      harness.manager.cancel(operationId),
+      rejected,
+    ]).then(() => undefined),
+    'recovery LIST cancellation',
+  )
+
+  assert.equal(
+    hasWrite(harness.transport, await transferFixture('start-command')),
+    false,
+  )
+  assert.ok(harness.events.some((event) =>
+    event.startsWith('unsubscribe:')
+      && event.includes(RECORDING_LIST_CHARACTERISTIC)
+  ))
+  assert.equal(harness.storage.recordingJournals.has(operationId), false)
+})
+
 test('cancellation aborts Rust transfer, removes only unverified state, and never confirms', async () => {
   const harness = await createHarness()
   const startCommand = await transferFixture('start-command')
@@ -497,6 +837,144 @@ test('abort immediately after prepared persistence removes unverified local stat
   assert.equal(harness.storage.recordingJournals.has(OPERATION_ID), false)
   assert.equal(hasConfirmWrite(harness.transport), false)
   assert.equal(harness.provider.prepared.length, 0)
+})
+
+test('manager cancellation at every pre-START await boundary settles without writing START', async (t) => {
+  const cases: Array<{
+    name: string
+    arrange(
+      harness: Harness,
+      gate: ReturnType<typeof deferred<void>>,
+      entered: ReturnType<typeof deferred<void>>,
+    ): Promise<void> | void
+  }> = [
+    {
+      name: 'journal lookup',
+      arrange: (harness, gate, entered) => {
+        const load = harness.storage.loadRecordingJournal.bind(harness.storage)
+        harness.storage.loadRecordingJournal = async (operationId) => {
+          entered.resolve(undefined)
+          await gate.promise
+          return await load(operationId)
+        }
+      },
+    },
+    {
+      name: 'serial verification',
+      arrange: (harness, gate, entered) => {
+        const read = harness.transport.read.bind(harness.transport)
+        harness.transport.read = async (...args) => {
+          entered.resolve(undefined)
+          await gate.promise
+          return await read(...args)
+        }
+      },
+    },
+    {
+      name: 'prepared journal save',
+      arrange: (harness, gate, entered) => {
+        const save = harness.storage.saveRecordingJournal.bind(harness.storage)
+        harness.storage.saveRecordingJournal = async (value) => {
+          if (value.phase === 'prepared') {
+            entered.resolve(undefined)
+            await gate.promise
+          }
+          await save(value)
+        }
+      },
+    },
+    {
+      name: 'checkpoint deletion',
+      arrange: (harness, gate, entered) => {
+        const remove = harness.storage.deleteWorkflowCheckpoint.bind(
+          harness.storage,
+        )
+        harness.storage.deleteWorkflowCheckpoint = async (operationId) => {
+          entered.resolve(undefined)
+          await gate.promise
+          await remove(operationId)
+        }
+      },
+    },
+    {
+      name: 'blob open',
+      arrange: (harness, gate, entered) => {
+        const open = harness.storage.openBlob.bind(harness.storage)
+        harness.storage.openBlob = async (blobId) => {
+          entered.resolve(undefined)
+          await gate.promise
+          return await open(blobId)
+        }
+      },
+    },
+    {
+      name: 'blob size read',
+      arrange: async (harness, gate, entered) => {
+        const blob = await harness.storage.openBlob(SINK_ID)
+        const size = blob.size.bind(blob)
+        blob.size = async () => {
+          entered.resolve(undefined)
+          await gate.promise
+          return await size()
+        }
+      },
+    },
+    {
+      name: 'legacy zero truncate',
+      arrange: async (harness, gate, entered) => {
+        const blob = await harness.storage.openBlob(SINK_ID)
+        blob.seed(Uint8Array.of(1))
+        const truncate = blob.truncate.bind(blob)
+        blob.truncate = async (size) => {
+          entered.resolve(undefined)
+          await gate.promise
+          await truncate(size)
+        }
+      },
+    },
+    {
+      name: 'transferring journal save',
+      arrange: (harness, gate, entered) => {
+        const save = harness.storage.saveRecordingJournal.bind(harness.storage)
+        harness.storage.saveRecordingJournal = async (value) => {
+          if (value.phase === 'transferring') {
+            entered.resolve(undefined)
+            await gate.promise
+          }
+          await save(value)
+        }
+      },
+    },
+  ]
+
+  for (const boundary of cases) {
+    await t.test(boundary.name, async () => {
+      const harness = await createHarness()
+      const gate = deferred<void>()
+      const entered = deferred<void>()
+      await boundary.arrange(harness, gate, entered)
+      const sync = harness.manager.sync(recording(9n), {
+        profile: 'legacy',
+        operationId: OPERATION_ID,
+      })
+      const rejected = assert.rejects(sync, (error: unknown) =>
+        error instanceof BotaSDKError && error.code === 'cancelled'
+      )
+      await entered.promise
+
+      const cancelled = harness.manager.cancel(OPERATION_ID)
+      gate.resolve(undefined)
+      await settleWithWatchdog(
+        Promise.all([cancelled, rejected]).then(() => undefined),
+        `cancellation at ${boundary.name}`,
+      )
+
+      assert.equal(
+        hasWrite(harness.transport, await transferFixture('start-command')),
+        false,
+      )
+    })
+  }
 })
 
 test('OPFS quota failure keeps the device recording and never starts upload', async () => {
@@ -545,6 +1023,38 @@ test('disconnect during transfer preserves the device recording and skips upload
   assert.equal(hasConfirmWrite(harness.transport), false)
   assert.equal(harness.provider.prepared.length, 0)
   assert.equal(harness.fetchCalls, 0)
+})
+
+test('a disconnect during final-ACK subscription teardown retains transfer success and cloud phase', async () => {
+  const harness = await createHarness()
+  const unsubscribeEntered = deferred<void>()
+  const unsubscribeGate = deferred<void>()
+  harness.transport.onUnsubscribe = () => unsubscribeEntered.resolve(undefined)
+  harness.transport.unsubscribeGate = unsubscribeGate.promise
+  const sync = harness.manager.sync(recording(9n), {
+    profile: 'legacy',
+    operationId: OPERATION_ID,
+  })
+  const rejected = assert.rejects(sync, (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'device_disconnected'
+  )
+  await waitForWrite(harness.transport, await transferFixture('start-command'))
+  await settleReducer()
+  await sendData(harness)
+  await finishTransfer(harness, false)
+  await unsubscribeEntered.promise
+  assert.ok(harness.transport.writes.some(({ value }) => value[0] === 0x10))
+
+  harness.transport.emitDisconnected()
+  unsubscribeGate.resolve(undefined)
+  await settleWithWatchdog(rejected, 'terminal disconnect race')
+
+  const retained = await harness.storage.loadRecordingJournal(OPERATION_ID)
+  assert.equal(retained?.phase, 'cloud_completed')
+  assert.equal(retained?.cloudCompletionId, 'cloud-completion-1')
+  assert.equal(harness.provider.completed.length, 1)
+  assert.equal(await (await harness.storage.openBlob(SINK_ID)).size(), 9)
+  assert.equal(hasConfirmWrite(harness.transport), false)
 })
 
 test('provider failure preserves the finalized staged body for recovery', async () => {
@@ -694,6 +1204,7 @@ function journal(
     uploadId,
     cloudCompletionId,
     confirmationDigestHex: null,
+    devicePlaintextSha256Hex: null,
     updatedAtEpochMs: 1_700_000_000_000,
   }
 }
@@ -856,5 +1367,24 @@ async function eventually(
   while (!predicate()) {
     if (Date.now() >= deadline) assert.fail(message)
     await new Promise((resolve) => setTimeout(resolve, 1))
+  }
+}
+
+async function settleWithWatchdog<T>(
+  promise: Promise<T>,
+  description: string,
+): Promise<T> {
+  let timer!: ReturnType<typeof setTimeout>
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`${description} did not settle`))
+        }, 5_000)
+      }),
+    ])
+  } finally {
+    clearTimeout(timer)
   }
 }

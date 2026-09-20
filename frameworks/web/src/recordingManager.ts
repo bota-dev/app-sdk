@@ -110,6 +110,12 @@ export class RecordingManager {
   }
 
   async list(): Promise<DeviceRecording[]> {
+    return await this.listWithSignal()
+  }
+
+  private async listWithSignal(
+    externalSignal?: AbortSignal,
+  ): Promise<DeviceRecording[]> {
     this.ensureAvailable('transfer_recording')
     return await this.withVerifiedConnection(
       'transfer_recording',
@@ -160,6 +166,7 @@ export class RecordingManager {
           await subscription?.remove()
         }
       },
+      externalSignal,
     )
   }
 
@@ -184,10 +191,13 @@ export class RecordingManager {
       operationId,
       options.signal,
       async (signal) => {
-        if (await storage.loadRecordingJournal(operationId)) {
+        const existing = await storage.loadRecordingJournal(operationId)
+        throwIfAborted(signal, 'transfer_recording')
+        if (existing) {
           throw new BotaSDKError('resume_rejected', 'transfer_recording')
         }
         const connection = await this.verifyConnection(signal)
+        throwIfAborted(signal, 'transfer_recording')
         const prepared: RecordingJournal = {
           schemaVersion: 1,
           operationId,
@@ -199,10 +209,12 @@ export class RecordingManager {
           uploadId: null,
           cloudCompletionId: null,
           confirmationDigestHex: null,
+          devicePlaintextSha256Hex: null,
           updatedAtEpochMs: this.now(),
         }
         try {
           await storage.saveRecordingJournal(prepared)
+          throwIfAborted(signal, 'transfer_recording')
           return await this.transferLegacy(
             prepared,
             recording,
@@ -233,53 +245,67 @@ export class RecordingManager {
     const storage = this.requireStorage()
     this.requireUploadProvider()
     throwIfAborted(options.signal, 'transfer_recording')
-    const journal = await storage.loadRecordingJournal(operationId)
-    if (!journal) throw new BotaSDKError('resume_rejected', 'transfer_recording')
-    if (journal.profile !== 'legacy') {
-      throw new BotaSDKError('unsupported_capability', 'transfer_recording')
-    }
-
-    if (journal.phase === 'confirmed') {
-      return await this.finishConfirmedJournal(journal)
-    }
-    if (journal.phase === 'cloud_completed') {
-      return await this.runManagedOperation(
-        operationId,
-        options.signal,
-        async (signal) => await this.confirmJournal(journal, signal),
-      )
-    }
-
-    const connected = this.requireConnectedDevice()
-    if (connected.serialNumber !== journal.serialNumber) {
-      throw new BotaSDKError('identity_mismatch', 'transfer_recording')
-    }
-    const recordings = await this.list()
-    const recording = recordings.find(({ uuid }) => uuid === journal.recordingUuid)
-    if (!recording) throw new BotaSDKError('resume_rejected', 'transfer_recording')
-    validateRecording(recording)
-
     return await this.runManagedOperation(
       operationId,
       options.signal,
       async (signal) => {
-        switch (journal.phase) {
-          case 'prepared':
-          case 'transferring':
-            return await this.transferLegacy(
-              journal,
-              recording,
-              signal,
-              options.onProgress,
+        try {
+          const journal = await storage.loadRecordingJournal(operationId)
+          throwIfAborted(signal, 'transfer_recording')
+          if (!journal) {
+            throw new BotaSDKError('resume_rejected', 'transfer_recording')
+          }
+          if (journal.profile !== 'legacy') {
+            throw new BotaSDKError(
+              'unsupported_capability',
+              'transfer_recording',
             )
-          case 'staged':
-            return await this.uploadStaged(journal, recording, signal)
-          case 'uploading':
-            return await this.reconcileUpload(journal, recording, signal)
-          case 'cloud_completed':
-            return await this.confirmJournal(journal, signal)
-          case 'confirmed':
+          }
+          if (journal.phase === 'confirmed') {
             return await this.finishConfirmedJournal(journal)
+          }
+          if (journal.phase === 'cloud_completed') {
+            return await this.confirmJournal(journal, signal)
+          }
+
+          const connected = this.requireConnectedDevice()
+          if (connected.serialNumber !== journal.serialNumber) {
+            throw new BotaSDKError('identity_mismatch', 'transfer_recording')
+          }
+          const recordings = await this.listWithSignal(signal)
+          throwIfAborted(signal, 'transfer_recording')
+          const recording = recordings.find(
+            ({ uuid }) => uuid === journal.recordingUuid,
+          )
+          if (!recording) {
+            throw new BotaSDKError('resume_rejected', 'transfer_recording')
+          }
+          validateRecording(recording)
+
+          switch (journal.phase) {
+            case 'prepared':
+            case 'transferring':
+              return await this.transferLegacy(
+                journal,
+                recording,
+                signal,
+                options.onProgress,
+              )
+            case 'staged':
+              return await this.uploadStaged(journal, recording, signal)
+            case 'uploading':
+              return await this.reconcileUpload(journal, recording, signal)
+          }
+        } catch (error) {
+          const normalized = recordingError(error, 'transfer_recording')
+          if (normalized.code === 'cancelled') {
+            const current = await storage.loadRecordingJournal(operationId)
+              .catch(() => null)
+            if (current) {
+              await this.deleteUnverifiedState(current).catch(() => undefined)
+            }
+          }
+          throw normalized
         }
       },
     )
@@ -306,19 +332,28 @@ export class RecordingManager {
   async confirm(operationId: string): Promise<void> {
     this.ensureAvailable('upload')
     validateOperationId(operationId)
-    const journal = await this.requireStorage().loadRecordingJournal(operationId)
-    if (!journal) throw new BotaSDKError('resume_rejected', 'upload')
-    if (journal.profile !== 'legacy') {
-      throw new BotaSDKError('unsupported_capability', 'upload')
-    }
-    if (journal.phase === 'confirmed') {
-      await this.finishConfirmedJournal(journal)
-      return
-    }
-    if (journal.phase !== 'cloud_completed') {
-      throw new BotaSDKError('resume_rejected', 'upload')
-    }
-    await this.confirmJournal(journal)
+    const storage = this.requireStorage()
+    await this.runManagedOperation(
+      operationId,
+      undefined,
+      async (signal) => {
+        const journal = await storage.loadRecordingJournal(operationId)
+        throwIfAborted(signal, 'upload')
+        if (!journal) throw new BotaSDKError('resume_rejected', 'upload')
+        if (journal.profile !== 'legacy') {
+          throw new BotaSDKError('unsupported_capability', 'upload')
+        }
+        if (journal.phase === 'confirmed') {
+          await this.finishConfirmedJournal(journal)
+          return
+        }
+        if (journal.phase !== 'cloud_completed') {
+          throw new BotaSDKError('resume_rejected', 'upload')
+        }
+        await this.confirmJournal(journal, signal)
+      },
+      'upload',
+    )
   }
 
   async listPendingOperations(): Promise<RecordingJournalSummary[]> {
@@ -356,24 +391,31 @@ export class RecordingManager {
     const storage = this.requireStorage()
     throwIfAborted(signal, 'transfer_recording')
     await storage.deleteWorkflowCheckpoint(journal.operationId)
+    throwIfAborted(signal, 'transfer_recording')
     const blob = await storage.openBlob(journal.sinkId)
-    const currentSize = safeBrowserNumber(await blob.size(), 'transfer_recording')
-    if (currentSize > 0) await blob.truncate(0)
+    throwIfAborted(signal, 'transfer_recording')
+    const currentSizeValue = await blob.size()
+    throwIfAborted(signal, 'transfer_recording')
+    const currentSize = safeBrowserNumber(
+      currentSizeValue,
+      'transfer_recording',
+    )
+    if (currentSize > 0) {
+      await blob.truncate(0)
+      throwIfAborted(signal, 'transfer_recording')
+    }
     const transferring = await this.saveJournal(journal, {
       phase: 'transferring',
       uploadId: null,
       cloudCompletionId: null,
     })
+    throwIfAborted(signal, 'transfer_recording')
     const sink = createRecordingSinkHost(
       journal.sinkId,
       blob,
       () => this.core.createIntegrityHasher(),
     )
     const cancellationId = randomCancellationId()
-    const cancelRuntime = (): void => {
-      void this.runtime.cancel(journal.operationId)
-    }
-    signal.addEventListener('abort', cancelRuntime, { once: true })
 
     try {
       const result = await this.runtime.run(
@@ -410,7 +452,12 @@ export class RecordingManager {
       ) {
         throw new BotaSDKError('internal_error', 'transfer_recording')
       }
-      const staged = await this.saveJournal(transferring, { phase: 'staged' })
+      const staged = await this.saveJournal(transferring, {
+        phase: 'staged',
+        devicePlaintextSha256Hex: completed.sha256
+          ? hex(completed.sha256)
+          : null,
+      })
       onProgress?.({
         phase: 'staged',
         completedBytes: BigInt(safeBrowserNumber(
@@ -427,11 +474,13 @@ export class RecordingManager {
     } catch (error) {
       const normalized = recordingError(error, 'transfer_recording')
       if (normalized.code === 'cancelled' || normalized.code === 'integrity_failed') {
-        await this.deleteUnverifiedState(transferring).catch(() => undefined)
+        const current = await storage.loadRecordingJournal(journal.operationId)
+          .catch(() => null)
+        if (current) {
+          await this.deleteUnverifiedState(current).catch(() => undefined)
+        }
       }
       throw normalized
-    } finally {
-      signal.removeEventListener('abort', cancelRuntime)
     }
   }
 
@@ -537,28 +586,28 @@ export class RecordingManager {
       throw new BotaSDKError('resume_rejected', 'upload')
     }
     throwIfAborted(signal, 'upload')
-    await this.withVerifiedConnection(
+    return await this.withVerifiedConnection(
       'upload',
       async ({ device, serialNumber }, runtimeSignal) => {
         if (serialNumber !== journal.serialNumber) {
           throw new BotaSDKError('identity_mismatch', 'upload')
         }
-        const combined = combineSignals(signal, runtimeSignal)
-        await awaitWithSignal(
-          this.transport.write(
-            device,
-            BOTA_STORAGE_SERVICE,
-            TRANSFER_CONTROL_CHARACTERISTIC,
-            this.core.encodeRecordingConfirm(journal.recordingUuid),
-            true,
-          ),
-          combined,
-          'upload',
+        throwIfAborted(runtimeSignal, 'upload')
+        const write = this.transport.write(
+          device,
+          BOTA_STORAGE_SERVICE,
+          TRANSFER_CONTROL_CHARACTERISTIC,
+          this.core.encodeRecordingConfirm(journal.recordingUuid),
+          true,
         )
+        await write
+        const confirmed = await this.saveJournal(journal, {
+          phase: 'confirmed',
+        })
+        return await this.finishConfirmedJournal(confirmed)
       },
+      signal,
     )
-    const confirmed = await this.saveJournal(journal, { phase: 'confirmed' })
-    return await this.finishConfirmedJournal(confirmed)
   }
 
   private async finishConfirmedJournal(
@@ -600,7 +649,8 @@ export class RecordingManager {
       serialNumber: journal.serialNumber,
       recording,
       sizeBytes: BigInt(reportedSize),
-      sha256Hex: hex(hasher.sha256Snapshot()),
+      plaintextSha256Hex: journal.devicePlaintextSha256Hex,
+      stagedBodySha256Hex: hex(hasher.sha256Snapshot()),
       encrypted: recording.encrypted,
     }
   }
@@ -636,6 +686,7 @@ export class RecordingManager {
       phase: RecordingJournalPhase
       uploadId?: string | null
       cloudCompletionId?: string | null
+      devicePlaintextSha256Hex?: string | null
     },
   ): Promise<RecordingJournal> {
     const next: RecordingJournal = {
@@ -647,6 +698,10 @@ export class RecordingManager {
       cloudCompletionId: update.cloudCompletionId === undefined
         ? journal.cloudCompletionId
         : update.cloudCompletionId,
+      devicePlaintextSha256Hex:
+        update.devicePlaintextSha256Hex === undefined
+          ? journal.devicePlaintextSha256Hex
+          : update.devicePlaintextSha256Hex,
       updatedAtEpochMs: Math.max(journal.updatedAtEpochMs, this.now()),
     }
     await this.requireStorage().saveRecordingJournal(next)
@@ -668,9 +723,10 @@ export class RecordingManager {
     return await this.withVerifiedConnection(
       'transfer_recording',
       async (connection, runtimeSignal) => {
-        throwIfAborted(combineSignals(signal, runtimeSignal), 'transfer_recording')
+        throwIfAborted(runtimeSignal, 'transfer_recording')
         return connection
       },
+      signal,
     )
   }
 
@@ -680,10 +736,13 @@ export class RecordingManager {
       connection: ConnectedRecordingDevice,
       signal: AbortSignal,
     ) => Promise<T>,
+    externalSignal?: AbortSignal,
   ): Promise<T> {
     const connection = this.requireConnectedDevice()
     try {
       return await this.runtime.runExclusive(operation, async (signal) => {
+        const combinedSignal = combineSignals(externalSignal, signal)
+        throwIfAborted(combinedSignal, operation)
         const current = this.requireConnectedDevice()
         if (current.device.id !== connection.device.id) {
           throw new BotaSDKError('device_disconnected', operation)
@@ -694,13 +753,13 @@ export class RecordingManager {
             DEVICE_INFORMATION_SERVICE,
             SERIAL_NUMBER_CHARACTERISTIC,
           ),
-          signal,
+          combinedSignal,
           operation,
         )
         if (decodeSerial(value, operation) !== current.serialNumber) {
           throw new BotaSDKError('identity_mismatch', operation)
         }
-        return await body(current, signal)
+        return await body(current, combinedSignal)
       })
     } catch (error) {
       const normalized = recordingError(error, operation)
@@ -724,16 +783,21 @@ export class RecordingManager {
     operationId: string,
     externalSignal: AbortSignal | undefined,
     body: (signal: AbortSignal) => Promise<T>,
+    operation: BotaOperation = 'transfer_recording',
   ): Promise<T> {
-    this.ensureAvailable('transfer_recording')
+    this.ensureAvailable(operation)
     if (this.activeOperations.has(operationId)) {
-      throw new BotaSDKError('operation_in_progress', 'transfer_recording')
+      throw new BotaSDKError('operation_in_progress', operation)
     }
-    throwIfAborted(externalSignal, 'transfer_recording')
+    throwIfAborted(externalSignal, operation)
     const controller = new AbortController()
     const settled = deferred<void>()
     const abort = (): void => controller.abort()
+    const cancelRuntime = (): void => {
+      void this.runtime.cancel(operationId).catch(() => undefined)
+    }
     externalSignal?.addEventListener('abort', abort, { once: true })
+    controller.signal.addEventListener('abort', cancelRuntime, { once: true })
     if (externalSignal?.aborted) controller.abort()
     const active: ActiveRecordingOperation = {
       controller,
@@ -745,6 +809,7 @@ export class RecordingManager {
       return await body(controller.signal)
     } finally {
       active.removeExternalAbort()
+      controller.signal.removeEventListener('abort', cancelRuntime)
       if (this.activeOperations.get(operationId) === active) {
         this.activeOperations.delete(operationId)
       }

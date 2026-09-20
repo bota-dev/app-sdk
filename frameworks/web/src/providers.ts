@@ -11,7 +11,8 @@ export interface LegacyUploadContext {
   serialNumber: string
   recording: DeviceRecording
   sizeBytes: bigint
-  sha256Hex: string | null
+  plaintextSha256Hex: string | null
+  stagedBodySha256Hex: string
   encrypted: boolean
 }
 

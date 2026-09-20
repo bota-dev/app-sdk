@@ -130,6 +130,7 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
     })
     this.onWrite?.()
     if (this.writeGate) await this.writeGate
+    this.eventLog?.push(`write_settled:${bytesHex(value)}`)
   }
 
   async subscribe(
