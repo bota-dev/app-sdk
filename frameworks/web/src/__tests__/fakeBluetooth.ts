@@ -30,8 +30,14 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
   authorizedDevicesGate: Promise<void> | null = null
   connectGate: Promise<void> | null = null
   discoverGate: Promise<void> | null = null
+  subscribeGate: Promise<void> | null = null
+  unsubscribeGate: Promise<void> | null = null
+  writeGate: Promise<void> | null = null
   onConnect: (() => void) | null = null
+  onDisconnect: (() => void) | null = null
   onSubscribe: (() => void) | null = null
+  onUnsubscribe: (() => void) | null = null
+  onWrite: (() => void) | null = null
   emitDisconnectedOnDisconnect = false
   serialNumber = 'GDPPSBZJN6'
   readonly serialNumbers = new Map<string, string>()
@@ -104,6 +110,8 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
     this.calls.push(
       `write:${device.id}:${serviceUuid}:${characteristicUuid}:${withResponse}`,
     )
+    this.onWrite?.()
+    if (this.writeGate) await this.writeGate
   }
 
   async subscribe(
@@ -121,11 +129,14 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
     history.push(listener)
     this.notificationListenerHistory.set(key, history)
     this.onSubscribe?.()
+    if (this.subscribeGate) await this.subscribeGate
     let removed = false
     return {
       remove: async () => {
         if (removed) return
         removed = true
+        this.onUnsubscribe?.()
+        if (this.unsubscribeGate) await this.unsubscribeGate
         listeners.delete(listener)
         if (listeners.size === 0) this.notificationListeners.delete(key)
         this.calls.push(
@@ -137,6 +148,7 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
 
   async disconnect(device: BrowserDeviceHandle): Promise<void> {
     this.calls.push(`disconnect:${device.id}`)
+    this.onDisconnect?.()
     if (this.emitDisconnectedOnDisconnect) this.emitDisconnected()
   }
 

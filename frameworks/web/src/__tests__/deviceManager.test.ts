@@ -78,6 +78,26 @@ function memoryStorage(initialHint: VerifiedDeviceHint | null = null):
   }
 }
 
+async function settleWithWatchdog<T>(
+  promise: Promise<T>,
+  label: string,
+): Promise<T> {
+  let watchdog: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        watchdog = setTimeout(
+          () => reject(new Error(`${label} did not settle`)),
+          5_000,
+        )
+      }),
+    ])
+  } finally {
+    if (watchdog) clearTimeout(watchdog)
+  }
+}
+
 test('unsupported browsers fail before opening the device picker', async () => {
   const transport = new FakeBrowserBluetoothTransport()
   transport.isSupported = false
@@ -299,6 +319,64 @@ test('reconnect enumerates authorized devices and selects only the persisted bro
     transport.calls.includes('read:browser-peripheral-1:180A:2A25'),
   )
   assert.equal(storage.savedHints.at(-1)?.browserDeviceId, 'browser-peripheral-1')
+})
+
+test('destroyed reconnect waits for the exact late connection cleanup before rejecting', async () => {
+  const storage = memoryStorage({
+    schemaVersion: 1,
+    serialNumber: 'GDPPSBZJN6',
+    browserDeviceId: 'browser-peripheral-1',
+    name: 'Bota Pin',
+    updatedAtEpochMs: 1,
+  })
+  const transport = new FakeBrowserBluetoothTransport()
+  let connectStarted!: () => void
+  const atConnect = new Promise<void>((resolve) => {
+    connectStarted = resolve
+  })
+  let releaseConnect!: () => void
+  transport.connectGate = new Promise<void>((resolve) => {
+    releaseConnect = resolve
+  })
+  transport.onConnect = connectStarted
+  let disconnected!: () => void
+  const atDisconnect = new Promise<void>((resolve) => {
+    disconnected = resolve
+  })
+  transport.onDisconnect = disconnected
+  const { manager } = await createManager(transport, storage)
+  let reconnectSettled = false
+  const reconnecting = manager.reconnect({
+    expectedSerialNumber: 'GDPPSBZJN6',
+  }).then(
+    () => {
+      reconnectSettled = true
+      return null
+    },
+    (error: unknown) => {
+      reconnectSettled = true
+      return error
+    },
+  )
+  await atConnect
+
+  await manager.destroy()
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  const settledBeforeRelease = reconnectSettled
+  releaseConnect()
+  const error = await settleWithWatchdog(reconnecting, 'reconnect rejection')
+  await settleWithWatchdog(atDisconnect, 'late reconnect disconnect')
+
+  assert.equal(settledBeforeRelease, false)
+  assert.ok(error instanceof BotaSDKError)
+  assert.equal(error.code, 'cancelled')
+  assert.equal(error.operation, 'reconnect')
+  assert.deepEqual(transport.calls, [
+    'get_authorized_devices',
+    'connect:browser-peripheral-1',
+    'disconnect:browser-peripheral-1',
+  ])
+  assert.equal(manager.connectedDevice, null)
 })
 
 test('reconnect without getDevices requires the picker without opening it', async () => {

@@ -10,6 +10,7 @@ import type {
   CoreWorkflowCheckpoint,
 } from '../core.ts'
 import { BotaSDKError, normalizeCoreError } from '../errors.ts'
+import { BrowserStorageError } from '../storage.ts'
 import {
   BrowserWorkflowRuntime,
   type WorkflowEffectHost,
@@ -74,6 +75,26 @@ function errorWith(
     assert.equal(error.code, code)
     if (operation) assert.equal(error.operation, operation)
     return true
+  }
+}
+
+async function settleWithWatchdog<T>(
+  promise: Promise<T>,
+  label: string,
+): Promise<T> {
+  let watchdog: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        watchdog = setTimeout(
+          () => reject(new Error(`${label} did not settle`)),
+          5_000,
+        )
+      }),
+    ])
+  } finally {
+    if (watchdog) clearTimeout(watchdog)
   }
 }
 
@@ -317,6 +338,103 @@ test('a second workflow or direct owner fails before any second GATT call', asyn
   releaseConnect()
   await cancelling
   assert.ok(await firstResult instanceof BotaSDKError)
+})
+
+test('cancellation retains ownership until pending subscription setup is removed', async () => {
+  const transport = new FakeBrowserBluetoothTransport()
+  let subscriptionStarted!: () => void
+  const atSubscription = new Promise<void>((resolve) => {
+    subscriptionStarted = resolve
+  })
+  let releaseSubscription!: () => void
+  transport.subscribeGate = new Promise<void>((resolve) => {
+    releaseSubscription = resolve
+  })
+  transport.onSubscribe = subscriptionStarted
+  let unsubscribeStarted!: () => void
+  const atUnsubscribe = new Promise<void>((resolve) => {
+    unsubscribeStarted = resolve
+  })
+  let releaseUnsubscribe!: () => void
+  transport.unsubscribeGate = new Promise<void>((resolve) => {
+    releaseUnsubscribe = resolve
+  })
+  transport.onUnsubscribe = unsubscribeStarted
+  const core = scriptedCore({
+    dispatch: (event) => {
+      if (event.kind === 'ble_connected') {
+        return [envelope(2n, {
+          kind: 'ble_subscribe',
+          serviceUuid: SERVICE_UUID,
+          characteristicUuid: CHARACTERISTIC_UUID,
+        })]
+      }
+      throw new Error(`unexpected event ${event.kind}`)
+    },
+    cancel: () => [envelope(3n, {
+      kind: 'notify',
+      notification: { kind: 'cancelled', operation: 'reconnect' },
+    })],
+  })
+  const runtime = new BrowserWorkflowRuntime(core, transport)
+  runtime.registerDevice(transport.device)
+  const running = runtime.run(
+    'reconnect:gated-subscription',
+    CANCELLATION_ID,
+    () => [envelope(1n, {
+      kind: 'ble_connect',
+      peripheralId: transport.device.id,
+    })],
+    { persistence: noOpHost() },
+  ).then(
+    () => null,
+    (error: unknown) => error,
+  )
+  await atSubscription
+
+  let cancellationSettled = false
+  const cancelling = runtime.cancel('reconnect:gated-subscription').then(() => {
+    cancellationSettled = true
+  })
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  const settledBeforeRelease = cancellationSettled
+  const secondOwner = await runtime.runExclusive('settings', async () => {
+    await transport.write(
+      transport.device,
+      SERVICE_UUID,
+      CHARACTERISTIC_UUID,
+      Uint8Array.of(0xff),
+      true,
+    )
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  )
+  const callsBeforeRelease = [...transport.calls]
+
+  releaseSubscription()
+  await settleWithWatchdog(atUnsubscribe, 'late subscription cleanup start')
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  const settledDuringCleanup = cancellationSettled
+  releaseUnsubscribe()
+  await settleWithWatchdog(cancelling, 'subscription cancellation')
+  const runError = await settleWithWatchdog(running, 'cancelled workflow')
+
+  assert.equal(settledBeforeRelease, false)
+  assert.equal(settledDuringCleanup, false)
+  assert.ok(secondOwner instanceof BotaSDKError)
+  assert.equal(secondOwner.code, 'operation_in_progress')
+  assert.equal(
+    callsBeforeRelease.some((call) => call.startsWith('write:')),
+    false,
+  )
+  assert.ok(
+    transport.calls.includes(
+      'unsubscribe:browser-peripheral-1:180A:2A25',
+    ),
+  )
+  assert.ok(runError instanceof BotaSDKError)
+  assert.equal(runError.code, 'cancelled')
 })
 
 test('foreign request and cancellation identities cannot reach the core', async (t) => {
@@ -577,6 +695,199 @@ test('cancellation settles before a provider that completes late', async () => {
 
   await new Promise<void>((resolve) => setImmediate(resolve))
   assert.equal(dispatchCalls, 0)
+})
+
+test('host failure executes core cancellation effects before releasing ownership', async () => {
+  const transport = new FakeBrowserBluetoothTransport()
+  let writeStarted!: () => void
+  const atWrite = new Promise<void>((resolve) => {
+    writeStarted = resolve
+  })
+  let releaseWrite!: () => void
+  transport.writeGate = new Promise<void>((resolve) => {
+    releaseWrite = resolve
+  })
+  transport.onWrite = writeStarted
+  const cancellationSequence: string[] = []
+  let cancelCalls = 0
+  const core = scriptedCore({
+    dispatch: (event) => {
+      if (event.kind === 'ble_connected') {
+        return [envelope(2n, {
+          kind: 'persistence_save_checkpoint',
+          checkpoint: CHECKPOINT,
+        })]
+      }
+      if (event.kind === 'ble_write_completed') {
+        cancellationSequence.push('ble_abort_completed')
+        return []
+      }
+      throw new Error(`unexpected event ${event.kind}`)
+    },
+    cancel: () => {
+      cancelCalls += 1
+      cancellationSequence.push('core_cancelled')
+      return [
+        envelope(3n, {
+          kind: 'ble_write',
+          serviceUuid: SERVICE_UUID,
+          characteristicUuid: CHARACTERISTIC_UUID,
+          payload: Uint8Array.of(0xab, 0x0f),
+          withResponse: true,
+        }),
+        envelope(4n, {
+          kind: 'notify',
+          notification: { kind: 'cancelled', operation: 'reconnect' },
+        }),
+      ]
+    },
+  })
+  const persistence: WorkflowEffectHost = {
+    execute: async () => {
+      throw new BrowserStorageError('storage_quota_exceeded')
+    },
+    cancel: async () => {
+      cancellationSequence.push('persistence_cancelled')
+    },
+  }
+  const runtime = new BrowserWorkflowRuntime(core, transport)
+  runtime.registerDevice(transport.device)
+
+  let workflowSettled = false
+  const running = runtime.run(
+    'reconnect:quota-failure',
+    CANCELLATION_ID,
+    () => [envelope(1n, {
+      kind: 'ble_connect',
+      peripheralId: transport.device.id,
+    })],
+    { persistence },
+    {
+      onNotification: (notification) => {
+        if (notification.kind === 'cancelled') {
+          cancellationSequence.push('cancelled_notification')
+        }
+      },
+    },
+  ).then(
+    () => {
+      workflowSettled = true
+      return null
+    },
+    (reason: unknown) => {
+      workflowSettled = true
+      return reason
+    },
+  )
+  await settleWithWatchdog(atWrite, 'cancellation BLE abort start')
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  const settledDuringAbort = workflowSettled
+  let secondBodyCalls = 0
+  const secondOwner = await runtime.runExclusive('settings', async () => {
+    secondBodyCalls += 1
+  }).then(
+    () => null,
+    (reason: unknown) => reason,
+  )
+  releaseWrite()
+  const error = await settleWithWatchdog(running, 'failed workflow cleanup')
+
+  assert.equal(settledDuringAbort, false)
+  assert.ok(secondOwner instanceof BotaSDKError)
+  assert.equal(secondOwner.code, 'operation_in_progress')
+  assert.equal(secondBodyCalls, 0)
+  assert.ok(error instanceof BotaSDKError)
+  assert.equal(error.code, 'storage_quota_exceeded')
+  assert.equal(error.operation, 'reconnect')
+  assert.equal(cancelCalls, 1)
+  assert.ok(
+    transport.calls.includes(
+      'write:browser-peripheral-1:180A:2A25:true',
+    ),
+  )
+  assert.deepEqual(cancellationSequence, [
+    'persistence_cancelled',
+    'core_cancelled',
+    'ble_abort_completed',
+    'cancelled_notification',
+  ])
+})
+
+test('firmware progress allows canonical phase resets', async () => {
+  const progress: Array<[bigint, bigint]> = []
+  const runtime = new BrowserWorkflowRuntime(
+    scriptedCore(),
+    new FakeBrowserBluetoothTransport(),
+  )
+
+  await runtime.run(
+    'update_firmware:phase-transition',
+    CANCELLATION_ID,
+    () => [
+      envelope(1n, {
+        kind: 'notify',
+        notification: {
+          kind: 'firmware_progress',
+          phase: 'downloading',
+          completedBytes: 20n,
+          totalBytes: 20n,
+        },
+      }, CANCELLATION_ID, 'update_firmware'),
+      envelope(2n, {
+        kind: 'notify',
+        notification: {
+          kind: 'firmware_progress',
+          phase: 'awaiting_device',
+          completedBytes: 0n,
+          totalBytes: 20n,
+        },
+      }, CANCELLATION_ID, 'update_firmware'),
+      envelope(3n, {
+        kind: 'notify',
+        notification: { kind: 'completed', operation: 'update_firmware' },
+      }, CANCELLATION_ID, 'update_firmware'),
+    ],
+    { persistence: noOpHost() },
+    { onProgress: (completed, total) => progress.push([completed, total]) },
+  )
+
+  assert.deepEqual(progress, [[20n, 20n], [0n, 20n]])
+})
+
+test('firmware progress still rejects a regression within one phase', async () => {
+  const runtime = new BrowserWorkflowRuntime(
+    scriptedCore(),
+    new FakeBrowserBluetoothTransport(),
+  )
+
+  await assert.rejects(
+    runtime.run(
+      'update_firmware:phase-regression',
+      CANCELLATION_ID,
+      () => [
+        envelope(1n, {
+          kind: 'notify',
+          notification: {
+            kind: 'firmware_progress',
+            phase: 'transferring',
+            completedBytes: 10n,
+            totalBytes: 20n,
+          },
+        }, CANCELLATION_ID, 'update_firmware'),
+        envelope(2n, {
+          kind: 'notify',
+          notification: {
+            kind: 'firmware_progress',
+            phase: 'transferring',
+            completedBytes: 9n,
+            totalBytes: 20n,
+          },
+        }, CANCELLATION_ID, 'update_firmware'),
+      ],
+      { persistence: noOpHost() },
+    ),
+    errorWith('protocol_error', 'update_firmware'),
+  )
 })
 
 test('destroy aborts a direct owner, waits for settlement, and is terminal', async () => {

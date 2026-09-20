@@ -79,7 +79,7 @@ export class BotaSDKError extends Error {
       cause?: unknown
     } = {},
   ) {
-    super(MESSAGES[code], { cause: options.cause })
+    super(MESSAGES[code])
     this.name = 'BotaSDKError'
     this.code = code
     this.operation = operation

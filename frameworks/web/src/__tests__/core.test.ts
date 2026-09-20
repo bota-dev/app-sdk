@@ -297,13 +297,13 @@ test('structured Rust identity failures map to the stable public error', () => {
   assert.doesNotMatch(error.message, /WRONG|GDPPSBZJN6/)
 })
 
-test('unknown platform errors remain private causes', () => {
+test('unknown platform errors are normalized without retaining their causes', () => {
   const platformError = new Error('token=secret-value')
 
   const error = normalizeCoreError(platformError, 'initialize')
 
   assert.equal(error.code, 'internal_error')
-  assert.equal(error.cause, platformError)
+  assert.equal(error.cause, undefined)
   assert.doesNotMatch(error.message, /secret-value/)
 })
 

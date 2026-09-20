@@ -84,12 +84,32 @@ interface RuntimeSubscription {
   remove(): Promise<void>
 }
 
+interface PendingGattSetup<T> {
+  promise: Promise<T>
+  settlement: Promise<void>
+  cancel(): void
+  transferOwnership(): void
+}
+
+type FirmwareProgressPhase = Extract<
+  CoreNotification,
+  { kind: 'firmware_progress' }
+>['phase']
+
+interface FirmwareProgressState {
+  phase: FirmwareProgressPhase
+  completedBytes: bigint
+  totalBytes: bigint
+}
+
 interface WorkflowOwner {
   kind: 'workflow'
   operationId: string
   operation: BotaOperation
   cancellationId: Uint8Array
   abortController: AbortController
+  cancellationAbortController: AbortController | null
+  cancellationGeneration: number | null
   hosts: WorkflowEffectHosts
   observer: WorkflowObserver | undefined
   result: Deferred<WorkflowResult>
@@ -99,13 +119,18 @@ interface WorkflowOwner {
   subscriptions: Map<bigint, RuntimeSubscription>
   timers: Map<bigint, ReturnType<typeof setTimeout>>
   cleanups: Array<() => Promise<void>>
+  pendingGattSetups: Set<Promise<void>>
   generation: number
   pumping: boolean
+  inlineEffects: QueuedEffect[] | null
   terminal: boolean
   cancelling: boolean
   cancelPromise: Promise<void> | null
+  failure: { error: unknown } | null
+  failurePromise: Promise<void> | null
   cleanupPromise: Promise<void> | null
   lastProgress: { completedUnits: bigint; totalUnits: bigint } | null
+  lastFirmwareProgress: FirmwareProgressState | null
   authorizedScanExhausted: boolean
 }
 
@@ -189,6 +214,8 @@ export class BrowserWorkflowRuntime {
       operation,
       cancellationId: cancellationId.slice(),
       abortController: new AbortController(),
+      cancellationAbortController: null,
+      cancellationGeneration: null,
       hosts,
       observer,
       result,
@@ -198,13 +225,18 @@ export class BrowserWorkflowRuntime {
       subscriptions: new Map(),
       timers: new Map(),
       cleanups: [],
+      pendingGattSetups: new Set(),
       generation: 0,
       pumping: false,
+      inlineEffects: null,
       terminal: false,
       cancelling: false,
       cancelPromise: null,
+      failure: null,
+      failurePromise: null,
       cleanupPromise: null,
       lastProgress: null,
+      lastFirmwareProgress: null,
       authorizedScanExhausted: false,
     }
     this.activeOwner = owner
@@ -294,11 +326,12 @@ export class BrowserWorkflowRuntime {
     generation: number,
   ): void {
     if (owner.terminal || generation !== owner.generation) return
+    const queue = owner.inlineEffects ?? owner.queue
     for (const effect of effects) {
       this.validateEnvelope(owner, effect, generation)
-      owner.queue.push({ envelope: effect, generation })
+      queue.push({ envelope: effect, generation })
     }
-    this.ensurePump(owner)
+    if (owner.inlineEffects === null) this.ensurePump(owner)
   }
 
   private validateEnvelope(
@@ -476,10 +509,11 @@ export class BrowserWorkflowRuntime {
     envelope: CoreEffectEnvelope,
     generation: number,
   ): WorkflowEffectContext {
+    const signal = this.ownerSignal(owner, generation)
     const context: WorkflowEffectContext = {
       operationId: owner.operationId,
       cancellationId: owner.cancellationId.slice(),
-      signal: owner.abortController.signal,
+      signal,
       dispatch: async (event) => {
         await this.dispatchFromContext(owner, envelope, generation, context, event)
       },
@@ -776,7 +810,7 @@ export class BrowserWorkflowRuntime {
       await this.dispatchBleFailure(context, envelope.requestId, null)
       return
     }
-    const subscribed = await this.awaitOwnerStep(
+    const pendingSubscription = this.trackGattSetup(
       owner,
       generation,
       this.transport.subscribe(
@@ -796,8 +830,14 @@ export class BrowserWorkflowRuntime {
       ),
       async (subscription) => subscription.remove(),
     )
+    const subscribed = await this.awaitOwnerStep(
+      owner,
+      generation,
+      pendingSubscription.promise,
+    )
     if (subscribed.kind === 'cancelled') return
     if (subscribed.kind === 'failed') {
+      pendingSubscription.cancel()
       await this.dispatchBleFailure(
         context,
         envelope.requestId,
@@ -807,7 +847,8 @@ export class BrowserWorkflowRuntime {
     }
     const subscription = subscribed.value
     if (owner.terminal || generation !== owner.generation) {
-      await subscription.remove()
+      pendingSubscription.cancel()
+      await pendingSubscription.settlement
       return
     }
     try {
@@ -823,6 +864,7 @@ export class BrowserWorkflowRuntime {
       }
       owner.subscriptions.set(envelope.requestId, runtimeSubscription)
       context.addCleanup(runtimeSubscription.remove)
+      pendingSubscription.transferOwnership()
       await context.dispatch({
         requestId: envelope.requestId,
         kind: 'ble_subscribed',
@@ -926,22 +968,17 @@ export class BrowserWorkflowRuntime {
     owner: WorkflowOwner,
     generation: number,
     promise: Promise<T>,
-    onLateCompletion?: (value: T) => Promise<void> | void,
   ): Promise<OwnerStepResult<T>> {
+    const signal = this.ownerSignal(owner, generation)
     const settled = promise.then<OwnerStepResult<T>, OwnerStepResult<T>>(
       (value) => ({ kind: 'completed', value }),
       (error: unknown) => ({ kind: 'failed', error }),
     )
-    const handleLateCompletion = (result: OwnerStepResult<T>): void => {
-      if (result.kind !== 'completed' || !onLateCompletion) return
-      void Promise.resolve(onLateCompletion(result.value)).catch(() => undefined)
-    }
     if (
       owner.terminal
       || generation !== owner.generation
-      || owner.abortController.signal.aborted
+      || signal.aborted
     ) {
-      void settled.then(handleLateCompletion)
       return { kind: 'cancelled' }
     }
 
@@ -949,12 +986,88 @@ export class BrowserWorkflowRuntime {
     const cancellation = new Promise<OwnerStepResult<T>>((resolve) => {
       resolveCancellation = () => resolve({ kind: 'cancelled' })
     })
-    const signal = owner.abortController.signal
     signal.addEventListener('abort', resolveCancellation, { once: true })
     const result = await Promise.race([settled, cancellation])
     signal.removeEventListener('abort', resolveCancellation)
-    if (result.kind === 'cancelled') void settled.then(handleLateCompletion)
     return result
+  }
+
+  private trackGattSetup<T>(
+    owner: WorkflowOwner,
+    generation: number,
+    promise: Promise<T>,
+    cleanup: (value: T) => Promise<void>,
+  ): PendingGattSetup<T> {
+    const signal = this.ownerSignal(owner, generation)
+    let decisionMade = false
+    let resolveDecision!: (decision: 'cancelled' | 'transferred') => void
+    const decision = new Promise<'cancelled' | 'transferred'>((resolve) => {
+      resolveDecision = resolve
+    })
+    const decide = (value: 'cancelled' | 'transferred'): void => {
+      if (decisionMade) return
+      decisionMade = true
+      signal.removeEventListener('abort', onAbort)
+      resolveDecision(value)
+    }
+    const onAbort = (): void => decide('cancelled')
+    signal.addEventListener('abort', onAbort, {
+      once: true,
+    })
+    if (signal.aborted) onAbort()
+
+    let settlement!: Promise<void>
+    settlement = promise.then(
+      async (value) => {
+        const setupDecision = await decision
+        if (
+          setupDecision === 'cancelled'
+          || owner.terminal
+          || generation !== owner.generation
+        ) {
+          await cleanup(value)
+        }
+      },
+      () => undefined,
+    ).finally(() => {
+      signal.removeEventListener('abort', onAbort)
+      owner.pendingGattSetups.delete(settlement)
+    })
+    owner.pendingGattSetups.add(settlement)
+
+    return {
+      promise,
+      settlement,
+      cancel: () => decide('cancelled'),
+      transferOwnership: () => decide('transferred'),
+    }
+  }
+
+  private async settlePendingGattSetups(owner: WorkflowOwner): Promise<void> {
+    let failure: unknown = null
+    while (owner.pendingGattSetups.size > 0) {
+      const settlements = [...owner.pendingGattSetups]
+      const results = await Promise.allSettled(settlements)
+      for (const result of results) {
+        if (failure === null && result.status === 'rejected') {
+          failure = result.reason
+        }
+      }
+    }
+    if (failure !== null) throw failure
+  }
+
+  private ownerSignal(
+    owner: WorkflowOwner,
+    generation: number,
+  ): AbortSignal {
+    if (
+      owner.cancellationGeneration === generation
+      && owner.cancellationAbortController
+    ) {
+      return owner.cancellationAbortController.signal
+    }
+    return owner.abortController.signal
   }
 
   private async handleNotification(
@@ -974,8 +1087,9 @@ export class BrowserWorkflowRuntime {
         notification.totalUnits,
       )
     } else if (notification.kind === 'firmware_progress') {
-      this.reportProgress(
+      this.reportFirmwareProgress(
         owner,
+        notification.phase,
         notification.completedBytes,
         notification.totalBytes,
       )
@@ -988,12 +1102,16 @@ export class BrowserWorkflowRuntime {
       case 'cancelled':
         await this.finishCancelled(owner)
         return
-      case 'failed':
-        await this.failOwner(
-          owner,
-          normalizeCoreError(notification.error, owner.operation),
-        )
+      case 'failed': {
+        const error = normalizeCoreError(notification.error, owner.operation)
+        if (owner.cancelling) {
+          owner.failure ??= { error }
+          await this.finishFailure(owner, owner.failure.error)
+        } else {
+          await this.failOwner(owner, error)
+        }
         return
+      }
       default:
         return
     }
@@ -1022,6 +1140,33 @@ export class BrowserWorkflowRuntime {
     }
   }
 
+  private reportFirmwareProgress(
+    owner: WorkflowOwner,
+    phase: FirmwareProgressPhase,
+    completedBytes: bigint,
+    totalBytes: bigint,
+  ): void {
+    const previous = owner.lastFirmwareProgress
+    if (
+      completedBytes < 0n
+      || totalBytes < 0n
+      || completedBytes > totalBytes
+      || (previous !== null
+        && (firmwarePhaseIndex(phase) < firmwarePhaseIndex(previous.phase)
+          || totalBytes !== previous.totalBytes
+          || (phase === previous.phase
+            && completedBytes < previous.completedBytes)))
+    ) {
+      throw new BotaSDKError('protocol_error', owner.operation)
+    }
+    owner.lastFirmwareProgress = { phase, completedBytes, totalBytes }
+    try {
+      owner.observer?.onProgress?.(completedBytes, totalBytes)
+    } catch {
+      // Observer failures do not change device workflow state.
+    }
+  }
+
   private async dispatchBleFailure(
     context: WorkflowEffectContext,
     requestId: bigint,
@@ -1045,25 +1190,22 @@ export class BrowserWorkflowRuntime {
 
   private async cancelOwner(owner: WorkflowOwner): Promise<void> {
     if (owner.terminal) return
-    owner.cancelling = true
-    owner.generation += 1
-    owner.abortController.abort()
+    this.beginCancellation(owner)
 
     let cleanupError: unknown = null
     try {
-      await this.cleanupOwner(owner, true)
+      await this.cleanupAndSettle(owner, true)
     } catch (error) {
       cleanupError = error
     }
 
-    let effects: CoreEffectEnvelope[]
     try {
-      effects = await this.serializedCoreCall(() =>
+      const effects = await this.serializedCoreCall(() =>
         this.core.cancel(owner.cancellationId.slice())
       )
       this.enqueueEffects(owner, effects, owner.generation)
     } catch (error) {
-      await this.failOwner(owner, cleanupError ?? error)
+      await this.finishFailure(owner, cleanupError ?? error)
     }
 
     try {
@@ -1076,16 +1218,20 @@ export class BrowserWorkflowRuntime {
       ) {
         return
       }
-      throw cleanupError ?? error
+      throw normalizeRuntimeError(cleanupError ?? error, owner.operation)
     }
   }
 
   private async finishSuccess(owner: WorkflowOwner): Promise<void> {
     if (owner.terminal) return
+    if (owner.failure) {
+      await this.finishFailure(owner, owner.failure.error)
+      return
+    }
     owner.terminal = true
     owner.queue.length = 0
     try {
-      await this.cleanupOwner(owner, false)
+      await this.cleanupAndSettle(owner, false)
       this.releaseOwner(owner)
       owner.result.resolve({ notifications: [...owner.notifications] })
     } catch (error) {
@@ -1098,28 +1244,121 @@ export class BrowserWorkflowRuntime {
     if (owner.terminal) return
     owner.terminal = true
     owner.queue.length = 0
+    owner.cancellationAbortController?.abort()
+    let cleanupError: unknown = null
     try {
-      await this.cleanupOwner(owner, true)
-      this.releaseOwner(owner)
-      owner.result.reject(new BotaSDKError('cancelled', owner.operation))
+      await this.cleanupAndSettle(owner, true)
     } catch (error) {
-      this.releaseOwner(owner)
-      owner.result.reject(normalizeRuntimeError(error, owner.operation))
+      cleanupError = error
+    }
+    this.releaseOwner(owner)
+    if (owner.failure) {
+      owner.result.reject(
+        normalizeRuntimeError(owner.failure.error, owner.operation),
+      )
+    } else if (cleanupError !== null) {
+      owner.result.reject(normalizeRuntimeError(cleanupError, owner.operation))
+    } else {
+      owner.result.reject(new BotaSDKError('cancelled', owner.operation))
     }
   }
 
-  private async failOwner(owner: WorkflowOwner, error: unknown): Promise<void> {
+  private failOwner(owner: WorkflowOwner, error: unknown): Promise<void> {
+    if (owner.terminal) return Promise.resolve()
+    if (owner.failurePromise) return owner.failurePromise
+    owner.failure = { error }
+    owner.failurePromise = owner.cancelling
+      ? this.finishFailure(owner, error)
+      : this.cancelAfterFailure(owner, error)
+    return owner.failurePromise
+  }
+
+  private async cancelAfterFailure(
+    owner: WorkflowOwner,
+    error: unknown,
+  ): Promise<void> {
+    this.beginCancellation(owner)
+    await this.cleanupAndSettle(owner, true).catch(() => undefined)
+
+    let effects: CoreEffectEnvelope[]
+    try {
+      effects = await this.serializedCoreCall(() =>
+        this.core.cancel(owner.cancellationId.slice())
+      )
+    } catch {
+      await this.finishFailure(owner, error)
+      return
+    }
+
+    try {
+      await this.executeCancellationEffects(owner, effects, owner.generation)
+    } catch {
+      // The originating operation error remains the public terminal failure.
+    }
+    if (!owner.terminal) await this.finishFailure(owner, error)
+  }
+
+  private async executeCancellationEffects(
+    owner: WorkflowOwner,
+    effects: readonly CoreEffectEnvelope[],
+    generation: number,
+  ): Promise<void> {
+    if (owner.inlineEffects) {
+      throw new BotaSDKError('internal_error', owner.operation)
+    }
+    const queue: QueuedEffect[] = []
+    owner.inlineEffects = queue
+    try {
+      this.enqueueEffects(owner, effects, generation)
+      while (queue.length > 0 && !owner.terminal) {
+        const queued = queue.shift()
+        if (!queued || queued.generation !== owner.generation) continue
+        await this.executeEffect(owner, queued)
+      }
+    } finally {
+      owner.inlineEffects = null
+    }
+  }
+
+  private async finishFailure(
+    owner: WorkflowOwner,
+    error: unknown,
+  ): Promise<void> {
     if (owner.terminal) return
     owner.terminal = true
+    owner.abortController.abort()
+    owner.cancellationAbortController?.abort()
+    owner.queue.length = 0
+    await this.cleanupAndSettle(owner, true).catch(() => undefined)
+    this.releaseOwner(owner)
+    owner.result.reject(normalizeRuntimeError(error, owner.operation))
+  }
+
+  private beginCancellation(owner: WorkflowOwner): void {
+    owner.cancelling = true
     owner.generation += 1
     owner.abortController.abort()
     owner.queue.length = 0
-    await this.cleanupOwner(owner, true).catch(() => undefined)
-    await this.serializedCoreCall(() =>
-      this.core.cancel(owner.cancellationId.slice())
-    ).catch(() => undefined)
-    this.releaseOwner(owner)
-    owner.result.reject(normalizeRuntimeError(error, owner.operation))
+    owner.cancellationAbortController = new AbortController()
+    owner.cancellationGeneration = owner.generation
+  }
+
+  private async cleanupAndSettle(
+    owner: WorkflowOwner,
+    cancelHosts: boolean,
+  ): Promise<void> {
+    let failure: unknown = null
+    try {
+      await this.cleanupOwner(owner, cancelHosts)
+    } catch (error) {
+      failure = error
+    }
+    try {
+      await this.settlePendingGattSetups(owner)
+    } catch (error) {
+      if (failure === null) failure = error
+    }
+    if (failure !== null) throw failure
   }
 
   private cleanupOwner(
@@ -1254,6 +1493,25 @@ function uniqueHosts(hosts: WorkflowEffectHosts): WorkflowEffectHost[] {
     hosts.hostMaterial,
     hosts.encryptedUploadV2,
   ].filter((host): host is WorkflowEffectHost => host !== undefined))]
+}
+
+function firmwarePhaseIndex(phase: FirmwareProgressPhase): number {
+  switch (phase) {
+    case 'downloading':
+      return 0
+    case 'awaiting_device':
+      return 1
+    case 'transferring':
+      return 2
+    case 'verifying':
+      return 3
+    case 'rebooting':
+      return 4
+    case 'reconnecting':
+      return 5
+    case 'complete':
+      return 6
+  }
 }
 
 function publicOperation(operation: CoreOperation): BotaOperation {

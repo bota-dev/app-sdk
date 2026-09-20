@@ -146,6 +146,7 @@ export class DeviceManager {
     }
     if (!this.storage) throw new BotaSDKError('picker_required', 'reconnect')
     this.claimConnectionStart('reconnect')
+    let attemptedDeviceId: string | null = null
 
     try {
       const hint = await this.storage.loadVerifiedDevice(
@@ -158,6 +159,7 @@ export class DeviceManager {
         id: hint.browserDeviceId,
         name: hint.name,
       }
+      attemptedDeviceId = hintedDevice.id
       this.activeDevice = hintedDevice
       this.runtime.registerDevice(hintedDevice)
       const cancellationId = randomCancellationId()
@@ -184,6 +186,9 @@ export class DeviceManager {
       )
     } catch (error) {
       const lifecycleCancelled = this.destroyed
+      if (lifecycleCancelled && attemptedDeviceId) {
+        await this.runtime.waitForPendingConnection(attemptedDeviceId)
+      }
       await this.cleanupFailedConnection()
       if (lifecycleCancelled) {
         throw new BotaSDKError('cancelled', 'reconnect', { cause: error })
