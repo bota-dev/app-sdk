@@ -1307,17 +1307,23 @@ export class BrowserWorkflowRuntime {
       throw new BotaSDKError('internal_error', owner.operation)
     }
     const queue: QueuedEffect[] = []
+    const failures: unknown[] = []
     owner.inlineEffects = queue
     try {
       this.enqueueEffects(owner, effects, generation)
       while (queue.length > 0 && !owner.terminal) {
         const queued = queue.shift()
         if (!queued || queued.generation !== owner.generation) continue
-        await this.executeEffect(owner, queued)
+        try {
+          await this.executeEffect(owner, queued)
+        } catch (error) {
+          failures.push(error)
+        }
       }
     } finally {
       owner.inlineEffects = null
     }
+    if (failures.length > 0) throw failures[0]
   }
 
   private async finishFailure(

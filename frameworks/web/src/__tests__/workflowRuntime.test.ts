@@ -813,6 +813,136 @@ test('host failure executes core cancellation effects before releasing ownership
   ])
 })
 
+test('failure cancellation drains later effects after one cleanup effect rejects', async () => {
+  const transport = new FakeBrowserBluetoothTransport()
+  const cancellationSequence: string[] = []
+  let discardCalls = 0
+  let deleteCalls = 0
+  let notificationCalls = 0
+  let cancelCalls = 0
+  let deleteStarted!: () => void
+  const atDelete = new Promise<void>((resolve) => {
+    deleteStarted = resolve
+  })
+  let releaseDelete!: () => void
+  const deleteGate = new Promise<void>((resolve) => {
+    releaseDelete = resolve
+  })
+  const core = scriptedCore({
+    dispatch: (event) => {
+      if (event.kind === 'ble_connected') {
+        return [envelope(2n, {
+          kind: 'persistence_save_checkpoint',
+          checkpoint: CHECKPOINT,
+        })]
+      }
+      throw new Error(`unexpected event ${event.kind}`)
+    },
+    cancel: () => {
+      cancelCalls += 1
+      return [
+        envelope(3n, {
+          kind: 'recording_sink_discard',
+          sinkId: 'recording-sink-1',
+        }),
+        envelope(4n, { kind: 'persistence_delete_checkpoint' }),
+        envelope(5n, {
+          kind: 'notify',
+          notification: { kind: 'cancelled', operation: 'reconnect' },
+        }),
+      ]
+    },
+  })
+  const persistence: WorkflowEffectHost = {
+    execute: async (effect) => {
+      if (effect.effect.kind === 'persistence_save_checkpoint') {
+        throw new BrowserStorageError('storage_quota_exceeded')
+      }
+      assert.equal(effect.effect.kind, 'persistence_delete_checkpoint')
+      deleteCalls += 1
+      cancellationSequence.push('checkpoint_delete_started')
+      deleteStarted()
+      await deleteGate
+      cancellationSequence.push('checkpoint_delete_settled')
+      return null
+    },
+    cancel: async () => undefined,
+  }
+  const recordingSink: WorkflowEffectHost = {
+    execute: async (effect) => {
+      assert.equal(effect.effect.kind, 'recording_sink_discard')
+      discardCalls += 1
+      cancellationSequence.push('sink_discard_rejected')
+      throw new Error('private cleanup failure')
+    },
+    cancel: async () => undefined,
+  }
+  const runtime = new BrowserWorkflowRuntime(core, transport)
+  runtime.registerDevice(transport.device)
+
+  let workflowSettled = false
+  const running = runtime.run(
+    'reconnect:drain-cancellation-effects',
+    CANCELLATION_ID,
+    () => [envelope(1n, {
+      kind: 'ble_connect',
+      peripheralId: transport.device.id,
+    })],
+    { persistence, recordingSink },
+    {
+      onNotification: (notification) => {
+        if (notification.kind === 'cancelled') {
+          notificationCalls += 1
+          cancellationSequence.push('cancelled_notification')
+        }
+      },
+    },
+  ).then(
+    () => {
+      workflowSettled = true
+      return null
+    },
+    (reason: unknown) => {
+      workflowSettled = true
+      return reason
+    },
+  )
+
+  await settleWithWatchdog(atDelete, 'cancellation checkpoint deletion start')
+  try {
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    assert.equal(workflowSettled, false)
+    let secondBodyCalls = 0
+    const secondOwner = await runtime.runExclusive('settings', async () => {
+      secondBodyCalls += 1
+    }).then(
+      () => null,
+      (reason: unknown) => reason,
+    )
+    assert.ok(secondOwner instanceof BotaSDKError)
+    assert.equal(secondOwner.code, 'operation_in_progress')
+    assert.equal(secondBodyCalls, 0)
+  } finally {
+    releaseDelete()
+  }
+
+  const error = await settleWithWatchdog(running, 'failed workflow cleanup')
+  assert.ok(error instanceof BotaSDKError)
+  assert.equal(error.code, 'storage_quota_exceeded')
+  assert.equal(error.operation, 'reconnect')
+  assert.doesNotMatch(error.message, /private cleanup failure/)
+  assert.equal(cancelCalls, 1)
+  assert.equal(discardCalls, 1)
+  assert.equal(deleteCalls, 1)
+  assert.equal(notificationCalls, 1)
+  assert.deepEqual(cancellationSequence, [
+    'sink_discard_rejected',
+    'checkpoint_delete_started',
+    'checkpoint_delete_settled',
+    'cancelled_notification',
+  ])
+})
+
 test('firmware progress allows canonical phase resets', async () => {
   const progress: Array<[bigint, bigint]> = []
   const runtime = new BrowserWorkflowRuntime(
