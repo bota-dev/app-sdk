@@ -338,6 +338,84 @@ test('a reconciled not-uploaded legacy operation may return to staged exactly on
   )
 })
 
+test('schema v1 recording journals without a plaintext digest remain resumable', async (t) => {
+  const phases = [
+    'prepared',
+    'transferring',
+    'staged',
+    'uploading',
+    'cloud_completed',
+  ] as const
+
+  for (const phase of phases) {
+    await t.test(phase, async () => {
+      const fixture = await storageFixture()
+      const storage = await fixture.open(`legacy-schema-${phase}-tenant`)
+      const operationId = `legacy-schema-${phase}-operation`
+      const seed = recordingJournal(operationId)
+      await storage.saveRecordingJournal(seed)
+      await replaceFirstRecord(
+        fixture.indexedDB,
+        'recording_journals',
+        (value) => {
+          const oldShape: Record<string, unknown> = {
+            ...recordValue(value),
+            phase,
+            uploadId: phase === 'uploading' || phase === 'cloud_completed'
+              ? `upload-${phase}`
+              : null,
+            cloudCompletionId: phase === 'cloud_completed'
+              ? 'cloud-completion-1'
+              : null,
+          }
+          delete oldShape.devicePlaintextSha256Hex
+          return oldShape
+        },
+      )
+
+      const loaded = await storage.loadRecordingJournal(operationId)
+      assert.deepEqual(loaded, {
+        ...seed,
+        phase,
+        uploadId: phase === 'uploading' || phase === 'cloud_completed'
+          ? `upload-${phase}`
+          : null,
+        cloudCompletionId: phase === 'cloud_completed'
+          ? 'cloud-completion-1'
+          : null,
+        devicePlaintextSha256Hex: null,
+      })
+
+      if (phase === 'uploading') {
+        assert.ok(loaded)
+        await storage.saveRecordingJournal({
+          ...loaded,
+          phase: 'staged',
+          uploadId: null,
+          updatedAtEpochMs: loaded.updatedAtEpochMs + 1,
+        })
+        assert.equal(
+          (await storage.loadRecordingJournal(operationId))?.phase,
+          'staged',
+        )
+      }
+
+      if (phase === 'cloud_completed') {
+        assert.ok(loaded)
+        await storage.saveRecordingJournal({
+          ...loaded,
+          phase: 'confirmed',
+          updatedAtEpochMs: loaded.updatedAtEpochMs + 1,
+        })
+        assert.equal(
+          (await storage.loadRecordingJournal(operationId))?.phase,
+          'confirmed',
+        )
+      }
+    })
+  }
+})
+
 test('journal timestamps cannot regress', async (t) => {
   await t.test('recording journal', async () => {
     const storage = await (await storageFixture()).open('recording-time-tenant')
@@ -425,6 +503,72 @@ test('recording evidence is phase-bound, immutable, and same-phase idempotent', 
         updatedAtEpochMs: prepared.updatedAtEpochMs + 4,
       }),
       'resume_rejected',
+    )
+  })
+
+  await t.test('a null plaintext digest is immutable once staging records it', async () => {
+    const storage = await (await storageFixture()).open('null-digest-tenant')
+    const prepared = recordingJournal('null-digest-operation')
+    const transferring: RecordingJournal = {
+      ...prepared,
+      phase: 'transferring',
+      updatedAtEpochMs: prepared.updatedAtEpochMs + 1,
+    }
+    const staged: RecordingJournal = {
+      ...transferring,
+      phase: 'staged',
+      updatedAtEpochMs: prepared.updatedAtEpochMs + 2,
+    }
+    await storage.saveRecordingJournal(prepared)
+    await storage.saveRecordingJournal(transferring)
+    await storage.saveRecordingJournal(staged)
+
+    await expectStorageError(
+      storage.saveRecordingJournal({
+        ...staged,
+        devicePlaintextSha256Hex: '77'.repeat(32),
+        updatedAtEpochMs: prepared.updatedAtEpochMs + 3,
+      }),
+      'resume_rejected',
+    )
+
+    const uploading: RecordingJournal = {
+      ...staged,
+      phase: 'uploading',
+      uploadId: 'null-digest-upload',
+      updatedAtEpochMs: prepared.updatedAtEpochMs + 3,
+    }
+    await storage.saveRecordingJournal(uploading)
+    await expectStorageError(
+      storage.saveRecordingJournal({
+        ...uploading,
+        devicePlaintextSha256Hex: '77'.repeat(32),
+        updatedAtEpochMs: prepared.updatedAtEpochMs + 4,
+      }),
+      'resume_rejected',
+    )
+  })
+
+  await t.test('the transfer result may establish a digest when staging begins', async () => {
+    const storage = await (await storageFixture()).open('new-digest-tenant')
+    const prepared = recordingJournal('new-digest-operation')
+    await storage.saveRecordingJournal(prepared)
+    await storage.saveRecordingJournal({
+      ...prepared,
+      phase: 'transferring',
+      updatedAtEpochMs: prepared.updatedAtEpochMs + 1,
+    })
+    await storage.saveRecordingJournal({
+      ...prepared,
+      phase: 'staged',
+      devicePlaintextSha256Hex: '88'.repeat(32),
+      updatedAtEpochMs: prepared.updatedAtEpochMs + 2,
+    })
+
+    assert.equal(
+      (await storage.loadRecordingJournal(prepared.operationId))
+        ?.devicePlaintextSha256Hex,
+      '88'.repeat(32),
     )
   })
 

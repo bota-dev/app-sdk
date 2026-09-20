@@ -217,10 +217,14 @@ export class IndexedDbWorkflowStore {
           previous.confirmationDigestHex,
           sanitized.confirmationDigestHex,
         )
-        assertEstablishedEvidence(
-          previous.devicePlaintextSha256Hex,
-          sanitized.devicePlaintextSha256Hex,
-        )
+        if (
+          RECORDING_PHASES.indexOf(previous.phase)
+            >= RECORDING_PHASES.indexOf('staged')
+          && previous.devicePlaintextSha256Hex
+            !== sanitized.devicePlaintextSha256Hex
+        ) {
+          throw resumeRejected()
+        }
         if (!reconciledNotUploaded) {
           assertNextPhase(RECORDING_PHASES, previous.phase, sanitized.phase)
         }
@@ -585,9 +589,9 @@ function recordingJournal(value: unknown): RecordingJournal {
     uploadId: nullableIdentifier(record.uploadId),
     cloudCompletionId: nullableIdentifier(record.cloudCompletionId),
     confirmationDigestHex: nullableDigest(record.confirmationDigestHex),
-    devicePlaintextSha256Hex: nullableDigest(
-      record.devicePlaintextSha256Hex,
-    ),
+    devicePlaintextSha256Hex: record.devicePlaintextSha256Hex === undefined
+      ? null
+      : nullableDigest(record.devicePlaintextSha256Hex),
     updatedAtEpochMs: safeNonnegativeInteger(record.updatedAtEpochMs),
   }
   assertRecordingEvidence(journal)
