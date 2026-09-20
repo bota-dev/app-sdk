@@ -237,6 +237,11 @@ const bridge: CoreBridge = {
     transportProfile: 2,
   }),
   encodeEncryptedUploadV2SignedBlob: () => new Uint8Array(),
+  decodeEncryptedUploadV2SignedBlobResult: () => ({
+    blobKind: 'authorization',
+    writeId: 1,
+    result: 0,
+  }),
   createIntegrityHasher: () => ({
     update: () => undefined,
     length: () => 0n,

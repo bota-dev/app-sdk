@@ -50,6 +50,8 @@ export class FakeRecordingUploadProvider implements RecordingUploadProvider {
   prepareError: unknown = null
   completeError: unknown = null
   reconcileError: unknown = null
+  readonly encryptedUploadV2Prepared: EncryptedUploadV2ProviderContext[] = []
+  encryptedUploadV2Material: EncryptedUploadV2Material | null = null
 
   constructor(events: string[] = []) {
     this.events = events
@@ -94,9 +96,31 @@ export class FakeRecordingUploadProvider implements RecordingUploadProvider {
   }
 
   async prepareEncryptedUploadV2(
-    _context: EncryptedUploadV2ProviderContext,
+    context: EncryptedUploadV2ProviderContext,
   ): Promise<EncryptedUploadV2Material> {
-    throw new Error('Encrypted Upload v2 belongs to Task 7.')
+    this.events.push('provider:v2:prepare')
+    this.encryptedUploadV2Prepared.push({
+      ...context,
+      recording: {
+        ...context.recording,
+        ciphertextSha256: context.recording.ciphertextSha256.slice(),
+      },
+      capability: {
+        rawValue: context.capability.rawValue.slice(),
+        sha256: context.capability.sha256.slice(),
+        decoded: { ...context.capability.decoded },
+      },
+      checkpoint: context.checkpoint
+        ? {
+            ...context.checkpoint,
+            prefixSha256: context.checkpoint.prefixSha256.slice(),
+          }
+        : null,
+    })
+    if (!this.encryptedUploadV2Material) {
+      throw new Error('missing encrypted upload v2 material')
+    }
+    return this.encryptedUploadV2Material
   }
 }
 
@@ -105,6 +129,7 @@ export class FakeRecordingStorage implements BrowserSdkStorage {
   readonly events: string[]
   readonly blobs = new Map<string, FakeRecordingBlob>()
   readonly workflowCheckpoints = new Map<string, unknown>()
+  readonly encryptedUploadV2Checkpoints = new Map<string, unknown>()
   readonly recordingJournals = new Map<string, RecordingJournal>()
   readonly verifiedDevices = new Map<string, VerifiedDeviceHint>()
   onSaveRecordingJournal: ((journal: RecordingJournal) => void) | null = null
@@ -149,16 +174,23 @@ export class FakeRecordingStorage implements BrowserSdkStorage {
     this.workflowCheckpoints.delete(operationId)
   }
 
-  async loadEncryptedUploadV2Checkpoint(_operationId: string): Promise<unknown | null> {
-    return null
+  async loadEncryptedUploadV2Checkpoint(operationId: string): Promise<unknown | null> {
+    this.events.push('v2-checkpoint:load')
+    return this.encryptedUploadV2Checkpoints.get(operationId) ?? null
   }
 
   async saveEncryptedUploadV2Checkpoint(
-    _operationId: string,
-    _checkpoint: unknown,
-  ): Promise<void> {}
+    operationId: string,
+    checkpoint: unknown,
+  ): Promise<void> {
+    this.events.push('v2-checkpoint:save')
+    this.encryptedUploadV2Checkpoints.set(operationId, checkpoint)
+  }
 
-  async deleteEncryptedUploadV2Checkpoint(_operationId: string): Promise<void> {}
+  async deleteEncryptedUploadV2Checkpoint(operationId: string): Promise<void> {
+    this.events.push('v2-checkpoint:delete')
+    this.encryptedUploadV2Checkpoints.delete(operationId)
+  }
 
   async loadRecordingJournal(operationId: string): Promise<RecordingJournal | null> {
     const journal = this.recordingJournals.get(operationId)
@@ -210,6 +242,7 @@ export class FakeRecordingStorage implements BrowserSdkStorage {
   async clear(): Promise<void> {
     this.verifiedDevices.clear()
     this.workflowCheckpoints.clear()
+    this.encryptedUploadV2Checkpoints.clear()
     this.recordingJournals.clear()
     this.blobs.clear()
   }

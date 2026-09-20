@@ -11,7 +11,8 @@ use bota_device_sdk_core::{
 use bota_device_sdk_wasm::{
     BridgeCore, WebIntegrityHasher, decode_deprovision_result_dto, decode_device_status_dto,
     decode_encrypted_upload_v2_capabilities_dto, decode_recording_list_dto,
-    encode_deprovision_command, encode_recording_confirm, encode_recording_list_command,
+    decode_encrypted_upload_v2_signed_blob_result_dto, encode_deprovision_command,
+    encode_recording_confirm, encode_recording_list_command,
 };
 
 const SERIAL: &str = "EVFXXW67KP";
@@ -354,6 +355,18 @@ fn encrypted_upload_capability_decoder_preserves_exact_bounds() {
             maximum_missing_sequences: 4,
         }
     );
+}
+
+#[test]
+fn encrypted_upload_signed_blob_result_uses_the_shared_decoder() {
+    let decoded = decode_encrypted_upload_v2_signed_blob_result_dto(&[
+        0x64, 0x02, 0x01, 0x00, 0x04, 0x03, 0x02, 0x01, 0x00, 0x00,
+    ])
+    .expect("valid signed-blob result should decode");
+
+    assert_eq!(decoded.kind, 1);
+    assert_eq!(decoded.write_id, 0x0102_0304);
+    assert_eq!(decoded.result, 0);
 }
 
 #[test]

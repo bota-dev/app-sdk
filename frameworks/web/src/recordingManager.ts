@@ -13,10 +13,17 @@ import {
 import {
   BOTA_STORAGE_SERVICE,
   DEVICE_INFORMATION_SERVICE,
+  ENCRYPTED_UPLOAD_V2_CAPABILITY_CHARACTERISTIC,
   RECORDING_LIST_CHARACTERISTIC,
   SERIAL_NUMBER_CHARACTERISTIC,
   TRANSFER_CONTROL_CHARACTERISTIC,
 } from './gatt.ts'
+import {
+  EncryptedUploadV2Host,
+  EncryptedUploadV2TransferControl,
+  parsePersistedEncryptedUploadV2State,
+  type PersistedEncryptedUploadV2State,
+} from './encryptedUploadV2Host.ts'
 import type {
   DeviceRecording,
   RecordingJournalSummary,
@@ -25,6 +32,9 @@ import type {
   RecordingSyncResult,
 } from './models.ts'
 import type {
+  EncryptedUploadV2CheckpointSummary,
+  EncryptedUploadV2Material,
+  EncryptedUploadV2ProviderContext,
   LegacyUploadContext,
   RecordingUploadProvider,
   UploadRequestTemplate,
@@ -120,6 +130,17 @@ export class RecordingManager {
     return await this.withVerifiedConnection(
       'transfer_recording',
       async ({ device }, signal) => {
+        const capability = await this.readOptionalV2Capability(device, signal)
+        if (capability) {
+          const control = new EncryptedUploadV2TransferControl(
+            this.core,
+            this.transport,
+            device,
+            () => this.runtime.poisonBleOwnership(device.id),
+          )
+          const listed = await control.list(randomTransportSessionId(), signal)
+          return listed.entries.map(encryptedDeviceRecording)
+        }
         let subscription: BrowserSubscription | null = null
         const notification = deferred<Uint8Array>()
         let received = false
@@ -176,7 +197,20 @@ export class RecordingManager {
   ): Promise<RecordingSyncResult> {
     this.ensureAvailable('transfer_recording')
     if (options.profile === 'encrypted_upload_v2') {
-      throw new BotaSDKError('unsupported_capability', 'transfer_recording')
+      validateEncryptedUploadV2Recording(recording)
+      const operationId = options.operationId ?? createOperationId()
+      validateOperationId(operationId)
+      throwIfAborted(options.signal, 'transfer_recording')
+      return await this.runManagedOperation(
+        operationId,
+        options.signal,
+        async (signal) => await this.startEncryptedUploadV2(
+          operationId,
+          recording,
+          signal,
+          options.onProgress,
+        ),
+      )
     }
     if (options.profile !== 'legacy') {
       throw new BotaSDKError('invalid_input', 'transfer_recording')
@@ -255,11 +289,18 @@ export class RecordingManager {
           if (!journal) {
             throw new BotaSDKError('resume_rejected', 'transfer_recording')
           }
-          if (journal.profile !== 'legacy') {
-            throw new BotaSDKError(
-              'unsupported_capability',
-              'transfer_recording',
+          if (journal.profile === 'encrypted_upload_v2') {
+            if (journal.phase === 'confirmed') {
+              return await this.finishConfirmedJournal(journal)
+            }
+            return await this.resumeEncryptedUploadV2(
+              journal,
+              signal,
+              options.onProgress,
             )
+          }
+          if (journal.profile !== 'legacy') {
+            throw new BotaSDKError('resume_rejected', 'transfer_recording')
           }
           if (journal.phase === 'confirmed') {
             return await this.finishConfirmedJournal(journal)
@@ -324,7 +365,10 @@ export class RecordingManager {
     const storage = this.requireStorage()
     const journal = await storage.loadRecordingJournal(operationId)
     if (!journal) return
-    if (journal.phase === 'prepared' || journal.phase === 'transferring') {
+    if (
+      journal.profile === 'legacy'
+      && (journal.phase === 'prepared' || journal.phase === 'transferring')
+    ) {
       await this.deleteUnverifiedState(journal)
     }
   }
@@ -340,8 +384,15 @@ export class RecordingManager {
         const journal = await storage.loadRecordingJournal(operationId)
         throwIfAborted(signal, 'upload')
         if (!journal) throw new BotaSDKError('resume_rejected', 'upload')
+        if (journal.profile === 'encrypted_upload_v2') {
+          if (journal.phase !== 'cloud_completed') {
+            throw new BotaSDKError('resume_rejected', 'upload')
+          }
+          await this.resumeEncryptedUploadV2(journal, signal)
+          return
+        }
         if (journal.profile !== 'legacy') {
-          throw new BotaSDKError('unsupported_capability', 'upload')
+          throw new BotaSDKError('resume_rejected', 'upload')
         }
         if (journal.phase === 'confirmed') {
           await this.finishConfirmedJournal(journal)
@@ -380,6 +431,399 @@ export class RecordingManager {
       await Promise.all(active.map(([, operation]) => operation.settled.promise))
     })()
     return this.destroyPromise
+  }
+
+  private async startEncryptedUploadV2(
+    operationId: string,
+    recording: DeviceRecording,
+    signal: AbortSignal,
+    onProgress?: (progress: RecordingSyncProgress) => void,
+  ): Promise<RecordingSyncResult> {
+    const storage = this.requireStorage()
+    const provider = this.requireUploadProvider()
+    if (await storage.loadRecordingJournal(operationId)) {
+      throw new BotaSDKError('resume_rejected', 'transfer_recording')
+    }
+    const capability = await this.readFreshV2Capability(signal)
+    const metadata = requireEncryptedUploadV2Metadata(recording)
+    const bounds = negotiatedEncryptedUploadV2Bounds(
+      capability.decoded,
+      this.transport.maximumWriteValueLength,
+    )
+    const journal: RecordingJournal = {
+      schemaVersion: 1,
+      operationId,
+      serialNumber: capability.connection.serialNumber,
+      recordingUuid: recording.uuid,
+      profile: 'encrypted_upload_v2',
+      phase: 'prepared',
+      sinkId: sinkId(operationId),
+      uploadId: null,
+      cloudCompletionId: null,
+      confirmationDigestHex: null,
+      devicePlaintextSha256Hex: null,
+      updatedAtEpochMs: this.now(),
+    }
+    const providerContext: EncryptedUploadV2ProviderContext = {
+      operationId,
+      serialNumber: capability.connection.serialNumber,
+      recording: {
+        uuid: recording.uuid,
+        generation: metadata.generation,
+        storageFormat: metadata.storageFormat,
+        ciphertextLength: metadata.ciphertextLength,
+        ciphertextSha256: metadata.ciphertextSha256.slice(),
+      },
+      capability: {
+        rawValue: capability.raw.slice(),
+        sha256: capability.sha256.slice(),
+        decoded: { ...capability.decoded },
+      },
+      checkpoint: null,
+    }
+    const material = await this.prepareEncryptedUploadV2Material(
+      provider,
+      providerContext,
+      signal,
+    )
+    let materialOwnedHere = true
+    try {
+      throwIfAborted(signal, 'transfer_recording')
+      validateEncryptedUploadV2Material(material, capability.decoded)
+      const state: PersistedEncryptedUploadV2State = {
+        schemaVersion: 1,
+        operationId,
+        serialNumber: journal.serialNumber,
+        recording: {
+          ...providerContext.recording,
+          ciphertextSha256: providerContext.recording.ciphertextSha256.slice(),
+        },
+        materialId: material.materialId,
+        recordingId: material.recordingId,
+        uploadSessionId: material.uploadSessionId,
+        ownerRevision: material.ownerRevision,
+        policy: material.policy,
+        transportSessionId: randomTransportSessionId(),
+        sinkId: journal.sinkId,
+        windowPackets: bounds.windowPackets,
+        dataPayloadBytes: bounds.dataPayloadBytes,
+        maximumSignedBlobBytes: capability.decoded.maximumSignedBlobBytes,
+        maximumMissingSequences: bounds.maximumMissingSequences,
+        checkpointIntervalBlocks:
+          capability.decoded.durableCheckpointIntervalBlocks,
+        capabilitySha256Hex: hex(capability.sha256),
+        coreCheckpoint: null,
+        highestContiguousSequence: null,
+        evidence: null,
+      }
+      await storage.saveEncryptedUploadV2Checkpoint(operationId, state)
+      throwIfAborted(signal, 'transfer_recording')
+      await storage.saveRecordingJournal(journal)
+      throwIfAborted(signal, 'transfer_recording')
+      const transferring = await this.saveJournal(journal, {
+        phase: 'transferring',
+      })
+      throwIfAborted(signal, 'transfer_recording')
+      materialOwnedHere = false
+      return await this.runEncryptedUploadV2(
+        transferring,
+        state,
+        capability.decoded,
+        material,
+        signal,
+        onProgress,
+      )
+    } catch (error) {
+      if (materialOwnedHere) {
+        await destroyEncryptedUploadV2Material(material).catch(() => undefined)
+        await storage.deleteEncryptedUploadV2Checkpoint(operationId)
+          .catch(() => undefined)
+        await storage.deleteRecordingJournal(operationId).catch(() => undefined)
+      }
+      throw recordingError(error, 'transfer_recording')
+    }
+  }
+
+  private async resumeEncryptedUploadV2(
+    journal: RecordingJournal,
+    signal: AbortSignal,
+    onProgress?: (progress: RecordingSyncProgress) => void,
+  ): Promise<RecordingSyncResult> {
+    const storage = this.requireStorage()
+    const rawState = await storage.loadEncryptedUploadV2Checkpoint(
+      journal.operationId,
+    )
+    if (!rawState) throw new BotaSDKError('resume_rejected', 'transfer_recording')
+    const state = parsePersistedEncryptedUploadV2State(rawState)
+    validateEncryptedUploadV2JournalState(journal, state)
+    const capability = await this.readFreshV2Capability(signal)
+    if (
+      capability.connection.serialNumber !== state.serialNumber
+      || hex(capability.sha256) !== state.capabilitySha256Hex
+    ) throw new BotaSDKError('integrity_failed', 'transfer_recording')
+    const bounds = negotiatedEncryptedUploadV2Bounds(
+      capability.decoded,
+      this.transport.maximumWriteValueLength,
+    )
+    if (
+      bounds.windowPackets !== state.windowPackets
+      || bounds.dataPayloadBytes !== state.dataPayloadBytes
+      || bounds.maximumMissingSequences !== state.maximumMissingSequences
+    ) throw new BotaSDKError('integrity_failed', 'transfer_recording')
+    const provider = this.requireUploadProvider()
+    const material = await this.prepareEncryptedUploadV2Material(
+      provider,
+      {
+        operationId: state.operationId,
+        serialNumber: state.serialNumber,
+        recording: {
+          ...state.recording,
+          ciphertextSha256: state.recording.ciphertextSha256.slice(),
+        },
+        capability: {
+          rawValue: capability.raw.slice(),
+          sha256: capability.sha256.slice(),
+          decoded: { ...capability.decoded },
+        },
+        checkpoint: encryptedUploadV2CheckpointSummary(state),
+      },
+      signal,
+    )
+    let materialOwnedHere = true
+    try {
+      throwIfAborted(signal, 'transfer_recording')
+      validateEncryptedUploadV2Material(material, capability.decoded, state)
+      materialOwnedHere = false
+      return await this.runEncryptedUploadV2(
+        journal,
+        state,
+        capability.decoded,
+        material,
+        signal,
+        onProgress,
+      )
+    } catch (error) {
+      if (materialOwnedHere) {
+        await destroyEncryptedUploadV2Material(material).catch(() => undefined)
+      }
+      throw recordingError(error, 'transfer_recording')
+    }
+  }
+
+  private async runEncryptedUploadV2(
+    initialJournal: RecordingJournal,
+    state: PersistedEncryptedUploadV2State,
+    capabilities: import('./models.ts').EncryptedUploadV2Capabilities,
+    material: EncryptedUploadV2Material,
+    signal: AbortSignal,
+    onProgress?: (progress: RecordingSyncProgress) => void,
+  ): Promise<RecordingSyncResult> {
+    const storage = this.requireStorage()
+    let host: EncryptedUploadV2Host | null = null
+    let workflowCompleted = false
+    try {
+      throwIfAborted(signal, 'transfer_recording')
+      const connection = this.requireConnectedDevice()
+      if (connection.serialNumber !== state.serialNumber) {
+        throw new BotaSDKError('identity_mismatch', 'transfer_recording')
+      }
+      const blob = await storage.openBlob(state.sinkId)
+      throwIfAborted(signal, 'transfer_recording')
+      let journal = initialJournal
+      const savePhase = async (
+        phase: RecordingJournalPhase,
+        update: {
+          uploadId?: string | null
+          cloudCompletionId?: string | null
+          confirmationDigestHex?: string | null
+        } = {},
+      ): Promise<void> => {
+        if (recordingPhaseIndex(journal.phase) > recordingPhaseIndex(phase)) return
+        journal = await this.saveJournal(journal, { phase, ...update })
+      }
+      host = new EncryptedUploadV2Host({
+        core: this.core,
+        transport: this.transport,
+        device: connection.device,
+        storage,
+        blob,
+        material,
+        state,
+        fetcher: this.fetcher,
+        recoveryPhase: journal.phase === 'confirmed'
+          ? 'cloud_completed'
+          : journal.phase,
+        expectedReceiptSha256Hex: journal.confirmationDigestHex,
+        onOwnershipUncertain: () => {
+          this.runtime.poisonBleOwnership(connection.device.id)
+        },
+        callbacks: {
+          transferCompleted: async (evidence) => {
+            await savePhase('staged')
+            onProgress?.({
+              phase: 'staged',
+              completedBytes: evidence.ciphertextLength,
+              totalBytes: state.recording.ciphertextLength,
+            })
+          },
+          uploading: async () => {
+            await savePhase('uploading', { uploadId: state.materialId })
+          },
+          cloudCompleted: async (receiptSha256) => {
+            await savePhase('cloud_completed', {
+              uploadId: state.materialId,
+              cloudCompletionId: state.recordingId,
+              confirmationDigestHex: hex(receiptSha256),
+            })
+          },
+          confirmed: async () => {
+            await savePhase('confirmed', {
+              uploadId: state.materialId,
+              cloudCompletionId: state.recordingId,
+            })
+          },
+        },
+      })
+      const cancellationId = randomCancellationId()
+      await this.runtime.run(
+        state.operationId,
+        cancellationId,
+        () => this.core.startEncryptedUploadV2({
+          serialNumber: state.serialNumber,
+          recordingUuid: state.recording.uuid,
+          recordingGeneration: state.recording.generation,
+          storageFormat: state.recording.storageFormat,
+          uploadSessionId: state.uploadSessionId,
+          ownerRevision: state.ownerRevision,
+          transportSessionId: state.transportSessionId,
+          materialId: state.materialId,
+          sinkId: state.sinkId,
+          policy: state.policy,
+          capabilities,
+          windowPackets: state.windowPackets,
+          dataPayloadBytes: state.dataPayloadBytes,
+          ciphertextLength: state.recording.ciphertextLength,
+          ciphertextSha256: state.recording.ciphertextSha256.slice(),
+          cancellationId,
+        }),
+        {
+          persistence: createBrowserPersistenceHost(storage),
+          encryptedUploadV2: host,
+        },
+        {
+          onProgress: (completedBytes, totalBytes) => {
+            onProgress?.({
+              phase: 'transferring',
+              completedBytes,
+              totalBytes,
+            })
+          },
+        },
+      )
+      workflowCompleted = true
+      const confirmed = await storage.loadRecordingJournal(state.operationId)
+      if (!confirmed || confirmed.phase !== 'confirmed') {
+        throw new BotaSDKError('internal_error', 'transfer_recording')
+      }
+      return await this.finishConfirmedJournal(confirmed)
+    } catch (error) {
+      if (!workflowCompleted) {
+        if (host) {
+          const confirmationAttempted = await host
+            .confirmationAttemptedOrClaimCancellation()
+            .catch(() => true)
+          if (!confirmationAttempted) {
+            await host.cancel().catch(() => undefined)
+          }
+        } else {
+          await destroyEncryptedUploadV2Material(material)
+            .catch(() => undefined)
+        }
+      }
+      throw recordingError(error, 'transfer_recording')
+    }
+  }
+
+  private async prepareEncryptedUploadV2Material(
+    provider: RecordingUploadProvider,
+    context: EncryptedUploadV2ProviderContext,
+    signal: AbortSignal,
+  ): Promise<EncryptedUploadV2Material> {
+    let pending: Promise<EncryptedUploadV2Material> | null = null
+    try {
+      pending = provider.prepareEncryptedUploadV2(context)
+      return await awaitWithSignal(
+        pending,
+        signal,
+        'upload',
+      )
+    } catch (error) {
+      if (signal.aborted && pending) {
+        void pending.then(
+          async (material) => {
+            await destroyEncryptedUploadV2Material(material)
+              .catch(() => undefined)
+          },
+          () => undefined,
+        )
+      }
+      throw uploadError(error, signal)
+    }
+  }
+
+  private async readFreshV2Capability(signal: AbortSignal): Promise<{
+    connection: ConnectedRecordingDevice
+    raw: Uint8Array
+    sha256: Uint8Array
+    decoded: import('./models.ts').EncryptedUploadV2Capabilities
+  }> {
+    return await this.withVerifiedConnection(
+      'transfer_recording',
+      async (connection, runtimeSignal) => {
+        const raw = await awaitWithSignal(
+          this.transport.read(
+            connection.device,
+            BOTA_STORAGE_SERVICE,
+            ENCRYPTED_UPLOAD_V2_CAPABILITY_CHARACTERISTIC,
+          ),
+          runtimeSignal,
+          'transfer_recording',
+        )
+        const decoded = this.core.decodeEncryptedUploadV2Capabilities(raw)
+        return {
+          connection,
+          raw: raw.slice(),
+          sha256: hashBytes(this.core, raw),
+          decoded,
+        }
+      },
+      signal,
+    )
+  }
+
+  private async readOptionalV2Capability(
+    device: BrowserDeviceHandle,
+    signal: AbortSignal,
+  ): Promise<import('./models.ts').EncryptedUploadV2Capabilities | null> {
+    let raw: Uint8Array
+    try {
+      raw = await awaitWithSignal(
+        this.transport.read(
+          device,
+          BOTA_STORAGE_SERVICE,
+          ENCRYPTED_UPLOAD_V2_CAPABILITY_CHARACTERISTIC,
+        ),
+        signal,
+        'transfer_recording',
+      )
+    } catch (error) {
+      if (
+        error instanceof BrowserTransportError
+        && error.code === 'characteristic_not_found'
+      ) return null
+      throw error
+    }
+    return this.core.decodeEncryptedUploadV2Capabilities(raw)
   }
 
   private async transferLegacy(
@@ -619,6 +1063,9 @@ export class RecordingManager {
     const storage = this.requireStorage()
     await (await storage.openBlob(journal.sinkId)).delete()
     await storage.deleteWorkflowCheckpoint(journal.operationId)
+    if (journal.profile === 'encrypted_upload_v2') {
+      await storage.deleteEncryptedUploadV2Checkpoint(journal.operationId)
+    }
     await storage.deleteRecordingJournal(journal.operationId)
     return resultFromJournal(journal)
   }
@@ -686,6 +1133,7 @@ export class RecordingManager {
       phase: RecordingJournalPhase
       uploadId?: string | null
       cloudCompletionId?: string | null
+      confirmationDigestHex?: string | null
       devicePlaintextSha256Hex?: string | null
     },
   ): Promise<RecordingJournal> {
@@ -698,6 +1146,9 @@ export class RecordingManager {
       cloudCompletionId: update.cloudCompletionId === undefined
         ? journal.cloudCompletionId
         : update.cloudCompletionId,
+      confirmationDigestHex: update.confirmationDigestHex === undefined
+        ? journal.confirmationDigestHex
+        : update.confirmationDigestHex,
       devicePlaintextSha256Hex:
         update.devicePlaintextSha256Hex === undefined
           ? journal.devicePlaintextSha256Hex
@@ -957,6 +1408,35 @@ function deviceRecording(recording: CoreDeviceRecording): DeviceRecording {
   }
 }
 
+function encryptedDeviceRecording(
+  recording: Extract<
+    ReturnType<CoreBridge['decodeEncryptedUploadV2Transfer']>,
+    { kind: 'recording_entry' }
+  >,
+): DeviceRecording {
+  if (
+    recording.startedAt < 0n
+    || recording.startedAt > BigInt(Number.MAX_SAFE_INTEGER)
+    || recording.durationSeconds > Math.floor(Number.MAX_SAFE_INTEGER / 1000)
+    || recording.plaintextLength > BigInt(Number.MAX_SAFE_INTEGER)
+  ) throw new BotaSDKError('protocol_error', 'transfer_recording')
+  return {
+    uuid: recording.recordingUuid,
+    startedAtTimestampSeconds: Number(recording.startedAt),
+    durationMilliseconds: BigInt(recording.durationSeconds) * 1000n,
+    fileSizeBytes: recording.plaintextLength,
+    codec: 'unknown',
+    encrypted: true,
+    encryptedUploadV2: {
+      generation: recording.recordingGeneration,
+      storageFormat: recording.storageFormat,
+      plaintextLength: recording.plaintextLength,
+      ciphertextLength: recording.ciphertextLength,
+      ciphertextSha256: recording.ciphertextSha256.slice(),
+    },
+  }
+}
+
 function validateRecording(recording: DeviceRecording): void {
   if (
     !Number.isSafeInteger(recording.startedAtTimestampSeconds)
@@ -967,6 +1447,185 @@ function validateRecording(recording: DeviceRecording): void {
   ) {
     throw new BotaSDKError('invalid_input', 'transfer_recording')
   }
+}
+
+function validateEncryptedUploadV2Recording(recording: DeviceRecording): void {
+  validateRecording(recording)
+  const metadata = recording.encryptedUploadV2
+  if (
+    !recording.encrypted
+    || !metadata
+    || !isUint32(metadata.generation)
+    || !Number.isInteger(metadata.storageFormat)
+    || metadata.storageFormat <= 0
+    || metadata.storageFormat > 0xff
+    || metadata.plaintextLength < 0n
+    || metadata.ciphertextLength <= 0n
+    || metadata.ciphertextLength > BigInt(Number.MAX_SAFE_INTEGER)
+    || metadata.ciphertextSha256.byteLength !== 32
+  ) throw new BotaSDKError('invalid_input', 'transfer_recording')
+}
+
+function requireEncryptedUploadV2Metadata(
+  recording: DeviceRecording,
+): NonNullable<DeviceRecording['encryptedUploadV2']> {
+  validateEncryptedUploadV2Recording(recording)
+  return recording.encryptedUploadV2 as NonNullable<
+    DeviceRecording['encryptedUploadV2']
+  >
+}
+
+function negotiatedEncryptedUploadV2Bounds(
+  capabilities: import('./models.ts').EncryptedUploadV2Capabilities,
+  transportMaximumWriteValueLength: number,
+): {
+  windowPackets: number
+  dataPayloadBytes: number
+  maximumMissingSequences: number
+} {
+  const frameBytes = Math.min(transportMaximumWriteValueLength, 128)
+  if (frameBytes < 128) {
+    throw new BotaSDKError('unsupported_capability', 'transfer_recording')
+  }
+  const maximumMissingSequences = Math.min(
+    capabilities.maximumMissingSequences,
+    Math.floor((frameBytes - 68) / 4),
+  )
+  const windowPackets = Math.min(
+    capabilities.maximumWindowPackets,
+    maximumMissingSequences,
+  )
+  const dataPayloadBytes = Math.min(
+    capabilities.maximumDataPayloadBytes,
+    frameBytes - 28,
+  )
+  if (
+    maximumMissingSequences <= 0
+    || windowPackets <= 0
+    || dataPayloadBytes <= 0
+    || capabilities.maximumSignedBlobBytes < 408
+    || capabilities.maximumManifestBytes < 580
+  ) throw new BotaSDKError('unsupported_capability', 'transfer_recording')
+  return { windowPackets, dataPayloadBytes, maximumMissingSequences }
+}
+
+function validateEncryptedUploadV2Material(
+  material: EncryptedUploadV2Material,
+  capabilities: import('./models.ts').EncryptedUploadV2Capabilities,
+  expected?: PersistedEncryptedUploadV2State,
+): void {
+  validateProviderIdentifier(material.materialId)
+  validateProviderIdentifier(material.recordingId)
+  if (
+    !isUuid(material.uploadSessionId)
+    || !isUint32(material.ownerRevision)
+    || material.ownerRevision === 0
+    || (material.policy !== 'legacy_allowed'
+      && material.policy !== 'v2_preferred'
+      && material.policy !== 'v2_required')
+    || !(material.authorization instanceof Uint8Array)
+    || material.authorization.byteLength !== 408
+    || material.authorization.byteLength > capabilities.maximumSignedBlobBytes
+    || typeof material.stagingRequest !== 'function'
+    || typeof material.submitManifest !== 'function'
+    || typeof material.finalize !== 'function'
+    || typeof material.completionReceipt !== 'function'
+    || typeof material.cancel !== 'function'
+  ) throw new BotaSDKError('upload_failed', 'upload')
+  if (
+    expected
+    && (
+      material.materialId !== expected.materialId
+      || material.recordingId !== expected.recordingId
+      || material.uploadSessionId !== expected.uploadSessionId
+      || material.ownerRevision !== expected.ownerRevision
+      || material.policy !== expected.policy
+    )
+  ) throw new BotaSDKError('integrity_failed', 'upload')
+}
+
+async function destroyEncryptedUploadV2Material(
+  material: EncryptedUploadV2Material,
+): Promise<void> {
+  if (material.authorization instanceof Uint8Array) {
+    material.authorization.fill(0)
+  }
+  if (typeof material.cancel === 'function') await material.cancel()
+}
+
+function validateEncryptedUploadV2JournalState(
+  journal: RecordingJournal,
+  state: PersistedEncryptedUploadV2State,
+): void {
+  const phase = recordingPhaseIndex(journal.phase)
+  if (
+    journal.profile !== 'encrypted_upload_v2'
+    || journal.operationId !== state.operationId
+    || journal.serialNumber !== state.serialNumber
+    || journal.recordingUuid !== state.recording.uuid
+    || journal.sinkId !== state.sinkId
+    || (phase >= recordingPhaseIndex('staged') && !state.evidence)
+    || (phase >= recordingPhaseIndex('uploading')
+      && journal.uploadId !== state.materialId)
+    || (phase >= recordingPhaseIndex('cloud_completed')
+      && (
+        journal.cloudCompletionId !== state.recordingId
+        || !journal.confirmationDigestHex
+        || !/^[0-9a-f]{64}$/.test(journal.confirmationDigestHex)
+      ))
+  ) throw new BotaSDKError('integrity_failed', 'transfer_recording')
+}
+
+function encryptedUploadV2CheckpointSummary(
+  state: PersistedEncryptedUploadV2State,
+): EncryptedUploadV2CheckpointSummary | null {
+  const checkpoint = state.coreCheckpoint
+  if (!checkpoint) return null
+  return {
+    uploadSessionId: state.uploadSessionId,
+    ownerRevision: state.ownerRevision,
+    checkpointRevision: checkpoint.checkpointRevision,
+    nextCiphertextOffset: checkpoint.nextCiphertextOffset,
+    prefixSha256: checkpoint.prefixSha256.slice(),
+    transportSessionId: state.transportSessionId,
+    sinkId: state.sinkId,
+    windowPackets: state.windowPackets,
+    dataPayloadBytes: state.dataPayloadBytes,
+  }
+}
+
+function hashBytes(core: CoreBridge, value: Uint8Array): Uint8Array {
+  const hasher = core.createIntegrityHasher()
+  hasher.update(value)
+  return hasher.sha256Snapshot()
+}
+
+function randomTransportSessionId(): bigint {
+  const value = crypto.getRandomValues(new Uint32Array(2))
+  const session = (BigInt(value[0] ?? 0) << 32n) | BigInt(value[1] ?? 0)
+  return session === 0n ? 1n : session
+}
+
+function recordingPhaseIndex(phase: RecordingJournalPhase): number {
+  return [
+    'prepared',
+    'transferring',
+    'staged',
+    'uploading',
+    'cloud_completed',
+    'confirmed',
+  ].indexOf(phase)
+}
+
+function isUint32(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isInteger(value)
+    && value >= 0
+    && value <= 0xffffffff
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 }
 
 function validateOperationId(operationId: string): void {

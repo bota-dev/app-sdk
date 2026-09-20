@@ -5,6 +5,7 @@ import initWasm, {
   decodeDeprovisionResult as decodeGeneratedDeprovisionResult,
   decodeDeviceStatus as decodeGeneratedDeviceStatus,
   decodeEncryptedUploadV2Capabilities as decodeGeneratedCapabilities,
+  decodeEncryptedUploadV2SignedBlobResult as decodeGeneratedEncryptedUploadV2SignedBlobResult,
   decodeEncryptedUploadV2Status as decodeGeneratedEncryptedUploadV2Status,
   decodeEncryptedUploadV2Transfer as decodeGeneratedEncryptedUploadV2Transfer,
   decodeRecordingControlResult as decodeGeneratedRecordingControlResult,
@@ -38,6 +39,7 @@ import type {
   CoreEncryptedUploadV2Input,
   CoreEncryptedUploadV2OutboundTransferFrame,
   CoreEncryptedUploadV2SignedBlobFrame,
+  CoreEncryptedUploadV2SignedBlobResult,
   CoreEncryptedUploadV2Status,
   CoreEncryptedUploadV2TransferFrame,
   CoreHostEvent,
@@ -414,6 +416,23 @@ class WasmCoreAdapter implements CoreBridge {
     }
   }
 
+  decodeEncryptedUploadV2SignedBlobResult(
+    bytesValue: Uint8Array,
+  ): CoreEncryptedUploadV2SignedBlobResult {
+    try {
+      const value = record(
+        decodeGeneratedEncryptedUploadV2SignedBlobResult(bytesValue),
+      )
+      return {
+        blobKind: signedBlobKind(number(value.kind)),
+        writeId: number(value.writeId),
+        result: number(value.result),
+      }
+    } catch (error) {
+      throw normalizePrivateCoreError(error, 'decode')
+    }
+  }
+
   createIntegrityHasher(): CoreIntegrityHasher {
     return new GeneratedWebIntegrityHasher()
   }
@@ -441,6 +460,12 @@ function rawCapabilities(capabilities: EncryptedUploadV2Capabilities): UnknownRe
     durable_checkpoint_interval_blocks: capabilities.durableCheckpointIntervalBlocks,
     maximum_missing_sequences: capabilities.maximumMissingSequences,
   }
+}
+
+function signedBlobKind(value: number): 'authorization' | 'receipt' {
+  if (value === 1) return 'authorization'
+  if (value === 2) return 'receipt'
+  throw internalBridgeError()
 }
 
 function rawUploadPolicy(policy: CoreEncryptedUploadV2Input['policy']): string {

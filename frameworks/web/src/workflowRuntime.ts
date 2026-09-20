@@ -40,6 +40,9 @@ export interface WorkflowEffectHost {
     context: WorkflowEffectContext,
   ): Promise<CoreHostEvent | readonly CoreHostEvent[] | null>
   cancel(): Promise<void>
+  confirmationAttemptedOrClaimCancellation?(
+    cancellationId: Uint8Array,
+  ): Promise<boolean>
 }
 
 export interface WorkflowObserver {
@@ -150,6 +153,7 @@ export class BrowserWorkflowRuntime {
   private readonly devices = new Map<string, BrowserDeviceHandle>()
   private activeOwner: MutationOwner | null = null
   private connectedDevice: BrowserDeviceHandle | null = null
+  private poisonedDeviceId: string | null = null
   private destroyed = false
   private destroyPromise: Promise<void> | null = null
   private coreDispatchTail: Promise<void> = Promise.resolve()
@@ -187,6 +191,7 @@ export class BrowserWorkflowRuntime {
   }
 
   markDeviceDisconnected(deviceId: string): void {
+    if (this.poisonedDeviceId === deviceId) this.poisonedDeviceId = null
     if (this.connectedDevice?.id !== deviceId) return
     this.connectedDevice = null
     const owner = this.activeOwner
@@ -210,6 +215,10 @@ export class BrowserWorkflowRuntime {
     })
   }
 
+  poisonBleOwnership(deviceId: string): void {
+    if (this.connectedDevice?.id === deviceId) this.poisonedDeviceId = deviceId
+  }
+
   run(
     operationId: string,
     cancellationId: Uint8Array,
@@ -221,7 +230,11 @@ export class BrowserWorkflowRuntime {
     if (this.destroyed) {
       return Promise.reject(new BotaSDKError('cancelled', operation))
     }
-    if (this.activeOwner || this.pendingConnectionSettlements.size > 0) {
+    if (
+      this.activeOwner
+      || this.pendingConnectionSettlements.size > 0
+      || (this.poisonedDeviceId !== null && operation !== 'disconnect')
+    ) {
       return Promise.reject(new BotaSDKError('operation_in_progress', operation))
     }
     if (operationId.length === 0 || cancellationId.byteLength !== 16) {
@@ -288,7 +301,11 @@ export class BrowserWorkflowRuntime {
     body: (signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
     if (this.destroyed) throw new BotaSDKError('cancelled', operation)
-    if (this.activeOwner || this.pendingConnectionSettlements.size > 0) {
+    if (
+      this.activeOwner
+      || this.pendingConnectionSettlements.size > 0
+      || (this.poisonedDeviceId !== null && operation !== 'disconnect')
+    ) {
       throw new BotaSDKError('operation_in_progress', operation)
     }
 
@@ -1297,6 +1314,10 @@ export class BrowserWorkflowRuntime {
 
   private async cancelOwner(owner: WorkflowOwner): Promise<void> {
     if (owner.terminal) return
+    if (await this.confirmationAttemptedOrClaimCancellation(owner)) {
+      await owner.result.promise
+      return
+    }
     this.beginCancellation(owner)
 
     let cleanupError: unknown = null
@@ -1384,6 +1405,10 @@ export class BrowserWorkflowRuntime {
     owner: WorkflowOwner,
     error: unknown,
   ): Promise<void> {
+    if (await this.confirmationAttemptedOrClaimCancellation(owner)) {
+      await this.finishFailure(owner, error)
+      return
+    }
     this.beginCancellation(owner)
     await this.cleanupAndSettle(owner, true).catch(() => undefined)
 
@@ -1454,6 +1479,17 @@ export class BrowserWorkflowRuntime {
     owner.queue.length = 0
     owner.cancellationAbortController = new AbortController()
     owner.cancellationGeneration = owner.generation
+  }
+
+  private async confirmationAttemptedOrClaimCancellation(
+    owner: WorkflowOwner,
+  ): Promise<boolean> {
+    for (const host of uniqueHosts(owner.hosts)) {
+      if (await host.confirmationAttemptedOrClaimCancellation?.(
+        owner.cancellationId.slice(),
+      )) return true
+    }
+    return false
   }
 
   private async cleanupAndSettle(

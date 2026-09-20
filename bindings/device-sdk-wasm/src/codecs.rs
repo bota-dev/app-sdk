@@ -9,7 +9,8 @@ use bota_device_sdk_core::{
         CommonHeaderV2, ConfirmV2, DeprovisionResult, EncryptedUploadV2SignedBlob,
         EncryptedUploadV2Transfer, RecordingControlCommand, RecordingControlError, ResumeV2,
         StartV2, TransferCommand, WiFiConfigResult, WiFiScanUpdate, WiFiStatus, WindowAckV2,
-        decode_encrypted_upload_v2_status, decode_encrypted_upload_v2_transfer,
+        decode_encrypted_upload_v2_signed_blob, decode_encrypted_upload_v2_status,
+        decode_encrypted_upload_v2_transfer,
         encode_connection_settings, encode_device_command, encode_encrypted_upload_v2_signed_blob,
         encode_encrypted_upload_v2_transfer, encode_recording_control_command,
         encode_transfer_command, parse_connection_settings, parse_deprovision_result,
@@ -299,6 +300,14 @@ pub struct WebEncryptedUploadV2Status {
     pub durable_ciphertext_bytes: u64,
     pub progress_percent: u8,
     pub transport_profile: u8,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebEncryptedUploadV2SignedBlobResult {
+    pub kind: u8,
+    pub write_id: u32,
+    pub result: u16,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -703,6 +712,28 @@ pub fn encode_encrypted_upload_v2_signed_blob_dto(
             kind: signed_blob_kind(blob_kind),
             write_id,
         }),
+    }
+}
+
+pub fn decode_encrypted_upload_v2_signed_blob_result_dto(
+    bytes: &[u8],
+) -> Result<WebEncryptedUploadV2SignedBlobResult, DeviceSdkError> {
+    match decode_encrypted_upload_v2_signed_blob(bytes)? {
+        EncryptedUploadV2SignedBlob::Result {
+            kind,
+            write_id,
+            result,
+        } => Ok(WebEncryptedUploadV2SignedBlobResult {
+            kind,
+            write_id,
+            result,
+        }),
+        _ => Err(DeviceSdkError::new(
+            ErrorCode::InvalidInput,
+            Operation::Decode,
+            false,
+        )
+        .with_detail("signed blob notification is not a result frame")),
     }
 }
 
@@ -1136,6 +1167,13 @@ mod wasm {
     #[wasm_bindgen(js_name = encodeEncryptedUploadV2SignedBlob)]
     pub fn encode_encrypted_upload_v2_signed_blob_wasm(frame: JsValue) -> Result<Vec<u8>, JsValue> {
         encode_encrypted_upload_v2_signed_blob_dto(from_js(frame)?).map_err(error_to_js)
+    }
+
+    #[wasm_bindgen(js_name = decodeEncryptedUploadV2SignedBlobResult)]
+    pub fn decode_encrypted_upload_v2_signed_blob_result_wasm(
+        bytes: &[u8],
+    ) -> Result<JsValue, JsValue> {
+        to_js(&decode_encrypted_upload_v2_signed_blob_result_dto(bytes).map_err(error_to_js)?)
     }
 
     fn to_js<T: Serialize + ?Sized>(value: &T) -> Result<JsValue, JsValue> {

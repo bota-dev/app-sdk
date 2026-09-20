@@ -1105,7 +1105,7 @@ test('malformed provider material fails as a stable upload error', async () => {
   assert.equal(harness.fetchCalls, 0)
 })
 
-test('unsafe sizes and explicit v2 selection fail before OPFS or legacy fallback', async () => {
+test('unsafe legacy sizes fail before OPFS or provider work', async () => {
   const harness = await createHarness()
 
   await assert.rejects(
@@ -1118,17 +1118,6 @@ test('unsafe sizes and explicit v2 selection fail before OPFS or legacy fallback
   )
   assert.equal(harness.storage.openBlobCalls, 0)
   assert.equal(harness.provider.prepared.length, 0)
-
-  await assert.rejects(
-    harness.manager.sync(recording(9n), {
-      profile: 'encrypted_upload_v2',
-      operationId: 'explicit-v2',
-    }),
-    (error: unknown) =>
-      error instanceof BotaSDKError && error.code === 'unsupported_capability',
-  )
-  assert.equal(harness.provider.prepared.length, 0)
-  assert.equal(harness.transport.writes.length, 0)
 
   const offsetHarness = await createHarness()
   const unsafeOffset = offsetHarness.manager.sync(recording(9n), {

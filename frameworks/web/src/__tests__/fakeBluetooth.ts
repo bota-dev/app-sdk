@@ -4,6 +4,7 @@ import type {
   BrowserNotification,
   BrowserSubscription,
 } from '../transport.ts'
+import { BrowserTransportError } from '../transport.ts'
 import {
   canonicalGattUuid,
   DEVICE_INFORMATION_SERVICE,
@@ -107,7 +108,7 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
         this.serialNumbers.get(device.id) ?? this.serialNumber,
       )
     }
-    throw new Error(`unexpected read ${serviceUuid}/${characteristicUuid}`)
+    throw new BrowserTransportError('characteristic_not_found')
   }
 
   async write(

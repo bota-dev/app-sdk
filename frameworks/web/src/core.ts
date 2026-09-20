@@ -646,6 +646,12 @@ export type CoreEncryptedUploadV2SignedBlobFrame =
       writeId: number
     }
 
+export interface CoreEncryptedUploadV2SignedBlobResult {
+  blobKind: 'authorization' | 'receipt'
+  writeId: number
+  result: number
+}
+
 export interface CoreIntegrityHasher {
   update(bytes: Uint8Array): void
   length(): bigint
@@ -696,6 +702,9 @@ export interface CoreBridge {
   encodeEncryptedUploadV2SignedBlob(
     frame: CoreEncryptedUploadV2SignedBlobFrame,
   ): Uint8Array
+  decodeEncryptedUploadV2SignedBlobResult(
+    bytes: Uint8Array,
+  ): CoreEncryptedUploadV2SignedBlobResult
   createIntegrityHasher(): CoreIntegrityHasher
 }
 
