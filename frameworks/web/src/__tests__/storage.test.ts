@@ -416,6 +416,26 @@ test('schema v1 recording journals without a plaintext digest remain resumable',
   }
 })
 
+test('schema v1 recording journals reject an explicitly undefined plaintext digest', async () => {
+  const fixture = await storageFixture()
+  const storage = await fixture.open('undefined-digest-tenant')
+  const operationId = 'undefined-digest-operation'
+  await storage.saveRecordingJournal(recordingJournal(operationId))
+  await replaceFirstRecord(
+    fixture.indexedDB,
+    'recording_journals',
+    (value) => ({
+      ...recordValue(value),
+      devicePlaintextSha256Hex: undefined,
+    }),
+  )
+
+  await expectStorageError(
+    storage.loadRecordingJournal(operationId),
+    'resume_rejected',
+  )
+})
+
 test('journal timestamps cannot regress', async (t) => {
   await t.test('recording journal', async () => {
     const storage = await (await storageFixture()).open('recording-time-tenant')

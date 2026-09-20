@@ -589,9 +589,12 @@ function recordingJournal(value: unknown): RecordingJournal {
     uploadId: nullableIdentifier(record.uploadId),
     cloudCompletionId: nullableIdentifier(record.cloudCompletionId),
     confirmationDigestHex: nullableDigest(record.confirmationDigestHex),
-    devicePlaintextSha256Hex: record.devicePlaintextSha256Hex === undefined
-      ? null
-      : nullableDigest(record.devicePlaintextSha256Hex),
+    devicePlaintextSha256Hex: Object.hasOwn(
+      record,
+      'devicePlaintextSha256Hex',
+    )
+      ? nullableDigest(record.devicePlaintextSha256Hex)
+      : null,
     updatedAtEpochMs: safeNonnegativeInteger(record.updatedAtEpochMs),
   }
   assertRecordingEvidence(journal)
