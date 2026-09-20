@@ -89,6 +89,45 @@ export interface ReconnectOptions {
   expectedSerialNumber: string
 }
 
+export interface ProvisionRequest {
+  attemptId: string
+  signal?: AbortSignal
+}
+
+export interface DeprovisionRequest {
+  grant: Uint8Array
+  signal?: AbortSignal
+}
+
+export interface DeprovisionResult {
+  success: boolean
+  error?:
+    | 'invalid_token'
+    | 'storage_error'
+    | 'chunk_error'
+    | 'already_paired'
+    | 'unknown'
+  errorRaw?: number
+}
+
+export interface DeviceConnectionSettings {
+  enabledConnections: {
+    wifi: boolean
+    cellular: boolean
+  }
+  heartbeatEnabledConnections: {
+    wifi: boolean
+    cellular: boolean
+  }
+  uploadNetworkPreference: Array<'wifi' | 'ble' | 'cellular'>
+  powerManagement: {
+    cellularIdleTimeoutSeconds: number
+    wifiIdleTimeoutSeconds: number
+  }
+  streamingEnabled: boolean
+  streamingFlushIntervalSeconds: number
+}
+
 export interface BrowserCapabilities {
   readonly bluetooth: boolean
   readonly authorizedDeviceReconnect: boolean

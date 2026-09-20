@@ -2,6 +2,34 @@ import type {
   DeviceRecording,
   EncryptedUploadV2Capabilities,
 } from './models.ts'
+import type { BotaSDKErrorCode } from './errors.ts'
+
+export interface ProvisioningPrepareContext {
+  attemptId: string
+  serialNumber: string
+  nonce: Uint8Array
+  devicePublicKey: Uint8Array
+}
+
+export interface ProvisioningMaterial {
+  materialId: string
+  apiEndpoint: Uint8Array
+  deviceToken: Uint8Array
+  mtu: number
+}
+
+export interface ProvisioningProvider {
+  prepare(context: ProvisioningPrepareContext): Promise<ProvisioningMaterial>
+  confirm(context: {
+    attemptId: string
+    serialNumber: string
+  }): Promise<void>
+  abort(context: {
+    attemptId: string
+    serialNumber: string
+    reason: BotaSDKErrorCode
+  }): Promise<void>
+}
 
 export interface UploadRequestTemplate {
   method: 'PUT'

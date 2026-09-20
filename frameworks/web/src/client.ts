@@ -1,6 +1,10 @@
 import type { CoreLoader } from './core.ts'
 import { DeviceManager } from './deviceManager.ts'
-import type { RecordingUploadProvider } from './providers.ts'
+import { ProvisioningManager } from './provisioningManager.ts'
+import type {
+  ProvisioningProvider,
+  RecordingUploadProvider,
+} from './providers.ts'
 import { RecordingManager } from './recordingManager.ts'
 import type { BrowserSdkStorage } from './storage.ts'
 import type { BrowserBluetoothTransport } from './transport.ts'
@@ -13,19 +17,23 @@ export interface BotaDeviceClientOptions {
   transport?: BrowserBluetoothTransport
   storage?: BrowserSdkStorage
   providers?: {
+    provisioning?: ProvisioningProvider
     recordingUpload?: RecordingUploadProvider
   }
 }
 
 export class BotaDeviceClient {
   readonly devices: DeviceManager
+  readonly provisioning: ProvisioningManager
   readonly recordings: RecordingManager
 
   private constructor(
     devices: DeviceManager,
+    provisioning: ProvisioningManager,
     recordings: RecordingManager,
   ) {
     this.devices = devices
+    this.provisioning = provisioning
     this.recordings = recordings
   }
 
@@ -40,6 +48,14 @@ export class BotaDeviceClient {
     })
     return new BotaDeviceClient(
       devices,
+      new ProvisioningManager({
+        core,
+        transport,
+        runtime,
+        devices,
+        storage,
+        provider: options.providers?.provisioning ?? null,
+      }),
       new RecordingManager(
         core,
         transport,
@@ -52,6 +68,7 @@ export class BotaDeviceClient {
   }
 
   async destroy(): Promise<void> {
+    await this.provisioning.destroy()
     await this.recordings.destroy()
     await this.devices.destroy()
   }

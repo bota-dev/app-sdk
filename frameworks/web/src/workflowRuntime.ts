@@ -368,11 +368,24 @@ export class BrowserWorkflowRuntime {
     effects: readonly CoreEffectEnvelope[],
     generation: number,
   ): void {
-    if (owner.terminal || generation !== owner.generation) return
+    if (owner.terminal || generation !== owner.generation) {
+      for (const effect of effects) scrubTransientEffect(effect)
+      return
+    }
     const queue = owner.inlineEffects ?? owner.queue
-    for (const effect of effects) {
-      this.validateEnvelope(owner, effect, generation)
-      queue.push({ envelope: effect, generation })
+    for (let index = 0; index < effects.length; index += 1) {
+      const effect = effects[index]
+      if (!effect) continue
+      try {
+        this.validateEnvelope(owner, effect, generation)
+        queue.push({ envelope: effect, generation })
+      } catch (error) {
+        scrubTransientEffect(effect)
+        for (const remaining of effects.slice(index + 1)) {
+          scrubTransientEffect(remaining)
+        }
+        throw error
+      }
     }
     if (owner.inlineEffects === null) this.ensurePump(owner)
   }
@@ -455,7 +468,11 @@ export class BrowserWorkflowRuntime {
   private async pump(owner: WorkflowOwner): Promise<void> {
     while (owner.queue.length > 0 && !owner.terminal) {
       const queued = owner.queue.shift()
-      if (!queued || queued.generation !== owner.generation) continue
+      if (!queued) continue
+      if (queued.generation !== owner.generation) {
+        scrubTransientEffect(queued.envelope)
+        continue
+      }
       await this.executeEffect(owner, queued)
     }
     if (!owner.terminal && owner.queue.length === 0) {
@@ -880,21 +897,30 @@ export class BrowserWorkflowRuntime {
     generation: number,
   ): Promise<void> {
     if (envelope.effect.kind !== 'ble_write') return
+    const payload = envelope.effect.payload
     const device = this.connectedDevice
     if (!device) {
+      payload.fill(0)
       await this.dispatchBleFailure(context, envelope.requestId, null)
       return
+    }
+    let pendingWrite: Promise<void>
+    try {
+      pendingWrite = this.transport.write(
+        device,
+        envelope.effect.serviceUuid,
+        envelope.effect.characteristicUuid,
+        payload,
+        envelope.effect.withResponse,
+      ).finally(() => payload.fill(0))
+    } catch (error) {
+      payload.fill(0)
+      throw error
     }
     const write = await this.awaitOwnerStep(
       owner,
       generation,
-      this.transport.write(
-        device,
-        envelope.effect.serviceUuid,
-        envelope.effect.characteristicUuid,
-        envelope.effect.payload,
-        envelope.effect.withResponse,
-      ),
+      pendingWrite,
     )
     if (write.kind === 'cancelled') return
     if (write.kind === 'completed') {
@@ -1357,7 +1383,7 @@ export class BrowserWorkflowRuntime {
       return
     }
     owner.terminal = true
-    owner.queue.length = 0
+    discardQueuedEffects(owner.queue)
     try {
       await this.cleanupAndSettle(owner, false)
       this.releaseOwner(owner)
@@ -1371,7 +1397,7 @@ export class BrowserWorkflowRuntime {
   private async finishCancelled(owner: WorkflowOwner): Promise<void> {
     if (owner.terminal) return
     owner.terminal = true
-    owner.queue.length = 0
+    discardQueuedEffects(owner.queue)
     owner.cancellationAbortController?.abort()
     let cleanupError: unknown = null
     try {
@@ -1445,7 +1471,11 @@ export class BrowserWorkflowRuntime {
       this.enqueueEffects(owner, effects, generation)
       while (queue.length > 0 && !owner.terminal) {
         const queued = queue.shift()
-        if (!queued || queued.generation !== owner.generation) continue
+        if (!queued) continue
+        if (queued.generation !== owner.generation) {
+          scrubTransientEffect(queued.envelope)
+          continue
+        }
         try {
           await this.executeEffect(owner, queued)
         } catch (error) {
@@ -1453,6 +1483,7 @@ export class BrowserWorkflowRuntime {
         }
       }
     } finally {
+      discardQueuedEffects(queue)
       owner.inlineEffects = null
     }
     if (failures.length > 0) throw failures[0]
@@ -1466,7 +1497,7 @@ export class BrowserWorkflowRuntime {
     owner.terminal = true
     owner.abortController.abort()
     owner.cancellationAbortController?.abort()
-    owner.queue.length = 0
+    discardQueuedEffects(owner.queue)
     await this.cleanupAndSettle(owner, true).catch(() => undefined)
     this.releaseOwner(owner)
     owner.result.reject(normalizeRuntimeError(error, owner.operation))
@@ -1476,7 +1507,7 @@ export class BrowserWorkflowRuntime {
     owner.cancelling = true
     owner.generation += 1
     owner.abortController.abort()
-    owner.queue.length = 0
+    discardQueuedEffects(owner.queue)
     owner.cancellationAbortController = new AbortController()
     owner.cancellationGeneration = owner.generation
   }
@@ -1631,6 +1662,21 @@ function platformCode(error: unknown): number | null {
     return error.code
   }
   return null
+}
+
+function discardQueuedEffects(queue: QueuedEffect[]): void {
+  for (const queued of queue) scrubTransientEffect(queued.envelope)
+  queue.length = 0
+}
+
+function scrubTransientEffect(envelope: CoreEffectEnvelope): void {
+  const effect = envelope.effect
+  if (effect.kind === 'ble_write') {
+    effect.payload.fill(0)
+  } else if (effect.kind === 'host_material_prepare_provisioning') {
+    effect.nonce.fill(0)
+    effect.devicePublicKey.fill(0)
+  }
 }
 
 function uniqueHosts(hosts: WorkflowEffectHosts): WorkflowEffectHost[] {
