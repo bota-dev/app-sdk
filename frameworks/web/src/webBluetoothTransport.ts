@@ -133,13 +133,15 @@ export class WebBluetoothTransport implements BrowserBluetoothTransport {
     value: Uint8Array,
     withResponse: boolean,
   ): Promise<void> {
+    let ownedValue: Uint8Array<ArrayBuffer> | null = null
     try {
       const characteristic = await this.characteristic(
         device,
         serviceUuid,
         characteristicUuid,
       )
-      const ownedValue = Uint8Array.from(value)
+      ownedValue = new Uint8Array(value.length)
+      ownedValue.set(value)
       if (withResponse) {
         await characteristic.writeValueWithResponse(ownedValue)
       } else {
@@ -147,6 +149,8 @@ export class WebBluetoothTransport implements BrowserBluetoothTransport {
       }
     } catch (error) {
       throw sanitizeDomError(error, 'characteristic')
+    } finally {
+      ownedValue?.fill(0)
     }
   }
 

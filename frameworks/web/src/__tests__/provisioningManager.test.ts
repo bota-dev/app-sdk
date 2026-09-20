@@ -10,6 +10,7 @@ import type {
 } from '../core.ts'
 import { DeviceManager } from '../deviceManager.ts'
 import { BotaSDKError, type BotaSDKErrorCode } from '../errors.ts'
+import { WebCoreBridge as GeneratedWebCoreBridge } from '../generated/bota_device_sdk_core.js'
 import {
   API_ENDPOINT_CHARACTERISTIC,
   AUTH_NONCE_CHARACTERISTIC,
@@ -70,7 +71,10 @@ class FakeProvisioningProvider implements ProvisioningProvider {
   prepareHandler: (
     context: ProvisioningPrepareContext,
   ) => Promise<ProvisioningMaterial> = async (context) =>
-    materialFor(context.attemptId)
+    materialFor(context.materialId)
+  confirmHandler: (
+    context: { attemptId: string; serialNumber: string },
+  ) => Promise<void> = async () => undefined
   confirmFailuresRemaining = 0
   confirmError: unknown = new Error(
     'https://secret.example.invalid token=raw-device-token',
@@ -87,6 +91,7 @@ class FakeProvisioningProvider implements ProvisioningProvider {
     this.prepares.push({
       snapshot: {
         attemptId: context.attemptId,
+        materialId: context.materialId,
         serialNumber: context.serialNumber,
         nonce: context.nonce.slice(),
         devicePublicKey: context.devicePublicKey.slice(),
@@ -104,6 +109,7 @@ class FakeProvisioningProvider implements ProvisioningProvider {
   }): Promise<void> {
     this.events.push(`provider:confirm:${context.attemptId}`)
     this.confirms.push({ ...context })
+    await this.confirmHandler(context)
     if (this.confirmFailuresRemaining > 0) {
       this.confirmFailuresRemaining -= 1
       throw this.confirmError
@@ -118,6 +124,9 @@ class FakeProvisioningProvider implements ProvisioningProvider {
 
 class FakeProvisioningStorage extends FakeRecordingStorage {
   readonly provisioningJournals = new Map<string, ProvisioningJournal>()
+  onSaveProvisioningJournal: (
+    (journal: ProvisioningJournal) => Promise<void> | void
+  ) | null = null
 
   override async loadProvisioningJournal(
     attemptId: string,
@@ -130,7 +139,12 @@ class FakeProvisioningStorage extends FakeRecordingStorage {
     journal: ProvisioningJournal,
   ): Promise<void> {
     this.events.push(`journal:${journal.attemptId}:${journal.phase}`)
+    await this.onSaveProvisioningJournal?.(journal)
     this.provisioningJournals.set(journal.attemptId, { ...journal })
+  }
+
+  override async listProvisioningJournals(): Promise<ProvisioningJournal[]> {
+    return [...this.provisioningJournals.values()].map((journal) => ({ ...journal }))
   }
 
   override async deleteProvisioningJournal(attemptId: string): Promise<void> {
@@ -228,7 +242,19 @@ test('provision passes fresh exact context, scrubs material, and closes the back
   assert.equal(await provision, undefined)
 
   assert.equal(harness.provider.prepares.length, 1)
-  assert.deepEqual(harness.provider.prepares[0]?.snapshot, {
+  const prepared = harness.provider.prepares[0]?.snapshot
+  assert.ok(prepared)
+  assert.match(prepared.materialId, /^web-[0-9a-f]{32}$/)
+  assert.equal(
+    harness.provider.materials[0]?.materialId,
+    prepared.materialId,
+  )
+  assert.deepEqual({
+    attemptId: prepared.attemptId,
+    serialNumber: prepared.serialNumber,
+    nonce: prepared.nonce,
+    devicePublicKey: prepared.devicePublicKey,
+  }, {
     attemptId,
     serialNumber: SERIAL,
     nonce: NONCE,
@@ -245,6 +271,7 @@ test('provision passes fresh exact context, scrubs material, and closes the back
   assert.deepEqual(harness.storage.provisioningJournals.get(attemptId), {
     schemaVersion: 1,
     attemptId,
+    materialId: prepared.materialId,
     serialNumber: SERIAL,
     phase: 'backend_confirmed',
     updatedAtEpochMs: 1_700_000_000_003,
@@ -282,8 +309,93 @@ test('provision passes fresh exact context, scrubs material, and closes the back
   assert.ok(sensitiveWrites.every((entry) => allZero(entry.value)))
   assert.deepEqual(
     Object.keys(harness.storage.provisioningJournals.get(attemptId) ?? {}).sort(),
-    ['attemptId', 'phase', 'schemaVersion', 'serialNumber', 'updatedAtEpochMs'],
+    [
+      'attemptId',
+      'materialId',
+      'phase',
+      'schemaVersion',
+      'serialNumber',
+      'updatedAtEpochMs',
+    ],
   )
+})
+
+test('provision rejects a cross-material prepare result before any sensitive device write', async () => {
+  const harness = await createHarness()
+  const returned: { value: ProvisioningMaterial | null } = { value: null }
+  harness.provider.prepareHandler = async (context) => {
+    returned.value = materialFor(`${context.materialId}-stale`, 0x61, 0xe1)
+    return returned.value
+  }
+
+  let operationSettled = false
+  const operation = harness.manager.provision({
+    attemptId: 'material-mismatch-attempt',
+  }).finally(() => {
+    operationSettled = true
+  })
+  const rejected = assert.rejects(
+    operation,
+    (error: unknown) => error instanceof BotaSDKError
+      && error.code === 'internal_error'
+      && error.operation === 'provision'
+      && error.retryable,
+  )
+  for (let attempt = 0; attempt < 200 && !operationSettled; attempt += 1) {
+    if (harness.transport.writes.some((write) =>
+      canonicalGattUuid(write.characteristicUuid)
+        === canonicalGattUuid(DEVICE_TOKEN_CHARACTERISTIC)
+    )) {
+      await completePhysicalProvisioning(harness)
+      break
+    }
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  }
+  await rejected
+
+  assert.ok(returned.value)
+  assert.ok(allZero(returned.value.apiEndpoint))
+  assert.ok(allZero(returned.value.deviceToken))
+  assert.equal(harness.transport.writes.some((write) => {
+    const characteristic = canonicalGattUuid(write.characteristicUuid)
+    return characteristic === canonicalGattUuid(API_ENDPOINT_CHARACTERISTIC)
+      || characteristic === canonicalGattUuid(DEVICE_TOKEN_CHARACTERISTIC)
+  }), false)
+  assert.equal(
+    harness.storage.provisioningJournals.has('material-mismatch-attempt'),
+    false,
+  )
+  assert.deepEqual(harness.provider.aborts, [{
+    attemptId: 'material-mismatch-attempt',
+    serialNumber: SERIAL,
+    reason: 'internal_error',
+  }])
+})
+
+test('provisioning zeroes transient WASM bridge byte copies after synchronous bridge calls', async () => {
+  const prototype = GeneratedWebCoreBridge.prototype as unknown as {
+    dispatch(this: GeneratedWebCoreBridge, event: unknown): unknown
+  }
+  const originalDispatch = prototype.dispatch
+  const bridgeCopies: Array<Uint8Array | number[]> = []
+  prototype.dispatch = function (event: unknown): unknown {
+    collectBridgeByteArrays(event, bridgeCopies)
+    const effects = originalDispatch.call(this, event)
+    collectBridgeByteArrays(effects, bridgeCopies)
+    return effects
+  }
+
+  try {
+    const harness = await createHarness()
+    const provision = harness.manager.provision({ attemptId: 'bridge-scrub-attempt' })
+    await completePhysicalProvisioning(harness)
+    await provision
+  } finally {
+    prototype.dispatch = originalDispatch
+  }
+
+  assert.ok(bridgeCopies.length > 0)
+  assert.ok(bridgeCopies.every((value) => value.every((byte) => byte === 0)))
 })
 
 test('backend prepare alone never completes binding and cancellation aborts it', async () => {
@@ -297,7 +409,10 @@ test('backend prepare alone never completes binding and cancellation aborts it',
     attemptId,
     signal: controller.signal,
   })
-  const rejected = assert.rejects(provision, cancelled('provision'))
+  let operationSettled = false
+  const rejected = assert.rejects(provision.finally(() => {
+    operationSettled = true
+  }), cancelled('provision'))
   await eventually(() =>
     harness.storage.provisioningJournals.get(attemptId)?.phase === 'prepared'
   )
@@ -308,8 +423,10 @@ test('backend prepare alone never completes binding and cancellation aborts it',
     'prepared',
   )
   controller.abort()
-  await settleWithWatchdog(rejected, 'prepared provisioning cancellation')
+  await settleReducer()
+  assert.equal(operationSettled, false)
   blockedWrite.resolve(undefined)
+  await settleWithWatchdog(rejected, 'prepared provisioning cancellation')
 
   assert.equal(harness.provider.aborts.length, 1)
   assert.equal(harness.provider.aborts[0]?.reason, 'cancelled')
@@ -317,6 +434,78 @@ test('backend prepare alone never completes binding and cancellation aborts it',
     harness.storage.provisioningJournals.get(attemptId)?.phase,
     'aborted',
   )
+})
+
+test('cancel and destroy join a blocked provisioning write before releasing ownership or scrubbing its bytes', async () => {
+  const harness = await createHarness()
+  harness.transport.setRead(
+    BOTA_PROVISIONING_SERVICE,
+    DEVICE_SETTINGS_CHARACTERISTIC,
+    Uint8Array.of(0x03, 0, 0, 0, 0, 0, 0, 0),
+  )
+  const writeGate = deferred<void>()
+  const writeEntered = deferred<void>()
+  const transportWrite = harness.transport.write.bind(harness.transport)
+  let inFlightToken: Uint8Array | null = null
+  harness.transport.write = async (
+    device,
+    serviceUuid,
+    characteristicUuid,
+    value,
+    withResponse,
+  ) => {
+    if (
+      canonicalGattUuid(characteristicUuid)
+        === canonicalGattUuid(DEVICE_TOKEN_CHARACTERISTIC)
+    ) {
+      inFlightToken = value
+      harness.transport.writeGate = writeGate.promise
+      writeEntered.resolve(undefined)
+    }
+    await transportWrite(device, serviceUuid, characteristicUuid, value, withResponse)
+  }
+  const sibling = new ProvisioningManager({
+    core: harness.core,
+    transport: harness.transport,
+    runtime: harness.runtime,
+    devices: harness.devices,
+    storage: harness.storage,
+    provider: harness.provider,
+  })
+  const controller = new AbortController()
+  const provision = harness.manager.provision({
+    attemptId: 'blocked-token-write',
+    signal: controller.signal,
+  })
+  const rejected = assert.rejects(provision, cancelled('provision'))
+  await settleWithWatchdog(writeEntered.promise, 'provisioning token write start')
+
+  controller.abort()
+  let destroySettled = false
+  const destroying = harness.manager.destroy().then(() => {
+    destroySettled = true
+  })
+  await settleReducer()
+  assert.equal(destroySettled, false)
+  assert.ok(inFlightToken)
+  assert.equal(allZero(inFlightToken), false)
+  await assert.rejects(
+    sibling.readConnectionSettings(),
+    operationInProgress('settings'),
+  )
+
+  writeGate.resolve(undefined)
+  await settleWithWatchdog(destroying, 'blocked provisioning destroy')
+  await settleWithWatchdog(rejected, 'blocked provisioning cancellation')
+  assert.ok(inFlightToken)
+  assert.ok(allZero(inFlightToken))
+  assert.ok(harness.provider.materials.every((material) =>
+    allZero(material.apiEndpoint) && allZero(material.deviceToken)
+  ))
+  const writesAfterSettlement = harness.transport.writes.length
+  await settleReducer()
+  assert.equal(harness.transport.writes.length, writesAfterSettlement)
+  await sibling.readConnectionSettings()
 })
 
 test('physical provisioning rejection aborts the backend and leaves no confirmed bind', async () => {
@@ -345,6 +534,84 @@ test('physical provisioning rejection aborts the backend and leaves no confirmed
   assert.ok(
     eventIndex(harness.events, `provider:abort:${attemptId}:protocol_error`)
       < eventIndex(harness.events, `journal:${attemptId}:aborted`),
+  )
+})
+
+test('cleanup failure after physical success never aborts or records the attempt as aborted', async () => {
+  const harness = await createHarness()
+  const subscribe = harness.transport.subscribe.bind(harness.transport)
+  harness.transport.subscribe = async (...args) => {
+    const subscription = await subscribe(...args)
+    return {
+      remove: async () => {
+        await subscription.remove()
+        throw new Error('cleanup failed with token=raw-device-token')
+      },
+    }
+  }
+
+  const provision = harness.manager.provision({
+    attemptId: 'post-success-cleanup-failure',
+  })
+  await completePhysicalProvisioning(harness)
+  await assert.rejects(provision, (error: unknown) => {
+    assert.ok(error instanceof BotaSDKError)
+    assert.equal(error.code, 'internal_error')
+    assert.equal(error.operation, 'provision')
+    assert.equal(String(error).includes('raw-device-token'), false)
+    return true
+  })
+
+  assert.deepEqual(harness.provider.aborts, [])
+  assert.equal(
+    harness.storage.provisioningJournals.get('post-success-cleanup-failure')?.phase,
+    'backend_confirmed',
+  )
+})
+
+test('physical success retains the shared owner through device_applied durability and confirm', async () => {
+  const harness = await createHarness({ deprovisionTimeoutMs: 20 })
+  const saveEntered = deferred<void>()
+  const saveGate = deferred<void>()
+  harness.storage.onSaveProvisioningJournal = async (journal) => {
+    if (journal.phase !== 'device_applied') return
+    saveEntered.resolve(undefined)
+    await saveGate.promise
+  }
+  const sibling = new ProvisioningManager({
+    core: harness.core,
+    transport: harness.transport,
+    runtime: harness.runtime,
+    devices: harness.devices,
+    storage: harness.storage,
+    provider: harness.provider,
+  })
+
+  const provision = harness.manager.provision({
+    attemptId: 'blocked-device-applied-save',
+  })
+  await completePhysicalProvisioning(harness)
+  await settleWithWatchdog(saveEntered.promise, 'device_applied save start')
+
+  await assert.rejects(
+    sibling.deprovision({ grant: Uint8Array.of(0x71) }),
+    operationInProgress('deprovision'),
+  )
+  await assert.rejects(
+    sibling.readConnectionSettings(),
+    operationInProgress('settings'),
+  )
+  await assert.rejects(
+    sibling.provision({ attemptId: 'new-attempt-during-save' }),
+    operationInProgress('provision'),
+  )
+  assert.equal(harness.provider.confirms.length, 0)
+
+  saveGate.resolve(undefined)
+  await settleWithWatchdog(provision, 'provisioning durable handoff')
+  assert.equal(
+    harness.storage.provisioningJournals.get('blocked-device-applied-save')?.phase,
+    'backend_confirmed',
   )
 })
 
@@ -386,13 +653,185 @@ test('confirm failure is retryable and the same attempt resumes confirm without 
   )
 })
 
+test('prepared recovery is a typed fail-closed reconciliation state for the exact material', async () => {
+  const harness = await createHarness()
+  const journal: ProvisioningJournal = {
+    schemaVersion: 1,
+    attemptId: 'ambiguous-prepared-attempt',
+    materialId: 'web-11111111111111111111111111111111',
+    serialNumber: SERIAL,
+    phase: 'prepared',
+    updatedAtEpochMs: 1_700_000_000_000,
+  }
+  harness.storage.provisioningJournals.set(journal.attemptId, journal)
+
+  await assert.rejects(
+    harness.manager.provision({ attemptId: journal.attemptId }),
+    (error: unknown) => error instanceof BotaSDKError
+      && error.code === 'reconciliation_required'
+      && error.operation === 'provision'
+      && error.retryable,
+  )
+
+  assert.deepEqual(harness.storage.provisioningJournals.get(journal.attemptId), journal)
+  assert.deepEqual(harness.provider.prepares, [])
+  assert.deepEqual(harness.provider.confirms, [])
+  assert.deepEqual(harness.provider.aborts, [])
+  assert.deepEqual(harness.transport.writes, [])
+  assert.ok(harness.transport.calls.some((call) =>
+    call.includes(SERIAL_NUMBER_CHARACTERISTIC)
+  ))
+
+  const crossAttemptController = new AbortController()
+  let crossAttemptSettled = false
+  const crossAttempt = harness.manager.provision({
+    attemptId: 'unrelated-attempt',
+    signal: crossAttemptController.signal,
+  }).finally(() => {
+    crossAttemptSettled = true
+  })
+  const crossAttemptRejected = assert.rejects(
+    crossAttempt,
+    (error: unknown) => error instanceof BotaSDKError
+      && error.code === 'reconciliation_required'
+      && error.operation === 'provision'
+      && error.retryable,
+  )
+  await settleReducer()
+  if (!crossAttemptSettled) crossAttemptController.abort()
+  await crossAttemptRejected
+  assert.deepEqual(harness.provider.prepares, [])
+})
+
+test('a pre-material prepared journal retains typed fail-closed recovery', async () => {
+  const harness = await createHarness()
+  const journal: ProvisioningJournal = {
+    schemaVersion: 1,
+    attemptId: 'legacy-ambiguous-attempt',
+    materialId: null,
+    serialNumber: SERIAL,
+    phase: 'prepared',
+    updatedAtEpochMs: 1_700_000_000_000,
+  }
+  harness.storage.provisioningJournals.set(journal.attemptId, journal)
+
+  await assert.rejects(
+    harness.manager.provision({ attemptId: journal.attemptId }),
+    (error: unknown) => error instanceof BotaSDKError
+      && error.code === 'reconciliation_required'
+      && error.operation === 'provision'
+      && error.retryable,
+  )
+
+  assert.deepEqual(harness.storage.provisioningJournals.get(journal.attemptId), journal)
+  assert.deepEqual(harness.provider.prepares, [])
+  assert.deepEqual(harness.provider.confirms, [])
+  assert.deepEqual(harness.provider.aborts, [])
+  assert.deepEqual(harness.transport.writes, [])
+})
+
+test('a blocked confirm is joined on cancel and destroy before another attempt can own the runtime', async () => {
+  const harness = await createHarness()
+  const oldConfirmEntered = deferred<void>()
+  const oldConfirmGate = deferred<void>()
+  const oldSaveEntered = deferred<void>()
+  const oldSaveGate = deferred<void>()
+  let confirmsInFlight = 0
+  let maximumConfirmsInFlight = 0
+  harness.provider.confirmHandler = async (context) => {
+    confirmsInFlight += 1
+    maximumConfirmsInFlight = Math.max(maximumConfirmsInFlight, confirmsInFlight)
+    try {
+      if (context.attemptId === 'old-confirm-attempt') {
+        oldConfirmEntered.resolve(undefined)
+        await oldConfirmGate.promise
+      }
+    } finally {
+      confirmsInFlight -= 1
+    }
+  }
+  harness.storage.onSaveProvisioningJournal = async (journal) => {
+    if (
+      journal.attemptId !== 'old-confirm-attempt'
+      || journal.phase !== 'backend_confirmed'
+    ) return
+    oldSaveEntered.resolve(undefined)
+    await oldSaveGate.promise
+  }
+  for (const attemptId of ['old-confirm-attempt', 'new-confirm-attempt']) {
+    harness.storage.provisioningJournals.set(attemptId, {
+      schemaVersion: 1,
+      attemptId,
+      materialId: `material-${attemptId}`,
+      serialNumber: SERIAL,
+      phase: 'device_applied',
+      updatedAtEpochMs: 1_700_000_000_000,
+    })
+  }
+  const sibling = new ProvisioningManager({
+    core: harness.core,
+    transport: harness.transport,
+    runtime: harness.runtime,
+    devices: harness.devices,
+    storage: harness.storage,
+    provider: harness.provider,
+  })
+  const controller = new AbortController()
+  const old = harness.manager.provision({
+    attemptId: 'old-confirm-attempt',
+    signal: controller.signal,
+  })
+  const oldRejected = assert.rejects(old, cancelled('provision'))
+  await settleWithWatchdog(oldConfirmEntered.promise, 'old confirm start')
+
+  controller.abort()
+  let destroySettled = false
+  const destroying = harness.manager.destroy().then(() => {
+    destroySettled = true
+  })
+  await settleReducer()
+  assert.equal(destroySettled, false)
+  await assert.rejects(
+    sibling.provision({ attemptId: 'new-confirm-attempt' }),
+    operationInProgress('provision'),
+  )
+  assert.equal(maximumConfirmsInFlight, 1)
+
+  oldConfirmGate.resolve(undefined)
+  await settleWithWatchdog(oldSaveEntered.promise, 'old confirm journal save')
+  await settleReducer()
+  assert.equal(destroySettled, false)
+  await assert.rejects(
+    sibling.provision({ attemptId: 'new-confirm-attempt' }),
+    operationInProgress('provision'),
+  )
+  oldSaveGate.resolve(undefined)
+  await settleWithWatchdog(destroying, 'confirming manager destroy')
+  await settleWithWatchdog(oldRejected, 'cancelled old confirm')
+  assert.equal(
+    harness.storage.provisioningJournals.get('old-confirm-attempt')?.phase,
+    'backend_confirmed',
+  )
+
+  await sibling.provision({ attemptId: 'new-confirm-attempt' })
+  assert.equal(maximumConfirmsInFlight, 1)
+  assert.equal(
+    harness.storage.provisioningJournals.get('new-confirm-attempt')?.phase,
+    'backend_confirmed',
+  )
+})
+
 test('cancelled late prepare cannot dispatch into or mutate a newer attempt', async () => {
   const events: string[] = []
   const provider = new FakeProvisioningProvider(events)
   const latePrepare = deferred<ProvisioningMaterial>()
   provider.prepareHandler = async (context) => {
     if (context.attemptId === 'old-attempt') return await latePrepare.promise
-    return materialFor(context.attemptId, 0x31, 0xb1)
+    return materialFor(
+      context.materialId,
+      0x31,
+      0xb1,
+    )
   }
   const harness = await createHarness({ provider })
   provider.events.splice(0, provider.events.length, ...harness.events)
@@ -481,9 +920,11 @@ test('client destruction cancels provisioning, scrubs inputs, and rejects a late
   )
 })
 
-test('deprovision writes grant, subscribes, then sends the Rust opcode and correlates only the post-command result', async () => {
+test('deprovision ignores stale success until the Rust opcode write has settled', async () => {
   const harness = await createHarness()
   const grant = Uint8Array.of(0xaa, 0xbb, 0xcc)
+  const commandWriteEntered = deferred<void>()
+  const commandWriteGate = deferred<void>()
   harness.transport.onSubscribe = () => {
     harness.transport.emitNotification(
       harness.transport.device,
@@ -495,18 +936,34 @@ test('deprovision writes grant, subscribes, then sends the Rust opcode and corre
   harness.transport.onWrite = () => {
     const write = harness.transport.writes.at(-1)
     if (write?.value.byteLength === 1 && write.value[0] === 0x05) {
-      queueMicrotask(() => {
-        harness.transport.emitNotification(
-          harness.transport.device,
-          BOTA_PROVISIONING_SERVICE,
-          PROVISIONING_RESULT_CHARACTERISTIC,
-          Uint8Array.of(0x00),
-        )
-      })
+      harness.transport.writeGate = commandWriteGate.promise
+      commandWriteEntered.resolve(undefined)
+      harness.transport.emitNotification(
+        harness.transport.device,
+        BOTA_PROVISIONING_SERVICE,
+        PROVISIONING_RESULT_CHARACTERISTIC,
+        Uint8Array.of(0x04),
+      )
     }
   }
 
-  const result = await harness.manager.deprovision({ grant })
+  let operationSettled = false
+  const operation = harness.manager.deprovision({ grant }).finally(() => {
+    operationSettled = true
+  })
+  await settleWithWatchdog(commandWriteEntered.promise, 'deprovision command write')
+  await settleReducer()
+  assert.equal(operationSettled, false)
+
+  commandWriteGate.resolve(undefined)
+  await eventually(() => harness.events.includes('write_settled:05'))
+  harness.transport.emitNotification(
+    harness.transport.device,
+    BOTA_PROVISIONING_SERVICE,
+    PROVISIONING_RESULT_CHARACTERISTIC,
+    Uint8Array.of(0x00),
+  )
+  const result = await operation
 
   assert.deepEqual(result, { success: true })
   const grantWrite = writeEvent(harness.events, bytesHex(grant))
@@ -730,12 +1187,12 @@ test('settings hold the shared runtime owner and reject a changed serial before 
 })
 
 function materialFor(
-  attemptId: string,
+  materialId: string,
   endpoint = 0x21,
   token = 0xd1,
 ): ProvisioningMaterial {
   return {
-    materialId: `material-${attemptId}`,
+    materialId,
     apiEndpoint: Uint8Array.of(endpoint),
     deviceToken: Uint8Array.of(token, token + 1, token + 2, token + 3),
     mtu: 64,
@@ -766,6 +1223,13 @@ function cancelled(operation: 'provision' | 'deprovision') {
       && error.operation === operation
 }
 
+function operationInProgress(operation: 'provision' | 'deprovision' | 'settings') {
+  return (error: unknown): boolean =>
+    error instanceof BotaSDKError
+      && error.code === 'operation_in_progress'
+      && error.operation === operation
+}
+
 function eventIndex(events: readonly string[], fragment: string): number {
   const index = events.findIndex((event) => event.includes(fragment))
   assert.notEqual(index, -1, `missing event containing ${fragment}`)
@@ -790,6 +1254,30 @@ function assertBufferWasScrubbed(
 ): void {
   assert.ok(value, `${label} was not captured`)
   assert.ok(allZero(value), `${label} was not scrubbed`)
+}
+
+function collectBridgeByteArrays(
+  value: unknown,
+  destination: Array<Uint8Array | number[]>,
+  seen: Set<object> = new Set(),
+): void {
+  if (value instanceof Uint8Array) {
+    if (value.byteLength > 0) destination.push(value)
+    return
+  }
+  if (Array.isArray(value)) {
+    if (value.length > 0 && value.every((item) => typeof item === 'number')) {
+      destination.push(value as number[])
+      return
+    }
+    for (const item of value) collectBridgeByteArrays(item, destination, seen)
+    return
+  }
+  if (typeof value !== 'object' || value === null || seen.has(value)) return
+  seen.add(value)
+  for (const item of Object.values(value)) {
+    collectBridgeByteArrays(item, destination, seen)
+  }
 }
 
 async function eventually(

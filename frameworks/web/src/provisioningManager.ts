@@ -170,7 +170,7 @@ export class ProvisioningManager {
     if (this.destroyed) throw new BotaSDKError('cancelled', 'settings')
     try {
       return await this.runtime.runExclusive('settings', async (signal) => {
-        const { device } = await this.verifyConnectedDevice(signal, true)
+        const { device } = await this.verifyConnectedDevice(signal, true, 'settings')
         const encoded = await this.gattStep(
           this.transport.read(
             device,
@@ -195,7 +195,11 @@ export class ProvisioningManager {
     if (this.destroyed) throw new BotaSDKError('cancelled', 'settings')
     try {
       await this.runtime.runExclusive('settings', async (signal) => {
-        const { device, model } = await this.verifyConnectedDevice(signal, true)
+        const { device, model } = await this.verifyConnectedDevice(
+          signal,
+          true,
+          'settings',
+        )
         if (!model) throw new BotaSDKError('protocol_error', 'settings')
         let encoded: Uint8Array | null = null
         try {
@@ -250,24 +254,42 @@ export class ProvisioningManager {
 
     const connected = this.requireConnected('provision')
     let journal: ProvisioningJournal | null
+    let journals: ProvisioningJournal[]
     try {
-      journal = await storage.loadProvisioningJournal(attemptId)
+      [journal, journals] = await Promise.all([
+        storage.loadProvisioningJournal(attemptId),
+        storage.listProvisioningJournals(),
+      ])
     } catch (error) {
       throw managerError(error, 'provision')
     }
-    this.throwIfProvisionCancelled(active)
 
     if (journal) {
       if (journal.serialNumber !== connected.serialNumber) {
         throw new BotaSDKError('identity_mismatch', 'provision')
       }
       if (journal.phase === 'backend_confirmed') return
+      if (journal.phase === 'prepared') {
+        await this.requireProvisioningReconciliation(journal)
+        return
+      }
       if (journal.phase !== 'device_applied') {
         throw new BotaSDKError('resume_rejected', 'provision')
       }
       await this.confirmProvisioning(journal, active.controller.signal)
       return
     }
+
+    const unresolved = journals.find((candidate) =>
+      candidate.serialNumber === connected.serialNumber
+      && candidate.attemptId !== attemptId
+      && (candidate.phase === 'prepared' || candidate.phase === 'device_applied')
+    )
+    if (unresolved) {
+      await this.requireProvisioningReconciliation(unresolved)
+      return
+    }
+    this.throwIfProvisionCancelled(active)
 
     const cancellationId = randomBytes(16)
     const operationId = `provision:${bytesHex(cancellationId)}`
@@ -279,6 +301,7 @@ export class ProvisioningManager {
       transport: this.transport,
       runtime: this.runtime,
       attemptId,
+      materialId,
       serialNumber: connected.serialNumber,
       now: this.now,
     })
@@ -296,19 +319,20 @@ export class ProvisioningManager {
           persistence: createBrowserPersistenceHost(storage),
           hostMaterial: host,
         },
+        undefined,
+        async () => {
+          active.physicalCompleted = true
+          const prepared = host.preparedJournal
+          if (!prepared) throw new BotaSDKError('internal_error', 'provision')
+          const deviceApplied = nextProvisioningJournal(
+            prepared,
+            'device_applied',
+            this.now,
+          )
+          await storage.saveProvisioningJournal(deviceApplied)
+          await this.confirmProvisioningWhileOwned(deviceApplied)
+        },
       )
-      active.physicalCompleted = true
-
-      const prepared = host.preparedJournal
-      if (!prepared) throw new BotaSDKError('internal_error', 'provision')
-      const deviceApplied = nextProvisioningJournal(
-        prepared,
-        'device_applied',
-        this.now,
-      )
-      await storage.saveProvisioningJournal(deviceApplied)
-      this.throwIfProvisionCancelled(active)
-      await this.confirmProvisioning(deviceApplied, active.controller.signal)
     } catch (error) {
       const normalized = managerError(error, 'provision')
       if (!active.physicalCompleted && host.prepareStarted) {
@@ -340,28 +364,12 @@ export class ProvisioningManager {
     journal: ProvisioningJournal,
     signal: AbortSignal,
   ): Promise<void> {
-    const provider = this.provider
-    const storage = this.storage
-    if (!provider || !storage) {
-      throw new BotaSDKError('unsupported_capability', 'provision')
-    }
-
     try {
       await this.runtime.runExclusive('provision', async (runtimeSignal) =>
         await withCombinedSignal(runtimeSignal, signal, async (combined) => {
           throwIfAborted(combined, 'provision')
-          await providerStep(
-            provider.confirm({
-              attemptId: journal.attemptId,
-              serialNumber: journal.serialNumber,
-            }),
-            combined,
-            'provision',
-          )
+          await this.confirmProvisioningWhileOwned(journal)
           throwIfAborted(combined, 'provision')
-          await storage.saveProvisioningJournal(
-            nextProvisioningJournal(journal, 'backend_confirmed', this.now),
-          )
         })
       )
     } catch (error) {
@@ -370,22 +378,63 @@ export class ProvisioningManager {
         || normalized.code === 'operation_in_progress'
         || normalized.code === 'storage_unavailable'
         || normalized.code === 'storage_quota_exceeded'
-        || normalized.code === 'resume_rejected') {
+        || normalized.code === 'resume_rejected'
+        || normalized.code === 'reconciliation_required') {
         throw normalized
       }
       throw new BotaSDKError('internal_error', 'provision', { retryable: true })
     }
   }
 
+  private async confirmProvisioningWhileOwned(
+    journal: ProvisioningJournal,
+  ): Promise<void> {
+    const provider = this.provider
+    const storage = this.storage
+    if (!provider || !storage) {
+      throw new BotaSDKError('unsupported_capability', 'provision')
+    }
+
+    const confirmed = await settled(provider.confirm({
+      attemptId: journal.attemptId,
+      serialNumber: journal.serialNumber,
+    }))
+    if (confirmed.kind === 'failed') {
+      throw new BotaSDKError('internal_error', 'provision', { retryable: true })
+    }
+    try {
+      await storage.saveProvisioningJournal(
+        nextProvisioningJournal(journal, 'backend_confirmed', this.now),
+      )
+    } catch (error) {
+      throw managerError(error, 'provision')
+    }
+  }
+
+  private async requireProvisioningReconciliation(
+    journal: ProvisioningJournal,
+  ): Promise<never> {
+    return await this.runtime.runExclusive('provision', async (signal) => {
+      const connected = this.requireConnected('provision')
+      if (journal.serialNumber !== connected.serialNumber) {
+        throw new BotaSDKError('identity_mismatch', 'provision')
+      }
+      await this.verifyConnectedDevice(signal, false, 'provision')
+      throw new BotaSDKError('reconciliation_required', 'provision', {
+        retryable: true,
+      })
+    })
+  }
+
   private async performDeprovision(
     callerGrant: Uint8Array,
     signal: AbortSignal,
   ): Promise<DeprovisionResult> {
-    const { device } = await this.verifyConnectedDevice(signal, false)
+    const { device } = await this.verifyConnectedDevice(signal, false, 'deprovision')
     const grant = callerGrant.slice()
     let command: Uint8Array | null = null
     let subscription: BrowserSubscription | null = null
-    let commandIssued = false
+    let resultWindowOpen = false
     let resolveResult!: (value: Uint8Array) => void
     const result = new Promise<Uint8Array>((resolve) => {
       resolveResult = resolve
@@ -412,7 +461,7 @@ export class ProvisioningManager {
           PROVISIONING_RESULT_CHARACTERISTIC,
           (notification) => {
             if (
-              !commandIssued
+              !resultWindowOpen
               || resultReceived
               || canonicalGattUuid(notification.characteristicUuid)
                 !== canonicalGattUuid(PROVISIONING_RESULT_CHARACTERISTIC)
@@ -427,7 +476,6 @@ export class ProvisioningManager {
       throwIfAborted(signal, 'deprovision')
 
       command = this.core.encodeDeprovisionCommand()
-      commandIssued = true
       await this.gattStep(
         this.transport.write(
           device,
@@ -439,6 +487,7 @@ export class ProvisioningManager {
         signal,
         'deprovision',
       )
+      resultWindowOpen = true
 
       const encodedResult = await resultWithDeadline(
         result,
@@ -447,7 +496,7 @@ export class ProvisioningManager {
       )
       return deprovisionResult(this.core.decodeDeprovisionResult(encodedResult))
     } finally {
-      commandIssued = false
+      resultWindowOpen = false
       resultReceived = true
       grant.fill(0)
       command?.fill(0)
@@ -458,14 +507,15 @@ export class ProvisioningManager {
   private async verifyConnectedDevice(
     signal: AbortSignal,
     includeModel: boolean,
+    operation: BotaOperation,
   ): Promise<{
     device: BrowserDeviceHandle
     model: CoreDeviceModel | null
   }> {
-    const connected = this.requireConnected('settings')
+    const connected = this.requireConnected(operation)
     const device = this.runtime.connectedDeviceHandle
     if (!device || device.id !== connected.id) {
-      throw new BotaSDKError('device_disconnected', 'settings')
+      throw new BotaSDKError('device_disconnected', operation)
     }
 
     const serialBytes = await this.gattStep(
@@ -475,10 +525,10 @@ export class ProvisioningManager {
         SERIAL_NUMBER_CHARACTERISTIC,
       ),
       signal,
-      'settings',
+      operation,
     )
-    if (decodeRequiredText(serialBytes, 'settings') !== connected.serialNumber) {
-      throw new BotaSDKError('identity_mismatch', 'settings')
+    if (decodeRequiredText(serialBytes, operation) !== connected.serialNumber) {
+      throw new BotaSDKError('identity_mismatch', operation)
     }
     if (!includeModel) return { device, model: null }
 
@@ -489,10 +539,10 @@ export class ProvisioningManager {
         MODEL_NUMBER_CHARACTERISTIC,
       ),
       signal,
-      'settings',
+      operation,
     )
-    const model = deviceModel(decodeRequiredText(modelBytes, 'settings'))
-    if (!model) throw new BotaSDKError('protocol_error', 'settings')
+    const model = deviceModel(decodeRequiredText(modelBytes, operation))
+    if (!model) throw new BotaSDKError('protocol_error', operation)
     return { device, model }
   }
 
@@ -538,6 +588,7 @@ export class ProvisioningManager {
 
 class ProvisioningMaterialHost implements WorkflowEffectHost {
   readonly attemptId: string
+  readonly materialId: string
   readonly serialNumber: string
   private readonly provider: ProvisioningProvider
   private readonly storage: BrowserSdkStorage
@@ -558,6 +609,7 @@ class ProvisioningMaterialHost implements WorkflowEffectHost {
     transport: BrowserBluetoothTransport
     runtime: BrowserWorkflowRuntime
     attemptId: string
+    materialId: string
     serialNumber: string
     now: () => number
   }) {
@@ -566,6 +618,7 @@ class ProvisioningMaterialHost implements WorkflowEffectHost {
     this.transport = options.transport
     this.runtime = options.runtime
     this.attemptId = options.attemptId
+    this.materialId = options.materialId
     this.serialNumber = options.serialNumber
     this.now = options.now
   }
@@ -588,6 +641,7 @@ class ProvisioningMaterialHost implements WorkflowEffectHost {
     const effect = envelope.effect
     const providerContext: ProvisioningPrepareContext = {
       attemptId: this.attemptId,
+      materialId: effect.materialId,
       serialNumber: this.serialNumber,
       nonce: effect.nonce.slice(),
       devicePublicKey: effect.devicePublicKey.slice(),
@@ -597,6 +651,9 @@ class ProvisioningMaterialHost implements WorkflowEffectHost {
     this.currentContext = providerContext
 
     try {
+      if (effect.materialId !== this.materialId) {
+        throw new BotaSDKError('internal_error', 'provision')
+      }
       const device = this.runtime.connectedDeviceHandle
       if (!device) throw new BotaSDKError('device_disconnected', 'provision')
       const serialBytes = await this.transport.read(
@@ -626,7 +683,7 @@ class ProvisioningMaterialHost implements WorkflowEffectHost {
       const material = prepared.value
       this.currentMaterial = material
       this.throwIfCancelled(context.signal)
-      if (!validMaterial(material)) {
+      if (!validMaterial(material, this.materialId)) {
         return {
           requestId: envelope.requestId,
           kind: 'host_material_failed',
@@ -637,6 +694,7 @@ class ProvisioningMaterialHost implements WorkflowEffectHost {
       const journal: ProvisioningJournal = {
         schemaVersion: 1,
         attemptId: this.attemptId,
+        materialId: this.materialId,
         serialNumber: freshSerial,
         phase: 'prepared',
         updatedAtEpochMs: this.now(),
@@ -699,15 +757,19 @@ function nextProvisioningJournal(
   return {
     schemaVersion: 1,
     attemptId: previous.attemptId,
+    materialId: previous.materialId,
     serialNumber: previous.serialNumber,
     phase,
     updatedAtEpochMs: Math.max(previous.updatedAtEpochMs, now()),
   }
 }
 
-function validMaterial(material: ProvisioningMaterial): boolean {
+function validMaterial(
+  material: ProvisioningMaterial,
+  expectedMaterialId: string,
+): boolean {
   return typeof material.materialId === 'string'
-    && material.materialId.length > 0
+    && material.materialId === expectedMaterialId
     && material.apiEndpoint instanceof Uint8Array
     && material.apiEndpoint.byteLength > 0
     && material.deviceToken instanceof Uint8Array
@@ -799,27 +861,6 @@ function decodeRequiredText(value: Uint8Array, operation: BotaOperation): string
     return decoded
   } catch {
     throw new BotaSDKError('protocol_error', operation)
-  }
-}
-
-async function providerStep(
-  promise: Promise<void>,
-  signal: AbortSignal,
-  operation: BotaOperation,
-): Promise<void> {
-  const outcome = settled(promise)
-  if (signal.aborted) throw new BotaSDKError('cancelled', operation)
-  let cancel!: () => void
-  const cancellation = new Promise<'cancelled'>((resolve) => {
-    cancel = () => resolve('cancelled')
-  })
-  signal.addEventListener('abort', cancel, { once: true })
-  try {
-    const result = await Promise.race([outcome, cancellation])
-    if (result === 'cancelled') throw new BotaSDKError('cancelled', operation)
-    if (result.kind === 'failed') throw result.error
-  } finally {
-    signal.removeEventListener('abort', cancel)
   }
 }
 

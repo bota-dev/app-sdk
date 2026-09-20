@@ -100,6 +100,7 @@ function provisioningJournal(): ProvisioningJournal {
   return {
     schemaVersion: 1,
     attemptId: 'provisioning-attempt-1',
+    materialId: 'web-11111111111111111111111111111111',
     serialNumber: 'EVFXXW67KP',
     phase: 'prepared',
     updatedAtEpochMs: 1_789_000_000_000,
@@ -463,6 +464,15 @@ test('journal timestamps cannot regress', async (t) => {
       }),
       'resume_rejected',
     )
+    await expectStorageError(
+      storage.saveProvisioningJournal({
+        ...journal,
+        materialId: 'web-22222222222222222222222222222222',
+        phase: 'device_applied',
+        updatedAtEpochMs: journal.updatedAtEpochMs + 1,
+      }),
+      'resume_rejected',
+    )
   })
 
   await t.test('firmware journal', async () => {
@@ -478,6 +488,30 @@ test('journal timestamps cannot regress', async (t) => {
       'resume_rejected',
     )
   })
+})
+
+test('pre-material provisioning journals preserve an explicitly unknown identity', async () => {
+  const fixture = await storageFixture()
+  const storage = await fixture.open('legacy-provisioning-material-tenant')
+  const journal = provisioningJournal()
+  await storage.saveProvisioningJournal(journal)
+  await replaceFirstRecord(
+    fixture.indexedDB,
+    'provisioning_journals',
+    (value) => {
+      const { materialId: _materialId, ...legacy } = recordValue(value)
+      return legacy
+    },
+  )
+
+  assert.deepEqual(
+    await storage.loadProvisioningJournal(journal.attemptId),
+    { ...journal, materialId: null },
+  )
+  assert.deepEqual(
+    await storage.listProvisioningJournals(),
+    [{ ...journal, materialId: null }],
+  )
 })
 
 test('recording evidence is phase-bound, immutable, and same-phase idempotent', async (t) => {
@@ -1241,6 +1275,7 @@ test('reopening recovers every durable record and blob size without secret path 
     await reopened.loadProvisioningJournal(provisioning.attemptId),
     provisioning,
   )
+  assert.deepEqual(await reopened.listProvisioningJournals(), [provisioning])
   assert.deepEqual(await reopened.loadFirmwareJournal(firmware.operationId), firmware)
   assert.equal(await (await reopened.openBlob(blobId)).size(), 4)
 

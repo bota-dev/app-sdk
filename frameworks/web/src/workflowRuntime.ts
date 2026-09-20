@@ -5,6 +5,7 @@ import type {
   CoreNotification,
   CoreOperation,
   CoreWorkflowCheckpoint,
+  CoreWorkflowStatus,
 } from './core.ts'
 import {
   BotaSDKError,
@@ -58,6 +59,8 @@ export interface WorkflowEffectHosts {
   hostMaterial?: WorkflowEffectHost
   encryptedUploadV2?: WorkflowEffectHost
 }
+
+export type WorkflowCompletionHandoff = () => Promise<void>
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -123,6 +126,11 @@ interface WorkflowOwner {
   timers: Map<bigint, ReturnType<typeof setTimeout>>
   cleanups: Array<() => Promise<void>>
   pendingGattSetups: Set<Promise<void>>
+  pendingGattWrites: Set<Promise<void>>
+  completionHandoff: WorkflowCompletionHandoff | undefined
+  completing: boolean
+  completionPromise: Promise<void> | null
+  completionFailure: { error: unknown } | null
   generation: number
   pumping: boolean
   inlineEffects: QueuedEffect[] | null
@@ -225,6 +233,7 @@ export class BrowserWorkflowRuntime {
     start: () => CoreEffectEnvelope[],
     hosts: WorkflowEffectHosts,
     observer?: WorkflowObserver,
+    completionHandoff?: WorkflowCompletionHandoff,
   ): Promise<WorkflowResult> {
     const operation = operationFromId(operationId)
     if (this.destroyed) {
@@ -260,6 +269,11 @@ export class BrowserWorkflowRuntime {
       timers: new Map(),
       cleanups: [],
       pendingGattSetups: new Set(),
+      pendingGattWrites: new Set(),
+      completionHandoff,
+      completing: false,
+      completionPromise: null,
+      completionFailure: null,
       generation: 0,
       pumping: false,
       inlineEffects: null,
@@ -904,23 +918,33 @@ export class BrowserWorkflowRuntime {
       await this.dispatchBleFailure(context, envelope.requestId, null)
       return
     }
+    const transportPayload = payload.slice()
     let pendingWrite: Promise<void>
     try {
       pendingWrite = this.transport.write(
         device,
         envelope.effect.serviceUuid,
         envelope.effect.characteristicUuid,
-        payload,
+        transportPayload,
         envelope.effect.withResponse,
-      ).finally(() => payload.fill(0))
+      ).finally(() => {
+        transportPayload.fill(0)
+        payload.fill(0)
+      })
     } catch (error) {
+      transportPayload.fill(0)
       payload.fill(0)
       throw error
     }
+    let trackedWrite!: Promise<void>
+    trackedWrite = pendingWrite.finally(() => {
+      owner.pendingGattWrites.delete(trackedWrite)
+    })
+    owner.pendingGattWrites.add(trackedWrite)
     const write = await this.awaitOwnerStep(
       owner,
       generation,
-      pendingWrite,
+      trackedWrite,
     )
     if (write.kind === 'cancelled') return
     if (write.kind === 'completed') {
@@ -1193,6 +1217,20 @@ export class BrowserWorkflowRuntime {
     if (failure !== null) throw failure
   }
 
+  private async settlePendingGattWrites(owner: WorkflowOwner): Promise<void> {
+    let failure: unknown = null
+    while (owner.pendingGattWrites.size > 0) {
+      const settlements = [...owner.pendingGattWrites]
+      const results = await Promise.allSettled(settlements)
+      for (const result of results) {
+        if (failure === null && result.status === 'rejected') {
+          failure = result.reason
+        }
+      }
+    }
+    if (failure !== null) throw failure
+  }
+
   private ownerSignal(
     owner: WorkflowOwner,
     generation: number,
@@ -1339,7 +1377,11 @@ export class BrowserWorkflowRuntime {
   }
 
   private async cancelOwner(owner: WorkflowOwner): Promise<void> {
-    if (owner.terminal) return
+    if (owner.terminal) return Promise.resolve()
+    if (owner.completing) {
+      await owner.result.promise.catch(() => undefined)
+      return
+    }
     if (await this.confirmationAttemptedOrClaimCancellation(owner)) {
       await owner.result.promise
       return
@@ -1376,22 +1418,39 @@ export class BrowserWorkflowRuntime {
     }
   }
 
-  private async finishSuccess(owner: WorkflowOwner): Promise<void> {
-    if (owner.terminal) return
+  private finishSuccess(owner: WorkflowOwner, priorError?: unknown): Promise<void> {
+    if (priorError !== undefined) {
+      owner.completionFailure ??= { error: priorError }
+    }
+    if (owner.completionPromise) return owner.completionPromise
+    if (owner.terminal) return Promise.resolve()
     if (owner.failure) {
-      await this.finishFailure(owner, owner.failure.error)
-      return
+      return this.finishFailure(owner, owner.failure.error)
     }
-    owner.terminal = true
-    discardQueuedEffects(owner.queue)
-    try {
-      await this.cleanupAndSettle(owner, false)
+    owner.completing = true
+    owner.completionPromise = (async () => {
+      try {
+        await owner.completionHandoff?.()
+      } catch (error) {
+        owner.completionFailure ??= { error }
+      }
+      owner.terminal = true
+      discardQueuedEffects(owner.queue)
+      try {
+        await this.cleanupAndSettle(owner, false)
+      } catch (error) {
+        owner.completionFailure ??= { error }
+      }
       this.releaseOwner(owner)
-      owner.result.resolve({ notifications: [...owner.notifications] })
-    } catch (error) {
-      this.releaseOwner(owner)
-      owner.result.reject(normalizeRuntimeError(error, owner.operation))
-    }
+      if (owner.completionFailure) {
+        owner.result.reject(
+          normalizeRuntimeError(owner.completionFailure.error, owner.operation),
+        )
+      } else {
+        owner.result.resolve({ notifications: [...owner.notifications] })
+      }
+    })()
+    return owner.completionPromise
   }
 
   private async finishCancelled(owner: WorkflowOwner): Promise<void> {
@@ -1419,6 +1478,18 @@ export class BrowserWorkflowRuntime {
 
   private failOwner(owner: WorkflowOwner, error: unknown): Promise<void> {
     if (owner.terminal) return Promise.resolve()
+    let status: CoreWorkflowStatus | null = null
+    try {
+      status = this.core.status()
+    } catch {
+      // Preserve the originating failure if the bridge cannot report status.
+    }
+    if (
+      status?.kind === 'completed'
+      && publicOperation(status.operation) === owner.operation
+    ) {
+      return this.finishSuccess(owner, error)
+    }
     if (owner.failurePromise) return owner.failurePromise
     owner.failure = { error }
     owner.failurePromise = owner.cancelling
@@ -1529,9 +1600,14 @@ export class BrowserWorkflowRuntime {
   ): Promise<void> {
     let failure: unknown = null
     try {
-      await this.cleanupOwner(owner, cancelHosts)
+      await this.settlePendingGattWrites(owner)
     } catch (error) {
       failure = error
+    }
+    try {
+      await this.cleanupOwner(owner, cancelHosts)
+    } catch (error) {
+      if (failure === null) failure = error
     }
     try {
       await this.settlePendingGattSetups(owner)

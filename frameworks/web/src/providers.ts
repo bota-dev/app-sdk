@@ -6,6 +6,7 @@ import type { BotaSDKErrorCode } from './errors.ts'
 
 export interface ProvisioningPrepareContext {
   attemptId: string
+  materialId: string
   serialNumber: string
   nonce: Uint8Array
   devicePublicKey: Uint8Array

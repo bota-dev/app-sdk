@@ -194,3 +194,211 @@ report is the immediate implementation documentation required for Task 8.
   `prepared`. The manager fails that ambiguous resume closed and never rewrites
   the device; operator/backend reconciliation is still required for that crash
   interval because the approved journal has no physical-result evidence field.
+
+## Fix Round 1
+
+### Status and Scope
+
+- Starting HEAD: `35a958e02e3e4b43cb31daf2bee13086787de640` (verified clean).
+- Commit subject: `fix(web): harden provisioning close loop`.
+- Scope remains Task 8 only. No Task 9 behavior, firmware implementation,
+  backend implementation, publish, push, or physical-device operation was
+  performed.
+- This section supersedes the original report's claim of deprovision "result
+  correlation." The released one-byte result supports only a bounded
+  post-write freshness window, not exact command-bound correlation.
+
+### Resolved SDK Behavior
+
+- The workflow runtime now retains one mutating owner from physical success
+  through the durable `device_applied` save and the provider-confirm outcome.
+  Deprovision, settings, and another provisioning attempt cannot pass a blocked
+  durable handoff.
+- Physical success is recorded before completion cleanup. A later unsubscribe
+  or other cleanup failure cannot invoke provider `abort` or persist `aborted`;
+  the close-loop handoff still saves `device_applied` and attempts confirmation.
+- `device_applied` confirmation is unabortable once initiated. Cancel and
+  destroy join the provider promise and durable journal resolution before owner
+  release, so an old confirm cannot overlap a newer attempt or publish a late
+  journal transition into it.
+- Every initiated generic workflow GATT write is tracked. Cancellation first
+  joins those unabortable writes, then performs host/subscription cleanup and
+  releases ownership. Secret effect, runtime transport, and Web Bluetooth
+  copies remain live until the write settles and are then zero-filled.
+- Provisioning generates one operation-scoped `materialId`, supplies it to both
+  Rust and `ProvisioningProvider.prepare`, requires the provider response to
+  match exactly before any sensitive device write, and persists the nonsecret
+  identity immutably with the attempt and serial.
+- A durable `prepared` journal is now a retryable
+  `reconciliation_required` state. The SDK reacquires the shared owner and
+  freshly verifies the connected serial, then performs no prepare, confirm,
+  abort, or device write because current firmware cannot prove whether the
+  exact material was durably applied. Another attempt for the same serial is
+  also blocked by that unresolved state. A pre-fix journal with no material ID
+  is preserved as explicit, immutable `materialId: null` and follows the same
+  typed recovery path; the SDK never invents an identity for it.
+- Deprovision subscribes before the Rust-encoded opcode and opens its result
+  window only after the opcode write settles. A stale pre-write or in-write
+  notification is ignored; the post-write wait remains bounded to 30 seconds
+  by default and teardown always unsubscribes.
+- WASM bridge number-array and typed-array copies used by provisioning dispatch
+  are zero-filled after the synchronous bridge call. Normalized effects retain
+  independent owned bytes, and the recursive scrubber copies nonsecret array
+  inputs before scrubbing so it cannot mutate caller state.
+- Public errors remain fixed and redacted; `reconciliation_required` exposes no
+  journal material, endpoint, token, nonce, key, provider error, or raw packet.
+
+### Files Changed
+
+- `.superpowers/sdd/2026-09-17-web-sdk-foreground-workflows/task-8-report.md`
+- `frameworks/web/src/provisioningManager.ts`
+- `frameworks/web/src/workflowRuntime.ts`
+- `frameworks/web/src/webBluetoothTransport.ts`
+- `frameworks/web/src/wasmCore.ts`
+- `frameworks/web/src/providers.ts`
+- `frameworks/web/src/storage.ts`
+- `frameworks/web/src/indexedDbWorkflowStore.ts`
+- `frameworks/web/src/errors.ts`
+- `frameworks/web/src/__tests__/provisioningManager.test.ts`
+- `frameworks/web/src/__tests__/workflowRuntime.test.ts`
+- `frameworks/web/src/__tests__/transport.test.ts`
+- `frameworks/web/src/__tests__/storage.test.ts`
+- `frameworks/web/src/__tests__/fakeProviders.ts`
+- `frameworks/web/src/__tests__/deviceManager.test.ts`
+
+No Rust source or generated protocol implementation changed.
+
+### RED Evidence
+
+The Fix Round 1 probes were added before their production changes and failed in
+the expected ownership, identity, recovery, and zeroization paths:
+
+```text
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  node --test src/__tests__/provisioningManager.test.ts
+Result: expected RED, 11 passed and 8 failed out of 19.
+Failures covered missing prepare materialId, accepting cross-material output,
+nonzero WASM bridge copies, early release during a blocked token write,
+post-success cleanup incorrectly aborting, owner release before a blocked
+device_applied save, prepared resume returning resume_rejected, and early
+release during a blocked provider confirm.
+
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  node --test src/__tests__/workflowRuntime.test.ts
+Result: expected RED, 18 passed and 1 failed out of 19; cancellation released
+the workflow owner before the blocked GATT write settled.
+
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  node --test src/__tests__/transport.test.ts
+Result: expected RED, 15 passed and 1 failed out of 16; Web Bluetooth's owned
+write copies remained nonzero after both write modes settled.
+
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  node --test src/__tests__/storage.test.ts
+Result: expected RED, 57 passed and 3 failed out of 60; material identity was
+not immutable, was absent after reopen, and could not be enumerated.
+
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  node --test src/__tests__/storage.test.ts
+Result: expected migration RED, 60 passed and 1 failed out of 61; a valid
+`prepared` journal written by the starting commit without `materialId` still
+failed as `resume_rejected` instead of preserving explicit unknown identity.
+```
+
+### GREEN Evidence
+
+```text
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  node --test src/__tests__/provisioningManager.test.ts \
+    src/__tests__/workflowRuntime.test.ts \
+    src/__tests__/transport.test.ts src/__tests__/storage.test.ts
+Result: PASS, 116 passed, 0 failed, 0 cancelled, 0 skipped.
+
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH npm test
+Working directory: frameworks/web
+Result: PASS, 248 passed, 0 failed, 0 cancelled, 0 skipped.
+
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH npm run type-check
+Working directory: frameworks/web
+Result: PASS; the WASM build and `tsc --noEmit` completed without errors.
+
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH npm run build
+Working directory: frameworks/web
+Result: PASS; the WASM asset, ESM JavaScript, and declarations were emitted.
+
+cargo test -p bota-device-sdk-wasm
+Result: PASS, 13 passed, 0 failed.
+
+cargo test -p bota-device-sdk-core --test provisioning_workflow
+Result: PASS, 4 passed, 0 failed.
+
+git diff --check
+Result: PASS, no whitespace errors.
+```
+
+### Self-Review
+
+- Confirmed `device_applied` and `backend_confirmed` occur while the same shared
+  runtime owner remains active; every exit releases ownership only after the
+  completion handoff and cleanup settle.
+- Confirmed physical success flips the abort fence before either durable work or
+  cleanup can fail. Only a pre-success failure can call provider `abort`.
+- Confirmed a blocked provider confirm is joined even when caller cancellation
+  and client destruction race it; the durable result is settled before the old
+  operation reports cancellation and before another owner can start.
+- Confirmed a `prepared` journal never causes automatic device replay, backend
+  confirmation, or provider abort, and a `device_applied` journal performs
+  confirm-only recovery.
+- Confirmed TypeScript does not hand-build provisioning, deprovision, or settings
+  protocol bytes. Opcode `0x05`, result decoding, settings defaults, Note
+  normalization, and the v2 heartbeat mask remain Rust/WASM-owned.
+- Confirmed direct and workflow writes preserve caller arrays, join the native
+  promise, and then zero every SDK-owned transport/effect copy visible to tests.
+- Confirmed no endpoint or token is journaled, logged, included in a public
+  error, or retained after a terminal success/cancellation path.
+- Confirmed no Task 9 symbols or behavior were added.
+
+### Documentation Impact
+
+Changed-token searches covered all workspace `internal-docs/`, public `docs/`,
+the App SDK plan/spec, and every repository `AGENTS.md`, `ARCHITECTURE.md`, and
+`README.md`. Tokens included `materialId`, `reconciliation_required`,
+`listProvisioningJournals`, `WorkflowCompletionHandoff`, `resultWindowOpen`, and
+`scrubBridgeBytes`.
+
+The authoritative provisioning design already requires the versioned exact
+result and records the released raw-token profile as compatibility-only. No
+published SDK guide currently documents `ProvisioningProvider`; this report is
+the Task 8 implementation record, while Task 14 remains responsible for public
+capability/status wording and physical evidence. The new nonsecret journal
+`materialId` is a Fix Round 1 requirement needed to preserve exact attempt
+identity. Pre-fix records preserve absence as `null` rather than fabricating
+identity; endpoint and token bytes remain excluded.
+
+### Residual Firmware and Target-Contract Gaps
+
+- Released firmware exposes a one-byte provisioning/deprovision result with no
+  action, attempt, material, nonce, or command identity. The SDK now rejects
+  stale notifications before the opcode write settles and bounds the post-write
+  wait, but it does not and cannot claim exact command-bound correlation.
+  Task 14 needs a negotiated, Rust-decoded versioned result tied to the exact
+  action and provisioning material.
+- After a crash with durable phase `prepared`, current firmware provides no
+  exact persisted attempt/material outcome that can prove whether those bytes
+  were applied. Generic `PAIRING_STATE` or `PAIRED` is insufficient under
+  `PROV-BIND-012`. The SDK therefore returns retryable
+  `reconciliation_required` after fresh identity verification and leaves the
+  journal intact; it does not claim the backend is unbound or the device is
+  unapplied. Safe automatic recovery depends on firmware exposing the exact
+  durable attempt/material result or an equivalent action-bound query/replay
+  capability through Rust.
+- The public provider still returns raw `apiEndpoint` and `deviceToken` bytes.
+  The target contract instead requires one opaque, versioned payload protected
+  to trusted `PK_D` and bound to the fresh nonce and exact attempt context. That
+  firmware/backend/provider migration remains a known compatibility gap and was
+  not concealed or expanded into this SDK-only fix.
+- JavaScript can explicitly zero SDK-owned arrays, as these tests prove, but it
+  cannot attest to browser-engine, Web Bluetooth implementation, or WASM linear
+  memory copies outside those owned references.
+- No physical Chromium/device/backend acceptance run was performed. Tasks 13
+  and 14 remain the owners of physical evidence and final protocol-gap status.

@@ -216,10 +216,13 @@ class WasmCoreAdapter implements CoreBridge {
   }
 
   dispatch(event: CoreHostEvent): CoreEffectEnvelope[] {
+    const rawEvent = rawHostEvent(event)
     try {
-      return normalizeEffects(this.generated.dispatch(rawHostEvent(event)))
+      return normalizeEffects(this.generated.dispatch(rawEvent))
     } catch (error) {
       throw normalizePrivateCoreError(error, 'unknown')
+    } finally {
+      scrubBridgeBytes(rawEvent)
     }
   }
 
@@ -812,16 +815,20 @@ function normalizeResumeFrame(
 }
 
 function normalizeEffects(value: unknown): CoreEffectEnvelope[] {
-  if (!Array.isArray(value)) throw internalBridgeError()
-  return value.map((item) => {
-    const request = record(item)
-    return {
-      requestId: bigint(request.request_id),
-      operation: normalizeOperation(request.operation),
-      cancellationId: bytes(request.cancellation_id, 16),
-      effect: normalizeEffect(request.effect),
-    }
-  })
+  try {
+    if (!Array.isArray(value)) throw internalBridgeError()
+    return value.map((item) => {
+      const request = record(item)
+      return {
+        requestId: bigint(request.request_id),
+        operation: normalizeOperation(request.operation),
+        cancellationId: bytes(request.cancellation_id, 16),
+        effect: normalizeEffect(request.effect),
+      }
+    })
+  } finally {
+    scrubBridgeBytes(value)
+  }
 }
 
 function normalizeEffect(value: unknown): CoreEffect {
@@ -1354,7 +1361,7 @@ function rawHostEvent(event: CoreHostEvent): UnknownRecord {
     case 'encrypted_upload_v2_window_staged':
       return { request_id, kind: { EncryptedUploadV2: { WindowStaged: {
         checkpoint: rawEncryptedCheckpoint(event.checkpoint),
-        missing_sequences: event.missingSequences,
+        missing_sequences: [...event.missingSequences],
       } } } }
     case 'encrypted_upload_v2_checkpoint_saved':
       return { request_id, kind: { EncryptedUploadV2: 'CheckpointSaved' } }
@@ -1777,6 +1784,24 @@ function numbers(value: unknown): number[] {
 
 function rawBytes(value: Uint8Array): number[] {
   return [...value]
+}
+
+function scrubBridgeBytes(value: unknown, seen: Set<object> = new Set()): void {
+  if (value instanceof Uint8Array) {
+    value.fill(0)
+    return
+  }
+  if (Array.isArray(value)) {
+    if (value.every((item) => typeof item === 'number')) {
+      value.fill(0)
+      return
+    }
+    for (const item of value) scrubBridgeBytes(item, seen)
+    return
+  }
+  if (typeof value !== 'object' || value === null || seen.has(value)) return
+  seen.add(value)
+  for (const item of Object.values(value)) scrubBridgeBytes(item, seen)
 }
 
 function enumValue<T extends string>(value: unknown, values: Record<string, T>): T {

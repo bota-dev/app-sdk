@@ -73,6 +73,7 @@ export interface EncryptedUploadV2CheckpointRecord {
 export interface ProvisioningJournal {
   schemaVersion: 1
   attemptId: string
+  materialId: string | null
   serialNumber: string
   phase: 'prepared' | 'device_applied' | 'backend_confirmed' | 'aborted'
   updatedAtEpochMs: number
@@ -114,6 +115,7 @@ export interface BrowserSdkStorage {
   deleteRecordingJournal(operationId: string): Promise<void>
   loadProvisioningJournal(attemptId: string): Promise<ProvisioningJournal | null>
   saveProvisioningJournal(journal: ProvisioningJournal): Promise<void>
+  listProvisioningJournals(): Promise<ProvisioningJournal[]>
   deleteProvisioningJournal(attemptId: string): Promise<void>
   loadFirmwareJournal(operationId: string): Promise<FirmwareJournal | null>
   saveFirmwareJournal(journal: FirmwareJournal): Promise<void>

@@ -8,6 +8,7 @@ import type {
   CoreHostEvent,
   CoreOperation,
   CoreWorkflowCheckpoint,
+  CoreWorkflowStatus,
 } from '../core.ts'
 import { BotaSDKError, normalizeCoreError } from '../errors.ts'
 import { BrowserStorageError } from '../storage.ts'
@@ -16,6 +17,7 @@ import {
   type WorkflowEffectHost,
 } from '../workflowRuntime.ts'
 import { FakeBrowserBluetoothTransport } from './fakeBluetooth.ts'
+import { deferred } from './fakeProviders.ts'
 
 const CANCELLATION_ID = new Uint8Array(16).fill(0x11)
 const OTHER_CANCELLATION_ID = new Uint8Array(16).fill(0x22)
@@ -51,11 +53,12 @@ function envelope(
 function scriptedCore(options: {
   dispatch?: (event: CoreHostEvent) => CoreEffectEnvelope[]
   cancel?: (cancellationId: Uint8Array) => CoreEffectEnvelope[]
+  status?: () => CoreWorkflowStatus
 } = {}): CoreBridge {
   return {
     dispatch: options.dispatch ?? (() => []),
     cancel: options.cancel ?? (() => []),
-    status: () => ({ kind: 'idle' }),
+    status: options.status ?? (() => ({ kind: 'idle' })),
   } as unknown as CoreBridge
 }
 
@@ -338,6 +341,93 @@ test('a second workflow or direct owner fails before any second GATT call', asyn
   releaseConnect()
   await cancelling
   assert.ok(await firstResult instanceof BotaSDKError)
+})
+
+test('workflow cancellation joins an initiated GATT write before owner release and byte scrubbing', async () => {
+  const transport = new FakeBrowserBluetoothTransport()
+  const writeEntered = deferred<void>()
+  const writeGate = deferred<void>()
+  const originalWrite = transport.write.bind(transport)
+  let transportReference: Uint8Array | null = null
+  transport.write = async (
+    device,
+    serviceUuid,
+    characteristicUuid,
+    value,
+    withResponse,
+  ) => {
+    transportReference = value
+    transport.writeGate = writeGate.promise
+    writeEntered.resolve(undefined)
+    await originalWrite(device, serviceUuid, characteristicUuid, value, withResponse)
+  }
+  const payload = Uint8Array.of(0x91, 0x92, 0x93)
+  const core = scriptedCore({
+    dispatch: (event) => {
+      if (event.kind === 'ble_connected') {
+        return [envelope(2n, {
+          kind: 'ble_write',
+          serviceUuid: SERVICE_UUID,
+          characteristicUuid: CHARACTERISTIC_UUID,
+          payload,
+          withResponse: true,
+        })]
+      }
+      return []
+    },
+    cancel: () => [envelope(3n, {
+      kind: 'notify',
+      notification: { kind: 'cancelled', operation: 'reconnect' },
+    })],
+    status: () => ({
+      kind: 'running',
+      operation: 'reconnect',
+      cancellationId: CANCELLATION_ID.slice(),
+    }),
+  })
+  const runtime = new BrowserWorkflowRuntime(core, transport)
+  runtime.registerDevice(transport.device)
+  const running = runtime.run(
+    'reconnect:blocked-write',
+    CANCELLATION_ID,
+    () => [envelope(1n, {
+      kind: 'ble_connect',
+      peripheralId: transport.device.id,
+    })],
+    { persistence: noOpHost() },
+  ).then(
+    () => null,
+    (error: unknown) => error,
+  )
+  await settleWithWatchdog(writeEntered.promise, 'workflow write start')
+
+  let cancellationSettled = false
+  const cancelling = runtime.cancel('reconnect:blocked-write').then(() => {
+    cancellationSettled = true
+  })
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  assert.equal(cancellationSettled, false)
+  const capturedTransportReference = transportReference as unknown as Uint8Array
+  assert.ok(capturedTransportReference)
+  assert.equal(capturedTransportReference.every((byte) => byte === 0), false)
+  await assert.rejects(
+    runtime.runExclusive('settings', async () => undefined),
+    errorWith('operation_in_progress', 'settings'),
+  )
+
+  writeGate.resolve(undefined)
+  await settleWithWatchdog(cancelling, 'workflow write cancellation')
+  const result = await settleWithWatchdog(running, 'cancelled write workflow')
+  assert.ok(result instanceof BotaSDKError)
+  assert.equal(result.code, 'cancelled')
+  assert.ok(capturedTransportReference.every((byte) => byte === 0))
+  assert.ok(payload.every((byte) => byte === 0))
+
+  let nextOwnerRan = false
+  await runtime.runExclusive('settings', async () => {
+    nextOwnerRan = true
+  })
+  assert.equal(nextOwnerRan, true)
 })
 
 test('cancellation retains ownership until pending subscription setup is removed', async () => {

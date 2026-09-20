@@ -158,18 +158,20 @@ test('read and both write modes use the connected characteristic', async () => {
     )
     fixture.characteristic.readBytes[0] = 0
 
+    const responseValue = Uint8Array.of(1, 2)
+    const withoutResponseValue = Uint8Array.of(3, 4)
     await transport.write(
       handle,
       BOTA_CONTROL_SERVICE,
       DEVICE_STATUS_CHARACTERISTIC,
-      Uint8Array.of(1, 2),
+      responseValue,
       true,
     )
     await transport.write(
       handle,
       BOTA_CONTROL_SERVICE,
       DEVICE_STATUS_CHARACTERISTIC,
-      Uint8Array.of(3, 4),
+      withoutResponseValue,
       false,
     )
 
@@ -177,6 +179,12 @@ test('read and both write modes use the connected characteristic', async () => {
     assert.notEqual(value.buffer, fixture.characteristic.lastReadView?.buffer)
     assert.deepEqual(fixture.characteristic.writesWithResponse, [Uint8Array.of(1, 2)])
     assert.deepEqual(fixture.characteristic.writesWithoutResponse, [Uint8Array.of(3, 4)])
+    assert.deepEqual(responseValue, Uint8Array.of(1, 2))
+    assert.deepEqual(withoutResponseValue, Uint8Array.of(3, 4))
+    assert.equal(fixture.characteristic.writeReferences.length, 2)
+    assert.ok(fixture.characteristic.writeReferences.every((reference) =>
+      reference.every((byte) => byte === 0)
+    ))
   } finally {
     await transport.disconnect(handle)
     restore()
@@ -738,6 +746,7 @@ class FakeCharacteristic extends EventTarget {
   readonly stopEntered: Promise<void>
   readonly writesWithResponse: Uint8Array[] = []
   readonly writesWithoutResponse: Uint8Array[] = []
+  readonly writeReferences: Uint8Array[] = []
   private listeners = new Set<EventListenerOrEventListenerObject>()
   private readonly markStartEntered: () => void
   private readonly markStopEntered: () => void
@@ -772,10 +781,14 @@ class FakeCharacteristic extends EventTarget {
   }
 
   async writeValueWithResponse(value: BufferSource): Promise<void> {
+    assert.ok(value instanceof Uint8Array)
+    this.writeReferences.push(value)
     this.writesWithResponse.push(copyBufferSource(value))
   }
 
   async writeValueWithoutResponse(value: BufferSource): Promise<void> {
+    assert.ok(value instanceof Uint8Array)
+    this.writeReferences.push(value)
     this.writesWithoutResponse.push(copyBufferSource(value))
   }
 

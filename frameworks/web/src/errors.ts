@@ -19,6 +19,7 @@ export type BotaSDKErrorCode =
   | 'storage_quota_exceeded'
   | 'authorization_expired'
   | 'resume_rejected'
+  | 'reconciliation_required'
   | 'integrity_failed'
   | 'upload_failed'
   | 'firmware_rejected'
@@ -59,6 +60,7 @@ const MESSAGES: Record<BotaSDKErrorCode, string> = {
   storage_quota_exceeded: 'Durable browser storage quota was exceeded.',
   authorization_expired: 'The operation authorization has expired.',
   resume_rejected: 'The saved operation cannot be resumed.',
+  reconciliation_required: 'The operation requires exact-state reconciliation.',
   integrity_failed: 'The operation failed an integrity check.',
   upload_failed: 'The upload could not be completed.',
   firmware_rejected: 'The device rejected the firmware update.',

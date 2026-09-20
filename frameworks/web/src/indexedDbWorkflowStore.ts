@@ -337,6 +337,7 @@ export class IndexedDbWorkflowStore {
         const previous = provisioningJournal(existing)
         if (
           previous.attemptId !== sanitized.attemptId
+          || previous.materialId !== sanitized.materialId
           || previous.serialNumber !== sanitized.serialNumber
         ) {
           throw resumeRejected()
@@ -354,6 +355,17 @@ export class IndexedDbWorkflowStore {
         if (sanitized.phase !== 'prepared') throw resumeRejected()
       },
     )
+  }
+
+  async listProvisioningJournals(): Promise<ProvisioningJournal[]> {
+    const entries = await this.getAll('provisioning_journals')
+    return entries
+      .map(({ key, value }) => {
+        const journal = provisioningJournal(value)
+        if (key !== this.key(journal.attemptId)) throw resumeRejected()
+        return journal
+      })
+      .sort((left, right) => left.attemptId.localeCompare(right.attemptId))
   }
 
   async deleteProvisioningJournal(attemptId: string): Promise<void> {
@@ -682,6 +694,9 @@ function provisioningJournal(value: unknown): ProvisioningJournal {
   return {
     schemaVersion: 1,
     attemptId: recordString(record, 'attemptId'),
+    materialId: record.materialId === undefined || record.materialId === null
+      ? null
+      : recordString(record, 'materialId'),
     serialNumber: recordString(record, 'serialNumber'),
     phase,
     updatedAtEpochMs: safeNonnegativeInteger(record.updatedAtEpochMs),
