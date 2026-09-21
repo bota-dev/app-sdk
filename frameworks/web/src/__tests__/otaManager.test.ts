@@ -501,7 +501,7 @@ test('HTTP status, exact size, SHA-256, and CRC32 fail before the first device w
   })
 })
 
-test('a verified blob is revalidated and reused after manager reload with bounded Rust reads', async () => {
+test('a provider-free verified blob is revalidated and reused after manager reload with bounded Rust reads', async () => {
   const bytes = Uint8Array.of(5, 4, 3, 2, 1)
   const harness = await createHarness({ bytes })
   const operationId = 'update_firmware:verified-reload'
@@ -525,7 +525,7 @@ test('a verified blob is revalidated and reused after manager reload with bounde
     runtime: harness.runtime,
     devices: harness.devices,
     storage: harness.storage,
-    provider: harness.provider,
+    provider: null,
     fetcher: harness.fetcher.fetch,
   })
   installVerifyResult(harness, 1)
@@ -592,6 +592,67 @@ test('an incomplete durable download resolves the same image again and restarts 
   assert.ok(blob.truncations.includes(0) || blob.deleteCalls > 0)
   assert.deepEqual(blob.writes[0], { offset: 0, length: bytes.length })
   assert.deepEqual(blob.snapshot(), bytes)
+})
+
+test('an incomplete provider-free resume fails before device or blob side effects', async () => {
+  const bytes = Uint8Array.of(27, 28, 29, 30)
+  const operationId = 'update_firmware:provider-required-before-resume'
+  const harness = await createHarness({ bytes })
+  installStartResult(harness, 1)
+  await assert.rejects(
+    harness.ota.updateFirmware(descriptor(bytes), { operationId }),
+    isSdkError('firmware_rejected'),
+  )
+  const journal = harness.storage.firmwareJournals.get(operationId)
+  assert.ok(journal)
+  harness.storage.firmwareJournals.set(operationId, {
+    ...journal,
+    downloadedBytes: 0,
+    verified: false,
+  })
+  await harness.storage.deleteWorkflowCheckpoint(operationId)
+  const blob = harness.storage.blob(journal.blobId)
+  blob.seed(bytes.subarray(0, 2))
+  await harness.ota.destroy()
+  await harness.devices.destroy()
+
+  const providerCalls = harness.provider.calls.length
+  const fetchCalls = harness.fetcher.calls.length
+  const openBlobCalls = harness.storage.openBlobCalls
+  const blobBefore = blob.snapshot()
+  const journalBefore = harness.storage.firmwareJournals.get(operationId)
+  blob.truncations.length = 0
+  blob.writes.length = 0
+  harness.events.length = 0
+  harness.transport.calls.length = 0
+  harness.transport.writes.length = 0
+  const fresh = await createFreshOtaHarness(harness, { provider: null })
+
+  await assert.rejects(
+    fresh.ota.resumeFirmwareUpdate(operationId),
+    isSdkError('unsupported_capability'),
+  )
+
+  assert.equal(harness.provider.calls.length, providerCalls)
+  assert.equal(harness.fetcher.calls.length, fetchCalls)
+  assert.equal(harness.storage.openBlobCalls, openBlobCalls)
+  assert.deepEqual(blob.snapshot(), blobBefore)
+  assert.deepEqual(blob.truncations, [])
+  assert.deepEqual(blob.writes, [])
+  assert.equal(blob.deleteCalls, 0)
+  assert.deepEqual(
+    harness.storage.firmwareJournals.get(operationId),
+    journalBefore,
+  )
+  assert.equal(
+    harness.events.some((event) => event.startsWith('firmware:save:')),
+    false,
+  )
+  assert.equal(harness.events.includes('firmware:delete'), false)
+  assert.deepEqual(harness.transport.calls, [])
+  assert.deepEqual(harness.transport.writes, [])
+  await fresh.ota.destroy()
+  await fresh.devices.destroy()
 })
 
 test('device rejection and device CRC rejection use stable Rust errors without reconnect', async (t) => {

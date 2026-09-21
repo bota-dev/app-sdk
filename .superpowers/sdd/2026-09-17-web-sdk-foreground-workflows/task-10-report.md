@@ -174,12 +174,33 @@ Reviewed head: `d2b0e26fc19900bae356061d28a2927179c49a88`.
   `frameworks/web/src/__tests__/storage.test.ts` — `firmware cleanup-only state
   is durable, verified, and one-way`.
 - RED: the OTA command for `terminal cleanup crash boundary` failed all three
-  subtests because no cleanup-only state existed. The storage command for
-  `firmware cleanup-only state` failed because IndexedDB discarded the state.
-- GREEN: both focused commands passed. Rust's terminal checkpoint delete is
-  wrapped by a durable one-way `cleanup_only` journal save; reload then performs
-  only idempotent checkpoint, blob, and journal cleanup without provider,
-  reconnect, or GATT work.
+  subtests because no cleanup-only state existed:
+
+  ```text
+  node --test --test-name-pattern="terminal cleanup crash boundary" frameworks/web/src/__tests__/otaManager.test.ts
+  Result: FAIL, 0 passed and 4 failed (parent plus 3 crash-boundary subtests).
+  ```
+
+  The storage command failed because IndexedDB discarded the state:
+
+  ```text
+  node --test --test-name-pattern="firmware cleanup-only state" frameworks/web/src/__tests__/storage.test.ts
+  Result: FAIL, 0 passed and 1 failed.
+  ```
+
+- GREEN: both focused commands then passed:
+
+  ```text
+  node --test --test-name-pattern="terminal cleanup crash boundary" frameworks/web/src/__tests__/otaManager.test.ts
+  Result: PASS, 4 passed and 0 failed (parent plus 3 subtests).
+
+  node --test --test-name-pattern="firmware cleanup-only state" frameworks/web/src/__tests__/storage.test.ts
+  Result: PASS, 1 passed and 0 failed.
+  ```
+
+  Rust's terminal checkpoint delete is wrapped by a durable one-way
+  `cleanup_only` journal save; reload then performs only idempotent checkpoint,
+  blob, and journal cleanup without provider, reconnect, or GATT work.
 
 ### Files Changed In Fix Round 1
 
@@ -237,3 +258,56 @@ these schema names.
   active journals retain compatibility; missing `state` is interpreted as
   `active`, while `cleanup_only` cannot transition back.
 - No push, merge, tag, publish, or Task 11 work was performed.
+
+## Fix Round 2
+
+Reviewed head: `fa5de5cc5132fa1a1eecb8e71f102faa9b76396e`.
+
+### Provider Gate Before Resume Side Effects
+
+- Test: `frameworks/web/src/__tests__/otaManager.test.ts` — `an incomplete
+  provider-free resume fails before device or blob side effects`. It asserts
+  `unsupported_capability` with no provider/fetch call, `getDevices`, connect,
+  GATT, OPFS open/truncate/write/delete, or firmware-journal mutation.
+- RED:
+
+  ```text
+  env PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH node --test --test-name-pattern="incomplete provider-free resume" frameworks/web/src/__tests__/otaManager.test.ts
+  Result: FAIL, 0 passed and 1 failed; OPFS open count changed from 2 to 4 before rejection.
+  ```
+
+- GREEN, including provider-free verified-artifact and cleanup-only preservation:
+
+  ```text
+  env PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH node --test --test-name-pattern="incomplete provider-free resume|provider-free verified blob|cleanup-only state" frameworks/web/src/__tests__/otaManager.test.ts
+  Result: PASS, 6 passed and 0 failed (3 top-level tests plus 3 cleanup subtests).
+  ```
+
+`resumeFirmwareUpdate` now requires a provider for an unverified active journal
+immediately after journal/checkpoint validation and cleanup-only handling, before
+artifact or device access. Cleanup-only journals still perform provider-free
+cleanup, and compatible verified blobs still resume provider-free.
+
+### Round 2 Verification
+
+```text
+node --test frameworks/web/src/__tests__/otaManager.test.ts
+Result: PASS, 42 passed, 0 failed, 0 cancelled, 0 skipped.
+
+npm test --prefix frameworks/web
+Result: PASS, 336 passed, 0 failed, 0 cancelled, 0 skipped.
+
+npm run type-check --prefix frameworks/web
+Result: PASS, TypeScript completed without errors.
+
+npm run build --prefix frameworks/web
+Result: PASS, ESM JavaScript, declarations, and WASM asset emitted.
+
+git diff --check
+Result: PASS, no whitespace errors.
+```
+
+Round 2 changes only resume ordering and tests; no public API, durable schema,
+or documented workflow state changed. No physical Web Bluetooth/reboot or
+production provider/browser-storage evidence was collected. No push, merge,
+tag, publish, or Task 11 work was performed.

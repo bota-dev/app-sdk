@@ -167,6 +167,7 @@ export class OTAManager {
           await this.finishFirmwareCleanup(journal)
           return
         }
+        if (!journal.verified) this.requireProvider()
 
         const artifact = this.createArtifactHost(journal)
         if (journal.verified && !(await artifact.hasCompatibleVerifiedBlob())) {
