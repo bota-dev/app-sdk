@@ -209,3 +209,101 @@ required immediate implementation documentation for Task 9.
   protocol: subscribe first, ignore results until the response-bearing command
   write settles, accept exactly one Rust-decoded result, and enforce a bounded
   30-second window. This is freshness fencing, not command-bound correlation.
+
+## Fix Round 1
+
+### Status
+
+DONE
+
+- Starting HEAD: `2d8d73ea1e31c9e75a33c388fe64b3fd5f31e325`
+  (verified clean).
+- Commit subject: `fix(web): close subscription setup races`
+- Trailer: `Co-Authored-By: OpenAI Codex <noreply@openai.com>`
+- Scope remains Task 9. Task 10 was not started.
+
+### Defect And Fix
+
+`withSubscription` previously awaited subscription setup through `gattStep`.
+When cancellation or destroy occurred while `transport.subscribe` was pending,
+`gattStep` observed cancellation after the transport returned its handle and
+threw before assigning that handle to the outer cleanup owner. The
+characteristic lease and Task 5 mutation owner were then released without
+calling `remove()`, leaving the old listener live.
+
+The shared setup path now settles the subscribe promise explicitly. A failed
+setup is propagated unchanged. A successful handle is first assigned to the
+outer cleanup owner, and only then is cancellation checked. The existing
+`finally` therefore joins that exact handle's idempotent `remove()` before
+releasing the characteristic lease or allowing the mutation owner to settle.
+Both `WiFiManager` and `ControlManager` use this path.
+
+### RED Evidence
+
+The blocked-subscribe tests were added before the production change:
+
+```text
+node --test frameworks/web/src/__tests__/wifiManager.test.ts \
+  frameworks/web/src/__tests__/controlManager.test.ts
+Result: expected failure, 34 passed and 4 failed.
+Failures: WiFi disconnect cancellation, WiFi destroy, control request
+cancellation, and control destroy all reported that their exact unsubscribe
+entry point did not occur after the pending subscribe handle settled.
+```
+
+The companion rejected-subscribe regression passed in RED: the transport error
+remained `bluetooth_unavailable`, no nonexistent handle was removed, and the
+characteristic lease was reusable.
+
+### GREEN Evidence
+
+All Node commands used Node `v22.23.2`.
+
+```text
+node --test frameworks/web/src/__tests__/wifiManager.test.ts \
+  frameworks/web/src/__tests__/controlManager.test.ts
+Result: PASS, 38 passed, 0 failed, 0 cancelled, 0 skipped.
+
+npm test  # frameworks/web
+Result: PASS, 289 passed, 0 failed, 0 cancelled, 0 skipped.
+
+npm run type-check  # frameworks/web
+Result: PASS, TypeScript completed without errors.
+
+npm run build  # frameworks/web
+Result: PASS, ESM JavaScript, declarations, and WASM asset emitted.
+
+git diff --check
+Result: PASS, no whitespace errors.
+```
+
+No Rust, WASM, protocol fixture, or generated source changed in Fix Round 1.
+The Web test, type-check, and build commands each rebuilt the existing WASM
+bridge; a separate Rust codec run was therefore not required for this
+TypeScript-only ownership fix.
+
+### Coverage And Self-Review
+
+- WiFi transport-disconnect cancellation and manager destroy both retain the
+  eventual handle and join one exact removal before operation settlement.
+- Control request-signal cancellation and manager destroy provide the same
+  proof through the shared helper.
+- While removal is blocked, the old listener ignores current and historical
+  notifications, grant/credential buffers remain intact, the exact
+  characteristic lease remains owned, and a competing mutating owner cannot
+  acquire or write. Once removal settles, buffers are zeroed and ownership is
+  reusable.
+- A rejected subscribe is still propagated before cancellation mapping, causes
+  zero remove calls, and releases its lease once. No retry, authority widening,
+  manual wire construction, secret-bearing cause, or public state stream was
+  added.
+- Changed-token searches covered the approved plan, App SDK reports and docs,
+  and repository `AGENTS.md`/`ARCHITECTURE.md`/`README.md` surfaces. This is an
+  internal lifecycle correction with no public API or protocol change, so this
+  report is the only documentation update required.
+
+### Concerns
+
+- No physical Chromium/Web Bluetooth device run was performed. Browser/device
+  acceptance remains owned by Tasks 13 and 14; the automated transport gates
+  deterministically exercise the reported setup/removal race.

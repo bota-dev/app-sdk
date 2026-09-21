@@ -546,16 +546,15 @@ export async function withSubscription<T>(
   try {
     await options.beforeSubscribe?.()
     throwIfAborted(options.signal, options.operation)
-    subscription = await gattStep(
-      options.transport.subscribe(
-        options.device,
-        options.serviceUuid,
-        options.characteristicUuid,
-        options.listener,
-      ),
-      options.signal,
-      options.operation,
-    )
+    const setup = await settled(options.transport.subscribe(
+      options.device,
+      options.serviceUuid,
+      options.characteristicUuid,
+      options.listener,
+    ))
+    if (setup.kind === 'failed') throw setup.error
+    subscription = setup.value
+    throwIfAborted(options.signal, options.operation)
     return await options.body()
   } finally {
     if (subscription) await subscription.remove().catch(() => undefined)

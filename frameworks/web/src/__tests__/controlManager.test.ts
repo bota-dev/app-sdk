@@ -318,6 +318,14 @@ test('destroy joins an initiated grant write before zeroing authority and releas
   )
 })
 
+test('request cancellation retains a pending control subscription through exact removal', async () => {
+  await assertBlockedControlSubscriptionCleanup('signal')
+})
+
+test('destroy retains a pending control subscription and ownership through exact removal', async () => {
+  await assertBlockedControlSubscriptionCleanup('destroy')
+})
+
 test('WiFi and recording control share the mutating owner and cannot overlap', async () => {
   const harness = await createHarness()
   const wifiGrantWrite = deferred<void>()
@@ -388,6 +396,147 @@ function unsubscribeCount(harness: Harness): number {
   ).length
 }
 
+async function assertBlockedControlSubscriptionCleanup(
+  cancellation: 'signal' | 'destroy',
+): Promise<void> {
+  const harness = await createHarness()
+  const subscribeGate = deferred<void>()
+  const unsubscribeGate = deferred<void>()
+  const controller = new AbortController()
+  const notification = await recordingControlPacket('recording-control-success')
+  const decodeResult = harness.core.decodeRecordingControlResult.bind(harness.core)
+  let decodeCalls = 0
+  harness.core.decodeRecordingControlResult = (bytes) => {
+    decodeCalls += 1
+    return decodeResult(bytes)
+  }
+  harness.transport.subscribeGate = subscribeGate.promise
+  harness.transport.unsubscribeGate = unsubscribeGate.promise
+  harness.transport.onUnsubscribe = () => {
+    harness.events.push('control_unsubscribe_started')
+  }
+
+  const started = harness.controls.startRecording({
+    operationId: `blocked-subscribe-${cancellation}`,
+    authorityId: 'blocked-subscribe-authority',
+    signal: controller.signal,
+  })
+  void started.catch(() => undefined)
+  let destroying: Promise<void> | null = null
+  try {
+    await waitForEvent(
+      harness.events,
+      `subscribe:${harness.transport.device.id}:${BOTA_CONTROL_SERVICE}:${RECORDING_STATUS_CHARACTERISTIC}`,
+    )
+    const grant = harness.provider.grants[0]
+    assertNotZeroed(grant)
+    if (cancellation === 'signal') {
+      controller.abort()
+    } else {
+      destroying = harness.controls.destroy()
+    }
+
+    assert.equal(await promiseSettled(started), false)
+    assertNotZeroed(grant)
+    harness.transport.emitNotification(
+      harness.transport.device,
+      BOTA_CONTROL_SERVICE,
+      RECORDING_STATUS_CHARACTERISTIC,
+      notification,
+    )
+    assert.equal(decodeCalls, 0)
+
+    subscribeGate.resolve(undefined)
+    await waitForEvent(harness.events, 'control_unsubscribe_started')
+    assert.equal(await promiseSettled(started), false)
+    if (destroying) assert.equal(await promiseSettled(destroying), false)
+    assert.equal(unsubscribeCount(harness), 0)
+    assertNotZeroed(grant)
+
+    harness.transport.emitNotification(
+      harness.transport.device,
+      BOTA_CONTROL_SERVICE,
+      RECORDING_STATUS_CHARACTERISTIC,
+      notification,
+    )
+    assert.equal(decodeCalls, 0)
+
+    const writesBeforeCompetingOwner = harness.transport.writes.length
+    const competingOwner = await runMutatingOwner(harness, 0xb1).then(
+      () => null,
+      (error: unknown) => error,
+    )
+    assert.ok(competingOwner instanceof BotaSDKError)
+    assert.equal(competingOwner.code, 'operation_in_progress')
+    assert.equal(harness.transport.writes.length, writesBeforeCompetingOwner)
+    assert.throws(
+      () => harness.runtime.claimCharacteristicLease(
+        'recording_control',
+        harness.transport.device,
+        BOTA_CONTROL_SERVICE,
+        RECORDING_STATUS_CHARACTERISTIC,
+      ),
+      (error: unknown) =>
+        error instanceof BotaSDKError
+          && error.code === 'operation_in_progress',
+    )
+
+    unsubscribeGate.resolve(undefined)
+    if (destroying) await destroying
+    await assert.rejects(started, (error: unknown) =>
+      error instanceof BotaSDKError && error.code === 'cancelled')
+    assert.equal(unsubscribeCount(harness), 1)
+    assertZeroed(grant)
+    assert.equal(
+      harness.transport.writes.some(({ characteristicUuid }) =>
+        characteristicUuid === RECORDING_CONTROL_CHARACTERISTIC),
+      false,
+    )
+
+    harness.transport.emitLateNotification(
+      harness.transport.device,
+      BOTA_CONTROL_SERVICE,
+      RECORDING_STATUS_CHARACTERISTIC,
+      notification,
+    )
+    assert.equal(decodeCalls, 0)
+
+    assert.equal(await runMutatingOwner(harness, 0xb2), undefined)
+    const lease = harness.runtime.claimCharacteristicLease(
+      'recording_control',
+      harness.transport.device,
+      BOTA_CONTROL_SERVICE,
+      RECORDING_STATUS_CHARACTERISTIC,
+    )
+    lease.release()
+  } finally {
+    controller.abort()
+    subscribeGate.resolve(undefined)
+    unsubscribeGate.resolve(undefined)
+    await Promise.allSettled([
+      started,
+      destroying ?? Promise.resolve(),
+    ])
+    await harness.controls.destroy()
+    await harness.wifi.destroy()
+  }
+}
+
+async function runMutatingOwner(
+  harness: Harness,
+  marker: number,
+): Promise<void> {
+  await harness.runtime.runExclusive('wifi', async () => {
+    await harness.transport.write(
+      harness.transport.device,
+      BOTA_WIFI_CONFIG_SERVICE,
+      WIFI_GRANT_CHARACTERISTIC,
+      Uint8Array.of(marker),
+      true,
+    )
+  })
+}
+
 async function waitForWrite(
   transport: FakeBrowserBluetoothTransport,
   characteristicUuid: string,
@@ -428,4 +577,9 @@ function hex(value: Uint8Array): string {
 function assertZeroed(value: Uint8Array | undefined): void {
   assert.ok(value)
   assert.ok(value.every((byte) => byte === 0), `expected zeroed bytes, got ${hex(value)}`)
+}
+
+function assertNotZeroed(value: Uint8Array | undefined): void {
+  assert.ok(value)
+  assert.ok(value.some((byte) => byte !== 0), 'expected retained secret bytes')
 }

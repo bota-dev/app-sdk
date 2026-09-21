@@ -10,6 +10,7 @@ import {
   DEVICE_INFORMATION_SERVICE,
   SERIAL_NUMBER_CHARACTERISTIC,
 } from '../gatt.ts'
+import { BrowserTransportError } from '../transport.ts'
 import { createWasmCore } from '../wasmCore.ts'
 import { WiFiManager } from '../wifiManager.ts'
 import { BrowserWorkflowRuntime } from '../workflowRuntime.ts'
@@ -257,6 +258,52 @@ test('configure writes grant, subscribes status, then writes only Rust credentia
   for (const value of passedValues) assertZeroed(value)
 })
 
+test('disconnect cancellation retains a pending WiFi subscription through exact removal', async () => {
+  await assertBlockedWiFiSubscriptionCleanup('disconnect')
+})
+
+test('destroy retains a pending WiFi subscription and ownership through exact removal', async () => {
+  await assertBlockedWiFiSubscriptionCleanup('destroy')
+})
+
+test('WiFi subscribe rejection is propagated without removing a nonexistent handle', async () => {
+  const harness = await createHarness()
+  const subscribeGate = deferred<void>()
+  harness.transport.subscribe = async () => {
+    harness.events.push('rejecting_subscribe_started')
+    await subscribeGate.promise
+    throw new BrowserTransportError('unavailable')
+  }
+
+  const configuring = harness.manager.configure(
+    { ssid: 'Bota', password: 'secret' },
+    'grant.test',
+  )
+  void configuring.catch(() => undefined)
+  await waitForEvent(harness.events, 'rejecting_subscribe_started')
+  const destroying = harness.manager.destroy()
+  assert.equal(await promiseSettled(configuring), false)
+
+  subscribeGate.resolve(undefined)
+  await assert.rejects(
+    configuring,
+    (error: unknown) =>
+      error instanceof BotaSDKError
+        && error.code === 'bluetooth_unavailable'
+        && error.operation === 'wifi',
+  )
+  await destroying
+  assert.equal(unsubscribeCount(harness, WIFI_STATUS_CHARACTERISTIC), 0)
+
+  const lease = harness.runtime.claimCharacteristicLease(
+    'wifi',
+    harness.transport.device,
+    BOTA_WIFI_CONFIG_SERVICE,
+    WIFI_STATUS_CHARACTERISTIC,
+  )
+  lease.release()
+})
+
 test('disconnect subscribes then writes the Rust empty-credential packet with no grant or password', async () => {
   const harness = await createHarness()
   const expected = harness.core.encodeWiFiCredentials('', '')
@@ -481,6 +528,159 @@ function unsubscribeCount(
   ).length
 }
 
+async function assertBlockedWiFiSubscriptionCleanup(
+  cancellation: 'disconnect' | 'destroy',
+): Promise<void> {
+  const harness = await createHarness()
+  const subscribeGate = deferred<void>()
+  const unsubscribeGate = deferred<void>()
+  const notification = await provisioningPacket('wifi-config-expired')
+  const encodeCredentials = harness.core.encodeWiFiCredentials.bind(harness.core)
+  const encodeGrant = harness.core.encodeWiFiGrant.bind(harness.core)
+  const decodeResult = harness.core.decodeWiFiConfigResult.bind(harness.core)
+  let encodedCredentials: Uint8Array | null = null
+  let encodedGrant: Uint8Array | null = null
+  let decodeCalls = 0
+  harness.core.encodeWiFiCredentials = (ssid, password) => {
+    encodedCredentials = encodeCredentials(ssid, password)
+    return encodedCredentials
+  }
+  harness.core.encodeWiFiGrant = (grant, maximumWriteValueLength) => {
+    encodedGrant = encodeGrant(grant, maximumWriteValueLength)
+    return encodedGrant
+  }
+  harness.core.decodeWiFiConfigResult = (bytes) => {
+    decodeCalls += 1
+    return decodeResult(bytes)
+  }
+  harness.transport.subscribeGate = subscribeGate.promise
+  harness.transport.unsubscribeGate = unsubscribeGate.promise
+  harness.transport.onUnsubscribe = () => {
+    harness.events.push('wifi_unsubscribe_started')
+  }
+
+  const configuring = harness.manager.configure(
+    { ssid: 'Bota', password: 'secret' },
+    'grant.test',
+  )
+  void configuring.catch(() => undefined)
+  let destroying: Promise<void> | null = null
+  try {
+    await waitForEvent(
+      harness.events,
+      `subscribe:${harness.transport.device.id}:${BOTA_WIFI_CONFIG_SERVICE}:${WIFI_STATUS_CHARACTERISTIC}`,
+    )
+    if (cancellation === 'disconnect') {
+      harness.transport.emitDisconnected()
+    } else {
+      destroying = harness.manager.destroy()
+    }
+
+    assert.equal(await promiseSettled(configuring), false)
+    assertNotZeroed(encodedCredentials)
+    assertNotZeroed(encodedGrant)
+    harness.transport.emitNotification(
+      harness.transport.device,
+      BOTA_WIFI_CONFIG_SERVICE,
+      WIFI_STATUS_CHARACTERISTIC,
+      notification,
+    )
+    assert.equal(decodeCalls, 0)
+
+    subscribeGate.resolve(undefined)
+    await waitForEvent(harness.events, 'wifi_unsubscribe_started')
+    assert.equal(await promiseSettled(configuring), false)
+    if (destroying) assert.equal(await promiseSettled(destroying), false)
+    assert.equal(unsubscribeCount(harness, WIFI_STATUS_CHARACTERISTIC), 0)
+    assertNotZeroed(encodedCredentials)
+    assertNotZeroed(encodedGrant)
+
+    harness.transport.emitNotification(
+      harness.transport.device,
+      BOTA_WIFI_CONFIG_SERVICE,
+      WIFI_STATUS_CHARACTERISTIC,
+      notification,
+    )
+    assert.equal(decodeCalls, 0)
+
+    const writesBeforeCompetingOwner = harness.transport.writes.length
+    const competingOwner = await runMutatingOwner(harness, 0xa1).then(
+      () => null,
+      (error: unknown) => error,
+    )
+    assert.ok(competingOwner instanceof BotaSDKError)
+    assert.equal(competingOwner.code, 'operation_in_progress')
+    assert.equal(harness.transport.writes.length, writesBeforeCompetingOwner)
+
+    if (cancellation === 'destroy') {
+      assert.throws(
+        () => harness.runtime.claimCharacteristicLease(
+          'wifi',
+          harness.transport.device,
+          BOTA_WIFI_CONFIG_SERVICE,
+          WIFI_STATUS_CHARACTERISTIC,
+        ),
+        (error: unknown) =>
+          error instanceof BotaSDKError
+            && error.code === 'operation_in_progress',
+      )
+    }
+
+    unsubscribeGate.resolve(undefined)
+    if (destroying) await destroying
+    await assert.rejects(configuring, (error: unknown) =>
+      error instanceof BotaSDKError
+        && error.code === (
+          cancellation === 'disconnect' ? 'device_disconnected' : 'cancelled'
+        ))
+    assert.equal(unsubscribeCount(harness, WIFI_STATUS_CHARACTERISTIC), 1)
+    assertZeroed(encodedCredentials)
+    assertZeroed(encodedGrant)
+
+    harness.transport.emitLateNotification(
+      harness.transport.device,
+      BOTA_WIFI_CONFIG_SERVICE,
+      WIFI_STATUS_CHARACTERISTIC,
+      notification,
+    )
+    assert.equal(decodeCalls, 0)
+
+    assert.equal(await runMutatingOwner(harness, 0xa2), undefined)
+    if (cancellation === 'destroy') {
+      const lease = harness.runtime.claimCharacteristicLease(
+        'wifi',
+        harness.transport.device,
+        BOTA_WIFI_CONFIG_SERVICE,
+        WIFI_STATUS_CHARACTERISTIC,
+      )
+      lease.release()
+    }
+  } finally {
+    subscribeGate.resolve(undefined)
+    unsubscribeGate.resolve(undefined)
+    await Promise.allSettled([
+      configuring,
+      destroying ?? Promise.resolve(),
+    ])
+    await harness.manager.destroy()
+  }
+}
+
+async function runMutatingOwner(
+  harness: Harness,
+  marker: number,
+): Promise<void> {
+  await harness.runtime.runExclusive('recording_control', async () => {
+    await harness.transport.write(
+      harness.transport.device,
+      BOTA_WIFI_CONFIG_SERVICE,
+      WIFI_CREDENTIAL_CHARACTERISTIC,
+      Uint8Array.of(marker),
+      true,
+    )
+  })
+}
+
 async function waitForWrite(
   transport: FakeBrowserBluetoothTransport,
   characteristicUuid: string,
@@ -524,6 +724,12 @@ async function promiseSettled(promise: Promise<unknown>): Promise<boolean> {
   return settled
 }
 
-function assertZeroed(value: Uint8Array): void {
+function assertNotZeroed(value: Uint8Array | null | undefined): void {
+  assert.ok(value)
+  assert.ok(value.some((byte) => byte !== 0), 'expected retained secret bytes')
+}
+
+function assertZeroed(value: Uint8Array | null | undefined): void {
+  assert.ok(value)
   assert.ok(value.every((byte) => byte === 0), `expected zeroed bytes, got ${hex(value)}`)
 }
