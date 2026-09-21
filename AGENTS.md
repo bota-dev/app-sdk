@@ -230,16 +230,16 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   consumers from an `npm pack` artifact, not a source symlink: Demo and Bota
   One must each produce release-mode iOS and Android Expo bundles before
   preview or production rollout.
-- `frameworks/web` is the first browser facade and publishes as
-  `@bota.dev/web-sdk`. Its initial surface is deliberately read-only: an
-  explicit Web Bluetooth picker, exact serial-number verification through the
-  shared Rust connection workflow, disconnect, and fresh identity, device
-  status, and encrypted-upload-v2 capability reads decoded by the WASM core.
-  Keep backend calls, recording list/transfer/upload, provisioning, settings,
-  recording control, OTA, logs, reconnect persistence, and background work out
-  of this increment. A missing Web Bluetooth implementation must fail as
-  `unsupported_browser` before opening the picker, and a snapshot must
-  re-verify the serial before returning data.
+- `frameworks/web` is the foreground browser facade and publishes as
+  `@bota.dev/web-sdk`. It uses the shared Rust workflows for exact connection,
+  provisioning, recording transfer, encrypted upload v2, and firmware update;
+  TypeScript owns Web Bluetooth, durable browser storage, and application
+  provider boundaries. Keep backend calls behind configured providers, keep
+  request credentials memory-only, and do not add background or closed-tab
+  execution. A missing Web Bluetooth implementation must fail as
+  `unsupported_browser` before opening the picker, snapshots must re-verify the
+  serial, and OTA reboot recovery may enumerate only the previously verified
+  exact browser device ID.
 - `RecordingManager` and `StreamingSession` preserve their frozen object model
   while Rust plus the Apple/Android hosts own recording bytes, live-transfer
   buffering, chunk uploads, finalization ordering, and cancellation. Codegen

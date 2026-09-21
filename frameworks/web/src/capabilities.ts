@@ -29,6 +29,9 @@ export function detectBrowserCapabilities(
     durableStorage,
     largeRecordingSync: bluetooth && durableStorage,
     firmwareUpdate:
-      bluetooth && durableStorage && typeof globalThis.fetch === 'function',
+      bluetooth
+      && transport.supportsAuthorizedDevices
+      && durableStorage
+      && typeof globalThis.fetch === 'function',
   })
 }

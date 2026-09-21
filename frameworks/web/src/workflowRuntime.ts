@@ -60,7 +60,9 @@ export interface WorkflowEffectHosts {
   encryptedUploadV2?: WorkflowEffectHost
 }
 
-export type WorkflowCompletionHandoff = () => Promise<void>
+export type WorkflowCompletionHandoff = (
+  result: WorkflowResult,
+) => Promise<void>
 
 export interface CharacteristicLease {
   release(): void
@@ -135,6 +137,7 @@ interface WorkflowOwner {
   cleanups: Array<() => Promise<void>>
   pendingGattSetups: Set<Promise<void>>
   pendingGattWrites: Set<Promise<void>>
+  pendingExternalOperations: Set<Promise<void>>
   completionHandoff: WorkflowCompletionHandoff | undefined
   completionEvidence: CompletionEvidence | null
   completing: boolean
@@ -152,6 +155,7 @@ interface WorkflowOwner {
   lastProgress: { completedUnits: bigint; totalUnits: bigint } | null
   lastFirmwareProgress: FirmwareProgressState | null
   authorizedScanExhausted: boolean
+  authorizedReconnectDeviceIds: Set<string>
 }
 
 interface DirectOwner {
@@ -330,6 +334,7 @@ export class BrowserWorkflowRuntime {
       cleanups: [],
       pendingGattSetups: new Set(),
       pendingGattWrites: new Set(),
+      pendingExternalOperations: new Set(),
       completionHandoff,
       completionEvidence: null,
       completing: false,
@@ -347,6 +352,7 @@ export class BrowserWorkflowRuntime {
       lastProgress: null,
       lastFirmwareProgress: null,
       authorizedScanExhausted: false,
+      authorizedReconnectDeviceIds: new Set(this.devices.keys()),
     }
     this.activeOwner = owner
 
@@ -607,7 +613,7 @@ export class BrowserWorkflowRuntime {
         await this.discoverServices(owner, envelope, context, generation)
         return
       case 'ble_disconnect':
-        await this.disconnectDevice(envelope, context)
+        await this.disconnectDevice(owner, envelope, context, generation)
         return
       case 'ble_read':
         await this.readCharacteristic(owner, envelope, context, generation)
@@ -783,7 +789,10 @@ export class BrowserWorkflowRuntime {
     const authorizedResult = await this.awaitOwnerStep(
       owner,
       generation,
-      this.transport.getAuthorizedDevices(),
+      this.trackExternalOperation(
+        owner,
+        this.transport.getAuthorizedDevices(),
+      ),
     )
     if (authorizedResult.kind === 'cancelled') return
     if (authorizedResult.kind === 'failed') throw authorizedResult.error
@@ -791,7 +800,7 @@ export class BrowserWorkflowRuntime {
     if (owner.terminal || generation !== owner.generation) return
     let forwarded = 0
     for (const device of authorized) {
-      if (!this.devices.has(device.id)) continue
+      if (!owner.authorizedReconnectDeviceIds.has(device.id)) continue
       this.devices.set(device.id, device)
       forwarded += 1
       await context.dispatch({
@@ -820,62 +829,69 @@ export class BrowserWorkflowRuntime {
       await this.dispatchBleFailure(context, envelope.requestId, null)
       return
     }
-    const attempt = ++this.nextConnectionAttempt
-    this.connectionAttempts.set(device.id, attempt)
-    const pendingConnection = this.transport.connect(device)
-    const connection = await this.awaitOwnerStep(
-      owner,
-      generation,
-      pendingConnection,
-    )
-    if (connection.kind === 'cancelled') {
-      let settlement!: Promise<void>
-      settlement = pendingConnection.then(
-        async () => {
-          if (
-            this.connectionAttempts.get(device.id) === attempt
-            && this.connectedDevice?.id !== device.id
-          ) {
-            await this.transport.disconnect(device).catch(() => undefined)
-          }
-        },
-        () => undefined,
-      ).finally(() => {
-        if (this.connectionAttempts.get(device.id) === attempt) {
-          this.connectionAttempts.delete(device.id)
-        }
-        if (this.pendingConnectionSettlements.get(device.id) === settlement) {
-          this.pendingConnectionSettlements.delete(device.id)
-        }
-      })
-      this.pendingConnectionSettlements.set(device.id, settlement)
-      return
-    }
-    if (this.connectionAttempts.get(device.id) === attempt) {
-      this.connectionAttempts.delete(device.id)
-    }
-    if (connection.kind === 'failed') {
-      await this.dispatchBleFailure(
-        context,
-        envelope.requestId,
-        connection.error,
+    const lifecycle = deferred<void>()
+    this.trackExternalSettlement(owner, lifecycle.promise)
+    try {
+      const attempt = ++this.nextConnectionAttempt
+      this.connectionAttempts.set(device.id, attempt)
+      const pendingConnection = this.transport.connect(device)
+      const connection = await this.awaitOwnerStep(
+        owner,
+        generation,
+        pendingConnection,
       )
-      return
+      if (connection.kind === 'cancelled') {
+        let settlement!: Promise<void>
+        settlement = pendingConnection.then(
+          async () => {
+            if (
+              this.connectionAttempts.get(device.id) === attempt
+              && this.connectedDevice?.id !== device.id
+            ) {
+              await this.transport.disconnect(device).catch(() => undefined)
+            }
+          },
+          () => undefined,
+        ).finally(() => {
+          if (this.connectionAttempts.get(device.id) === attempt) {
+            this.connectionAttempts.delete(device.id)
+          }
+          if (this.pendingConnectionSettlements.get(device.id) === settlement) {
+            this.pendingConnectionSettlements.delete(device.id)
+          }
+        })
+        this.pendingConnectionSettlements.set(device.id, settlement)
+        await settlement
+        return
+      }
+      if (this.connectionAttempts.get(device.id) === attempt) {
+        this.connectionAttempts.delete(device.id)
+      }
+      if (connection.kind === 'failed') {
+        await this.dispatchBleFailure(
+          context,
+          envelope.requestId,
+          connection.error,
+        )
+        return
+      }
+      if (
+        owner.terminal
+        || generation !== owner.generation
+        || owner.abortController.signal.aborted
+      ) {
+        await this.transport.disconnect(device).catch(() => undefined)
+        return
+      }
+      this.connectedDevice = device
+      await context.dispatch({
+        requestId: envelope.requestId,
+        kind: 'ble_connected',
+        peripheralId: device.id,
+      })
+    } finally {
+      lifecycle.resolve(undefined)
     }
-    if (
-      owner.terminal
-      || generation !== owner.generation
-      || owner.abortController.signal.aborted
-    ) {
-      await this.transport.disconnect(device).catch(() => undefined)
-      return
-    }
-    this.connectedDevice = device
-    await context.dispatch({
-      requestId: envelope.requestId,
-      kind: 'ble_connected',
-      peripheralId: device.id,
-    })
   }
 
   private async discoverServices(
@@ -893,7 +909,10 @@ export class BrowserWorkflowRuntime {
     const discovery = await this.awaitOwnerStep(
       owner,
       generation,
-      this.transport.discoverServices(device),
+      this.trackExternalOperation(
+        owner,
+        this.transport.discoverServices(device),
+      ),
     )
     if (discovery.kind === 'cancelled') return
     if (discovery.kind === 'completed') {
@@ -912,14 +931,25 @@ export class BrowserWorkflowRuntime {
   }
 
   private async disconnectDevice(
+    owner: WorkflowOwner,
     envelope: CoreEffectEnvelope,
     context: WorkflowEffectContext,
+    generation: number,
   ): Promise<void> {
     if (envelope.effect.kind !== 'ble_disconnect') return
     const device = this.devices.get(envelope.effect.peripheralId)
     try {
       if (device && this.connectedDevice?.id === device.id) {
-        await this.transport.disconnect(device)
+        const disconnected = await this.awaitOwnerStep(
+          owner,
+          generation,
+          this.trackExternalOperation(
+            owner,
+            this.transport.disconnect(device),
+          ),
+        )
+        if (disconnected.kind === 'cancelled') return
+        if (disconnected.kind === 'failed') throw disconnected.error
       }
       if (this.connectedDevice?.id === envelope.effect.peripheralId) {
         this.connectedDevice = null
@@ -950,10 +980,13 @@ export class BrowserWorkflowRuntime {
     const read = await this.awaitOwnerStep(
       owner,
       generation,
-      this.transport.read(
-        device,
-        envelope.effect.serviceUuid,
-        envelope.effect.characteristicUuid,
+      this.trackExternalOperation(
+        owner,
+        this.transport.read(
+          device,
+          envelope.effect.serviceUuid,
+          envelope.effect.characteristicUuid,
+        ),
       ),
     )
     if (read.kind === 'cancelled') return
@@ -1295,6 +1328,36 @@ export class BrowserWorkflowRuntime {
     if (failure !== null) throw failure
   }
 
+  private trackExternalOperation<T>(
+    owner: WorkflowOwner,
+    promise: Promise<T>,
+  ): Promise<T> {
+    this.trackExternalSettlement(owner, promise.then(
+      () => undefined,
+      () => undefined,
+    ))
+    return promise
+  }
+
+  private trackExternalSettlement(
+    owner: WorkflowOwner,
+    pending: Promise<void>,
+  ): void {
+    let settlement!: Promise<void>
+    settlement = pending.finally(() => {
+      owner.pendingExternalOperations.delete(settlement)
+    })
+    owner.pendingExternalOperations.add(settlement)
+  }
+
+  private async settlePendingExternalOperations(
+    owner: WorkflowOwner,
+  ): Promise<void> {
+    while (owner.pendingExternalOperations.size > 0) {
+      await Promise.allSettled([...owner.pendingExternalOperations])
+    }
+  }
+
   private ownerSignal(
     owner: WorkflowOwner,
     generation: number,
@@ -1529,7 +1592,9 @@ export class BrowserWorkflowRuntime {
     owner.completing = true
     owner.completionPromise = (async () => {
       try {
-        await owner.completionHandoff?.()
+        await owner.completionHandoff?.({
+          notifications: [...owner.notifications],
+        })
       } catch (error) {
         owner.completionFailure ??= { error }
       }
@@ -1701,6 +1766,11 @@ export class BrowserWorkflowRuntime {
     }
     try {
       await this.settlePendingGattSetups(owner)
+    } catch (error) {
+      if (failure === null) failure = error
+    }
+    try {
+      await this.settlePendingExternalOperations(owner)
     } catch (error) {
       if (failure === null) failure = error
     }

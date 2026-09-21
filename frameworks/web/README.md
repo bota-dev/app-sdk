@@ -1,10 +1,9 @@
 # Bota SDK for Web
 
-`@bota.dev/web-sdk` is the browser distribution of the Bota App SDK. The first
-beta supports an explicit, foreground Web Bluetooth connection with exact
-serial verification and read-only device identity, status, and capability
-reads. Protocol sequencing and decoding come from the shared Rust core compiled
-to WebAssembly.
+`@bota.dev/web-sdk` is the browser distribution of the Bota App SDK. It supports
+explicit, foreground Web Bluetooth workflows with exact serial verification,
+durable browser state, and a shared Rust core compiled to WebAssembly for
+protocol sequencing, integrity, and stable workflow errors.
 
 ## Install
 
@@ -59,7 +58,28 @@ metadata. A selected device is returned only after its Device Information
 serial matches, and `readSnapshot()` repeats that verification before returning
 fresh values.
 
-## Initial beta scope
+## Foreground firmware updates
+
+`BotaDeviceClient.create()` accepts a durable browser storage implementation and
+a `providers.firmwareDownload` resolver. The resolver receives only stable image
+identity and returns a fresh operation-scoped `GET` URL and headers. Those
+request credentials remain in memory and are never written to the firmware
+journal.
+
+Use `bota.devices.getCapabilities().firmwareUpdate` before starting. A supported
+browser must provide Web Bluetooth authorized-device enumeration, IndexedDB,
+OPFS, and `fetch`. `bota.ota.updateFirmware()` streams the response into OPFS,
+verifies its exact size, SHA-256, and CRC32 before GATT mutation, then delegates
+transfer, verification, reboot, and reconnect sequencing to Rust. Durable
+operations may be continued with `resumeFirmwareUpdate(operationId)` or stopped
+with `cancelFirmwareUpdate(operationId)`.
+
+Firmware sources must use HTTPS. Plain HTTP is accepted only for deterministic
+loopback tests. Reboot recovery uses `getDevices()` and only the exact browser
+device ID saved by the verified connection; it never opens the picker or falls
+back to a same-name device.
+
+## Foreground scope
 
 Supported:
 
@@ -69,12 +89,14 @@ Supported:
 - shared-core decoding of device status;
 - a fresh shared-core decode of encrypted-upload-v2 capability `0406` when the
   firmware exposes it;
+- durable, integrity-checked foreground firmware update with reload and reboot
+  recovery;
 - stable typed SDK errors and deterministic cleanup through `destroy()`.
 
 Not yet supported:
 
 - recording list, transfer, sync, or upload;
-- provisioning, connection settings, remote recording control, OTA, or logs;
+- provisioning, connection settings, remote recording control, or logs;
 - automatic scan, saved-device reconnect, background work, or closed-tab work;
 - browsers without Web Bluetooth;
 - Bota API calls. Authentication and backend requests remain application-owned.

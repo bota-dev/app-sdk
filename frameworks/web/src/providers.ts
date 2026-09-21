@@ -1,6 +1,7 @@
 import type {
   DeviceRecording,
   EncryptedUploadV2Capabilities,
+  FirmwareImageDescriptor,
 } from './models.ts'
 import type { BotaSDKErrorCode } from './errors.ts'
 
@@ -40,6 +41,18 @@ export interface RecordingControlProvider {
     action: 'start' | 'stop'
     authorityId: string
   }): Promise<{ grant: Uint8Array }>
+}
+
+export interface FirmwareDownloadProvider {
+  resolve(context: {
+    operationId: string
+    serialNumber: string
+    image: FirmwareImageDescriptor
+  }): Promise<{
+    method: 'GET'
+    url: string
+    headers: Readonly<Record<string, string>>
+  }>
 }
 
 export interface UploadRequestTemplate {

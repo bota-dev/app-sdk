@@ -52,7 +52,7 @@ test('picker support does not imply authorized-device reconnect support', () => 
         authorizedDeviceReconnect: false,
         durableStorage: true,
         largeRecordingSync: true,
-        firmwareUpdate: true,
+        firmwareUpdate: false,
       },
     )
   } finally {

@@ -3,6 +3,7 @@ export type { BotaDeviceClientOptions } from './client.ts'
 export { ControlManager } from './controlManager.ts'
 export { DeviceManager } from './deviceManager.ts'
 export { BotaSDKError } from './errors.ts'
+export { OTAManager } from './otaManager.ts'
 export { ProvisioningManager } from './provisioningManager.ts'
 export { RecordingManager } from './recordingManager.ts'
 export { WiFiManager } from './wifiManager.ts'
@@ -23,6 +24,9 @@ export type {
   DeviceStatus,
   DeviceRecording,
   EncryptedUploadV2Capabilities,
+  FirmwareImageDescriptor,
+  FirmwareUpdateOptions,
+  FirmwareUpdateProgress,
   ModemInfo,
   RecordingJournalSummary,
   RecordingControlRequest,
@@ -42,6 +46,7 @@ export type {
 export type {
   EncryptedUploadV2Material,
   EncryptedUploadV2ProviderContext,
+  FirmwareDownloadProvider,
   LegacyUploadContext,
   ProvisioningMaterial,
   ProvisioningPrepareContext,

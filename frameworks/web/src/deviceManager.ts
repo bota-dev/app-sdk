@@ -87,6 +87,17 @@ export class DeviceManager {
     return this.capabilities
   }
 
+  adoptWorkflowConnection(
+    result: WorkflowResult,
+    expectedSerialNumber: string,
+  ): ConnectedDevice {
+    return this.publishConnectedDevice(
+      result,
+      expectedSerialNumber,
+      'update_firmware',
+    )
+  }
+
   async connect(options: ConnectOptions): Promise<ConnectedDevice> {
     this.validateConnectionRequest(options.expectedSerialNumber, 'connect')
     if (!this.isSupported) {
@@ -339,7 +350,7 @@ export class DeviceManager {
   private publishConnectedDevice(
     result: WorkflowResult,
     expectedSerialNumber: string,
-    operation: 'connect' | 'reconnect',
+    operation: 'connect' | 'reconnect' | 'update_firmware',
   ): ConnectedDevice {
     if (this.destroyed) throw new BotaSDKError('cancelled', operation)
     const established = [...result.notifications].reverse().find(

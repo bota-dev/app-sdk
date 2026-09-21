@@ -204,6 +204,33 @@ export interface BrowserCapabilities {
   readonly firmwareUpdate: boolean
 }
 
+export interface FirmwareImageDescriptor {
+  imageId: string
+  version: string
+  sizeBytes: number
+  crc32: number
+  sha256Hex: string
+}
+
+export interface FirmwareUpdateOptions {
+  operationId?: string
+  signal?: AbortSignal
+  onProgress?: (progress: FirmwareUpdateProgress) => void
+}
+
+export interface FirmwareUpdateProgress {
+  phase:
+    | 'downloading'
+    | 'awaiting_device'
+    | 'transferring'
+    | 'verifying'
+    | 'rebooting'
+    | 'reconnecting'
+    | 'complete'
+  completedBytes: bigint
+  totalBytes: bigint
+}
+
 export interface DeviceRecording {
   uuid: string
   startedAtTimestampSeconds: number

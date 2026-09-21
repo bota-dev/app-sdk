@@ -989,10 +989,25 @@ rejected as cancelled before it can become the active device or start GATT
 work. If destruction races later connection work, the captured device is
 disconnected and cannot be published by a late workflow completion.
 
+Foreground firmware update is exposed through the client's `OTAManager`. The
+application resolves stable image identity to a fresh HTTPS request, while the
+browser host streams bounded chunks directly to OPFS and incrementally verifies
+exact length, SHA-256, and CRC32 before Rust may write GATT. Only stable image
+identity and workflow checkpoints are durable; request URLs and headers remain
+memory-only. A compatible verified blob can be reused after reload, while an
+incomplete blob restarts from byte zero with a freshly resolved request.
+
+Rust owns OTA transfer, device status handling, verification, reboot, reconnect,
+and public workflow errors. Reboot recovery requires authorized-device
+enumeration and filters it to the exact browser device ID captured by the
+verified connection. Cancellation retains mutation ownership until provider,
+fetch, OPFS, GATT, subscription, and timer work settles, then reconciles the
+latest durable journal so a compatible verified artifact remains recoverable.
+
 This release is foreground-only and requires a secure-context browser with Web
 Bluetooth. It has no automatic scan, saved-device reconnect, background or
 closed-tab execution, recording operations, upload transport, provisioning,
-settings, recording control, OTA, or logs. The host Portal continues to own
+settings, recording control, or logs. The host Portal continues to own
 authentication and all backend API calls.
 
 ## Security

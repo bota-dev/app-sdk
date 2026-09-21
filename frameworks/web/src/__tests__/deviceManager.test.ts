@@ -362,10 +362,15 @@ test('destroyed reconnect waits for the exact late connection cleanup before rej
   )
   await atConnect
 
-  await manager.destroy()
+  let destroySettled = false
+  const destroying = manager.destroy().then(() => {
+    destroySettled = true
+  })
   await new Promise<void>((resolve) => setImmediate(resolve))
   const settledBeforeRelease = reconnectSettled
+  assert.equal(destroySettled, false)
   releaseConnect()
+  await settleWithWatchdog(destroying, 'manager destruction')
   const error = await settleWithWatchdog(reconnecting, 'reconnect rejection')
   await settleWithWatchdog(atDisconnect, 'late reconnect disconnect')
 
@@ -538,7 +543,6 @@ test('destroy while GATT connect is pending disconnects the late connection', as
     'request_device',
     'connect:browser-peripheral-1',
   ])
-  await manager.destroy()
 
   const rejection = assert.rejects(connecting, (error: unknown) => {
     assert.ok(error instanceof BotaSDKError)
@@ -546,7 +550,14 @@ test('destroy while GATT connect is pending disconnects the late connection', as
     assert.equal(error.operation, 'connect')
     return true
   })
+  let destroySettled = false
+  const destroying = manager.destroy().then(() => {
+    destroySettled = true
+  })
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  assert.equal(destroySettled, false)
   releaseConnect()
+  await settleWithWatchdog(destroying, 'manager destruction')
   await rejection
 
   assert.deepEqual(transport.calls, [
@@ -572,15 +583,20 @@ test('destroy during connection workflow cannot publish a late device', async ()
     'connect:browser-peripheral-1',
     'discover:browser-peripheral-1',
   ])
-  await manager.destroy()
-
   const rejection = assert.rejects(connecting, (error: unknown) => {
     assert.ok(error instanceof BotaSDKError)
     assert.equal(error.code, 'cancelled')
     assert.equal(error.operation, 'connect')
     return true
   })
+  let destroySettled = false
+  const destroying = manager.destroy().then(() => {
+    destroySettled = true
+  })
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  assert.equal(destroySettled, false)
   releaseDiscovery()
+  await settleWithWatchdog(destroying, 'manager destruction')
   await rejection
 
   assert.equal(
