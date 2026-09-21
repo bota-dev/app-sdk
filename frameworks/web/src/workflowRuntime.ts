@@ -11,6 +11,7 @@ import {
   normalizeCoreError,
   type BotaOperation,
 } from './errors.ts'
+import { canonicalGattUuid } from './gatt.ts'
 import {
   BrowserStorageError,
   type BrowserSdkStorage,
@@ -60,6 +61,10 @@ export interface WorkflowEffectHosts {
 }
 
 export type WorkflowCompletionHandoff = () => Promise<void>
+
+export interface CharacteristicLease {
+  release(): void
+}
 
 interface Deferred<T> {
   promise: Promise<T>
@@ -163,6 +168,8 @@ export class BrowserWorkflowRuntime {
   private readonly core: CoreBridge
   private readonly transport: BrowserBluetoothTransport
   private readonly devices = new Map<string, BrowserDeviceHandle>()
+  private readonly characteristicLeases = new Map<string, symbol>()
+  private readonly disconnectListeners = new Set<(deviceId: string) => void>()
   private activeOwner: MutationOwner | null = null
   private connectedDevice: BrowserDeviceHandle | null = null
   private poisonedDeviceId: string | null = null
@@ -206,6 +213,13 @@ export class BrowserWorkflowRuntime {
     if (this.poisonedDeviceId === deviceId) this.poisonedDeviceId = null
     if (this.connectedDevice?.id !== deviceId) return
     this.connectedDevice = null
+    for (const listener of [...this.disconnectListeners]) {
+      try {
+        listener(deviceId)
+      } catch {
+        // Lifecycle observers own their asynchronous cleanup and errors.
+      }
+    }
     const owner = this.activeOwner
     if (!owner) return
     if (owner.kind === 'direct') {
@@ -229,6 +243,48 @@ export class BrowserWorkflowRuntime {
 
   poisonBleOwnership(deviceId: string): void {
     if (this.connectedDevice?.id === deviceId) this.poisonedDeviceId = deviceId
+  }
+
+  onDeviceDisconnected(listener: (deviceId: string) => void): () => void {
+    this.disconnectListeners.add(listener)
+    return () => this.disconnectListeners.delete(listener)
+  }
+
+  claimCharacteristicLease(
+    operation: BotaOperation,
+    device: BrowserDeviceHandle,
+    serviceUuid: string,
+    characteristicUuid: string,
+  ): CharacteristicLease {
+    if (this.destroyed) throw new BotaSDKError('cancelled', operation)
+    if (this.connectedDevice?.id !== device.id) {
+      throw new BotaSDKError('device_disconnected', operation)
+    }
+    if (this.poisonedDeviceId !== null) {
+      throw new BotaSDKError('operation_in_progress', operation)
+    }
+
+    const key = [
+      device.id,
+      canonicalGattUuid(serviceUuid),
+      canonicalGattUuid(characteristicUuid),
+    ].join(':')
+    if (this.characteristicLeases.has(key)) {
+      throw new BotaSDKError('operation_in_progress', operation)
+    }
+
+    const owner = Symbol(key)
+    this.characteristicLeases.set(key, owner)
+    let released = false
+    return {
+      release: () => {
+        if (released) return
+        released = true
+        if (this.characteristicLeases.get(key) === owner) {
+          this.characteristicLeases.delete(key)
+        }
+      },
+    }
   }
 
   run(

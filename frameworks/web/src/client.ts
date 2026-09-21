@@ -1,8 +1,10 @@
 import type { CoreLoader } from './core.ts'
+import { ControlManager } from './controlManager.ts'
 import { DeviceManager } from './deviceManager.ts'
 import { ProvisioningManager } from './provisioningManager.ts'
 import type {
   ProvisioningProvider,
+  RecordingControlProvider,
   RecordingUploadProvider,
 } from './providers.ts'
 import { RecordingManager } from './recordingManager.ts'
@@ -10,6 +12,7 @@ import type { BrowserSdkStorage } from './storage.ts'
 import type { BrowserBluetoothTransport } from './transport.ts'
 import { loadDefaultCore } from './wasmCore.ts'
 import { WebBluetoothTransport } from './webBluetoothTransport.ts'
+import { WiFiManager } from './wifiManager.ts'
 import { BrowserWorkflowRuntime } from './workflowRuntime.ts'
 
 export interface BotaDeviceClientOptions {
@@ -18,23 +21,30 @@ export interface BotaDeviceClientOptions {
   storage?: BrowserSdkStorage
   providers?: {
     provisioning?: ProvisioningProvider
+    recordingControl?: RecordingControlProvider
     recordingUpload?: RecordingUploadProvider
   }
 }
 
 export class BotaDeviceClient {
   readonly devices: DeviceManager
+  readonly controls: ControlManager
   readonly provisioning: ProvisioningManager
   readonly recordings: RecordingManager
+  readonly wifi: WiFiManager
 
   private constructor(
     devices: DeviceManager,
+    controls: ControlManager,
     provisioning: ProvisioningManager,
     recordings: RecordingManager,
+    wifi: WiFiManager,
   ) {
     this.devices = devices
+    this.controls = controls
     this.provisioning = provisioning
     this.recordings = recordings
+    this.wifi = wifi
   }
 
   static async create(options: BotaDeviceClientOptions = {}): Promise<BotaDeviceClient> {
@@ -48,6 +58,13 @@ export class BotaDeviceClient {
     })
     return new BotaDeviceClient(
       devices,
+      new ControlManager({
+        core,
+        transport,
+        runtime,
+        devices,
+        provider: options.providers?.recordingControl ?? null,
+      }),
       new ProvisioningManager({
         core,
         transport,
@@ -64,10 +81,18 @@ export class BotaDeviceClient {
         storage,
         options.providers?.recordingUpload ?? null,
       ),
+      new WiFiManager({
+        core,
+        transport,
+        runtime,
+        devices,
+      }),
     )
   }
 
   async destroy(): Promise<void> {
+    await this.wifi.destroy()
+    await this.controls.destroy()
     await this.provisioning.destroy()
     await this.recordings.destroy()
     await this.devices.destroy()

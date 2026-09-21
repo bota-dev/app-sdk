@@ -33,6 +33,15 @@ export interface ProvisioningProvider {
   }): Promise<void>
 }
 
+export interface RecordingControlProvider {
+  prepare(context: {
+    operationId: string
+    serialNumber: string
+    action: 'start' | 'stop'
+    authorityId: string
+  }): Promise<{ grant: Uint8Array }>
+}
+
 export interface UploadRequestTemplate {
   method: 'PUT'
   url: string

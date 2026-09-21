@@ -128,6 +128,74 @@ export interface DeviceConnectionSettings {
   streamingFlushIntervalSeconds: number
 }
 
+export interface WiFiCredentials {
+  ssid: string
+  password: string
+}
+
+export interface WiFiScanNetwork {
+  ssid: string
+  quality: number
+  isCurrent: boolean
+  isOpen: boolean
+}
+
+export interface WiFiScanResult {
+  networks: WiFiScanNetwork[]
+  currentSsid: string | null
+}
+
+export interface WiFiStatusInfo {
+  status:
+    | 'idle'
+    | 'connecting'
+    | 'connected'
+    | 'failed'
+    | 'disconnected'
+    | 'unknown'
+  statusRaw: number
+  signalStrength?: number
+  ssid?: string
+  lastError?: string
+}
+
+export type WiFiConfigResult =
+  | { success: true }
+  | {
+      success: false
+      error:
+        | 'invalid_grant'
+        | 'grant_expired'
+        | 'decryption_error'
+        | 'storage_error'
+        | 'unknown'
+      errorRaw?: number
+    }
+
+export interface WiFiStatusSubscription {
+  remove(): Promise<void>
+}
+
+export interface RecordingControlRequest {
+  authorityId: string
+  operationId?: string
+  signal?: AbortSignal
+}
+
+export type RecordingControlResult =
+  | { success: true }
+  | {
+      success: false
+      error:
+        | 'already_recording'
+        | 'not_recording'
+        | 'invalid_grant'
+        | 'invalid_state'
+        | 'invalid_response'
+        | 'unknown_error'
+      errorRaw?: number
+    }
+
 export interface BrowserCapabilities {
   readonly bluetooth: boolean
   readonly authorizedDeviceReconnect: boolean

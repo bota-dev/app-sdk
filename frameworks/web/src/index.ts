@@ -1,9 +1,11 @@
 export { BotaDeviceClient } from './client.ts'
 export type { BotaDeviceClientOptions } from './client.ts'
+export { ControlManager } from './controlManager.ts'
 export { DeviceManager } from './deviceManager.ts'
 export { BotaSDKError } from './errors.ts'
 export { ProvisioningManager } from './provisioningManager.ts'
 export { RecordingManager } from './recordingManager.ts'
+export { WiFiManager } from './wifiManager.ts'
 export type {
   BotaOperation,
   BotaSDKErrorCode,
@@ -23,11 +25,19 @@ export type {
   EncryptedUploadV2Capabilities,
   ModemInfo,
   RecordingJournalSummary,
+  RecordingControlRequest,
+  RecordingControlResult,
   RecordingSyncOptions,
   RecordingSyncProgress,
   RecordingSyncResult,
   ReconnectOptions,
   ProvisionRequest,
+  WiFiConfigResult,
+  WiFiCredentials,
+  WiFiScanNetwork,
+  WiFiScanResult,
+  WiFiStatusInfo,
+  WiFiStatusSubscription,
 } from './models.ts'
 export type {
   EncryptedUploadV2Material,
@@ -36,6 +46,7 @@ export type {
   ProvisioningMaterial,
   ProvisioningPrepareContext,
   ProvisioningProvider,
+  RecordingControlProvider,
   RecordingUploadProvider,
   UploadRequestTemplate,
 } from './providers.ts'
