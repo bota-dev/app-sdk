@@ -74,6 +74,13 @@ transfer, verification, reboot, and reconnect sequencing to Rust. Durable
 operations may be continued with `resumeFirmwareUpdate(operationId)` or stopped
 with `cancelFirmwareUpdate(operationId)`.
 
+Reload recovery validates the journal, checkpoint, and verified OPFS blob before
+device mutation. Download, transfer, and verify recovery reconnect through only
+the persisted authorized browser device ID and re-verify its serial before OTA
+GATT. Terminal success first advances the optional journal `state` to
+`cleanup_only`; reload then completes checkpoint, blob, and journal deletion
+without resolving a provider or reconnecting to the device.
+
 Firmware sources must use HTTPS. Plain HTTP is accepted only for deterministic
 loopback tests. Reboot recovery uses `getDevices()` and only the exact browser
 device ID saved by the verified connection; it never opens the picker or falls

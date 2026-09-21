@@ -114,6 +114,7 @@ class ObservedFirmwareBlob extends FakeRecordingBlob {
   readonly reads: Array<{ offset: number; maximumLength: number }> = []
   readonly writes: Array<{ offset: number; length: number }> = []
   readonly truncations: number[] = []
+  deleteError: unknown = null
 
   override async truncate(size: number): Promise<void> {
     this.truncations.push(size)
@@ -132,11 +133,19 @@ class ObservedFirmwareBlob extends FakeRecordingBlob {
     this.reads.push({ offset, maximumLength })
     return await super.read(offset, maximumLength)
   }
+
+  override async delete(): Promise<void> {
+    if (this.deleteError) throw this.deleteError
+    await super.delete()
+  }
 }
 
 class FakeFirmwareStorage extends FakeRecordingStorage {
   readonly firmwareJournals = new Map<string, FirmwareJournal>()
   verifiedSaveGate: Promise<void> | null = null
+  checkpointDeleteError: unknown = null
+  blobDeleteError: unknown = null
+  journalDeleteError: unknown = null
 
   override async loadFirmwareJournal(
     operationId: string,
@@ -158,8 +167,14 @@ class FakeFirmwareStorage extends FakeRecordingStorage {
   }
 
   override async deleteFirmwareJournal(operationId: string): Promise<void> {
+    if (this.journalDeleteError) throw this.journalDeleteError
     this.events.push('firmware:delete')
     this.firmwareJournals.delete(operationId)
+  }
+
+  override async deleteWorkflowCheckpoint(operationId: string): Promise<void> {
+    if (this.checkpointDeleteError) throw this.checkpointDeleteError
+    await super.deleteWorkflowCheckpoint(operationId)
   }
 
   override async openBlob(blobId: string): Promise<ObservedFirmwareBlob> {
@@ -171,6 +186,7 @@ class FakeFirmwareStorage extends FakeRecordingStorage {
       this.blobs.set(blobId, blob)
     }
     assert.ok(blob instanceof ObservedFirmwareBlob)
+    blob.deleteError = this.blobDeleteError
     return blob
   }
 
@@ -275,6 +291,35 @@ test('firmwareUpdate capability fails before provider, storage, or device mutati
 
   assert.deepEqual(harness.provider.calls, [])
   assert.deepEqual(harness.storage.firmwareJournals, new Map())
+  assert.deepEqual(harness.transport.calls, [])
+  assert.deepEqual(harness.transport.writes, [])
+})
+
+test('an orphan Rust checkpoint rejects a new update before provider or GATT', async () => {
+  const bytes = Uint8Array.of(1, 2, 3, 4)
+  const image = descriptor(bytes)
+  const operationId = 'update_firmware:orphan-checkpoint'
+  const harness = await createHarness({ bytes })
+  harness.storage.workflowCheckpoints.set(operationId, {
+    workflow: 'firmware_update',
+    operation: 'update_firmware',
+    serialNumber: SERIAL,
+    recordingUuid: null,
+    phase: 'transferring',
+    completedUnits: 0n,
+    retryCount: 0,
+    lastSequence: null,
+    firmwareVersion: image.version,
+  } satisfies CoreWorkflowCheckpoint)
+  installStartResult(harness, 1)
+
+  await assert.rejects(
+    harness.ota.updateFirmware(image, { operationId }),
+    isSdkError('resume_rejected'),
+  )
+
+  assert.equal(harness.storage.firmwareJournals.has(operationId), false)
+  assert.deepEqual(harness.provider.calls, [])
   assert.deepEqual(harness.transport.calls, [])
   assert.deepEqual(harness.transport.writes, [])
 })
@@ -705,6 +750,233 @@ test('reload resumes a durable reconnect checkpoint without a picker or live man
   await devices.destroy()
 })
 
+test('fresh managers recover download, transfer, verify, and reconnect through the exact authorized device', async (t) => {
+  const cases: Array<{
+    name: string
+    phase: 'transferring' | 'verifying' | 'reconnecting' | null
+    completes: boolean
+  }> = [
+    { name: 'download', phase: null, completes: false },
+    { name: 'transfer', phase: 'transferring', completes: false },
+    { name: 'verify', phase: 'verifying', completes: false },
+    { name: 'reconnecting', phase: 'reconnecting', completes: true },
+  ]
+
+  for (const candidate of cases) {
+    await t.test(candidate.name, async () => {
+      const bytes = Uint8Array.of(101, 102, 103, 104)
+      const image = descriptor(bytes)
+      const operationId = `update_firmware:fresh-${candidate.name}`
+      const harness = await createHarness({ bytes })
+      installStartResult(harness, 1)
+      await assert.rejects(
+        harness.ota.updateFirmware(image, { operationId }),
+        isSdkError('firmware_rejected'),
+      )
+      const journal = harness.storage.firmwareJournals.get(operationId)
+      assert.ok(journal?.verified)
+
+      if (candidate.phase === null) {
+        harness.storage.firmwareJournals.set(operationId, {
+          ...journal,
+          downloadedBytes: 0,
+          verified: false,
+        })
+        await harness.storage.deleteWorkflowCheckpoint(operationId)
+      } else {
+        harness.storage.workflowCheckpoints.set(
+          operationId,
+          firmwareCheckpoint(candidate.phase, image.version, bytes.byteLength),
+        )
+      }
+      await harness.ota.destroy()
+      await harness.devices.destroy()
+
+      const sameNameDevice = {
+        id: `same-name-${candidate.name}`,
+        name: harness.transport.device.name,
+      }
+      harness.transport.authorizedDevices = [sameNameDevice, harness.transport.device]
+      harness.transport.serialNumbers.set(sameNameDevice.id, SERIAL)
+      harness.transport.setRead(
+        '0000180a-0000-1000-8000-00805f9b34fb',
+        FIRMWARE_REVISION_CHARACTERISTIC,
+        new TextEncoder().encode(image.version),
+      )
+      harness.transport.calls.length = 0
+      harness.transport.writes.length = 0
+      if (candidate.phase === null) {
+        harness.fetcher.handler = async () => response(
+          [bytes],
+          200,
+          bytes.byteLength,
+        )
+      }
+      const fresh = await createFreshOtaHarness(harness)
+
+      if (candidate.completes) {
+        await fresh.ota.resumeFirmwareUpdate(operationId)
+      } else {
+        const error = await fresh.ota.resumeFirmwareUpdate(operationId).then(
+          () => null,
+          (reason: unknown) => reason,
+        )
+        assert.ok(error instanceof BotaSDKError)
+        assert.equal(
+          error.code,
+          'firmware_rejected',
+          stringify({
+            events: harness.events,
+            calls: harness.transport.calls,
+            writes: harness.transport.writes.map((write) => [...write.value]),
+          }),
+        )
+      }
+
+      assert.equal(
+        harness.transport.calls.filter((call) => call === 'get_authorized_devices').length,
+        1,
+      )
+      assert.equal(harness.transport.calls.includes('request_device'), false)
+      assert.equal(
+        harness.transport.calls.includes(`connect:${sameNameDevice.id}`),
+        false,
+      )
+      assert.ok(
+        harness.transport.calls.includes(`connect:${harness.transport.device.id}`),
+      )
+      assert.deepEqual(fresh.devices.connectedDevice, {
+        id: harness.transport.device.id,
+        name: harness.transport.device.name,
+        serialNumber: SERIAL,
+      })
+      await fresh.ota.destroy()
+      await fresh.devices.destroy()
+    })
+  }
+})
+
+test('fresh recovery rejects an exact authorized device with the wrong serial before OTA GATT', async () => {
+  const bytes = Uint8Array.of(105, 106, 107, 108)
+  const image = descriptor(bytes)
+  const operationId = 'update_firmware:fresh-identity-mismatch'
+  const harness = await createHarness({ bytes })
+  installStartResult(harness, 1)
+  await assert.rejects(
+    harness.ota.updateFirmware(image, { operationId }),
+    isSdkError('firmware_rejected'),
+  )
+  assert.ok(harness.storage.firmwareJournals.get(operationId)?.verified)
+  await harness.ota.destroy()
+  await harness.devices.destroy()
+
+  harness.transport.serialNumbers.set(harness.transport.device.id, 'WRONGSERIAL')
+  harness.transport.calls.length = 0
+  harness.transport.writes.length = 0
+  const fresh = await createFreshOtaHarness(harness)
+
+  await assert.rejects(
+    fresh.ota.resumeFirmwareUpdate(operationId),
+    isSdkError('identity_mismatch'),
+  )
+  assert.equal(
+    harness.transport.calls.filter((call) => call === 'get_authorized_devices').length,
+    1,
+  )
+  assert.equal(harness.transport.calls.includes('request_device'), false)
+  assert.deepEqual(harness.transport.writes, [])
+  assert.equal(harness.provider.calls.length, 1)
+  await fresh.ota.destroy()
+  await fresh.devices.destroy()
+})
+
+test('reload completes cleanup-only state after every terminal cleanup crash boundary', async (t) => {
+  const cases: Array<{
+    name: string
+    inject(storage: FakeFirmwareStorage): void
+    clear(storage: FakeFirmwareStorage): void
+    checkpointRemains: boolean
+    blobRemains: boolean
+  }> = [
+    {
+      name: 'before checkpoint delete',
+      inject: (storage) => { storage.checkpointDeleteError = new Error('injected') },
+      clear: (storage) => { storage.checkpointDeleteError = null },
+      checkpointRemains: true,
+      blobRemains: true,
+    },
+    {
+      name: 'before blob delete',
+      inject: (storage) => { storage.blobDeleteError = new Error('injected') },
+      clear: (storage) => { storage.blobDeleteError = null },
+      checkpointRemains: false,
+      blobRemains: true,
+    },
+    {
+      name: 'before journal delete',
+      inject: (storage) => { storage.journalDeleteError = new Error('injected') },
+      clear: (storage) => { storage.journalDeleteError = null },
+      checkpointRemains: false,
+      blobRemains: false,
+    },
+  ]
+
+  for (const candidate of cases) {
+    await t.test(candidate.name, async () => {
+      const bytes = Uint8Array.of(109, 110, 111, 112)
+      const image = descriptor(bytes)
+      const operationId = `update_firmware:cleanup-${candidate.name.replaceAll(' ', '-')}`
+      const harness = await createHarness({ bytes })
+      harness.transport.setRead(
+        '0000180a-0000-1000-8000-00805f9b34fb',
+        FIRMWARE_REVISION_CHARACTERISTIC,
+        new TextEncoder().encode(image.version),
+      )
+      installSuccessfulUpdate(harness)
+      candidate.inject(harness.storage)
+
+      await assert.rejects(
+        harness.ota.updateFirmware(image, { operationId }),
+        isSdkError('internal_error'),
+      )
+      const journal = harness.storage.firmwareJournals.get(operationId)
+      assert.ok(journal)
+      assert.equal(
+        (journal as FirmwareJournal & { state?: string }).state,
+        'cleanup_only',
+      )
+      assert.equal(
+        harness.storage.workflowCheckpoints.has(operationId),
+        candidate.checkpointRemains,
+      )
+      assert.equal(
+        harness.storage.blob(journal.blobId).snapshot().byteLength > 0,
+        candidate.blobRemains,
+      )
+      const providerCalls = harness.provider.calls.length
+
+      candidate.clear(harness.storage)
+      await harness.ota.destroy()
+      await harness.devices.destroy()
+      harness.transport.calls.length = 0
+      harness.transport.writes.length = 0
+      const fresh = await createFreshOtaHarness(harness, { provider: null })
+
+      await fresh.ota.resumeFirmwareUpdate(operationId)
+
+      assert.equal(harness.provider.calls.length, providerCalls)
+      assert.equal(harness.transport.calls.includes('get_authorized_devices'), false)
+      assert.equal(harness.transport.calls.includes('request_device'), false)
+      assert.deepEqual(harness.transport.writes, [])
+      assert.equal(harness.storage.workflowCheckpoints.has(operationId), false)
+      assert.equal(harness.storage.firmwareJournals.has(operationId), false)
+      assert.equal(harness.storage.blob(journal.blobId).snapshot().byteLength, 0)
+      await fresh.ota.destroy()
+      await fresh.devices.destroy()
+    })
+  }
+})
+
 test('reconnect cancellation joins getDevices and preserves the verified artifact', async () => {
   const bytes = Uint8Array.of(49, 50, 51, 52)
   const operationId = 'update_firmware:cancel-get-devices'
@@ -921,6 +1193,21 @@ test('incompatible image identity, version, size, hash, or Rust checkpoint rejec
     })
   }
 
+  await t.test('verified blob', async () => {
+    harness.storage.firmwareJournals.set(operationId, valid)
+    await harness.storage.deleteWorkflowCheckpoint(operationId)
+    harness.storage.blob(valid.blobId).seed(Uint8Array.of(0, 0, 0, 0))
+    harness.transport.calls.length = 0
+    harness.transport.writes.length = 0
+    await assert.rejects(
+      harness.ota.resumeFirmwareUpdate(operationId),
+      isSdkError('resume_rejected'),
+    )
+    assert.deepEqual(harness.transport.calls, [])
+    assert.deepEqual(harness.transport.writes, [])
+    assert.equal(harness.provider.calls.length, providerCalls)
+  })
+
   await t.test('checkpoint', async () => {
     harness.storage.firmwareJournals.set(operationId, valid)
     harness.storage.workflowCheckpoints.set(operationId, {
@@ -980,17 +1267,53 @@ function reconnectCheckpoint(
   version: string,
   completedBytes: number,
 ): CoreWorkflowCheckpoint {
+  return firmwareCheckpoint('reconnecting', version, completedBytes)
+}
+
+function firmwareCheckpoint(
+  phase: 'transferring' | 'verifying' | 'reconnecting',
+  version: string,
+  completedBytes: number,
+): CoreWorkflowCheckpoint {
   return {
     workflow: 'firmware_update',
     operation: 'update_firmware',
     serialNumber: SERIAL,
     recordingUuid: null,
-    phase: 'reconnecting',
+    phase,
     completedUnits: BigInt(completedBytes),
     retryCount: 0,
     lastSequence: null,
     firmwareVersion: version,
   }
+}
+
+async function createFreshOtaHarness(
+  harness: Harness,
+  options: { provider?: FirmwareDownloadProvider | null } = {},
+): Promise<{
+  core: CoreBridge
+  runtime: BrowserWorkflowRuntime
+  devices: DeviceManager
+  ota: OTAManager
+}> {
+  const core = await createWasmCore(await wasmBytes)
+  const runtime = new BrowserWorkflowRuntime(core, harness.transport)
+  const devices = new DeviceManager(core, harness.transport, {
+    runtime,
+    storage: harness.storage,
+  })
+  enableFirmwareUpdate(devices)
+  const ota = new OTAManager({
+    core,
+    transport: harness.transport,
+    runtime,
+    devices,
+    storage: harness.storage,
+    provider: options.provider === undefined ? harness.provider : options.provider,
+    fetcher: harness.fetcher.fetch,
+  })
+  return { core, runtime, devices, ota }
 }
 
 function enableFirmwareUpdate(devices: DeviceManager): void {

@@ -47,6 +47,7 @@ export interface FirmwareJournal {
   blobId: string
   downloadedBytes: number
   verified: boolean
+  state?: 'active' | 'cleanup_only'
   updatedAtEpochMs: number
 }
 

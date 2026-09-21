@@ -71,6 +71,7 @@ const SHA256_PATTERN = /^[0-9a-f]{64}$/
 
 export class OTAManager {
   private readonly core: CoreBridge
+  private readonly transport: BrowserBluetoothTransport
   private readonly runtime: BrowserWorkflowRuntime
   private readonly devices: DeviceManager
   private readonly storage: BrowserSdkStorage | null
@@ -86,6 +87,7 @@ export class OTAManager {
 
   constructor(options: OTAManagerOptions) {
     this.core = options.core
+    this.transport = options.transport
     this.runtime = options.runtime
     this.devices = options.devices
     this.storage = options.storage ?? null
@@ -110,7 +112,11 @@ export class OTAManager {
       operationId,
       options.signal,
       async (signal) => {
-        if (await storage.loadFirmwareJournal(operationId)) {
+        const [existingJournal, existingCheckpoint] = await Promise.all([
+          storage.loadFirmwareJournal(operationId),
+          storage.loadWorkflowCheckpoint(operationId),
+        ])
+        if (existingJournal || existingCheckpoint) {
           throw new BotaSDKError('resume_rejected', 'update_firmware')
         }
         throwIfAborted(signal)
@@ -144,7 +150,6 @@ export class OTAManager {
     this.ensureFirmwareCapability(options.signal)
     validateOperationId(operationId)
     const storage = this.requireStorage()
-    this.requireProvider()
 
     await this.runManagedOperation(
       operationId,
@@ -158,6 +163,17 @@ export class OTAManager {
         const checkpoint = await storage.loadWorkflowCheckpoint(operationId)
         validateCheckpoint(checkpoint, journal)
         throwIfAborted(signal)
+        if (firmwareJournalState(journal) === 'cleanup_only') {
+          await this.finishFirmwareCleanup(journal)
+          return
+        }
+
+        const artifact = this.createArtifactHost(journal)
+        if (journal.verified && !(await artifact.hasCompatibleVerifiedBlob())) {
+          await artifact.deleteBlob().catch(() => undefined)
+          throw new BotaSDKError('resume_rejected', 'update_firmware')
+        }
+        throwIfAborted(signal)
 
         const hint = await this.loadReconnectHint(journal.serialNumber)
         const reconnecting = checkpointPhase(checkpoint) === 'reconnecting'
@@ -167,7 +183,19 @@ export class OTAManager {
             name: hint.name,
           })
         } else {
-          const connected = this.requireConnectedDevice()
+          let connected: { id: string; serialNumber: string }
+          if (
+            !this.devices.connectedDevice
+            && !this.runtime.connectedDeviceHandle
+          ) {
+            connected = await this.recoverExactConnection(
+              journal,
+              hint,
+              signal,
+            )
+          } else {
+            connected = this.requireConnectedDevice()
+          }
           if (
             connected.serialNumber !== journal.serialNumber
             || connected.id !== hint.browserDeviceId
@@ -176,11 +204,6 @@ export class OTAManager {
           }
         }
 
-        const artifact = this.createArtifactHost(journal)
-        if (journal.verified && !(await artifact.hasCompatibleVerifiedBlob())) {
-          await artifact.deleteBlob().catch(() => undefined)
-          throw new BotaSDKError('integrity_failed', 'update_firmware')
-        }
         throwIfAborted(signal)
         await this.runFirmwareWorkflow(
           journal,
@@ -207,6 +230,10 @@ export class OTAManager {
     const journal = await storage.loadFirmwareJournal(operationId)
     if (!journal) return
     validateJournal(journal, operationId)
+    if (firmwareJournalState(journal) === 'cleanup_only') {
+      await this.finishFirmwareCleanup(journal)
+      return
+    }
     const artifact = this.createArtifactHost(journal)
     if (!journal.verified || !(await artifact.hasCompatibleVerifiedBlob())) {
       await artifact.deleteBlob()
@@ -234,7 +261,6 @@ export class OTAManager {
     onProgress?: (progress: FirmwareUpdateProgress) => void,
     existingArtifact?: FirmwareArtifactHost,
   ): Promise<void> {
-    const storage = this.requireStorage()
     const artifact = existingArtifact ?? this.createArtifactHost(journal)
     const cancellationId = randomBytes(16)
     throwIfAborted(signal)
@@ -259,7 +285,7 @@ export class OTAManager {
           cancellationId: cancellationId.slice(),
         }),
         {
-          persistence: createBrowserPersistenceHost(storage, this.now),
+          persistence: this.createFirmwarePersistenceHost(journal),
           network: artifact,
           firmwareBlob: artifact,
         },
@@ -275,14 +301,7 @@ export class OTAManager {
         },
         async (result) => {
           this.devices.adoptWorkflowConnection(result, journal.serialNumber)
-          await storage.deleteWorkflowCheckpoint(journal.operationId)
-          const latest = await storage.loadFirmwareJournal(journal.operationId)
-          if (!latest) {
-            throw new BotaSDKError('resume_rejected', 'update_firmware')
-          }
-          validateCompatibleJournal(latest, journal)
-          await (await storage.openBlob(latest.blobId)).delete()
-          await storage.deleteFirmwareJournal(journal.operationId)
+          await this.finishFirmwareCleanup(journal)
         },
       )
     } catch (error) {
@@ -303,6 +322,99 @@ export class OTAManager {
       journal,
       now: this.now,
     })
+  }
+
+  private createFirmwarePersistenceHost(
+    expected: FirmwareJournal,
+  ): WorkflowEffectHost {
+    const storage = this.requireStorage()
+    const base = createBrowserPersistenceHost(storage, this.now)
+    return {
+      execute: async (envelope, context) => {
+        if (envelope.effect.kind !== 'persistence_delete_checkpoint') {
+          return await base.execute(envelope, context)
+        }
+        const latest = await storage.loadFirmwareJournal(expected.operationId)
+        if (!latest) {
+          throw new BotaSDKError('resume_rejected', 'update_firmware')
+        }
+        validateCompatibleJournal(latest, expected)
+        if (firmwareJournalState(latest) !== 'cleanup_only') {
+          await storage.saveFirmwareJournal({
+            ...latest,
+            state: 'cleanup_only',
+            updatedAtEpochMs: Math.max(latest.updatedAtEpochMs, this.now()),
+          })
+        }
+        await storage.deleteWorkflowCheckpoint(expected.operationId)
+        return null
+      },
+      cancel: async () => {
+        await base.cancel()
+      },
+    }
+  }
+
+  private async finishFirmwareCleanup(expected: FirmwareJournal): Promise<void> {
+    const storage = this.requireStorage()
+    const latest = await storage.loadFirmwareJournal(expected.operationId)
+    if (!latest) return
+    validateCompatibleJournal(latest, expected)
+    if (firmwareJournalState(latest) !== 'cleanup_only') {
+      throw new BotaSDKError('resume_rejected', 'update_firmware')
+    }
+    await storage.deleteWorkflowCheckpoint(expected.operationId)
+    await (await storage.openBlob(latest.blobId)).delete()
+    await storage.deleteFirmwareJournal(expected.operationId)
+  }
+
+  private async recoverExactConnection(
+    journal: FirmwareJournal,
+    hint: VerifiedDeviceHint,
+    signal: AbortSignal,
+  ): Promise<{ id: string; serialNumber: string }> {
+    throwIfAborted(signal)
+    let authorized: Awaited<ReturnType<BrowserBluetoothTransport['getAuthorizedDevices']>>
+    try {
+      authorized = await this.transport.getAuthorizedDevices()
+    } catch (error) {
+      throw asFirmwareError(error)
+    }
+    throwIfAborted(signal)
+    const exact = authorized.find((device) => device.id === hint.browserDeviceId)
+    if (!exact) throw new BotaSDKError('picker_required', 'update_firmware')
+
+    this.runtime.registerDevice(exact)
+    const cancellationId = randomBytes(16)
+    const connectionOperationId = `connect:${bytesHex(cancellationId)}`
+    const cancel = (): void => {
+      void this.runtime.cancel(connectionOperationId).catch(() => undefined)
+    }
+    const running = this.runtime.run(
+      connectionOperationId,
+      cancellationId,
+      () => this.core.startExactConnection({
+        expectedSerialNumber: journal.serialNumber,
+        peripheralId: exact.id,
+        name: exact.name,
+        cancellationId: cancellationId.slice(),
+      }),
+      { persistence: createBrowserPersistenceHost(this.requireStorage(), this.now) },
+    )
+    signal.addEventListener('abort', cancel, { once: true })
+    if (signal.aborted) cancel()
+    try {
+      const result = await running
+      const connected = this.devices.adoptWorkflowConnection(
+        result,
+        journal.serialNumber,
+      )
+      return { id: connected.id, serialNumber: connected.serialNumber }
+    } catch (error) {
+      throw asFirmwareError(error)
+    } finally {
+      signal.removeEventListener('abort', cancel)
+    }
   }
 
   private async deleteLatestBlob(expected: FirmwareJournal): Promise<void> {
@@ -739,6 +851,7 @@ function createJournal(
     blobId: firmwareBlobId(operationId, image, downloadId),
     downloadedBytes: 0,
     verified: false,
+    state: 'active',
     updatedAtEpochMs: now(),
   }
 }
@@ -777,12 +890,23 @@ function validateJournal(journal: FirmwareJournal, operationId: string): void {
     || journal.downloadedBytes < 0
     || journal.downloadedBytes > journal.sizeBytes
     || typeof journal.verified !== 'boolean'
+    || (journal.state !== undefined
+      && journal.state !== 'active'
+      && journal.state !== 'cleanup_only')
     || !Number.isSafeInteger(journal.updatedAtEpochMs)
     || journal.updatedAtEpochMs < 0
     || (journal.verified && journal.downloadedBytes !== journal.sizeBytes)
+    || (firmwareJournalState(journal) === 'cleanup_only'
+      && (!journal.verified || journal.downloadedBytes !== journal.sizeBytes))
   ) {
     throw new BotaSDKError('resume_rejected', 'update_firmware')
   }
+}
+
+function firmwareJournalState(
+  journal: FirmwareJournal,
+): 'active' | 'cleanup_only' {
+  return journal.state ?? 'active'
 }
 
 function validateCompatibleJournal(
@@ -1036,6 +1160,15 @@ function otaError(error: unknown): BotaSDKError {
     return new BotaSDKError(code, 'update_firmware')
   }
   return normalizeCoreError(error, 'update_firmware')
+}
+
+function asFirmwareError(error: unknown): BotaSDKError {
+  const normalized = otaError(error)
+  if (normalized.operation === 'update_firmware') return normalized
+  return new BotaSDKError(normalized.code, 'update_firmware', {
+    retryable: normalized.retryable,
+    protocolStatus: normalized.protocolStatus,
+  })
 }
 
 function bytesHex(value: Uint8Array): string {

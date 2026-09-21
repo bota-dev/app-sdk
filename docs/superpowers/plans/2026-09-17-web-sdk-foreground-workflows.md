@@ -572,6 +572,7 @@ The implementation adds focused Web files instead of growing `deviceManager.ts` 
     blobId: string
     downloadedBytes: number
     verified: boolean
+    state?: 'active' | 'cleanup_only'
     updatedAtEpochMs: number
   }
 
@@ -1478,7 +1479,7 @@ The implementation adds focused Web files instead of growing `deviceManager.ts` 
   }
   ```
 
-  Persist the firmware journal before provider resolution. Start Rust with the journal's stable download ID and verified reconnect hint. On success, delete checkpoint, blob, then journal. On retryable failure retain only compatible durable state; on integrity failure delete the untrusted blob but preserve the journal's safe identity metadata.
+  Persist the firmware journal before provider resolution. Start Rust with the journal's stable download ID and verified reconnect hint. On success, persist one-way `cleanup_only` before deleting checkpoint, blob, then journal, so every crash boundary resumes as cleanup only. On retryable failure retain only compatible durable state; on integrity failure delete the untrusted blob but preserve the journal's safe identity metadata.
 
 - [ ] **Step 6: Run OTA and Web gates**
 

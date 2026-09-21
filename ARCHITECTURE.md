@@ -1003,6 +1003,13 @@ enumeration and filters it to the exact browser device ID captured by the
 verified connection. Cancellation retains mutation ownership until provider,
 fetch, OPFS, GATT, subscription, and timer work settles, then reconciles the
 latest durable journal so a compatible verified artifact remains recoverable.
+Generic workflow-host operations, including checkpoint load/save/delete, also
+remain joined before ownership release. Fresh-page recovery for download,
+transfer, and verify phases establishes the same exact authorized connection
+and re-verifies serial before OTA GATT. Before Rust's terminal checkpoint delete,
+the persistence host durably advances the optional firmware-journal `state` from
+`active` to the one-way `cleanup_only` value; any reload from that state performs
+only idempotent checkpoint, blob, and journal cleanup.
 
 This release is foreground-only and requires a secure-context browser with Web
 Bluetooth. It has no automatic scan, saved-device reconnect, background or

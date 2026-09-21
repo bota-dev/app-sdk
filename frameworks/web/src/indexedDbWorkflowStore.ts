@@ -400,12 +400,16 @@ export class IndexedDbWorkflowStore {
           || existing.blobId !== sanitized.blobId
           || sanitized.downloadedBytes < existing.downloadedBytes
           || (existing.verified && !sanitized.verified)
+          || (firmwareJournalState(existing) === 'cleanup_only'
+            && firmwareJournalState(sanitized) !== 'cleanup_only')
         ) {
           throw resumeRejected()
         }
         assertNondecreasingTimestamp(existing, sanitized)
       },
-      () => undefined,
+      () => {
+        if (firmwareJournalState(sanitized) !== 'active') throw resumeRejected()
+      },
     )
   }
 
@@ -712,6 +716,16 @@ function firmwareJournal(value: unknown): FirmwareJournal {
   const sizeBytes = safeNonnegativeInteger(record.sizeBytes)
   const downloadedBytes = safeNonnegativeInteger(record.downloadedBytes)
   if (downloadedBytes > sizeBytes) throw resumeRejected()
+  const state = record.state
+  if (state !== undefined && state !== 'active' && state !== 'cleanup_only') {
+    throw resumeRejected()
+  }
+  if (
+    state === 'cleanup_only'
+    && (!record.verified || downloadedBytes !== sizeBytes)
+  ) {
+    throw resumeRejected()
+  }
   return {
     schemaVersion: 1,
     operationId: recordString(record, 'operationId'),
@@ -725,8 +739,15 @@ function firmwareJournal(value: unknown): FirmwareJournal {
     blobId: recordString(record, 'blobId'),
     downloadedBytes,
     verified: record.verified,
+    ...(state === undefined ? {} : { state }),
     updatedAtEpochMs: safeNonnegativeInteger(record.updatedAtEpochMs),
   }
+}
+
+function firmwareJournalState(
+  journal: FirmwareJournal,
+): 'active' | 'cleanup_only' {
+  return journal.state ?? 'active'
 }
 
 function versionedRecord(value: unknown): UnknownRecord {

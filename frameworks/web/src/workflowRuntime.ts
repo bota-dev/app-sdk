@@ -1207,11 +1207,11 @@ export class BrowserWorkflowRuntime {
     if (!host) {
       throw new BotaSDKError('unsupported_capability', publicOperation(envelope.operation))
     }
-    const executed = await this.awaitOwnerStep(
+    const execution = this.trackExternalOperation(
       owner,
-      generation,
       host.execute(envelope, context),
     )
+    const executed = await this.awaitOwnerStep(owner, generation, execution)
     if (executed.kind === 'cancelled') return
     if (executed.kind === 'failed') throw executed.error
     if (!executed.value) return

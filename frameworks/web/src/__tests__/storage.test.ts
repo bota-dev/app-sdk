@@ -860,6 +860,36 @@ test('concurrent firmware saves cannot replace newer durable progress', async ()
   )
 })
 
+test('firmware cleanup-only state is durable, verified, and one-way', async () => {
+  const storage = await (await storageFixture()).open('firmware-cleanup-state-tenant')
+  const journal = firmwareJournal()
+  await storage.saveFirmwareJournal(journal)
+  const cleanup = {
+    ...journal,
+    state: 'cleanup_only' as const,
+    updatedAtEpochMs: journal.updatedAtEpochMs + 1,
+  }
+
+  await storage.saveFirmwareJournal(cleanup)
+  assert.deepEqual(await storage.loadFirmwareJournal(journal.operationId), cleanup)
+  await expectStorageError(
+    storage.saveFirmwareJournal({
+      ...journal,
+      state: 'active',
+      updatedAtEpochMs: cleanup.updatedAtEpochMs + 1,
+    } as FirmwareJournal),
+    'resume_rejected',
+  )
+  await expectStorageError(
+    storage.saveFirmwareJournal({
+      ...cleanup,
+      verified: false,
+      updatedAtEpochMs: cleanup.updatedAtEpochMs + 1,
+    }),
+    'resume_rejected',
+  )
+})
+
 test('concurrent same-offset OPFS appends commit one complete suffix without losing the prefix', async () => {
   const fixture = await storageFixture()
   const firstStorage = await fixture.open('concurrent-blob-tenant')

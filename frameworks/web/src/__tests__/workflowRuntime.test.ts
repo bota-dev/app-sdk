@@ -430,6 +430,97 @@ test('workflow cancellation joins an initiated GATT write before owner release a
   assert.equal(nextOwnerRan, true)
 })
 
+test('cancellation joins initiated workflow-checkpoint persistence before owner release', async (t) => {
+  const cases: Array<{
+    name: string
+    effect: CoreEffect
+    event: CoreHostEvent | null
+  }> = [
+    {
+      name: 'load',
+      effect: { kind: 'persistence_load_checkpoint' },
+      event: {
+        requestId: 1n,
+        kind: 'checkpoint_loaded',
+        checkpoint: CHECKPOINT,
+      },
+    },
+    {
+      name: 'save',
+      effect: {
+        kind: 'persistence_save_checkpoint',
+        checkpoint: CHECKPOINT,
+      },
+      event: { requestId: 1n, kind: 'checkpoint_saved' },
+    },
+    {
+      name: 'delete',
+      effect: { kind: 'persistence_delete_checkpoint' },
+      event: null,
+    },
+  ]
+
+  for (const candidate of cases) {
+    await t.test(candidate.name, async () => {
+      const entered = deferred<void>()
+      const gate = deferred<void>()
+      const persistence: WorkflowEffectHost = {
+        execute: async (effect) => {
+          assert.equal(effect.effect.kind, candidate.effect.kind)
+          entered.resolve(undefined)
+          await gate.promise
+          return candidate.event
+        },
+        cancel: async () => undefined,
+      }
+      const core = scriptedCore({
+        cancel: () => [envelope(2n, {
+          kind: 'notify',
+          notification: { kind: 'cancelled', operation: 'reconnect' },
+        })],
+      })
+      const runtime = new BrowserWorkflowRuntime(
+        core,
+        new FakeBrowserBluetoothTransport(),
+      )
+      const operationId = `reconnect:gated-checkpoint-${candidate.name}`
+      const running = runtime.run(
+        operationId,
+        CANCELLATION_ID,
+        () => [envelope(1n, candidate.effect)],
+        { persistence },
+      ).then(
+        () => null,
+        (error: unknown) => error,
+      )
+      await settleWithWatchdog(entered.promise, `${candidate.name} checkpoint start`)
+
+      let cancellationSettled = false
+      const cancelling = runtime.cancel(operationId).then(() => {
+        cancellationSettled = true
+      })
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      assert.equal(cancellationSettled, false)
+      await assert.rejects(
+        runtime.runExclusive('settings', async () => undefined),
+        errorWith('operation_in_progress', 'settings'),
+      )
+
+      gate.resolve(undefined)
+      await settleWithWatchdog(cancelling, `${candidate.name} checkpoint cancellation`)
+      const result = await settleWithWatchdog(running, `${candidate.name} checkpoint workflow`)
+      assert.ok(result instanceof BotaSDKError)
+      assert.equal(result.code, 'cancelled')
+
+      let nextOwnerRan = false
+      await runtime.runExclusive('settings', async () => {
+        nextOwnerRan = true
+      })
+      assert.equal(nextOwnerRan, true)
+    })
+  }
+})
+
 test('cancellation retains ownership until pending subscription setup is removed', async () => {
   const transport = new FakeBrowserBluetoothTransport()
   let subscriptionStarted!: () => void
@@ -770,7 +861,7 @@ test('cancellation removes subscriptions, cancels hosts, and ignores late comple
   assert.deepEqual(dispatched, ['ble_connected', 'ble_subscribed'])
 })
 
-test('cancellation settles before a provider that completes late', async () => {
+test('cancellation joins a provider that completes late before releasing ownership', async () => {
   let providerStarted!: () => void
   const atProvider = new Promise<void>((resolve) => {
     providerStarted = resolve
@@ -822,26 +913,33 @@ test('cancellation settles before a provider that completes late', async () => {
   await atProvider
 
   const cancelling = runtime.cancel('reconnect:late-provider')
-  let watchdog: ReturnType<typeof setTimeout> | undefined
-  const settled = await Promise.race([
-    cancelling.then(() => true),
-    new Promise<false>((resolve) => {
-      watchdog = setTimeout(() => resolve(false), 5_000)
-    }),
-  ])
-  if (watchdog) clearTimeout(watchdog)
+  let cancellationSettled = false
+  void cancelling.then(() => {
+    cancellationSettled = true
+  })
 
   try {
-    assert.equal(settled, true)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    assert.equal(cancellationSettled, false)
     assert.equal(hostCancelled, true)
-    const runError = await running
-    assert.ok(runError instanceof BotaSDKError)
-    assert.equal(runError.code, 'cancelled')
+    let secondBodyCalls = 0
+    const secondOwner = await runtime.runExclusive('settings', async () => {
+      secondBodyCalls += 1
+    }).then(
+      () => null,
+      (reason: unknown) => reason,
+    )
+    assert.ok(secondOwner instanceof BotaSDKError)
+    assert.equal(secondOwner.code, 'operation_in_progress')
+    assert.equal(secondBodyCalls, 0)
   } finally {
     releaseProvider()
-    await cancelling
   }
 
+  await settleWithWatchdog(cancelling, 'late provider cancellation')
+  const runError = await settleWithWatchdog(running, 'late provider workflow')
+  assert.ok(runError instanceof BotaSDKError)
+  assert.equal(runError.code, 'cancelled')
   await new Promise<void>((resolve) => setImmediate(resolve))
   assert.equal(dispatchCalls, 0)
 })

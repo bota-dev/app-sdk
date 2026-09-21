@@ -118,3 +118,122 @@ implemented foreground OTA surface and exact reconnect requirement.
 - The implementation is foreground/page-owned only. It deliberately adds no
   worker, service-worker, closed-tab, or picker-fallback behavior.
 - No push, merge, tag, publish, or Task 11 work was performed.
+
+## Fix Round 1
+
+Reviewed head: `d2b0e26fc19900bae356061d28a2927179c49a88`.
+
+### Finding 1: Orphan And Incompatible Durable State
+
+- Test: `frameworks/web/src/__tests__/otaManager.test.ts` — `an orphan Rust
+  checkpoint rejects a new update before provider or GATT`; the incompatible
+  state matrix also covers a corrupt verified blob.
+- RED: `node --test --test-name-pattern="orphan Rust checkpoint"
+  frameworks/web/src/__tests__/otaManager.test.ts` failed because the operation
+  reached OTA START and returned `firmware_rejected` instead of
+  `resume_rejected`.
+- GREEN: the same command passed, 1 passed and 0 failed. `updateFirmware` now
+  checks both journal and Rust checkpoint before provider or device mutation;
+  resume validates journal/checkpoint/blob compatibility before reconnect or
+  OTA GATT.
+
+### Finding 2: Join Generic Host Persistence
+
+- Test: `frameworks/web/src/__tests__/workflowRuntime.test.ts` — `cancellation
+  joins initiated workflow-checkpoint persistence before owner release`, with
+  gated load, save, and delete subtests. The pre-existing late-provider test now
+  verifies the same generic-host ownership rule.
+- RED: `node --test --test-name-pattern="workflow-checkpoint persistence"
+  frameworks/web/src/__tests__/workflowRuntime.test.ts` failed all three gated
+  subtests because cancellation settled before persistence.
+- GREEN: `node --test --test-name-pattern="provider that completes late|workflow-checkpoint persistence"
+  frameworks/web/src/__tests__/workflowRuntime.test.ts` passed 5 tests and 0
+  failed. Every initiated generic host execution is now tracked and joined;
+  cancellation effects still drain and late results remain undispatched.
+
+### Finding 3: Fresh-Page Active-Phase Recovery
+
+- Tests: `frameworks/web/src/__tests__/otaManager.test.ts` — `fresh managers
+  recover download, transfer, verify, and reconnect through the exact authorized
+  device` and `fresh recovery rejects an exact authorized device with the wrong
+  serial before OTA GATT`.
+- RED: `node --test --test-name-pattern="fresh managers recover|fresh recovery rejects"
+  frameworks/web/src/__tests__/otaManager.test.ts` failed download, transfer,
+  verify, and identity-mismatch recovery with `device_disconnected`; the existing
+  reconnect phase passed.
+- GREEN: the same command passed 6 tests and 0 failed. Fresh managers enumerate
+  `getDevices()`, select only the persisted browser device ID, run the Rust exact
+  connection workflow to re-verify serial, and never open the picker or probe a
+  same-name device.
+
+### Finding 4: Terminal Cleanup Crash Recovery
+
+- Tests: `frameworks/web/src/__tests__/otaManager.test.ts` — `reload completes
+  cleanup-only state after every terminal cleanup crash boundary`, covering
+  checkpoint, blob, and journal deletion; and
+  `frameworks/web/src/__tests__/storage.test.ts` — `firmware cleanup-only state
+  is durable, verified, and one-way`.
+- RED: the OTA command for `terminal cleanup crash boundary` failed all three
+  subtests because no cleanup-only state existed. The storage command for
+  `firmware cleanup-only state` failed because IndexedDB discarded the state.
+- GREEN: both focused commands passed. Rust's terminal checkpoint delete is
+  wrapped by a durable one-way `cleanup_only` journal save; reload then performs
+  only idempotent checkpoint, blob, and journal cleanup without provider,
+  reconnect, or GATT work.
+
+### Files Changed In Fix Round 1
+
+- `.superpowers/sdd/2026-09-17-web-sdk-foreground-workflows/task-10-report.md`
+- `AGENTS.md`
+- `ARCHITECTURE.md`
+- `docs/superpowers/plans/2026-09-17-web-sdk-foreground-workflows.md`
+- `docs/superpowers/specs/2026-09-17-web-sdk-foreground-workflows-design.md`
+- `frameworks/web/README.md`
+- `frameworks/web/src/otaManager.ts`
+- `frameworks/web/src/storage.ts`
+- `frameworks/web/src/indexedDbWorkflowStore.ts`
+- `frameworks/web/src/workflowRuntime.ts`
+- `frameworks/web/src/__tests__/otaManager.test.ts`
+- `frameworks/web/src/__tests__/storage.test.ts`
+- `frameworks/web/src/__tests__/workflowRuntime.test.ts`
+
+### Final Verification
+
+All Node commands used Node `v22.23.2`.
+
+```text
+node --test frameworks/web/src/__tests__/otaManager.test.ts
+Result: PASS, 41 passed, 0 failed, 0 cancelled, 0 skipped.
+
+npm test --prefix frameworks/web
+Result: PASS, 335 passed, 0 failed, 0 cancelled, 0 skipped.
+
+npm run type-check --prefix frameworks/web
+Result: PASS, TypeScript completed without errors.
+
+npm run build --prefix frameworks/web
+Result: PASS, ESM JavaScript, declarations, and WASM asset emitted.
+
+git diff --check
+Result: PASS, no whitespace errors.
+```
+
+Changed-token searches covered the worktree plan/spec, Web README,
+`ARCHITECTURE.md`, every repository `AGENTS.md`/`ARCHITECTURE.md`/`README.md`,
+and wrapper `internal-docs/` and public `docs/`. The optional journal `state`,
+`cleanup_only`, exact active-phase reconnect, and generic-host join semantics are
+documented in the affected App SDK sources; no external wrapper document quoted
+these schema names.
+
+### Deferred Evidence And Caveat
+
+- No physical Chromium/Web Bluetooth transfer, reboot/reconnect, firmware
+  version readback, or crash interruption was performed. No physical-device
+  claim is made.
+- No production firmware provider, presigned URL, CDN redirect, or real browser
+  IndexedDB/OPFS profile was exercised. Tests use controlled external boundaries
+  with the real Rust/WASM workflow and integrity implementation.
+- The cleanup marker remains optional so custom storage extensions and legacy
+  active journals retain compatibility; missing `state` is interpreted as
+  `active`, while `cleanup_only` cannot transition back.
+- No push, merge, tag, publish, or Task 11 work was performed.

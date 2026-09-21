@@ -239,7 +239,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   execution. A missing Web Bluetooth implementation must fail as
   `unsupported_browser` before opening the picker, snapshots must re-verify the
   serial, and OTA reboot recovery may enumerate only the previously verified
-  exact browser device ID.
+  exact browser device ID. OTA reload recovery must validate compatible durable
+  journal/checkpoint/blob state before GATT, use that exact authorized device for
+  every disconnected active phase, and persist the one-way journal
+  `cleanup_only` state before terminal checkpoint deletion so reload performs
+  cleanup without provider or device work.
 - `RecordingManager` and `StreamingSession` preserve their frozen object model
   while Rust plus the Apple/Android hosts own recording bytes, live-transfer
   buffering, chunk uploads, finalization ordering, and cancellation. Codegen
