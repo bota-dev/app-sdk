@@ -176,6 +176,15 @@ export interface WiFiStatusSubscription {
   remove(): Promise<void>
 }
 
+export interface DeviceLogLine {
+  message: string
+  isBacklog: boolean
+}
+
+export interface DeviceLogSubscription {
+  remove(): Promise<void>
+}
+
 export interface RecordingControlRequest {
   authorityId: string
   operationId?: string

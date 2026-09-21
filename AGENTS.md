@@ -232,7 +232,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   preview or production rollout.
 - `frameworks/web` is the foreground browser facade and publishes as
   `@bota.dev/web-sdk`. It uses the shared Rust workflows for exact connection,
-  provisioning, recording transfer, encrypted upload v2, and firmware update;
+  provisioning, recording transfer, encrypted upload v2, firmware update, and
+  device logs;
   TypeScript owns Web Bluetooth, durable browser storage, and application
   provider boundaries. Keep backend calls behind configured providers, keep
   request credentials memory-only, and do not add background or closed-tab
@@ -244,6 +245,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   every disconnected active phase, and persist the one-way journal
   `cleanup_only` state before terminal checkpoint deletion so reload performs
   cleanup without provider or device work.
+- Web device logs have one Rust workflow owner and one diagnostics
+  characteristic lease. Resolve subscription setup only after Rust reaches its
+  running state, expose only typed Rust `DeviceLog` notifications, and join
+  pending subscribe/write cleanup before releasing callbacks or ownership.
 - `RecordingManager` and `StreamingSession` preserve their frozen object model
   while Rust plus the Apple/Android hosts own recording bytes, live-transfer
   buffering, chunk uploads, finalization ordering, and cancellation. Codegen

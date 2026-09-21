@@ -86,6 +86,22 @@ loopback tests. Reboot recovery uses `getDevices()` and only the exact browser
 device ID saved by the verified connection; it never opens the picker or falls
 back to a same-name device.
 
+## Device logs
+
+```ts
+const subscription = await bota.logs.subscribe(({ message, isBacklog }) => {
+  console.log(isBacklog ? `[backlog] ${message}` : message)
+})
+
+await subscription.remove()
+```
+
+The client permits one device-log owner at a time. Rust owns packet decoding;
+the listener receives only complete `{ message, isBacklog }` values. Explicit
+removal, listener failure, Bluetooth disconnect, and `bota.destroy()` cancel the
+exact workflow and remove its characteristic subscription before ownership is
+released.
+
 ## Foreground scope
 
 Supported:
@@ -98,12 +114,13 @@ Supported:
   firmware exposes it;
 - durable, integrity-checked foreground firmware update with reload and reboot
   recovery;
+- one foreground, Rust-decoded device-log subscription;
 - stable typed SDK errors and deterministic cleanup through `destroy()`.
 
 Not yet supported:
 
 - recording list, transfer, sync, or upload;
-- provisioning, connection settings, remote recording control, or logs;
+- provisioning, connection settings, or remote recording control;
 - automatic scan, saved-device reconnect, background work, or closed-tab work;
 - browsers without Web Bluetooth;
 - Bota API calls. Authentication and backend requests remain application-owned.

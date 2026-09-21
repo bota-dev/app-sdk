@@ -1,6 +1,7 @@
 import type { CoreLoader } from './core.ts'
 import { ControlManager } from './controlManager.ts'
 import { DeviceManager } from './deviceManager.ts'
+import { LogManager } from './logManager.ts'
 import { OTAManager } from './otaManager.ts'
 import { ProvisioningManager } from './provisioningManager.ts'
 import type {
@@ -34,6 +35,7 @@ export class BotaDeviceClient {
   readonly controls: ControlManager
   readonly provisioning: ProvisioningManager
   readonly ota: OTAManager
+  readonly logs: LogManager
   readonly recordings: RecordingManager
   readonly wifi: WiFiManager
 
@@ -42,6 +44,7 @@ export class BotaDeviceClient {
     controls: ControlManager,
     provisioning: ProvisioningManager,
     ota: OTAManager,
+    logs: LogManager,
     recordings: RecordingManager,
     wifi: WiFiManager,
   ) {
@@ -49,6 +52,7 @@ export class BotaDeviceClient {
     this.controls = controls
     this.provisioning = provisioning
     this.ota = ota
+    this.logs = logs
     this.recordings = recordings
     this.wifi = wifi
   }
@@ -87,6 +91,7 @@ export class BotaDeviceClient {
         storage,
         provider: options.providers?.firmwareDownload ?? null,
       }),
+      new LogManager({ core, runtime, devices }),
       new RecordingManager(
         core,
         transport,
@@ -105,6 +110,7 @@ export class BotaDeviceClient {
   }
 
   async destroy(): Promise<void> {
+    await this.logs.destroy()
     await this.ota.destroy()
     await this.wifi.destroy()
     await this.controls.destroy()

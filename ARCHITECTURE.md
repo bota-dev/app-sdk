@@ -975,7 +975,7 @@ resolve a grant or resend destructive opcode `0x06`.
 the WASM core owns exact connection sequencing and protocol decoding. The
 initial public API contains `BotaDeviceClient.create()`, `destroy()`,
 `DeviceManager.connect()`, `disconnect()`, `connectedDevice`, and
-`readSnapshot()`.
+`readSnapshot()`, plus the foreground workflow managers described below.
 
 Connection always starts with the browser's explicit device picker and requires
 the caller's expected serial number. The advertised name is only a picker
@@ -1011,10 +1011,19 @@ the persistence host durably advances the optional firmware-journal `state` from
 `active` to the one-way `cleanup_only` value; any reload from that state performs
 only idempotent checkpoint, blob, and journal cleanup.
 
+`LogManager.subscribe()` starts the Rust `ReadDeviceLogs` workflow and resolves
+only after subscribe-before-START setup reaches a running state. One exact
+workflow owner and diagnostics-characteristic lease cover the stream. TypeScript
+maps only Rust `DeviceLog` notifications to public `{ message, isBacklog }`
+values; raw packets and decoder details never reach application callbacks.
+Removal, listener failure, disconnect, and client destruction join initiated
+subscription setup and GATT writes before releasing the lease. A stream that
+completes without cancellation is classified as a retryable connection failure.
+
 This release is foreground-only and requires a secure-context browser with Web
 Bluetooth. It has no automatic scan, saved-device reconnect, background or
 closed-tab execution, recording operations, upload transport, provisioning,
-settings, recording control, or logs. The host Portal continues to own
+settings, or recording control. The host Portal continues to own
 authentication and all backend API calls.
 
 ## Security

@@ -2,6 +2,7 @@ export { BotaDeviceClient } from './client.ts'
 export type { BotaDeviceClientOptions } from './client.ts'
 export { ControlManager } from './controlManager.ts'
 export { DeviceManager } from './deviceManager.ts'
+export { LogManager } from './logManager.ts'
 export { BotaSDKError } from './errors.ts'
 export { OTAManager } from './otaManager.ts'
 export { ProvisioningManager } from './provisioningManager.ts'
@@ -18,6 +19,8 @@ export type {
   DeprovisionRequest,
   DeprovisionResult,
   DeviceConnectionSettings,
+  DeviceLogLine,
+  DeviceLogSubscription,
   DeviceFlags,
   DeviceSnapshot,
   DeviceState,

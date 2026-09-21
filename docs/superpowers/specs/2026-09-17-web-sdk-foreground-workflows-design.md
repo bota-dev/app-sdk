@@ -360,7 +360,12 @@ await subscription.remove()
 
 Only decoded, sanitized lines leave the SDK. Subscription ownership is unique,
 and disconnect, cancellation, or client destruction unsubscribes the
-characteristic before releasing callbacks.
+characteristic before releasing callbacks. The Web facade holds one shared
+runtime owner plus the exact diagnostics-characteristic lease, resolves setup
+only after Rust reaches a running state, and joins initiated subscribe and write
+operations before releasing either. Listener failure cancels the exact Rust
+workflow, late notifications are ignored, and completion without cancellation
+is a retryable stream failure.
 
 ## Recording Synchronization Flow
 

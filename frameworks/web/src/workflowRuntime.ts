@@ -49,6 +49,7 @@ export interface WorkflowEffectHost {
 export interface WorkflowObserver {
   onNotification?(notification: CoreNotification): void
   onProgress?(completedUnits: bigint, totalUnits: bigint): void
+  onRunning?(): void
 }
 
 export interface WorkflowEffectHosts {
@@ -580,7 +581,13 @@ export class BrowserWorkflowRuntime {
         )
         return
       case 'idle':
+        return
       case 'running':
+        try {
+          owner.observer?.onRunning?.()
+        } catch {
+          // Observer failures do not change device workflow state.
+        }
         return
     }
   }
