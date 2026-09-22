@@ -147,7 +147,7 @@ class ProtocolCodecTest {
         val cases = encryptedUploadV2Cases().filter {
             it.getString("operation") !in encryptedUploadV2Operations
         }
-        assertEquals(49, cases.size)
+        assertEquals(50, cases.size)
         cases.forEach { fixture ->
             val inputHex = fixture.getString("inputHex")
             assertEquals(fixture.getString("name"), inputHex, inputHex.hexBytes().toHex())
@@ -157,7 +157,7 @@ class ProtocolCodecTest {
         val digest = assets.open("EncryptedUploadV2Vectors/encrypted-upload-v2.sha256")
             .bufferedReader()
             .use { it.readText() }
-        assertEquals("e9c7a41da6bfa8ab60d639a3c3f8e3fac4f8d525d61f5e407f1be599a63cf670\n", digest)
+        assertEquals("02afe605d1e038a3ed6d300671baead78475e186f66744a72954787734c0cc6a\n", digest)
     }
 
     private fun encode(fixture: JSONObject, operation: String): ByteArray {
