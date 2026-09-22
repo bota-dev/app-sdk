@@ -85,6 +85,14 @@ already occupied. Update every version authority and the matching
 `release/examples/VERSION.json` together. The release-channel resolver rejects
 a new stable tag before any publication work starts.
 
+The React Native Codegen contract includes the package version in its digest.
+After a version bump, regenerate and review it before committing:
+
+```bash
+npm run codegen --prefix frameworks/react-native
+npm run codegen:check --prefix frameworks/react-native
+```
+
 Generate the deterministic archive and write the matching root Swift package:
 
 ```bash
