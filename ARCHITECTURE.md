@@ -1002,6 +1002,10 @@ or workflow owner and removes passive subscriptions and leases before the one
 final device disconnect. Tenant cleanup runs only through
 `clearPersistedData()`: it requires no active coordinator owner, performs no
 BLE command, and remains safe and repeatable after destroy for logout ordering.
+Teardown uses exhaustive joins rather than fail-fast aggregation. Failure
+precedence is deterministic: manager cleanup in client declaration order,
+runtime teardown, then final disconnect. The first failure is normalized to a
+stable public SDK error only after every initiated stage settles.
 
 Foreground firmware update is exposed through the client's `OTAManager`. The
 application resolves stable image identity to a fresh HTTPS request, while the

@@ -148,7 +148,7 @@ export class BotaDeviceClient {
 
   destroy(): Promise<void> {
     if (this.destroyPromise) return this.destroyPromise
-    const managerCleanup = Promise.all([
+    const managerCleanup = joinManagerCleanup([
       this.logs.destroy(),
       this.ota.destroy(),
       this.wifi.destroy(),
@@ -162,6 +162,16 @@ export class BotaDeviceClient {
     )
     return this.destroyPromise
   }
+}
+
+async function joinManagerCleanup(
+  cleanups: readonly Promise<void>[],
+): Promise<void> {
+  const results = await Promise.allSettled(cleanups)
+  const failure = results.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  )
+  if (failure) throw failure.reason
 }
 
 async function resolveStorage(

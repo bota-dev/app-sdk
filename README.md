@@ -450,6 +450,8 @@ instance types, while construction remains owned by `BotaDeviceClient.create()`;
 applications do not instantiate managers directly. Destruction also joins an
 open picker or reconnect-hint load, removes passive subscriptions before its
 single disconnect, and prevents late startup results from publishing a device.
+Cleanup rejection does not short-circuit later teardown: every initiated stage
+settles before the first stable SDK cleanup error is returned.
 
 The foreground Web beta exposes recording, provisioning, WiFi, recording
 control, firmware update, and device-log managers alongside connection and

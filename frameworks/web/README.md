@@ -81,7 +81,10 @@ One client owns one runtime and one instance of each manager. `destroy()` is
 terminal and idempotent: it rejects new operations, cancels and joins active
 owners, joins an open picker or verified-device-hint load, removes passive
 subscriptions and leases, and only then disconnects once. Late startup results
-cannot publish a connection or begin GATT ownership. `clearPersistedData()` is
+cannot publish a connection or begin GATT ownership. Teardown still joins every
+initiated stage and attempts the final disconnect when a cleanup fails; only
+afterward does it reject with the first stable SDK cleanup error. Repeated
+`destroy()` calls share that same settlement. `clearPersistedData()` is
 local-only, requires no active operation, sends no Bluetooth command, and
 remains repeatable after destruction so logout can clear only the current
 tenant.

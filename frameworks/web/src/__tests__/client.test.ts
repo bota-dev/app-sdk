@@ -322,6 +322,87 @@ test('client destroy removes a pending passive WiFi subscription before disconne
   )
 })
 
+test('client destroy exhaustively joins cleanup failures before final teardown', async () => {
+  const transport = new FakeBrowserBluetoothTransport()
+  const { client } = await createClient({ transport })
+  await client.devices.connect({ expectedSerialNumber: SERIAL })
+  await client.wifi.subscribeToStatus(() => undefined)
+  transport.calls.length = 0
+  const events: string[] = []
+  transport.eventLog = events
+  const cleanupCanFail = deferred<void>()
+  const unsubscribeStarted = deferred<void>()
+  const unsubscribeCanFinish = deferred<void>()
+  const cleanupFailure = new BotaSDKError(
+    'protocol_error',
+    'read_device_logs',
+  )
+  const originalLogDestroy = client.logs.destroy.bind(client.logs)
+  const originalRuntimeDestroy = internalRuntime(client.devices).destroy.bind(
+    internalRuntime(client.devices),
+  )
+  const originalDisconnect = transport.disconnect.bind(transport)
+
+  client.logs.destroy = async () => {
+    await originalLogDestroy()
+    await cleanupCanFail.promise
+    events.push('manager_cleanup_failed')
+    throw cleanupFailure
+  }
+  internalRuntime(client.devices).destroy = async () => {
+    events.push('runtime_destroy')
+    await originalRuntimeDestroy()
+    throw new Error('private runtime teardown failure')
+  }
+  transport.onUnsubscribe = () => unsubscribeStarted.resolve(undefined)
+  transport.unsubscribeGate = unsubscribeCanFinish.promise
+  transport.disconnect = async (device) => {
+    events.push('disconnect')
+    await originalDisconnect(device)
+    throw new Error('private disconnect failure')
+  }
+
+  const firstDestroy = client.destroy()
+  const repeatedDestroy = client.destroy()
+  let destroySettled = false
+  void firstDestroy.then(
+    () => { destroySettled = true },
+    () => { destroySettled = true },
+  )
+  const destroyResult = firstDestroy.then(
+    () => null,
+    (error: unknown) => error,
+  )
+  assert.strictEqual(repeatedDestroy, firstDestroy)
+  await unsubscribeStarted.promise
+
+  cleanupCanFail.resolve(undefined)
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  const settledBeforeUnsubscribe = destroySettled
+  unsubscribeCanFinish.resolve(undefined)
+  const rejection = await destroyResult
+
+  assert.equal(settledBeforeUnsubscribe, false)
+  assert.strictEqual(rejection, cleanupFailure)
+  assert.equal(String(rejection).includes('private runtime'), false)
+  assert.equal(String(rejection).includes('private disconnect'), false)
+  const unsubscribeIndex = events.findIndex((event) =>
+    event.startsWith('unsubscribe:'))
+  const runtimeIndex = events.indexOf('runtime_destroy')
+  const disconnectIndex = events.indexOf('disconnect')
+  assert.ok(unsubscribeIndex >= 0 && unsubscribeIndex < runtimeIndex)
+  assert.ok(runtimeIndex >= 0 && runtimeIndex < disconnectIndex)
+  assert.equal(
+    transport.calls.filter((call) =>
+      call === 'disconnect:browser-peripheral-1').length,
+    1,
+  )
+  assert.strictEqual(
+    await client.destroy().catch((error: unknown) => error),
+    rejection,
+  )
+})
+
 test('logs reverify the exact active serial after reconnect without picker fallback', async () => {
   const storage = new ObservedStorage(NAMESPACE)
   const transport = new FakeBrowserBluetoothTransport()
@@ -387,6 +468,8 @@ function managerGraph(client: BotaDeviceClient): readonly object[] {
   ]
 }
 
-function internalRuntime(manager: object): unknown {
-  return (manager as { runtime: unknown }).runtime
+function internalRuntime(manager: object): {
+  destroy(): Promise<void>
+} {
+  return (manager as { runtime: { destroy(): Promise<void> } }).runtime
 }

@@ -250,6 +250,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   namespace, and custom storage must match it exactly. Client destruction is
   terminal, joins picker and reconnect-hint startup work, and joins every
   non-device owner and passive subscription before the one final disconnect.
+  Teardown must exhaustively settle all manager cleanup in declaration order,
+  runtime destruction, and final disconnect even after an earlier failure;
+  reject only afterward with the first normalized cleanup error, and keep
+  repeated destroy calls on the same terminal promise.
   OTA active resume phases and passive WiFi status setup must freshly verify
   the exact active serial before provider, mutation, or characteristic work.
   Root manager names are instance types only; applications obtain managers

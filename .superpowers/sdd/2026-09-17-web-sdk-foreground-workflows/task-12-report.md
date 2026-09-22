@@ -308,3 +308,93 @@ and required no change.
   called; deterministic providers cover ordering and cancellation only.
 - No Task 13 implementation, push, merge, tag, publish, or external release
   action was performed.
+
+## Fix Round 2
+
+Reviewed head: `1f408be3a115a8f62ba1496461116c7af6560a6e`.
+
+### Rejection-Path Fix
+
+- Client manager cleanup now uses `Promise.allSettled()` and inspects results in
+  manager declaration order. One rejected manager cannot publish the destroy
+  result while another manager still owns pending cleanup.
+- Device teardown records, rather than immediately throws, failures from prior
+  manager cleanup, runtime destruction, connection-start settlement, and final
+  disconnect. It always advances through the remaining stages and normalizes
+  only the first failure after teardown is exhausted.
+- Failure precedence is deterministic: manager cleanup in declaration order,
+  runtime destruction, connection-start settlement, then final disconnect.
+  Public `BotaSDKError` values are preserved; private runtime and transport
+  errors are normalized without exposing their messages.
+- The focused regression gates passive WiFi unsubscribe while a log-manager
+  cleanup rejects, then injects both runtime-destroy and disconnect failures.
+  It proves destroy remains pending through unsubscribe, runtime teardown and
+  one final disconnect still run in order, the manager error wins, and every
+  repeated destroy call shares the same terminal promise and rejection.
+
+### Files Changed
+
+- `.superpowers/sdd/2026-09-17-web-sdk-foreground-workflows/task-12-report.md`
+- `AGENTS.md`
+- `ARCHITECTURE.md`
+- `README.md`
+- `frameworks/web/README.md`
+- `frameworks/web/src/__tests__/client.test.ts`
+- `frameworks/web/src/client.ts`
+- `frameworks/web/src/deviceManager.ts`
+
+### RED Evidence
+
+All Node commands used Node `v22.23.2`.
+
+```text
+env PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  node --test frameworks/web/src/__tests__/client.test.ts
+Result: expected failure, 10 tests discovered; 9 passed and 1 failed. The new
+regression observed destroy settling (`true !== false`) after the first manager
+rejection while passive unsubscribe remained gated, before runtime destruction
+or final disconnect.
+```
+
+### GREEN Evidence
+
+```text
+env PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  node --test frameworks/web/src/__tests__/client.test.ts
+Result: PASS, 10 passed, 0 failed, 0 cancelled, 0 skipped.
+
+env PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  node --test frameworks/web/src/__tests__/client.test.ts \
+  frameworks/web/src/__tests__/deviceManager.test.ts
+Result: PASS, 32 passed, 0 failed, 0 cancelled, 0 skipped.
+
+env PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  npm test --prefix frameworks/web
+Result: PASS, 365 passed, 0 failed, 0 cancelled, 0 skipped.
+
+env PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  npm run type-check --prefix frameworks/web
+Result: PASS.
+
+env PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  npm run build --prefix frameworks/web
+Result: PASS; ESM JavaScript, declarations, and WASM asset emitted.
+```
+
+No package consumer or declaration-surface check was rerun because this round
+does not change exports, public declarations, package metadata, or subpaths.
+
+### Documentation Impact
+
+The app-sdk README, Web README, architecture, and agent guidance now state
+that teardown exhaustively joins initiated cleanup despite rejection, attempts
+runtime destruction and final disconnect, uses deterministic failure
+precedence, and shares one terminal settlement across repeated destroy calls.
+
+### Remaining Physical And External Gaps
+
+- No physical Chromium/Web Bluetooth device exercised a native notification
+  removal failure, runtime teardown failure, or disconnect failure. The ordering
+  and error precedence are covered with deterministic transport/runtime seams.
+- No Task 13 implementation, push, merge, tag, publish, or external release
+  action was performed.

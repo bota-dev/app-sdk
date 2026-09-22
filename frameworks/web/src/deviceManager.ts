@@ -368,17 +368,23 @@ export class DeviceManager {
     const connectionSettlement = this.connectionStartup?.settled
       ?? Promise.resolve()
     this.destroyPromise = (async () => {
-      await priorCleanup
-      await this.runtime.destroy()
-      await connectionSettlement
-      const connected = this.runtime.connectedDeviceHandle
+      const failures: unknown[] = []
+      await collectTeardownFailure(() => priorCleanup, failures)
+      await collectTeardownFailure(() => this.runtime.destroy(), failures)
+      await collectTeardownFailure(() => connectionSettlement, failures)
+      const connected = this.runtime.connectedDeviceHandle ?? this.activeDevice
       if (connected) {
         this.runtime.markDeviceDisconnected(connected.id)
         this.clearConnection()
-        await this.transport.disconnect(connected).catch(() => undefined)
+        await collectTeardownFailure(
+          () => this.transport.disconnect(connected),
+          failures,
+        )
       } else {
         this.clearConnection()
       }
+      const failure = failures[0]
+      if (failure) throw normalizeManagerError(failure, 'disconnect')
     })()
     return this.destroyPromise
   }
@@ -626,6 +632,17 @@ export function destroyDeviceManagerAfter(
       destroyAfterInternal(value: Promise<unknown>): Promise<void>
     }
   ).destroyAfterInternal(priorCleanup)
+}
+
+async function collectTeardownFailure(
+  cleanup: () => Promise<unknown>,
+  failures: unknown[],
+): Promise<void> {
+  try {
+    await cleanup()
+  } catch (error) {
+    failures.push(error)
+  }
 }
 
 function decodeRequiredText(
