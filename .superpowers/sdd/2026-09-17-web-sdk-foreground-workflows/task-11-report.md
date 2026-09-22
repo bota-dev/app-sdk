@@ -122,3 +122,112 @@ wrapper `internal-docs/` or public API-doc page quoted the changed Web symbols.
   exposes only complete decoded lines and never raw packets, but application
   storage, display, and redaction policy remain host responsibilities.
 - No push, merge, tag, publish, or Task 12 work was performed.
+
+## Fix Round 1
+
+### Status And Ruling
+
+Applied review fixes against reviewed HEAD
+`ef9840a939a7b4011e4cc44c07d090b4b7dd014b`. The recorded ruling makes the
+canonical Rust codec fixture authoritative over the contradictory Task 11 plan
+sentence: empty and undersized device-log packets are non-terminal, produce no
+public value, preserve decoder sequence state, and permit later valid packets to
+decode normally. Rust semantics and `protocol/fixtures/device-logs.json` were
+not changed. Genuine Rust, bridge, and runtime failures remain sanitized.
+
+### Files Changed
+
+- `.superpowers/sdd/2026-09-17-web-sdk-foreground-workflows/task-11-report.md`
+- `AGENTS.md`
+- `ARCHITECTURE.md`
+- `docs/superpowers/plans/2026-09-17-web-sdk-foreground-workflows.md`
+- `docs/superpowers/specs/2026-09-17-web-sdk-foreground-workflows-design.md`
+- `frameworks/web/README.md`
+- `frameworks/web/src/__tests__/logManager.test.ts`
+- `frameworks/web/src/logManager.ts`
+
+### RED Evidence
+
+The review regressions were added before production changes.
+
+```text
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  node --test frameworks/web/src/__tests__/logManager.test.ts
+Result: expected failure, 11 tests discovered; 5 passed and 6 were cancelled
+because the rejected promise-like listener result was not observed and exact
+cleanup never started. Exit code 1.
+
+PATH=/Users/zhangqi/.nvm/versions/node/v22.23.2/bin:$PATH \
+  node --test --test-name-pattern='explicit and repeated removal' \
+  frameworks/web/src/__tests__/logManager.test.ts
+Result: expected failure, 1 failed, 0 passed. The retained owner still held the
+exact application listener instead of `null` after terminal cleanup. Exit code
+1.
+```
+
+The new real Rust/WASM malformed-packet test passed during RED. It loads and
+delivers the canonical `malformed-packet-keeps-sequence-state` inputs through
+the production workflow/runtime, observes no listener value for the malformed
+packets, then receives only `{ message, isBacklog }` for `first` and `second`.
+
+### Implementation And Race Coverage
+
+- Replaced the fabricated core-dispatch throw with the canonical fixture driven
+  through real Rust/WASM and the production `BrowserWorkflowRuntime`.
+- Consumes rejected promise-like listener results using the established Web
+  listener pattern. Rejection disables delivery, cancels the exact workflow,
+  removes the exact subscription, and does not become an unhandled rejection.
+- Makes the owner listener nullable and clears it both when closing begins and
+  in the centralized terminal finalizer, including unexpected stream terminal
+  paths. A deterministic regression retains the public removal handle and the
+  former owner, then proves the owner no longer references the application
+  listener.
+- Blocks unsubscribe during rejected-listener cleanup and proves the exact
+  diagnostics lease remains occupied until cleanup joins. A late notification
+  during that window is ignored. Exact cancellation identity, repeated remove,
+  and post-cleanup lease reuse remain covered.
+
+### GREEN Evidence
+
+All Node commands used Node `v22.23.2`.
+
+```text
+node --test frameworks/web/src/__tests__/logManager.test.ts
+Result: PASS, 11 passed, 0 failed, 0 cancelled, 0 skipped.
+
+npm test --prefix frameworks/web
+Result: PASS, 347 passed, 0 failed, 0 cancelled, 0 skipped.
+
+npm run type-check --prefix frameworks/web
+Result: PASS, TypeScript completed without errors.
+
+npm run build --prefix frameworks/web
+Result: PASS, ESM JavaScript, declarations, and WASM asset emitted.
+
+git diff --check
+Result: PASS, no whitespace errors.
+```
+
+### Documentation Impact
+
+Changed-symbol searches covered wrapper `internal-docs/`, the app-sdk `docs/`
+tree, `AGENTS.md`, `ARCHITECTURE.md`, and the Web README for `LogManager`,
+`DeviceLogLine`, `DeviceLogSubscription`, `logs.subscribe`,
+`read_device_logs`, and `malformed-packet-keeps-sequence-state`. The tracked
+Task 11 plan sentence, approved design, Web README, architecture, and agent
+guidance now document the ruled non-terminal undersized-packet compatibility
+behavior and the distinct sanitization of genuine failures. No wrapper internal
+document quoted the changed Web symbols.
+
+### Physical And External Gaps
+
+- No physical Chromium/Web Bluetooth or real diagnostics stream was exercised;
+  malformed-packet coverage uses real Rust/WASM with the deterministic browser
+  transport boundary.
+- Browser event-loop timing and listener rejections from a production host app
+  remain physical acceptance gaps, although promise-like rejection, blocked
+  teardown, late delivery, and lease ordering are deterministic automated tests.
+- Firmware diagnostics-service availability and long-running log volume remain
+  device acceptance gates.
+- No push, merge, tag, publish, external release action, or Task 12 work was
+  performed.

@@ -365,7 +365,11 @@ runtime owner plus the exact diagnostics-characteristic lease, resolves setup
 only after Rust reaches a running state, and joins initiated subscribe and write
 operations before releasing either. Listener failure cancels the exact Rust
 workflow, late notifications are ignored, and completion without cancellation
-is a retryable stream failure.
+is a retryable stream failure. Consistent with the canonical Rust codec fixture,
+undersized packets are ignored without exposing bytes or decoder detail and do
+not reset sequence state, so later valid packets continue to decode normally.
+Genuine Rust, bridge, and runtime failures remain sanitized rather than exposing
+private decoder details.
 
 ## Recording Synchronization Flow
 

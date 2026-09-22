@@ -1520,7 +1520,9 @@ The implementation adds focused Web files instead of growing `deviceManager.ts` 
 
   - one subscription starts the Rust workflow and subscribes once;
   - decoded `{message,isBacklog}` values come only from Rust notifications;
-  - malformed raw packets fail without exposing bytes or decoder detail;
+  - undersized malformed raw packets are ignored without exposing bytes or
+    decoder detail, preserve Rust decoder sequence state, and allow later valid
+    packets to decode normally;
   - a second log owner fails with `operation_in_progress`;
   - listener exceptions remove the subscription and cancel the exact workflow;
   - explicit removal, BLE disconnect, client destruction, and repeated removal each leave no listener or characteristic lease;

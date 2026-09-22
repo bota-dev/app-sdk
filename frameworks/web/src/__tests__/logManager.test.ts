@@ -26,6 +26,10 @@ const SERIAL = 'GDPPSBZJN6'
 const wasmBytes = readFile(
   new URL('../generated/bota_device_sdk_core_bg.wasm', import.meta.url),
 )
+const deviceLogFixtures = readFile(
+  new URL('../../../../protocol/fixtures/device-logs.json', import.meta.url),
+  'utf8',
+)
 
 interface Harness {
   cancelledIds: Uint8Array[]
@@ -126,40 +130,43 @@ test('one owner subscribes before START and emits only Rust-decoded log lines', 
   await subscription.remove()
 })
 
-test('malformed log input fails closed with no bytes or decoder detail', async () => {
-  const secret = 'raw=deadbeef decoder=DeviceLogDecoder'
-  const harness = await createHarness({
-    dispatch: (event, delegate) => {
-      if (event.kind === 'ble_notification' && event.value[0] === 0xde) {
-        throw new Error(secret)
-      }
-      return delegate()
-    },
-  })
+test('canonical malformed packets are ignored and later packets decode only through Rust', async () => {
+  const harness = await createHarness()
   const lines: unknown[] = []
   const subscription = await harness.manager.subscribe((line) => lines.push(line))
   await waitForWrite(harness.transport, LOG_CONTROL_CHARACTERISTIC)
+  const packets = await fixturePackets('malformed-packet-keeps-sequence-state')
 
-  harness.transport.emitNotification(
-    harness.transport.device,
-    BOTA_DIAGNOSTICS_SERVICE,
-    LOG_DATA_CHARACTERISTIC,
-    new Uint8Array([0xde, 0xad, 0xbe, 0xef]),
-  )
-  await waitForUnsubscribe(harness)
-
-  const error = await subscription.remove().then(
-    () => null,
-    (reason: unknown) => reason,
-  )
-  assert.ok(error instanceof BotaSDKError)
-  assert.equal(error.code, 'internal_error')
-  assert.equal(error.operation, 'read_device_logs')
-  assert.equal('cause' in error, false)
-  assert.doesNotMatch(error.message, /deadbeef|decoder|DeviceLogDecoder/i)
+  for (const packet of packets.slice(0, 2)) {
+    harness.transport.emitNotification(
+      harness.transport.device,
+      BOTA_DIAGNOSTICS_SERVICE,
+      LOG_DATA_CHARACTERISTIC,
+      packet,
+    )
+    await flushTasks()
+  }
   assert.deepEqual(lines, [])
-  assert.equal(unsubscribeCount(harness), 1)
-  assertLeaseAvailable(harness)
+
+  for (const packet of packets.slice(2)) {
+    harness.transport.emitNotification(
+      harness.transport.device,
+      BOTA_DIAGNOSTICS_SERVICE,
+      LOG_DATA_CHARACTERISTIC,
+      packet,
+    )
+  }
+  await waitFor(() => lines.length === 2, 'valid lines after malformed packets')
+  assert.deepEqual(lines, [
+    { message: 'first', isBacklog: false },
+    { message: 'second', isBacklog: false },
+  ])
+  assert.deepEqual(
+    lines.map((line) => Object.keys(line as object).sort()),
+    [['isBacklog', 'message'], ['isBacklog', 'message']],
+  )
+
+  await subscription.remove()
 })
 
 test('unexpected workflow completion closes with a retryable sanitized stream error', async () => {
@@ -249,13 +256,57 @@ test('listener exceptions cancel the exact Rust workflow and remove its exact su
   assertLeaseAvailable(harness)
 })
 
+test('rejected asynchronous listeners disable delivery and join exact cleanup', async () => {
+  const harness = await createHarness()
+  const unsubscribeStarted = deferred<void>()
+  const unsubscribeGate = deferred<void>()
+  let calls = 0
+  const subscription = await harness.manager.subscribe(async () => {
+    calls += 1
+    throw new Error('async listener detail must not escape')
+  })
+  await waitForWrite(harness.transport, LOG_CONTROL_CHARACTERISTIC)
+  harness.transport.onUnsubscribe = () => unsubscribeStarted.resolve(undefined)
+  harness.transport.unsubscribeGate = unsubscribeGate.promise
+
+  harness.transport.emitNotification(
+    harness.transport.device,
+    BOTA_DIAGNOSTICS_SERVICE,
+    LOG_DATA_CHARACTERISTIC,
+    logPacket(1, false, 'first\nsecond\n'),
+  )
+  await unsubscribeStarted.promise
+  harness.transport.emitLateNotification(
+    harness.transport.device,
+    BOTA_DIAGNOSTICS_SERVICE,
+    LOG_DATA_CHARACTERISTIC,
+    logPacket(2, false, 'too late\n'),
+  )
+  await flushTasks()
+
+  assert.equal(calls, 1)
+  assert.throws(() => assertLeaseAvailable(harness), (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'operation_in_progress')
+
+  unsubscribeGate.resolve(undefined)
+  await waitForUnsubscribe(harness)
+  await subscription.remove()
+  assert.equal(harness.cancelledIds.length, 1)
+  assert.deepEqual(harness.cancelledIds[0], harness.startedIds[0])
+  assert.equal(retainedOwner(harness.manager), null)
+  assertLeaseAvailable(harness)
+})
+
 test('explicit and repeated removal stop once, release ownership, and ignore late notifications', async () => {
   const harness = await createHarness()
   let calls = 0
-  const subscription = await harness.manager.subscribe(() => {
+  const listener = () => {
     calls += 1
-  })
+  }
+  const subscription = await harness.manager.subscribe(listener)
   await waitForWrite(harness.transport, LOG_CONTROL_CHARACTERISTIC)
+  const owner = retainedOwner(harness.manager)
+  assert.equal(owner?.listener, listener)
 
   const first = subscription.remove()
   const second = subscription.remove()
@@ -272,6 +323,7 @@ test('explicit and repeated removal stop once, release ownership, and ignore lat
   assert.equal(unsubscribeCount(harness), 1)
   assert.equal(stopWriteCount(harness), 1)
   assert.equal(harness.cancelledIds.length, 1)
+  assert.equal(owner?.listener, null)
   assertLeaseAvailable(harness)
 })
 
@@ -371,6 +423,30 @@ function logPacket(sequence: number, isBacklog: boolean, message: string): Uint8
   packet[2] = isBacklog ? 0x01 : 0x00
   packet.set(payload, 3)
   return packet
+}
+
+async function fixturePackets(name: string): Promise<Uint8Array[]> {
+  const fixture = JSON.parse(await deviceLogFixtures) as {
+    cases: Array<{ name: string; inputsHex: string[] }>
+  }
+  const testCase = fixture.cases.find((candidate) => candidate.name === name)
+  assert.ok(testCase, `missing device-log fixture ${name}`)
+  return testCase.inputsHex.map(hexBytes)
+}
+
+function hexBytes(value: string): Uint8Array {
+  assert.equal(value.length % 2, 0)
+  return Uint8Array.from(
+    value.match(/.{2}/g)?.map((byte) => Number.parseInt(byte, 16)) ?? [],
+  )
+}
+
+function retainedOwner(manager: LogManager): {
+  listener: unknown
+} | null {
+  return (manager as unknown as {
+    activeOwner: { listener: unknown } | null
+  }).activeOwner
 }
 
 function subscribeCount(harness: Harness): number {

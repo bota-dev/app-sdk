@@ -1016,6 +1016,11 @@ only after subscribe-before-START setup reaches a running state. One exact
 workflow owner and diagnostics-characteristic lease cover the stream. TypeScript
 maps only Rust `DeviceLog` notifications to public `{ message, isBacklog }`
 values; raw packets and decoder details never reach application callbacks.
+Canonical undersized packets are ignored by Rust without resetting decoder
+sequence state, allowing later valid packets to decode normally; genuine Rust,
+bridge, and runtime failures remain sanitized. Synchronous listener throws and
+rejected promise-like listener results both disable delivery and cancel the
+exact workflow.
 Removal, listener failure, disconnect, and client destruction join initiated
 subscription setup and GATT writes before releasing the lease. A stream that
 completes without cancellation is classified as a retryable connection failure.

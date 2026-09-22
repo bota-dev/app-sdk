@@ -32,7 +32,7 @@ interface LogOwner {
   operationId: string
   cancellationId: Uint8Array
   lease: CharacteristicLease
-  listener: (line: DeviceLogLine) => void
+  listener: ((line: DeviceLogLine) => void) | null
   ready: Deferred<void>
   outcome: Promise<WorkflowOutcome>
   settled: Promise<void>
@@ -180,11 +180,18 @@ export class LogManager {
       void this.closeOwner(owner).catch(() => undefined)
       return
     }
+    const listener = owner.listener
+    if (!listener) return
     try {
-      owner.listener({
+      const completion = (listener as (line: DeviceLogLine) => unknown)({
         message: notification.message,
         isBacklog: notification.isBacklog,
       })
+      if (isPromiseLike(completion)) {
+        void Promise.resolve(completion).catch(() => {
+          void this.closeOwner(owner).catch(() => undefined)
+        })
+      }
     } catch {
       void this.closeOwner(owner).catch(() => undefined)
     }
@@ -193,6 +200,7 @@ export class LogManager {
   private closeOwner(owner: LogOwner): Promise<void> {
     if (owner.closePromise) return owner.closePromise
     owner.closing = true
+    owner.listener = null
     owner.closePromise = (async () => {
       let cancellationError: BotaSDKError | null = null
       if (!owner.closed) {
@@ -212,6 +220,7 @@ export class LogManager {
   private finishOwner(owner: LogOwner, outcome: WorkflowOutcome): void {
     if (owner.closed) return
     owner.closed = true
+    owner.listener = null
     if (!owner.closing) {
       owner.terminalError = outcome.kind === 'failed'
         ? outcome.error
@@ -255,4 +264,10 @@ function deferred<T>(): Deferred<T> {
     resolve = resolvePromise
   })
   return { promise, resolve }
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return typeof value === 'object'
+    && value !== null
+    && typeof (value as { then?: unknown }).then === 'function'
 }

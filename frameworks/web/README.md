@@ -100,7 +100,10 @@ The client permits one device-log owner at a time. Rust owns packet decoding;
 the listener receives only complete `{ message, isBacklog }` values. Explicit
 removal, listener failure, Bluetooth disconnect, and `bota.destroy()` cancel the
 exact workflow and remove its characteristic subscription before ownership is
-released.
+released. Undersized packets are ignored by Rust without resetting decoder
+sequence state, so later valid packets continue normally and no raw bytes or
+decoder details reach the listener. Genuine Rust, bridge, and runtime failures
+remain sanitized.
 
 ## Foreground scope
 

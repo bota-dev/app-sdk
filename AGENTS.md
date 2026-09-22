@@ -249,6 +249,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   characteristic lease. Resolve subscription setup only after Rust reaches its
   running state, expose only typed Rust `DeviceLog` notifications, and join
   pending subscribe/write cleanup before releasing callbacks or ownership.
+  Preserve the canonical Rust behavior that ignores undersized packets without
+  resetting sequence state, while sanitizing genuine Rust, bridge, and runtime
+  failures. Synchronous throws and rejected promise-like listener results must
+  disable delivery and cancel the exact workflow.
 - `RecordingManager` and `StreamingSession` preserve their frozen object model
   while Rust plus the Apple/Android hosts own recording bytes, live-transfer
   buffering, chunk uploads, finalization ordering, and cancellation. Codegen
