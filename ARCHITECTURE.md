@@ -972,10 +972,13 @@ resolve a grant or resend destructive opcode `0x06`.
 
 `frameworks/web` is a publishable ESM facade over the private
 `bindings/device-sdk-wasm` bridge. Browser code owns Web Bluetooth lifecycle;
-the WASM core owns exact connection sequencing and protocol decoding. The
-initial public API contains `BotaDeviceClient.create()`, `destroy()`,
-`DeviceManager.connect()`, `disconnect()`, `connectedDevice`, and
-`readSnapshot()`, plus the foreground workflow managers described below.
+the WASM core owns exact connection sequencing and protocol decoding.
+`BotaDeviceClient` composes exactly one shared runtime, one operation
+coordinator, and one instance of each public foreground manager. Read-only
+construction needs neither storage nor providers. Durable construction uses a
+non-empty tenant `storageNamespace`; a caller-provided storage adapter must
+report that exact namespace, otherwise creation fails before browser or device
+work.
 
 Connection always starts with the browser's explicit device picker and requires
 the caller's expected serial number. The advertised name is only a picker
@@ -988,13 +991,21 @@ If client destruction races an open picker, the eventual picker result is
 rejected as cancelled before it can become the active device or start GATT
 work. If destruction races later connection work, the captured device is
 disconnected and cannot be published by a late workflow completion.
+Client destruction marks every manager terminal before awaiting cleanup,
+cancels and joins direct and workflow owners, removes passive subscriptions,
+and disconnects only after initiated unabortable work settles. Tenant cleanup
+runs only through `clearPersistedData()`: it requires no active coordinator
+owner, performs no BLE command, and remains safe and repeatable after destroy
+for logout ordering.
 
 Foreground firmware update is exposed through the client's `OTAManager`. The
 application resolves stable image identity to a fresh HTTPS request, while the
 browser host streams bounded chunks directly to OPFS and incrementally verifies
 exact length, SHA-256, and CRC32 before Rust may write GATT. Only stable image
 identity and workflow checkpoints are durable; request URLs and headers remain
-memory-only. A compatible verified blob can be reused after reload, while an
+memory-only. An update from a live connection freshly re-verifies the active
+Device Information serial before provider, journal mutation, or OTA GATT. A
+compatible verified blob can be reused after reload, while an
 incomplete blob restarts from byte zero with a freshly resolved request.
 
 Rust owns OTA transfer, device status handling, verification, reboot, reconnect,
@@ -1016,6 +1027,8 @@ only after subscribe-before-START setup reaches a running state. One exact
 workflow owner and diagnostics-characteristic lease cover the stream. TypeScript
 maps only Rust `DeviceLog` notifications to public `{ message, isBacklog }`
 values; raw packets and decoder details never reach application callbacks.
+The manager freshly re-verifies the active Device Information serial before it
+claims the diagnostics lease; it never opens the picker or probes by name.
 Canonical undersized packets are ignored by Rust without resetting decoder
 sequence state, allowing later valid packets to decode normally; genuine Rust,
 bridge, and runtime failures remain sanitized. Synchronous listener throws and

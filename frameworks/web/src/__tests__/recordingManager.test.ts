@@ -1153,6 +1153,7 @@ test('the public client exposes one recording manager with its configured provid
   const client = await BotaDeviceClient.create({
     coreLoader: async () => await createWasmCore(await wasmBytes),
     transport,
+    storageNamespace: storage.namespace,
     storage,
     providers: { recordingUpload: provider },
   })

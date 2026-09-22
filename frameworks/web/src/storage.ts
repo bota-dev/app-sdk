@@ -6,18 +6,12 @@ import {
   validateStorageNamespace,
 } from './indexedDbWorkflowStore.ts'
 import { OpfsBlobStore } from './opfsBlobStore.ts'
+import type { RecordingJournalPhase } from './models.ts'
 import { loadDefaultCore } from './wasmCore.ts'
 
 export { BrowserStorageError } from './indexedDbWorkflowStore.ts'
 export type { BrowserStorageErrorCode } from './indexedDbWorkflowStore.ts'
-
-export type RecordingJournalPhase =
-  | 'prepared'
-  | 'transferring'
-  | 'staged'
-  | 'uploading'
-  | 'cloud_completed'
-  | 'confirmed'
+export type { RecordingJournalPhase } from './models.ts'
 
 export interface RecordingJournal {
   schemaVersion: 1

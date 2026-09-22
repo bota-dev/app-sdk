@@ -32,6 +32,7 @@ export type {
   FirmwareUpdateProgress,
   ModemInfo,
   RecordingJournalSummary,
+  RecordingJournalPhase,
   RecordingControlRequest,
   RecordingControlResult,
   RecordingSyncOptions,

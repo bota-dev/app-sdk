@@ -5,7 +5,10 @@ import type {
   CoreIntegrityHasher,
   CoreWorkflowCheckpoint,
 } from './core.ts'
-import type { DeviceManager } from './deviceManager.ts'
+import {
+  verifyActiveDeviceSerial,
+  type DeviceManager,
+} from './deviceManager.ts'
 import {
   BotaSDKError,
   normalizeCoreError,
@@ -120,7 +123,10 @@ export class OTAManager {
           throw new BotaSDKError('resume_rejected', 'update_firmware')
         }
         throwIfAborted(signal)
-        const connected = this.requireConnectedDevice()
+        const connected = await verifyActiveDeviceSerial(
+          this.devices,
+          'update_firmware',
+        )
         const hint = await this.loadReconnectHint(connected.serialNumber)
         if (hint.browserDeviceId !== connected.id) {
           throw new BotaSDKError('resume_rejected', 'update_firmware')
@@ -218,6 +224,9 @@ export class OTAManager {
   }
 
   async cancelFirmwareUpdate(operationId: string): Promise<void> {
+    if (this.destroyed) {
+      throw new BotaSDKError('cancelled', 'update_firmware')
+    }
     validateOperationId(operationId)
     const active = this.activeOperations.get(operationId)
     if (active) {

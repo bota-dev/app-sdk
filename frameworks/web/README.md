@@ -58,10 +58,37 @@ metadata. A selected device is returned only after its Device Information
 serial matches, and `readSnapshot()` repeats that verification before returning
 fresh values.
 
+## Durable storage and logout
+
+Read-only connection and snapshot use do not require storage or providers.
+Durable workflows require a non-empty tenant namespace. The default adapter
+uses IndexedDB and OPFS; a caller-provided adapter is accepted only when its
+`namespace` exactly matches `storageNamespace`.
+
+```ts
+const bota = await BotaDeviceClient.create({
+  storageNamespace: `${organizationId}:${projectId}:${userId}`,
+  storage: customStorage, // optional
+  providers,
+})
+
+// Logout or tenant switch ordering:
+await bota.destroy()
+await bota.clearPersistedData()
+```
+
+One client owns one runtime and one instance of each manager. `destroy()` is
+terminal and idempotent: it rejects new operations, cancels and joins active
+owners, removes passive subscriptions, and disconnects only after initiated
+unabortable work settles. `clearPersistedData()` is local-only, requires no
+active operation, sends no Bluetooth command, and remains repeatable after
+destruction so logout can clear only the current tenant.
+
 ## Foreground firmware updates
 
-`BotaDeviceClient.create()` accepts a durable browser storage implementation and
-a `providers.firmwareDownload` resolver. The resolver receives only stable image
+`BotaDeviceClient.create()` accepts a tenant storage namespace, an optional
+matching durable browser storage implementation, and a
+`providers.firmwareDownload` resolver. The resolver receives only stable image
 identity and returns a fresh operation-scoped `GET` URL and headers. Those
 request credentials remain in memory and are never written to the firmware
 journal.

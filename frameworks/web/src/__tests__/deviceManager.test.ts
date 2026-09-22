@@ -279,6 +279,7 @@ test('the public client composes picker persistence through the shared runtime',
   const client = await BotaDeviceClient.create({
     coreLoader: async () => core,
     transport,
+    storageNamespace: storage.namespace,
     storage,
   })
 

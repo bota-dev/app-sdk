@@ -42,8 +42,10 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
   subscribeGate: Promise<void> | null = null
   unsubscribeGate: Promise<void> | null = null
   writeGate: Promise<void> | null = null
+  readGate: Promise<void> | null = null
   onConnect: (() => void) | null = null
   onDisconnect: (() => void) | null = null
+  onRead: (() => void) | null = null
   onSubscribe: (() => void) | null = null
   onUnsubscribe: (() => void) | null = null
   onWrite: (() => void) | null = null
@@ -95,6 +97,8 @@ export class FakeBrowserBluetoothTransport implements BrowserBluetoothTransport 
     const call = `read:${device.id}:${serviceUuid}:${characteristicUuid}`
     this.calls.push(call)
     this.eventLog?.push(call)
+    this.onRead?.()
+    if (this.readGate) await this.readGate
     const key = readKey(serviceUuid, characteristicUuid)
     const error = this.readErrors.get(key)
     if (error) throw error

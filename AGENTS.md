@@ -244,7 +244,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   journal/checkpoint/blob state before GATT, use that exact authorized device for
   every disconnected active phase, and persist the one-way journal
   `cleanup_only` state before terminal checkpoint deletion so reload performs
-  cleanup without provider or device work.
+  cleanup without provider or device work. One public Web client owns one
+  runtime/coordinator and one instance of each manager. Read-only construction
+  needs no storage or provider; durable workflows require a non-empty tenant
+  namespace, and custom storage must match it exactly. Client destruction is
+  terminal and joins every active owner and passive subscription before final
+  disconnect. Tenant cleanup is BLE-free, requires no active owner, and remains
+  available after destroy for logout ordering.
 - Web device logs have one Rust workflow owner and one diagnostics
   characteristic lease. Resolve subscription setup only after Rust reaches its
   running state, expose only typed Rust `DeviceLog` notifications, and join

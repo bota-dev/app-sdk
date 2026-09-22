@@ -1043,6 +1043,7 @@ test('client destruction joins provider prepare before scrubbing and aborting', 
   const client = await BotaDeviceClient.create({
     coreLoader: async () => core,
     transport,
+    storageNamespace: storage.namespace,
     storage,
     providers: { provisioning: provider },
   })

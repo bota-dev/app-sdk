@@ -356,6 +356,7 @@ export class RecordingManager {
   }
 
   async cancel(operationId: string): Promise<void> {
+    this.ensureAvailable('transfer_recording')
     validateOperationId(operationId)
     const active = this.activeOperations.get(operationId)
     if (active) {

@@ -1,4 +1,10 @@
-import type { RecordingJournalPhase } from './storage.ts'
+export type RecordingJournalPhase =
+  | 'prepared'
+  | 'transferring'
+  | 'staged'
+  | 'uploading'
+  | 'cloud_completed'
+  | 'confirmed'
 
 export type DeviceState =
   | 'idle'

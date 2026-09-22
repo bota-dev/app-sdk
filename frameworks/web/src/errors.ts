@@ -39,6 +39,7 @@ export type BotaOperation =
   | 'upload'
   | 'update_firmware'
   | 'read_device_logs'
+  | 'clear_persisted_data'
   | 'unknown'
 
 const MESSAGES: Record<BotaSDKErrorCode, string> = {

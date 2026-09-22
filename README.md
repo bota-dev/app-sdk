@@ -38,14 +38,12 @@ release action.
 
 ## Current Status
 
-The next synchronized version is `1.2.0-beta.1`. The prepared source adds
-the first `@bota.dev/web-sdk` package: an explicit, foreground Web Bluetooth picker,
-exact serial verification through the shared Rust/WASM workflow, explicit
-disconnect, and fresh read-only identity, device-status, and
-encrypted-upload-v2 capability snapshots. A packed-package gate installs the
-exact tarball in a clean Vite application. Recording, upload, provisioning,
-settings, control, OTA, logs, saved reconnect, and background browser behavior
-remain deferred.
+The next synchronized version is `1.2.0-beta.1`. The prepared source composes
+the foreground Web managers for picker and authorized reconnect, snapshots,
+recording workflows, provisioning and settings, WiFi, recording control, OTA,
+and device logs over one shared Rust/WASM runtime. Packed-consumer, real
+Chromium, release, and physical-device acceptance gates remain separate work;
+background browser behavior remains unsupported.
 
 The App SDK has published synchronized beta release `1.1.0`: the repository has a generated
 protocol manifest, 64 language-neutral compatibility fixtures, bounded Rust
@@ -442,8 +440,18 @@ console.log(device.serialNumber, snapshot.status.batteryPercent)
 await bota.destroy()
 ```
 
-The first Web beta is intentionally read-only after connection. It does not
-list, transfer, or upload recordings and does not call the Bota API.
+Construction without options remains valid for read-only connection and
+snapshot use. Durable foreground workflows require a non-empty tenant
+`storageNamespace`; a custom storage adapter must report that exact namespace.
+On logout or tenant switch, await `destroy()` and then
+`clearPersistedData()` so active owners and subscriptions settle before only
+that tenant's local data is removed.
+
+The foreground Web beta exposes recording, provisioning, WiFi, recording
+control, firmware update, and device-log managers alongside connection and
+snapshot APIs. Backend-dependent work remains host-provided through explicit
+provider callbacks; the SDK does not own application authentication or call the
+Bota API implicitly.
 
 ## Development
 

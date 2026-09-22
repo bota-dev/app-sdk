@@ -1,5 +1,8 @@
 import type { CoreBridge, CoreNotification } from './core.ts'
-import { DeviceManager } from './deviceManager.ts'
+import {
+  DeviceManager,
+  verifyActiveDeviceSerial,
+} from './deviceManager.ts'
 import { BotaSDKError, normalizeCoreError } from './errors.ts'
 import {
   BOTA_DIAGNOSTICS_SERVICE,
@@ -69,9 +72,12 @@ export class LogManager {
       throw new BotaSDKError('operation_in_progress', 'read_device_logs')
     }
 
-    const connected = this.devices.connectedDevice
+    const connected = await verifyActiveDeviceSerial(
+      this.devices,
+      'read_device_logs',
+    )
     const device = this.runtime.connectedDeviceHandle
-    if (!connected || !device || connected.id !== device.id) {
+    if (!device || connected.id !== device.id) {
       throw new BotaSDKError('device_disconnected', 'read_device_logs')
     }
 

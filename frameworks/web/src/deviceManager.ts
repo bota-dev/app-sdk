@@ -46,7 +46,6 @@ interface DeviceManagerOptions {
 type DirectStepResult<T> =
   | { kind: 'completed'; value: T }
   | { kind: 'failed'; error: unknown }
-  | { kind: 'cancelled' }
 
 export class DeviceManager {
   private readonly core: CoreBridge
@@ -211,7 +210,7 @@ export class DeviceManager {
   }
 
   async disconnect(): Promise<void> {
-    if (this.destroyed) return
+    if (this.destroyed) throw new BotaSDKError('cancelled', 'disconnect')
     if (this.operationActive) {
       throw new BotaSDKError('operation_in_progress', 'disconnect')
     }
@@ -310,6 +309,44 @@ export class DeviceManager {
       )
     } catch (error) {
       throw snapshotError(error)
+    }
+  }
+
+  private async verifyActiveSerialInternal(
+    operation: BotaOperation,
+  ): Promise<ConnectedDevice> {
+    if (this.destroyed) throw new BotaSDKError('cancelled', operation)
+    const connected = this.verifiedDevice
+    const device = this.activeDevice
+    if (
+      !connected
+      || !device
+      || connected.id !== device.id
+      || this.runtime.connectedDeviceHandle?.id !== device.id
+    ) {
+      throw new BotaSDKError('device_disconnected', operation)
+    }
+
+    try {
+      return await this.runtime.runExclusive(operation, async (signal) => {
+        const encoded = await awaitDirectStep(
+          this.transport.read(
+            device,
+            DEVICE_INFORMATION_SERVICE,
+            SERIAL_NUMBER_CHARACTERISTIC,
+          ),
+          signal,
+          operation,
+        )
+        const serialNumber = decodeRequiredText(encoded, operation)
+        if (serialNumber !== connected.serialNumber) {
+          await this.disconnectForIdentityMismatch(device)
+          throw new BotaSDKError('identity_mismatch', operation)
+        }
+        return connected
+      })
+    } catch (error) {
+      throw normalizeManagerError(error, operation)
     }
   }
 
@@ -531,20 +568,36 @@ async function awaitDirectStep<T>(
     (value) => ({ kind: 'completed', value }),
     (error: unknown) => ({ kind: 'failed', error }),
   )
+  const result = await settled
   if (signal.aborted) throw new BotaSDKError('cancelled', operation)
-
-  let resolveCancellation!: () => void
-  const cancellation = new Promise<DirectStepResult<T>>((resolve) => {
-    resolveCancellation = () => resolve({ kind: 'cancelled' })
-  })
-  signal.addEventListener('abort', resolveCancellation, { once: true })
-  const result = await Promise.race([settled, cancellation])
-  signal.removeEventListener('abort', resolveCancellation)
-  if (result.kind === 'cancelled') {
-    throw new BotaSDKError('cancelled', operation)
-  }
   if (result.kind === 'failed') throw result.error
   return result.value
+}
+
+export async function verifyActiveDeviceSerial(
+  manager: DeviceManager,
+  operation: BotaOperation,
+): Promise<ConnectedDevice> {
+  return await (
+    manager as unknown as {
+      verifyActiveSerialInternal(value: BotaOperation): Promise<ConnectedDevice>
+    }
+  ).verifyActiveSerialInternal(operation)
+}
+
+function decodeRequiredText(
+  value: Uint8Array,
+  operation: BotaOperation,
+): string {
+  try {
+    const decoded = new TextDecoder('utf-8', { fatal: true })
+      .decode(value)
+      .replace(/^[\0\s]+|[\0\s]+$/g, '')
+    if (!decoded) throw new Error('empty')
+    return decoded
+  } catch (error) {
+    throw new BotaSDKError('protocol_error', operation, { cause: error })
+  }
 }
 
 function pickerError(error: unknown): BotaSDKError {

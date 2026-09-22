@@ -295,6 +295,26 @@ test('firmwareUpdate capability fails before provider, storage, or device mutati
   assert.deepEqual(harness.transport.writes, [])
 })
 
+test('a connected update re-verifies the active serial before durable or provider work', async () => {
+  const bytes = Uint8Array.of(1, 2, 3, 4)
+  const harness = await createHarness({ bytes })
+  harness.transport.serialNumber = 'OTHERDEVICE1'
+  installStartResult(harness, 1)
+
+  await assert.rejects(
+    harness.ota.updateFirmware(descriptor(bytes), {
+      operationId: 'update_firmware:changed-serial',
+    }),
+    isSdkError('identity_mismatch'),
+  )
+
+  assert.deepEqual(harness.storage.firmwareJournals, new Map())
+  assert.deepEqual(harness.provider.calls, [])
+  assert.equal(harness.transport.calls.includes('request_device'), false)
+  assert.equal(harness.transport.calls.includes('get_authorized_devices'), false)
+  assert.equal(harness.devices.connectedDevice, null)
+})
+
 test('an orphan Rust checkpoint rejects a new update before provider or GATT', async () => {
   const bytes = Uint8Array.of(1, 2, 3, 4)
   const image = descriptor(bytes)
@@ -1302,6 +1322,7 @@ test('the public client composes one firmware manager with its configured provid
   const client = await BotaDeviceClient.create({
     coreLoader: async () => core,
     transport,
+    storageNamespace: storage.namespace,
     storage,
     providers: { firmwareDownload: provider },
   })

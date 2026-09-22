@@ -17,6 +17,7 @@ import {
 import { BrowserTransportError } from '../transport.ts'
 import { createWasmCore } from '../wasmCore.ts'
 import { FakeBrowserBluetoothTransport } from './fakeBluetooth.ts'
+import { FakeRecordingStorage } from './fakeProviders.ts'
 
 const STATUS_BYTES = Uint8Array.from([
   0x43, 0x03, 0x03, 0x01, 0x00, 0xf1, 0x53, 0x65, 0x18, 0x00, 0x08,
@@ -144,6 +145,26 @@ test('a changed serial disconnects and rejects the snapshot', async () => {
   await assert.rejects(manager.readSnapshot(), hasCode('identity_mismatch'))
   assert.equal(manager.connectedDevice, null)
   assert.equal(transport.calls.at(-1), 'disconnect:browser-peripheral-1')
+})
+
+test('snapshot re-verifies the exact serial after reconnect without picker fallback', async () => {
+  const wasm = await readFile(
+    new URL('../generated/bota_device_sdk_core_bg.wasm', import.meta.url),
+  )
+  const core = await createWasmCore(wasm)
+  const transport = new FakeBrowserBluetoothTransport()
+  const storage = new FakeRecordingStorage()
+  const manager = new DeviceManager(core, transport, { storage })
+  await manager.connect({ expectedSerialNumber: 'GDPPSBZJN6' })
+  await manager.disconnect()
+  await manager.reconnect({ expectedSerialNumber: 'GDPPSBZJN6' })
+  transport.calls.length = 0
+  transport.serialNumber = 'OTHERDEVICE1'
+
+  await assert.rejects(manager.readSnapshot(), hasCode('identity_mismatch'))
+  assert.equal(transport.calls.includes('request_device'), false)
+  assert.equal(transport.calls.includes('get_authorized_devices'), false)
+  assert.equal(manager.connectedDevice, null)
 })
 
 test('a GATT disconnect during snapshot reads maps to device_disconnected', async () => {
