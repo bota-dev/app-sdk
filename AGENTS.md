@@ -267,6 +267,12 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   tarball identity, and installed regular-file hashes before testing the
   production ESM/WASM copy. Preserve `target/web-release` and its hash
   inventory unchanged through protected `release.yml` npm OIDC publication.
+  Treat `docs/testing/web-physical-device.md` as a separate supervised release
+  gate: fake Bluetooth in automated Chromium is never physical evidence. The
+  Web candidate is blocked while any required hardware row is `NOT RUN` or
+  failed. Do not advertise background or closed-tab work, live streaming,
+  authenticated factory reset, Safari/iOS fallback, Flutter Web, or Windows as
+  Web capabilities.
 - Web device logs have one Rust workflow owner and one diagnostics
   characteristic lease. Resolve subscription setup only after Rust reaches its
   running state, expose only typed Rust `DeviceLog` notifications, and join

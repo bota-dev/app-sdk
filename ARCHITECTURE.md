@@ -1051,11 +1051,25 @@ Removal, listener failure, disconnect, and client destruction join initiated
 subscription setup and GATT writes before releasing the lease. A stream that
 completes without cancellation is classified as a retryable connection failure.
 
+The foreground surface also includes exact authorized-device reconnect;
+recording list and legacy or freshly advertised encrypted-upload-v2 sync;
+provisioning and remove-only deprovisioning; connection settings; WiFi scan,
+configuration, disconnect, status, and status subscription; grant-bound
+recording start/stop; and durable OTA and log workflows described above. The
+shared runtime serializes mutating GATT ownership. Recording and firmware bodies
+stay in OPFS, while IndexedDB stores tenant-scoped journals and checkpoints.
+Host providers own provisioning material, object-storage destinations and
+cloud completion, recording-control authority, and firmware download
+resolution. Their credentials and operation material remain memory-only.
+
 This release is foreground-only and requires a secure-context browser with Web
-Bluetooth. It has no automatic scan, saved-device reconnect, background or
-closed-tab execution, recording operations, upload transport, provisioning,
-settings, or recording control. The host Portal continues to own
-authentication and all backend API calls.
+Bluetooth. It does not provide automatic or background scan, service-worker or
+closed-tab Bluetooth, live recording streaming, authenticated destructive
+factory reset, Safari/iOS fallback, a Bluetooth polyfill, Flutter Web, Windows,
+or a built-in Bota API client. The host application continues to own
+authentication and every backend API call. Browser permission is not device
+identity or backend authorization, and unsupported optional capabilities fail
+before device mutation.
 
 The Web release gate creates one npm tarball and inspects its archive headers
 and bounded regular-file payloads exactly once without extraction. That pass
@@ -1064,6 +1078,9 @@ local artifact; the browser stage validates the original inventory, source
 revision, tarball hash, and installed regular-file hashes without parsing the
 archive again before the production ESM/WASM Chromium cases run. CI then
 preserves the tarball and inventory unchanged for protected beta publication.
+The supervised Chromium/device matrix in
+`docs/testing/web-physical-device.md` is a separate release gate. Automated
+Chromium cases use deterministic fake Bluetooth and cannot satisfy it.
 
 ## Security
 

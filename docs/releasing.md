@@ -6,6 +6,9 @@ Native package. `1.2.0-beta.0` is occupied by an immutable annotated tag for
 non-Flutter source; it must not be reused for the prepared Flutter facade. No
 artifact at that identity may be replaced. `1.2.0-beta.1` is the selected
 synchronized replacement candidate and is prepared locally but not published.
+Its Web foreground implementation and automated Chromium/package gates are
+complete, but synchronized publication is blocked until the supervised Web
+physical-device matrix passes.
 Apple consumers add
 `https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
 compiles the Swift facade source and downloads a checksummed
@@ -57,6 +60,16 @@ external hardware acceptance. Automated tests never claim a physical-device
 result. Keep supervised device evidence separate and follow
 [`docs/testing/apple-physical-device.md`](testing/apple-physical-device.md) when
 new hardware or firmware requires another lab run.
+
+For the Web facade, follow
+[`docs/testing/web-physical-device.md`](testing/web-physical-device.md) in a
+supported desktop Chromium browser. The reviewer must confirm every required
+row against one exact Bota device and the exact candidate source revision.
+`npm run web:verify` uses deterministic fake Bluetooth and is not a substitute.
+Do not approve the protected release environment while any required Web row is
+`NOT RUN` or failed. The current `1.2.0-beta.1` Web evidence is therefore
+`BLOCKED`, as recorded in
+[`release/evidence/1.2.0-beta.1-web-foreground.md`](../release/evidence/1.2.0-beta.1-web-foreground.md).
 
 ## Prepare A Version
 

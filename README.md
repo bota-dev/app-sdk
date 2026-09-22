@@ -3,8 +3,9 @@
 Source monorepo for the **Bota App SDK** family. The repository provides a
 shared Rust protocol and workflow core with platform-native Bluetooth
 transports and Apple, Android, React Native, Flutter, and Web facades. The Web
-facade currently exposes its read-only beta foundation; foreground workflow
-parity is the next approved increment. The Windows facade remains planned.
+facade implements the browser-feasible foreground workflow surface for the
+`1.2.0-beta.1` candidate. Its supervised physical Chromium matrix has not run,
+so that beta remains blocked. The Windows facade remains planned.
 
 `@bota.dev/react-native-sdk@1.1.0`, `BotaAppleSDK`, and
 `dev.bota:bota-android-sdk:1.1.0` are the first synchronized public App SDK
@@ -41,9 +42,10 @@ release action.
 The next synchronized version is `1.2.0-beta.1`. The prepared source composes
 the foreground Web managers for picker and authorized reconnect, snapshots,
 recording workflows, provisioning and settings, WiFi, recording control, OTA,
-and device logs over one shared Rust/WASM runtime. Packed-consumer, real
-Chromium, release, and physical-device acceptance gates remain separate work;
-background browser behavior remains unsupported.
+and device logs over one shared Rust/WASM runtime. Unit, packed-consumer, and
+automated Chromium gates pass locally. Supervised physical-device acceptance
+and protected publication remain open; background browser behavior remains
+unsupported.
 
 The App SDK has published synchronized beta release `1.1.0`: the repository has a generated
 protocol manifest, 64 language-neutral compatibility fixtures, bounded Rust
@@ -458,6 +460,31 @@ control, firmware update, and device-log managers alongside connection and
 snapshot APIs. Backend-dependent work remains host-provided through explicit
 provider callbacks; the SDK does not own application authentication or call the
 Bota API implicitly.
+
+### Web capability matrix
+
+| Capability | `1.2.0-beta.1` candidate |
+|---|---|
+| Explicit picker connect and exact-serial snapshot | Implemented, foreground only; the picker must start from a user gesture |
+| Exact authorized-device reconnect | Implemented when `navigator.bluetooth.getDevices()` is available; never falls back by name |
+| Recording list and legacy sync | Implemented with tenant-scoped durable state and host-provided upload callbacks |
+| Encrypted Upload v2 sync | Implemented only when freshly advertised by firmware and exactly authorized by the host |
+| Provisioning and remove-only deprovision | Implemented through host-provided, attempt-bound material; deprovision is not factory reset |
+| Connection settings | Implemented for read and write |
+| WiFi | Implemented for scan, configure, disconnect, status read, and foreground status subscription |
+| Recording control | Implemented for host-authorized start and stop |
+| Firmware update | Implemented with verified OPFS download, progress, cancellation, reload recovery, reboot, and exact-device reconnect |
+| Device logs | Implemented as one sanitized foreground subscription with explicit removal |
+| Background/closed-tab work, live streaming, factory reset | Unavailable |
+| Safari/iOS Web Bluetooth fallback, Flutter Web, Windows | Unavailable |
+
+The full provider examples and browser lifecycle rules are in the
+[Web integration guide](frameworks/web/README.md). Durable workflows require a
+secure context, a non-empty tenant namespace, IndexedDB and OPFS, and the exact
+host provider for each backend-authorized operation. Bluetooth permission is
+not device identity or backend authorization. Always destroy the client before
+tenant cleanup, and always use the authenticated device serial rather than an
+advertised name.
 
 ## Development
 
