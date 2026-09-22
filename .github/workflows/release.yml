@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       releaseRef:
-        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.1
+        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.2
         required: true
         type: string
       centralDeploymentId:
@@ -265,10 +265,10 @@ jobs:
           cargo xtask release validate target/android-release/release-manifest.json
           tools/android/install-release-repository.sh target/android-release target/android-m2
           platforms/android/gradlew -p platforms/android \
-            :sdk:testDebugUnitTest \
             :sdk:lintRelease \
             :sdk:assembleDebug \
             :sdk:assembleDebugAndroidTest
+          platforms/android/gradlew -p platforms/android :sdk:testDebugUnitTest
           tools/android/test-legacy-consumer.sh --mode source --compile-only \
             --repository target/android-m2
           tools/android/test-legacy-consumer.sh --mode binary --compile-only \

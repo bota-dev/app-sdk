@@ -79,7 +79,7 @@ protected release verifies and publishes only that preserved tarball under npm
 The Flutter facade is implemented in source, but it is not part of the
 immutable `1.1.0` public release and has not been published. The historical
 `1.2.0-beta.0` candidate identity is occupied by immutable non-Flutter source
-and cannot identify this tree. Selected replacement `1.2.0-beta.1` binds its
+and cannot identify this tree. Selected replacement `1.2.0-beta.2` binds its
 exact source revision, Pigeon identity, raw and normalized archive digests, and
 every file's digest before it can be tagged or published.
 
@@ -1080,7 +1080,9 @@ archive again before the production ESM/WASM Chromium cases run. CI then
 preserves the tarball and inventory unchanged for protected beta publication.
 The supervised Chromium/device matrix in
 `docs/testing/web-physical-device.md` is a separate release gate. Automated
-Chromium cases use deterministic fake Bluetooth and cannot satisfy it.
+Chromium cases use deterministic fake Bluetooth and cannot satisfy it. For
+`1.2.0-beta.2` only, the release owner requested beta publication before the
+supervised production-device test; physical acceptance remains open.
 
 ## Security
 

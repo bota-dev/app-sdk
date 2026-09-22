@@ -6,16 +6,16 @@ Rust core compiled to WebAssembly. Rust owns protocol sequencing, integrity,
 checkpoints, and stable workflow errors; the application owns authentication,
 backend calls, user consent, and presentation.
 
-The `1.2.0-beta.1` candidate is implemented and passes automated package and
-Chromium gates. It is not release-ready until the supervised physical-device
-matrix passes.
+The `1.2.0-beta.2` candidate is implemented and passes automated package and
+Chromium gates. Its supervised physical-device matrix has not run; the release
+owner requested this beta be published first for production-device testing.
 
 ## Install
 
 After the synchronized candidate is published, pin its exact version:
 
 ```bash
-npm install @bota.dev/web-sdk@1.2.0-beta.1
+npm install @bota.dev/web-sdk@1.2.0-beta.2
 ```
 
 Use a secure context in a desktop Chromium browser with Web Bluetooth. The
@@ -511,6 +511,6 @@ is never treated as device identity or backend authorization.
 ## Physical acceptance
 
 Automated Chromium uses deterministic fake Bluetooth and storage boundaries;
-it is not physical-device evidence. Before release, run the supervised matrix
+it is not physical-device evidence. Run the supervised matrix
 in [`docs/testing/web-physical-device.md`](../../docs/testing/web-physical-device.md)
 with one exact device and record the result in the matching release evidence.

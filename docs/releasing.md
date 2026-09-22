@@ -3,12 +3,11 @@
 Published synchronized beta `1.1.0` includes the Apple `BotaAppleSDK` Swift
 package for iOS 15+ and macOS 13+, the Android Maven package, and the React
 Native package. `1.2.0-beta.0` is occupied by an immutable annotated tag for
-non-Flutter source; it must not be reused for the prepared Flutter facade. No
-artifact at that identity may be replaced. `1.2.0-beta.1` is the selected
-synchronized replacement candidate and is prepared locally but not published.
-Its Web foreground implementation and automated Chromium/package gates are
-complete, but synchronized publication is blocked until the supervised Web
-physical-device matrix passes.
+non-Flutter source; it must not be reused for the prepared Flutter facade. The
+unpublished `v1.2.0-beta.1` tag is also immutable and must not be moved after
+its release workflow failed. `1.2.0-beta.2` is the selected replacement
+candidate. Its Web foreground implementation and automated Chromium/package
+gates are complete; supervised Web physical-device acceptance remains open.
 Apple consumers add
 `https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
 compiles the Swift facade source and downloads a checksummed
@@ -38,7 +37,8 @@ publication must use dist-tag `beta`, and GitHub Releases remain prereleases.
 SwiftPM and Maven Central consumers pin the exact synchronized beta version.
 Historical immutable `1.1.0` is the one recovery exception; do not rename,
 unpublish, or recreate it. The next synchronized release is selected as
-`1.2.0-beta.1`; do not move, delete, recreate, or reuse `v1.2.0-beta.0`.
+`1.2.0-beta.2`; do not move, delete, recreate, or reuse `v1.2.0-beta.0` or
+`v1.2.0-beta.1`.
 Before that first Web publication, configure the npm trusted publisher for
 `@bota.dev/web-sdk` against the protected `release` environment and this
 repository's release workflow. The workflow intentionally has no token-based
@@ -66,10 +66,14 @@ For the Web facade, follow
 supported desktop Chromium browser. The reviewer must confirm every required
 row against one exact Bota device and the exact candidate source revision.
 `npm run web:verify` uses deterministic fake Bluetooth and is not a substitute.
-Do not approve the protected release environment while any required Web row is
-`NOT RUN` or failed. The current `1.2.0-beta.1` Web evidence is therefore
-`BLOCKED`, as recorded in
-[`release/evidence/1.2.0-beta.1-web-foreground.md`](../release/evidence/1.2.0-beta.1-web-foreground.md).
+Ordinarily, do not approve the protected release environment while a required
+Web row is `NOT RUN` or failed. For `1.2.0-beta.2` only, the release owner
+explicitly requested a public beta rollout before supervised production-device
+testing. This authorizes publication for that post-release test, not a claim
+of Web hardware acceptance or general availability. A failed automated gate
+still blocks publication, and any failed supervised row must be triaged before
+another version is released. The open hardware status is recorded in
+[`release/evidence/1.2.0-beta.2-web-foreground.md`](../release/evidence/1.2.0-beta.2-web-foreground.md).
 
 ## Prepare A Version
 
@@ -283,7 +287,7 @@ never release evidence by themselves. A consumer failure must not fall back to
 an earlier application build, cached native candidate, remote Maven artifact,
 or remote Apple package.
 
-The first Flutter beta may be published only after every `1.2.0-beta.1` version
+The first Flutter beta may be published only after every `1.2.0-beta.2` version
 authority changes together and the Apple
 and Android artifacts at that exact version are public with passing no-override
 consumers. The initial pub.dev publication mechanism must be deliberately
@@ -293,7 +297,7 @@ publication is downloaded and compared with the candidate's exact file hashes
 and normalized archive SHA-256 before release completion.
 
 `tools/flutter/package-release.sh --check` refuses occupied
-`1.2.0-beta.0`. For selected `1.2.0-beta.1`, it writes
+`1.2.0-beta.0`. For selected `1.2.0-beta.2`, it writes
 only deterministic evidence to `target/flutter-release/`: the candidate
 archive, exact package inventory, v2 release manifest, dependency lock and
 graph, hosted-package license hashes, normalized dry-run output, and fixed
@@ -392,7 +396,7 @@ install its own Node.js dependencies before running repository tooling.
    consumers pass and compares it to the Flutter subset of the CI inventory
    named in the annotated tag.
 10. Refuses the occupied `1.2.0-beta.0` identity. For selected
-    `1.2.0-beta.1`, its explicitly authorized first-publish
+    `1.2.0-beta.2`, its explicitly authorized first-publish
     procedure must consume the ordered candidate artifact; later beta tags use
     Dart's official reusable OIDC publisher.
 11. Downloads the public pub.dev archive, compares its complete normalized

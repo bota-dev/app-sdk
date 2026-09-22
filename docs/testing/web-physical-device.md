@@ -6,8 +6,11 @@ Bota Pin with released foreground protocol support. Automated Playwright tests,
 fake Bluetooth, simulator results, another platform's physical matrix, or a
 prior SDK version cannot satisfy this gate.
 
-The `1.2.0-beta.1` candidate has no selected browser/device session. Every row
-below is therefore `NOT RUN`, and release remains `BLOCKED`.
+The `1.2.0-beta.2` candidate has no selected browser/device session. Every row
+below is therefore `NOT RUN`. The release owner explicitly requested this
+public beta be published first for production-device testing. This is a
+version-specific exception to the prepublication gate, not physical-device
+acceptance; keep the result open until the matrix is run.
 
 ## Safety boundary
 
@@ -56,7 +59,7 @@ contains no Playwright initialization or fake transport:
 
 ```bash
 export APP_SDK_ROOT="$PWD"
-export WEB_TARBALL="$APP_SDK_ROOT/target/web-release/bota.dev-web-sdk-1.2.0-beta.1.tgz"
+export WEB_TARBALL="$APP_SDK_ROOT/target/web-release/bota.dev-web-sdk-1.2.0-beta.2.tgz"
 export PHYSICAL_HOST="$(mktemp -d)/bota-web-physical-host"
 npm create vite@8.3.0 "$PHYSICAL_HOST" -- --template vanilla-ts
 cd "$PHYSICAL_HOST"
@@ -223,5 +226,6 @@ recording bytes/content, or device-log content in the public evidence.
 The Web physical gate passes only when every required row is `PASS`, every
 conditional `NOT APPLICABLE` disposition is reviewed, the device is restored
 to its intended final state, and the evidence references the exact release
-candidate. Any `NOT RUN`, `FAIL`, or unresolved `BLOCKED` row keeps the
-synchronized beta release `BLOCKED`.
+candidate. Until then, Web physical acceptance remains open. The one-time
+`1.2.0-beta.2` publication exception above does not turn a `NOT RUN` row into
+`PASS` or authorize a later release with unresolved failures.
