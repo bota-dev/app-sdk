@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 CONSUMER_DIR="$ROOT_DIR/tests/consumers/web-vite"
 RELEASE_DIR="$ROOT_DIR/target/web-release"
 TARBALL="${1:-}"
+INVENTORY="${2:-$RELEASE_DIR/web-package-files.json}"
+INVENTORY_CHECKSUM="${3:-$INVENTORY.sha256}"
 
 if [[ -z "$TARBALL" ]]; then
   TARBALL_COUNT="$(find "$RELEASE_DIR" -mindepth 1 -maxdepth 1 -type f -name '*.tgz' | wc -l | tr -d ' ')"
@@ -27,9 +29,11 @@ if [[ ! -d "$INSTALLED_PACKAGE" || -L "$INSTALLED_PACKAGE" ]]; then
   exit 1
 fi
 
-node "$ROOT_DIR/tools/web/verify-package.mjs" \
+node "$ROOT_DIR/tools/web/verify-installed-package.mjs" \
   "$TARBALL" \
-  --compare-directory "$INSTALLED_PACKAGE"
+  "$INVENTORY" \
+  "$INVENTORY_CHECKSUM" \
+  "$INSTALLED_PACKAGE"
 
 export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$ROOT_DIR/target/playwright-browsers}"
 npm run test:browser --prefix "$CONSUMER_DIR"

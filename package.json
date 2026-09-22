@@ -33,7 +33,7 @@
     "test:tooling": "node --test scripts/*.test.mjs tools/baseline/*.test.mjs tools/flutter/verify-package.test.mjs tools/flutter/verify-pigeon.test.mjs tools/react-native/*.test.mjs",
     "test:workflows": "node tools/baseline/compare-workflows.mjs",
     "web:browser": "tools/web/test-browser.sh",
-    "web:verify": "npm ci --prefix frameworks/web && npm test --prefix frameworks/web && npm run type-check --prefix frameworks/web && node --test tools/web/verify-package.test.mjs && tools/web/test-consumer.sh"
+    "web:verify": "npm ci --prefix frameworks/web && npm test --prefix frameworks/web && npm run type-check --prefix frameworks/web && node --test tools/web/*.test.mjs && tools/web/test-consumer.sh"
   },
   "devDependencies": {
     "ajv": "8.20.0",

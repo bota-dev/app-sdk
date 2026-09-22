@@ -216,6 +216,88 @@ export function verifyInstalledPackage(expectedFiles, packageRoot) {
   }
 }
 
+export function verifyInstalledPackageEvidence(
+  tarballPath,
+  inventoryPath,
+  checksumPath,
+  packageRoot,
+  { workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..') } = {},
+) {
+  const absoluteTarball = resolve(tarballPath)
+  const absoluteInventory = resolve(inventoryPath)
+  const inventoryContents = readRegularFileNoFollow(
+    absoluteInventory,
+    'package inventory',
+  )
+  const checksumContents = readRegularFileNoFollow(
+    resolve(checksumPath),
+    'package inventory checksum',
+  )
+  const expectedChecksum = Buffer.from(
+    `${sha256(inventoryContents)}  ${basename(absoluteInventory)}\n`,
+  )
+  if (!checksumContents.equals(expectedChecksum)) {
+    throw new Error('inventory checksum does not match inventory contents')
+  }
+
+  let inventory
+  try {
+    inventory = JSON.parse(inventoryContents.toString('utf8'))
+  } catch {
+    throw new Error('package inventory must be valid JSON')
+  }
+  const sourceRevision = execFileSync('git', ['rev-parse', 'HEAD'], {
+    cwd: workspaceRoot,
+    encoding: 'utf8',
+  }).trim()
+  if (inventory.schemaVersion !== 1) {
+    throw new Error('package inventory schema version must be 1')
+  }
+  if (inventory.sourceRevision !== sourceRevision) {
+    throw new Error('inventory source revision does not match HEAD')
+  }
+  if (!Array.isArray(inventory.files) || inventory.files.length === 0) {
+    throw new Error('package inventory files must be a non-empty array')
+  }
+
+  const inventoryFiles = inventory.files.map((file) => {
+    assertSafePackagePath(file?.path)
+    if (!Number.isSafeInteger(file.byteLength) || file.byteLength < 0) {
+      throw new Error(`invalid inventory byte length: ${file.path}`)
+    }
+    if (typeof file.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(file.sha256)) {
+      throw new Error(`invalid inventory SHA-256: ${file.path}`)
+    }
+    return {
+      path: file.path,
+      byteLength: file.byteLength,
+      sha256: file.sha256,
+    }
+  })
+  const sortedFiles = [...inventoryFiles].sort((left, right) =>
+    left.path.localeCompare(right.path))
+  if (
+    new Set(sortedFiles.map(({ path }) => path)).size !== sortedFiles.length
+    || JSON.stringify(sortedFiles) !== JSON.stringify(inventoryFiles)
+  ) {
+    throw new Error('package inventory files must have unique sorted paths')
+  }
+  const normalizedContentSha256 = sha256(`${JSON.stringify(sortedFiles)}\n`)
+  if (inventory.tarball?.normalizedContentSha256 !== normalizedContentSha256) {
+    throw new Error('normalized package inventory hash does not match files')
+  }
+
+  const tarballContents = readRegularFileNoFollow(absoluteTarball, 'package tarball')
+  if (
+    inventory.tarball?.name !== basename(absoluteTarball)
+    || inventory.tarball?.byteLength !== tarballContents.byteLength
+    || inventory.tarball?.sha256 !== sha256(tarballContents)
+  ) {
+    throw new Error('tarball does not match verified inventory')
+  }
+  verifyInstalledPackage(sortedFiles, packageRoot)
+}
+
 function collectInstalledFiles(packageRoot, relativeDirectory = '') {
   const directory = relativeDirectory
     ? resolve(packageRoot, relativeDirectory)
@@ -279,8 +361,17 @@ function parsePackageArchive(tarballContents) {
   parser.on('meta', () => {
     validationError ??= new Error('archive metadata headers are not allowed')
   })
+  parser.on('ignoredEntry', (entry) => {
+    validationError ??= new Error(
+      `ignored archive entries are not allowed: ${entry.type} ${entry.path}`,
+    )
+  })
   parser.on('entry', (entry) => {
     const chunks = []
+    if (validationError) {
+      entry.resume()
+      return
+    }
     try {
       assertArchiveEntry(entry, contents, totalBytes)
       totalBytes += entry.size
@@ -299,13 +390,16 @@ function parsePackageArchive(tarballContents) {
     entry.resume()
   })
 
+  let parserCompleted = false
   try {
-    parser.end(tarballContents)
+    parser.end(tarballContents, () => {
+      parserCompleted = true
+    })
   } catch (error) {
     parserError ??= error
   }
   if (validationError) throw validationError
-  if (parserError || contents.size === 0) {
+  if (parserError || !parserCompleted || contents.size === 0) {
     const detail = parserError instanceof Error ? `: ${parserError.message}` : ''
     throw new Error(`malformed or truncated archive${detail}`)
   }
@@ -372,6 +466,22 @@ function readSdkVersion(path) {
   return match[1]
 }
 
+function readRegularFileNoFollow(path, label) {
+  const fileStat = lstatSync(path)
+  if (!fileStat.isFile() || fileStat.isSymbolicLink()) {
+    throw new Error(`${label} must be a regular file`)
+  }
+  const descriptor = openSync(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+  try {
+    if (!fstatSync(descriptor).isFile()) {
+      throw new Error(`${label} must be a regular file`)
+    }
+    return readFileSync(descriptor)
+  } finally {
+    closeSync(descriptor)
+  }
+}
+
 function sha256(contents) {
   return createHash('sha256').update(contents).digest('hex')
 }
@@ -380,22 +490,16 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const tarball = process.argv[2]
   const inventoryFlag = process.argv.indexOf('--inventory')
   const inventoryPath = inventoryFlag >= 0 ? process.argv[inventoryFlag + 1] : null
-  const compareFlag = process.argv.indexOf('--compare-directory')
-  const compareDirectory = compareFlag >= 0 ? process.argv[compareFlag + 1] : null
   if (!tarball) {
     console.error(
-      'usage: node tools/web/verify-package.mjs <tarball> [--inventory <path>] [--compare-directory <path>]',
+      'usage: node tools/web/verify-package.mjs <tarball> [--inventory <path>]',
     )
     process.exitCode = 2
   } else if (inventoryFlag >= 0 && !inventoryPath) {
     console.error('--inventory requires a path')
     process.exitCode = 2
-  } else if (compareFlag >= 0 && !compareDirectory) {
-    console.error('--compare-directory requires a path')
-    process.exitCode = 2
   } else {
     const inventory = verifyPackageTarball(tarball)
-    if (compareDirectory) verifyInstalledPackage(inventory.files, compareDirectory)
     if (inventoryPath) {
       const serialized = `${JSON.stringify(inventory, null, 2)}\n`
       writeFileSync(inventoryPath, serialized)

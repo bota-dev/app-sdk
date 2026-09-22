@@ -262,6 +262,26 @@ test('tarball verification rejects conflicting PAX and GNU metadata headers', ()
   }
 })
 
+test('tarball verification rejects oversized ignored PAX and GNU metadata', () => {
+  for (const type of ['ExtendedHeader', 'NextFileHasLongPath']) {
+    const metadata = {
+      path: type === 'ExtendedHeader' ? 'PaxHeader' : '././@LongLink',
+      type,
+      body: randomBytes(65_537),
+    }
+    for (const position of ['before', 'after']) {
+      const extraEntries = position === 'after' ? [metadata] : []
+      const prefix = position === 'before' ? encodeEntry(metadata) : Buffer.alloc(0)
+      withTarball(validContents, (tarball) => {
+        assert.throws(
+          () => verifyPackageTarball(tarball),
+          /ignored archive entr(?:y|ies) are not allowed/,
+        )
+      }, extraEntries, prefix)
+    }
+  }
+})
+
 test('tarball verification rejects oversized entries, totals, and counts', () => {
   withTarball(validContents, (tarball) => {
     assert.throws(() => verifyPackageTarball(tarball), /archive entry is too large/)

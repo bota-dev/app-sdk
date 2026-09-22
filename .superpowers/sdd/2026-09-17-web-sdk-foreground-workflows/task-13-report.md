@@ -6,9 +6,11 @@ DONE
 
 - Starting HEAD: `8acb4564721ac5158a62ec14ff984c943ad90b6e`.
 - Fix round 1 reviewed HEAD: `afcf17a0cc05bd2c64f428374f983d7c0c4cc236`.
+- Fix round 2 reviewed HEAD: `1af275abc8cc1ba9a85c80620a8bf7f174f11a2f`.
 - Branch: `codex/web-foreground-workflows`.
 - Commit subject: `test(web): gate foreground browser package`.
 - Fix round 1 commit subject: `fix(web): harden packed release gate`.
+- Fix round 2 commit subject: `fix(web): preserve verified package evidence`.
 - Commit trailer: `Co-Authored-By: OpenAI Codex <noreply@openai.com>`.
 - Scope stopped at Task 13. Task 14 was not started.
 
@@ -249,3 +251,61 @@ internal product requirements did not need Task 13 edits.
   recovery against an external release were not run locally.
 - No push, merge, tag, publish, remote CI/CD, subagent dispatch, global tool
   install, or user-level state change was performed.
+
+## Fix Round 2
+
+### RED
+
+The focused oversized-metadata regression used incompressible 65,537-byte PAX
+and GNU long-path records followed by an otherwise valid package:
+
+```bash
+node --test --test-name-pattern='oversized ignored' \
+  tools/web/verify-package.test.mjs
+```
+
+Result: FAIL with `Missing expected exception.` The parser emitted
+`ignoredEntry`, the verifier did not observe it, and archive completion was
+accepted.
+
+The executable shell-orchestration test ran the real consumer and browser
+scripts with controlled command shims:
+
+```bash
+node --test tools/web/release-gate.test.mjs
+```
+
+Result: FAIL because `verify-package.mjs` was invoked twice (`2 !== 1`). Three
+additional evidence tests failed because the checksum/source/tar/install
+validator did not yet exist.
+
+### Implementation
+
+- Every `ignoredEntry` now makes archive validation terminal. Once any ignored
+  or rejected entry is observed, no later entry body is collected, parser
+  completion is required, and validation errors take precedence over success.
+- The oversized metadata regression covers both PAX and GNU metadata before
+  and after valid package entries so event ordering cannot mask rejection.
+- `test-consumer.sh` invokes `verify-package.mjs` once to create the inventory
+  and checksum, then passes the exact tarball, inventory, and checksum paths to
+  `test-browser.sh`.
+- `verify-installed-package.mjs` does not parse the archive. It verifies the
+  checksum-bound inventory, exact HEAD, normalized file inventory, tarball
+  name/size/hash, and installed regular-file hashes with no-follow reads before
+  Playwright runs.
+- The script test proves one archive-verifier call and one installed-evidence
+  call. Unit tests reject checksum drift, stale source revision, tarball drift,
+  and installed-package drift.
+
+### GREEN
+
+The pre-commit complete gate passed with 365 Web tests, 26 Web release-tooling
+tests, the production Vite ESM/WASM build, and all 7 Chromium cases. The
+focused archive suite passed 21/21 and release-gate suite passed 5/5.
+
+After the tracked fix is committed, two clean gates are run from that exact
+HEAD. Their complete inventory and checksum files are retained in the
+gitignored `task-13-head-run-1/` and `task-13-head-run-2/` directories. The
+gitignored `task-13-head-reproducibility.json` records both raw tarball hashes,
+normalized hashes, inventory checksums, and byte-match booleans without any
+post-gate tracked edit.

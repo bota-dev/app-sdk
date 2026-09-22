@@ -1058,9 +1058,11 @@ settings, or recording control. The host Portal continues to own
 authentication and all backend API calls.
 
 The Web release gate creates one npm tarball and inspects its archive headers
-and bounded regular-file payloads without extraction. The Vite consumer installs
-only that local artifact; its installed file hashes must exactly match the
-verified inventory before the production ESM/WASM Chromium cases run. CI then
+and bounded regular-file payloads exactly once without extraction. That pass
+creates a checksum-bound inventory. The Vite consumer installs only the same
+local artifact; the browser stage validates the original inventory, source
+revision, tarball hash, and installed regular-file hashes without parsing the
+archive again before the production ESM/WASM Chromium cases run. CI then
 preserves the tarball and inventory unchanged for protected beta publication.
 
 ## Security

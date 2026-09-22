@@ -35,4 +35,7 @@ npm_config_cache="$NPM_CACHE_DIR" \
   npx --yes "npm@$NPM_CLI_VERSION" install --prefix "$CONSUMER_DIR" \
     --no-save --package-lock=false "$TARBALL"
 npm run build --prefix "$CONSUMER_DIR"
-"$ROOT_DIR/tools/web/test-browser.sh" "$TARBALL"
+"$ROOT_DIR/tools/web/test-browser.sh" \
+  "$TARBALL" \
+  "$INVENTORY" \
+  "$INVENTORY.sha256"
