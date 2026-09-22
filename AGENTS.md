@@ -260,9 +260,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   requires no active owner, and remains available after destroy for logout
   ordering. Keep the release gate on npm 12.0.2 and Playwright 1.63.0 with
   Chromium only. `npm run web:verify` must pack once, reject unsafe package
-  contents, install only that tarball into the Vite consumer, and test the
-  production ESM/WASM copy. Preserve `target/web-release` and its hash inventory
-  unchanged through protected `release.yml` npm OIDC publication.
+  headers and contents without extracting it, install only that tarball into
+  the Vite consumer, compare the installed package to the verified per-file
+  inventory without following links, and test the production ESM/WASM copy.
+  Preserve `target/web-release` and its hash inventory unchanged through
+  protected `release.yml` npm OIDC publication.
 - Web device logs have one Rust workflow owner and one diagnostics
   characteristic lease. Resolve subscription setup only after Rust reaches its
   running state, expose only typed Rust `DeviceLog` notifications, and join

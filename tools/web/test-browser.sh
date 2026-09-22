@@ -27,10 +27,9 @@ if [[ ! -d "$INSTALLED_PACKAGE" || -L "$INSTALLED_PACKAGE" ]]; then
   exit 1
 fi
 
-EXTRACTED="$(mktemp -d "${TMPDIR:-/tmp}/bota-web-browser-package.XXXXXX")"
-trap 'rm -rf "$EXTRACTED"' EXIT
-tar -xzf "$TARBALL" -C "$EXTRACTED"
-diff -qr "$EXTRACTED/package" "$INSTALLED_PACKAGE"
+node "$ROOT_DIR/tools/web/verify-package.mjs" \
+  "$TARBALL" \
+  --compare-directory "$INSTALLED_PACKAGE"
 
 export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$ROOT_DIR/target/playwright-browsers}"
 npm run test:browser --prefix "$CONSUMER_DIR"

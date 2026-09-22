@@ -80,7 +80,7 @@ test('GATT notifications produce exactly one WiFi update and one log line', asyn
   }])
 })
 
-test('reload resumes staged IndexedDB and OPFS state while destroy suppresses late work', async ({ page }) => {
+test('destroy owns log cleanup and suppresses a historical late notification', async ({ page }) => {
   await installBrowserFakes(page)
   await page.goto('/')
   await expect.poll(() => state(page, 'ready')).toBe(true)
@@ -88,29 +88,42 @@ test('reload resumes staged IndexedDB and OPFS state while destroy suppresses la
   await expect.poll(() => state(page, 'connectedSerial')).toBe(SERIAL)
   await page.locator('#subscribe-events').click()
   await expect.poll(() => state(page, 'subscriptions')).toBe('ready')
-  await page.evaluate(async () => {
-    await (window as any).__botaConsumerTest.removeLogs()
-  })
+  expect(await fakeMetric(page, 'activeLogListeners')).toBe(1)
+
+  const logsBeforeDestroy = await state(page, 'logLines')
+  await page.locator('#destroy').click()
+  await expect.poll(() => state(page, 'destroyed')).toBe(true)
+  expect(await fakeMetric(page, 'activeLogListeners')).toBe(0)
+  await page.evaluate((logs) => {
+    ;(window as any).__botaFake.emitLate(
+      logs,
+      [0x02, 0x00, 0x00, 0x6c, 0x61, 0x74, 0x65, 0x0a],
+    )
+  }, UUID.logData)
+  await page.waitForTimeout(50)
+
+  expect(await state(page, 'logLines')).toEqual(logsBeforeDestroy)
+})
+
+test('reload resumes staged IndexedDB and OPFS state while destroy suppresses late work', async ({ page }) => {
+  await installBrowserFakes(page)
+  await page.goto('/')
+  await expect.poll(() => state(page, 'ready')).toBe(true)
+  await page.locator('#connect').click()
+  await expect.poll(() => state(page, 'connectedSerial')).toBe(SERIAL)
   await page.evaluate(() => {
     ;(window as any).__botaConsumerTest.holdProvider()
   })
   await page.locator('#start-sync').click()
   await expect.poll(() => state(page, 'syncPhase')).toBe('provider_pending')
 
-  const wifiBeforeDestroy = await state(page, 'wifiUpdates')
-  const logsBeforeDestroy = await state(page, 'logLines')
   await page.locator('#destroy').click()
   await expect.poll(() => state(page, 'destroyed')).toBe(true)
-  await page.evaluate(({ wifi, logs }) => {
-    const fake = (window as any).__botaFake
-    fake.emitLate(wifi, [0x02, 0x57, 0x04, 0x42, 0x6f, 0x74, 0x61])
-    fake.emitLate(logs, [0x02, 0x00, 0x00, 0x6c, 0x61, 0x74, 0x65, 0x0a])
+  await page.evaluate(() => {
     ;(window as any).__botaConsumerTest.resolveProvider()
-  }, { wifi: UUID.wifiStatus, logs: UUID.logData })
+  })
   await page.waitForTimeout(50)
 
-  expect(await state(page, 'wifiUpdates')).toEqual(wifiBeforeDestroy)
-  expect(await state(page, 'logLines')).toEqual(logsBeforeDestroy)
   expect(await state(page, 'syncResult')).toBeNull()
   expect(await fakeMetric(page, 'uploadBytes')).toBe(0)
   expect(await fakeMetric(page, 'confirmWrites')).toBe(0)
@@ -227,6 +240,10 @@ async function installBrowserFakes(
 
       removeEventListener(type: string, listener: EventListenerOrEventListenerObject | null): void {
         if (listener) this.listeners.get(type)?.delete(listener)
+      }
+
+      listenerCount(type: string): number {
+        return this.listeners.get(type)?.size ?? 0
       }
 
       protected dispatch(type: string, late = false): void {
@@ -459,7 +476,11 @@ async function installBrowserFakes(
       emit: (uuid: string, value: number[]) => characteristic(uuid).emit(value),
       emitLate: (uuid: string, value: number[]) => characteristic(uuid).emit(value, true),
       recordUpload: (count: number) => { metric.uploadBytes += count },
-      snapshot: () => structuredClone(metric),
+      snapshot: () => structuredClone({
+        ...metric,
+        activeLogListeners: characteristic(uuids.logData)
+          .listenerCount('characteristicvaluechanged'),
+      }),
     }
   }, {
     bluetooth: options.bluetooth ?? true,

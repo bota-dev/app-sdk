@@ -359,8 +359,9 @@ jobs:
       - name: Install pinned wasm-bindgen CLI
         run: cargo install wasm-bindgen-cli --version 0.2.128 --locked
 
-      - name: Install pinned Chromium browser
+      - name: Install Web gate dependencies and pinned Chromium browser
         run: |
+          npx --yes "npm@$NPM_CLI_VERSION" ci
           npx --yes "npm@$NPM_CLI_VERSION" ci --prefix tests/consumers/web-vite
           tests/consumers/web-vite/node_modules/.bin/playwright install --with-deps chromium
 

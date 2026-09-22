@@ -475,7 +475,9 @@ Requirements:
   `target/playwright-browsers` for the packed Web consumer gate
 
 The Web release gate packs once with npm 12.0.2, verifies and inventories that
-tarball, installs only that local path into the Vite consumer, and runs the
+tarball with strict archive-header and publication-metadata checks, installs
+only that local path into the Vite consumer, compares the installed regular
+files to the verified inventory without extracting the archive, and runs the
 production ESM/WASM build and Chromium suite against the installed copy.
 
 ```bash

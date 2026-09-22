@@ -5,8 +5,10 @@
 DONE
 
 - Starting HEAD: `8acb4564721ac5158a62ec14ff984c943ad90b6e`.
+- Fix round 1 reviewed HEAD: `afcf17a0cc05bd2c64f428374f983d7c0c4cc236`.
 - Branch: `codex/web-foreground-workflows`.
 - Commit subject: `test(web): gate foreground browser package`.
+- Fix round 1 commit subject: `fix(web): harden packed release gate`.
 - Commit trailer: `Co-Authored-By: OpenAI Codex <noreply@openai.com>`.
 - Scope stopped at Task 13. Task 14 was not started.
 
@@ -48,6 +50,24 @@ absolute Cargo path embedded in a WASM payload. The verifier now scans every
 package payload and the WASM build remaps workspace, Cargo, and Rustup paths to
 stable relative prefixes.
 
+Fix round 1 added the archive, publication metadata, exact WASM, and installed
+package cases before implementation. The first expanded run reported 18 tests,
+10 passed and 8 failed: exact WASM placement/content, archive links, special
+headers/duplicates, PAX/GNU metadata, archive limits, malformed archives,
+`private: true`, and related diagnostics were not yet enforced. The subsequent
+installed-package comparison test reported 18 passed and 1 failed because
+`verifyInstalledPackage` did not yet exist.
+
+The focused Chromium destroy test also failed before its implementation:
+
+```text
+Expected: 1
+Received: 0
+```
+
+That failure proved the log subscription had been manually removed before
+`destroy()` instead of exercising client-owned teardown.
+
 ## Implementation
 
 - Pinned `@playwright/test` to exactly `1.63.0` in the disposable Vite
@@ -62,12 +82,17 @@ stable relative prefixes.
   once, writes release evidence, installs only that tarball path into a clean
   consumer, builds with Vite, and passes the same tarball to the browser gate.
 - `tools/web/test-browser.sh` rejects a missing, ambiguous, or symlinked
-  package installation and byte-compares the installed package with the exact
-  tarball before Playwright runs.
-- Package verification now rejects missing/multiple/misplaced WASM, source
-  maps, tests, source files, unsafe archive paths, embedded machine paths,
-  credential files/values, version drift, package-manager drift, invalid ESM
-  exports, and non-public publication metadata.
+  package installation and compares every installed regular file against the
+  verified inventory without extracting the archive or following links.
+- Package verification uses the pinned maintained `tar@7.5.22` parser in
+  strict mode and rejects links, unsafe link targets, non-file headers,
+  duplicate/unsafe paths, PAX/GNU metadata, malformed/truncated input, and
+  bounded entry/count/expanded/compressed-size violations before package reads.
+- Package verification also rejects missing/multiple/renamed/invalid WASM,
+  including anything other than the exact generated path and WebAssembly
+  magic/version, plus source maps, tests, source, machine paths, credentials,
+  `private: true`, version/package-manager drift, invalid ESM exports, and
+  non-public publication metadata.
 - The generated inventory records source revision, package metadata, raw
   tarball SHA-256, normalized content SHA-256, and each file's size and SHA-256.
 - CI and tag workflows install only Chromium, assert the inventory source
@@ -77,7 +102,7 @@ stable relative prefixes.
 
 ## Browser Cases
 
-All six cases pass in Playwright Chromium 1.63.0:
+All seven cases pass in Playwright Chromium 1.63.0:
 
 1. A programmatic click is rejected without trusted user activation; a real
    click exercises `requestDevice`; a wrong serial fails; the exact serial
@@ -86,12 +111,15 @@ All six cases pass in Playwright Chromium 1.63.0:
    exact device and does not call the picker again.
 3. GATT notifications publish exactly one decoded WiFi status update and one
    decoded device-log line.
-4. A staged recording upload persists through real IndexedDB and the
+4. A live log subscription remains installed until `destroy()` owns its
+   cleanup; the active listener count changes from one to zero and replaying
+   the historical callback cannot publish a late line.
+5. A staged recording upload persists through real IndexedDB and the
    OPFS-compatible fake, survives reload, reconnects without a picker, uploads
    exactly 9 bytes, completes cloud confirmation, and sends one device confirm.
-5. Destroy suppresses late WiFi/log notifications and a late provider
-   completion; no upload or confirm occurs before reload/resume.
-6. Missing Bluetooth and missing durable storage each expose their exact
+6. Destroy suppresses a late provider completion; no upload or confirm occurs
+   before reload/resume.
+7. Missing Bluetooth and missing durable storage each expose their exact
    storage-only or Bluetooth-only capability matrix.
 
 The fake `navigator.bluetooth` is installed with `page.addInitScript()` before
@@ -118,6 +146,20 @@ The 52 entries contain only `dist`, `LICENSE`, `README.md`, and `package.json`.
 There are no source maps, tests, source trees, credential files/values,
 workspace paths, dependencies, or additional WASM binaries.
 
+Fix round 1's two pre-commit clean runs were bound to reviewed HEAD
+`afcf17a0cc05bd2c64f428374f983d7c0c4cc236` and matched byte-for-byte:
+
+```text
+tarball SHA-256: d527fb80c117fdeabf884fc3383ef25b079741180cb13b50e4eeb4c627bac735
+normalized content SHA-256: 618e2718215a6f2ff37db60c6e9794a1c01be5e45b9b80c82d7dfdc7adc5b8dc
+inventory SHA-256: 7db66d12ab445902a0ec429ef63fc4b57edb3dfe5f87721146e799778f8f49eb
+inventory entries: 52
+```
+
+The final two head-bound runs are intentionally generated after the fix commit
+with no later tracked edits; their exact final revision and hashes are returned
+to the operator rather than written back into this pre-commit report.
+
 ## GREEN Evidence
 
 The complete gate was run twice with `target/web-release` removed between
@@ -134,10 +176,10 @@ Both runs passed:
 
 - Web tests: 365 passed, 0 failed.
 - Web typecheck: passed.
-- Package verifier tests: 11 passed, 0 failed.
+- Package verifier tests: 20 passed, 0 failed.
 - Package build and verification: passed.
 - Production Vite consumer build: passed from the installed tarball.
-- Playwright Chromium: 6 passed, 0 failed.
+- Playwright Chromium: 7 passed, 0 failed.
 
 `cmp` confirmed that `web-package-files.json` and its checksum file were
 byte-identical across both runs. The raw tarball, normalized content, per-file
@@ -148,6 +190,10 @@ inventory, and inventory hashes matched exactly.
 ```bash
 cargo test -p xtask --test release_readiness
 # 31 passed, 0 failed
+
+node --test tools/release/*.test.mjs tools/android/*.test.mjs \
+  tools/flutter/verify-publication.test.mjs
+# 64 passed, 0 failed
 
 node --test tools/baseline/compare-workflows.test.mjs
 # 16 passed, 0 failed
@@ -161,10 +207,18 @@ git diff --check
 ```
 
 JSON parsing and explicit package assertions confirmed Playwright 1.63.0 in
-both consumer manifest and lockfile, npm 12.0.2 in the Web package, and exactly
-one release tarball. Both GitHub workflow files parsed through the Rust
-release-readiness tests. No remote workflow, publish, tag, or deployment was
-triggered.
+both consumer manifest and lockfile, `tar@7.5.22` in the root manifest and
+lockfile, npm 12.0.2 in the Web package, and exactly one release tarball. Ruby
+Psych parsed both changed GitHub workflow files, and the Rust release-readiness
+tests checked their release invariants. No remote workflow, publish, tag, or
+deployment was triggered.
+
+The broader `npm run test:workflows -- --sdk-path ../react-native-sdk` command
+was also attempted. It reproducibly fails in unchanged
+`core/device-sdk-core/tests/firmware_update_workflow.rs` because
+`successful_reconnect_reads_back_the_target_firmware_version` reaches
+`expected effect`. No Task 13 changed path participates in that test; the
+focused workflow contract suite above remains green.
 
 ## Documentation Impact
 
@@ -175,10 +229,11 @@ app-sdk documentation tree, and repository `AGENTS.md`, `ARCHITECTURE.md`, and
 `README.md` files.
 
 The affected app-sdk README, architecture, release guide, and AGENTS guidance
-now describe the pinned Chromium install, exact tarball consumer, deterministic
-WASM path remapping, hashed release inventory, and unchanged protected release
-payload. No public API or cross-system product design changed, so public docs
-and wrapper internal product requirements did not need Task 13 edits.
+now describe the pinned Chromium install, strict no-extraction archive gate,
+exact tarball consumer, installed-file comparison, deterministic WASM path
+remapping, hashed release inventory, and unchanged protected release payload.
+No public API or cross-system product design changed, so public docs and wrapper
+internal product requirements did not need Task 13 edits.
 
 ## Physical And External Gaps
 

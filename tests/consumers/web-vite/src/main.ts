@@ -37,7 +37,6 @@ declare global {
     __botaConsumerTest: {
       holdProvider(): void
       resolveProvider(): void
-      removeLogs(): Promise<void>
     }
   }
 }
@@ -60,7 +59,6 @@ const state: ConsumerState = {
 }
 let providerGate: Promise<void> | null = null
 let resolveProviderGate: (() => void) | null = null
-let logSubscription: { remove(): Promise<void> } | null = null
 
 window.__botaConsumerTest = {
   holdProvider() {
@@ -72,10 +70,6 @@ window.__botaConsumerTest = {
     resolveProviderGate?.()
     resolveProviderGate = null
     providerGate = null
-  },
-  async removeLogs() {
-    await logSubscription?.remove()
-    logSubscription = null
   },
 }
 
@@ -170,7 +164,7 @@ onClick('#subscribe-events', async () => {
     state.wifiUpdates.push(status)
     render()
   })
-  logSubscription = await client.logs.subscribe((line) => {
+  await client.logs.subscribe((line) => {
     state.logLines.push(line)
     render()
   })

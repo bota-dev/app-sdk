@@ -1057,6 +1057,12 @@ closed-tab execution, recording operations, upload transport, provisioning,
 settings, or recording control. The host Portal continues to own
 authentication and all backend API calls.
 
+The Web release gate creates one npm tarball and inspects its archive headers
+and bounded regular-file payloads without extraction. The Vite consumer installs
+only that local artifact; its installed file hashes must exactly match the
+verified inventory before the production ESM/WASM Chromium cases run. CI then
+preserves the tarball and inventory unchanged for protected beta publication.
+
 ## Security
 
 - Never commit credentials, tokens, private keys, certificate bodies, signing

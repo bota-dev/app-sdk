@@ -1,18 +1,29 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
-  mkdtempSync,
+  closeSync,
+  constants as fsConstants,
+  fstatSync,
+  lstatSync,
+  openSync,
   readFileSync,
-  rmSync,
-  statSync,
+  readdirSync,
   writeFileSync,
 } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { Parser } from 'tar'
 
 const EXPECTED_PACKAGE_NAME = '@bota.dev/web-sdk'
 const EXPECTED_PACKAGE_MANAGER = 'npm@12.0.2'
+const EXPECTED_WASM_PATH =
+  'package/dist/generated/bota_device_sdk_core_bg.wasm'
+const WASM_HEADER = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00])
+const MAX_ARCHIVE_BYTES = 16 * 1024 * 1024
+const MAX_ENTRY_BYTES = 2 * 1024 * 1024
+const MAX_TOTAL_BYTES = 8 * 1024 * 1024
+const MAX_ENTRY_COUNT = 128
+const MAX_META_ENTRY_BYTES = 64 * 1024
 
 const REQUIRED_FILES = [
   'package/LICENSE',
@@ -35,7 +46,7 @@ const TEST_FILE = /(?:^|\/)[^/]+\.(?:spec|test)\.[^/]+$/i
 const FORBIDDEN_PATH = /(?:^|\/)(?:__tests__|fixtures?|source|src|tests?)(?:\/|$)/i
 const CREDENTIAL_PATH = /(?:^|\/)\.env(?:\.|$)|\.(?:jks|key|keystore|p12|pfx|pem)$/i
 
-export function verifyPackageInventory(files, textFiles, metadata = null) {
+export function verifyPackageInventory(files, packageContents, metadata = null) {
   const normalized = [...files].sort()
   if (new Set(normalized).size !== normalized.length) {
     throw new Error('duplicate package paths are not allowed')
@@ -53,8 +64,16 @@ export function verifyPackageInventory(files, textFiles, metadata = null) {
       `expected exactly one WebAssembly file, found ${wasmFiles.length}`,
     )
   }
-  if (!wasmFiles[0].startsWith('package/dist/generated/')) {
-    throw new Error('WebAssembly file must be inside package/dist/generated')
+  if (wasmFiles[0] !== EXPECTED_WASM_PATH) {
+    throw new Error(`WebAssembly file must be ${EXPECTED_WASM_PATH}`)
+  }
+  const wasm = packageContents.get(EXPECTED_WASM_PATH)
+  if (
+    !wasm
+    || Buffer.byteLength(wasm) < WASM_HEADER.byteLength
+    || !Buffer.from(wasm).subarray(0, WASM_HEADER.byteLength).equals(WASM_HEADER)
+  ) {
+    throw new Error('WebAssembly file must contain the WebAssembly magic and version bytes')
   }
   if (normalized.some((file) => file.endsWith('.map'))) {
     throw new Error('source maps are not allowed in the release package')
@@ -76,7 +95,7 @@ export function verifyPackageInventory(files, textFiles, metadata = null) {
     throw new Error('credential files are not allowed in the package')
   }
 
-  for (const [file, contents] of textFiles) {
+  for (const [file, contents] of packageContents) {
     if (ABSOLUTE_WORKSPACE_PATH.test(contents)) {
       throw new Error(`absolute workspace path found in ${file}`)
     }
@@ -104,6 +123,9 @@ export function verifyPackageMetadata({
   if (packageJson.packageManager !== expectedPackageManager) {
     throw new Error(`package manager must be ${expectedPackageManager}`)
   }
+  if (packageJson.private === true) {
+    throw new Error('package must not be private')
+  }
   if (packageJson.type !== 'module') {
     throw new Error('package type must be module')
   }
@@ -123,56 +145,206 @@ export function verifyPackageTarball(
   { workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..') } = {},
 ) {
   const absoluteTarball = resolve(tarballPath)
-  const files = execFileSync('tar', ['-tzf', absoluteTarball], {
-    encoding: 'utf8',
-  })
-    .split('\n')
-    .filter(Boolean)
-  const extraction = mkdtempSync(join(tmpdir(), 'bota-web-sdk-package-'))
+  const tarballStat = lstatSync(absoluteTarball)
+  if (!tarballStat.isFile() || tarballStat.isSymbolicLink()) {
+    throw new Error('package tarball must be a regular file')
+  }
+  if (tarballStat.size > MAX_ARCHIVE_BYTES) {
+    throw new Error(`compressed archive exceeds ${MAX_ARCHIVE_BYTES} bytes`)
+  }
 
-  try {
-    verifyPackageInventory(files, new Map())
-    execFileSync('tar', ['-xzf', absoluteTarball, '-C', extraction])
-    const packageContents = new Map()
-    const inventoryFiles = []
-    for (const file of files) {
-      const contents = readFileSync(join(extraction, file))
-      inventoryFiles.push({
-        path: file,
+  const tarballContents = readFileSync(absoluteTarball)
+  const packageContents = parsePackageArchive(tarballContents)
+  const files = [...packageContents.keys()]
+  verifyPackageInventory(files, packageContents)
+  const packageJson = JSON.parse(
+    packageContents.get('package/package.json').toString('utf8'),
+  )
+  const sdkVersion = readSdkVersion(resolve(workspaceRoot, 'sdk-version.toml'))
+  verifyPackageMetadata({ packageJson, sdkVersion })
+  const inventoryFiles = [...packageContents]
+    .map(([path, contents]) => ({
+      path,
+      byteLength: contents.byteLength,
+      sha256: sha256(contents),
+    }))
+    .sort((left, right) => left.path.localeCompare(right.path))
+  return {
+    schemaVersion: 1,
+    packageName: packageJson.name,
+    version: packageJson.version,
+    packageManager: packageJson.packageManager,
+    sourceRevision: execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: workspaceRoot,
+      encoding: 'utf8',
+    }).trim(),
+    tarball: {
+      name: basename(absoluteTarball),
+      byteLength: tarballStat.size,
+      sha256: sha256(tarballContents),
+      normalizedContentSha256: sha256(
+        `${JSON.stringify(inventoryFiles)}\n`,
+      ),
+    },
+    files: inventoryFiles,
+  }
+}
+
+export function verifyInstalledPackage(expectedFiles, packageRoot) {
+  const absoluteRoot = resolve(packageRoot)
+  const rootStat = lstatSync(absoluteRoot)
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
+    throw new Error('installed package must be a regular directory')
+  }
+
+  const expected = [...expectedFiles].sort((left, right) =>
+    left.path.localeCompare(right.path))
+  const actual = collectInstalledFiles(absoluteRoot)
+  if (expected.length !== actual.length) {
+    throw new Error('installed package does not match verified tarball inventory')
+  }
+  for (let index = 0; index < expected.length; index += 1) {
+    const wanted = expected[index]
+    const found = actual[index]
+    if (
+      wanted.path !== found.path
+      || wanted.byteLength !== found.byteLength
+      || wanted.sha256 !== found.sha256
+    ) {
+      throw new Error('installed package does not match verified tarball inventory')
+    }
+  }
+}
+
+function collectInstalledFiles(packageRoot, relativeDirectory = '') {
+  const directory = relativeDirectory
+    ? resolve(packageRoot, relativeDirectory)
+    : packageRoot
+  const files = []
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const relativePath = relativeDirectory
+      ? `${relativeDirectory}/${entry.name}`
+      : entry.name
+    const absolutePath = resolve(packageRoot, relativePath)
+    const entryStat = lstatSync(absolutePath)
+    if (entryStat.isSymbolicLink()) {
+      throw new Error('installed package must contain only regular files and directories')
+    }
+    if (entryStat.isDirectory()) {
+      files.push(...collectInstalledFiles(packageRoot, relativePath))
+      continue
+    }
+    if (!entryStat.isFile()) {
+      throw new Error('installed package must contain only regular files and directories')
+    }
+
+    const packagePath = `package/${relativePath}`
+    assertSafePackagePath(packagePath)
+    const descriptor = openSync(
+      absolutePath,
+      fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW,
+    )
+    try {
+      const openedStat = fstatSync(descriptor)
+      if (!openedStat.isFile()) {
+        throw new Error('installed package must contain only regular files and directories')
+      }
+      const contents = readFileSync(descriptor)
+      files.push({
+        path: packagePath,
         byteLength: contents.byteLength,
         sha256: sha256(contents),
       })
-      packageContents.set(file, contents.toString('latin1'))
+    } finally {
+      closeSync(descriptor)
     }
+  }
+  return files.sort((left, right) => left.path.localeCompare(right.path))
+}
 
-    const packageJson = JSON.parse(
-      readFileSync(join(extraction, 'package/package.json'), 'utf8'),
-    )
-    const sdkVersion = readSdkVersion(resolve(workspaceRoot, 'sdk-version.toml'))
-    verifyPackageInventory(files, packageContents, { packageJson, sdkVersion })
-    inventoryFiles.sort((left, right) => left.path.localeCompare(right.path))
-    const tarballContents = readFileSync(absoluteTarball)
-    return {
-      schemaVersion: 1,
-      packageName: packageJson.name,
-      version: packageJson.version,
-      packageManager: packageJson.packageManager,
-      sourceRevision: execFileSync('git', ['rev-parse', 'HEAD'], {
-        cwd: workspaceRoot,
-        encoding: 'utf8',
-      }).trim(),
-      tarball: {
-        name: basename(absoluteTarball),
-        byteLength: statSync(absoluteTarball).size,
-        sha256: sha256(tarballContents),
-        normalizedContentSha256: sha256(
-          `${JSON.stringify(inventoryFiles)}\n`,
-        ),
-      },
-      files: inventoryFiles,
+function parsePackageArchive(tarballContents) {
+  const contents = new Map()
+  let totalBytes = 0
+  let validationError = null
+  let parserError = null
+  const parser = new Parser({
+    strict: true,
+    maxMetaEntrySize: MAX_META_ENTRY_BYTES,
+    maxDecompressionRatio: 100,
+  })
+
+  parser.on('error', (error) => {
+    parserError ??= error
+  })
+  parser.on('meta', () => {
+    validationError ??= new Error('archive metadata headers are not allowed')
+  })
+  parser.on('entry', (entry) => {
+    const chunks = []
+    try {
+      assertArchiveEntry(entry, contents, totalBytes)
+      totalBytes += entry.size
+      entry.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+      entry.on('end', () => {
+        const body = Buffer.concat(chunks)
+        if (body.byteLength !== entry.size) {
+          validationError ??= new Error('malformed or truncated archive entry')
+          return
+        }
+        contents.set(entry.path, body)
+      })
+    } catch (error) {
+      validationError ??= error
     }
-  } finally {
-    rmSync(extraction, { recursive: true, force: true })
+    entry.resume()
+  })
+
+  try {
+    parser.end(tarballContents)
+  } catch (error) {
+    parserError ??= error
+  }
+  if (validationError) throw validationError
+  if (parserError || contents.size === 0) {
+    const detail = parserError instanceof Error ? `: ${parserError.message}` : ''
+    throw new Error(`malformed or truncated archive${detail}`)
+  }
+  return contents
+}
+
+function assertArchiveEntry(entry, contents, totalBytes) {
+  if (entry.type === 'Link' || entry.type === 'SymbolicLink') {
+    assertSafeLinkTarget(entry.linkpath)
+    throw new Error('archive links are not allowed')
+  }
+  if (entry.type !== 'File' && entry.type !== 'OldFile') {
+    throw new Error(`unsupported archive entry type: ${entry.type}`)
+  }
+  assertSafePackagePath(entry.path)
+  if (contents.has(entry.path)) {
+    throw new Error(`duplicate archive path: ${entry.path}`)
+  }
+  if (!Number.isSafeInteger(entry.size) || entry.size < 0 || entry.size > MAX_ENTRY_BYTES) {
+    throw new Error(`archive entry is too large: ${entry.path}`)
+  }
+  if (contents.size + 1 > MAX_ENTRY_COUNT) {
+    throw new Error(`too many archive entries: maximum ${MAX_ENTRY_COUNT}`)
+  }
+  if (totalBytes + entry.size > MAX_TOTAL_BYTES) {
+    throw new Error(`archive expands beyond ${MAX_TOTAL_BYTES} bytes`)
+  }
+}
+
+function assertSafeLinkTarget(linkpath) {
+  if (
+    typeof linkpath !== 'string'
+    || linkpath.length === 0
+    || linkpath.includes('\\')
+    || isAbsolute(linkpath)
+    || /^[A-Za-z]:/.test(linkpath)
+    || linkpath.split('/').some((segment) => segment === '..')
+  ) {
+    throw new Error(`unsafe link target: ${linkpath ?? '(missing)'}`)
   }
 }
 
@@ -208,16 +380,22 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const tarball = process.argv[2]
   const inventoryFlag = process.argv.indexOf('--inventory')
   const inventoryPath = inventoryFlag >= 0 ? process.argv[inventoryFlag + 1] : null
+  const compareFlag = process.argv.indexOf('--compare-directory')
+  const compareDirectory = compareFlag >= 0 ? process.argv[compareFlag + 1] : null
   if (!tarball) {
     console.error(
-      'usage: node tools/web/verify-package.mjs <tarball> [--inventory <path>]',
+      'usage: node tools/web/verify-package.mjs <tarball> [--inventory <path>] [--compare-directory <path>]',
     )
     process.exitCode = 2
   } else if (inventoryFlag >= 0 && !inventoryPath) {
     console.error('--inventory requires a path')
     process.exitCode = 2
+  } else if (compareFlag >= 0 && !compareDirectory) {
+    console.error('--compare-directory requires a path')
+    process.exitCode = 2
   } else {
     const inventory = verifyPackageTarball(tarball)
+    if (compareDirectory) verifyInstalledPackage(inventory.files, compareDirectory)
     if (inventoryPath) {
       const serialized = `${JSON.stringify(inventory, null, 2)}\n`
       writeFileSync(inventoryPath, serialized)
