@@ -535,6 +535,50 @@ test('cancellation after provider material prevents START and destroys unowned m
   assert.equal(harness.storage.encryptedUploadV2Checkpoints.size, 0)
 })
 
+test('cancellation stops waiting for a never-settling v2 material cleanup', async () => {
+  const harness = await createHarness()
+  const authorization = bytes(
+    (await vector('authorization-development')).inputHex,
+  )
+  let cancelSignal: AbortSignal | undefined
+  harness.provider.encryptedUploadV2Material = {
+    ...inertMaterial(authorization, () => undefined),
+    cancel: async (signal: AbortSignal) => {
+      cancelSignal = signal
+      await new Promise<never>(() => undefined)
+    },
+  }
+  const entered = deferred<void>()
+  const release = deferred<void>()
+  const saveOperation = harness.storage.saveEncryptedUploadV2Operation
+    .bind(harness.storage)
+  harness.storage.saveEncryptedUploadV2Operation = async (
+    operationId,
+    checkpoint,
+    journal,
+  ) => {
+    entered.resolve(undefined)
+    await release.promise
+    await saveOperation(operationId, checkpoint, journal)
+  }
+  const controller = new AbortController()
+  const sync = harness.manager.sync(recording(), {
+    profile: 'encrypted_upload_v2',
+    operationId: 'v2-stalled-material-cleanup',
+    signal: controller.signal,
+  })
+  await entered.promise
+
+  controller.abort()
+  release.resolve(undefined)
+
+  await assert.rejects(withWatchdog(sync), (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'cancelled'
+  )
+  assert.equal(cancelSignal?.aborted, true)
+  assert.ok(authorization.every((value) => value === 0))
+})
+
 test('late provider material after cancellation is zero-filled and cancelled once', async () => {
   const harness = await createHarness()
   const authorization = bytes(

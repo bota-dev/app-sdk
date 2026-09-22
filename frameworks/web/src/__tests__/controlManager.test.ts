@@ -31,6 +31,8 @@ const wasmBytes = readFile(
   new URL('../generated/bota_device_sdk_core_bg.wasm', import.meta.url),
 )
 
+type ProviderContext = Parameters<RecordingControlProvider['prepare']>[0]
+
 interface ProviderCall {
   operationId: string
   serialNumber: string
@@ -41,19 +43,46 @@ interface ProviderCall {
 class FakeRecordingControlProvider implements RecordingControlProvider {
   readonly calls: ProviderCall[] = []
   readonly grants: Uint8Array[] = []
+  readonly signals: AbortSignal[] = []
   prepareHandler: (
-    context: ProviderCall,
+    context: ProviderContext,
   ) => Promise<{ grant: Uint8Array }> = async () => ({
     grant: Uint8Array.of(0x91, 0x92, 0x93),
   })
 
-  async prepare(context: ProviderCall): Promise<{ grant: Uint8Array }> {
-    this.calls.push({ ...context })
+  async prepare(context: ProviderContext): Promise<{ grant: Uint8Array }> {
+    const { signal: _signal, ...snapshot } = context
+    this.calls.push(snapshot)
+    this.signals.push(context.signal)
     const prepared = await this.prepareHandler(context)
     this.grants.push(prepared.grant)
     return prepared
   }
 }
+
+test('destroy aborts and stops waiting for a never-settling grant provider', async () => {
+  const provider = new FakeRecordingControlProvider()
+  const entered = deferred<void>()
+  provider.prepareHandler = async () => {
+    entered.resolve(undefined)
+    return await new Promise<never>(() => undefined)
+  }
+  const harness = await createHarness({ provider })
+  const started = harness.controls.startRecording({
+    operationId: 'never-settling-control-provider',
+    authorityId: 'authority-never-settles',
+  })
+  void started.catch(() => undefined)
+  await entered.promise
+
+  await settleWithWatchdog(
+    harness.controls.destroy(),
+    'never-settling recording-control provider destruction',
+  )
+  await assert.rejects(started, (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'cancelled')
+  assert.equal(provider.signals[0]?.aborted, true)
+})
 
 interface Harness {
   controls: ControlManager
@@ -582,4 +611,16 @@ function assertZeroed(value: Uint8Array | undefined): void {
 function assertNotZeroed(value: Uint8Array | undefined): void {
   assert.ok(value)
   assert.ok(value.some((byte) => byte !== 0), 'expected retained secret bytes')
+}
+
+async function settleWithWatchdog<T>(
+  promise: Promise<T>,
+  label: string,
+): Promise<T> {
+  return await Promise.race([
+    promise,
+    new Promise<never>((_resolve, reject) => {
+      setTimeout(() => reject(new Error(`${label} did not settle`)), 250)
+    }),
+  ])
 }

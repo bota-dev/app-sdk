@@ -19,6 +19,7 @@ import type {
   RecordingControlResult,
 } from './models.ts'
 import type { RecordingControlProvider } from './providers.ts'
+import { awaitProviderCall } from './providerCancellation.ts'
 import {
   BrowserTransportError,
   type BrowserBluetoothTransport,
@@ -110,31 +111,41 @@ export class ControlManager {
         const { device, serialNumber } = await this.verifyConnectedDevice(signal)
         let grant: Uint8Array | null = null
         try {
-          const prepared = await settled(this.provider!.prepare({
+          let prepared: Awaited<ReturnType<RecordingControlProvider['prepare']>>
+          const pending = this.provider!.prepare({
             operationId,
             serialNumber,
             action,
             authorityId: request.authorityId,
-          }))
-          if (prepared.kind === 'failed') {
-            if (
-              prepared.error instanceof BotaSDKError
-              && prepared.error.code === 'authorization_expired'
-            ) {
-              throw new BotaSDKError(
-                'authorization_expired',
-                'recording_control',
+            signal,
+          })
+          try {
+            prepared = await awaitProviderCall(
+              pending,
+              signal,
+              'recording_control',
+            )
+          } catch (error) {
+            if (signal.aborted) {
+              void pending.then(
+                ({ grant: lateGrant }) => lateGrant.fill(0),
+                () => undefined,
               )
             }
+            if (
+              error instanceof BotaSDKError
+              && (error.code === 'authorization_expired'
+                || error.code === 'cancelled')
+            ) throw error
             throw new BotaSDKError('internal_error', 'recording_control')
           }
           if (
-            !(prepared.value.grant instanceof Uint8Array)
-            || prepared.value.grant.byteLength === 0
+            !(prepared.grant instanceof Uint8Array)
+            || prepared.grant.byteLength === 0
           ) {
             throw new BotaSDKError('internal_error', 'recording_control')
           }
-          grant = prepared.value.grant
+          grant = prepared.grant
           throwIfAborted(signal)
 
           return await this.executeControl(

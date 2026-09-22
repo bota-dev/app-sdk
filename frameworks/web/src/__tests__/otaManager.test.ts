@@ -50,7 +50,8 @@ type DownloadRequest = Awaited<ReturnType<FirmwareDownloadProvider['resolve']>>
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
 
 class FakeFirmwareProvider implements FirmwareDownloadProvider {
-  readonly calls: ResolveContext[] = []
+  readonly calls: Array<Omit<ResolveContext, 'signal'>> = []
+  readonly signals: AbortSignal[] = []
   readonly events: string[]
   request: DownloadRequest = {
     method: 'GET',
@@ -70,6 +71,7 @@ class FakeFirmwareProvider implements FirmwareDownloadProvider {
       serialNumber: context.serialNumber,
       image: { ...context.image },
     })
+    this.signals.push(context.signal)
     if (this.resolveHandler) return await this.resolveHandler(context)
     return {
       method: this.request.method,
@@ -293,6 +295,29 @@ test('firmwareUpdate capability fails before provider, storage, or device mutati
   assert.deepEqual(harness.storage.firmwareJournals, new Map())
   assert.deepEqual(harness.transport.calls, [])
   assert.deepEqual(harness.transport.writes, [])
+})
+
+test('destroy aborts and stops waiting for a never-settling firmware provider', async () => {
+  const bytes = Uint8Array.of(41, 42, 43, 44)
+  const provider = new FakeFirmwareProvider()
+  const entered = deferred<void>()
+  provider.resolveHandler = async () => {
+    entered.resolve(undefined)
+    return await new Promise<never>(() => undefined)
+  }
+  const harness = await createHarness({ bytes, provider })
+  const updating = harness.ota.updateFirmware(descriptor(bytes), {
+    operationId: 'update_firmware:never-settling-provider',
+  })
+  void updating.catch(() => undefined)
+  await entered.promise
+
+  await settleWithWatchdog(
+    harness.ota.destroy(),
+    'never-settling firmware provider destruction',
+  )
+  await assert.rejects(updating, isSdkError('cancelled'))
+  assert.equal(provider.signals[0]?.aborted, true)
 })
 
 test('a connected update re-verifies the active serial before durable or provider work', async () => {
@@ -1185,7 +1210,7 @@ test('reconnect cancellation joins getDevices and preserves the verified artifac
   assert.deepEqual(harness.storage.blob(latest.blobId).snapshot(), bytes)
 })
 
-test('cancellation joins a late provider, rejects its request, and retains workflow ownership', async () => {
+test('cancellation releases SDK ownership without accepting a late firmware provider result', async () => {
   const bytes = Uint8Array.of(51, 52, 53, 54)
   const events: string[] = []
   const provider = new FakeFirmwareProvider(events)
@@ -1207,23 +1232,19 @@ test('cancellation joins a late provider, rejects its request, and retains workf
 
   controller.abort()
   const cancelling = harness.ota.cancelFirmwareUpdate(operationId)
-  assert.equal(await promiseSettled(updating), false)
-  assert.equal(await promiseSettled(cancelling), false)
-  await assert.rejects(
-    harness.runtime.runExclusive('wifi', async () => undefined),
-    isErrorCode('operation_in_progress'),
-  )
+  await cancelling
+  await assert.rejects(updating, isSdkError('cancelled'))
+  assert.equal(provider.signals[0]?.aborted, true)
+  assert.equal(await harness.runtime.runExclusive('wifi', async () => 7), 7)
 
   providerGate.resolve({
     method: 'GET',
     url: 'https://late-secret.example.invalid/image.ufw?token=late',
     headers: { Authorization: 'Bearer late-secret' },
   })
-  await cancelling
-  await assert.rejects(updating, isSdkError('cancelled'))
+  await new Promise<void>((resolve) => setImmediate(resolve))
   assert.equal(fetcher.calls.length, 0)
   assert.deepEqual(harness.transport.writes, [])
-  assert.equal(await harness.runtime.runExclusive('wifi', async () => 7), 7)
 })
 
 test('cancellation joins durable verification and preserves the latest compatible verified blob', async () => {
@@ -1652,6 +1673,18 @@ async function promiseSettled(promise: Promise<unknown>): Promise<boolean> {
   )
   await tick()
   return settled
+}
+
+async function settleWithWatchdog<T>(
+  promise: Promise<T>,
+  label: string,
+): Promise<T> {
+  return await Promise.race([
+    promise,
+    new Promise<never>((_resolve, reject) => {
+      setTimeout(() => reject(new Error(`${label} did not settle`)), 250)
+    }),
+  ])
 }
 
 async function tick(): Promise<void> {

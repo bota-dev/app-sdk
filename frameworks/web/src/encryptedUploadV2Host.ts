@@ -20,6 +20,7 @@ import type {
   EncryptedUploadV2Recording,
   UploadRequestTemplate,
 } from './providers.ts'
+import { awaitProviderCall } from './providerCancellation.ts'
 import {
   BrowserStorageError,
   type BrowserBlobHandle,
@@ -1467,17 +1468,23 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
       throwIfCancelled(this.cancelledValue, signal)
       await this.callbacks.uploading()
       throwIfCancelled(this.cancelledValue, signal)
-      const request = await abortable(
-        this.material.stagingRequest(providerEvidence(evidence)),
+      const request = await awaitProviderCall(
+        this.material.stagingRequest(providerEvidence(evidence), signal),
         signal,
+        'upload',
       )
       validateUploadRequest(request)
       await this.uploadCiphertext(request, signal)
       throwIfCancelled(this.cancelledValue, signal)
-      await abortable(this.material.submitManifest(
-        this.requireCompletedManifest().slice(),
-        providerEvidence(evidence),
-      ), signal)
+      await awaitProviderCall(
+        this.material.submitManifest(
+          this.requireCompletedManifest().slice(),
+          providerEvidence(evidence),
+          signal,
+        ),
+        signal,
+        'upload',
+      )
     }
     return {
       requestId,
@@ -1494,18 +1501,20 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
     this.validateCompletion(this.state.sinkId, materialId, evidence)
     if (this.recoveryPhase !== 'cloud_completed') {
       throwIfCancelled(this.cancelledValue, signal)
-      await abortable(
-        this.material.finalize(providerEvidence(evidence)),
+      await awaitProviderCall(
+        this.material.finalize(providerEvidence(evidence), signal),
         signal,
+        'upload',
       )
     }
     throwIfCancelled(this.cancelledValue, signal)
     const pendingReceipt = this.material.completionReceipt(
       providerEvidence(evidence),
+      signal,
     )
     let receipt: Uint8Array
     try {
-      receipt = await abortable(pendingReceipt, signal)
+      receipt = await awaitProviderCall(pendingReceipt, signal, 'upload')
     } catch (error) {
       void pendingReceipt.then(
         (lateReceipt) => {
@@ -1800,9 +1809,13 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
         failure ??= error
       }
       try {
-        await this.material.cancel()
+        await awaitProviderCall(
+          this.material.cancel(this.uploadAbort.signal),
+          this.uploadAbort.signal,
+          'upload',
+        )
       } catch (error) {
-        failure ??= error
+        if (!this.uploadAbort.signal.aborted) failure ??= error
       }
       if (failure !== null) throw normalizeHostError(failure)
     })()

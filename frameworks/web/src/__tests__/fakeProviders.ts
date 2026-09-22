@@ -32,9 +32,14 @@ export function deferred<T>(): Deferred<T> {
 }
 
 export class FakeRecordingUploadProvider implements RecordingUploadProvider {
-  readonly prepared: LegacyUploadContext[] = []
-  readonly completed: Array<LegacyUploadContext & { uploadId: string }> = []
-  readonly reconciled: Array<LegacyUploadContext & { uploadId: string }> = []
+  readonly prepared: Array<Omit<LegacyUploadContext, 'signal'>> = []
+  readonly completed: Array<
+    Omit<LegacyUploadContext, 'signal'> & { uploadId: string }
+  > = []
+  readonly reconciled: Array<
+    Omit<LegacyUploadContext, 'signal'> & { uploadId: string }
+  > = []
+  readonly signals: AbortSignal[] = []
   readonly events: string[]
   request: UploadRequestTemplate = {
     method: 'PUT',
@@ -51,7 +56,10 @@ export class FakeRecordingUploadProvider implements RecordingUploadProvider {
   prepareError: unknown = null
   completeError: unknown = null
   reconcileError: unknown = null
-  readonly encryptedUploadV2Prepared: EncryptedUploadV2ProviderContext[] = []
+  readonly encryptedUploadV2Prepared: Array<
+    Omit<EncryptedUploadV2ProviderContext, 'signal'>
+  > = []
+  readonly encryptedUploadV2Signals: AbortSignal[] = []
   encryptedUploadV2Material: EncryptedUploadV2Material | null = null
 
   constructor(events: string[] = []) {
@@ -63,7 +71,9 @@ export class FakeRecordingUploadProvider implements RecordingUploadProvider {
     request: UploadRequestTemplate
   }> {
     this.events.push('provider:prepare')
-    this.prepared.push(context)
+    const { signal, ...snapshot } = context
+    this.signals.push(signal)
+    this.prepared.push(snapshot)
     if (this.prepareError) throw this.prepareError
     return {
       uploadId: `upload-${this.nextUploadId++}`,
@@ -79,7 +89,9 @@ export class FakeRecordingUploadProvider implements RecordingUploadProvider {
     context: LegacyUploadContext & { uploadId: string },
   ): Promise<{ cloudCompletionId: string }> {
     this.events.push('provider:complete')
-    this.completed.push(context)
+    const { signal, ...snapshot } = context
+    this.signals.push(signal)
+    this.completed.push(snapshot)
     if (this.completeError) throw this.completeError
     return { cloudCompletionId: this.cloudCompletionId }
   }
@@ -91,7 +103,9 @@ export class FakeRecordingUploadProvider implements RecordingUploadProvider {
     | { state: 'cloud_completed'; cloudCompletionId: string }
   > {
     this.events.push('provider:reconcile')
-    this.reconciled.push(context)
+    const { signal, ...snapshot } = context
+    this.signals.push(signal)
+    this.reconciled.push(snapshot)
     if (this.reconcileError) throw this.reconcileError
     return this.reconcileResult
   }
@@ -100,8 +114,10 @@ export class FakeRecordingUploadProvider implements RecordingUploadProvider {
     context: EncryptedUploadV2ProviderContext,
   ): Promise<EncryptedUploadV2Material> {
     this.events.push('provider:v2:prepare')
+    const { signal, ...snapshot } = context
+    this.encryptedUploadV2Signals.push(signal)
     this.encryptedUploadV2Prepared.push({
-      ...context,
+      ...snapshot,
       recording: {
         ...context.recording,
         ciphertextSha256: context.recording.ciphertextSha256.slice(),
