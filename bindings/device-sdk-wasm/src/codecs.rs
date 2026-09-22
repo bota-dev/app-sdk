@@ -10,12 +10,11 @@ use bota_device_sdk_core::{
         EncryptedUploadV2Transfer, RecordingControlCommand, RecordingControlError, ResumeV2,
         StartV2, TransferCommand, WiFiConfigResult, WiFiScanUpdate, WiFiStatus, WindowAckV2,
         decode_encrypted_upload_v2_signed_blob, decode_encrypted_upload_v2_status,
-        decode_encrypted_upload_v2_transfer,
-        encode_connection_settings, encode_device_command, encode_encrypted_upload_v2_signed_blob,
-        encode_encrypted_upload_v2_transfer, encode_recording_control_command,
-        encode_transfer_command, parse_connection_settings, parse_deprovision_result,
-        parse_recording_control_result, parse_recording_list, parse_wifi_config_result,
-        parse_wifi_scan_result, parse_wifi_status_info,
+        decode_encrypted_upload_v2_transfer, encode_connection_settings, encode_device_command,
+        encode_encrypted_upload_v2_signed_blob, encode_encrypted_upload_v2_transfer,
+        encode_recording_control_command, encode_transfer_command, parse_connection_settings,
+        parse_deprovision_result, parse_recording_control_result, parse_recording_list,
+        parse_wifi_config_result, parse_wifi_scan_result, parse_wifi_status_info,
     },
 };
 use serde::{Deserialize, Serialize};
@@ -728,12 +727,10 @@ pub fn decode_encrypted_upload_v2_signed_blob_result_dto(
             write_id,
             result,
         }),
-        _ => Err(DeviceSdkError::new(
-            ErrorCode::InvalidInput,
-            Operation::Decode,
-            false,
-        )
-        .with_detail("signed blob notification is not a result frame")),
+        _ => Err(
+            DeviceSdkError::new(ErrorCode::InvalidInput, Operation::Decode, false)
+                .with_detail("signed blob notification is not a result frame"),
+        ),
     }
 }
 
