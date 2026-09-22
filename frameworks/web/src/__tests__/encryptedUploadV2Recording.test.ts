@@ -239,6 +239,7 @@ test('explicit v2 sync binds fresh capability, stages ciphertext, persists recei
   }
   harness.setFetch(async (_input, init) => {
     harness.events.push('fetch:v2')
+    assert.equal(init?.redirect, 'error')
     uploaded = new Uint8Array(await new Response(init?.body).arrayBuffer())
     return new Response(null, { status: 200 })
   })

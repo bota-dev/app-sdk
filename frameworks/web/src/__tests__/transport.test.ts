@@ -492,6 +492,57 @@ test('disconnect invalidates cached characteristics and rejects late callbacks',
   }
 })
 
+test('reconnect waits for prior notification teardown before installing a new session', async () => {
+  const fixture = createBluetoothFixture()
+  const restore = installNavigator({ bluetooth: fixture.bluetooth })
+  const transport = new WebBluetoothTransport()
+  const handle = await transport.requestDevice()
+  let releaseStop!: () => void
+
+  try {
+    await transport.connect(handle)
+    await transport.subscribe(
+      handle,
+      BOTA_CONTROL_SERVICE,
+      DEVICE_STATUS_CHARACTERISTIC,
+      () => undefined,
+    )
+    const staleCharacteristic = fixture.characteristic
+    staleCharacteristic.stopGate = new Promise<void>((resolve) => {
+      releaseStop = resolve
+    })
+
+    const replacement = new FakeCharacteristic(DEVICE_STATUS_CHARACTERISTIC)
+    const replacementServer = new FakeServer(
+      new FakeService(BOTA_CONTROL_SERVICE, replacement),
+    )
+    fixture.device.replaceServer(replacementServer)
+
+    const reconnecting = transport.connect(handle)
+    await staleCharacteristic.stopEntered
+
+    assert.equal(await promiseSettled(reconnecting), false)
+    assert.equal(replacementServer.connected, false)
+
+    releaseStop()
+    await reconnecting
+    const subscription = await transport.subscribe(
+      handle,
+      BOTA_CONTROL_SERVICE,
+      DEVICE_STATUS_CHARACTERISTIC,
+      () => undefined,
+    )
+
+    assert.equal(staleCharacteristic.stopNotificationsCalls, 1)
+    assert.equal(replacement.startNotificationsCalls, 1)
+    await subscription.remove()
+  } finally {
+    releaseStop?.()
+    await transport.disconnect(handle).catch(() => undefined)
+    restore()
+  }
+})
+
 test('disconnect stops notifications that finish starting after teardown', async () => {
   const fixture = createBluetoothFixture()
   const restore = installNavigator({ bluetooth: fixture.bluetooth })
@@ -838,6 +889,16 @@ class FakeCharacteristic extends EventTarget {
 function rejectionReason(result: PromiseSettledResult<void>): unknown {
   if (result.status !== 'rejected') throw new Error('expected rejection')
   return result.reason
+}
+
+async function promiseSettled(promise: Promise<unknown>): Promise<boolean> {
+  let settled = false
+  void promise.then(
+    () => { settled = true },
+    () => { settled = true },
+  )
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  return settled
 }
 
 function copyBufferSource(source: BufferSource): Uint8Array {

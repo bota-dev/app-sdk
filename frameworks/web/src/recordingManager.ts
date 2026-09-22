@@ -1142,6 +1142,7 @@ export class RecordingManager {
       headers: { ...request.headers },
       body,
       signal,
+      redirect: 'error',
     }
     if (fetchRequiresDuplex()) init.duplex = 'half'
     const response = await awaitWithSignal(

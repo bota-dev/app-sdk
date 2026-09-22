@@ -464,6 +464,7 @@ test('download persists only stable identity, writes bounded OPFS chunks, and re
   assert.deepEqual(blob.snapshot(), bytes)
   assert.equal(harness.fetcher.calls.length, 1)
   assert.equal(harness.fetcher.calls[0]?.init?.method, 'GET')
+  assert.equal(harness.fetcher.calls[0]?.init?.redirect, 'error')
   assert.deepEqual(harness.fetcher.calls[0]?.init?.headers, {
     Authorization: 'Bearer firmware-secret',
   })

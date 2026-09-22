@@ -71,10 +71,15 @@ export class WebBluetoothTransport implements BrowserBluetoothTransport {
     if (!native.gatt) throw new BrowserTransportError('unavailable')
 
     try {
+      const existing = this.connections.get(device.id)
+      if (existing) {
+        await this.detachConnection(device.id, existing)
+      } else {
+        await this.connectionTeardowns.get(device.id)
+      }
       const server = await native.gatt.connect()
       if (!server.connected) throw new BrowserTransportError('disconnected')
 
-      this.invalidateConnection(device.id)
       let cache!: ConnectedDeviceCache
       const disconnectedListener: EventListener = () => {
         if (this.connections.get(device.id) === cache) {

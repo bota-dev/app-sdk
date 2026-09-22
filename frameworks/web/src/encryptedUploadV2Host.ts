@@ -1750,6 +1750,7 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
       headers: { ...request.headers },
       body,
       signal: combinedSignal,
+      redirect: 'error',
       duplex: 'half',
     }
     const pendingResponse = this.fetcher(request.url, init)

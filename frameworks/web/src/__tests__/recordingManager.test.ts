@@ -1259,6 +1259,7 @@ function streamingFetch(events: string[]): (
     events.push('fetch:stream')
     assert.equal(String(input), 'https://upload-secret.example.invalid/recording')
     assert.equal(init?.method, 'PUT')
+    assert.equal(init?.redirect, 'error')
     assert.deepEqual(init?.headers, { Authorization: 'Bearer upload-secret' })
     assert.ok(init?.body instanceof ReadableStream)
     const reader = init.body.getReader()

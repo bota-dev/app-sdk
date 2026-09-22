@@ -688,6 +688,7 @@ class FirmwareArtifactHost implements WorkflowEffectHost {
         method: 'GET',
         headers: { ...request.headers },
         signal: this.fetchAbortController.signal,
+        redirect: 'error',
       }))
       this.throwIfCancelled(context.signal)
     } catch (error) {

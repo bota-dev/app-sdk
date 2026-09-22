@@ -291,7 +291,9 @@ application endpoint such as `https://example.invalid/sdk/provisioning/prepare`;
 the SDK itself never calls the Bota API implicitly. Provider failures must fail
 closed, and provider implementations must not log returned grants, tokens,
 signed documents, presigned URLs, headers, WiFi credentials, receipts, or
-recording content.
+recording content. The SDK sends operation-scoped upload and firmware requests
+with redirects disabled; providers must return the exact final HTTPS target
+rather than a redirecting URL.
 
 Create one client for the signed-in tenant and keep it for the page lifetime:
 
@@ -323,8 +325,9 @@ console.log(reconnected.serialNumber, snapshot.status.batteryPercent)
 
 `connect()` publishes a device only after Device Information serial verification.
 `reconnect()` enumerates previously authorized devices, selects only the saved
-browser device ID, and verifies the serial again. `readSnapshot()` repeats that
-verification before returning fresh identity, status, and capability values.
+browser device ID, waits for prior notification teardown, and verifies the
+serial again. `readSnapshot()` repeats that verification before returning fresh
+identity, status, and capability values.
 
 ## Recording list and sync
 
