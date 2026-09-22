@@ -471,6 +471,12 @@ Requirements:
   3.22.1 for the Android facade
 - Flutter 3.47.2 with Dart 3.13.2 through the repository wrapper for Flutter
   facade verification
+- Playwright 1.63.0 with only its Chromium build installed under
+  `target/playwright-browsers` for the packed Web consumer gate
+
+The Web release gate packs once with npm 12.0.2, verifies and inventories that
+tarball, installs only that local path into the Vite consumer, and runs the
+production ESM/WASM build and Chromium suite against the installed copy.
 
 ```bash
 npm ci

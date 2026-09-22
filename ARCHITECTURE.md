@@ -68,10 +68,13 @@ an uncertain publish is recoverable without attempting to replace an immutable
 npm version. The npm package trusts `bota-dev/app-sdk`, `release.yml`, and the
 `release` environment; no long-lived npm write token enters GitHub Actions.
 The Web package follows the same immutable-candidate rule. CI builds its WASM
-bridge, packs `@bota.dev/web-sdk`, installs that exact tarball in a clean Vite
-consumer, and includes it in the annotated tag inventory. The protected
-release publishes only the preserved tarball under npm `beta`, verifies the
-registry `dist.shasum`, and does not move `latest`.
+bridge with host paths remapped, packs `@bota.dev/web-sdk` once with the pinned
+npm CLI, and installs that exact tarball in a clean Vite consumer. Package
+verification records per-file hashes plus raw and normalized tarball hashes;
+the production ESM/WASM consumer and pinned Chromium behavior suite run against
+that installed copy. CI uploads the tarball and inventory together. The
+protected release verifies and publishes only that preserved tarball under npm
+`beta`, verifies the registry `dist.shasum`, and does not move `latest`.
 
 The Flutter facade is implemented in source, but it is not part of the
 immutable `1.1.0` public release and has not been published. The historical

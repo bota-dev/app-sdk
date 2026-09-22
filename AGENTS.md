@@ -233,11 +233,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 - `frameworks/web` is the foreground browser facade and publishes as
   `@bota.dev/web-sdk`. It uses the shared Rust workflows for exact connection,
   provisioning, recording transfer, encrypted upload v2, firmware update, and
-  device logs;
-  TypeScript owns Web Bluetooth, durable browser storage, and application
-  provider boundaries. Keep backend calls behind configured providers, keep
-  request credentials memory-only, and do not add background or closed-tab
-  execution. A missing Web Bluetooth implementation must fail as
+  device logs; TypeScript owns Web Bluetooth, durable browser storage, and
+  application provider boundaries. Keep backend calls behind configured
+  providers, keep request credentials memory-only, and do not add background or
+  closed-tab execution. A missing Web Bluetooth implementation must fail as
   `unsupported_browser` before opening the picker, snapshots must re-verify the
   serial, and OTA reboot recovery may enumerate only the previously verified
   exact browser device ID. OTA reload recovery must validate compatible durable
@@ -259,7 +258,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   Root manager names are instance types only; applications obtain managers
   from `BotaDeviceClient`, not constructors. Tenant cleanup is BLE-free,
   requires no active owner, and remains available after destroy for logout
-  ordering.
+  ordering. Keep the release gate on npm 12.0.2 and Playwright 1.63.0 with
+  Chromium only. `npm run web:verify` must pack once, reject unsafe package
+  contents, install only that tarball into the Vite consumer, and test the
+  production ESM/WASM copy. Preserve `target/web-release` and its hash inventory
+  unchanged through protected `release.yml` npm OIDC publication.
 - Web device logs have one Rust workflow owner and one diagnostics
   characteristic lease. Resolve subscription setup only after Rust reaches its
   running state, expose only typed Rust `DeviceLog` notifications, and join

@@ -103,8 +103,17 @@ CI checks out the pinned maintenance React Native workflow baseline below
 `.ci/`. Do not move that checkout below Cargo's `target/`; the Rust cache action
 may recursively clean that directory before the baseline dependency install.
 
+Before the local Web gate, install only the Playwright 1.63.0 Chromium build
+into the repository target directory. `web:verify` then creates one
+`target/web-release` tarball and inventory, installs only that tarball into the
+Vite consumer, and runs its production build and browser cases. The release
+workflow publishes this verified payload unchanged.
+
 ```bash
 npm ci
+npx --yes npm@12.0.2 ci --prefix tests/consumers/web-vite
+PLAYWRIGHT_BROWSERS_PATH="$PWD/target/playwright-browsers" \
+  tests/consumers/web-vite/node_modules/.bin/playwright install chromium
 npm run check
 npm run test:tooling
 npm run test:release

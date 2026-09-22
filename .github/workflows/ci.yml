@@ -147,6 +147,8 @@ jobs:
   web:
     name: Web SDK package and Vite consumer
     runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/target/playwright-browsers
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -174,8 +176,15 @@ jobs:
       - name: Install pinned wasm-bindgen CLI
         run: cargo install wasm-bindgen-cli --version 0.2.128 --locked
 
+      - name: Install pinned Chromium browser
+        run: |
+          npx --yes "npm@$NPM_CLI_VERSION" ci --prefix tests/consumers/web-vite
+          tests/consumers/web-vite/node_modules/.bin/playwright install --with-deps chromium
+
       - name: Verify Web package and packed consumer
-        run: npm run web:verify
+        run: |
+          npm run web:verify
+          test "$(jq -r .sourceRevision target/web-release/web-package-files.json)" = "$GITHUB_SHA"
 
       - name: Upload Web candidate
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

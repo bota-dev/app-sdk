@@ -14,7 +14,8 @@ if [[ "$ACTUAL_WASM_BINDGEN_VERSION" != "$EXPECTED_WASM_BINDGEN_VERSION" ]]; the
 fi
 
 cd "$ROOT_DIR"
-cargo build \
+RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--remap-path-prefix=$ROOT_DIR=bota-app-sdk --remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=cargo-home --remap-path-prefix=${RUSTUP_HOME:-$HOME/.rustup}=rustup-home" \
+  cargo build \
   --locked \
   --package bota-device-sdk-wasm \
   --release \

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+CONSUMER_DIR="$ROOT_DIR/tests/consumers/web-vite"
+RELEASE_DIR="$ROOT_DIR/target/web-release"
+TARBALL="${1:-}"
+
+if [[ -z "$TARBALL" ]]; then
+  TARBALL_COUNT="$(find "$RELEASE_DIR" -mindepth 1 -maxdepth 1 -type f -name '*.tgz' | wc -l | tr -d ' ')"
+  if [[ "$TARBALL_COUNT" != "1" ]]; then
+    echo "expected exactly one packed Web SDK tarball, found $TARBALL_COUNT" >&2
+    exit 1
+  fi
+  TARBALL="$(find "$RELEASE_DIR" -mindepth 1 -maxdepth 1 -type f -name '*.tgz' -print)"
+fi
+
+TARBALL="$(cd "$(dirname "$TARBALL")" && pwd -P)/$(basename "$TARBALL")"
+if [[ ! -f "$TARBALL" ]]; then
+  echo "Web SDK tarball does not exist: $TARBALL" >&2
+  exit 1
+fi
+
+INSTALLED_PACKAGE="$CONSUMER_DIR/node_modules/@bota.dev/web-sdk"
+if [[ ! -d "$INSTALLED_PACKAGE" || -L "$INSTALLED_PACKAGE" ]]; then
+  echo "packed Web SDK is not installed as a regular consumer package" >&2
+  exit 1
+fi
+
+EXTRACTED="$(mktemp -d "${TMPDIR:-/tmp}/bota-web-browser-package.XXXXXX")"
+trap 'rm -rf "$EXTRACTED"' EXIT
+tar -xzf "$TARBALL" -C "$EXTRACTED"
+diff -qr "$EXTRACTED/package" "$INSTALLED_PACKAGE"
+
+export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-$ROOT_DIR/target/playwright-browsers}"
+npm run test:browser --prefix "$CONSUMER_DIR"
