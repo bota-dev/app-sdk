@@ -20,6 +20,7 @@ import type {
   FirmwareUpdateProgress,
 } from './models.ts'
 import type { FirmwareDownloadProvider } from './providers.ts'
+import { awaitProviderCall } from './providerCancellation.ts'
 import {
   BrowserStorageError,
   type BrowserSdkStorage,
@@ -666,12 +667,17 @@ class FirmwareArtifactHost implements WorkflowEffectHost {
       throw new BotaSDKError('unsupported_capability', 'update_firmware')
     }
     let request: Awaited<ReturnType<FirmwareDownloadProvider['resolve']>>
+    const providerSignal = AbortSignal.any([
+      context.signal,
+      this.fetchAbortController.signal,
+    ])
     try {
-      request = await this.track(provider.resolve({
+      request = await awaitProviderCall(provider.resolve({
         operationId: this.journal.operationId,
         serialNumber: this.journal.serialNumber,
         image: publicImage(this.journal),
-      }))
+        signal: providerSignal,
+      }), providerSignal, 'update_firmware')
       this.throwIfCancelled(context.signal)
       validateDownloadRequest(request)
     } catch (error) {
@@ -688,6 +694,7 @@ class FirmwareArtifactHost implements WorkflowEffectHost {
         method: 'GET',
         headers: { ...request.headers },
         signal: this.fetchAbortController.signal,
+        redirect: 'error',
       }))
       this.throwIfCancelled(context.signal)
     } catch (error) {

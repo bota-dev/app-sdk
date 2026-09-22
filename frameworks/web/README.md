@@ -131,10 +131,17 @@ const provisioning: ProvisioningProvider = {
     }
   },
   async confirm(context) {
-    await postHost<void>('/sdk/provisioning/confirm', context)
+    await postHost<void>('/sdk/provisioning/confirm', {
+      attemptId: context.attemptId,
+      serialNumber: context.serialNumber,
+    }, context.signal)
   },
   async abort(context) {
-    await postHost<void>('/sdk/provisioning/abort', context)
+    await postHost<void>('/sdk/provisioning/abort', {
+      attemptId: context.attemptId,
+      serialNumber: context.serialNumber,
+      reason: context.reason,
+    }, context.signal)
   },
 }
 
@@ -142,7 +149,13 @@ const recordingControl: RecordingControlProvider = {
   async prepare(context) {
     const response = await postHost<{ grantBase64: string }>(
       '/sdk/recording-control/prepare',
-      context,
+      {
+        operationId: context.operationId,
+        serialNumber: context.serialNumber,
+        action: context.action,
+        authorityId: context.authorityId,
+      },
+      context.signal,
     )
     return { grant: decodeBytes(response.grantBase64) }
   },
@@ -153,7 +166,11 @@ const firmwareDownload: FirmwareDownloadProvider = {
     const response = await postHost<{
       url: string
       headers: Record<string, string>
-    }>('/sdk/firmware/resolve', context)
+    }>('/sdk/firmware/resolve', {
+      operationId: context.operationId,
+      serialNumber: context.serialNumber,
+      image: context.image,
+    }, context.signal)
     return { method: 'GET', url: response.url, headers: response.headers }
   },
 }
@@ -163,13 +180,18 @@ const recordingUpload: RecordingUploadProvider = {
     const response = await postHost<{
       uploadId: string
       request: { url: string; headers: Record<string, string> }
-    }>('/sdk/recordings/legacy/prepare', legacyBody(context))
+    }>(
+      '/sdk/recordings/legacy/prepare',
+      legacyBody(context),
+      context.signal,
+    )
     return { uploadId: response.uploadId, request: uploadRequest(response.request) }
   },
   async completeLegacyUpload(context) {
     return await postHost<{ cloudCompletionId: string }>(
       '/sdk/recordings/legacy/complete',
       { ...legacyBody(context), uploadId: context.uploadId },
+      context.signal,
     )
   },
   async reconcileLegacyUpload(context) {
@@ -179,7 +201,7 @@ const recordingUpload: RecordingUploadProvider = {
     >('/sdk/recordings/legacy/reconcile', {
       ...legacyBody(context),
       uploadId: context.uploadId,
-    })
+    }, context.signal)
   },
   async prepareEncryptedUploadV2(context: EncryptedUploadV2ProviderContext) {
     const response = await postHost<{
@@ -215,43 +237,48 @@ const recordingUpload: RecordingUploadProvider = {
         windowPackets: context.checkpoint.windowPackets,
         dataPayloadBytes: context.checkpoint.dataPayloadBytes,
       },
-    })
+    }, context.signal)
     const materialId = response.materialId
     return {
       ...response,
       authorization: decodeBytes(response.authorizationBase64),
-      async stagingRequest(evidence) {
+      async stagingRequest(evidence, signal) {
         const request = await postHost<{
           url: string
           headers: Record<string, string>
         }>('/sdk/recordings/v2/staging-request', {
           materialId,
           evidence: v2Evidence(evidence),
-        })
+        }, signal)
         return uploadRequest(request)
       },
-      async submitManifest(manifest, evidence) {
+      async submitManifest(manifest, evidence, signal) {
         await postHost<void>('/sdk/recordings/v2/manifest', {
           materialId,
           manifestBase64: encodeBytes(manifest),
           evidence: v2Evidence(evidence),
-        })
+        }, signal)
       },
-      async finalize(evidence) {
+      async finalize(evidence, signal) {
         await postHost<void>('/sdk/recordings/v2/finalize', {
           materialId,
           evidence: v2Evidence(evidence),
-        })
+        }, signal)
       },
-      async completionReceipt(evidence) {
+      async completionReceipt(evidence, signal) {
         const receipt = await postHost<{ receiptBase64: string }>(
           '/sdk/recordings/v2/receipt',
           { materialId, evidence: v2Evidence(evidence) },
+          signal,
         )
         return decodeBytes(receipt.receiptBase64)
       },
-      async cancel() {
-        await postHost<void>('/sdk/recordings/v2/cancel', { materialId })
+      async cancel(signal) {
+        await postHost<void>(
+          '/sdk/recordings/v2/cancel',
+          { materialId },
+          signal,
+        )
       },
     }
   },
@@ -291,7 +318,12 @@ application endpoint such as `https://example.invalid/sdk/provisioning/prepare`;
 the SDK itself never calls the Bota API implicitly. Provider failures must fail
 closed, and provider implementations must not log returned grants, tokens,
 signed documents, presigned URLs, headers, WiFi credentials, receipts, or
-recording content.
+recording content. Every provider callback receives an operation-scoped
+`AbortSignal`; pass it to application I/O. On cancellation the SDK stops
+waiting, observes late settlement, and ignores late results. The SDK sends
+operation-scoped upload and firmware requests
+with redirects disabled; providers must return the exact final HTTPS target
+rather than a redirecting URL.
 
 Create one client for the signed-in tenant and keep it for the page lifetime:
 
@@ -323,8 +355,9 @@ console.log(reconnected.serialNumber, snapshot.status.batteryPercent)
 
 `connect()` publishes a device only after Device Information serial verification.
 `reconnect()` enumerates previously authorized devices, selects only the saved
-browser device ID, and verifies the serial again. `readSnapshot()` repeats that
-verification before returning fresh identity, status, and capability values.
+browser device ID, waits for prior notification teardown, and verifies the
+serial again. `readSnapshot()` repeats that verification before returning fresh
+identity, status, and capability values.
 
 ## Recording list and sync
 

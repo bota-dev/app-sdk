@@ -26,11 +26,13 @@ export interface ProvisioningProvider {
   confirm(context: {
     attemptId: string
     serialNumber: string
+    signal: AbortSignal
   }): Promise<void>
   abort(context: {
     attemptId: string
     serialNumber: string
     reason: BotaSDKErrorCode
+    signal: AbortSignal
   }): Promise<void>
 }
 
@@ -40,6 +42,7 @@ export interface RecordingControlProvider {
     serialNumber: string
     action: 'start' | 'stop'
     authorityId: string
+    signal: AbortSignal
   }): Promise<{ grant: Uint8Array }>
 }
 
@@ -48,6 +51,7 @@ export interface FirmwareDownloadProvider {
     operationId: string
     serialNumber: string
     image: FirmwareImageDescriptor
+    signal: AbortSignal
   }): Promise<{
     method: 'GET'
     url: string
@@ -69,6 +73,7 @@ export interface LegacyUploadContext {
   plaintextSha256Hex: string | null
   stagedBodySha256Hex: string
   encrypted: boolean
+  signal: AbortSignal
 }
 
 export interface EncryptedUploadV2Recording {
@@ -101,6 +106,7 @@ export interface EncryptedUploadV2ProviderContext {
     decoded: EncryptedUploadV2Capabilities
   }
   checkpoint: EncryptedUploadV2CheckpointSummary | null
+  signal: AbortSignal
 }
 
 export interface EncryptedUploadV2Evidence {
@@ -120,16 +126,22 @@ export interface EncryptedUploadV2Material {
   authorization: Uint8Array
   stagingRequest(
     evidence: EncryptedUploadV2Evidence,
+    signal: AbortSignal,
   ): Promise<UploadRequestTemplate>
   submitManifest(
     manifest: Uint8Array,
     evidence: EncryptedUploadV2Evidence,
+    signal: AbortSignal,
   ): Promise<void>
-  finalize(evidence: EncryptedUploadV2Evidence): Promise<void>
+  finalize(
+    evidence: EncryptedUploadV2Evidence,
+    signal: AbortSignal,
+  ): Promise<void>
   completionReceipt(
     evidence: EncryptedUploadV2Evidence,
+    signal: AbortSignal,
   ): Promise<Uint8Array>
-  cancel(): Promise<void>
+  cancel(signal: AbortSignal): Promise<void>
 }
 
 export interface RecordingUploadProvider {

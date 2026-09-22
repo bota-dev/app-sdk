@@ -39,6 +39,7 @@ import type {
   RecordingUploadProvider,
   UploadRequestTemplate,
 } from './providers.ts'
+import { awaitProviderCall } from './providerCancellation.ts'
 import {
   BrowserStorageError,
   type BrowserBlobHandle,
@@ -490,6 +491,7 @@ export class RecordingManager {
         decoded: { ...capability.decoded },
       },
       checkpoint: null,
+      signal,
     }
     const material = await this.prepareEncryptedUploadV2Material(
       provider,
@@ -547,7 +549,8 @@ export class RecordingManager {
       )
     } catch (error) {
       if (materialOwnedHere) {
-        await destroyEncryptedUploadV2Material(material).catch(() => undefined)
+        await destroyEncryptedUploadV2Material(material, signal)
+          .catch(() => undefined)
         const current = await storage.loadRecordingJournal(operationId)
           .catch(() => null)
         if (current) {
@@ -605,6 +608,7 @@ export class RecordingManager {
           decoded: { ...capability.decoded },
         },
         checkpoint: encryptedUploadV2CheckpointSummary(state),
+        signal,
       },
       signal,
     )
@@ -623,7 +627,8 @@ export class RecordingManager {
       )
     } catch (error) {
       if (materialOwnedHere) {
-        await destroyEncryptedUploadV2Material(material).catch(() => undefined)
+        await destroyEncryptedUploadV2Material(material, signal)
+          .catch(() => undefined)
       }
       throw recordingError(error, 'transfer_recording')
     }
@@ -755,7 +760,7 @@ export class RecordingManager {
             await host.cancel().catch(() => undefined)
           }
         } else {
-          await destroyEncryptedUploadV2Material(material)
+          await destroyEncryptedUploadV2Material(material, signal)
             .catch(() => undefined)
         }
       }
@@ -779,7 +784,7 @@ export class RecordingManager {
     let pending: Promise<EncryptedUploadV2Material> | null = null
     try {
       pending = provider.prepareEncryptedUploadV2(context)
-      return await awaitWithSignal(
+      return await awaitProviderCall(
         pending,
         signal,
         'upload',
@@ -788,7 +793,7 @@ export class RecordingManager {
       if (signal.aborted && pending) {
         void pending.then(
           async (material) => {
-            await destroyEncryptedUploadV2Material(material)
+            await destroyEncryptedUploadV2Material(material, signal)
               .catch(() => undefined)
           },
           () => undefined,
@@ -966,7 +971,7 @@ export class RecordingManager {
     const context = await this.legacyContext(journal, recording, blob, signal)
     let prepared: Awaited<ReturnType<RecordingUploadProvider['prepareLegacyUpload']>>
     try {
-      prepared = await awaitWithSignal(
+      prepared = await awaitProviderCall(
         provider.prepareLegacyUpload(context),
         signal,
         'upload',
@@ -983,7 +988,7 @@ export class RecordingManager {
 
     try {
       await this.uploadBlob(prepared.request, blob, signal)
-      const completion = await awaitWithSignal(
+      const completion = await awaitProviderCall(
         provider.completeLegacyUpload({
           ...context,
           uploadId: prepared.uploadId,
@@ -1015,7 +1020,7 @@ export class RecordingManager {
       RecordingUploadProvider['reconcileLegacyUpload']
     >>
     try {
-      reconciliation = await awaitWithSignal(
+      reconciliation = await awaitProviderCall(
         provider.reconcileLegacyUpload({
           ...context,
           uploadId: journal.uploadId,
@@ -1127,6 +1132,7 @@ export class RecordingManager {
       plaintextSha256Hex: journal.devicePlaintextSha256Hex,
       stagedBodySha256Hex: hex(hasher.sha256Snapshot()),
       encrypted: recording.encrypted,
+      signal,
     }
   }
 
@@ -1142,6 +1148,7 @@ export class RecordingManager {
       headers: { ...request.headers },
       body,
       signal,
+      redirect: 'error',
     }
     if (fetchRequiresDuplex()) init.duplex = 'half'
     const response = await awaitWithSignal(
@@ -1591,11 +1598,14 @@ function validateEncryptedUploadV2Material(
 
 async function destroyEncryptedUploadV2Material(
   material: EncryptedUploadV2Material,
+  signal: AbortSignal,
 ): Promise<void> {
   if (material.authorization instanceof Uint8Array) {
     material.authorization.fill(0)
   }
-  if (typeof material.cancel === 'function') await material.cancel()
+  if (typeof material.cancel === 'function') {
+    await awaitProviderCall(material.cancel(signal), signal, 'upload')
+  }
 }
 
 function validateEncryptedUploadV2JournalState(

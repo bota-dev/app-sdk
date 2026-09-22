@@ -63,18 +63,23 @@ interface ProviderAbortRecord {
   reason: BotaSDKErrorCode
 }
 
+type ProviderConfirmContext = Parameters<ProvisioningProvider['confirm']>[0]
+type ProviderAbortContext = Parameters<ProvisioningProvider['abort']>[0]
+
 class FakeProvisioningProvider implements ProvisioningProvider {
   readonly events: string[]
   readonly prepares: ProviderPrepareRecord[] = []
   readonly materials: ProvisioningMaterial[] = []
   readonly confirms: Array<{ attemptId: string; serialNumber: string }> = []
   readonly aborts: ProviderAbortRecord[] = []
+  readonly confirmSignals: AbortSignal[] = []
+  readonly abortSignals: AbortSignal[] = []
   prepareHandler: (
     context: ProvisioningPrepareContext,
   ) => Promise<ProvisioningMaterial> = async (context) =>
     materialFor(context.materialId)
   confirmHandler: (
-    context: { attemptId: string; serialNumber: string },
+    context: ProviderConfirmContext,
   ) => Promise<void> = async () => undefined
   confirmFailuresRemaining = 0
   confirmError: unknown = new Error(
@@ -105,12 +110,13 @@ class FakeProvisioningProvider implements ProvisioningProvider {
     return material
   }
 
-  async confirm(context: {
-    attemptId: string
-    serialNumber: string
-  }): Promise<void> {
+  async confirm(context: ProviderConfirmContext): Promise<void> {
     this.events.push(`provider:confirm:${context.attemptId}`)
-    this.confirms.push({ ...context })
+    this.confirms.push({
+      attemptId: context.attemptId,
+      serialNumber: context.serialNumber,
+    })
+    this.confirmSignals.push(context.signal)
     await this.confirmHandler(context)
     if (this.confirmFailuresRemaining > 0) {
       this.confirmFailuresRemaining -= 1
@@ -118,11 +124,48 @@ class FakeProvisioningProvider implements ProvisioningProvider {
     }
   }
 
-  async abort(context: ProviderAbortRecord): Promise<void> {
+  async abort(context: ProviderAbortContext): Promise<void> {
     this.events.push(`provider:abort:${context.attemptId}:${context.reason}`)
-    this.aborts.push({ ...context })
+    this.aborts.push({
+      attemptId: context.attemptId,
+      serialNumber: context.serialNumber,
+      reason: context.reason,
+    })
+    this.abortSignals.push(context.signal)
   }
 }
+
+test('destroy aborts and stops waiting for a never-settling confirm provider', async () => {
+  const harness = await createHarness()
+  const attemptId = 'never-settling-confirm-attempt'
+  const entered = deferred<void>()
+  harness.provider.confirmHandler = async () => {
+    entered.resolve(undefined)
+    return await new Promise<never>(() => undefined)
+  }
+  harness.storage.provisioningJournals.set(attemptId, {
+    schemaVersion: 1,
+    attemptId,
+    materialId: `material-${attemptId}`,
+    serialNumber: SERIAL,
+    phase: 'device_applied',
+    updatedAtEpochMs: 1_700_000_000_000,
+  })
+  const provisioning = harness.manager.provision({ attemptId })
+  void provisioning.catch(() => undefined)
+  await entered.promise
+
+  await settleWithWatchdog(
+    harness.manager.destroy(),
+    'never-settling provisioning confirm destruction',
+  )
+  await assert.rejects(provisioning, cancelled('provision'))
+  assert.equal(harness.provider.confirmSignals[0]?.aborted, true)
+  assert.equal(
+    harness.storage.provisioningJournals.get(attemptId)?.phase,
+    'device_applied',
+  )
+})
 
 class FakeProvisioningStorage extends FakeRecordingStorage {
   readonly provisioningJournals = new Map<string, ProvisioningJournal>()
@@ -400,7 +443,7 @@ test('provisioning zeroes transient WASM bridge byte copies after synchronous br
   assert.ok(bridgeCopies.every((value) => value.every((byte) => byte === 0)))
 })
 
-test('backend prepare alone never completes binding and cancellation aborts it', async () => {
+test('backend prepare alone never completes binding and cancellation requests abort without overclaiming it', async () => {
   const harness = await createHarness()
   const attemptId = 'prepared-only-attempt'
   const controller = new AbortController()
@@ -432,9 +475,10 @@ test('backend prepare alone never completes binding and cancellation aborts it',
 
   assert.equal(harness.provider.aborts.length, 1)
   assert.equal(harness.provider.aborts[0]?.reason, 'cancelled')
+  assert.equal(harness.provider.abortSignals[0]?.aborted, true)
   assert.equal(
     harness.storage.provisioningJournals.get(attemptId)?.phase,
-    'aborted',
+    'prepared',
   )
 })
 
@@ -818,12 +862,10 @@ test('prepared recovery identity mismatch disconnects stale state and permits re
   )
 })
 
-test('a blocked confirm is joined on cancel and destroy before another attempt can own the runtime', async () => {
+test('cancelled confirm releases SDK ownership and ignores late provider success', async () => {
   const harness = await createHarness()
   const oldConfirmEntered = deferred<void>()
   const oldConfirmGate = deferred<void>()
-  const oldSaveEntered = deferred<void>()
-  const oldSaveGate = deferred<void>()
   let confirmsInFlight = 0
   let maximumConfirmsInFlight = 0
   harness.provider.confirmHandler = async (context) => {
@@ -837,14 +879,6 @@ test('a blocked confirm is joined on cancel and destroy before another attempt c
     } finally {
       confirmsInFlight -= 1
     }
-  }
-  harness.storage.onSaveProvisioningJournal = async (journal) => {
-    if (
-      journal.attemptId !== 'old-confirm-attempt'
-      || journal.phase !== 'backend_confirmed'
-    ) return
-    oldSaveEntered.resolve(undefined)
-    await oldSaveGate.promise
   }
   for (const attemptId of ['old-confirm-attempt', 'new-confirm-attempt']) {
     harness.storage.provisioningJournals.set(attemptId, {
@@ -873,43 +907,33 @@ test('a blocked confirm is joined on cancel and destroy before another attempt c
   await settleWithWatchdog(oldConfirmEntered.promise, 'old confirm start')
 
   controller.abort()
-  let destroySettled = false
-  const destroying = harness.manager.destroy().then(() => {
-    destroySettled = true
-  })
-  await settleReducer()
-  assert.equal(destroySettled, false)
-  await assert.rejects(
-    sibling.provision({ attemptId: 'new-confirm-attempt' }),
-    operationInProgress('provision'),
+  await settleWithWatchdog(
+    harness.manager.destroy(),
+    'confirming manager destroy',
   )
-  assert.equal(maximumConfirmsInFlight, 1)
-
-  oldConfirmGate.resolve(undefined)
-  await settleWithWatchdog(oldSaveEntered.promise, 'old confirm journal save')
-  await settleReducer()
-  assert.equal(destroySettled, false)
-  await assert.rejects(
-    sibling.provision({ attemptId: 'new-confirm-attempt' }),
-    operationInProgress('provision'),
-  )
-  oldSaveGate.resolve(undefined)
-  await settleWithWatchdog(destroying, 'confirming manager destroy')
   await settleWithWatchdog(oldRejected, 'cancelled old confirm')
+  assert.equal(harness.provider.confirmSignals[0]?.aborted, true)
   assert.equal(
     harness.storage.provisioningJournals.get('old-confirm-attempt')?.phase,
-    'backend_confirmed',
+    'device_applied',
   )
 
   await sibling.provision({ attemptId: 'new-confirm-attempt' })
-  assert.equal(maximumConfirmsInFlight, 1)
+  assert.equal(maximumConfirmsInFlight, 2)
   assert.equal(
     harness.storage.provisioningJournals.get('new-confirm-attempt')?.phase,
     'backend_confirmed',
   )
+
+  oldConfirmGate.resolve(undefined)
+  await settleReducer()
+  assert.equal(
+    harness.storage.provisioningJournals.get('old-confirm-attempt')?.phase,
+    'device_applied',
+  )
 })
 
-test('cancellation joins the exact provider prepare before abort, scrubbing, or reuse', async () => {
+test('cancellation scrubs provider prepare inputs and ignores late material', async () => {
   const events: string[] = []
   const provider = new FakeProvisioningProvider(events)
   const prepareGate = deferred<void>()
@@ -943,58 +967,41 @@ test('cancellation joins the exact provider prepare before abort, scrubbing, or 
   })
   const controller = new AbortController()
 
-  let oldSettled = false
   const oldProvision = harness.manager.provision({
     attemptId: 'old-attempt',
     signal: controller.signal,
-  }).finally(() => {
-    oldSettled = true
   })
   const oldRejected = assert.rejects(oldProvision, cancelled('provision'))
   await eventually(() => provider.prepares.length === 1)
   const prepare = provider.prepares[0]
   assert.ok(prepare)
   controller.abort()
-  let destroySettled = false
-  const destroying = harness.manager.destroy().then(() => {
-    destroySettled = true
-  })
-  await settleReducer()
-
-  try {
-    assert.equal(oldSettled, false)
-    assert.equal(destroySettled, false)
-    assert.equal(prepare.signal.aborted, true)
-    assert.deepEqual(prepare.references.nonce, NONCE)
-    assert.deepEqual(prepare.references.devicePublicKey, DEVICE_PUBLIC_KEY)
-    assert.equal(provider.aborts.length, 0)
-    await assert.rejects(
-      sibling.provision({ attemptId: 'new-attempt' }),
-      operationInProgress('provision'),
-    )
-  } finally {
-    prepareGate.resolve(undefined)
-  }
-
-  await settleWithWatchdog(destroying, 'prepare-joining manager destroy')
+  await settleWithWatchdog(
+    harness.manager.destroy(),
+    'prepare provider manager destroy',
+  )
   await settleWithWatchdog(oldRejected, 'old provisioning cancellation')
-  assert.deepEqual(observedNonce, NONCE)
-  assert.deepEqual(observedDevicePublicKey, DEVICE_PUBLIC_KEY)
+  assert.equal(prepare.signal.aborted, true)
   assertBufferWasScrubbed(prepare.references.nonce, 'cancelled provider nonce')
   assertBufferWasScrubbed(
     prepare.references.devicePublicKey,
     'cancelled provider public key',
   )
+  assert.equal(provider.aborts.filter((call) =>
+    call.attemptId === 'old-attempt'
+  ).length, 1)
+
+  prepareGate.resolve(undefined)
+  await settleReducer()
+  assert.ok(observedNonce && allZero(observedNonce))
+  assert.ok(observedDevicePublicKey && allZero(observedDevicePublicKey))
   const settledMaterial = lateMaterial as ProvisioningMaterial | null
   assert.ok(settledMaterial)
   assert.ok(allZero(settledMaterial.apiEndpoint))
   assert.ok(allZero(settledMaterial.deviceToken))
-  assert.equal(provider.aborts.filter((call) =>
-    call.attemptId === 'old-attempt'
-  ).length, 1)
   assert.ok(
-    eventIndex(events, 'provider:prepare:settled')
-      < eventIndex(events, 'provider:abort:old-attempt:cancelled'),
+    eventIndex(events, 'provider:abort:old-attempt:cancelled')
+      < eventIndex(events, 'provider:prepare:settled'),
   )
 
   const newProvision = sibling.provision({ attemptId: 'new-attempt' })
@@ -1013,7 +1020,28 @@ test('cancellation joins the exact provider prepare before abort, scrubbing, or 
   assert.equal(provider.prepares[1]?.snapshot.attemptId, 'new-attempt')
 })
 
-test('client destruction joins provider prepare before scrubbing and aborting', async () => {
+test('malformed late provisioning material after cancellation is ignored', async () => {
+  const provider = new FakeProvisioningProvider()
+  const lateResult = deferred<unknown>()
+  provider.prepareHandler = async () =>
+    await lateResult.promise as ProvisioningMaterial
+  const harness = await createHarness({ provider })
+  const provision = harness.manager.provision({
+    attemptId: 'malformed-late-material',
+  })
+  void provision.catch(() => undefined)
+  await eventually(() => provider.prepares.length === 1)
+
+  await settleWithWatchdog(
+    harness.manager.destroy(),
+    'malformed late provisioning provider destruction',
+  )
+  await assert.rejects(provision, cancelled('provision'))
+  lateResult.resolve(undefined)
+  await settleReducer()
+})
+
+test('client destruction scrubs provider prepare without waiting for late material', async () => {
   const core = await createWasmCore(await wasmBytes)
   const transport = new FakeBrowserBluetoothTransport()
   transport.setRead(BOTA_AUTH_SERVICE, AUTH_NONCE_CHARACTERISTIC, NONCE)
@@ -1056,25 +1084,9 @@ test('client destruction joins provider prepare before scrubbing and aborting', 
   await eventually(() => provider.prepares.length === 1)
   const prepare = provider.prepares[0]
   assert.ok(prepare)
-  let destroySettled = false
-  const destroying = client.destroy().then(() => {
-    destroySettled = true
-  })
-  await settleReducer()
-  try {
-    assert.equal(destroySettled, false)
-    assert.equal(prepare.signal.aborted, true)
-    assert.deepEqual(prepare.references.nonce, NONCE)
-    assert.deepEqual(prepare.references.devicePublicKey, DEVICE_PUBLIC_KEY)
-    assert.equal(provider.aborts.length, 0)
-  } finally {
-    prepareGate.resolve(undefined)
-  }
-  await settleWithWatchdog(destroying, 'client destruction')
+  await settleWithWatchdog(client.destroy(), 'client destruction')
   await rejected
-
-  assert.deepEqual(observedNonce, NONCE)
-  assert.deepEqual(observedDevicePublicKey, DEVICE_PUBLIC_KEY)
+  assert.equal(prepare.signal.aborted, true)
   assertBufferWasScrubbed(
     prepare.references.nonce,
     'destroyed provider nonce',
@@ -1083,13 +1095,18 @@ test('client destruction joins provider prepare before scrubbing and aborting', 
     prepare.references.devicePublicKey,
     'destroyed provider public key',
   )
+  assert.equal(provider.aborts.filter((call) =>
+    call.attemptId === 'destroyed-attempt'
+  ).length, 1)
+
+  prepareGate.resolve(undefined)
+  await settleReducer()
+  assert.ok(observedNonce && allZero(observedNonce))
+  assert.ok(observedDevicePublicKey && allZero(observedDevicePublicKey))
   const settledMaterial = lateMaterial as ProvisioningMaterial | null
   assert.ok(settledMaterial)
   assert.ok(allZero(settledMaterial.apiEndpoint))
   assert.ok(allZero(settledMaterial.deviceToken))
-  assert.equal(provider.aborts.filter((call) =>
-    call.attemptId === 'destroyed-attempt'
-  ).length, 1)
   assert.equal(
     storage.provisioningJournals.has('destroyed-attempt'),
     false,

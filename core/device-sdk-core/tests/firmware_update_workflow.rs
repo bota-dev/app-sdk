@@ -586,7 +586,7 @@ fn successful_reconnect_reads_back_the_target_firmware_version() {
     let discover_request = request_id(&discovering, |effect| {
         matches!(effect, Effect::Ble(BleEffect::DiscoverServices { .. }))
     });
-    let reading_serial = engine
+    let reading_identity = engine
         .dispatch(host(
             discover_request,
             HostEventKind::Ble(BleEvent::ServicesDiscovered {
@@ -594,7 +594,7 @@ fn successful_reconnect_reads_back_the_target_firmware_version() {
             }),
         ))
         .unwrap();
-    let serial_request = request_id(&reading_serial, |effect| {
+    let serial_request = request_id(&reading_identity, |effect| {
         matches!(
             effect,
             Effect::Ble(BleEffect::Read { characteristic_uuid, .. })
@@ -605,7 +605,7 @@ fn successful_reconnect_reads_back_the_target_firmware_version() {
         .dispatch(host(
             serial_request,
             HostEventKind::Ble(BleEvent::ReadCompleted {
-                value: b"EVFXXW67KP".to_vec(),
+                value: device().as_str().as_bytes().to_vec(),
             }),
         ))
         .unwrap();

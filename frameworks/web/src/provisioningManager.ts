@@ -34,6 +34,7 @@ import type {
   ProvisioningPrepareContext,
   ProvisioningProvider,
 } from './providers.ts'
+import { awaitProviderCall } from './providerCancellation.ts'
 import {
   BrowserStorageError,
   type BrowserSdkStorage,
@@ -337,14 +338,17 @@ export class ProvisioningManager {
             this.now,
           )
           await storage.saveProvisioningJournal(deviceApplied)
-          await this.confirmProvisioningWhileOwned(deviceApplied)
+          await this.confirmProvisioningWhileOwned(
+            deviceApplied,
+            active.controller.signal,
+          )
         },
       )
     } catch (error) {
       const normalized = managerError(error, 'provision')
       if (!active.physicalCompleted && host.prepareStarted) {
         try {
-          await host.abort(normalized.code)
+          await host.abort(normalized.code, active.controller.signal)
           const prepared = host.preparedJournal
           if (prepared) {
             await storage.saveProvisioningJournal(
@@ -352,6 +356,7 @@ export class ProvisioningManager {
             )
           }
         } catch {
+          if (normalized.code === 'cancelled') throw normalized
           throw new BotaSDKError('internal_error', 'provision', {
             retryable: true,
           })
@@ -372,7 +377,7 @@ export class ProvisioningManager {
       await this.runtime.runExclusive('provision', async (runtimeSignal) =>
         await withCombinedSignal(runtimeSignal, signal, async (combined) => {
           throwIfAborted(combined, 'provision')
-          await this.confirmProvisioningWhileOwned(journal)
+          await this.confirmProvisioningWhileOwned(journal, combined)
           throwIfAborted(combined, 'provision')
         })
       )
@@ -392,6 +397,7 @@ export class ProvisioningManager {
 
   private async confirmProvisioningWhileOwned(
     journal: ProvisioningJournal,
+    signal: AbortSignal,
   ): Promise<void> {
     const provider = this.provider
     const storage = this.storage
@@ -399,11 +405,14 @@ export class ProvisioningManager {
       throw new BotaSDKError('unsupported_capability', 'provision')
     }
 
-    const confirmed = await settled(provider.confirm({
-      attemptId: journal.attemptId,
-      serialNumber: journal.serialNumber,
-    }))
-    if (confirmed.kind === 'failed') {
+    try {
+      await awaitProviderCall(provider.confirm({
+        attemptId: journal.attemptId,
+        serialNumber: journal.serialNumber,
+        signal,
+      }), signal, 'provision')
+    } catch (error) {
+      if (error instanceof BotaSDKError && error.code === 'cancelled') throw error
       throw new BotaSDKError('internal_error', 'provision', { retryable: true })
     }
     try {
@@ -681,15 +690,25 @@ class ProvisioningMaterialHost implements WorkflowEffectHost {
 
       this.didStartPrepare = true
       this.prepareSettlement = prepareLifecycle.promise
-      const prepared = await settled(this.provider.prepare(providerContext))
-      if (prepared.kind === 'failed') {
+      const pending = this.provider.prepare(providerContext)
+      let material: ProvisioningMaterial
+      try {
+        material = await awaitProviderCall(
+          pending,
+          this.prepareAbortController.signal,
+          'provision',
+        )
+      } catch (error) {
+        if (this.prepareAbortController.signal.aborted) {
+          void pending.then(scrubMaterial).catch(() => undefined)
+        }
+        if (error instanceof BotaSDKError && error.code === 'cancelled') throw error
         return {
           requestId: envelope.requestId,
           kind: 'host_material_failed',
           platformCode: null,
         }
       }
-      const material = prepared.value
       this.currentMaterial = material
       this.throwIfCancelled(context.signal)
       if (!validMaterial(material, this.materialId)) {
@@ -743,13 +762,18 @@ class ProvisioningMaterialHost implements WorkflowEffectHost {
     if (this.currentMaterial) scrubMaterial(this.currentMaterial)
   }
 
-  abort(reason: BotaSDKErrorCode): Promise<void> {
+  abort(reason: BotaSDKErrorCode, signal: AbortSignal): Promise<void> {
     if (!this.abortPromise) {
-      this.abortPromise = this.provider.abort({
-        attemptId: this.attemptId,
-        serialNumber: this.serialNumber,
-        reason,
-      })
+      this.abortPromise = awaitProviderCall(
+        this.provider.abort({
+          attemptId: this.attemptId,
+          serialNumber: this.serialNumber,
+          reason,
+          signal,
+        }),
+        signal,
+        'provision',
+      )
     }
     return this.abortPromise
   }
@@ -795,9 +819,22 @@ function scrubContext(context: ProvisioningPrepareContext): void {
   context.devicePublicKey.fill(0)
 }
 
-function scrubMaterial(material: ProvisioningMaterial): void {
-  material.apiEndpoint.fill(0)
-  material.deviceToken.fill(0)
+function scrubMaterial(material: unknown): void {
+  try {
+    if (typeof material !== 'object' || material === null) return
+    const candidate = material as {
+      apiEndpoint?: unknown
+      deviceToken?: unknown
+    }
+    if (candidate.apiEndpoint instanceof Uint8Array) {
+      candidate.apiEndpoint.fill(0)
+    }
+    if (candidate.deviceToken instanceof Uint8Array) {
+      candidate.deviceToken.fill(0)
+    }
+  } catch {
+    // Application-owned late values are untrusted and already ignored.
+  }
 }
 
 function coreSettings(settings: DeviceConnectionSettings): CoreConnectionSettings {

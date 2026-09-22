@@ -236,7 +236,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   device logs; TypeScript owns Web Bluetooth, durable browser storage, and
   application provider boundaries. Keep backend calls behind configured
   providers, keep request credentials memory-only, and do not add background or
-  closed-tab execution. A missing Web Bluetooth implementation must fail as
+  closed-tab execution. Every application provider callback receives its
+  operation `AbortSignal`; host I/O must honor it, while the SDK stops waiting
+  on cancellation, observes late settlement, and ignores late results. A
+  missing Web Bluetooth implementation must fail as
   `unsupported_browser` before opening the picker, snapshots must re-verify the
   serial, and OTA reboot recovery may enumerate only the previously verified
   exact browser device ID. OTA reload recovery must validate compatible durable
