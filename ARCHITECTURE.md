@@ -68,10 +68,13 @@ an uncertain publish is recoverable without attempting to replace an immutable
 npm version. The npm package trusts `bota-dev/app-sdk`, `release.yml`, and the
 `release` environment; no long-lived npm write token enters GitHub Actions.
 The Web package follows the same immutable-candidate rule. CI builds its WASM
-bridge, packs `@bota.dev/web-sdk`, installs that exact tarball in a clean Vite
-consumer, and includes it in the annotated tag inventory. The protected
-release publishes only the preserved tarball under npm `beta`, verifies the
-registry `dist.shasum`, and does not move `latest`.
+bridge with host paths remapped, packs `@bota.dev/web-sdk` once with the pinned
+npm CLI, and installs that exact tarball in a clean Vite consumer. Package
+verification records per-file hashes plus raw and normalized tarball hashes;
+the production ESM/WASM consumer and pinned Chromium behavior suite run against
+that installed copy. CI uploads the tarball and inventory together. The
+protected release verifies and publishes only that preserved tarball under npm
+`beta`, verifies the registry `dist.shasum`, and does not move `latest`.
 
 The Flutter facade is implemented in source, but it is not part of the
 immutable `1.1.0` public release and has not been published. The historical
@@ -972,10 +975,16 @@ resolve a grant or resend destructive opcode `0x06`.
 
 `frameworks/web` is a publishable ESM facade over the private
 `bindings/device-sdk-wasm` bridge. Browser code owns Web Bluetooth lifecycle;
-the WASM core owns exact connection sequencing and protocol decoding. The
-initial public API contains `BotaDeviceClient.create()`, `destroy()`,
-`DeviceManager.connect()`, `disconnect()`, `connectedDevice`, and
-`readSnapshot()`.
+the WASM core owns exact connection sequencing and protocol decoding.
+`BotaDeviceClient` composes exactly one shared runtime, one operation
+coordinator, and one instance of each public foreground manager. Read-only
+construction needs neither storage nor providers. Durable construction uses a
+non-empty tenant `storageNamespace`; a caller-provided storage adapter must
+report that exact namespace, otherwise creation fails before browser or device
+work. Manager names are root-exported as instance types only: operational
+construction remains client-owned, and applications use `client.devices`,
+`client.recordings`, `client.provisioning`, `client.wifi`, `client.controls`,
+`client.ota`, and `client.logs`.
 
 Connection always starts with the browser's explicit device picker and requires
 the caller's expected serial number. The advertised name is only a picker
@@ -988,12 +997,90 @@ If client destruction races an open picker, the eventual picker result is
 rejected as cancelled before it can become the active device or start GATT
 work. If destruction races later connection work, the captured device is
 disconnected and cannot be published by a late workflow completion.
+Client destruction marks every manager terminal before awaiting cleanup. It
+joins non-cancellable picker and verified-device-hint loads before resolving;
+late results cannot publish a connection or start GATT ownership, and a late
+picker device is cleaned up. It then cancels and joins every non-device direct
+or workflow owner and removes passive subscriptions and leases before the one
+final device disconnect. Tenant cleanup runs only through
+`clearPersistedData()`: it requires no active coordinator owner, performs no
+BLE command, and remains safe and repeatable after destroy for logout ordering.
+Teardown uses exhaustive joins rather than fail-fast aggregation. Failure
+precedence is deterministic: manager cleanup in client declaration order,
+runtime teardown, then final disconnect. The first failure is normalized to a
+stable public SDK error only after every initiated stage settles.
+
+Foreground firmware update is exposed through the client's `OTAManager`. The
+application resolves stable image identity to a fresh HTTPS request, while the
+browser host streams bounded chunks directly to OPFS and incrementally verifies
+exact length, SHA-256, and CRC32 before Rust may write GATT. Only stable image
+identity and workflow checkpoints are durable; request URLs and headers remain
+memory-only. An update or non-reconnecting active resume from a live connection
+freshly re-verifies the exact active Device Information serial before provider,
+journal mutation, or OTA GATT. Cleanup-only recovery remains local and BLE-free.
+A compatible verified blob can be reused after reload, while an
+incomplete blob restarts from byte zero with a freshly resolved request.
+
+Rust owns OTA transfer, device status handling, verification, reboot, reconnect,
+and public workflow errors. Reboot recovery requires authorized-device
+enumeration and filters it to the exact browser device ID captured by the
+verified connection. Cancellation retains mutation ownership until provider,
+fetch, OPFS, GATT, subscription, and timer work settles, then reconciles the
+latest durable journal so a compatible verified artifact remains recoverable.
+Generic workflow-host operations, including checkpoint load/save/delete, also
+remain joined before ownership release. Fresh-page recovery for download,
+transfer, and verify phases establishes the same exact authorized connection
+and re-verifies serial before OTA GATT. Before Rust's terminal checkpoint delete,
+the persistence host durably advances the optional firmware-journal `state` from
+`active` to the one-way `cleanup_only` value; any reload from that state performs
+only idempotent checkpoint, blob, and journal cleanup.
+
+`LogManager.subscribe()` starts the Rust `ReadDeviceLogs` workflow and resolves
+only after subscribe-before-START setup reaches a running state. One exact
+workflow owner and diagnostics-characteristic lease cover the stream. TypeScript
+maps only Rust `DeviceLog` notifications to public `{ message, isBacklog }`
+values; raw packets and decoder details never reach application callbacks.
+The manager freshly re-verifies the active Device Information serial before it
+claims the diagnostics lease; it never opens the picker or probes by name.
+Canonical undersized packets are ignored by Rust without resetting decoder
+sequence state, allowing later valid packets to decode normally; genuine Rust,
+bridge, and runtime failures remain sanitized. Synchronous listener throws and
+rejected promise-like listener results both disable delivery and cancel the
+exact workflow.
+Removal, listener failure, disconnect, and client destruction join initiated
+subscription setup and GATT writes before releasing the lease. A stream that
+completes without cancellation is classified as a retryable connection failure.
+
+The foreground surface also includes exact authorized-device reconnect;
+recording list and legacy or freshly advertised encrypted-upload-v2 sync;
+provisioning and remove-only deprovisioning; connection settings; WiFi scan,
+configuration, disconnect, status, and status subscription; grant-bound
+recording start/stop; and durable OTA and log workflows described above. The
+shared runtime serializes mutating GATT ownership. Recording and firmware bodies
+stay in OPFS, while IndexedDB stores tenant-scoped journals and checkpoints.
+Host providers own provisioning material, object-storage destinations and
+cloud completion, recording-control authority, and firmware download
+resolution. Their credentials and operation material remain memory-only.
 
 This release is foreground-only and requires a secure-context browser with Web
-Bluetooth. It has no automatic scan, saved-device reconnect, background or
-closed-tab execution, recording operations, upload transport, provisioning,
-settings, recording control, OTA, or logs. The host Portal continues to own
-authentication and all backend API calls.
+Bluetooth. It does not provide automatic or background scan, service-worker or
+closed-tab Bluetooth, live recording streaming, authenticated destructive
+factory reset, Safari/iOS fallback, a Bluetooth polyfill, Flutter Web, Windows,
+or a built-in Bota API client. The host application continues to own
+authentication and every backend API call. Browser permission is not device
+identity or backend authorization, and unsupported optional capabilities fail
+before device mutation.
+
+The Web release gate creates one npm tarball and inspects its archive headers
+and bounded regular-file payloads exactly once without extraction. That pass
+creates a checksum-bound inventory. The Vite consumer installs only the same
+local artifact; the browser stage validates the original inventory, source
+revision, tarball hash, and installed regular-file hashes without parsing the
+archive again before the production ESM/WASM Chromium cases run. CI then
+preserves the tarball and inventory unchanged for protected beta publication.
+The supervised Chromium/device matrix in
+`docs/testing/web-physical-device.md` is a separate release gate. Automated
+Chromium cases use deterministic fake Bluetooth and cannot satisfy it.
 
 ## Security
 

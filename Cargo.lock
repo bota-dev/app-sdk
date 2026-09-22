@@ -154,6 +154,7 @@ dependencies = [
  "bota-device-sdk-core",
  "serde",
  "serde-wasm-bindgen",
+ "sha2",
  "wasm-bindgen",
 ]
 

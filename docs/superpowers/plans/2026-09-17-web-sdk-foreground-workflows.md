@@ -572,6 +572,7 @@ The implementation adds focused Web files instead of growing `deviceManager.ts` 
     blobId: string
     downloadedBytes: number
     verified: boolean
+    state?: 'active' | 'cleanup_only'
     updatedAtEpochMs: number
   }
 
@@ -1478,7 +1479,7 @@ The implementation adds focused Web files instead of growing `deviceManager.ts` 
   }
   ```
 
-  Persist the firmware journal before provider resolution. Start Rust with the journal's stable download ID and verified reconnect hint. On success, delete checkpoint, blob, then journal. On retryable failure retain only compatible durable state; on integrity failure delete the untrusted blob but preserve the journal's safe identity metadata.
+  Persist the firmware journal before provider resolution. Start Rust with the journal's stable download ID and verified reconnect hint. On success, persist one-way `cleanup_only` before deleting checkpoint, blob, then journal, so every crash boundary resumes as cleanup only. On retryable failure retain only compatible durable state; on integrity failure delete the untrusted blob but preserve the journal's safe identity metadata.
 
 - [ ] **Step 6: Run OTA and Web gates**
 
@@ -1519,7 +1520,9 @@ The implementation adds focused Web files instead of growing `deviceManager.ts` 
 
   - one subscription starts the Rust workflow and subscribes once;
   - decoded `{message,isBacklog}` values come only from Rust notifications;
-  - malformed raw packets fail without exposing bytes or decoder detail;
+  - undersized malformed raw packets are ignored without exposing bytes or
+    decoder detail, preserve Rust decoder sequence state, and allow later valid
+    packets to decode normally;
   - a second log owner fails with `operation_in_progress`;
   - listener exceptions remove the subscription and cancel the exact workflow;
   - explicit removal, BLE disconnect, client destruction, and repeated removal each leave no listener or characteristic lease;

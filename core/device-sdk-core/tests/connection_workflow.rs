@@ -40,6 +40,14 @@ fn host(request_id: RequestId, kind: HostEventKind) -> Event {
     Event::Host(HostEvent { request_id, kind })
 }
 
+fn assert_identity_not_trusted(effects: &[EffectRequest]) {
+    assert!(!effects.iter().any(|request| matches!(
+        request.effect,
+        Effect::Persistence(PersistenceEffect::SaveConnectionIdentity { .. })
+            | Effect::Notify(WorkflowNotification::ConnectionEstablished { .. })
+    )));
+}
+
 fn reach_serial_read(
     engine: &mut WorkflowEngine,
     started: &[EffectRequest],
@@ -292,65 +300,132 @@ fn reconnect_waits_for_an_exact_address_without_probing_same_name_early() {
         .unwrap();
     assert!(ignored.is_empty());
 
-    let exact = candidate("new-ios-id", Some("EF:7F:26:9C:C7:73"), -42);
     let stopping = engine
         .dispatch(host(
             scan_request,
             HostEventKind::Ble(BleEvent::ScanResult {
-                candidate: exact.clone(),
+                candidate: candidate("new-ios-id", Some("EF:7F:26:9C:C7:73"), -42),
             }),
         ))
         .unwrap();
     assert!(
-        !stopping
+        stopping
             .iter()
-            .any(|request| matches!(request.effect, Effect::Ble(BleEffect::Read { .. })))
+            .any(|request| matches!(request.effect, Effect::Ble(BleEffect::StopScan)))
     );
-    let stop_request = request_id(&stopping, |effect| {
-        matches!(effect, Effect::Ble(BleEffect::StopScan))
-    });
-    let connecting = engine
-        .dispatch(host(
-            stop_request,
-            HostEventKind::Ble(BleEvent::ScanStopped),
-        ))
-        .unwrap();
-    assert!(connecting.iter().any(|request| matches!(
-        &request.effect,
-        Effect::Ble(BleEffect::Connect { peripheral_id }) if peripheral_id == &exact.peripheral_id
-    )));
+    assert_identity_not_trusted(&stopping);
+}
 
-    let connect_request = request_id(&connecting, |effect| {
-        matches!(effect, Effect::Ble(BleEffect::Connect { .. }))
-    });
-    let discovering = engine
-        .dispatch(host(
-            connect_request,
-            HostEventKind::Ble(BleEvent::Connected {
-                peripheral_id: exact.peripheral_id.clone(),
-            }),
-        ))
-        .unwrap();
-    let discover_request = request_id(&discovering, |effect| {
-        matches!(effect, Effect::Ble(BleEffect::DiscoverServices { .. }))
-    });
-    let persisting = engine
-        .dispatch(host(
-            discover_request,
-            HostEventKind::Ble(BleEvent::ServicesDiscovered {
-                peripheral_id: exact.peripheral_id,
-            }),
-        ))
-        .unwrap();
-    assert!(persisting.iter().any(|request| matches!(
-        request.effect,
-        Effect::Persistence(PersistenceEffect::SaveConnectionIdentity { .. })
-    )));
-    assert!(
-        !persisting
-            .iter()
-            .any(|request| matches!(request.effect, Effect::Ble(BleEffect::Read { .. })))
-    );
+#[test]
+fn reconnect_exact_hints_read_serial_before_trusting_identity_and_reject_mismatches() {
+    let exact = candidate("exact-peripheral", Some("EF:7F:26:9C:C7:73"), -42);
+    let hints = [
+        ReconnectHint {
+            stored_peripheral_id: Some(exact.peripheral_id.clone()),
+            advertised_address: None,
+            stored_name: Some("Bota Pin".into()),
+            scan_timeout_ms: 1_000,
+            connection_timeout_ms: 10_000,
+        },
+        ReconnectHint {
+            stored_peripheral_id: Some("old-ios-id".into()),
+            advertised_address: Some("ef7f269cc773".into()),
+            stored_name: Some("Bota Pin".into()),
+            scan_timeout_ms: 1_000,
+            connection_timeout_ms: 10_000,
+        },
+    ];
+
+    for hint in hints {
+        let mut engine = WorkflowEngine::default();
+        let started = start_reconnect(&mut engine, hint);
+        assert_identity_not_trusted(&started);
+        let scan_request = request_id(&started, |effect| {
+            matches!(effect, Effect::Ble(BleEffect::StartScan { .. }))
+        });
+
+        let stopping = engine
+            .dispatch(host(
+                scan_request,
+                HostEventKind::Ble(BleEvent::ScanResult {
+                    candidate: exact.clone(),
+                }),
+            ))
+            .unwrap();
+        assert_identity_not_trusted(&stopping);
+        let stop_request = request_id(&stopping, |effect| {
+            matches!(effect, Effect::Ble(BleEffect::StopScan))
+        });
+        let connecting = engine
+            .dispatch(host(
+                stop_request,
+                HostEventKind::Ble(BleEvent::ScanStopped),
+            ))
+            .unwrap();
+        assert_identity_not_trusted(&connecting);
+
+        let connect_request = request_id(&connecting, |effect| {
+            matches!(effect, Effect::Ble(BleEffect::Connect { .. }))
+        });
+        let discovering = engine
+            .dispatch(host(
+                connect_request,
+                HostEventKind::Ble(BleEvent::Connected {
+                    peripheral_id: exact.peripheral_id.clone(),
+                }),
+            ))
+            .unwrap();
+        assert_identity_not_trusted(&discovering);
+        let discover_request = request_id(&discovering, |effect| {
+            matches!(effect, Effect::Ble(BleEffect::DiscoverServices { .. }))
+        });
+        let reading = engine
+            .dispatch(host(
+                discover_request,
+                HostEventKind::Ble(BleEvent::ServicesDiscovered {
+                    peripheral_id: exact.peripheral_id.clone(),
+                }),
+            ))
+            .unwrap();
+        assert_identity_not_trusted(&reading);
+        let read_request = request_id(&reading, |effect| {
+            matches!(
+                effect,
+                Effect::Ble(BleEffect::Read {
+                    service_uuid,
+                    characteristic_uuid,
+                }) if service_uuid == "180A" && characteristic_uuid == "2A25"
+            )
+        });
+
+        let releasing = engine
+            .dispatch(host(
+                read_request,
+                HostEventKind::Ble(BleEvent::ReadCompleted {
+                    value: b"OTHER12345".to_vec(),
+                }),
+            ))
+            .unwrap();
+        assert_identity_not_trusted(&releasing);
+        let disconnect_request = request_id(&releasing, |effect| {
+            matches!(effect, Effect::Ble(BleEffect::Disconnect { .. }))
+        });
+        let failed = engine
+            .dispatch(host(
+                disconnect_request,
+                HostEventKind::Ble(BleEvent::Disconnected {
+                    peripheral_id: exact.peripheral_id.clone(),
+                    reason_code: None,
+                }),
+            ))
+            .unwrap();
+        assert_identity_not_trusted(&failed);
+        assert!(failed.iter().any(|request| matches!(
+            &request.effect,
+            Effect::Notify(WorkflowNotification::Failed { error })
+                if error.code == ErrorCode::DeviceNotFound
+        )));
+    }
 }
 
 #[test]

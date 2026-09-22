@@ -7,7 +7,7 @@ use bota_device_sdk_core::{
     },
     error::{ErrorCode, Operation},
     generated::protocol::{
-        CHAR_FIRMWARE_REVISION, CHAR_RECORDING_TRANSFER, CHAR_TRANSFER_CONTROL,
+        CHAR_FIRMWARE_REVISION, CHAR_RECORDING_TRANSFER, CHAR_SERIAL_NUMBER, CHAR_TRANSFER_CONTROL,
         CHAR_TRANSFER_STATUS, FIRMWARE_ACK, FIRMWARE_UPLOAD_START, FIRMWARE_UPLOAD_VERIFY,
     },
     model::{
@@ -586,11 +586,26 @@ fn successful_reconnect_reads_back_the_target_firmware_version() {
     let discover_request = request_id(&discovering, |effect| {
         matches!(effect, Effect::Ble(BleEffect::DiscoverServices { .. }))
     });
-    let persisting = engine
+    let reading_serial = engine
         .dispatch(host(
             discover_request,
             HostEventKind::Ble(BleEvent::ServicesDiscovered {
                 peripheral_id: "new-ios-id".into(),
+            }),
+        ))
+        .unwrap();
+    let serial_request = request_id(&reading_serial, |effect| {
+        matches!(
+            effect,
+            Effect::Ble(BleEffect::Read { characteristic_uuid, .. })
+                if characteristic_uuid == CHAR_SERIAL_NUMBER
+        )
+    });
+    let persisting = engine
+        .dispatch(host(
+            serial_request,
+            HostEventKind::Ble(BleEvent::ReadCompleted {
+                value: b"EVFXXW67KP".to_vec(),
             }),
         ))
         .unwrap();

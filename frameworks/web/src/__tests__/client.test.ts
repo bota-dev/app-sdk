@@ -1,0 +1,475 @@
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import test from 'node:test'
+
+import {
+  BotaDeviceClient,
+  BotaSDKError,
+} from '../index.ts'
+import type {
+  ControlManager,
+  DeviceManager,
+  LogManager,
+  OTAManager,
+  ProvisioningManager,
+  RecordingManager,
+  WiFiManager,
+} from '../index.ts'
+import * as publicApi from '../index.ts'
+import { createWasmCore } from '../wasmCore.ts'
+import { FakeBrowserBluetoothTransport } from './fakeBluetooth.ts'
+import {
+  deferred,
+  FakeRecordingStorage,
+} from './fakeProviders.ts'
+
+const SERIAL = 'GDPPSBZJN6'
+const NAMESPACE = 'organization:project:user'
+const wasmBytes = readFile(
+  new URL('../generated/bota_device_sdk_core_bg.wasm', import.meta.url),
+)
+
+class ObservedStorage extends FakeRecordingStorage {
+  clearCalls = 0
+  clearGate: Promise<void> | null = null
+
+  override async clear(): Promise<void> {
+    this.clearCalls += 1
+    if (this.clearGate) await this.clearGate
+    await super.clear()
+  }
+}
+
+async function createClient(options: {
+  storageNamespace?: string
+  storage?: ObservedStorage
+  transport?: FakeBrowserBluetoothTransport
+} = {}): Promise<{
+  client: BotaDeviceClient
+  storage: ObservedStorage | undefined
+  transport: FakeBrowserBluetoothTransport
+}> {
+  const core = await createWasmCore(await wasmBytes)
+  const transport = options.transport ?? new FakeBrowserBluetoothTransport()
+  const client = await BotaDeviceClient.create({
+    coreLoader: async () => core,
+    transport,
+    ...(options.storageNamespace === undefined
+      ? {}
+      : { storageNamespace: options.storageNamespace }),
+    ...(options.storage === undefined ? {} : { storage: options.storage }),
+  })
+  return { client, storage: options.storage, transport }
+}
+
+test('the root module exports only the approved browser runtime values', () => {
+  assert.deepEqual(Object.keys(publicApi).sort(), [
+    'BotaDeviceClient',
+    'BotaSDKError',
+  ])
+})
+
+test('read-only construction needs neither durable storage nor providers', async () => {
+  const { client, transport } = await createClient()
+
+  const typedManagers: {
+    devices: DeviceManager
+    recordings: RecordingManager
+    provisioning: ProvisioningManager
+    wifi: WiFiManager
+    controls: ControlManager
+    ota: OTAManager
+    logs: LogManager
+  } = client
+  assert.strictEqual(typedManagers.devices, client.devices)
+  assert.deepEqual(transport.calls, [])
+
+  await assert.rejects(
+    client.recordings.listPendingOperations(),
+    isSdkError('storage_unavailable'),
+  )
+  await assert.rejects(
+    client.provisioning.provision({ attemptId: 'attempt-without-provider' }),
+    isSdkError('unsupported_capability'),
+  )
+  await assert.rejects(
+    client.devices.reconnect({ expectedSerialNumber: SERIAL }),
+    isSdkError('picker_required'),
+  )
+  await assert.rejects(
+    client.controls.startRecording({ authorityId: 'authority-without-provider' }),
+    isSdkError('unsupported_capability'),
+  )
+  assert.deepEqual(transport.calls, [])
+
+  await client.destroy()
+})
+
+test('each client owns seven distinct managers over one unshared runtime', async () => {
+  const first = await createClient()
+  const second = await createClient()
+  const firstManagers = managerGraph(first.client)
+  const secondManagers = managerGraph(second.client)
+  const firstRuntime = internalRuntime(first.client.devices)
+  const secondRuntime = internalRuntime(second.client.devices)
+
+  assert.equal(new Set(firstManagers).size, 7)
+  assert.equal(new Set(secondManagers).size, 7)
+  for (const manager of firstManagers) {
+    assert.strictEqual(internalRuntime(manager), firstRuntime)
+  }
+  for (const manager of secondManagers) {
+    assert.strictEqual(internalRuntime(manager), secondRuntime)
+  }
+  for (const firstManager of firstManagers) {
+    for (const secondManager of secondManagers) {
+      assert.notStrictEqual(firstManager, secondManager)
+    }
+  }
+  assert.notStrictEqual(firstRuntime, secondRuntime)
+
+  await Promise.all([first.client.destroy(), second.client.destroy()])
+})
+
+test('caller storage requires the exact requested tenant namespace', async () => {
+  const storage = new ObservedStorage('organization:project:other-user')
+  const core = await createWasmCore(await wasmBytes)
+  const transport = new FakeBrowserBluetoothTransport()
+
+  await assert.rejects(
+    BotaDeviceClient.create({
+      coreLoader: async () => core,
+      transport,
+      storageNamespace: NAMESPACE,
+      storage,
+    }),
+    isSdkError('invalid_input'),
+  )
+  await assert.rejects(
+    BotaDeviceClient.create({
+      coreLoader: async () => core,
+      transport,
+      storage,
+    }),
+    isSdkError('invalid_input'),
+  )
+  const emptyStorage = new ObservedStorage(' ')
+  await assert.rejects(
+    BotaDeviceClient.create({
+      coreLoader: async () => core,
+      transport,
+      storageNamespace: ' ',
+      storage: emptyStorage,
+    }),
+    isSdkError('invalid_input'),
+  )
+  assert.equal(storage.clearCalls, 0)
+  assert.deepEqual(transport.calls, [])
+})
+
+test('clearPersistedData is tenant-local, BLE-free, and repeatable after destroy', async () => {
+  const storage = new ObservedStorage(NAMESPACE)
+  const otherTenant = new ObservedStorage('organization:project:other-user')
+  storage.verifiedDevices.set(SERIAL, verifiedHint(SERIAL))
+  otherTenant.verifiedDevices.set('OTHERDEVICE1', verifiedHint('OTHERDEVICE1'))
+  const { client, transport } = await createClient({
+    storageNamespace: NAMESPACE,
+    storage,
+  })
+
+  await client.destroy()
+  const callsAfterDestroy = [...transport.calls]
+  await client.clearPersistedData()
+  await client.clearPersistedData()
+
+  assert.equal(storage.clearCalls, 2)
+  assert.equal(storage.verifiedDevices.size, 0)
+  assert.equal(otherTenant.clearCalls, 0)
+  assert.equal(otherTenant.verifiedDevices.has('OTHERDEVICE1'), true)
+  assert.deepEqual(transport.calls, callsAfterDestroy)
+})
+
+test('one shared coordinator rejects a second manager operation', async () => {
+  const storage = new ObservedStorage(NAMESPACE)
+  const transport = new FakeBrowserBluetoothTransport()
+  const { client } = await createClient({
+    storageNamespace: NAMESPACE,
+    storage,
+    transport,
+  })
+  await client.devices.connect({ expectedSerialNumber: SERIAL })
+  transport.calls.length = 0
+  const readEntered = deferred<void>()
+  const releaseRead = deferred<void>()
+  transport.onRead = () => readEntered.resolve(undefined)
+  transport.readGate = releaseRead.promise
+
+  const snapshot = client.devices.readSnapshot()
+  await readEntered.promise
+  await assert.rejects(client.wifi.readStatus(), isSdkError('operation_in_progress'))
+  await assert.rejects(
+    client.clearPersistedData(),
+    isSdkError('operation_in_progress'),
+  )
+  assert.equal(storage.clearCalls, 0)
+
+  const destroy = client.destroy()
+  const clearAfterDestroy = client.clearPersistedData()
+  assert.equal(await isSettled(destroy), false)
+  assert.equal(await isSettled(clearAfterDestroy), false)
+  assert.equal(storage.clearCalls, 0)
+  assert.equal(transport.calls.some((call) => call.startsWith('disconnect:')), false)
+  releaseRead.resolve(undefined)
+  await assert.rejects(snapshot, isSdkError('cancelled'))
+  await Promise.all([destroy, clearAfterDestroy])
+  assert.equal(storage.clearCalls, 1)
+  assert.equal(transport.calls.at(-1), 'disconnect:browser-peripheral-1')
+})
+
+test('destroy is immediately terminal across managers and joins workflow cleanup', async () => {
+  const storage = new ObservedStorage(NAMESPACE)
+  const transport = new FakeBrowserBluetoothTransport()
+  const { client } = await createClient({
+    storageNamespace: NAMESPACE,
+    storage,
+    transport,
+  })
+  await client.devices.connect({ expectedSerialNumber: SERIAL })
+  transport.calls.length = 0
+  const writeEntered = deferred<void>()
+  const releaseWrite = deferred<void>()
+  transport.onWrite = () => writeEntered.resolve(undefined)
+  transport.writeGate = releaseWrite.promise
+  const subscription = client.logs.subscribe(() => undefined)
+  await writeEntered.promise
+
+  const firstDestroy = client.destroy()
+  const secondDestroy = client.destroy()
+  await assert.rejects(client.devices.disconnect(), isSdkError('cancelled'))
+  await assert.rejects(client.wifi.readStatus(), isSdkError('cancelled'))
+  await assert.rejects(client.recordings.list(), isSdkError('cancelled'))
+  await assert.rejects(
+    client.recordings.cancel('transfer_recording:after-destroy'),
+    isSdkError('cancelled'),
+  )
+  await assert.rejects(
+    client.provisioning.readConnectionSettings(),
+    isSdkError('cancelled'),
+  )
+  await assert.rejects(
+    client.controls.startRecording({ authorityId: 'after-destroy' }),
+    isSdkError('cancelled'),
+  )
+  await assert.rejects(client.logs.subscribe(() => undefined), isSdkError('cancelled'))
+  await assert.rejects(
+    client.ota.cancelFirmwareUpdate('update_firmware:after-destroy'),
+    isSdkError('cancelled'),
+  )
+  assert.equal(await isSettled(firstDestroy), false)
+  assert.equal(transport.calls.some((call) => call.startsWith('disconnect:')), false)
+
+  releaseWrite.resolve(undefined)
+  await assert.rejects(subscription, isSdkError('cancelled'))
+  await Promise.all([firstDestroy, secondDestroy])
+  assert.equal(
+    transport.calls.filter((call) => call.startsWith('unsubscribe:')).length,
+    1,
+  )
+  assert.equal(
+    transport.calls.filter((call) => call === 'disconnect:browser-peripheral-1').length,
+    1,
+  )
+})
+
+test('client destroy removes a pending passive WiFi subscription before disconnect', async () => {
+  const transport = new FakeBrowserBluetoothTransport()
+  const { client } = await createClient({ transport })
+  await client.devices.connect({ expectedSerialNumber: SERIAL })
+  transport.calls.length = 0
+  const subscribeStarted = deferred<void>()
+  const releaseSubscribe = deferred<void>()
+  const unsubscribeStarted = deferred<void>()
+  const releaseUnsubscribe = deferred<void>()
+  transport.onSubscribe = () => subscribeStarted.resolve(undefined)
+  transport.subscribeGate = releaseSubscribe.promise
+  transport.onUnsubscribe = () => unsubscribeStarted.resolve(undefined)
+  transport.unsubscribeGate = releaseUnsubscribe.promise
+
+  const subscribing = client.wifi.subscribeToStatus(() => undefined)
+  void subscribing.catch(() => undefined)
+  await subscribeStarted.promise
+  const destroying = client.destroy()
+
+  assert.equal(await isSettled(destroying), false)
+  assert.equal(transport.calls.some((call) => call.startsWith('disconnect:')), false)
+  releaseSubscribe.resolve(undefined)
+  await unsubscribeStarted.promise
+  assert.equal(await isSettled(destroying), false)
+  assert.equal(transport.calls.some((call) => call.startsWith('disconnect:')), false)
+
+  releaseUnsubscribe.resolve(undefined)
+  await assert.rejects(subscribing, isSdkError('cancelled'))
+  await destroying
+  const unsubscribeIndex = transport.calls.findIndex((call) =>
+    call.startsWith('unsubscribe:'))
+  const disconnectIndex = transport.calls.findIndex((call) =>
+    call === 'disconnect:browser-peripheral-1')
+  assert.ok(unsubscribeIndex >= 0 && unsubscribeIndex < disconnectIndex)
+  assert.equal(
+    transport.calls.filter((call) =>
+      call === 'disconnect:browser-peripheral-1').length,
+    1,
+  )
+})
+
+test('client destroy exhaustively joins cleanup failures before final teardown', async () => {
+  const transport = new FakeBrowserBluetoothTransport()
+  const { client } = await createClient({ transport })
+  await client.devices.connect({ expectedSerialNumber: SERIAL })
+  await client.wifi.subscribeToStatus(() => undefined)
+  transport.calls.length = 0
+  const events: string[] = []
+  transport.eventLog = events
+  const cleanupCanFail = deferred<void>()
+  const unsubscribeStarted = deferred<void>()
+  const unsubscribeCanFinish = deferred<void>()
+  const cleanupFailure = new BotaSDKError(
+    'protocol_error',
+    'read_device_logs',
+  )
+  const originalLogDestroy = client.logs.destroy.bind(client.logs)
+  const originalRuntimeDestroy = internalRuntime(client.devices).destroy.bind(
+    internalRuntime(client.devices),
+  )
+  const originalDisconnect = transport.disconnect.bind(transport)
+
+  client.logs.destroy = async () => {
+    await originalLogDestroy()
+    await cleanupCanFail.promise
+    events.push('manager_cleanup_failed')
+    throw cleanupFailure
+  }
+  internalRuntime(client.devices).destroy = async () => {
+    events.push('runtime_destroy')
+    await originalRuntimeDestroy()
+    throw new Error('private runtime teardown failure')
+  }
+  transport.onUnsubscribe = () => unsubscribeStarted.resolve(undefined)
+  transport.unsubscribeGate = unsubscribeCanFinish.promise
+  transport.disconnect = async (device) => {
+    events.push('disconnect')
+    await originalDisconnect(device)
+    throw new Error('private disconnect failure')
+  }
+
+  const firstDestroy = client.destroy()
+  const repeatedDestroy = client.destroy()
+  let destroySettled = false
+  void firstDestroy.then(
+    () => { destroySettled = true },
+    () => { destroySettled = true },
+  )
+  const destroyResult = firstDestroy.then(
+    () => null,
+    (error: unknown) => error,
+  )
+  assert.strictEqual(repeatedDestroy, firstDestroy)
+  await unsubscribeStarted.promise
+
+  cleanupCanFail.resolve(undefined)
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  const settledBeforeUnsubscribe = destroySettled
+  unsubscribeCanFinish.resolve(undefined)
+  const rejection = await destroyResult
+
+  assert.equal(settledBeforeUnsubscribe, false)
+  assert.strictEqual(rejection, cleanupFailure)
+  assert.equal(String(rejection).includes('private runtime'), false)
+  assert.equal(String(rejection).includes('private disconnect'), false)
+  const unsubscribeIndex = events.findIndex((event) =>
+    event.startsWith('unsubscribe:'))
+  const runtimeIndex = events.indexOf('runtime_destroy')
+  const disconnectIndex = events.indexOf('disconnect')
+  assert.ok(unsubscribeIndex >= 0 && unsubscribeIndex < runtimeIndex)
+  assert.ok(runtimeIndex >= 0 && runtimeIndex < disconnectIndex)
+  assert.equal(
+    transport.calls.filter((call) =>
+      call === 'disconnect:browser-peripheral-1').length,
+    1,
+  )
+  assert.strictEqual(
+    await client.destroy().catch((error: unknown) => error),
+    rejection,
+  )
+})
+
+test('logs reverify the exact active serial after reconnect without picker fallback', async () => {
+  const storage = new ObservedStorage(NAMESPACE)
+  const transport = new FakeBrowserBluetoothTransport()
+  const { client } = await createClient({
+    storageNamespace: NAMESPACE,
+    storage,
+    transport,
+  })
+  await client.devices.connect({ expectedSerialNumber: SERIAL })
+  await client.devices.disconnect()
+  await client.devices.reconnect({ expectedSerialNumber: SERIAL })
+  transport.calls.length = 0
+  transport.serialNumber = 'OTHERDEVICE1'
+
+  try {
+    await assert.rejects(
+      client.logs.subscribe(() => undefined),
+      isSdkError('identity_mismatch'),
+    )
+    assert.equal(transport.calls.includes('request_device'), false)
+    assert.equal(transport.calls.includes('get_authorized_devices'), false)
+    assert.equal(transport.calls.some((call) => call.startsWith('write:')), false)
+  } finally {
+    await client.destroy()
+  }
+})
+
+function verifiedHint(serialNumber: string) {
+  return {
+    schemaVersion: 1 as const,
+    serialNumber,
+    browserDeviceId: 'browser-peripheral-1',
+    name: 'Bota Pin',
+    updatedAtEpochMs: 1_789_000_000_000,
+  }
+}
+
+function isSdkError(code: BotaSDKError['code']): (error: unknown) => boolean {
+  return (error: unknown) => {
+    assert.ok(error instanceof BotaSDKError)
+    assert.equal(error.code, code)
+    return true
+  }
+}
+
+async function isSettled(promise: Promise<unknown>): Promise<boolean> {
+  const marker = Symbol('pending')
+  return await Promise.race([
+    promise.then(() => true, () => true),
+    Promise.resolve(marker),
+  ]) !== marker
+}
+
+function managerGraph(client: BotaDeviceClient): readonly object[] {
+  return [
+    client.devices,
+    client.recordings,
+    client.provisioning,
+    client.wifi,
+    client.controls,
+    client.ota,
+    client.logs,
+  ]
+}
+
+function internalRuntime(manager: object): {
+  destroy(): Promise<void>
+} {
+  return (manager as { runtime: { destroy(): Promise<void> } }).runtime
+}

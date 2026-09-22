@@ -22,6 +22,18 @@
       "baselineReference": "src/managers/DeviceManager.ts"
     },
     {
+      "name": "recording-control-start-command",
+      "operation": "encodeRecordingControlStart",
+      "expectedHex": "10",
+      "baselineReference": "src/managers/DeviceManager.ts"
+    },
+    {
+      "name": "recording-control-stop-command",
+      "operation": "encodeRecordingControlStop",
+      "expectedHex": "11",
+      "baselineReference": "src/managers/DeviceManager.ts"
+    },
+    {
       "name": "recording-control-success",
       "operation": "parseRecordingControlResult",
       "inputHex": "010000000000",

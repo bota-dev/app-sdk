@@ -3,8 +3,9 @@
 Source monorepo for the **Bota App SDK** family. The repository provides a
 shared Rust protocol and workflow core with platform-native Bluetooth
 transports and Apple, Android, React Native, Flutter, and Web facades. The Web
-facade currently exposes its read-only beta foundation; foreground workflow
-parity is the next approved increment. The Windows facade remains planned.
+facade implements the browser-feasible foreground workflow surface for the
+`1.2.0-beta.1` candidate. Its supervised physical Chromium matrix has not run,
+so that beta remains blocked. The Windows facade remains planned.
 
 `@bota.dev/react-native-sdk@1.1.0`, `BotaAppleSDK`, and
 `dev.bota:bota-android-sdk:1.1.0` are the first synchronized public App SDK
@@ -38,14 +39,13 @@ release action.
 
 ## Current Status
 
-The next synchronized version is `1.2.0-beta.1`. The prepared source adds
-the first `@bota.dev/web-sdk` package: an explicit, foreground Web Bluetooth picker,
-exact serial verification through the shared Rust/WASM workflow, explicit
-disconnect, and fresh read-only identity, device-status, and
-encrypted-upload-v2 capability snapshots. A packed-package gate installs the
-exact tarball in a clean Vite application. Recording, upload, provisioning,
-settings, control, OTA, logs, saved reconnect, and background browser behavior
-remain deferred.
+The next synchronized version is `1.2.0-beta.1`. The prepared source composes
+the foreground Web managers for picker and authorized reconnect, snapshots,
+recording workflows, provisioning and settings, WiFi, recording control, OTA,
+and device logs over one shared Rust/WASM runtime. Unit, packed-consumer, and
+automated Chromium gates pass locally. Supervised physical-device acceptance
+and protected publication remain open; background browser behavior remains
+unsupported.
 
 The App SDK has published synchronized beta release `1.1.0`: the repository has a generated
 protocol manifest, 64 language-neutral compatibility fixtures, bounded Rust
@@ -442,8 +442,49 @@ console.log(device.serialNumber, snapshot.status.batteryPercent)
 await bota.destroy()
 ```
 
-The first Web beta is intentionally read-only after connection. It does not
-list, transfer, or upload recordings and does not call the Bota API.
+Construction without options remains valid for read-only connection and
+snapshot use. Durable foreground workflows require a non-empty tenant
+`storageNamespace`; a custom storage adapter must report that exact namespace.
+On logout or tenant switch, await `destroy()` and then
+`clearPersistedData()` so active owners and subscriptions settle before only
+that tenant's local data is removed. Manager names are available as TypeScript
+instance types, while construction remains owned by `BotaDeviceClient.create()`;
+applications do not instantiate managers directly. Destruction also joins an
+open picker or reconnect-hint load, removes passive subscriptions before its
+single disconnect, and prevents late startup results from publishing a device.
+Cleanup rejection does not short-circuit later teardown: every initiated stage
+settles before the first stable SDK cleanup error is returned.
+
+The foreground Web beta exposes recording, provisioning, WiFi, recording
+control, firmware update, and device-log managers alongside connection and
+snapshot APIs. Backend-dependent work remains host-provided through explicit
+provider callbacks; the SDK does not own application authentication or call the
+Bota API implicitly.
+
+### Web capability matrix
+
+| Capability | `1.2.0-beta.1` candidate |
+|---|---|
+| Explicit picker connect and exact-serial snapshot | Implemented, foreground only; the picker must start from a user gesture |
+| Exact authorized-device reconnect | Implemented when `navigator.bluetooth.getDevices()` is available; never falls back by name |
+| Recording list and legacy sync | Implemented with tenant-scoped durable state and host-provided upload callbacks |
+| Encrypted Upload v2 sync | Implemented only when freshly advertised by firmware and exactly authorized by the host |
+| Provisioning and remove-only deprovision | Implemented through host-provided, attempt-bound material; deprovision is not factory reset |
+| Connection settings | Implemented for read and write |
+| WiFi | Implemented for scan, configure, disconnect, status read, and foreground status subscription |
+| Recording control | Implemented for host-authorized start and stop |
+| Firmware update | Implemented with verified OPFS download, progress, cancellation, reload recovery, reboot, and exact-device reconnect |
+| Device logs | Implemented as one sanitized foreground subscription with explicit removal |
+| Background/closed-tab work, live streaming, factory reset | Unavailable |
+| Safari/iOS Web Bluetooth fallback, Flutter Web, Windows | Unavailable |
+
+The full provider examples and browser lifecycle rules are in the
+[Web integration guide](frameworks/web/README.md). Durable workflows require a
+secure context, a non-empty tenant namespace, IndexedDB and OPFS, and the exact
+host provider for each backend-authorized operation. Bluetooth permission is
+not device identity or backend authorization. Always destroy the client before
+tenant cleanup, and always use the authenticated device serial rather than an
+advertised name.
 
 ## Development
 
@@ -457,6 +498,15 @@ Requirements:
   3.22.1 for the Android facade
 - Flutter 3.47.2 with Dart 3.13.2 through the repository wrapper for Flutter
   facade verification
+- Playwright 1.63.0 with only its Chromium build installed under
+  `target/playwright-browsers` for the packed Web consumer gate
+
+The Web release gate packs once with npm 12.0.2, verifies and inventories that
+tarball exactly once with strict archive-header and publication-metadata
+checks, then installs only that local path into the Vite consumer. The browser
+stage does not parse the archive again: it validates the original inventory
+checksum, source revision, tarball identity, and installed regular-file hashes
+before running the Chromium suite against the production ESM/WASM build.
 
 ```bash
 npm ci

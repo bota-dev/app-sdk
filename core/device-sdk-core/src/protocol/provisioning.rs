@@ -4,6 +4,21 @@ use serde::{Deserialize, Serialize};
 use super::cursor::Cursor;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum DeprovisionFailure {
+    InvalidToken,
+    StorageError,
+    ChunkError,
+    AlreadyPaired,
+    Unknown(u8),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct DeprovisionResult {
+    pub success: bool,
+    pub error: Option<DeprovisionFailure>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum WiFiConfigResult {
     Success,
     InvalidGrant,
@@ -86,6 +101,24 @@ impl WiFiConfigResult {
             Self::Unknown(value) => value,
         }
     }
+}
+
+pub fn parse_deprovision_result(bytes: &[u8]) -> Result<DeprovisionResult, DeviceSdkError> {
+    let cursor = Cursor::new(bytes);
+    cursor.require_exact(1)?;
+    let status = cursor.u8(0)?;
+    let error = match status {
+        0 => None,
+        1 => Some(DeprovisionFailure::InvalidToken),
+        2 => Some(DeprovisionFailure::StorageError),
+        3 => Some(DeprovisionFailure::ChunkError),
+        4 => Some(DeprovisionFailure::AlreadyPaired),
+        value => Some(DeprovisionFailure::Unknown(value)),
+    };
+    Ok(DeprovisionResult {
+        success: error.is_none(),
+        error,
+    })
 }
 
 pub fn parse_wifi_config_result(bytes: &[u8]) -> Result<WiFiConfigResult, DeviceSdkError> {

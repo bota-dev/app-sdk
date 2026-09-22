@@ -4,14 +4,21 @@ import test from 'node:test'
 
 import { DeviceManager } from '../deviceManager.ts'
 import { BotaSDKError } from '../errors.ts'
+import {
+  BOTA_CONTROL_SERVICE,
+  BOTA_STORAGE_SERVICE,
+  DEVICE_INFORMATION_SERVICE,
+  DEVICE_STATUS_CHARACTERISTIC,
+  FIRMWARE_REVISION_CHARACTERISTIC,
+  HARDWARE_REVISION_CHARACTERISTIC,
+  MODEL_NUMBER_CHARACTERISTIC,
+  STORAGE_TRANSFER_CAPABILITIES_V2_CHARACTERISTIC,
+} from '../gatt.ts'
 import { BrowserTransportError } from '../transport.ts'
 import { createWasmCore } from '../wasmCore.ts'
 import { FakeBrowserBluetoothTransport } from './fakeBluetooth.ts'
+import { FakeRecordingStorage } from './fakeProviders.ts'
 
-const CONTROL_SERVICE = 'B07A0002-0000-1000-8000-00805F9B34FB'
-const DEVICE_STATUS = 'B07A0002-0001-1000-8000-00805F9B34FB'
-const STORAGE_SERVICE = 'B07A0004-0000-1000-8000-00805F9B34FB'
-const V2_CAPABILITIES = 'B07A0004-0006-1000-8000-00805F9B34FB'
 const STATUS_BYTES = Uint8Array.from([
   0x43, 0x03, 0x03, 0x01, 0x00, 0xf1, 0x53, 0x65, 0x18, 0x00, 0x08,
   0x00, 0x02, 0x14, 0x03, 0x68, 0x10, 0x49, 0x4d, 0x45, 0x49, 0x3d,
@@ -32,11 +39,31 @@ async function connectedManager(): Promise<{
   )
   const core = await createWasmCore(wasm)
   const transport = new FakeBrowserBluetoothTransport()
-  transport.setRead('180A', '2A24', new TextEncoder().encode('Bota Pin'))
-  transport.setRead('180A', '2A27', new TextEncoder().encode('WL83-A'))
-  transport.setRead('180A', '2A26', new TextEncoder().encode('1.4.0'))
-  transport.setRead(CONTROL_SERVICE, DEVICE_STATUS, STATUS_BYTES)
-  transport.setRead(STORAGE_SERVICE, V2_CAPABILITIES, CAPABILITY_BYTES)
+  transport.setRead(
+    DEVICE_INFORMATION_SERVICE,
+    MODEL_NUMBER_CHARACTERISTIC,
+    new TextEncoder().encode('Bota Pin'),
+  )
+  transport.setRead(
+    DEVICE_INFORMATION_SERVICE,
+    HARDWARE_REVISION_CHARACTERISTIC,
+    new TextEncoder().encode('WL83-A'),
+  )
+  transport.setRead(
+    DEVICE_INFORMATION_SERVICE,
+    FIRMWARE_REVISION_CHARACTERISTIC,
+    new TextEncoder().encode('1.4.0'),
+  )
+  transport.setRead(
+    BOTA_CONTROL_SERVICE,
+    DEVICE_STATUS_CHARACTERISTIC,
+    STATUS_BYTES,
+  )
+  transport.setRead(
+    BOTA_STORAGE_SERVICE,
+    STORAGE_TRANSFER_CAPABILITIES_V2_CHARACTERISTIC,
+    CAPABILITY_BYTES,
+  )
   const manager = new DeviceManager(core, transport)
   await manager.connect({ expectedSerialNumber: 'GDPPSBZJN6' })
   transport.calls.length = 0
@@ -70,7 +97,7 @@ test('every snapshot performs a fresh encrypted v2 capability read', async () =>
     transport.calls.filter(
       (call) =>
         call ===
-        `read:browser-peripheral-1:${STORAGE_SERVICE}:${V2_CAPABILITIES}`,
+        `read:browser-peripheral-1:${BOTA_STORAGE_SERVICE}:${STORAGE_TRANSFER_CAPABILITIES_V2_CHARACTERISTIC}`,
     ).length,
     2,
   )
@@ -79,8 +106,8 @@ test('every snapshot performs a fresh encrypted v2 capability read', async () =>
 test('an absent encrypted v2 capability characteristic maps to null', async () => {
   const { manager, transport } = await connectedManager()
   transport.failRead(
-    STORAGE_SERVICE,
-    V2_CAPABILITIES,
+    BOTA_STORAGE_SERVICE,
+    STORAGE_TRANSFER_CAPABILITIES_V2_CHARACTERISTIC,
     new BrowserTransportError('characteristic_not_found'),
   )
 
@@ -91,14 +118,22 @@ test('an absent encrypted v2 capability characteristic maps to null', async () =
 
 test('malformed encrypted v2 capabilities map to protocol_error', async () => {
   const { manager, transport } = await connectedManager()
-  transport.setRead(STORAGE_SERVICE, V2_CAPABILITIES, Uint8Array.of(0x01))
+  transport.setRead(
+    BOTA_STORAGE_SERVICE,
+    STORAGE_TRANSFER_CAPABILITIES_V2_CHARACTERISTIC,
+    Uint8Array.of(0x01),
+  )
 
   await assert.rejects(manager.readSnapshot(), hasCode('protocol_error'))
 })
 
 test('malformed device status maps to protocol_error', async () => {
   const { manager, transport } = await connectedManager()
-  transport.setRead(CONTROL_SERVICE, DEVICE_STATUS, Uint8Array.of(0x00))
+  transport.setRead(
+    BOTA_CONTROL_SERVICE,
+    DEVICE_STATUS_CHARACTERISTIC,
+    Uint8Array.of(0x00),
+  )
 
   await assert.rejects(manager.readSnapshot(), hasCode('protocol_error'))
 })
@@ -112,11 +147,31 @@ test('a changed serial disconnects and rejects the snapshot', async () => {
   assert.equal(transport.calls.at(-1), 'disconnect:browser-peripheral-1')
 })
 
+test('snapshot re-verifies the exact serial after reconnect without picker fallback', async () => {
+  const wasm = await readFile(
+    new URL('../generated/bota_device_sdk_core_bg.wasm', import.meta.url),
+  )
+  const core = await createWasmCore(wasm)
+  const transport = new FakeBrowserBluetoothTransport()
+  const storage = new FakeRecordingStorage()
+  const manager = new DeviceManager(core, transport, { storage })
+  await manager.connect({ expectedSerialNumber: 'GDPPSBZJN6' })
+  await manager.disconnect()
+  await manager.reconnect({ expectedSerialNumber: 'GDPPSBZJN6' })
+  transport.calls.length = 0
+  transport.serialNumber = 'OTHERDEVICE1'
+
+  await assert.rejects(manager.readSnapshot(), hasCode('identity_mismatch'))
+  assert.equal(transport.calls.includes('request_device'), false)
+  assert.equal(transport.calls.includes('get_authorized_devices'), false)
+  assert.equal(manager.connectedDevice, null)
+})
+
 test('a GATT disconnect during snapshot reads maps to device_disconnected', async () => {
   const { manager, transport } = await connectedManager()
   transport.failRead(
-    '180A',
-    '2A24',
+    DEVICE_INFORMATION_SERVICE,
+    MODEL_NUMBER_CHARACTERISTIC,
     new BrowserTransportError('disconnected'),
   )
 

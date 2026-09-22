@@ -45,6 +45,24 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+Web facade changes use Node.js 22+, npm 12.0.2 for packing, and Playwright
+1.63.0 with only Chromium installed under `target/playwright-browsers`. Run the
+single complete local gate rather than testing a source-linked consumer:
+
+```bash
+PLAYWRIGHT_BROWSERS_PATH="$PWD/target/playwright-browsers" \
+  npm run web:verify
+```
+
+That command builds the WASM package, runs the Web unit/type/package suites,
+packs one tarball, installs only that artifact into the Vite consumer, and runs
+automated Chromium with deterministic fake Bluetooth. It does not prove a real
+device. Release acceptance separately follows
+[`docs/testing/web-physical-device.md`](docs/testing/web-physical-device.md);
+never mark a physical row passed from Playwright output, and never run its
+state-changing provisioning, settings, WiFi, recording-control, transfer, OTA,
+or deprovision cases without the supervised prerequisites in that runbook.
+
 Flutter changes use the repository-local Flutter `3.47.2` and Dart `3.13.2`
 toolchain. The wrapper downloads and verifies the official archive under
 `target/flutter-sdk`; `BOTA_FLUTTER_HOME` is accepted only when it reports the

@@ -1,43 +1,83 @@
-import type { CoreBridge, CoreEffect, CoreHostEvent } from './core.ts'
-import { BotaSDKError, normalizeCoreError } from './errors.ts'
+import type { CoreBridge, CoreEffectEnvelope } from './core.ts'
+import { detectBrowserCapabilities } from './capabilities.ts'
+import { BotaSDKError, normalizeCoreError, type BotaOperation } from './errors.ts'
+import {
+  BOTA_CONTROL_SERVICE,
+  BOTA_STORAGE_SERVICE,
+  DEVICE_INFORMATION_SERVICE,
+  DEVICE_STATUS_CHARACTERISTIC,
+  FIRMWARE_REVISION_CHARACTERISTIC,
+  HARDWARE_REVISION_CHARACTERISTIC,
+  MODEL_NUMBER_CHARACTERISTIC,
+  SERIAL_NUMBER_CHARACTERISTIC,
+  STORAGE_TRANSFER_CAPABILITIES_V2_CHARACTERISTIC,
+} from './gatt.ts'
 import type {
+  BrowserCapabilities,
   ConnectOptions,
   ConnectedDevice,
   DeviceSnapshot,
   EncryptedUploadV2Capabilities,
+  ReconnectOptions,
 } from './models.ts'
+import {
+  BrowserStorageError,
+  type BrowserSdkStorage,
+} from './storage.ts'
 import {
   BrowserTransportError,
   type BrowserBluetoothTransport,
   type BrowserDeviceHandle,
 } from './transport.ts'
+import {
+  BrowserWorkflowRuntime,
+  createBrowserPersistenceHost,
+  type WorkflowResult,
+} from './workflowRuntime.ts'
 
 const SERIAL_PATTERN = /^[A-Za-z0-9]{1,64}$/
-const DEVICE_INFORMATION_SERVICE = '180A'
-const SERIAL_NUMBER = '2A25'
-const MODEL_NUMBER = '2A24'
-const HARDWARE_REVISION = '2A27'
-const FIRMWARE_REVISION = '2A26'
-const CONTROL_SERVICE = 'B07A0002-0000-1000-8000-00805F9B34FB'
-const DEVICE_STATUS = 'B07A0002-0001-1000-8000-00805F9B34FB'
-const STORAGE_SERVICE = 'B07A0004-0000-1000-8000-00805F9B34FB'
-const V2_CAPABILITIES = 'B07A0004-0006-1000-8000-00805F9B34FB'
+const CONNECTION_TIMEOUT_MS = 15_000n
+
+interface DeviceManagerOptions {
+  runtime?: BrowserWorkflowRuntime
+  storage?: BrowserSdkStorage | null
+}
+
+interface ConnectionStartup {
+  settled: Promise<void>
+  settle(): void
+}
+
+type DirectStepResult<T> =
+  | { kind: 'completed'; value: T }
+  | { kind: 'failed'; error: unknown }
 
 export class DeviceManager {
   private readonly core: CoreBridge
   private readonly transport: BrowserBluetoothTransport
+  private readonly runtime: BrowserWorkflowRuntime
+  private readonly storage: BrowserSdkStorage | null
+  private readonly capabilities: BrowserCapabilities
+  private readonly persistenceHost: ReturnType<typeof createBrowserPersistenceHost>
   private activeDevice: BrowserDeviceHandle | null = null
   private verifiedDevice: ConnectedDevice | null = null
   private removeDisconnectListener: (() => void) | null = null
   private operationActive = false
+  private connectionStartup: ConnectionStartup | null = null
   private destroyed = false
-  private transportConnected = false
-  private readonly timers = new Map<bigint, ReturnType<typeof setTimeout>>()
-  private coreDispatchTail: Promise<void> = Promise.resolve()
+  private destroyPromise: Promise<void> | null = null
 
-  constructor(core: CoreBridge, transport: BrowserBluetoothTransport) {
+  constructor(
+    core: CoreBridge,
+    transport: BrowserBluetoothTransport,
+    options: DeviceManagerOptions = {},
+  ) {
     this.core = core
     this.transport = transport
+    this.runtime = options.runtime ?? new BrowserWorkflowRuntime(core, transport)
+    this.storage = options.storage ?? null
+    this.capabilities = detectBrowserCapabilities(transport)
+    this.persistenceHost = createBrowserPersistenceHost(this.storage)
   }
 
   get isSupported(): boolean {
@@ -48,153 +88,425 @@ export class DeviceManager {
     return this.verifiedDevice
   }
 
-  async connect(options: ConnectOptions): Promise<ConnectedDevice> {
-    if (this.destroyed) throw new BotaSDKError('cancelled', 'connect')
-    if (!SERIAL_PATTERN.test(options.expectedSerialNumber)) {
-      throw new BotaSDKError('invalid_input', 'connect')
-    }
-    if (!this.isSupported) throw new BotaSDKError('unsupported_browser', 'connect')
-    if (this.operationActive || this.activeDevice) {
-      throw new BotaSDKError('operation_in_progress', 'connect')
-    }
+  getCapabilities(): BrowserCapabilities {
+    return this.capabilities
+  }
 
-    this.operationActive = true
+  adoptWorkflowConnection(
+    result: WorkflowResult,
+    expectedSerialNumber: string,
+  ): ConnectedDevice {
+    return this.publishConnectedDevice(
+      result,
+      expectedSerialNumber,
+      'update_firmware',
+    )
+  }
+
+  async connect(options: ConnectOptions): Promise<ConnectedDevice> {
+    this.validateConnectionRequest(options.expectedSerialNumber, 'connect')
+    if (!this.isSupported) {
+      throw new BotaSDKError('unsupported_browser', 'connect')
+    }
+    this.claimConnectionStart('connect')
+
     let selected: BrowserDeviceHandle | null = null
     try {
-      selected = await this.transport.requestDevice().catch((error: unknown) => {
-        throw pickerError(error)
-      })
+      const picked = await this.transport.requestDevice().catch(
+        (error: unknown) => {
+          throw pickerError(error)
+        },
+      )
+      selected = picked
       if (this.destroyed) throw new BotaSDKError('cancelled', 'connect')
-      this.activeDevice = selected
-      this.removeDisconnectListener = this.transport.onDisconnected(selected, () => {
-        this.transportConnected = false
-        this.clearConnection()
-      })
-      const cancellationId = new Uint8Array(16)
-      globalThis.crypto.getRandomValues(cancellationId)
-      const effects = this.core.startExactConnection({
-        expectedSerialNumber: options.expectedSerialNumber,
-        peripheralId: selected.id,
-        name: selected.name,
+
+      this.runtime.registerDevice(picked)
+      this.installActiveDevice(picked)
+      const cancellationId = randomCancellationId()
+      const result = await this.runtime.run(
+        operationId('connect', cancellationId),
         cancellationId,
-      })
-      await this.executeEffects(effects)
-      if (this.destroyed || this.activeDevice !== selected) {
-        throw new BotaSDKError('cancelled', 'connect')
-      }
-      if (!this.verifiedDevice) throw new BotaSDKError('internal_error', 'connect')
-      return this.verifiedDevice
+        () => this.core.startExactConnection({
+          expectedSerialNumber: options.expectedSerialNumber,
+          peripheralId: picked.id,
+          name: picked.name,
+          cancellationId,
+        }),
+        { persistence: this.persistenceHost },
+      )
+      return this.publishConnectedDevice(
+        result,
+        options.expectedSerialNumber,
+        'connect',
+      )
     } catch (error) {
       const lifecycleCancelled = this.destroyed
-      await this.cleanupFailedConnection()
+      if (lifecycleCancelled && this.activeDevice) {
+        await this.runtime.waitForPendingConnection(this.activeDevice.id)
+      }
+      await this.cleanupFailedConnection(this.activeDevice ? null : selected)
       if (lifecycleCancelled) {
         throw new BotaSDKError('cancelled', 'connect', { cause: error })
       }
-      throw normalizeCoreError(error, 'connect')
+      throw normalizeManagerError(error, 'connect')
     } finally {
-      this.operationActive = false
+      this.finishConnectionStart()
+    }
+  }
+
+  async reconnect(options: ReconnectOptions): Promise<ConnectedDevice> {
+    this.validateConnectionRequest(options.expectedSerialNumber, 'reconnect')
+    if (!this.isSupported) {
+      throw new BotaSDKError('unsupported_browser', 'reconnect')
+    }
+    if (!this.transport.supportsAuthorizedDevices) {
+      throw new BotaSDKError('picker_required', 'reconnect')
+    }
+    if (!this.storage) throw new BotaSDKError('picker_required', 'reconnect')
+    this.claimConnectionStart('reconnect')
+    let attemptedDeviceId: string | null = null
+
+    try {
+      const hint = await this.storage.loadVerifiedDevice(
+        options.expectedSerialNumber,
+      )
+      if (!hint) throw new BotaSDKError('picker_required', 'reconnect')
+      if (this.destroyed) throw new BotaSDKError('cancelled', 'reconnect')
+
+      const hintedDevice: BrowserDeviceHandle = {
+        id: hint.browserDeviceId,
+        name: hint.name,
+      }
+      attemptedDeviceId = hintedDevice.id
+      this.activeDevice = hintedDevice
+      this.runtime.registerDevice(hintedDevice)
+      const cancellationId = randomCancellationId()
+      const result = await this.runtime.run(
+        operationId('reconnect', cancellationId),
+        cancellationId,
+        () => this.core.startReconnect({
+          expectedSerialNumber: options.expectedSerialNumber,
+          hint: {
+            storedPeripheralId: hint.browserDeviceId,
+            advertisedAddress: null,
+            storedName: hint.name,
+            scanTimeoutMs: CONNECTION_TIMEOUT_MS,
+            connectionTimeoutMs: CONNECTION_TIMEOUT_MS,
+          },
+          cancellationId,
+        }),
+        { persistence: this.persistenceHost },
+      )
+      return this.publishConnectedDevice(
+        result,
+        options.expectedSerialNumber,
+        'reconnect',
+      )
+    } catch (error) {
+      const lifecycleCancelled = this.destroyed
+      if (lifecycleCancelled && attemptedDeviceId) {
+        await this.runtime.waitForPendingConnection(attemptedDeviceId)
+      }
+      await this.cleanupFailedConnection()
+      if (lifecycleCancelled) {
+        throw new BotaSDKError('cancelled', 'reconnect', { cause: error })
+      }
+      throw normalizeManagerError(error, 'reconnect')
+    } finally {
+      this.finishConnectionStart()
     }
   }
 
   async disconnect(): Promise<void> {
-    const device = this.activeDevice
-    this.clearTimers()
-    this.clearConnection()
-    if (!device || !this.transportConnected) return
-    this.transportConnected = false
+    if (this.destroyed) throw new BotaSDKError('cancelled', 'disconnect')
+    if (this.operationActive) {
+      throw new BotaSDKError('operation_in_progress', 'disconnect')
+    }
+    const device = this.runtime.connectedDeviceHandle ?? this.activeDevice
+    if (!device) {
+      this.clearConnection()
+      return
+    }
+
     try {
-      await this.transport.disconnect(device)
+      await this.runtime.runExclusive('disconnect', async (signal) => {
+        this.runtime.markDeviceDisconnected(device.id)
+        this.clearConnection()
+        await awaitDirectStep(
+          this.transport.disconnect(device),
+          signal,
+          'disconnect',
+        )
+      })
     } catch (error) {
-      throw normalizeCoreError(error, 'disconnect')
+      throw normalizeManagerError(error, 'disconnect')
     }
   }
 
   async readSnapshot(): Promise<DeviceSnapshot> {
-    if (this.destroyed) throw new BotaSDKError('cancelled', 'read_snapshot')
-    const device = this.activeDevice
-    const connected = this.verifiedDevice
-    if (!device || !connected || !this.transportConnected) {
-      throw new BotaSDKError('device_disconnected', 'read_snapshot')
+    if (this.destroyed) {
+      throw new BotaSDKError('cancelled', 'read_snapshot')
     }
     if (this.operationActive) {
       throw new BotaSDKError('operation_in_progress', 'read_snapshot')
     }
+    const device = this.activeDevice
+    const connected = this.verifiedDevice
+    if (
+      !device
+      || !connected
+      || this.runtime.connectedDeviceHandle?.id !== device.id
+    ) {
+      throw new BotaSDKError('device_disconnected', 'read_snapshot')
+    }
 
-    this.operationActive = true
     try {
-      const serialNumber = await this.readRequiredText(
-        device,
-        DEVICE_INFORMATION_SERVICE,
-        SERIAL_NUMBER,
-      )
-      if (serialNumber !== connected.serialNumber) {
-        await this.disconnect()
-        throw new BotaSDKError('identity_mismatch', 'read_snapshot')
-      }
+      return await this.runtime.runExclusive(
+        'read_snapshot',
+        async (signal) => {
+          const serialNumber = await this.readRequiredText(
+            device,
+            DEVICE_INFORMATION_SERVICE,
+            SERIAL_NUMBER_CHARACTERISTIC,
+            signal,
+          )
+          if (serialNumber !== connected.serialNumber) {
+            await this.disconnectForIdentityMismatch(device)
+            throw new BotaSDKError('identity_mismatch', 'read_snapshot')
+          }
 
-      const modelNumber = await this.readOptionalText(
-        device,
-        DEVICE_INFORMATION_SERVICE,
-        MODEL_NUMBER,
-      )
-      const hardwareRevision = await this.readOptionalText(
-        device,
-        DEVICE_INFORMATION_SERVICE,
-        HARDWARE_REVISION,
-      )
-      const firmwareRevision = await this.readOptionalText(
-        device,
-        DEVICE_INFORMATION_SERVICE,
-        FIRMWARE_REVISION,
-      )
-      const statusBytes = await this.read(device, CONTROL_SERVICE, DEVICE_STATUS)
-      const status = this.core.decodeDeviceStatus(statusBytes)
-      const encryptedUploadV2 = await this.readCapabilities(device)
+          const modelNumber = await this.readOptionalText(
+            device,
+            DEVICE_INFORMATION_SERVICE,
+            MODEL_NUMBER_CHARACTERISTIC,
+            signal,
+          )
+          const hardwareRevision = await this.readOptionalText(
+            device,
+            DEVICE_INFORMATION_SERVICE,
+            HARDWARE_REVISION_CHARACTERISTIC,
+            signal,
+          )
+          const firmwareRevision = await this.readOptionalText(
+            device,
+            DEVICE_INFORMATION_SERVICE,
+            FIRMWARE_REVISION_CHARACTERISTIC,
+            signal,
+          )
+          const statusBytes = await this.read(
+            device,
+            BOTA_CONTROL_SERVICE,
+            DEVICE_STATUS_CHARACTERISTIC,
+            signal,
+          )
+          const status = this.core.decodeDeviceStatus(statusBytes)
+          const encryptedUploadV2 = await this.readCapabilities(device, signal)
 
-      return {
-        identity: {
-          serialNumber,
-          modelNumber,
-          hardwareRevision,
-          firmwareRevision,
+          return {
+            identity: {
+              serialNumber,
+              modelNumber,
+              hardwareRevision,
+              firmwareRevision,
+            },
+            status,
+            capabilities: { encryptedUploadV2 },
+            capturedAt: new Date(),
+          }
         },
-        status,
-        capabilities: { encryptedUploadV2 },
-        capturedAt: new Date(),
-      }
+      )
     } catch (error) {
       throw snapshotError(error)
-    } finally {
-      this.operationActive = false
     }
   }
 
-  async destroy(): Promise<void> {
-    if (this.destroyed) return
+  private async verifyActiveSerialInternal(
+    operation: BotaOperation,
+  ): Promise<ConnectedDevice> {
+    if (this.destroyed) throw new BotaSDKError('cancelled', operation)
+    const connected = this.verifiedDevice
+    const device = this.activeDevice
+    if (
+      !connected
+      || !device
+      || connected.id !== device.id
+      || this.runtime.connectedDeviceHandle?.id !== device.id
+    ) {
+      throw new BotaSDKError('device_disconnected', operation)
+    }
+
+    try {
+      return await this.runtime.runExclusive(operation, async (signal) => {
+        const encoded = await awaitDirectStep(
+          this.transport.read(
+            device,
+            DEVICE_INFORMATION_SERVICE,
+            SERIAL_NUMBER_CHARACTERISTIC,
+          ),
+          signal,
+          operation,
+        )
+        const serialNumber = decodeRequiredText(encoded, operation)
+        if (serialNumber !== connected.serialNumber) {
+          await this.disconnectForIdentityMismatch(device)
+          throw new BotaSDKError('identity_mismatch', operation)
+        }
+        return connected
+      })
+    } catch (error) {
+      throw normalizeManagerError(error, operation)
+    }
+  }
+
+  destroy(): Promise<void> {
+    return this.destroyAfterInternal(Promise.resolve())
+  }
+
+  private destroyAfterInternal(priorCleanup: Promise<unknown>): Promise<void> {
+    if (this.destroyPromise) return this.destroyPromise
     this.destroyed = true
-    await this.disconnect()
+    const connectionSettlement = this.connectionStartup?.settled
+      ?? Promise.resolve()
+    this.destroyPromise = (async () => {
+      const failures: unknown[] = []
+      await collectTeardownFailure(() => priorCleanup, failures)
+      await collectTeardownFailure(() => this.runtime.destroy(), failures)
+      await collectTeardownFailure(() => connectionSettlement, failures)
+      const connected = this.runtime.connectedDeviceHandle ?? this.activeDevice
+      if (connected) {
+        this.runtime.markDeviceDisconnected(connected.id)
+        this.clearConnection()
+        await collectTeardownFailure(
+          () => this.transport.disconnect(connected),
+          failures,
+        )
+      } else {
+        this.clearConnection()
+      }
+      const failure = failures[0]
+      if (failure) throw normalizeManagerError(failure, 'disconnect')
+    })()
+    return this.destroyPromise
   }
 
-  private async executeEffects(initial: CoreEffect[]): Promise<void> {
-    const queue = [...initial]
-    while (queue.length > 0) {
-      const effect = queue.shift()
-      if (!effect) continue
-      const next = await this.executeEffect(effect)
-      queue.push(...next)
+  private validateConnectionRequest(
+    expectedSerialNumber: string,
+    operation: 'connect' | 'reconnect',
+  ): void {
+    if (this.destroyed) throw new BotaSDKError('cancelled', operation)
+    if (!SERIAL_PATTERN.test(expectedSerialNumber)) {
+      throw new BotaSDKError('invalid_input', operation)
     }
+  }
+
+  private claimConnectionStart(operation: 'connect' | 'reconnect'): void {
+    if (this.operationActive || this.activeDevice) {
+      throw new BotaSDKError('operation_in_progress', operation)
+    }
+    this.operationActive = true
+    let settle!: () => void
+    const settled = new Promise<void>((resolve) => {
+      settle = resolve
+    })
+    this.connectionStartup = { settled, settle }
+  }
+
+  private finishConnectionStart(): void {
+    this.operationActive = false
+    const startup = this.connectionStartup
+    this.connectionStartup = null
+    startup?.settle()
+  }
+
+  private publishConnectedDevice(
+    result: WorkflowResult,
+    expectedSerialNumber: string,
+    operation: 'connect' | 'reconnect' | 'update_firmware',
+  ): ConnectedDevice {
+    if (this.destroyed) throw new BotaSDKError('cancelled', operation)
+    const established = [...result.notifications].reverse().find(
+      (notification) => notification.kind === 'connection_established',
+    )
+    if (!established || established.kind !== 'connection_established') {
+      throw new BotaSDKError('internal_error', operation)
+    }
+    if (established.serialNumber !== expectedSerialNumber) {
+      throw new BotaSDKError('identity_mismatch', operation)
+    }
+    const device = this.runtime.registeredDevice(
+      established.candidate.peripheralId,
+    )
+    if (!device || this.runtime.connectedDeviceHandle?.id !== device.id) {
+      throw new BotaSDKError('internal_error', operation)
+    }
+
+    this.installActiveDevice(device)
+    this.verifiedDevice = {
+      id: device.id,
+      name: device.name,
+      serialNumber: established.serialNumber,
+    }
+    return this.verifiedDevice
+  }
+
+  private installActiveDevice(device: BrowserDeviceHandle): void {
+    this.removeDisconnectListener?.()
+    this.activeDevice = device
+    this.removeDisconnectListener = this.transport.onDisconnected(device, () => {
+      if (this.activeDevice?.id !== device.id) return
+      this.runtime.markDeviceDisconnected(device.id)
+      this.clearConnection()
+    })
+  }
+
+  private async cleanupFailedConnection(
+    candidate: BrowserDeviceHandle | null = null,
+  ): Promise<void> {
+    const connected = this.runtime.connectedDeviceHandle
+    if (connected) {
+      this.runtime.markDeviceDisconnected(connected.id)
+      await this.transport.disconnect(connected).catch(() => undefined)
+    } else if (candidate) {
+      await this.transport.disconnect(candidate).catch(() => undefined)
+    }
+    this.clearConnection()
+  }
+
+  private async disconnectForIdentityMismatch(
+    device: BrowserDeviceHandle,
+  ): Promise<void> {
+    this.runtime.markDeviceDisconnected(device.id)
+    this.clearConnection()
+    await this.transport.disconnect(device).catch(() => undefined)
+  }
+
+  private clearConnection(): void {
+    const deviceId = this.activeDevice?.id
+    this.removeDisconnectListener?.()
+    this.removeDisconnectListener = null
+    this.activeDevice = null
+    this.verifiedDevice = null
+    if (deviceId) this.runtime.unregisterDevice(deviceId)
   }
 
   private async read(
     device: BrowserDeviceHandle,
     serviceUuid: string,
     characteristicUuid: string,
+    signal: AbortSignal,
   ): Promise<Uint8Array> {
     try {
-      return await this.transport.read(device, serviceUuid, characteristicUuid)
+      return await awaitDirectStep(
+        this.transport.read(device, serviceUuid, characteristicUuid),
+        signal,
+        'read_snapshot',
+      )
     } catch (error) {
-      if (error instanceof BrowserTransportError && error.code === 'disconnected') {
-        this.transportConnected = false
+      if (
+        error instanceof BrowserTransportError
+        && error.code === 'disconnected'
+      ) {
+        this.runtime.markDeviceDisconnected(device.id)
         this.clearConnection()
       }
       throw error
@@ -205,8 +517,14 @@ export class DeviceManager {
     device: BrowserDeviceHandle,
     serviceUuid: string,
     characteristicUuid: string,
+    signal: AbortSignal,
   ): Promise<string> {
-    const value = await this.read(device, serviceUuid, characteristicUuid)
+    const value = await this.read(
+      device,
+      serviceUuid,
+      characteristicUuid,
+      signal,
+    )
     try {
       const decoded = new TextDecoder('utf-8', { fatal: true })
         .decode(value)
@@ -222,13 +540,19 @@ export class DeviceManager {
     device: BrowserDeviceHandle,
     serviceUuid: string,
     characteristicUuid: string,
+    signal: AbortSignal,
   ): Promise<string | null> {
     try {
-      return await this.readRequiredText(device, serviceUuid, characteristicUuid)
+      return await this.readRequiredText(
+        device,
+        serviceUuid,
+        characteristicUuid,
+        signal,
+      )
     } catch (error) {
       if (
-        error instanceof BrowserTransportError &&
-        error.code === 'characteristic_not_found'
+        error instanceof BrowserTransportError
+        && error.code === 'characteristic_not_found'
       ) {
         return null
       }
@@ -238,171 +562,113 @@ export class DeviceManager {
 
   private async readCapabilities(
     device: BrowserDeviceHandle,
+    signal: AbortSignal,
   ): Promise<EncryptedUploadV2Capabilities | null> {
     try {
-      const bytes = await this.read(device, STORAGE_SERVICE, V2_CAPABILITIES)
+      const bytes = await this.read(
+        device,
+        BOTA_STORAGE_SERVICE,
+        STORAGE_TRANSFER_CAPABILITIES_V2_CHARACTERISTIC,
+        signal,
+      )
       return this.core.decodeEncryptedUploadV2Capabilities(bytes)
     } catch (error) {
       if (
-        error instanceof BrowserTransportError &&
-        error.code === 'characteristic_not_found'
+        error instanceof BrowserTransportError
+        && error.code === 'characteristic_not_found'
       ) {
         return null
       }
       throw error
     }
   }
+}
 
-  private async executeEffect(effect: CoreEffect): Promise<CoreEffect[]> {
-    const device = this.activeDevice
-    switch (effect.kind) {
-      case 'notify':
-        if (effect.notification.kind === 'failed') {
-          throw normalizeCoreError(effect.notification.error, 'connect')
-        }
-        if (effect.notification.kind === 'connection_established') {
-          this.verifiedDevice = {
-            id: effect.notification.peripheralId,
-            name: effect.notification.name,
-            serialNumber: effect.notification.serialNumber,
-          }
-        }
-        return []
-      case 'ble_connect':
-        if (!device || device.id !== effect.peripheralId) throw new BotaSDKError('internal_error', 'connect')
-        try {
-          await this.transport.connect(device)
-        } catch (error) {
-          return this.dispatchBleFailure(effect.requestId, error)
-        }
-        if (this.destroyed || this.activeDevice !== device) {
-          await this.transport.disconnect(device).catch(() => undefined)
-          throw new BotaSDKError('cancelled', 'connect')
-        }
-        this.transportConnected = true
-        return this.dispatchCore({
-          requestId: effect.requestId,
-          kind: 'ble_connected',
-          peripheralId: device.id,
-        })
-      case 'ble_discover_services':
-        if (!device || device.id !== effect.peripheralId) throw new BotaSDKError('internal_error', 'connect')
-        try {
-          await this.transport.discoverServices(device)
-          return this.dispatchCore({
-            requestId: effect.requestId,
-            kind: 'ble_services_discovered',
-            peripheralId: device.id,
-          })
-        } catch (error) {
-          return this.dispatchBleFailure(effect.requestId, error)
-        }
-      case 'ble_read':
-        if (!device) throw new BotaSDKError('device_disconnected', 'connect')
-        try {
-          const value = await this.transport.read(device, effect.serviceUuid, effect.characteristicUuid)
-          return this.dispatchCore({
-            requestId: effect.requestId,
-            kind: 'ble_read_completed',
-            value,
-          })
-        } catch (error) {
-          return this.dispatchBleFailure(effect.requestId, error)
-        }
-      case 'ble_disconnect':
-        if (!device || device.id !== effect.peripheralId) throw new BotaSDKError('internal_error', 'connect')
-        await this.transport.disconnect(device)
-        this.transportConnected = false
-        return this.dispatchCore({
-          requestId: effect.requestId,
-          kind: 'ble_disconnected',
-          peripheralId: device.id,
-          reasonCode: null,
-        })
-      case 'timer_schedule': {
-        const delay = Number(effect.delayMs)
-        const timer = setTimeout(() => {
-          this.timers.delete(effect.timerId)
-          void this.executeDispatchedEvent({
-            requestId: effect.requestId,
-            kind: 'timer_fired',
-            timerId: effect.timerId,
-          })
-        }, delay)
-        this.timers.set(effect.timerId, timer)
-        return []
-      }
-      case 'timer_cancel': {
-        const timer = this.timers.get(effect.timerId)
-        if (timer) clearTimeout(timer)
-        this.timers.delete(effect.timerId)
-        return []
-      }
-      case 'persistence_save_checkpoint':
-        // The browser facade does not persist resumable workflow checkpoints.
-        // Treat this fire-and-forget host effect as completed locally; sending
-        // a late acknowledgement after a terminal effect would address a
-        // workflow that the shared core has already closed.
-        return []
-      case 'persistence_save_connection_identity':
-        if (!device || effect.peripheralId !== device.id) throw new BotaSDKError('internal_error', 'connect')
-        return this.dispatchCore({
-          requestId: effect.requestId,
-          kind: 'connection_identity_saved',
-        })
-      case 'persistence_delete_checkpoint':
-        return []
+function randomCancellationId(): Uint8Array {
+  const cancellationId = new Uint8Array(16)
+  globalThis.crypto.getRandomValues(cancellationId)
+  return cancellationId
+}
+
+function operationId(operation: string, cancellationId: Uint8Array): string {
+  const suffix = [...cancellationId]
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('')
+  return `${operation}:${suffix}`
+}
+
+async function awaitDirectStep<T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+  operation: BotaOperation,
+): Promise<T> {
+  const settled = promise.then<DirectStepResult<T>, DirectStepResult<T>>(
+    (value) => ({ kind: 'completed', value }),
+    (error: unknown) => ({ kind: 'failed', error }),
+  )
+  const result = await settled
+  if (signal.aborted) throw new BotaSDKError('cancelled', operation)
+  if (result.kind === 'failed') throw result.error
+  return result.value
+}
+
+export async function verifyActiveDeviceSerial(
+  manager: DeviceManager,
+  operation: BotaOperation,
+): Promise<ConnectedDevice> {
+  return await (
+    manager as unknown as {
+      verifyActiveSerialInternal(value: BotaOperation): Promise<ConnectedDevice>
     }
-  }
+  ).verifyActiveSerialInternal(operation)
+}
 
-  private async dispatchBleFailure(requestId: bigint, error: unknown): Promise<CoreEffect[]> {
-    return this.dispatchCore({
-      requestId,
-      kind: 'ble_failed',
-      platformCode: platformCode(error),
-    })
-  }
-
-  private async dispatchCore(event: CoreHostEvent): Promise<CoreEffect[]> {
-    const result = this.coreDispatchTail.then(() => this.core.dispatch(event))
-    this.coreDispatchTail = result.then(
-      () => undefined,
-      () => undefined,
-    )
-    return result
-  }
-
-  private async executeDispatchedEvent(event: CoreHostEvent): Promise<void> {
-    try {
-      await this.executeEffects(await this.dispatchCore(event))
-    } catch {
-      await this.cleanupFailedConnection()
+export function destroyDeviceManagerAfter(
+  manager: DeviceManager,
+  priorCleanup: Promise<unknown>,
+): Promise<void> {
+  return (
+    manager as unknown as {
+      destroyAfterInternal(value: Promise<unknown>): Promise<void>
     }
-  }
+  ).destroyAfterInternal(priorCleanup)
+}
 
-  private async cleanupFailedConnection(): Promise<void> {
-    const device = this.activeDevice
-    this.clearTimers()
-    this.clearConnection()
-    if (!device || !this.transportConnected) return
-    this.transportConnected = false
-    await this.transport.disconnect(device).catch(() => undefined)
+async function collectTeardownFailure(
+  cleanup: () => Promise<unknown>,
+  failures: unknown[],
+): Promise<void> {
+  try {
+    await cleanup()
+  } catch (error) {
+    failures.push(error)
   }
+}
 
-  private clearConnection(): void {
-    this.removeDisconnectListener?.()
-    this.removeDisconnectListener = null
-    this.activeDevice = null
-    this.verifiedDevice = null
-  }
-
-  private clearTimers(): void {
-    for (const timer of this.timers.values()) clearTimeout(timer)
-    this.timers.clear()
+function decodeRequiredText(
+  value: Uint8Array,
+  operation: BotaOperation,
+): string {
+  try {
+    const decoded = new TextDecoder('utf-8', { fatal: true })
+      .decode(value)
+      .replace(/^[\0\s]+|[\0\s]+$/g, '')
+    if (!decoded) throw new Error('empty')
+    return decoded
+  } catch (error) {
+    throw new BotaSDKError('protocol_error', operation, { cause: error })
   }
 }
 
 function pickerError(error: unknown): BotaSDKError {
+  if (error instanceof BrowserTransportError) {
+    if (error.code === 'picker_cancelled') {
+      return new BotaSDKError('picker_cancelled', 'connect', { cause: error })
+    }
+    if (error.code === 'permission_denied') {
+      return new BotaSDKError('permission_denied', 'connect', { cause: error })
+    }
+  }
   const name = typeof error === 'object' && error !== null && 'name' in error
     ? String(error.name)
     : ''
@@ -415,11 +681,23 @@ function pickerError(error: unknown): BotaSDKError {
   return new BotaSDKError('bluetooth_unavailable', 'connect', { cause: error })
 }
 
-function platformCode(error: unknown): number | null {
-  if (typeof error === 'object' && error !== null && 'code' in error && typeof error.code === 'number') {
-    return error.code
+function normalizeManagerError(
+  error: unknown,
+  operation: BotaOperation,
+): BotaSDKError {
+  if (error instanceof BotaSDKError) return error
+  if (error instanceof BrowserStorageError) {
+    return new BotaSDKError(error.code, operation, { cause: error })
   }
-  return null
+  if (error instanceof BrowserTransportError) {
+    const code = error.code === 'disconnected'
+      ? 'device_disconnected'
+      : error.code === 'permission_denied'
+        ? 'permission_denied'
+        : 'bluetooth_unavailable'
+    return new BotaSDKError(code, operation, { cause: error })
+  }
+  return normalizeCoreError(error, operation)
 }
 
 function snapshotError(error: unknown): BotaSDKError {

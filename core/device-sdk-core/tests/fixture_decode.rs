@@ -1,11 +1,13 @@
 use bota_device_sdk_core::{
     model::{ConnectionType, DeviceState},
     protocol::{
-        DeviceLogDecoder, ParsedConnectionSettings, TransferPacket, WiFiConfigResult,
-        WiFiScanUpdate, WiFiStatus, parse_connection_settings, parse_device_status,
-        parse_ota_status, parse_recording_control_result, parse_recording_list,
-        parse_recording_state, parse_transfer_packet, parse_trigger_upload_response,
-        parse_wifi_config_result, parse_wifi_scan_result, parse_wifi_status_info,
+        DeprovisionFailure, DeviceLogDecoder, ParsedConnectionSettings, RecordingControlCommand,
+        TransferPacket, WiFiConfigResult, WiFiScanUpdate, WiFiStatus,
+        encode_recording_control_command, parse_connection_settings, parse_deprovision_result,
+        parse_device_status, parse_ota_status, parse_recording_control_result,
+        parse_recording_list, parse_recording_state, parse_transfer_packet,
+        parse_trigger_upload_response, parse_wifi_config_result, parse_wifi_scan_result,
+        parse_wifi_status_info,
     },
 };
 use serde_json::{Map, Value, json};
@@ -34,11 +36,15 @@ fn decode_fixtures_match_react_native_compatibility_values() {
             if fixture_case.get("expectedError").is_some() {
                 assert!(actual.is_err(), "{name} unexpectedly succeeded");
             } else {
-                assert_eq!(actual.unwrap(), fixture_case["expected"], "{name}");
+                let expected = fixture_case
+                    .get("expected")
+                    .or_else(|| fixture_case.get("expectedHex"))
+                    .unwrap();
+                assert_eq!(actual.unwrap(), *expected, "{name}");
             }
         }
     }
-    assert_eq!(matched, 39);
+    assert_eq!(matched, 41);
 }
 
 #[test]
@@ -52,6 +58,7 @@ fn parsers_never_panic_for_short_or_oversized_deterministic_input() {
         let _ = parse_transfer_packet(&bytes);
         let _ = parse_trigger_upload_response(&bytes);
         let _ = parse_connection_settings(&bytes);
+        let _ = parse_deprovision_result(&bytes);
         let _ = parse_wifi_config_result(&bytes);
         let _ = parse_wifi_status_info(&bytes);
         let _ = parse_wifi_scan_result(&bytes);
@@ -59,6 +66,27 @@ fn parsers_never_panic_for_short_or_oversized_deterministic_input() {
         let mut decoder = DeviceLogDecoder::default();
         let _ = decoder.push(&bytes);
     }
+}
+
+#[test]
+fn deprovision_results_preserve_released_meanings_and_unknown_status() {
+    let expected = [
+        (0, true, None),
+        (1, false, Some(DeprovisionFailure::InvalidToken)),
+        (2, false, Some(DeprovisionFailure::StorageError)),
+        (3, false, Some(DeprovisionFailure::ChunkError)),
+        (4, false, Some(DeprovisionFailure::AlreadyPaired)),
+        (0xfe, false, Some(DeprovisionFailure::Unknown(0xfe))),
+    ];
+
+    for (status, success, error) in expected {
+        let decoded = parse_deprovision_result(&[status]).unwrap();
+        assert_eq!(decoded.success, success, "status {status}");
+        assert_eq!(decoded.error, error, "status {status}");
+    }
+
+    assert!(parse_deprovision_result(&[]).is_err());
+    assert!(parse_deprovision_result(&[0, 0]).is_err());
 }
 
 fn decode_fixture(fixture_case: &Value) -> Option<Result<Value, String>> {
@@ -93,6 +121,12 @@ fn decode_fixture(fixture_case: &Value) -> Option<Result<Value, String>> {
             }
             Value::Object(value)
         }),
+        "encodeRecordingControlStart" => Ok(Value::String(hex_encode(
+            &encode_recording_control_command(RecordingControlCommand::Start),
+        ))),
+        "encodeRecordingControlStop" => Ok(Value::String(hex_encode(
+            &encode_recording_control_command(RecordingControlCommand::Stop),
+        ))),
         "parseTransferPacket" => parse_transfer_packet(&bytes).map(transfer_json),
         "parseTriggerDeviceUploadResponse" => {
             parse_trigger_upload_response(&bytes).map(|response| match response {

@@ -333,6 +333,8 @@ jobs:
     name: Package and verify Web SDK
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/target/playwright-browsers
     steps:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -357,8 +359,16 @@ jobs:
       - name: Install pinned wasm-bindgen CLI
         run: cargo install wasm-bindgen-cli --version 0.2.128 --locked
 
+      - name: Install Web gate dependencies and pinned Chromium browser
+        run: |
+          npx --yes "npm@$NPM_CLI_VERSION" ci
+          npx --yes "npm@$NPM_CLI_VERSION" ci --prefix tests/consumers/web-vite
+          tests/consumers/web-vite/node_modules/.bin/playwright install --with-deps chromium
+
       - name: Verify and pack exact Web SDK artifact
-        run: npm run web:verify
+        run: |
+          npm run web:verify
+          test "$(jq -r .sourceRevision target/web-release/web-package-files.json)" = "$GITHUB_SHA"
 
       - name: Upload Web release payload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -629,8 +639,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PACKAGE_PATH="$(find target/web-release -maxdepth 1 -type f -name '*.tgz' -print -quit)"
-          test -n "$PACKAGE_PATH"
+          mapfile -t WEB_PACKAGES < <(find target/web-release -maxdepth 1 -type f -name '*.tgz' -print)
+          test "${#WEB_PACKAGES[@]}" = 1
+          PACKAGE_PATH="${WEB_PACKAGES[0]}"
+          (cd target/web-release && sha256sum -c web-package-files.json.sha256)
+          node tools/web/verify-package.mjs "$PACKAGE_PATH"
+          test "$(jq -r .sourceRevision target/web-release/web-package-files.json)" = "$(git rev-parse HEAD)"
+          test "$(jq -r .tarball.sha256 target/web-release/web-package-files.json)" = "$(sha256sum "$PACKAGE_PATH" | awk '{print $1}')"
           PACKAGE_SPEC="@bota.dev/web-sdk@$RELEASE_VERSION"
           EXPECTED_SHASUM="$(sha1sum "$PACKAGE_PATH" | awk '{print $1}')"
           LATEST_BEFORE="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/web-sdk dist-tags.latest 2>/dev/null || true)"
@@ -931,8 +946,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          PACKAGE_PATH="$(find target/recovered/web-release -maxdepth 1 -type f -name '*.tgz' -print -quit)"
-          test -n "$PACKAGE_PATH"
+          mapfile -t WEB_PACKAGES < <(find target/recovered/web-release -maxdepth 1 -type f -name '*.tgz' -print)
+          test "${#WEB_PACKAGES[@]}" = 1
+          PACKAGE_PATH="${WEB_PACKAGES[0]}"
+          (cd target/recovered/web-release && sha256sum -c web-package-files.json.sha256)
+          test "$(jq -r .sourceRevision target/recovered/web-release/web-package-files.json)" = "$SOURCE_REVISION"
+          test "$(jq -r .tarball.sha256 target/recovered/web-release/web-package-files.json)" = "$(sha256sum "$PACKAGE_PATH" | awk '{print $1}')"
           PACKAGE_SPEC="@bota.dev/web-sdk@$RELEASE_VERSION"
           EXPECTED_SHASUM="$(sha1sum "$PACKAGE_PATH" | awk '{print $1}')"
           LATEST_BEFORE="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/web-sdk dist-tags.latest 2>/dev/null || true)"

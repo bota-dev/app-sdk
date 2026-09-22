@@ -230,16 +230,57 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   consumers from an `npm pack` artifact, not a source symlink: Demo and Bota
   One must each produce release-mode iOS and Android Expo bundles before
   preview or production rollout.
-- `frameworks/web` is the first browser facade and publishes as
-  `@bota.dev/web-sdk`. Its initial surface is deliberately read-only: an
-  explicit Web Bluetooth picker, exact serial-number verification through the
-  shared Rust connection workflow, disconnect, and fresh identity, device
-  status, and encrypted-upload-v2 capability reads decoded by the WASM core.
-  Keep backend calls, recording list/transfer/upload, provisioning, settings,
-  recording control, OTA, logs, reconnect persistence, and background work out
-  of this increment. A missing Web Bluetooth implementation must fail as
-  `unsupported_browser` before opening the picker, and a snapshot must
-  re-verify the serial before returning data.
+- `frameworks/web` is the foreground browser facade and publishes as
+  `@bota.dev/web-sdk`. It uses the shared Rust workflows for exact connection,
+  provisioning, recording transfer, encrypted upload v2, firmware update, and
+  device logs; TypeScript owns Web Bluetooth, durable browser storage, and
+  application provider boundaries. Keep backend calls behind configured
+  providers, keep request credentials memory-only, and do not add background or
+  closed-tab execution. A missing Web Bluetooth implementation must fail as
+  `unsupported_browser` before opening the picker, snapshots must re-verify the
+  serial, and OTA reboot recovery may enumerate only the previously verified
+  exact browser device ID. OTA reload recovery must validate compatible durable
+  journal/checkpoint/blob state before GATT, use that exact authorized device for
+  every disconnected active phase, and persist the one-way journal
+  `cleanup_only` state before terminal checkpoint deletion so reload performs
+  cleanup without provider or device work. One public Web client owns one
+  runtime/coordinator and one instance of each manager. Read-only construction
+  needs no storage or provider; durable workflows require a non-empty tenant
+  namespace, and custom storage must match it exactly. Client destruction is
+  terminal, joins picker and reconnect-hint startup work, and joins every
+  non-device owner and passive subscription before the one final disconnect.
+  Teardown must exhaustively settle all manager cleanup in declaration order,
+  runtime destruction, and final disconnect even after an earlier failure;
+  reject only afterward with the first normalized cleanup error, and keep
+  repeated destroy calls on the same terminal promise.
+  OTA active resume phases and passive WiFi status setup must freshly verify
+  the exact active serial before provider, mutation, or characteristic work.
+  Root manager names are instance types only; applications obtain managers
+  from `BotaDeviceClient`, not constructors. Tenant cleanup is BLE-free,
+  requires no active owner, and remains available after destroy for logout
+  ordering. Keep the release gate on npm 12.0.2 and Playwright 1.63.0 with
+  Chromium only. `npm run web:verify` must pack once, reject unsafe package
+  headers and contents without extracting it, and produce the checksum-bound
+  inventory in that single archive verification. Install only that tarball
+  into the Vite consumer; the browser stage must not parse the archive again,
+  and instead validates the original inventory checksum, source revision,
+  tarball identity, and installed regular-file hashes before testing the
+  production ESM/WASM copy. Preserve `target/web-release` and its hash
+  inventory unchanged through protected `release.yml` npm OIDC publication.
+  Treat `docs/testing/web-physical-device.md` as a separate supervised release
+  gate: fake Bluetooth in automated Chromium is never physical evidence. The
+  Web candidate is blocked while any required hardware row is `NOT RUN` or
+  failed. Do not advertise background or closed-tab work, live streaming,
+  authenticated factory reset, Safari/iOS fallback, Flutter Web, or Windows as
+  Web capabilities.
+- Web device logs have one Rust workflow owner and one diagnostics
+  characteristic lease. Resolve subscription setup only after Rust reaches its
+  running state, expose only typed Rust `DeviceLog` notifications, and join
+  pending subscribe/write cleanup before releasing callbacks or ownership.
+  Preserve the canonical Rust behavior that ignores undersized packets without
+  resetting sequence state, while sanitizing genuine Rust, bridge, and runtime
+  failures. Synchronous throws and rejected promise-like listener results must
+  disable delivery and cancel the exact workflow.
 - `RecordingManager` and `StreamingSession` preserve their frozen object model
   while Rust plus the Apple/Android hosts own recording bytes, live-transfer
   buffering, chunk uploads, finalization ordering, and cancellation. Codegen

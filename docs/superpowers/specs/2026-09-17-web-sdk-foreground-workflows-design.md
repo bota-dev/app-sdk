@@ -76,8 +76,8 @@ The SDK reports capabilities independently:
 - `durableStorage`: IndexedDB and OPFS are available;
 - `largeRecordingSync`: durable storage and required GATT operations are
   available;
-- `firmwareUpdate`: durable storage, fetch, and required GATT operations are
-  available.
+- `firmwareUpdate`: authorized-device reconnect, durable storage, fetch, and
+  required GATT operations are available.
 
 An unavailable optional capability fails before device mutation with a stable
 `unsupported_capability` error. The SDK never guesses that a browser supports
@@ -340,10 +340,16 @@ integrity metadata. The host `firmwareDownload` provider resolves that ID to a
 fresh operation-scoped HTTPS request; its URL and headers stay memory-only.
 The browser adapter downloads to OPFS, validates the artifact before the first
 device write, and serves bounded chunks to the Rust workflow. Reboot reconnect
-uses the already authorized browser device when available. A reload resumes
-from a durable compatible checkpoint and the same verified artifact; when an
-incomplete download must continue, the provider resolves a fresh source for
-the same image ID.
+requires authorized-device enumeration and accepts only the exact browser
+device ID from the verified connection; it never opens the picker. A reload
+validates journal/checkpoint/blob compatibility before GATT and reconnects that
+same exact authorized device for download, transfer, verify, or reboot recovery.
+It resumes from a durable compatible checkpoint and the same verified artifact;
+when an incomplete download must continue, the provider resolves a fresh source
+for the same image ID. Terminal success durably advances the optional firmware
+journal `state` from `active` to one-way `cleanup_only` before deleting the Rust
+checkpoint. Reload from `cleanup_only` performs only idempotent checkpoint,
+blob, and journal cleanup without provider, reconnect, or GATT work.
 
 ### Device Logs
 
@@ -354,7 +360,16 @@ await subscription.remove()
 
 Only decoded, sanitized lines leave the SDK. Subscription ownership is unique,
 and disconnect, cancellation, or client destruction unsubscribes the
-characteristic before releasing callbacks.
+characteristic before releasing callbacks. The Web facade holds one shared
+runtime owner plus the exact diagnostics-characteristic lease, resolves setup
+only after Rust reaches a running state, and joins initiated subscribe and write
+operations before releasing either. Listener failure cancels the exact Rust
+workflow, late notifications are ignored, and completion without cancellation
+is a retryable stream failure. Consistent with the canonical Rust codec fixture,
+undersized packets are ignored without exposing bytes or decoder detail and do
+not reset sequence state, so later valid packets continue to decode normally.
+Genuine Rust, bridge, and runtime failures remain sanitized rather than exposing
+private decoder details.
 
 ## Recording Synchronization Flow
 
