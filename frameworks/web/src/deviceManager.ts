@@ -43,6 +43,11 @@ interface DeviceManagerOptions {
   storage?: BrowserSdkStorage | null
 }
 
+interface ConnectionStartup {
+  settled: Promise<void>
+  settle(): void
+}
+
 type DirectStepResult<T> =
   | { kind: 'completed'; value: T }
   | { kind: 'failed'; error: unknown }
@@ -58,6 +63,7 @@ export class DeviceManager {
   private verifiedDevice: ConnectedDevice | null = null
   private removeDisconnectListener: (() => void) | null = null
   private operationActive = false
+  private connectionStartup: ConnectionStartup | null = null
   private destroyed = false
   private destroyPromise: Promise<void> | null = null
 
@@ -104,24 +110,26 @@ export class DeviceManager {
     }
     this.claimConnectionStart('connect')
 
+    let selected: BrowserDeviceHandle | null = null
     try {
-      const selected = await this.transport.requestDevice().catch(
+      const picked = await this.transport.requestDevice().catch(
         (error: unknown) => {
           throw pickerError(error)
         },
       )
+      selected = picked
       if (this.destroyed) throw new BotaSDKError('cancelled', 'connect')
 
-      this.runtime.registerDevice(selected)
-      this.installActiveDevice(selected)
+      this.runtime.registerDevice(picked)
+      this.installActiveDevice(picked)
       const cancellationId = randomCancellationId()
       const result = await this.runtime.run(
         operationId('connect', cancellationId),
         cancellationId,
         () => this.core.startExactConnection({
           expectedSerialNumber: options.expectedSerialNumber,
-          peripheralId: selected.id,
-          name: selected.name,
+          peripheralId: picked.id,
+          name: picked.name,
           cancellationId,
         }),
         { persistence: this.persistenceHost },
@@ -136,13 +144,13 @@ export class DeviceManager {
       if (lifecycleCancelled && this.activeDevice) {
         await this.runtime.waitForPendingConnection(this.activeDevice.id)
       }
-      await this.cleanupFailedConnection()
+      await this.cleanupFailedConnection(this.activeDevice ? null : selected)
       if (lifecycleCancelled) {
         throw new BotaSDKError('cancelled', 'connect', { cause: error })
       }
       throw normalizeManagerError(error, 'connect')
     } finally {
-      this.operationActive = false
+      this.finishConnectionStart()
     }
   }
 
@@ -205,7 +213,7 @@ export class DeviceManager {
       }
       throw normalizeManagerError(error, 'reconnect')
     } finally {
-      this.operationActive = false
+      this.finishConnectionStart()
     }
   }
 
@@ -351,10 +359,18 @@ export class DeviceManager {
   }
 
   destroy(): Promise<void> {
+    return this.destroyAfterInternal(Promise.resolve())
+  }
+
+  private destroyAfterInternal(priorCleanup: Promise<unknown>): Promise<void> {
     if (this.destroyPromise) return this.destroyPromise
     this.destroyed = true
+    const connectionSettlement = this.connectionStartup?.settled
+      ?? Promise.resolve()
     this.destroyPromise = (async () => {
+      await priorCleanup
       await this.runtime.destroy()
+      await connectionSettlement
       const connected = this.runtime.connectedDeviceHandle
       if (connected) {
         this.runtime.markDeviceDisconnected(connected.id)
@@ -382,6 +398,18 @@ export class DeviceManager {
       throw new BotaSDKError('operation_in_progress', operation)
     }
     this.operationActive = true
+    let settle!: () => void
+    const settled = new Promise<void>((resolve) => {
+      settle = resolve
+    })
+    this.connectionStartup = { settled, settle }
+  }
+
+  private finishConnectionStart(): void {
+    this.operationActive = false
+    const startup = this.connectionStartup
+    this.connectionStartup = null
+    startup?.settle()
   }
 
   private publishConnectedDevice(
@@ -425,11 +453,15 @@ export class DeviceManager {
     })
   }
 
-  private async cleanupFailedConnection(): Promise<void> {
+  private async cleanupFailedConnection(
+    candidate: BrowserDeviceHandle | null = null,
+  ): Promise<void> {
     const connected = this.runtime.connectedDeviceHandle
     if (connected) {
       this.runtime.markDeviceDisconnected(connected.id)
       await this.transport.disconnect(connected).catch(() => undefined)
+    } else if (candidate) {
+      await this.transport.disconnect(candidate).catch(() => undefined)
     }
     this.clearConnection()
   }
@@ -583,6 +615,17 @@ export async function verifyActiveDeviceSerial(
       verifyActiveSerialInternal(value: BotaOperation): Promise<ConnectedDevice>
     }
   ).verifyActiveSerialInternal(operation)
+}
+
+export function destroyDeviceManagerAfter(
+  manager: DeviceManager,
+  priorCleanup: Promise<unknown>,
+): Promise<void> {
+  return (
+    manager as unknown as {
+      destroyAfterInternal(value: Promise<unknown>): Promise<void>
+    }
+  ).destroyAfterInternal(priorCleanup)
 }
 
 function decodeRequiredText(

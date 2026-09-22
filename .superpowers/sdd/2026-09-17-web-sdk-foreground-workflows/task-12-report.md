@@ -160,3 +160,151 @@ Task 12-specific API change; broader rollout status remains outside this task.
   deterministic adapters.
 - No push, merge, tag, publish, external release action, subagent dispatch, or
   Task 13 work was performed.
+
+## Fix Round 1
+
+Reviewed head: `790b78b83e8030aecb58b146bb812d2ed2c67edc`.
+
+### Recorded Manager-Export Ruling
+
+The package root exposes manager families as TypeScript instance types only.
+Operational manager construction is client-owned through
+`BotaDeviceClient.create()`. Consumers that instantiated root manager values
+must migrate to `client.devices`, `client.recordings`, `client.provisioning`,
+`client.wifi`, `client.controls`, `client.ota`, and `client.logs`.
+
+### Findings Fixed
+
+- Non-reconnecting OTA resume now validates any compatible verified artifact,
+  resolves the exact durable hint, and freshly verifies the active Device
+  Information serial before provider calls, durable mutation, or OTA GATT.
+  Download, transfer, and verify regressions prove stale identity disconnects
+  without picker or name fallback. Cleanup-only recovery remains BLE-free.
+- `BotaDeviceClient.destroy()` marks all managers terminal synchronously, joins
+  non-device owners and passive subscription setup/removal first, and only then
+  destroys the device manager and disconnects exactly once.
+- `DeviceManager` now retains a settlement owner from connection-start claim
+  through picker or verified-device-hint loading and the connection workflow.
+  Destruction joins those non-cancellable startup steps. A late picker result is
+  disconnected before destroy resolves; a late hint cannot enumerate devices,
+  connect, start GATT ownership, or publish a connection.
+- Passive WiFi status setup now uses the shared direct owner to freshly verify
+  exact serial before claiming its characteristic lease or subscribing.
+- Root manager exports are type-only. The runtime root contains only
+  `BotaDeviceClient` and `BotaSDKError`; package subpaths remain closed and the
+  client declaration retains a private constructor. A compile-only consumer
+  proves all seven `client.*` properties remain usable as manager instance
+  types while manager/internal runtime values are unavailable.
+- Replaced self-equality assertions with deterministic graph checks: all seven
+  managers in one client are pairwise distinct, share one runtime object, and
+  share neither manager objects nor runtime with a second client.
+
+### Files Changed
+
+- `.superpowers/sdd/2026-09-17-web-sdk-foreground-workflows/task-12-report.md`
+- `AGENTS.md`
+- `ARCHITECTURE.md`
+- `README.md`
+- `frameworks/web/README.md`
+- `frameworks/web/src/__tests__/client.test.ts`
+- `frameworks/web/src/__tests__/deviceManager.test.ts`
+- `frameworks/web/src/__tests__/otaManager.test.ts`
+- `frameworks/web/src/__tests__/publicSurface.consumer.ts`
+- `frameworks/web/src/__tests__/wifiManager.test.ts`
+- `frameworks/web/src/client.ts`
+- `frameworks/web/src/deviceManager.ts`
+- `frameworks/web/src/index.ts`
+- `frameworks/web/src/otaManager.ts`
+- `frameworks/web/src/wifiManager.ts`
+
+### RED Evidence
+
+All Node commands used Node `v22.23.2`.
+
+```text
+node --test frameworks/web/src/__tests__/client.test.ts \
+  frameworks/web/src/__tests__/deviceManager.test.ts \
+  frameworks/web/src/__tests__/wifiManager.test.ts \
+  frameworks/web/src/__tests__/otaManager.test.ts \
+  frameworks/web/src/__tests__/snapshot.test.ts
+Result: expected failure, 114 tests discovered; 105 passed and 9 failed. The
+failures reproduced runtime manager values, disconnect-before-unsubscribe,
+early picker and reconnect-storage destruction, three stale OTA resume phases,
+and passive WiFi subscription without fresh serial verification.
+
+npm run type-check --prefix frameworks/web
+Result: expected failure. Seven TS2578 diagnostics proved the manager runtime
+values still existed despite the consumer's type-only expectations. Four
+additional noUncheckedIndexedAccess diagnostics in the new graph assertion
+were corrected in test code before production changes.
+```
+
+The first focused GREEN attempt passed the new findings but retained two
+duplicate-disconnect regressions and one pre-GATT corrupt-artifact regression:
+110 of 114 tests passed. Candidate cleanup was narrowed to the pre-runtime
+picker window, where runtime cancellation cannot already own cleanup, and
+verified-artifact compatibility remained a read-only pre-GATT gate.
+
+### GREEN Evidence
+
+```text
+node --test frameworks/web/src/__tests__/client.test.ts \
+  frameworks/web/src/__tests__/deviceManager.test.ts \
+  frameworks/web/src/__tests__/wifiManager.test.ts \
+  frameworks/web/src/__tests__/otaManager.test.ts \
+  frameworks/web/src/__tests__/snapshot.test.ts
+Result: PASS, 114 passed, 0 failed, 0 cancelled, 0 skipped.
+
+npm test --prefix frameworks/web
+Result: PASS, 364 passed, 0 failed, 0 cancelled, 0 skipped.
+
+npm run type-check --prefix frameworks/web
+Result: PASS, including the compile-only public-surface consumer.
+
+npm run build --prefix frameworks/web
+Result: PASS, ESM JavaScript, declarations, and WASM asset emitted.
+
+npm pack --dry-run --json  # run from frameworks/web
+Result: PASS, @bota.dev/web-sdk@1.2.0-beta.1, 52 files, 354,153 packed
+bytes, 1,577,724 unpacked bytes.
+
+tools/web/test-consumer.sh
+Result: PASS; the exact packed tarball passed package verification, installed
+into the clean Vite consumer, type-checked, and built 26 modules with its WASM
+asset. No publication occurred.
+
+node --input-type=module -e '<assert dist runtime keys>'
+Result: PASS; BotaDeviceClient,BotaSDKError.
+
+node --input-type=module -e '<assert dist root declarations>'
+Result: PASS; all manager names are type-only and CoreBridge,
+BrowserWorkflowRuntime, BrowserBluetoothTransport, and BrowserSdkStorage are
+not root exports.
+
+git diff --check
+Result: PASS, no whitespace errors.
+```
+
+### Documentation Impact
+
+Changed-token searches covered wrapper `internal-docs/`, public `docs/`, the
+app-sdk plan/spec tree, and repository agent, architecture, and README files for
+the manager names, `resumeFirmwareUpdate`, `subscribeToStatus`,
+`storageNamespace`, `clearPersistedData`, passive subscriptions, and the new
+internal destroy-order helper. The affected app-sdk and Web documents now state
+the type-only/client-owned manager ruling, startup-work joins,
+passive-before-disconnect ordering, and fresh OTA/WiFi identity checks. Wrapper
+documents mentioning similarly named native managers were not Web API claims
+and required no change.
+
+### Remaining Physical And External Gaps
+
+- No physical Chromium/Web Bluetooth device exercised picker settlement,
+  authorized reconnect, passive notification teardown, OTA resume, or exact
+  serial mismatch timing.
+- Real browser IndexedDB/OPFS, permission revocation, page unload, and native
+  GATT cancellation timing remain physical/browser acceptance gates.
+- No live provisioning, recording, recording-control, or firmware provider was
+  called; deterministic providers cover ordering and cancellation only.
+- No Task 13 implementation, push, merge, tag, publish, or external release
+  action was performed.

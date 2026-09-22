@@ -80,6 +80,17 @@ function memoryStorage(initialHint: VerifiedDeviceHint | null = null):
   }
 }
 
+function deferredVoid(): {
+  promise: Promise<void>
+  resolve(): void
+} {
+  let resolve!: () => void
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
 async function settleWithWatchdog<T>(
   promise: Promise<T>,
   label: string,
@@ -174,20 +185,70 @@ test('destroy while the picker is pending cancels before any GATT work', async (
   })
   const { manager } = await createManager(transport)
   const connecting = manager.connect({ expectedSerialNumber: 'GDPPSBZJN6' })
+  void connecting.catch(() => undefined)
 
   assert.deepEqual(transport.calls, ['request_device'])
-  await manager.destroy()
-
-  const rejection = assert.rejects(connecting, (error: unknown) => {
+  let destroySettled = false
+  const destroying = manager.destroy().then(() => {
+    destroySettled = true
+  })
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  assert.equal(destroySettled, false)
+  releasePicker()
+  await assert.rejects(connecting, (error: unknown) => {
     assert.ok(error instanceof BotaSDKError)
     assert.equal(error.code, 'cancelled')
     assert.equal(error.operation, 'connect')
     return true
   })
-  releasePicker()
-  await rejection
+  await settleWithWatchdog(destroying, 'picker destruction')
 
-  assert.deepEqual(transport.calls, ['request_device'])
+  assert.deepEqual(transport.calls, [
+    'request_device',
+    'disconnect:browser-peripheral-1',
+  ])
+  assert.equal(manager.connectedDevice, null)
+})
+
+test('destroy joins a pending reconnect hint load before rejecting without GATT', async () => {
+  const storage = memoryStorage({
+    schemaVersion: 1,
+    serialNumber: 'GDPPSBZJN6',
+    browserDeviceId: 'browser-peripheral-1',
+    name: 'Bota Pin',
+    updatedAtEpochMs: 1,
+  })
+  const loadStarted = deferredVoid()
+  const releaseLoad = deferredVoid()
+  const loadVerifiedDevice = storage.loadVerifiedDevice.bind(storage)
+  storage.loadVerifiedDevice = async (serialNumber) => {
+    loadStarted.resolve()
+    await releaseLoad.promise
+    return await loadVerifiedDevice(serialNumber)
+  }
+  const transport = new FakeBrowserBluetoothTransport()
+  const { manager } = await createManager(transport, storage)
+  const reconnecting = manager.reconnect({
+    expectedSerialNumber: 'GDPPSBZJN6',
+  })
+  void reconnecting.catch(() => undefined)
+  await loadStarted.promise
+
+  let destroySettled = false
+  const destroying = manager.destroy().then(() => {
+    destroySettled = true
+  })
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  assert.equal(destroySettled, false)
+  assert.deepEqual(transport.calls, [])
+
+  releaseLoad.resolve()
+  await assert.rejects(reconnecting, (error: unknown) =>
+    error instanceof BotaSDKError
+      && error.code === 'cancelled'
+      && error.operation === 'reconnect')
+  await settleWithWatchdog(destroying, 'reconnect storage destruction')
+  assert.deepEqual(transport.calls, [])
   assert.equal(manager.connectedDevice, null)
 })
 

@@ -79,10 +79,17 @@ await bota.clearPersistedData()
 
 One client owns one runtime and one instance of each manager. `destroy()` is
 terminal and idempotent: it rejects new operations, cancels and joins active
-owners, removes passive subscriptions, and disconnects only after initiated
-unabortable work settles. `clearPersistedData()` is local-only, requires no
-active operation, sends no Bluetooth command, and remains repeatable after
-destruction so logout can clear only the current tenant.
+owners, joins an open picker or verified-device-hint load, removes passive
+subscriptions and leases, and only then disconnects once. Late startup results
+cannot publish a connection or begin GATT ownership. `clearPersistedData()` is
+local-only, requires no active operation, sends no Bluetooth command, and
+remains repeatable after destruction so logout can clear only the current
+tenant.
+
+Manager names are exported from the package root as TypeScript instance types
+only. Obtain their values from `bota.devices`, `bota.recordings`,
+`bota.provisioning`, `bota.wifi`, `bota.controls`, `bota.ota`, and `bota.logs`;
+standalone manager construction is not part of the public API.
 
 ## Foreground firmware updates
 
@@ -107,6 +114,12 @@ the persisted authorized browser device ID and re-verify its serial before OTA
 GATT. Terminal success first advances the optional journal `state` to
 `cleanup_only`; reload then completes checkpoint, blob, and journal deletion
 without resolving a provider or reconnecting to the device.
+
+Every non-reconnecting active resume freshly reads the exact connected Device
+Information serial before provider calls, durable mutation, or OTA GATT.
+Passive WiFi status subscription performs the same check before claiming its
+lease or subscribing. Neither path opens the picker or falls back by name;
+cleanup-only firmware recovery remains BLE-free.
 
 Firmware sources must use HTTPS. Plain HTTP is accepted only for deterministic
 loopback tests. Reboot recovery uses `getDevices()` and only the exact browser

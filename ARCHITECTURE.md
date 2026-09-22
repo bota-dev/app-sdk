@@ -978,7 +978,10 @@ coordinator, and one instance of each public foreground manager. Read-only
 construction needs neither storage nor providers. Durable construction uses a
 non-empty tenant `storageNamespace`; a caller-provided storage adapter must
 report that exact namespace, otherwise creation fails before browser or device
-work.
+work. Manager names are root-exported as instance types only: operational
+construction remains client-owned, and applications use `client.devices`,
+`client.recordings`, `client.provisioning`, `client.wifi`, `client.controls`,
+`client.ota`, and `client.logs`.
 
 Connection always starts with the browser's explicit device picker and requires
 the caller's expected serial number. The advertised name is only a picker
@@ -991,21 +994,24 @@ If client destruction races an open picker, the eventual picker result is
 rejected as cancelled before it can become the active device or start GATT
 work. If destruction races later connection work, the captured device is
 disconnected and cannot be published by a late workflow completion.
-Client destruction marks every manager terminal before awaiting cleanup,
-cancels and joins direct and workflow owners, removes passive subscriptions,
-and disconnects only after initiated unabortable work settles. Tenant cleanup
-runs only through `clearPersistedData()`: it requires no active coordinator
-owner, performs no BLE command, and remains safe and repeatable after destroy
-for logout ordering.
+Client destruction marks every manager terminal before awaiting cleanup. It
+joins non-cancellable picker and verified-device-hint loads before resolving;
+late results cannot publish a connection or start GATT ownership, and a late
+picker device is cleaned up. It then cancels and joins every non-device direct
+or workflow owner and removes passive subscriptions and leases before the one
+final device disconnect. Tenant cleanup runs only through
+`clearPersistedData()`: it requires no active coordinator owner, performs no
+BLE command, and remains safe and repeatable after destroy for logout ordering.
 
 Foreground firmware update is exposed through the client's `OTAManager`. The
 application resolves stable image identity to a fresh HTTPS request, while the
 browser host streams bounded chunks directly to OPFS and incrementally verifies
 exact length, SHA-256, and CRC32 before Rust may write GATT. Only stable image
 identity and workflow checkpoints are durable; request URLs and headers remain
-memory-only. An update from a live connection freshly re-verifies the active
-Device Information serial before provider, journal mutation, or OTA GATT. A
-compatible verified blob can be reused after reload, while an
+memory-only. An update or non-reconnecting active resume from a live connection
+freshly re-verifies the exact active Device Information serial before provider,
+journal mutation, or OTA GATT. Cleanup-only recovery remains local and BLE-free.
+A compatible verified blob can be reused after reload, while an
 incomplete blob restarts from byte zero with a freshly resolved request.
 
 Rust owns OTA transfer, device status handling, verification, reboot, reconnect,

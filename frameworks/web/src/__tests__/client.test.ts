@@ -5,6 +5,8 @@ import test from 'node:test'
 import {
   BotaDeviceClient,
   BotaSDKError,
+} from '../index.ts'
+import type {
   ControlManager,
   DeviceManager,
   LogManager,
@@ -64,28 +66,22 @@ test('the root module exports only the approved browser runtime values', () => {
   assert.deepEqual(Object.keys(publicApi).sort(), [
     'BotaDeviceClient',
     'BotaSDKError',
-    'ControlManager',
-    'DeviceManager',
-    'LogManager',
-    'OTAManager',
-    'ProvisioningManager',
-    'RecordingManager',
-    'WiFiManager',
   ])
 })
 
 test('read-only construction needs neither durable storage nor providers', async () => {
   const { client, transport } = await createClient()
 
-  assert.ok(client.devices instanceof DeviceManager)
-  assert.ok(client.recordings instanceof RecordingManager)
-  assert.ok(client.provisioning instanceof ProvisioningManager)
-  assert.ok(client.wifi instanceof WiFiManager)
-  assert.ok(client.controls instanceof ControlManager)
-  assert.ok(client.ota instanceof OTAManager)
-  assert.ok(client.logs instanceof LogManager)
-  assert.strictEqual(client.devices, client.devices)
-  assert.strictEqual(client.recordings, client.recordings)
+  const typedManagers: {
+    devices: DeviceManager
+    recordings: RecordingManager
+    provisioning: ProvisioningManager
+    wifi: WiFiManager
+    controls: ControlManager
+    ota: OTAManager
+    logs: LogManager
+  } = client
+  assert.strictEqual(typedManagers.devices, client.devices)
   assert.deepEqual(transport.calls, [])
 
   await assert.rejects(
@@ -107,6 +103,32 @@ test('read-only construction needs neither durable storage nor providers', async
   assert.deepEqual(transport.calls, [])
 
   await client.destroy()
+})
+
+test('each client owns seven distinct managers over one unshared runtime', async () => {
+  const first = await createClient()
+  const second = await createClient()
+  const firstManagers = managerGraph(first.client)
+  const secondManagers = managerGraph(second.client)
+  const firstRuntime = internalRuntime(first.client.devices)
+  const secondRuntime = internalRuntime(second.client.devices)
+
+  assert.equal(new Set(firstManagers).size, 7)
+  assert.equal(new Set(secondManagers).size, 7)
+  for (const manager of firstManagers) {
+    assert.strictEqual(internalRuntime(manager), firstRuntime)
+  }
+  for (const manager of secondManagers) {
+    assert.strictEqual(internalRuntime(manager), secondRuntime)
+  }
+  for (const firstManager of firstManagers) {
+    for (const secondManager of secondManagers) {
+      assert.notStrictEqual(firstManager, secondManager)
+    }
+  }
+  assert.notStrictEqual(firstRuntime, secondRuntime)
+
+  await Promise.all([first.client.destroy(), second.client.destroy()])
 })
 
 test('caller storage requires the exact requested tenant namespace', async () => {
@@ -259,6 +281,47 @@ test('destroy is immediately terminal across managers and joins workflow cleanup
   )
 })
 
+test('client destroy removes a pending passive WiFi subscription before disconnect', async () => {
+  const transport = new FakeBrowserBluetoothTransport()
+  const { client } = await createClient({ transport })
+  await client.devices.connect({ expectedSerialNumber: SERIAL })
+  transport.calls.length = 0
+  const subscribeStarted = deferred<void>()
+  const releaseSubscribe = deferred<void>()
+  const unsubscribeStarted = deferred<void>()
+  const releaseUnsubscribe = deferred<void>()
+  transport.onSubscribe = () => subscribeStarted.resolve(undefined)
+  transport.subscribeGate = releaseSubscribe.promise
+  transport.onUnsubscribe = () => unsubscribeStarted.resolve(undefined)
+  transport.unsubscribeGate = releaseUnsubscribe.promise
+
+  const subscribing = client.wifi.subscribeToStatus(() => undefined)
+  void subscribing.catch(() => undefined)
+  await subscribeStarted.promise
+  const destroying = client.destroy()
+
+  assert.equal(await isSettled(destroying), false)
+  assert.equal(transport.calls.some((call) => call.startsWith('disconnect:')), false)
+  releaseSubscribe.resolve(undefined)
+  await unsubscribeStarted.promise
+  assert.equal(await isSettled(destroying), false)
+  assert.equal(transport.calls.some((call) => call.startsWith('disconnect:')), false)
+
+  releaseUnsubscribe.resolve(undefined)
+  await assert.rejects(subscribing, isSdkError('cancelled'))
+  await destroying
+  const unsubscribeIndex = transport.calls.findIndex((call) =>
+    call.startsWith('unsubscribe:'))
+  const disconnectIndex = transport.calls.findIndex((call) =>
+    call === 'disconnect:browser-peripheral-1')
+  assert.ok(unsubscribeIndex >= 0 && unsubscribeIndex < disconnectIndex)
+  assert.equal(
+    transport.calls.filter((call) =>
+      call === 'disconnect:browser-peripheral-1').length,
+    1,
+  )
+})
+
 test('logs reverify the exact active serial after reconnect without picker fallback', async () => {
   const storage = new ObservedStorage(NAMESPACE)
   const transport = new FakeBrowserBluetoothTransport()
@@ -310,4 +373,20 @@ async function isSettled(promise: Promise<unknown>): Promise<boolean> {
     promise.then(() => true, () => true),
     Promise.resolve(marker),
   ]) !== marker
+}
+
+function managerGraph(client: BotaDeviceClient): readonly object[] {
+  return [
+    client.devices,
+    client.recordings,
+    client.provisioning,
+    client.wifi,
+    client.controls,
+    client.ota,
+    client.logs,
+  ]
+}
+
+function internalRuntime(manager: object): unknown {
+  return (manager as { runtime: unknown }).runtime
 }

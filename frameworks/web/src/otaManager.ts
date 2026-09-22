@@ -174,14 +174,10 @@ export class OTAManager {
           return
         }
         if (!journal.verified) this.requireProvider()
-
         const artifact = this.createArtifactHost(journal)
         if (journal.verified && !(await artifact.hasCompatibleVerifiedBlob())) {
-          await artifact.deleteBlob().catch(() => undefined)
           throw new BotaSDKError('resume_rejected', 'update_firmware')
         }
-        throwIfAborted(signal)
-
         const hint = await this.loadReconnectHint(journal.serialNumber)
         const reconnecting = checkpointPhase(checkpoint) === 'reconnecting'
         if (reconnecting) {
@@ -201,7 +197,10 @@ export class OTAManager {
               signal,
             )
           } else {
-            connected = this.requireConnectedDevice()
+            connected = await verifyActiveDeviceSerial(
+              this.devices,
+              'update_firmware',
+            )
           }
           if (
             connected.serialNumber !== journal.serialNumber

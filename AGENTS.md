@@ -248,9 +248,14 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   runtime/coordinator and one instance of each manager. Read-only construction
   needs no storage or provider; durable workflows require a non-empty tenant
   namespace, and custom storage must match it exactly. Client destruction is
-  terminal and joins every active owner and passive subscription before final
-  disconnect. Tenant cleanup is BLE-free, requires no active owner, and remains
-  available after destroy for logout ordering.
+  terminal, joins picker and reconnect-hint startup work, and joins every
+  non-device owner and passive subscription before the one final disconnect.
+  OTA active resume phases and passive WiFi status setup must freshly verify
+  the exact active serial before provider, mutation, or characteristic work.
+  Root manager names are instance types only; applications obtain managers
+  from `BotaDeviceClient`, not constructors. Tenant cleanup is BLE-free,
+  requires no active owner, and remains available after destroy for logout
+  ordering.
 - Web device logs have one Rust workflow owner and one diagnostics
   characteristic lease. Resolve subscription setup only after Rust reaches its
   running state, expose only typed Rust `DeviceLog` notifications, and join

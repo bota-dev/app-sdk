@@ -1,6 +1,9 @@
 import type { CoreLoader } from './core.ts'
 import { ControlManager } from './controlManager.ts'
-import { DeviceManager } from './deviceManager.ts'
+import {
+  destroyDeviceManagerAfter,
+  DeviceManager,
+} from './deviceManager.ts'
 import { BotaSDKError, type BotaOperation } from './errors.ts'
 import { LogManager } from './logManager.ts'
 import { OTAManager } from './otaManager.ts'
@@ -145,16 +148,18 @@ export class BotaDeviceClient {
 
   destroy(): Promise<void> {
     if (this.destroyPromise) return this.destroyPromise
-    const cleanups = [
+    const managerCleanup = Promise.all([
       this.logs.destroy(),
       this.ota.destroy(),
       this.wifi.destroy(),
       this.controls.destroy(),
       this.provisioning.destroy(),
       this.recordings.destroy(),
-      this.devices.destroy(),
-    ]
-    this.destroyPromise = Promise.all(cleanups).then(() => undefined)
+    ])
+    this.destroyPromise = destroyDeviceManagerAfter(
+      this.devices,
+      managerCleanup,
+    )
     return this.destroyPromise
   }
 }

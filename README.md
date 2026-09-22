@@ -445,7 +445,11 @@ snapshot use. Durable foreground workflows require a non-empty tenant
 `storageNamespace`; a custom storage adapter must report that exact namespace.
 On logout or tenant switch, await `destroy()` and then
 `clearPersistedData()` so active owners and subscriptions settle before only
-that tenant's local data is removed.
+that tenant's local data is removed. Manager names are available as TypeScript
+instance types, while construction remains owned by `BotaDeviceClient.create()`;
+applications do not instantiate managers directly. Destruction also joins an
+open picker or reconnect-hint load, removes passive subscriptions before its
+single disconnect, and prevents late startup results from publishing a device.
 
 The foreground Web beta exposes recording, provisioning, WiFi, recording
 control, firmware update, and device-log managers alongside connection and

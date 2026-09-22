@@ -386,6 +386,26 @@ test('passive status owns one exact lease and explicit removal is idempotent', a
   assert.equal(unsubscribeCount(harness, WIFI_STATUS_CHARACTERISTIC), 1)
 })
 
+test('passive status freshly rejects a changed serial before subscribing', async () => {
+  const harness = await createHarness()
+  harness.transport.serialNumber = 'OTHERDEVICE1'
+
+  await assert.rejects(
+    harness.manager.subscribeToStatus(() => undefined),
+    (error: unknown) =>
+      error instanceof BotaSDKError && error.code === 'identity_mismatch',
+  )
+
+  assert.equal(
+    harness.transport.calls.some((call) => call.startsWith('subscribe:')),
+    false,
+  )
+  assert.equal(harness.transport.calls.includes('request_device'), false)
+  assert.equal(harness.transport.calls.includes('get_authorized_devices'), false)
+  assert.deepEqual(harness.transport.writes, [])
+  assert.equal(harness.devices.connectedDevice, null)
+})
+
 test('passive status delivers a notification emitted during subscription setup', async () => {
   const harness = await createHarness()
   const encoded = await provisioningPacket('wifi-status-connected')

@@ -315,6 +315,81 @@ test('a connected update re-verifies the active serial before durable or provide
   assert.equal(harness.devices.connectedDevice, null)
 })
 
+test('every connected active resume phase re-verifies serial before provider, mutation, or OTA GATT', async (t) => {
+  const cases: Array<{
+    name: string
+    phase: 'transferring' | 'verifying' | null
+  }> = [
+    { name: 'download', phase: null },
+    { name: 'transfer', phase: 'transferring' },
+    { name: 'verify', phase: 'verifying' },
+  ]
+
+  for (const candidate of cases) {
+    await t.test(candidate.name, async () => {
+      const bytes = Uint8Array.of(11, 12, 13, 14)
+      const image = descriptor(bytes)
+      const operationId = `update_firmware:stale-resume-${candidate.name}`
+      const harness = await createHarness({ bytes })
+      installStartResult(harness, 1)
+      await assert.rejects(
+        harness.ota.updateFirmware(image, { operationId }),
+        isSdkError('firmware_rejected'),
+      )
+      const journal = harness.storage.firmwareJournals.get(operationId)
+      assert.ok(journal?.verified)
+      if (candidate.phase === null) {
+        harness.storage.firmwareJournals.set(operationId, {
+          ...journal,
+          downloadedBytes: 0,
+          verified: false,
+        })
+        harness.storage.workflowCheckpoints.delete(operationId)
+      } else {
+        harness.storage.workflowCheckpoints.set(
+          operationId,
+          firmwareCheckpoint(candidate.phase, image.version, bytes.byteLength),
+        )
+      }
+      const expectedJournal = {
+        ...harness.storage.firmwareJournals.get(operationId),
+      }
+      const expectedCheckpoint = harness.storage.workflowCheckpoints.get(operationId)
+      harness.provider.calls.length = 0
+      harness.fetcher.calls.length = 0
+      harness.events.length = 0
+      harness.transport.calls.length = 0
+      harness.transport.writes.length = 0
+      harness.transport.serialNumber = 'OTHERDEVICE1'
+
+      await assert.rejects(
+        harness.ota.resumeFirmwareUpdate(operationId),
+        isSdkError('identity_mismatch'),
+      )
+
+      assert.deepEqual(harness.provider.calls, [])
+      assert.deepEqual(harness.fetcher.calls, [])
+      assert.deepEqual(
+        harness.storage.firmwareJournals.get(operationId),
+        expectedJournal,
+      )
+      assert.deepEqual(
+        harness.storage.workflowCheckpoints.get(operationId),
+        expectedCheckpoint,
+      )
+      assert.deepEqual(harness.transport.writes, [])
+      assert.equal(harness.transport.calls.includes('request_device'), false)
+      assert.equal(
+        harness.transport.calls.includes('get_authorized_devices'),
+        false,
+      )
+      assert.equal(harness.devices.connectedDevice, null)
+      await harness.ota.destroy()
+      await harness.devices.destroy()
+    })
+  }
+})
+
 test('an orphan Rust checkpoint rejects a new update before provider or GATT', async () => {
   const bytes = Uint8Array.of(1, 2, 3, 4)
   const image = descriptor(bytes)

@@ -293,7 +293,20 @@ export class WiFiManager {
     if (typeof listener !== 'function') {
       throw new BotaSDKError('invalid_input', 'wifi')
     }
-    const device = this.requireConnectedDevice()
+    try {
+      return await this.runManaged(async (signal) => {
+        const device = await this.verifyConnectedDevice(signal)
+        return await this.subscribeToVerifiedStatus(device, listener)
+      })
+    } catch (error) {
+      throw await this.normalizeFailure(error)
+    }
+  }
+
+  private async subscribeToVerifiedStatus(
+    device: BrowserDeviceHandle,
+    listener: (status: WiFiStatusInfo) => void,
+  ): Promise<WiFiStatusSubscription> {
     let lease: CharacteristicLease
     try {
       lease = this.runtime.claimCharacteristicLease(
