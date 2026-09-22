@@ -470,6 +470,9 @@ ciphertext file. Canonical CONFIRM is written only after the receipt digest
 matches, and every earlier failure or cancellation retains the device copy.
 `RecordingManager.syncEncryptedRecordingV2` starts only command `0x010c` and
 never falls back to a legacy transfer after selection.
+Host-owned cancellation while START is awaiting the transport opening returns
+the stable code-16 cancellation result; cancellation of the caller coroutine
+still propagates as coroutine cancellation.
 The `0409` collector is attached before START and the platform plus transfer
 queues share a one-MiB byte budget. Overflow, phase-invalid repair traffic,
 mixed-profile framing, and pre-EOF completion fail closed. Checkpoint metadata

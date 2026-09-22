@@ -154,7 +154,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   transfer jobs, including when the pump has been created but has not started.
   The platform plus phase-aware transfer queues share a 1 MiB byte cap; overflow,
   premature post-window traffic, mixed profiles, and pre-EOF completion fail
-  closed. START/ABORT races cannot resurrect ownership, and checkpoint lookup
+  closed. START/ABORT races cannot resurrect ownership. Host-owned cancellation
+  during an in-flight START opening maps to the stable code-16 host error while
+  direct caller coroutine cancellation still propagates. Checkpoint lookup
   plus metadata are replaced in one AtomicFile catalog whose file and parent
   directory are flushed before success. Optional internal completion services bind START to the
   prepared authorization and its exact material-registration lease, pass only

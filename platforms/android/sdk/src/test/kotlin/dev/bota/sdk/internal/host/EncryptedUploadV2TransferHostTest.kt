@@ -432,12 +432,11 @@ class EncryptedUploadV2TransferHostTest {
             ),
         )
         val entered = CompletableDeferred<Unit>()
-        val release = CompletableDeferred<Unit>()
         val actions = mutableListOf<String>()
         val journals = TestJournals()
         val services = EncryptedUploadV2TransferHostServices(
             registry, EncryptedUploadV2CheckpointStore(journals),
-            openTransfer = { _, _ -> entered.complete(Unit); release.await(); error("cancelled open") },
+            openTransfer = { _, _ -> entered.complete(Unit); awaitCancellation() },
             sendControl = { _, _, _ -> }, confirmTransfer = { _, _, _ -> },
             abortTransfer = { actions += "abort-$it" },
             releaseTransfer = {}, sendSignedDocument = { kind, _, _, _ -> actions += "signed-$kind" },
@@ -454,11 +453,10 @@ class EncryptedUploadV2TransferHostTest {
         }
         entered.await()
 
-        val cancelling = async { host.cancel(CoreCancellationId(1u, 2u)) }
-        release.complete(Unit)
-        cancelling.await()
-        starting.await()
+        host.cancel(CoreCancellationId(1u, 2u))
+        val error = withTimeout(AsyncSettlementTimeoutMilliseconds) { starting.await() }.exceptionOrNull()
 
+        assertTrue(error.toString(), error is EncryptedUploadV2HostException && error.errorCode == 16u)
         assertTrue(actions.contains("abort-9"))
         assertEquals(1, cancelled.get())
         host.close()

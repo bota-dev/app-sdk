@@ -25,6 +25,7 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.security.MessageDigest
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
@@ -36,8 +37,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -363,7 +366,14 @@ internal class EncryptedUploadV2TransferHost(
             generation
         }
         opening.start()
-        val opened = opening.await()
+        val opened = try {
+            opening.await()
+        } catch (error: CancellationException) {
+            if (currentCoroutineContext().isActive && synchronized(stateLock) { generation != startGeneration }) {
+                fail(16u, "encrypted transfer opening was cancelled")
+            }
+            throw error
+        }
         when (opened) {
             EncryptedUploadV2OpenResult.ResumeRejected -> {
                 val stillOwned = synchronized(stateLock) {
