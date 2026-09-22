@@ -1020,6 +1020,27 @@ test('cancellation scrubs provider prepare inputs and ignores late material', as
   assert.equal(provider.prepares[1]?.snapshot.attemptId, 'new-attempt')
 })
 
+test('malformed late provisioning material after cancellation is ignored', async () => {
+  const provider = new FakeProvisioningProvider()
+  const lateResult = deferred<unknown>()
+  provider.prepareHandler = async () =>
+    await lateResult.promise as ProvisioningMaterial
+  const harness = await createHarness({ provider })
+  const provision = harness.manager.provision({
+    attemptId: 'malformed-late-material',
+  })
+  void provision.catch(() => undefined)
+  await eventually(() => provider.prepares.length === 1)
+
+  await settleWithWatchdog(
+    harness.manager.destroy(),
+    'malformed late provisioning provider destruction',
+  )
+  await assert.rejects(provision, cancelled('provision'))
+  lateResult.resolve(undefined)
+  await settleReducer()
+})
+
 test('client destruction scrubs provider prepare without waiting for late material', async () => {
   const core = await createWasmCore(await wasmBytes)
   const transport = new FakeBrowserBluetoothTransport()

@@ -700,10 +700,7 @@ class ProvisioningMaterialHost implements WorkflowEffectHost {
         )
       } catch (error) {
         if (this.prepareAbortController.signal.aborted) {
-          void pending.then(
-            (lateMaterial) => scrubMaterial(lateMaterial),
-            () => undefined,
-          )
+          void pending.then(scrubMaterial).catch(() => undefined)
         }
         if (error instanceof BotaSDKError && error.code === 'cancelled') throw error
         return {
@@ -822,9 +819,22 @@ function scrubContext(context: ProvisioningPrepareContext): void {
   context.devicePublicKey.fill(0)
 }
 
-function scrubMaterial(material: ProvisioningMaterial): void {
-  material.apiEndpoint.fill(0)
-  material.deviceToken.fill(0)
+function scrubMaterial(material: unknown): void {
+  try {
+    if (typeof material !== 'object' || material === null) return
+    const candidate = material as {
+      apiEndpoint?: unknown
+      deviceToken?: unknown
+    }
+    if (candidate.apiEndpoint instanceof Uint8Array) {
+      candidate.apiEndpoint.fill(0)
+    }
+    if (candidate.deviceToken instanceof Uint8Array) {
+      candidate.deviceToken.fill(0)
+    }
+  } catch {
+    // Application-owned late values are untrusted and already ignored.
+  }
 }
 
 function coreSettings(settings: DeviceConnectionSettings): CoreConnectionSettings {

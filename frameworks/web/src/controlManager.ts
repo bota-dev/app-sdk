@@ -127,10 +127,7 @@ export class ControlManager {
             )
           } catch (error) {
             if (signal.aborted) {
-              void pending.then(
-                ({ grant: lateGrant }) => lateGrant.fill(0),
-                () => undefined,
-              )
+              void pending.then(scrubLateGrant).catch(() => undefined)
             }
             if (
               error instanceof BotaSDKError
@@ -446,6 +443,16 @@ function isCharacteristic(
 function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) {
     throw new BotaSDKError('cancelled', 'recording_control')
+  }
+}
+
+function scrubLateGrant(value: unknown): void {
+  try {
+    if (typeof value !== 'object' || value === null) return
+    const grant = (value as { grant?: unknown }).grant
+    if (grant instanceof Uint8Array) grant.fill(0)
+  } catch {
+    // Application-owned late values are untrusted and already ignored.
   }
 }
 

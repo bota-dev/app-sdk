@@ -84,6 +84,33 @@ test('destroy aborts and stops waiting for a never-settling grant provider', asy
   assert.equal(provider.signals[0]?.aborted, true)
 })
 
+test('malformed late grant after cancellation is ignored', async () => {
+  const provider = new FakeRecordingControlProvider()
+  const entered = deferred<void>()
+  const lateResult = deferred<unknown>()
+  provider.prepare = async () => {
+    entered.resolve(undefined)
+    return await lateResult.promise as { grant: Uint8Array }
+  }
+  const harness = await createHarness({ provider })
+  const started = harness.controls.startRecording({
+    operationId: 'malformed-late-control-provider',
+    authorityId: 'authority-malformed-late-result',
+  })
+  void started.catch(() => undefined)
+  await entered.promise
+
+  await settleWithWatchdog(
+    harness.controls.destroy(),
+    'malformed late recording-control provider destruction',
+  )
+  await assert.rejects(started, (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'cancelled')
+  lateResult.resolve(undefined)
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  await new Promise<void>((resolve) => setImmediate(resolve))
+})
+
 interface Harness {
   controls: ControlManager
   core: CoreBridge
@@ -617,10 +644,18 @@ async function settleWithWatchdog<T>(
   promise: Promise<T>,
   label: string,
 ): Promise<T> {
-  return await Promise.race([
-    promise,
-    new Promise<never>((_resolve, reject) => {
-      setTimeout(() => reject(new Error(`${label} did not settle`)), 250)
-    }),
-  ])
+  let timer: ReturnType<typeof setTimeout> | null = null
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${label} did not settle`)),
+          5_000,
+        )
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }

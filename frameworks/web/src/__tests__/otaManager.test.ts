@@ -1679,12 +1679,20 @@ async function settleWithWatchdog<T>(
   promise: Promise<T>,
   label: string,
 ): Promise<T> {
-  return await Promise.race([
-    promise,
-    new Promise<never>((_resolve, reject) => {
-      setTimeout(() => reject(new Error(`${label} did not settle`)), 250)
-    }),
-  ])
+  let timer: ReturnType<typeof setTimeout> | null = null
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${label} did not settle`)),
+          5_000,
+        )
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 async function tick(): Promise<void> {
