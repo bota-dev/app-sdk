@@ -114,7 +114,7 @@ final class ProtocolCodecTests: XCTestCase {
         let cases = try Self.encryptedUploadV2Cases().filter {
             !Self.encryptedUploadV2Operations.contains($0["operation"] as? String ?? "")
         }
-        XCTAssertEqual(cases.count, 49)
+        XCTAssertEqual(cases.count, 50)
         for fixtureCase in cases {
             let inputHex = try XCTUnwrap(fixtureCase["inputHex"] as? String)
             XCTAssertEqual(Self.hex(Self.data(inputHex)), inputHex)
@@ -127,7 +127,7 @@ final class ProtocolCodecTests: XCTestCase {
         ))
         XCTAssertEqual(
             try String(contentsOf: digestURL, encoding: .utf8),
-            "e9c7a41da6bfa8ab60d639a3c3f8e3fac4f8d525d61f5e407f1be599a63cf670\n"
+            "02afe605d1e038a3ed6d300671baead78475e186f66744a72954787734c0cc6a\n"
         )
     }
 
