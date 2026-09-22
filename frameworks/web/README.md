@@ -32,29 +32,247 @@ namespace.
 
 ```ts
 import type {
+  EncryptedUploadV2Material,
+  EncryptedUploadV2ProviderContext,
   FirmwareDownloadProvider,
+  LegacyUploadContext,
   ProvisioningProvider,
   RecordingControlProvider,
   RecordingUploadProvider,
+  UploadRequestTemplate,
 } from '@bota.dev/web-sdk'
 import { BotaDeviceClient } from '@bota.dev/web-sdk'
 
-const API_ORIGIN = 'https://example.invalid'
+declare global {
+  interface Window {
+    BOTA_TEST_HOST_ORIGIN?: string
+  }
+}
 
-const provisioning: ProvisioningProvider = createProvisioningProvider(API_ORIGIN)
-const recordingUpload: RecordingUploadProvider = createRecordingUploadProvider(API_ORIGIN)
-const recordingControl: RecordingControlProvider = createRecordingControlProvider(API_ORIGIN)
-const firmwareDownload: FirmwareDownloadProvider = createFirmwareDownloadProvider(API_ORIGIN)
+const HOST_ORIGIN = window.BOTA_TEST_HOST_ORIGIN ?? 'https://example.invalid'
 
-const bota = await BotaDeviceClient.create({
-  storageNamespace: `${organizationId}:${projectId}:${userId}`,
-  providers: {
-    provisioning,
-    recordingUpload,
-    recordingControl,
-    firmwareDownload,
+function encodeBytes(value: Uint8Array): string {
+  let binary = ''
+  for (const byte of value) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
+
+function decodeBytes(value: string): Uint8Array {
+  return Uint8Array.from(atob(value), (character) => character.charCodeAt(0))
+}
+
+async function postHost<T>(
+  path: string,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
+  const response = await fetch(new URL(path, HOST_ORIGIN), {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  })
+  if (!response.ok) throw new Error(`Host callback failed: ${response.status}`)
+  if (response.status === 204) return undefined as T
+  return await response.json() as T
+}
+
+function uploadRequest(response: {
+  url: string
+  headers: Record<string, string>
+}): UploadRequestTemplate {
+  return { method: 'PUT', url: response.url, headers: response.headers }
+}
+
+function legacyBody(context: LegacyUploadContext): Record<string, unknown> {
+  return {
+    operationId: context.operationId,
+    serialNumber: context.serialNumber,
+    recordingUuid: context.recording.uuid,
+    sizeBytes: context.sizeBytes.toString(),
+    plaintextSha256Hex: context.plaintextSha256Hex,
+    stagedBodySha256Hex: context.stagedBodySha256Hex,
+    encrypted: context.encrypted,
+  }
+}
+
+function v2Evidence(
+  evidence: Parameters<EncryptedUploadV2Material['stagingRequest']>[0],
+): Record<string, unknown> {
+  return {
+    ciphertextLength: evidence.ciphertextLength.toString(),
+    ciphertextSha256Base64: encodeBytes(evidence.ciphertextSha256),
+    manifestLength: evidence.manifestLength,
+    manifestSha256Base64: encodeBytes(evidence.manifestSha256),
+    blockCount: evidence.blockCount,
+  }
+}
+
+const provisioning: ProvisioningProvider = {
+  async prepare(context) {
+    const response = await postHost<{
+      materialId: string
+      apiEndpointBase64: string
+      deviceTokenBase64: string
+      mtu: number
+    }>('/sdk/provisioning/prepare', {
+      attemptId: context.attemptId,
+      materialId: context.materialId,
+      serialNumber: context.serialNumber,
+      nonceBase64: encodeBytes(context.nonce),
+      devicePublicKeyBase64: encodeBytes(context.devicePublicKey),
+    }, context.signal)
+    return {
+      materialId: response.materialId,
+      apiEndpoint: decodeBytes(response.apiEndpointBase64),
+      deviceToken: decodeBytes(response.deviceTokenBase64),
+      mtu: response.mtu,
+    }
   },
-})
+  async confirm(context) {
+    await postHost<void>('/sdk/provisioning/confirm', context)
+  },
+  async abort(context) {
+    await postHost<void>('/sdk/provisioning/abort', context)
+  },
+}
+
+const recordingControl: RecordingControlProvider = {
+  async prepare(context) {
+    const response = await postHost<{ grantBase64: string }>(
+      '/sdk/recording-control/prepare',
+      context,
+    )
+    return { grant: decodeBytes(response.grantBase64) }
+  },
+}
+
+const firmwareDownload: FirmwareDownloadProvider = {
+  async resolve(context) {
+    const response = await postHost<{
+      url: string
+      headers: Record<string, string>
+    }>('/sdk/firmware/resolve', context)
+    return { method: 'GET', url: response.url, headers: response.headers }
+  },
+}
+
+const recordingUpload: RecordingUploadProvider = {
+  async prepareLegacyUpload(context) {
+    const response = await postHost<{
+      uploadId: string
+      request: { url: string; headers: Record<string, string> }
+    }>('/sdk/recordings/legacy/prepare', legacyBody(context))
+    return { uploadId: response.uploadId, request: uploadRequest(response.request) }
+  },
+  async completeLegacyUpload(context) {
+    return await postHost<{ cloudCompletionId: string }>(
+      '/sdk/recordings/legacy/complete',
+      { ...legacyBody(context), uploadId: context.uploadId },
+    )
+  },
+  async reconcileLegacyUpload(context) {
+    return await postHost<
+      | { state: 'not_uploaded' }
+      | { state: 'cloud_completed'; cloudCompletionId: string }
+    >('/sdk/recordings/legacy/reconcile', {
+      ...legacyBody(context),
+      uploadId: context.uploadId,
+    })
+  },
+  async prepareEncryptedUploadV2(context: EncryptedUploadV2ProviderContext) {
+    const response = await postHost<{
+      materialId: string
+      recordingId: string
+      uploadSessionId: string
+      ownerRevision: number
+      policy: 'legacy_allowed' | 'v2_preferred' | 'v2_required'
+      authorizationBase64: string
+    }>('/sdk/recordings/v2/prepare', {
+      operationId: context.operationId,
+      serialNumber: context.serialNumber,
+      recording: {
+        uuid: context.recording.uuid,
+        generation: context.recording.generation,
+        storageFormat: context.recording.storageFormat,
+        ciphertextLength: context.recording.ciphertextLength.toString(),
+        ciphertextSha256Base64: encodeBytes(context.recording.ciphertextSha256),
+      },
+      capability: {
+        rawValueBase64: encodeBytes(context.capability.rawValue),
+        sha256Base64: encodeBytes(context.capability.sha256),
+        decoded: context.capability.decoded,
+      },
+      checkpoint: context.checkpoint && {
+        uploadSessionId: context.checkpoint.uploadSessionId,
+        ownerRevision: context.checkpoint.ownerRevision,
+        checkpointRevision: context.checkpoint.checkpointRevision,
+        nextCiphertextOffset: context.checkpoint.nextCiphertextOffset.toString(),
+        prefixSha256Base64: encodeBytes(context.checkpoint.prefixSha256),
+        transportSessionId: context.checkpoint.transportSessionId.toString(),
+        sinkId: context.checkpoint.sinkId,
+        windowPackets: context.checkpoint.windowPackets,
+        dataPayloadBytes: context.checkpoint.dataPayloadBytes,
+      },
+    })
+    const materialId = response.materialId
+    return {
+      ...response,
+      authorization: decodeBytes(response.authorizationBase64),
+      async stagingRequest(evidence) {
+        const request = await postHost<{
+          url: string
+          headers: Record<string, string>
+        }>('/sdk/recordings/v2/staging-request', {
+          materialId,
+          evidence: v2Evidence(evidence),
+        })
+        return uploadRequest(request)
+      },
+      async submitManifest(manifest, evidence) {
+        await postHost<void>('/sdk/recordings/v2/manifest', {
+          materialId,
+          manifestBase64: encodeBytes(manifest),
+          evidence: v2Evidence(evidence),
+        })
+      },
+      async finalize(evidence) {
+        await postHost<void>('/sdk/recordings/v2/finalize', {
+          materialId,
+          evidence: v2Evidence(evidence),
+        })
+      },
+      async completionReceipt(evidence) {
+        const receipt = await postHost<{ receiptBase64: string }>(
+          '/sdk/recordings/v2/receipt',
+          { materialId, evidence: v2Evidence(evidence) },
+        )
+        return decodeBytes(receipt.receiptBase64)
+      },
+      async cancel() {
+        await postHost<void>('/sdk/recordings/v2/cancel', { materialId })
+      },
+    }
+  },
+}
+
+export async function createExampleClient(tenant: {
+  organizationId: string
+  projectId: string
+  userId: string
+}) {
+  return await BotaDeviceClient.create({
+    storageNamespace:
+      `${tenant.organizationId}:${tenant.projectId}:${tenant.userId}`,
+    providers: {
+      provisioning,
+      recordingUpload,
+      recordingControl,
+      firmwareDownload,
+    },
+  })
+}
 ```
 
 Those application-owned adapters have these exact responsibilities:
@@ -74,6 +292,12 @@ the SDK itself never calls the Bota API implicitly. Provider failures must fail
 closed, and provider implementations must not log returned grants, tokens,
 signed documents, presigned URLs, headers, WiFi credentials, receipts, or
 recording content.
+
+Create one client for the signed-in tenant and keep it for the page lifetime:
+
+```ts
+const bota = await createExampleClient({ organizationId, projectId, userId })
+```
 
 ## Picker connection, reconnect, and snapshot
 
