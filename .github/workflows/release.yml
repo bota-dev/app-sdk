@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       releaseRef:
-        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.2
+        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.3
         required: true
         type: string
       centralDeploymentId:
@@ -504,7 +504,7 @@ jobs:
             target/apple-release target/android-release target/react-native-release \
             target/web-release
           EXPECTED_NATIVE="$(jq -S -c \
-            '{sourceRevision, files: [.files[] | select(.path | startswith("flutter-release/") | not)]}' \
+            '{schemaVersion, sourceRevision, files: [.files[] | select(.path | startswith("flutter-release/") | not)]}' \
             target/ci-candidate/release-candidate-files.json)"
           CURRENT_NATIVE="$(jq -S -c . target/current-native-candidate-files.json)"
           test "$CURRENT_NATIVE" = "$EXPECTED_NATIVE"
@@ -847,7 +847,7 @@ jobs:
             target/recovered/react-native-release \
             target/recovered/web-release
           EXPECTED_NATIVE="$(jq -S -c \
-            '{sourceRevision, files: [.files[] | select(.path | startswith("flutter-release/") | not)]}' \
+            '{schemaVersion, sourceRevision, files: [.files[] | select(.path | startswith("flutter-release/") | not)]}' \
             target/release-candidate-files.json)"
           RECOVERED_NATIVE="$(jq -S -c . target/recovered-release-candidate-files.json)"
           test "$RECOVERED_NATIVE" = "$EXPECTED_NATIVE"
@@ -1135,7 +1135,7 @@ jobs:
             --output target/current-flutter-candidate-files.json \
             target/flutter-release
           EXPECTED_FLUTTER="$(jq -S -c \
-            '{sourceRevision, files: [.files[] | select(.path | startswith("flutter-release/"))]}' \
+            '{schemaVersion, sourceRevision, files: [.files[] | select(.path | startswith("flutter-release/"))]}' \
             target/tagged-candidate/release-candidate-files.json)"
           CURRENT_FLUTTER="$(jq -S -c . target/current-flutter-candidate-files.json)"
           test "$CURRENT_FLUTTER" = "$EXPECTED_FLUTTER"

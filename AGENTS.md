@@ -92,7 +92,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 - `tools/flutter/package-release.sh --ci` is the automatic PR/main verification
   path. It runs the complete non-publishing Flutter and fresh-consumer gates,
   emits `candidate-ready=false`, and leaves no Flutter release directory only
-  for occupied `1.2.0-beta.0`. Selected synchronized `1.2.0-beta.2` emits
+  for occupied `1.2.0-beta.0`. Selected synchronized `1.2.0-beta.3` emits
   `candidate-ready=true` and preserves the candidate.
   `tools/flutter/package-release.sh --check` is the strict non-publishing
   release gate for beta.1 and later; it must refuse beta.0. It preserves only
@@ -277,7 +277,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   Treat `docs/testing/web-physical-device.md` as a separate supervised release
   gate: fake Bluetooth in automated Chromium is never physical evidence. The
   Web hardware acceptance remains open while any required row is `NOT RUN` or
-  failed. `1.2.0-beta.2` alone has release-owner authorization to publish as a
+  failed. `1.2.0-beta.3` alone has release-owner authorization to publish as a
   beta before this matrix; do not treat publication as hardware acceptance.
   Do not advertise background or closed-tab work, live streaming,
   authenticated factory reset, Safari/iOS fallback, Flutter Web, or Windows as
@@ -750,10 +750,12 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
 - Read `docs/releasing.md` before creating or pushing a release tag.
 - Prepared `1.2.0-beta.0` metadata and evidence do not claim publication. That
   identity is occupied by immutable non-Flutter source and must not be reused.
-  Immutable `v1.2.0-beta.1` was tagged but its release workflow failed; never
-  move or reuse it. `1.2.0-beta.2` is the selected synchronized candidate.
-  Its publication requires green automated gates and protected approval. It and later betas use the
-  protected release workflows and verify occupied versions instead of
+  Immutable `v1.2.0-beta.1` and `v1.2.0-beta.2` were tagged but their release
+  workflows failed; never move or reuse them. Beta.2 stopped before publication
+  on a candidate-inventory projection that dropped `schemaVersion`.
+  `1.2.0-beta.3` is the selected synchronized candidate. Its publication
+  requires green automated gates and protected approval. It and later betas
+  use the protected release workflows and verify occupied versions instead of
   attempting to replace them.
 - The public Apple package is the root `Package.swift`; keep the nested
   `platforms/apple/Package.swift` for local development against the generated

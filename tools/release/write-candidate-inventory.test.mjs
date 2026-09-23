@@ -49,3 +49,28 @@ test('writes a deterministic sorted inventory for every synchronized facade cand
   await execute('tools/release/write-candidate-inventory.sh', arguments_, { cwd: process.cwd() });
   assert.equal(await readFile(output, 'utf8'), first);
 });
+
+test('release workflow projections preserve the inventory schema', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'bota-release-projection-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const input = join(directory, 'release-candidate-files.json');
+  await writeFile(input, JSON.stringify({
+    schemaVersion: 1,
+    sourceRevision,
+    files: [
+      { path: 'apple-release/a.txt', byteLength: 1, sha256: 'a'.repeat(64) },
+      { path: 'flutter-release/b.txt', byteLength: 1, sha256: 'b'.repeat(64) },
+    ],
+  }));
+  const workflow = await readFile('.github/workflows/release.yml', 'utf8');
+  const projections = [...workflow.matchAll(/EXPECTED_(?:NATIVE|FLUTTER)="\$\(jq -S -c \\\n\s+'([^']+)'/g)];
+  assert.equal(projections.length, 3);
+
+  for (const [, expression] of projections) {
+    const { stdout } = await execute('jq', ['-S', '-c', expression, input]);
+    const projected = JSON.parse(stdout);
+    assert.equal(projected.schemaVersion, 1);
+    assert.equal(projected.sourceRevision, sourceRevision);
+    assert.equal(projected.files.length, 1);
+  }
+});

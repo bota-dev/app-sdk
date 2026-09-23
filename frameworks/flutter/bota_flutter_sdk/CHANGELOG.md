@@ -1,7 +1,9 @@
 # Changelog
 
-## 1.2.0-beta.2 (unreleased)
+## 1.2.0-beta.3 (unreleased)
 
+- Replaced the unpublished beta.2 tag after its release workflow stopped before
+  publication on a candidate-inventory comparison error.
 - Selected a new synchronized Flutter-bearing candidate after immutable
   non-Flutter `v1.2.0-beta.0` and unpublished `v1.2.0-beta.1` occupied their
   identities.
