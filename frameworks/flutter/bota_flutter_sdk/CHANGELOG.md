@@ -1,15 +1,20 @@
 # Changelog
 
-## 1.2.0-beta.10 (unreleased)
+## 1.2.0-beta.11 (unreleased)
 
-- Replaced the partially published beta.9 tag after GitHub skipped Flutter
-  through the deliberately skipped recovery branch of the release graph.
+- Replaced the partially published beta.10 tag after its Flutter consumer gate
+  could not locate the installed CocoaPods executable on the macOS runner.
 - Selected a new synchronized Flutter-bearing candidate after immutable
   non-Flutter `v1.2.0-beta.0` and unpublished `v1.2.0-beta.1` occupied their
   identities.
 - Synchronized Apple, Android, React Native, Flutter, Web, Rust, protocol, and
   release metadata for local candidate verification. This entry does not claim
   publication on pub.dev or any other registry.
+
+## 1.2.0-beta.10 (partially published)
+
+- Published the native and npm packages, but the Flutter candidate gate failed
+  before pub.dev publication because it could not locate CocoaPods 1.16.2.
 
 ## 1.2.0-beta.0 (historical unpublished Flutter metadata)
 

@@ -92,7 +92,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 - `tools/flutter/package-release.sh --ci` is the automatic PR/main verification
   path. It runs the complete non-publishing Flutter and fresh-consumer gates,
   emits `candidate-ready=false`, and leaves no Flutter release directory only
-  for occupied `1.2.0-beta.0`. Selected synchronized `1.2.0-beta.10` emits
+  for occupied `1.2.0-beta.0`. Selected synchronized `1.2.0-beta.11` emits
   `candidate-ready=true` and preserves the candidate.
   `tools/flutter/package-release.sh --check` is the strict non-publishing
   release gate for beta.1 and later; it must refuse beta.0. It preserves only
@@ -278,7 +278,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   gate: fake Bluetooth in automated Chromium is never physical evidence. The
   Web hardware acceptance remains open while any required row is `NOT RUN` or
   failed. `1.2.0-beta.7` and its CocoaPods repairs `1.2.0-beta.8` and
-  `1.2.0-beta.9` and `1.2.0-beta.10` have
+  `1.2.0-beta.9`, `1.2.0-beta.10`, and `1.2.0-beta.11` have
   release-owner authorization to publish as a
   beta before this matrix; do not treat publication as hardware acceptance.
   Do not advertise background or closed-tab work, live streaming,
@@ -773,7 +773,10 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
   Trunk registered the pod and Flutter was held. `v1.2.0-beta.9` is also
   immutable and partially published: its native and npm artifacts are public,
   but Flutter was skipped after all public consumers passed because the skipped
-  recovery job propagated through the release graph. `1.2.0-beta.10` is the
+  recovery job propagated through the release graph. `v1.2.0-beta.10` is also
+  immutable and partially published: native and npm artifacts are public, but
+  Flutter failed because its consumer gate did not locate the installed
+  CocoaPods 1.16.2 executable. `1.2.0-beta.11` is the
   selected synchronized candidate. Its script-free CocoaPods archive contains
   the Swift facade and XCFramework, and its podspec pins that archive's SHA-256.
   Its publication

@@ -37,7 +37,7 @@ const validWasm = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00])
 const validMetadata = {
   packageJson: {
     name: '@bota.dev/web-sdk',
-    version: '1.2.0-beta.10',
+    version: '1.2.0-beta.11',
     type: 'module',
     packageManager: 'npm@12.0.2',
     publishConfig: { access: 'public' },
@@ -48,7 +48,7 @@ const validMetadata = {
       },
     },
   },
-  sdkVersion: '1.2.0-beta.10',
+  sdkVersion: '1.2.0-beta.11',
   expectedPackageManager: 'npm@12.0.2',
 }
 

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       releaseRef:
-        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.10
+        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.11
         required: true
         type: string
       centralDeploymentId:
@@ -1164,6 +1164,10 @@ jobs:
             "ndk;28.2.13676358" \
             "cmake;3.22.1"
           gem install --no-document cocoapods -v 1.16.2
+          POD_BINARY="$(ruby -e 'print Gem.bindir')/pod"
+          test -x "$POD_BINARY"
+          test "$("$POD_BINARY" --version)" = "1.16.2"
+          echo "POD_BINARY=$POD_BINARY" >> "$GITHUB_ENV"
 
       - name: Install repository tooling
         run: npm ci
