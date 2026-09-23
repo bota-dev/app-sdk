@@ -9,7 +9,7 @@ test('renders a script-free, checksummed CocoaPods source archive', () => {
   const spec = renderPublicPodspec({ sdkVersion: '1.2.0-beta.11', artifactChecksum: checksum });
   assert.match(spec, /spec.version = "1\.2\.0-beta\.11"/);
   assert.match(spec, /BotaAppleSDK\.cocoapods\.zip/);
-  assert.match(spec, /http: "https:\/\/github\.com\/bota-dev\/app-sdk\/releases\/download\/v1\.2\.0-beta\.10\/BotaAppleSDK\.cocoapods\.zip"/);
+  assert.match(spec, /http: "https:\/\/github\.com\/bota-dev\/app-sdk\/releases\/download\/v1\.2\.0-beta\.11\/BotaAppleSDK\.cocoapods\.zip"/);
   assert.match(spec, new RegExp(`sha256: "${checksum}"`));
   assert.match(spec, /Sources\/BotaAppleSDK\/\*\*\/\*\.swift/);
   assert.match(spec, /Artifacts\/BotaDeviceSDKCore\.xcframework/);

@@ -50,7 +50,8 @@ release dependency graph. Do not move or reuse beta.9. Beta.10 corrected the
 Flutter-side job conditions and published the native and npm artifacts, but the
 Flutter candidate job failed because its consumer gate could not locate the
 installed CocoaPods 1.16.2 executable. Do not move or reuse beta.10. Beta.11
-passes the installed executable explicitly to that gate.
+passes the installed executable explicitly to that gate and checks its exact
+version before building consumers.
 Apple consumers add
 `https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
 compiles the Swift facade source and downloads a checksummed
