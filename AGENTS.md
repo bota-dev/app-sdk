@@ -92,7 +92,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 - `tools/flutter/package-release.sh --ci` is the automatic PR/main verification
   path. It runs the complete non-publishing Flutter and fresh-consumer gates,
   emits `candidate-ready=false`, and leaves no Flutter release directory only
-  for occupied `1.2.0-beta.0`. Selected synchronized `1.2.0-beta.4` emits
+  for occupied `1.2.0-beta.0`. Selected synchronized `1.2.0-beta.5` emits
   `candidate-ready=true` and preserves the candidate.
   `tools/flutter/package-release.sh --check` is the strict non-publishing
   release gate for beta.1 and later; it must refuse beta.0. It preserves only
@@ -277,7 +277,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   Treat `docs/testing/web-physical-device.md` as a separate supervised release
   gate: fake Bluetooth in automated Chromium is never physical evidence. The
   Web hardware acceptance remains open while any required row is `NOT RUN` or
-  failed. `1.2.0-beta.4` alone has release-owner authorization to publish as a
+  failed. `1.2.0-beta.5` alone has release-owner authorization to publish as a
   beta before this matrix; do not treat publication as hardware acceptance.
   Do not advertise background or closed-tab work, live streaming,
   authenticated factory reset, Safari/iOS fallback, Flutter Web, or Windows as
@@ -755,7 +755,9 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
   on a candidate-inventory projection that dropped `schemaVersion`.
   `v1.2.0-beta.3` is also immutable: Central published, but npm and Apple did
   not after the HTML-index timeout and a signed-bundle mismatch on retry.
-  `1.2.0-beta.4` is the selected synchronized candidate. Its publication
+  `v1.2.0-beta.4` is immutable and unpublished: the tagged Android unit suite
+  failed twice before the protected publish job.
+  `1.2.0-beta.5` is the selected synchronized candidate. Its publication
   requires green automated gates and protected approval. It and later betas
   use the protected release workflows and verify occupied versions instead of
   attempting to replace them.

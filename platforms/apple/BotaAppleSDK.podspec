@@ -1,7 +1,7 @@
 Pod::Spec.new do |spec|
   spec.name = "BotaAppleSDK"
   spec.module_name = "BotaAppleSDK"
-  spec.version = "1.2.0-beta.4"
+  spec.version = "1.2.0-beta.5"
   spec.summary = "Bota App SDK for Apple platforms"
   spec.homepage = "https://docs.bota.dev"
   spec.license = { type: "Apache-2.0" }

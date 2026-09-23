@@ -12,6 +12,7 @@ import dev.bota.sdk.internal.jni.NativeCore
 import dev.bota.sdk.internal.jni.NativePacket
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.async
@@ -20,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onEach
@@ -367,6 +369,7 @@ private class ControlDriver(
 ) : BluetoothDriver {
     private val replies = MutableSharedFlow<BluetoothNotification>()
     private val overflowAttempted = CompletableDeferred<Unit>()
+    private val startReplyPending = AtomicBoolean()
     var subscribersAtWrite = 0
     var writeCount = 0
     var unsubscribeCount = 0
@@ -380,6 +383,9 @@ private class ControlDriver(
         withResponse: Boolean,
     ) {
         writeCount += 1
+        if (startReplyPending.getAndSet(false)) {
+            withTimeout(5_000) { replies.subscriptionCount.first { it > 0 } }
+        }
         subscribersAtWrite = replies.subscriptionCount.value
         if (activeWriteEntered != null && writeCount == 2) {
             activeWriteEntered.complete(Unit)
@@ -411,7 +417,7 @@ private class ControlDriver(
             overflowAttempted.complete(Unit)
         }
         awaitCancellation()
-    } else replies
+    } else replies.also { startReplyPending.set(true) }
 
     override suspend fun unsubscribe(peripheralId: String, serviceUuid: UUID, characteristicUuid: UUID) {
         unsubscribeCount += 1
