@@ -14,6 +14,7 @@ import {
   recoverDeployment,
   retryFailedDeployment,
   resumeDeployment,
+  verifyArchivedRelease,
   verifyPublishedArtifacts,
 } from './central-portal.mjs';
 import { buildCentralBundle } from './build-central-bundle.mjs';
@@ -40,7 +41,7 @@ test('creates deterministic READY state without credentials or a deployment ID',
   const state = createDeploymentState({ sourceRevision, bundleSha256, inventorySha256 });
 
   assert.equal(state.packageIdentifier, 'dev.bota:bota-android-sdk');
-  assert.equal(state.version, '1.2.0-beta.3');
+  assert.equal(state.version, '1.2.0-beta.4');
   assert.equal(state.deploymentName, deploymentName(bundleSha256));
   assert.equal(state.deploymentId, null);
   assert.equal(state.deploymentState, 'READY');
@@ -330,6 +331,18 @@ test('public Maven file verification does not require a directory index', async 
   });
   state.deploymentId = deploymentId;
   state.deploymentState = 'PUBLISHED';
+  await writeFile(statePath, `${JSON.stringify(state)}\n`);
+  await verifyArchivedRelease({ inventoryPath, bundlePath, statePath, sourceRevision });
+  await assert.rejects(
+    () => verifyArchivedRelease({ inventoryPath, bundlePath, statePath, sourceRevision: 'f'.repeat(40) }),
+    /archived release identity is invalid/,
+  );
+  const wrongState = { ...state, inventorySha256: '0'.repeat(64) };
+  await writeFile(statePath, `${JSON.stringify(wrongState)}\n`);
+  await assert.rejects(
+    () => verifyArchivedRelease({ inventoryPath, bundlePath, statePath, sourceRevision }),
+    /archived release hashes are invalid/,
+  );
   await writeFile(statePath, `${JSON.stringify(state)}\n`);
   const inventory = JSON.parse(await readFile(inventoryPath, 'utf8'));
   const mavenRoot = 'https://maven.example/maven2';

@@ -10,7 +10,7 @@ import { inspectZip, verifyCentralBundle } from './build-central-bundle.mjs';
 import { primaryFiles, validatePublishedMetadata } from './normalize-central-repository.mjs';
 
 const PACKAGE_IDENTIFIER = 'dev.bota:bota-android-sdk';
-const VERSION = '1.2.0-beta.3';
+const VERSION = '1.2.0-beta.4';
 const API_ROOT = 'https://central.sonatype.com/api/v1/publisher';
 const MAVEN_ROOT = 'https://repo1.maven.org/maven2';
 const REVISION = /^[0-9a-f]{40}$/;
@@ -279,6 +279,19 @@ export async function verifyArchivedBundle({ inventoryPath, bundlePath }) {
   return inventory;
 }
 
+export async function verifyArchivedRelease({ inventoryPath, bundlePath, statePath, sourceRevision }) {
+  const inventory = await verifyArchivedBundle({ inventoryPath, bundlePath });
+  const state = await loadDeploymentState(statePath);
+  if (inventory.coordinate !== PACKAGE_IDENTIFIER || inventory.version !== VERSION
+      || inventory.sourceRevision !== sourceRevision || state.sourceRevision !== sourceRevision) {
+    throw new Error('archived release identity is invalid');
+  }
+  if (digest(await readFile(bundlePath)) !== state.bundleSha256
+      || digest(await readFile(inventoryPath)) !== state.inventorySha256) {
+    throw new Error('archived release hashes are invalid');
+  }
+}
+
 export async function verifyPublishedArtifacts({
   statePath,
   inventoryPath,
@@ -456,8 +469,17 @@ function parseArguments(argv) {
 
 async function main() {
   const { command, options } = parseArguments(process.argv.slice(2));
-  if (!['prepare', 'upload-or-resume', 'recover-and-resume', 'retry-failed', 'verify-published'].includes(command)) {
-    throw new Error('usage: central-portal.mjs <prepare|upload-or-resume|recover-and-resume|retry-failed|verify-published> [options]');
+  if (!['prepare', 'upload-or-resume', 'recover-and-resume', 'retry-failed', 'verify-published', 'verify-archived'].includes(command)) {
+    throw new Error('usage: central-portal.mjs <prepare|upload-or-resume|recover-and-resume|retry-failed|verify-published|verify-archived> [options]');
+  }
+  if (command === 'verify-archived') {
+    await verifyArchivedRelease({
+      inventoryPath: options.inventory,
+      bundlePath: options.bundle,
+      statePath: options.state,
+      sourceRevision: options['source-revision'],
+    });
+    return;
   }
   if (command === 'prepare') {
     await verifyCentralBundle({ repository: options.repository, inventory: options.inventory, zip: options.bundle });

@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.2.0-beta.3 (unreleased)
+## 1.2.0-beta.4 (unreleased)
 
 - Replaced the unpublished beta.2 tag after its release workflow stopped before
   publication on a candidate-inventory comparison error.

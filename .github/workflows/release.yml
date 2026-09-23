@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       releaseRef:
-        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.3
+        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.4
         required: true
         type: string
       centralDeploymentId:
@@ -514,7 +514,56 @@ jobs:
           grep -Fx "Source-Revision: $SOURCE_REVISION" <<<"$TAG_MESSAGE"
           grep -Fx "Candidate-Inventory-SHA256: $INVENTORY_SHA256" <<<"$TAG_MESSAGE"
 
+      - name: Restore and verify preserved Central publication inputs
+        id: central-archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo 'preserved=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mapfile -t ASSETS < <(gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name')
+          expected=(central-bundle.zip central-bundle-files.json central-portal-state.json release-candidate-files.json)
+          present=0
+          for name in "${expected[@]}"; do
+            if printf '%s\n' "${ASSETS[@]}" | grep -Fxq "$name"; then
+              ((present += 1))
+            fi
+          done
+          if ((present == 0)); then
+            echo 'preserved=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          test "$present" -eq "${#expected[@]}" || { echo 'incomplete preserved Central inputs' >&2; exit 1; }
+          mkdir -p target/preserved-central
+          for name in "${expected[@]}"; do
+            gh release download "$RELEASE_TAG" --pattern "$name" --dir target/preserved-central
+          done
+          cmp target/release-candidate-files.json target/preserved-central/release-candidate-files.json
+          node tools/android/central-portal.mjs verify-archived \
+            --bundle target/preserved-central/central-bundle.zip \
+            --inventory target/preserved-central/central-bundle-files.json \
+            --state target/preserved-central/central-portal-state.json \
+            --source-revision "$(git rev-parse HEAD)"
+          cp target/preserved-central/central-bundle.zip target/android-release/central-bundle.zip
+          cp target/preserved-central/central-bundle-files.json target/android-release/central-bundle-files.json
+          cp target/preserved-central/central-portal-state.json target/central-portal-state.json
+          mkdir -p target/android-central-portal
+          unzip -q target/android-release/central-bundle.zip -d target/android-central-portal
+          node tools/android/build-central-bundle.mjs verify \
+            --repository target/android-central-portal \
+            --inventory target/android-release/central-bundle-files.json \
+            --zip target/android-release/central-bundle.zip
+          cmp \
+            "target/android-central-portal/dev/bota/bota-android-sdk/$RELEASE_VERSION/bota-android-sdk-$RELEASE_VERSION.aar" \
+            "target/android-release/bota-android-sdk-$RELEASE_VERSION.aar"
+          echo 'preserved=true' >> "$GITHUB_OUTPUT"
+
       - name: Stage signed Maven Central repository
+        if: steps.central-archive.outputs.preserved != 'true'
         env:
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
@@ -527,6 +576,7 @@ jobs:
             --no-daemon --no-parallel --no-configuration-cache
 
       - name: Build and verify exact Central bundle
+        if: steps.central-archive.outputs.preserved != 'true'
         run: |
           node tools/android/normalize-central-repository.mjs \
             --raw-repository target/android-central-raw \
