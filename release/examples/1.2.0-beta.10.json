@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "sdkFamily": "bota-app-sdk",
   "sdkVersion": "1.2.0-beta.10",
-  "sourceRevision": "c99aa17472528d5903414c3884a0fdeabecbc351",
+  "sourceRevision": "1a4a35c44cc6246e4c45be4b7a4297340dc23fcc",
   "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.0",
@@ -16,7 +16,7 @@
       "name": "BotaDeviceSDKCore.xcframework.zip",
       "ecosystem": "swiftpm",
       "version": "1.2.0-beta.10",
-      "checksumSha256": "16aebc143a95ffa4e6de7bc060bb559eb98ba7b699a2f0fa99cd2587c815b0dc",
+      "checksumSha256": "7322267df9b9d6b1674a15267c1250795e803b4563dc7f255bcb8f5ed9281a58",
       "capabilities": [
         "apple_device_sdk"
       ]
@@ -49,9 +49,9 @@
       "name": "bota_flutter_sdk-1.2.0-beta.10.tar.gz",
       "ecosystem": "pub",
       "version": "1.2.0-beta.10",
-      "checksumSha256": "5c1315f6356fe997312bc614d8994bd1d2716046f6eeb27a2f4bf425fcd8f7c9",
-      "sourceRevision": "c99aa17472528d5903414c3884a0fdeabecbc351",
-      "normalizedArchiveSha256": "ca11f1098228aee5bf9e2732ea72f3d933610b13a5aa6f80106960fef2b1a19d",
+      "checksumSha256": "c4ce14ba76bf796a83b90c948d539b4a245a9dece63b9b3e5c8d3494f2f577f6",
+      "sourceRevision": "1a4a35c44cc6246e4c45be4b7a4297340dc23fcc",
+      "normalizedArchiveSha256": "2fe7f9b038c24a9efe091311b955e8278d2ea9eaff7c1814fc0f3fce863b3365",
       "generator": {
         "name": "pigeon",
         "version": "28.0.0"
@@ -59,13 +59,13 @@
       "packageInventory": [
         {
           "path": "AGENTS.md",
-          "byteLength": 4903,
-          "sha256": "8b14693dfb8920d7a64f5e9ee5ec658120f59122ae310e80e11ab22159007c53"
+          "byteLength": 4904,
+          "sha256": "c1817a4c65bc534ea22cace1800fefcaf9a6bb94227a83199e4d3b5030fbeee6"
         },
         {
           "path": "CHANGELOG.md",
-          "byteLength": 2089,
-          "sha256": "5cd3191cfc8a6d8f134198400cdcedff8d68b7c822f0b8d61ad5f613403822d8"
+          "byteLength": 2085,
+          "sha256": "cb7ec61c3b5456a81e704507773253ad48bb7781878871e69d82a55ae1f54eba"
         },
         {
           "path": "LICENSE",
@@ -74,8 +74,8 @@
         },
         {
           "path": "README.md",
-          "byteLength": 10518,
-          "sha256": "a2a14c4980cc47763cd91a2549aa63d6358d047408a5549574d4449556d0f847"
+          "byteLength": 10520,
+          "sha256": "7714f7fd4cd9a3d8be47f41eae6fb423f9fef86e31aa86501154249d46320538"
         },
         {
           "path": "analysis_options.yaml",
@@ -89,8 +89,8 @@
         },
         {
           "path": "android/sdk-version.toml",
-          "byteLength": 25,
-          "sha256": "5b3eb352a3d993e49e2eb988ba7f0c410c2c078983b4781ae943a6964b6a8eda"
+          "byteLength": 26,
+          "sha256": "425f5d3354c6e6799df0b9497b107446d6e2f3645e94ae7ac5205c3588bd2f6e"
         },
         {
           "path": "android/settings.gradle.kts",
@@ -174,8 +174,8 @@
         },
         {
           "path": "ios/bota_flutter_sdk/Package.swift",
-          "byteLength": 770,
-          "sha256": "ac8001591dbf8bb0c4540f45f08887e1b39a3705cfd7e8b5c2a432e49267d06a"
+          "byteLength": 771,
+          "sha256": "46c08349299c5c19193f4dec2f1ca41c1db0c5f24fb5d93d681e3beb3995673d"
         },
         {
           "path": "ios/bota_flutter_sdk/Sources/bota_flutter_sdk/BotaApi.g.swift",
@@ -289,8 +289,8 @@
         },
         {
           "path": "pubspec.yaml",
-          "byteLength": 653,
-          "sha256": "1938ed5c143a1c9b0dce3700ea8732c910132d6b00ebd68af6f8cf4245c70bc5"
+          "byteLength": 654,
+          "sha256": "367e604ea8d6e6845f9e5f91d36f282669ea87baa308c46d9dd1be2b7df64739"
         },
         {
           "path": "test/bridge_contract_test.dart",
