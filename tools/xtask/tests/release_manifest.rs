@@ -5,7 +5,7 @@ fn root() -> PathBuf {
 }
 
 fn example() -> serde_json::Value {
-    let contents = fs::read_to_string(root().join("release/examples/1.2.0-beta.6.json")).unwrap();
+    let contents = fs::read_to_string(root().join("release/examples/1.2.0-beta.7.json")).unwrap();
     serde_json::from_str(&contents).unwrap()
 }
 
@@ -26,7 +26,7 @@ fn validate_modified(
 
 #[test]
 fn example_release_manifest_is_valid() {
-    let manifest = root().join("release/examples/1.2.0-beta.6.json");
+    let manifest = root().join("release/examples/1.2.0-beta.7.json");
 
     let result = xtask::release::validate_manifest(&manifest);
 
@@ -46,7 +46,7 @@ fn published_v1_manifest_remains_valid_independent_of_later_checkout_version() {
     fs::create_dir_all(&temp_root).unwrap();
     fs::write(
         temp_root.join("sdk-version.toml"),
-        "version = \"1.2.0-beta.6\"\n",
+        "version = \"1.2.0-beta.7\"\n",
     )
     .unwrap();
     let manifest = temp_root.join("published-1.0.0-v1.json");
@@ -64,7 +64,7 @@ fn published_v1_manifest_remains_valid_independent_of_later_checkout_version() {
     assert!(
         current_release_result
             .unwrap_err()
-            .contains("sdkVersion 1.0.0 does not match sdk-version.toml 1.2.0-beta.6")
+            .contains("sdkVersion 1.0.0 does not match sdk-version.toml 1.2.0-beta.7")
     );
 }
 

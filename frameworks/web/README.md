@@ -6,7 +6,7 @@ Rust core compiled to WebAssembly. Rust owns protocol sequencing, integrity,
 checkpoints, and stable workflow errors; the application owns authentication,
 backend calls, user consent, and presentation.
 
-The `1.2.0-beta.6` candidate is implemented and passes automated package and
+The `1.2.0-beta.7` candidate is implemented and passes automated package and
 Chromium gates. Its supervised physical-device matrix has not run; the release
 owner requested this beta be published first for production-device testing.
 
@@ -15,7 +15,7 @@ owner requested this beta be published first for production-device testing.
 After the synchronized candidate is published, pin its exact version:
 
 ```bash
-npm install @bota.dev/web-sdk@1.2.0-beta.6
+npm install @bota.dev/web-sdk@1.2.0-beta.7
 ```
 
 Use a secure context in a desktop Chromium browser with Web Bluetooth. The

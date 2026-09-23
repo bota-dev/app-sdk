@@ -19,6 +19,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.onSubscription
@@ -26,7 +27,6 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
@@ -36,7 +36,7 @@ import org.junit.Test
 
 class EncryptedUploadV2TransferControlTest {
     @Test
-    fun collectorIsAttachedBeforeStartWriteSoImmediateReplyIsNotLost() = runTest {
+    fun collectorIsAttachedBeforeStartWriteSoImmediateReplyIsNotLost() = runBlocking {
         val driver = ControlDriver()
         val mapper = CoreModelMapper(TransferControlCore())
         val control = testControl(driver, mapper)
@@ -51,7 +51,7 @@ class EncryptedUploadV2TransferControlTest {
     }
 
     @Test
-    fun transferQueueFailsClosedAtTheDocumentedTotalByteBound() = runTest {
+    fun transferQueueFailsClosedAtTheDocumentedTotalByteBound() = runBlocking {
         val driver = ControlDriver(overflow = true)
         val mapper = CoreModelMapper(TransferControlCore())
         val control = testControl(driver, mapper)
@@ -67,7 +67,7 @@ class EncryptedUploadV2TransferControlTest {
     }
 
     @Test
-    fun unsubscribeFailurePoisonsTheOwnerUntilConfirmedDisconnectReset() = runTest {
+    fun unsubscribeFailurePoisonsTheOwnerUntilConfirmedDisconnectReset() = runBlocking {
         val driver = ControlDriver(failUnsubscribe = true)
         val mapper = CoreModelMapper(TransferControlCore())
         val control = testControl(driver, mapper)
@@ -88,7 +88,7 @@ class EncryptedUploadV2TransferControlTest {
     }
 
     @Test
-    fun staleDisconnectGenerationCannotClearANewerPoisonedOwner() = runTest {
+    fun staleDisconnectGenerationCannotClearANewerPoisonedOwner() = runBlocking {
         val driver = ControlDriver(failUnsubscribe = true, connectionGeneration = 2)
         val mapper = CoreModelMapper(TransferControlCore())
         val control = testControl(driver, mapper)
@@ -110,7 +110,7 @@ class EncryptedUploadV2TransferControlTest {
     }
 
     @Test
-    fun abortTimeoutStillAttemptsUnsubscribeAndPoisonsUntilReset() = runTest {
+    fun abortTimeoutStillAttemptsUnsubscribeAndPoisonsUntilReset() = runBlocking {
         val driver = ControlDriver(abortDelayMilliseconds = 1_000, unsubscribeDelayMilliseconds = 10)
         val mapper = CoreModelMapper(TransferControlCore())
         val control = EncryptedUploadV2TransferControl(driver, mapper, cleanupTimeoutMilliseconds = 200)
@@ -128,7 +128,7 @@ class EncryptedUploadV2TransferControlTest {
     }
 
     @Test
-    fun cancellationBeforeConfirmAbortsAndNeverSendsConfirm() = runTest {
+    fun cancellationBeforeConfirmAbortsAndNeverSendsConfirm() = runBlocking {
         val driver = ControlDriver()
         val mapper = CoreModelMapper(TransferControlCore())
         val control = testControl(driver, mapper)
@@ -145,7 +145,7 @@ class EncryptedUploadV2TransferControlTest {
     }
 
     @Test
-    fun cancellationDuringAndAfterConfirmNeverSendsAbort() = runTest {
+    fun cancellationDuringAndAfterConfirmNeverSendsAbort() = runBlocking {
         val entered = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
         val driver = ControlDriver(
@@ -182,7 +182,7 @@ class EncryptedUploadV2TransferControlTest {
     }
 
     @Test
-    fun successfulConfirmWriteWithFailedUnsubscribeReportsDeletionAndPoisonsUntilDisconnect() = runTest {
+    fun successfulConfirmWriteWithFailedUnsubscribeReportsDeletionAndPoisonsUntilDisconnect() = runBlocking {
         val driver = ControlDriver(failUnsubscribe = true)
         val mapper = CoreModelMapper(TransferControlCore())
         val control = testControl(driver, mapper)
@@ -204,7 +204,7 @@ class EncryptedUploadV2TransferControlTest {
     }
 
     @Test
-    fun disconnectDuringConfirmUnsubscribeWaitsForSettlementAndClearsTheExactPoison() = runTest {
+    fun disconnectDuringConfirmUnsubscribeWaitsForSettlementAndClearsTheExactPoison() = runBlocking {
         val unsubscribeEntered = CompletableDeferred<Unit>()
         val unsubscribeRelease = CompletableDeferred<Unit>()
         val driver = ControlDriver(
@@ -241,7 +241,7 @@ class EncryptedUploadV2TransferControlTest {
     }
 
     @Test
-    fun intakeRemainsPausedUntilAcknowledgementWriteCompletes() = runTest {
+    fun intakeRemainsPausedUntilAcknowledgementWriteCompletes() = runBlocking {
         val entered = CompletableDeferred<Unit>()
         val release = CompletableDeferred<Unit>()
         val driver = ControlDriver(activeWriteEntered = entered, activeWriteRelease = release)
@@ -274,7 +274,7 @@ class EncryptedUploadV2TransferControlTest {
     }
 
     @Test
-    fun failedAcknowledgementWritePoisonsWithoutAdvancingIntake() = runTest {
+    fun failedAcknowledgementWritePoisonsWithoutAdvancingIntake() = runBlocking {
         val driver = ControlDriver(failActiveWrite = true)
         val mapper = CoreModelMapper(TransferControlCore())
         val control = testControl(driver, mapper)
