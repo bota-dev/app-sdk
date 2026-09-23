@@ -732,14 +732,37 @@ fn tag_and_recovery_workflows_bind_native_and_flutter_outputs_to_the_ci_candidat
     assert!(publish_source.contains("startswith(\"flutter-release/\") | not"));
     assert!(publish_source.contains("Candidate-Inventory-SHA256: $INVENTORY_SHA256"));
     let steps = publish["steps"].as_sequence().unwrap();
-    let archive_index = steps.iter().position(|step| step["id"].as_str() == Some("central-archive")).unwrap();
-    let signing_index = steps.iter().position(|step| step["name"].as_str() == Some("Stage signed Maven Central repository")).unwrap();
+    let archive_index = steps
+        .iter()
+        .position(|step| step["id"].as_str() == Some("central-archive"))
+        .unwrap();
+    let signing_index = steps
+        .iter()
+        .position(|step| step["name"].as_str() == Some("Stage signed Maven Central repository"))
+        .unwrap();
     assert!(archive_index < signing_index);
-    assert!(serde_yaml_ng::to_string(&steps[archive_index]).unwrap().contains("verify-archived"));
-    assert!(serde_yaml_ng::to_string(&steps[archive_index]).unwrap().contains("incomplete preserved Central inputs"));
-    assert_eq!(steps[signing_index]["if"].as_str(), Some("steps.central-archive.outputs.preserved != 'true'"));
-    let bundle_index = steps.iter().position(|step| step["name"].as_str() == Some("Build and verify exact Central bundle")).unwrap();
-    assert_eq!(steps[bundle_index]["if"].as_str(), Some("steps.central-archive.outputs.preserved != 'true'"));
+    assert!(
+        serde_yaml_ng::to_string(&steps[archive_index])
+            .unwrap()
+            .contains("verify-archived")
+    );
+    assert!(
+        serde_yaml_ng::to_string(&steps[archive_index])
+            .unwrap()
+            .contains("incomplete preserved Central inputs")
+    );
+    assert_eq!(
+        steps[signing_index]["if"].as_str(),
+        Some("steps.central-archive.outputs.preserved != 'true'")
+    );
+    let bundle_index = steps
+        .iter()
+        .position(|step| step["name"].as_str() == Some("Build and verify exact Central bundle"))
+        .unwrap();
+    assert_eq!(
+        steps[bundle_index]["if"].as_str(),
+        Some("steps.central-archive.outputs.preserved != 'true'")
+    );
 
     let flutter_source = serde_yaml_ng::to_string(&workflow["jobs"]["flutter"]).unwrap();
     assert!(flutter_source.contains("gh release download \"$GITHUB_REF_NAME\""));
