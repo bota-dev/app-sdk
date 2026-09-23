@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       releaseRef:
-        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.7
+        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.8
         required: true
         type: string
       centralDeploymentId:
@@ -187,6 +187,11 @@ jobs:
 
       - name: Package checksummed Apple release
         run: tools/apple/package-release.sh
+
+      - name: Lint exact CocoaPods archive
+        run: |
+          gem install --no-document cocoapods -v 1.16.2
+          tools/apple/test-pod-archive.sh
 
       - name: Upload Apple release payload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

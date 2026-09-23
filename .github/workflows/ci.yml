@@ -70,7 +70,7 @@ jobs:
         run: node tools/baseline/react-native-api-contract.mjs validate --contract protocol/baseline/react-native-public-api-0.0.65.json --baseline-metadata protocol/baseline/react-native-sdk-0.0.65.json
 
       - name: Validate release manifest
-        run: cargo xtask release validate release/examples/1.2.0-beta.7.json
+        run: cargo xtask release validate release/examples/1.2.0-beta.8.json
 
       - name: Check generated protocol constants
         run: cargo xtask protocol generate --check
@@ -414,6 +414,11 @@ jobs:
 
       - name: Generate unpublished Apple release evidence
         run: tools/apple/package-release.sh --evidence-only
+
+      - name: Lint exact CocoaPods archive
+        run: |
+          gem install --no-document cocoapods -v 1.16.2
+          tools/apple/test-pod-archive.sh
 
       - name: Upload unpublished Apple evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

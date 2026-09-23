@@ -7,7 +7,7 @@ non-Flutter source; it must not be reused for the prepared Flutter facade. The
 unpublished `v1.2.0-beta.1` and `v1.2.0-beta.2` tags are also immutable and
 must not be moved after their release workflows failed. Beta.2 stopped at the
 candidate-inventory projection before signing or publishing any artifact;
-its package bytes matched the main-CI inventory. `1.2.0-beta.7` is the selected
+its package bytes matched the main-CI inventory. `1.2.0-beta.8` is the selected
 replacement candidate. Its Web foreground implementation and automated Chromium/package
 gates are complete; supervised Web physical-device acceptance remains open.
 The beta.3 Central deployment reached `PUBLISHED`, but the tagged release
@@ -31,6 +31,12 @@ Beta.6 passed main CI but failed a tagged START-dependent Android unit test
 before publication. The test class mixed virtual `runTest` time with real IO;
 beta.7 uses `runBlocking` for that integration fixture. Do not move or reuse
 beta.6.
+Beta.7 published Apple SwiftPM, Android Maven, React Native npm, and Web npm,
+but CocoaPods Trunk rejected the first `BotaAppleSDK` pod after local iOS/macOS
+validation. The tagged podspec used `prepare_command`, which Trunk does not
+allow for a new pod. Flutter and synchronized completion were held. Do not move
+or reuse beta.7. Beta.8 distributes a checksummed CocoaPods archive containing
+the same Swift facade sources and XCFramework without install-time scripting.
 Apple consumers add
 `https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
 compiles the Swift facade source and downloads a checksummed
@@ -60,9 +66,8 @@ publication must use dist-tag `beta`, and GitHub Releases remain prereleases.
 SwiftPM and Maven Central consumers pin the exact synchronized beta version.
 Historical immutable `1.1.0` is the one recovery exception; do not rename,
 unpublish, or recreate it. The next synchronized release is selected as
-`1.2.0-beta.7`; do not move, delete, recreate, or reuse `v1.2.0-beta.0` or
-`v1.2.0-beta.1`, `v1.2.0-beta.2`, `v1.2.0-beta.3`, `v1.2.0-beta.4`, or
-`v1.2.0-beta.5`, or `v1.2.0-beta.6`.
+`1.2.0-beta.8`; do not move, delete, recreate, or reuse `v1.2.0-beta.0`
+through `v1.2.0-beta.7`.
 Before that first Web publication, configure the npm trusted publisher for
 `@bota.dev/web-sdk` against the protected `release` environment and this
 repository's release workflow. The workflow intentionally has no token-based
@@ -91,13 +96,14 @@ supported desktop Chromium browser. The reviewer must confirm every required
 row against one exact Bota device and the exact candidate source revision.
 `npm run web:verify` uses deterministic fake Bluetooth and is not a substitute.
 Ordinarily, do not approve the protected release environment while a required
-Web row is `NOT RUN` or failed. For `1.2.0-beta.7` only, the release owner
-explicitly requested a public beta rollout before supervised production-device
-testing. This authorizes publication for that post-release test, not a claim
+Web row is `NOT RUN` or failed. For `1.2.0-beta.7` and its CocoaPods repair
+`1.2.0-beta.8`, the release owner explicitly requested a public beta rollout
+before supervised production-device testing. This authorizes publication for
+that post-release test, not a claim
 of Web hardware acceptance or general availability. A failed automated gate
 still blocks publication, and any failed supervised row must be triaged before
 another version is released. The open hardware status is recorded in
-[`release/evidence/1.2.0-beta.7-web-foreground.md`](../release/evidence/1.2.0-beta.7-web-foreground.md).
+[`release/evidence/1.2.0-beta.8-web-foreground.md`](../release/evidence/1.2.0-beta.8-web-foreground.md).
 
 ## Prepare A Version
 
@@ -117,18 +123,22 @@ npm run codegen --prefix frameworks/react-native
 npm run codegen:check --prefix frameworks/react-native
 ```
 
-Generate the deterministic archive and write the matching root Swift package:
+Generate deterministic SwiftPM and CocoaPods archives and write their matching
+root manifests:
 
 ```bash
 tools/apple/package-release.sh --write-package-manifest
 swift package dump-package
-git diff -- Package.swift
+git diff -- Package.swift platforms/apple/BotaAppleSDK.podspec
 ```
 
 The explicit preparation mode builds from the current working snapshot,
 computes its SwiftPM checksum, and changes only `Package.swift`; this permits a
-synchronized version change and its generated checksum to land in one commit.
-Review and commit that manifest. Then rerun the normal check-only mode from the
+synchronized version change and its generated checksums to land in one commit.
+Review and commit both manifests. The CocoaPods source is a checksummed
+`BotaAppleSDK.cocoapods.zip` containing Swift sources and the generated
+XCFramework; it must not use `prepare_command`, which Trunk rejects for new
+pods. Then rerun the normal check-only mode from the
 new clean commit:
 
 ```bash
@@ -179,6 +189,7 @@ tools/ffi-smoke/run-native-swift-smoke.sh
 tools/apple/test-package.sh
 tools/apple/test-consumer.sh
 tools/apple/package-release.sh
+tools/apple/test-pod-archive.sh
 tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
 tools/flutter/test-android-adapter.sh
 tools/flutter/test-consumers.sh
@@ -319,7 +330,7 @@ never release evidence by themselves. A consumer failure must not fall back to
 an earlier application build, cached native candidate, remote Maven artifact,
 or remote Apple package.
 
-The first Flutter beta may be published only after every `1.2.0-beta.7` version
+The first Flutter beta may be published only after every `1.2.0-beta.8` version
 authority changes together and the Apple
 and Android artifacts at that exact version are public with passing no-override
 consumers. The initial pub.dev publication mechanism must be deliberately
@@ -329,7 +340,7 @@ publication is downloaded and compared with the candidate's exact file hashes
 and normalized archive SHA-256 before release completion.
 
 `tools/flutter/package-release.sh --check` refuses occupied
-`1.2.0-beta.0`. For selected `1.2.0-beta.7`, it writes
+`1.2.0-beta.0`. For selected `1.2.0-beta.8`, it writes
 only deterministic evidence to `target/flutter-release/`: the candidate
 archive, exact package inventory, v2 release manifest, dependency lock and
 graph, hosted-package license hashes, normalized dry-run output, and fixed
@@ -405,8 +416,9 @@ install its own Node.js dependencies before running repository tooling.
 2. Runs the Rust, tooling, ABI, license, Apple package, and local-consumer gates.
 3. Packages Android once, runs API 26 and API 35 consumers against that exact
    AAR, and uploads the unsigned Maven publication inputs.
-4. Rebuilds the deterministic XCFramework and rejects root-package checksum
-   drift.
+4. Rebuilds the deterministic XCFramework and CocoaPods source archive,
+   rejects checked-in checksum drift, and lints the exact extracted pod archive
+   for iOS and macOS before publication.
 5. Waits for approval in the protected `release` environment.
    Public Maven verification requires all 30 expected file URLs and hashes.
    It also checks the HTML directory listing for missing or extra entries when
@@ -431,7 +443,7 @@ install its own Node.js dependencies before running repository tooling.
    consumers pass and compares it to the Flutter subset of the CI inventory
    named in the annotated tag.
 10. Refuses the occupied `1.2.0-beta.0` identity. For selected
-    `1.2.0-beta.7`, its explicitly authorized first-publish
+    `1.2.0-beta.8`, its explicitly authorized first-publish
     procedure must consume the ordered candidate artifact; later beta tags use
     Dart's official reusable OIDC publisher.
 11. Downloads the public pub.dev archive, compares its complete normalized

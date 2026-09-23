@@ -92,7 +92,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 - `tools/flutter/package-release.sh --ci` is the automatic PR/main verification
   path. It runs the complete non-publishing Flutter and fresh-consumer gates,
   emits `candidate-ready=false`, and leaves no Flutter release directory only
-  for occupied `1.2.0-beta.0`. Selected synchronized `1.2.0-beta.7` emits
+  for occupied `1.2.0-beta.0`. Selected synchronized `1.2.0-beta.8` emits
   `candidate-ready=true` and preserves the candidate.
   `tools/flutter/package-release.sh --check` is the strict non-publishing
   release gate for beta.1 and later; it must refuse beta.0. It preserves only
@@ -277,7 +277,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   Treat `docs/testing/web-physical-device.md` as a separate supervised release
   gate: fake Bluetooth in automated Chromium is never physical evidence. The
   Web hardware acceptance remains open while any required row is `NOT RUN` or
-  failed. `1.2.0-beta.7` alone has release-owner authorization to publish as a
+  failed. `1.2.0-beta.7` and its CocoaPods repair `1.2.0-beta.8` have
+  release-owner authorization to publish as a
   beta before this matrix; do not treat publication as hardware acceptance.
   Do not advertise background or closed-tab work, live streaming,
   authenticated factory reset, Safari/iOS fallback, Flutter Web, or Windows as
@@ -723,6 +724,7 @@ tools/ffi-smoke/run-native-swift-smoke.sh
 tools/apple/test-package.sh
 tools/apple/test-consumer.sh
 tools/apple/package-release.sh
+tools/apple/test-pod-archive.sh
 ```
 
 Use `docs/testing/apple-physical-device.md` only for supervised lab runs. Do not
@@ -761,7 +763,13 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
   stalled and the run was cancelled before publication.
   `v1.2.0-beta.6` is immutable and unpublished: tagged Android unit tests
   failed before the protected publish job.
-  `1.2.0-beta.7` is the selected synchronized candidate. Its publication
+  `v1.2.0-beta.7` is immutable and partially published: Apple SwiftPM, Android
+  Maven, React Native npm, and Web npm are public, but the first CocoaPod was
+  rejected and Flutter publication was held. The beta.7 podspec used
+  `prepare_command`, which Trunk rejects for a new pod. `1.2.0-beta.8` is the
+  selected synchronized candidate. Its script-free CocoaPods archive contains
+  the Swift facade and XCFramework, and its podspec pins that archive's SHA-256.
+  Its publication
   requires green automated gates and protected approval. It and later betas
   use the protected release workflows and verify occupied versions instead of
   attempting to replace them.

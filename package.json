@@ -1,6 +1,6 @@
 {
   "name": "@bota.dev/app-sdk-workspace",
-  "version": "1.2.0-beta.7",
+  "version": "1.2.0-beta.8",
   "private": true,
   "engines": {
     "node": ">=22"

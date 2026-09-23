@@ -41,11 +41,19 @@ jobs:
           (
             cd target/apple-release
             shasum -a 256 -c BotaDeviceSDKCore.xcframework.zip.sha256
+            shasum -a 256 -c BotaAppleSDK.cocoapods.zip.sha256
           )
           CHECKSUM="$(cat target/apple-release/BotaDeviceSDKCore.xcframework.swiftpm-checksum)"
           test "$CHECKSUM" = "$(swift package compute-checksum target/apple-release/BotaDeviceSDKCore.xcframework.zip)"
           grep -F "releases/download/v$VERSION/BotaDeviceSDKCore.xcframework.zip" Package.swift
           grep -F "checksum: \"$CHECKSUM\"" Package.swift
+          POD_CHECKSUM="$(shasum -a 256 target/apple-release/BotaAppleSDK.cocoapods.zip | awk '{print $1}')"
+          node tools/release/generate-public-podspec.mjs \
+            --sdk-version "$VERSION" \
+            --artifact-checksum "$POD_CHECKSUM" \
+            --output platforms/apple/BotaAppleSDK.podspec \
+            --check
+          ! grep -q 'prepare_command' platforms/apple/BotaAppleSDK.podspec
 
       - name: Install exact CocoaPods client
         run: gem install --no-document cocoapods -v 1.16.2
@@ -57,10 +65,13 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
+          POD_URL="https://github.com/bota-dev/app-sdk/releases/download/v$VERSION/BotaAppleSDK.cocoapods.zip"
+          POD_CHECKSUM="$(shasum -a 256 target/apple-release/BotaAppleSDK.cocoapods.zip | awk '{print $1}')"
           existing="$(mktemp)"
           if pod spec cat BotaAppleSDK --version="$VERSION" >"$existing" 2>/dev/null; then
             test "$(jq -r .version "$existing")" = "$VERSION"
-            test "$(jq -r .source.tag "$existing")" = "v$VERSION"
+            test "$(jq -r .source.http "$existing")" = "$POD_URL"
+            test "$(jq -r .source.sha256 "$existing")" = "$POD_CHECKSUM"
           else
             test -n "$COCOAPODS_TRUNK_TOKEN"
             pod trunk push platforms/apple/BotaAppleSDK.podspec
@@ -72,4 +83,5 @@ jobs:
             sleep 10
           done
           test "$(jq -r .version "$existing")" = "$VERSION"
-          test "$(jq -r .source.tag "$existing")" = "v$VERSION"
+          test "$(jq -r .source.http "$existing")" = "$POD_URL"
+          test "$(jq -r .source.sha256 "$existing")" = "$POD_CHECKSUM"

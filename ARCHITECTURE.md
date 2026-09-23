@@ -79,7 +79,7 @@ protected release verifies and publishes only that preserved tarball under npm
 The Flutter facade is implemented in source, but it is not part of the
 immutable `1.1.0` public release and has not been published. The historical
 `1.2.0-beta.0` candidate identity is occupied by immutable non-Flutter source
-and cannot identify this tree. Selected replacement `1.2.0-beta.7` binds its
+and cannot identify this tree. Selected replacement `1.2.0-beta.8` binds its
 exact source revision, Pigeon identity, raw and normalized archive digests, and
 every file's digest before it can be tagged or published.
 
@@ -749,6 +749,12 @@ against the checked-in checksum before exposing product `BotaAppleSDK`.
 Release packaging rewrites Xcode-generated XCFramework metadata into one
 canonical plist so archives built by supported Xcode versions have identical
 container metadata and checksums.
+The CocoaPods release asset is a separate deterministic, checksummed archive
+containing that XCFramework and the same Swift facade sources. Its podspec uses
+an HTTP source with the archive digest and no `prepare_command`: Trunk forbids
+install-time scripts in new pods. Beta.7 published the SwiftPM asset but could
+not bootstrap the first CocoaPod, so the synchronized Flutter release remained
+incomplete. Beta.8 is the script-free replacement.
 Assembly rejects a header digest or Swift package version that differs from the
 frozen repository evidence.
 
@@ -1086,7 +1092,8 @@ preserves the tarball and inventory unchanged for protected beta publication.
 The supervised Chromium/device matrix in
 `docs/testing/web-physical-device.md` is a separate release gate. Automated
 Chromium cases use deterministic fake Bluetooth and cannot satisfy it. For
-`1.2.0-beta.7` only, the release owner requested beta publication before the
+`1.2.0-beta.7` and the CocoaPods repair `1.2.0-beta.8`, the release owner
+requested beta publication before the
 supervised production-device test; physical acceptance remains open.
 
 ## Security

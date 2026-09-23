@@ -1,14 +1,14 @@
 Pod::Spec.new do |spec|
   spec.name = "BotaAppleSDK"
   spec.module_name = "BotaAppleSDK"
-  spec.version = "1.2.0-beta.7"
+  spec.version = "1.2.0-beta.8"
   spec.summary = "Bota App SDK for Apple platforms"
   spec.homepage = "https://docs.bota.dev"
   spec.license = { type: "Apache-2.0" }
   spec.author = "Bota"
   spec.source = {
-    git: "https://github.com/bota-dev/app-sdk.git",
-    tag: "v#{spec.version}",
+    http: "https://github.com/bota-dev/app-sdk/releases/download/v1.2.0-beta.8/BotaAppleSDK.cocoapods.zip",
+    sha256: "d05ea2ca8e5d1d3e5541e113a608017ab2b3b158a2341c68ad07164622411937",
   }
   spec.platforms = { ios: "15.0", osx: "13.0" }
   spec.cocoapods_version = ">= 1.13"
@@ -21,23 +21,4 @@ Pod::Spec.new do |spec|
     "SWIFT_STRICT_CONCURRENCY" => "complete",
     "SWIFT_TREAT_WARNINGS_AS_ERRORS" => "YES",
   }
-  spec.prepare_command = <<-CMD
-    set -eu
-    package_root="."
-    if [ -d "platforms/apple" ]; then package_root="platforms/apple"; fi
-    artifact="$package_root/Artifacts/BotaDeviceSDKCore.xcframework"
-    if [ ! -d "$artifact" ]; then
-      mkdir -p "$package_root/Artifacts"
-      archive="$package_root/Artifacts/BotaDeviceSDKCore.xcframework.zip"
-      checksum="$archive.sha256"
-      base="https://github.com/bota-dev/app-sdk/releases/download/v#{spec.version}"
-      curl --fail --location --retry 3 --output "$archive" \
-        "$base/BotaDeviceSDKCore.xcframework.zip"
-      curl --fail --location --retry 3 --output "$checksum" \
-        "$base/BotaDeviceSDKCore.xcframework.zip.sha256"
-      (cd "$package_root/Artifacts" && shasum -a 256 -c "$(basename "$checksum")")
-      unzip -q "$archive" -d "$package_root/Artifacts"
-      rm -f "$archive" "$checksum"
-    fi
-  CMD
 end
