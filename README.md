@@ -4,7 +4,7 @@ Source monorepo for the **Bota App SDK** family. The repository provides a
 shared Rust protocol and workflow core with platform-native Bluetooth
 transports and Apple, Android, React Native, Flutter, and Web facades. The Web
 facade implements the browser-feasible foreground workflow surface for the
-`1.2.0-beta.5` candidate. Its supervised physical Chromium matrix has not run;
+`1.2.0-beta.6` candidate. Its supervised physical Chromium matrix has not run;
 the release owner requested beta rollout before that test. The Windows facade
 remains planned.
 
@@ -33,14 +33,14 @@ gates, but no Flutter version has been published yet. `1.2.0-beta.0` is occupied
 by an immutable annotated tag for earlier non-Flutter source; it must not be reused
 for this Flutter-bearing tree. Flutter applications must not infer
 pub.dev availability from the Apple, Android, or React Native release.
-`1.2.0-beta.5` is the selected synchronized replacement candidate. Automatic
+`1.2.0-beta.6` is the selected synchronized replacement candidate. Automatic
 PR/main CI runs the complete Flutter verification and fresh consumer builds and
 may preserve that candidate, but publication remains a separate protected
 release action.
 
 ## Current Status
 
-The next synchronized version is `1.2.0-beta.5`. The prepared source composes
+The next synchronized version is `1.2.0-beta.6`. The prepared source composes
 the foreground Web managers for picker and authorized reconnect, snapshots,
 recording workflows, provisioning and settings, WiFi, recording control, OTA,
 and device logs over one shared Rust/WASM runtime. Unit, packed-consumer, and
@@ -51,6 +51,8 @@ The beta.3 Android coordinate is public, but the synchronized release is
 incomplete: its protected workflow stopped before npm, Apple, and Flutter
 publication after the HTML-index timeout and signed-bundle mismatch on retry.
 Beta.4 passed main CI but stopped in tagged Android tests before publication.
+Beta.5 also passed main CI but its tagged Android unit step stalled; its run
+was cancelled before publication.
 
 The App SDK has published synchronized beta release `1.1.0`: the repository has a generated
 protocol manifest, 64 language-neutral compatibility fixtures, bounded Rust
@@ -358,7 +360,7 @@ package distributes the Apple facade for iOS and macOS while keeping the Rust
 core in a checksummed XCFramework. This release does not replace the production
 React Native maintenance line or claim published Flutter, Web, or Windows
 availability. Flutter is available only from an exact source revision until
-`1.2.0-beta.5` is published and verified on pub.dev.
+`1.2.0-beta.6` is published and verified on pub.dev.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and the
 [firmware compatibility matrix](protocol/compatibility/firmware-compatibility.json).
@@ -411,16 +413,16 @@ reconnect, retained encrypted batch handoff, WiFi, OTA, remove-only
 deprovision, authenticated reset, and unsupported targets.
 
 The historical `1.2.0-beta.0` preparation cannot be published from this source
-because that immutable tag identifies non-Flutter source. `1.2.0-beta.5` is the
+because that immutable tag identifies non-Flutter source. `1.2.0-beta.6` is the
 selected synchronized prerelease and every version authority is prepared for
 local candidate verification. This does not claim publication.
 
 ## Web Beta Installation
 
-After the `1.2.0-beta.5` candidate is published, install the exact beta:
+After the `1.2.0-beta.6` candidate is published, install the exact beta:
 
 ```bash
-npm install @bota.dev/web-sdk@1.2.0-beta.5
+npm install @bota.dev/web-sdk@1.2.0-beta.6
 ```
 
 Web Bluetooth requires a secure context and a browser implementation that
@@ -468,7 +470,7 @@ Bota API implicitly.
 
 ### Web capability matrix
 
-| Capability | `1.2.0-beta.5` candidate |
+| Capability | `1.2.0-beta.6` candidate |
 |---|---|
 | Explicit picker connect and exact-serial snapshot | Implemented, foreground only; the picker must start from a user gesture |
 | Exact authorized-device reconnect | Implemented when `navigator.bluetooth.getDevices()` is available; never falls back by name |

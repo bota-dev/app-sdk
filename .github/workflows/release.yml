@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       releaseRef:
-        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.5
+        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.6
         required: true
         type: string
       centralDeploymentId:
@@ -258,6 +258,7 @@ jobs:
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
       - name: Build and verify deterministic Android release inputs
+        timeout-minutes: 15
         run: |
           tools/android/test-publication-graphs.sh
           tools/android/package-release.sh --check

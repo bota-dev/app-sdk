@@ -12,7 +12,7 @@ let package = Package(
     .package(name: "FlutterFramework", path: "../FlutterFramework"),
     .package(
       url: "https://github.com/bota-dev/app-sdk.git",
-      exact: "1.2.0-beta.5"
+      exact: "1.2.0-beta.6"
     ),
   ],
   targets: [

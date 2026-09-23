@@ -8,7 +8,7 @@ file, network, and workflow ownership to `BotaAppleSDK` and
 The source facade is implemented and passes local build and release-consumer
 gates. The package was not part of the published synchronized `1.1.0` release.
 `1.2.0-beta.0` is occupied by an immutable non-Flutter tag and must not be
-reused. `1.2.0-beta.5` is the selected synchronized replacement candidate but
+reused. `1.2.0-beta.6` is the selected synchronized replacement candidate but
 is not yet published on pub.dev. Until it is published and verified, consume
 this package only from an exact source revision for development.
 
@@ -18,7 +18,7 @@ After the first Flutter beta is published, pin its exact prerelease version:
 
 ```yaml
 dependencies:
-  bota_flutter_sdk: 1.2.0-beta.5
+  bota_flutter_sdk: 1.2.0-beta.6
 ```
 
 For source development, point at an exact checkout rather than a moving branch:

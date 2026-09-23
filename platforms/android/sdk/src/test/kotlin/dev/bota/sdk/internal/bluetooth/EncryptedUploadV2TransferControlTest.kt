@@ -12,7 +12,7 @@ import dev.bota.sdk.internal.jni.NativeCore
 import dev.bota.sdk.internal.jni.NativePacket
 import java.security.MessageDigest
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.async
@@ -21,7 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onEach
@@ -162,8 +162,11 @@ class EncryptedUploadV2TransferControlTest {
         val during = async(Dispatchers.Default) {
             control.confirmationAttemptedOrClaimCancellation(9u)
         }
-        assertFalse(during.isCompleted)
-        release.complete(Unit)
+        try {
+            assertFalse(during.isCompleted)
+        } finally {
+            release.complete(Unit)
+        }
         withContext(Dispatchers.Default) {
             withTimeout(TestSettlementTimeoutMilliseconds) { confirming.await() }
         }
@@ -220,8 +223,11 @@ class EncryptedUploadV2TransferControlTest {
         val resetting = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
             control.resetAfterConfirmedDisconnect(ConfirmedBluetoothDisconnect("device", 1))
         }
-        val resetReturnedBeforeConfirmationSettled = resetting.isCompleted
-        unsubscribeRelease.complete(Unit)
+        val resetReturnedBeforeConfirmationSettled = try {
+            resetting.isCompleted
+        } finally {
+            unsubscribeRelease.complete(Unit)
+        }
         val failure = withContext(Dispatchers.Default) { withTimeout(1_000) { confirming.await() } }
         withContext(Dispatchers.Default) { withTimeout(1_000) { resetting.await() } }
 
@@ -253,12 +259,15 @@ class EncryptedUploadV2TransferControlTest {
             control.writeActiveFrame(9u, byteArrayOf(1), EncryptedUploadV2TransferContinuation.Window)
         }
         withContext(Dispatchers.Default) { withTimeout(1_000) { entered.await() } }
-        driver.emit(byteArrayOf(0x41))
-        val failure = withContext(Dispatchers.Default) { withTimeout(1_000) { collecting.await() } }
+        val failure = try {
+            withContext(Dispatchers.Default) { withTimeout(1_000) { driver.emit(byteArrayOf(0x41)) } }
+            withContext(Dispatchers.Default) { withTimeout(1_000) { collecting.await() } }
+        } finally {
+            release.complete(Unit)
+        }
 
         assertEquals(9u, (failure as EncryptedUploadV2HostException).errorCode)
-        release.complete(Unit)
-        runCatching { acknowledging.await() }
+        withContext(Dispatchers.Default) { withTimeout(1_000) { runCatching { acknowledging.await() } } }
         control.resetAfterConfirmedDisconnect(ConfirmedBluetoothDisconnect("device", 1))
         control.close()
         mapper.close()
@@ -369,7 +378,7 @@ private class ControlDriver(
 ) : BluetoothDriver {
     private val replies = MutableSharedFlow<BluetoothNotification>()
     private val overflowAttempted = CompletableDeferred<Unit>()
-    private val startReplyPending = AtomicBoolean()
+    private val startReplyPending = AtomicReference<CompletableDeferred<Unit>?>()
     var subscribersAtWrite = 0
     var writeCount = 0
     var unsubscribeCount = 0
@@ -383,8 +392,8 @@ private class ControlDriver(
         withResponse: Boolean,
     ) {
         writeCount += 1
-        if (startReplyPending.getAndSet(false)) {
-            withTimeout(5_000) { replies.subscriptionCount.first { it > 0 } }
+        startReplyPending.getAndSet(null)?.let { attached ->
+            withTimeout(5_000) { attached.await() }
         }
         subscribersAtWrite = replies.subscriptionCount.value
         if (activeWriteEntered != null && writeCount == 2) {
@@ -417,7 +426,11 @@ private class ControlDriver(
             overflowAttempted.complete(Unit)
         }
         awaitCancellation()
-    } else replies.also { startReplyPending.set(true) }
+    } else {
+        val attached = CompletableDeferred<Unit>()
+        startReplyPending.set(attached)
+        replies.onSubscription { attached.complete(Unit) }
+    }
 
     override suspend fun unsubscribe(peripheralId: String, serviceUuid: UUID, characteristicUuid: UUID) {
         unsubscribeCount += 1
