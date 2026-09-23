@@ -10,6 +10,13 @@ candidate-inventory projection before signing or publishing any artifact;
 its package bytes matched the main-CI inventory. `1.2.0-beta.3` is the selected
 replacement candidate. Its Web foreground implementation and automated Chromium/package
 gates are complete; supervised Web physical-device acceptance remains open.
+The beta.3 Central deployment reached `PUBLISHED`, but the tagged release
+workflow stopped before npm and Apple publication because Central did not serve
+the HTML version-directory index within its ten-minute verification window.
+All 30 expected public Maven files were independently verified against the
+signed inventory. The beta.3 tag remains immutable; retry only the same tag
+after the index appears, or prepare a new synchronized version using the
+corrected file-based verifier.
 Apple consumers add
 `https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
 compiles the Swift facade source and downloads a checksummed
@@ -386,6 +393,9 @@ install its own Node.js dependencies before running repository tooling.
 4. Rebuilds the deterministic XCFramework and rejects root-package checksum
    drift.
 5. Waits for approval in the protected `release` environment.
+   Public Maven verification requires all 30 expected file URLs and hashes.
+   It also checks the HTML directory listing for missing or extra entries when
+   Central serves one, but does not require that optional index to exist.
 6. Publishes the exact React Native and Web npm tarballs to dist-tag `beta`
    through OIDC trusted publishing, verifies both registry `dist.shasum`
    values, and proves npm `latest` did not move. The Web first-publication path

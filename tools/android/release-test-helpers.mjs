@@ -13,7 +13,7 @@ export async function createRawRepository(root, overrides = {}) {
   await mkdir(versionDirectory, { recursive: true });
 
   const primaries = new Map([
-    [`bota-android-sdk-${version}.aar`, Buffer.from('aar-bytes')],
+    [`bota-android-sdk-${version}.aar`, Buffer.from(overrides.aar ?? 'aar-bytes')],
     [`bota-android-sdk-${version}.pom`, Buffer.from(overrides.pom ?? mavenPom())],
     [`bota-android-sdk-${version}.module`, Buffer.from(overrides.module ?? moduleMetadata())],
     [`bota-android-sdk-${version}-sources.jar`, Buffer.from('source-bytes')],

@@ -47,6 +47,9 @@ and device logs over one shared Rust/WASM runtime. Unit, packed-consumer, and
 automated Chromium gates pass locally. Supervised physical-device acceptance
 and protected publication remain open; background browser behavior remains
 unsupported.
+The beta.3 Android coordinate is public, but the synchronized release is
+incomplete: its protected workflow stopped before npm, Apple, and Flutter
+publication while waiting for Central's optional HTML directory index.
 
 The App SDK has published synchronized beta release `1.1.0`: the repository has a generated
 protocol manifest, 64 language-neutral compatibility fixtures, bounded Rust

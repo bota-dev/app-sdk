@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { zipSync } from 'fflate';
 
 import {
   createDeploymentState,
@@ -12,7 +14,11 @@ import {
   recoverDeployment,
   retryFailedDeployment,
   resumeDeployment,
+  verifyPublishedArtifacts,
 } from './central-portal.mjs';
+import { buildCentralBundle } from './build-central-bundle.mjs';
+import { normalizeCentralRepository } from './normalize-central-repository.mjs';
+import { coordinate, createRawRepository, version } from './release-test-helpers.mjs';
 
 const sourceRevision = 'a'.repeat(40);
 const bundleSha256 = 'b'.repeat(64);
@@ -285,5 +291,85 @@ test('Central HTTP errors redact credentials and authorization material', async 
       assert.equal(error.message.includes(authorization), false);
       return true;
     },
+  );
+});
+
+test('public Maven file verification does not require a directory index', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'bota-central-public-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const rawRepository = join(directory, 'android-central-raw');
+  const repository = join(directory, 'android-central-portal');
+  const inventoryPath = join(directory, 'central-bundle-files.json');
+  const bundlePath = join(directory, 'central-bundle.zip');
+  const statePath = join(directory, 'central-portal-state.json');
+  const libraries = Object.fromEntries(
+    ['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'].flatMap((abi) =>
+      ['libbota_android_jni.so', 'libbota_device_sdk_ffi.so'].map((name) => [`jni/${abi}/${name}`, Uint8Array.of(1)])),
+  );
+  await createRawRepository(rawRepository, { aar: zipSync(libraries) });
+  await normalizeCentralRepository({
+    rawRepository,
+    portalRepository: repository,
+    targetRoot: directory,
+    coordinate,
+    version,
+  });
+  await buildCentralBundle({
+    repository,
+    inventory: inventoryPath,
+    zip: bundlePath,
+    coordinate,
+    version,
+    sourceRevision,
+  });
+  const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
+  const state = createDeploymentState({
+    sourceRevision,
+    bundleSha256: sha256(await readFile(bundlePath)),
+    inventorySha256: sha256(await readFile(inventoryPath)),
+  });
+  state.deploymentId = deploymentId;
+  state.deploymentState = 'PUBLISHED';
+  await writeFile(statePath, `${JSON.stringify(state)}\n`);
+  const inventory = JSON.parse(await readFile(inventoryPath, 'utf8'));
+  const mavenRoot = 'https://maven.example/maven2';
+  const prefix = `${mavenRoot}/`;
+  const fetchImpl = async (url) => {
+    if (url.endsWith('/')) return new Response(null, { status: 404 });
+    return new Response(await readFile(join(repository, url.slice(prefix.length))));
+  };
+
+  await verifyPublishedArtifacts({
+    statePath,
+    inventoryPath,
+    fetchImpl,
+    mavenRoot,
+    retryIntervalMs: 0,
+    maxAttempts: 1,
+  });
+  assert.equal(inventory.files.length, 30);
+
+  const names = inventory.files.map((file) => file.path.split('/').at(-1));
+  const indexedFetch = async (url) => url.endsWith('/')
+    ? new Response([...names, 'unexpected.txt'].map((name) => `<a href="${name}">${name}</a>`).join(''))
+    : fetchImpl(url);
+  await assert.rejects(
+    () => verifyPublishedArtifacts({ statePath, inventoryPath, fetchImpl: indexedFetch, mavenRoot, maxAttempts: 1 }),
+    /missing or extra files/,
+  );
+
+  const missingFileFetch = async (url) => url.endsWith('.pom')
+    ? new Response(null, { status: 404 })
+    : fetchImpl(url);
+  await assert.rejects(
+    () => verifyPublishedArtifacts({
+      statePath,
+      inventoryPath,
+      fetchImpl: missingFileFetch,
+      mavenRoot,
+      retryIntervalMs: 0,
+      maxAttempts: 1,
+    }),
+    /published Maven files did not synchronize/,
   );
 });

@@ -303,16 +303,13 @@ export async function verifyPublishedArtifacts({
   let downloaded;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const directoryResponse = await fetchImpl(directoryUrl);
-    if (directoryResponse.status === 404) {
-      if (attempt === maxAttempts) throw new Error('published Maven directory did not synchronize before timeout');
-      if (retryIntervalMs > 0) await sleep(retryIntervalMs);
-      continue;
-    }
-    if (!directoryResponse.ok) throw new Error(`published Maven directory returned HTTP ${directoryResponse.status}`);
-    const names = directoryEntries(await directoryResponse.text());
-    const expectedSorted = [...expectedNames].sort();
-    if (names.length !== expectedSorted.length || names.some((name, index) => name !== expectedSorted[index])) {
-      throw new Error('published Maven directory has missing or extra files');
+    if (directoryResponse.status !== 404) {
+      if (!directoryResponse.ok) throw new Error(`published Maven directory returned HTTP ${directoryResponse.status}`);
+      const names = directoryEntries(await directoryResponse.text());
+      const expectedSorted = [...expectedNames].sort();
+      if (names.length !== expectedSorted.length || names.some((name, index) => name !== expectedSorted[index])) {
+        throw new Error('published Maven directory has missing or extra files');
+      }
     }
     downloaded = new Map();
     let pending404 = false;

@@ -757,6 +757,9 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
   requires green automated gates and protected approval. It and later betas
   use the protected release workflows and verify occupied versions instead of
   attempting to replace them.
+  Beta.3 Central is `PUBLISHED` with all 30 file hashes verified, but its tagged
+  workflow stopped before npm and Apple publication on a missing HTML directory
+  index. Do not mistake this partial Maven publication for a complete release.
 - The public Apple package is the root `Package.swift`; keep the nested
   `platforms/apple/Package.swift` for local development against the generated
   XCFramework.

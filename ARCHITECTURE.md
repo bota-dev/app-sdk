@@ -551,9 +551,11 @@ an explicit protected recovery supplies the matching Portal UUID. Detached PGP
 signatures include a creation time, so reruns never replace the preserved ZIP.
 A confirmed `FAILED` deployment can be superseded only after the protected
 recovery verifies its UUID and deployment name, then uploads those same
-preserved bytes as a fresh deployment. Publication
-is claimed only after the complete public Maven directory matches the signed
-inventory and unrelated API 26 and API 35 consumers run it.
+preserved bytes as a fresh deployment. Publication is claimed only after all
+30 public Maven file URLs match the signed inventory and unrelated API 26 and
+API 35 consumers run it. When Central serves an HTML directory index, the
+verifier also rejects missing or extra entries; an absent index is not
+evidence that the published files are absent.
 
 Android `ProvisioningManager` and `FactoryResetManager` use the same opaque
 material, durable reset, shared-codec, and facade-wide operation contracts as
