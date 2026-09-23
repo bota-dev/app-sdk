@@ -92,7 +92,7 @@ fn release_metadata_fixture() -> PathBuf {
         "platforms/android/gradle.properties",
         "platforms/apple/BotaAppleSDK.podspec",
         "protocol/compatibility/firmware-compatibility.json",
-        "release/examples/1.2.0-beta.9.json",
+        "release/examples/1.2.0-beta.10.json",
     ] {
         let destination = temp_root.join(path);
         fs::create_dir_all(destination.parent().unwrap()).unwrap();
@@ -140,9 +140,9 @@ fn occupied_flutter_release_fixture() -> PathBuf {
 
 #[test]
 fn version_tag_and_publishable_metadata_are_synchronized() {
-    let release = xtask::release::verify_release(&root(), "v1.2.0-beta.9").unwrap();
+    let release = xtask::release::verify_release(&root(), "v1.2.0-beta.10").unwrap();
 
-    assert_eq!(release.version, "1.2.0-beta.9");
+    assert_eq!(release.version, "1.2.0-beta.10");
     assert_eq!(release.crate_name, "bota-device-sdk-core");
 }
 
@@ -151,42 +151,42 @@ fn every_public_package_version_copy_fails_closed_on_drift() {
     for (path, needle, replacement) in [
         (
             "package-lock.json",
-            "\"version\": \"1.2.0-beta.9\"",
+            "\"version\": \"1.2.0-beta.10\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/react-native/package.json",
-            "\"version\": \"1.2.0-beta.9\"",
+            "\"version\": \"1.2.0-beta.10\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/react-native/package-lock.json",
-            "\"version\": \"1.2.0-beta.9\"",
+            "\"version\": \"1.2.0-beta.10\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/web/package.json",
-            "\"version\": \"1.2.0-beta.9\"",
+            "\"version\": \"1.2.0-beta.10\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/flutter/bota_flutter_sdk/pubspec.yaml",
-            "version: 1.2.0-beta.9",
+            "version: 1.2.0-beta.10",
             "version: 1.2.0-beta.2",
         ),
         (
             "frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Package.swift",
-            "exact: \"1.2.0-beta.9\"",
+            "exact: \"1.2.0-beta.10\"",
             "exact: \"1.2.0-beta.2\"",
         ),
         (
             "platforms/android/gradle.properties",
-            "VERSION_NAME=1.2.0-beta.9",
+            "VERSION_NAME=1.2.0-beta.10",
             "VERSION_NAME=1.2.0-beta.2",
         ),
         (
             "platforms/apple/BotaAppleSDK.podspec",
-            "spec.version = \"1.2.0-beta.9\"",
+            "spec.version = \"1.2.0-beta.10\"",
             "spec.version = \"1.2.0-beta.2\"",
         ),
     ] {
@@ -196,7 +196,7 @@ fn every_public_package_version_copy_fails_closed_on_drift() {
         assert!(contents.contains(needle));
         fs::write(&target, contents.replacen(needle, replacement, 1)).unwrap();
 
-        let error = xtask::release::verify_release(&fixture, "v1.2.0-beta.9").unwrap_err();
+        let error = xtask::release::verify_release(&fixture, "v1.2.0-beta.10").unwrap_err();
         assert!(
             error.contains("version") || error.contains("Version"),
             "{path}: {error}"
@@ -236,7 +236,7 @@ fn compatibility_metadata_reports_apple_and_the_android_release_candidate() {
 #[test]
 fn mismatched_or_unprefixed_tags_are_rejected() {
     let wrong_version = xtask::release::verify_release(&root(), "v1.0.0-alpha.1").unwrap_err();
-    let missing_prefix = xtask::release::verify_release(&root(), "1.2.0-beta.9").unwrap_err();
+    let missing_prefix = xtask::release::verify_release(&root(), "1.2.0-beta.10").unwrap_err();
 
     assert!(wrong_version.contains("does not match"));
     assert!(missing_prefix.contains("must start with v"));
@@ -244,7 +244,7 @@ fn mismatched_or_unprefixed_tags_are_rejected() {
 
 #[test]
 fn ci_workflow_validates_the_current_release_manifest() {
-    let release = xtask::release::verify_release(&root(), "v1.2.0-beta.9").unwrap();
+    let release = xtask::release::verify_release(&root(), "v1.2.0-beta.10").unwrap();
     let path = root().join(".github/workflows/ci.yml");
     let contents = fs::read_to_string(path).unwrap();
     let _: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
@@ -683,6 +683,16 @@ fn flutter_release_is_ordered_after_public_native_dependencies_and_verified_befo
         )
         .unwrap()
     );
+    let flutter_condition = workflow["jobs"]["flutter"]["if"].as_str().unwrap();
+    for required in [
+        "always()",
+        "needs.publish.result == 'success'",
+        "needs.publish-apple-pod.result == 'success'",
+        "needs.smoke-public-package.result == 'success'",
+        "needs.smoke-public-android.result == 'success'",
+    ] {
+        assert!(flutter_condition.contains(required), "missing {required}");
+    }
     assert!(contents.contains("tools/apple/test-remote-consumer.sh"));
     assert!(contents.contains("tools/flutter/test-public-apple-pod-consumer.sh"));
     assert!(contents.contains("tools/android/test-consumer.sh --public --compile-only"));
@@ -691,6 +701,13 @@ fn flutter_release_is_ordered_after_public_native_dependencies_and_verified_befo
 
     let bootstrap = &workflow["jobs"]["verify-flutter-publication"];
     assert_eq!(bootstrap["needs"].as_str(), Some("flutter"));
+    assert!(bootstrap["if"].as_str().unwrap().contains("always()"));
+    assert!(
+        bootstrap["if"]
+            .as_str()
+            .unwrap()
+            .contains("needs.flutter.result == 'success'")
+    );
     assert_eq!(bootstrap["environment"].as_str(), Some("release"));
     let bootstrap_source = serde_yaml_ng::to_string(bootstrap).unwrap();
     assert!(!bootstrap_source.contains("flutter pub publish"));
@@ -709,6 +726,13 @@ fn flutter_release_is_ordered_after_public_native_dependencies_and_verified_befo
     assert_eq!(
         complete["needs"].as_str(),
         Some("verify-flutter-publication")
+    );
+    assert!(complete["if"].as_str().unwrap().contains("always()"));
+    assert!(
+        complete["if"]
+            .as_str()
+            .unwrap()
+            .contains("needs.verify-flutter-publication.result == 'success'")
     );
     assert!(
         serde_yaml_ng::to_string(complete)

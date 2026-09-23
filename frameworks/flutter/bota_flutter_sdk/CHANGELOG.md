@@ -1,9 +1,9 @@
 # Changelog
 
-## 1.2.0-beta.9 (unreleased)
+## 1.2.0-beta.10 (unreleased)
 
-- Replaced the partially published beta.8 tag after the CocoaPods workflow
-  missed an already-registered pod in its CDN-backed lookup and held Flutter.
+- Replaced the partially published beta.9 tag after GitHub skipped Flutter
+  through the deliberately skipped recovery branch of the release graph.
 - Selected a new synchronized Flutter-bearing candidate after immutable
   non-Flutter `v1.2.0-beta.0` and unpublished `v1.2.0-beta.1` occupied their
   identities.

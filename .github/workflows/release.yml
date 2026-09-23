@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       releaseRef:
-        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.9
+        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.10
         required: true
         type: string
       centralDeploymentId:
@@ -1117,7 +1117,12 @@ jobs:
 
   flutter:
     name: Build Flutter release candidate
-    if: github.event_name == 'push'
+    if: >-
+      ${{ always() && github.event_name == 'push' &&
+          needs.publish.result == 'success' &&
+          needs.publish-apple-pod.result == 'success' &&
+          needs.smoke-public-package.result == 'success' &&
+          needs.smoke-public-android.result == 'success' }}
     needs: [publish, publish-apple-pod, smoke-public-package, smoke-public-android]
     runs-on: macos-15
     permissions:
@@ -1206,7 +1211,8 @@ jobs:
 
   verify-flutter-publication:
     name: Verify Flutter publication
-    if: github.event_name == 'push'
+    if: >-
+      ${{ always() && github.event_name == 'push' && needs.flutter.result == 'success' }}
     needs: flutter
     runs-on: ubuntu-latest
     environment: release
@@ -1265,7 +1271,9 @@ jobs:
 
   complete-release:
     name: Complete synchronized prerelease
-    if: github.event_name == 'push'
+    if: >-
+      ${{ always() && github.event_name == 'push' &&
+          needs.verify-flutter-publication.result == 'success' }}
     needs: verify-flutter-publication
     runs-on: ubuntu-latest
     permissions:
