@@ -10,7 +10,7 @@ import { inspectZip, verifyCentralBundle } from './build-central-bundle.mjs';
 import { primaryFiles, validatePublishedMetadata } from './normalize-central-repository.mjs';
 
 const PACKAGE_IDENTIFIER = 'dev.bota:bota-android-sdk';
-const VERSION = '1.2.0-beta.8';
+const VERSION = '1.2.0-beta.9';
 const API_ROOT = 'https://central.sonatype.com/api/v1/publisher';
 const MAVEN_ROOT = 'https://repo1.maven.org/maven2';
 const REVISION = /^[0-9a-f]{40}$/;

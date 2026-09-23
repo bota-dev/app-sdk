@@ -67,21 +67,38 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           POD_URL="https://github.com/bota-dev/app-sdk/releases/download/v$VERSION/BotaAppleSDK.cocoapods.zip"
           POD_CHECKSUM="$(shasum -a 256 target/apple-release/BotaAppleSDK.cocoapods.zip | awk '{print $1}')"
+          SPEC_URL="https://trunk.cocoapods.org/api/v1/pods/BotaAppleSDK/specs/$VERSION"
           existing="$(mktemp)"
-          if pod spec cat BotaAppleSDK --version="$VERSION" >"$existing" 2>/dev/null; then
-            test "$(jq -r .version "$existing")" = "$VERSION"
-            test "$(jq -r .source.http "$existing")" = "$POD_URL"
-            test "$(jq -r .source.sha256 "$existing")" = "$POD_CHECKSUM"
+          fetch_public_spec() {
+            local status
+            status="$(curl --silent --show-error --location --retry 3 \
+              --connect-timeout 10 --max-time 60 --output "$existing" \
+              --write-out '%{http_code}' "$SPEC_URL")"
+            case "$status" in
+              200) return 0 ;;
+              404) return 1 ;;
+              *) echo "CocoaPods Trunk lookup failed: HTTP $status" >&2; exit 1 ;;
+            esac
+          }
+          verify_public_spec() {
+            jq -e --arg version "$VERSION" --arg url "$POD_URL" \
+              --arg checksum "$POD_CHECKSUM" \
+              '.version == $version and .source.http == $url and .source.sha256 == $checksum' \
+              "$existing" >/dev/null
+          }
+          if fetch_public_spec; then
+            verify_public_spec
           else
             test -n "$COCOAPODS_TRUNK_TOKEN"
-            pod trunk push platforms/apple/BotaAppleSDK.podspec
+            # Trunk may register the pod before its CLI finishes or times out.
+            pod trunk push platforms/apple/BotaAppleSDK.podspec || true
           fi
           for attempt in {1..30}; do
-            if pod spec cat BotaAppleSDK --version="$VERSION" >"$existing" 2>/dev/null; then
+            if fetch_public_spec; then
+              verify_public_spec
               break
             fi
             sleep 10
           done
-          test "$(jq -r .version "$existing")" = "$VERSION"
-          test "$(jq -r .source.http "$existing")" = "$POD_URL"
-          test "$(jq -r .source.sha256 "$existing")" = "$POD_CHECKSUM"
+          fetch_public_spec
+          verify_public_spec
