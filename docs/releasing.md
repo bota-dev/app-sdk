@@ -1,5 +1,15 @@
 # Releasing The Bota App SDK
 
+## Current Candidate
+
+`2.0.0-beta.1` is the selected synchronized release candidate. It includes the
+Flutter Android SDK-path fix and the release workflow corrections made after
+beta.0. The owner authorized normal CI and protected publication for this
+version. Publication and fresh public-consumer verification are pending.
+Only the new npm `beta` tags may advance; `latest` stays at `2.0.0-beta.0`, and
+all legacy packages and tags remain unchanged. Hardware acceptance remains
+NOT RUN and application rollout is separate.
+
 ## Package Name Migration
 
 Current tooling selects publication identities from the verified release

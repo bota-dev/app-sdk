@@ -43,7 +43,7 @@ Normal consumers resolve the Flutter SDK from the application's
 overrides. The full consumer gate must unset both Flutter environment variables
 for its Android build, so test setup cannot hide a broken normal installation.
 Published `2.0.0-beta.0` still requires the documented explicit-path workaround;
-the lookup fix is source-only until the next release.
+the lookup fix is included in the selected `2.0.0-beta.1` source candidate.
 
 `android/sdk-version.toml` is packaged with the plugin and must match the root
 `sdk-version.toml`. Local consumer tests reserve the `dev.bota` group for the
@@ -54,16 +54,16 @@ remote substitute.
 
 The Swift Package and CocoaPods integrations compile the same adapter source in
 Swift 5 language mode. Public metadata resolves the exact synchronized
-`BotaAppleSDK` and contains no local override. Local adapter and consumer tools
+`BotaAppSDK` and contains no local override. Local adapter and consumer tools
 patch only disposable copies of the Swift manifest to use the nested Apple
 source package. Those overrides must retain the public package identity
-`app-sdk`; `BotaAppleSDK` is the product name. Never add
+`app-sdk`; `BotaAppSDK` is the product name. Never add
 `BOTA_APPLE_SDK_PACKAGE_PATH` to public package files.
 
 ## Release Candidate
 
 `tools/flutter/package-release.sh --check` is the complete local publication
-gate for selected synchronized `1.2.0-beta.12`; it must fail closed for occupied
+gate for selected synchronized `2.0.0-beta.1`; it must fail closed for occupied
 `1.2.0-beta.0`. It verifies
 synchronized metadata, Pigeon drift, formatting, analysis,
 all Dart tests, hosted dependency licenses, `flutter pub publish --dry-run`,
@@ -74,7 +74,7 @@ build outputs, credentials, links, unsafe paths, extras, and checksum drift.
 The command prepares evidence only; it must never publish a package.
 
 Automatic PR/main CI uses `tools/flutter/package-release.sh --ci` to run the
-same verification. Occupied beta.0 returns `candidate-ready=false` without a
+same verification. Occupied `1.2.0-beta.0` returns `candidate-ready=false` without a
 release directory; beta.1 and later synchronized versions return
 `candidate-ready=true` and preserve the deterministic candidate.
 
@@ -91,7 +91,7 @@ material.
 Run from the repository root:
 
 ```bash
-tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
+tools/flutter/run-flutter.sh test frameworks/flutter/bota_app_sdk/test
 tools/flutter/test-android-adapter.sh
 tools/flutter/test-apple-adapter.sh
 tools/flutter/test-consumers.sh
@@ -99,9 +99,9 @@ npm run flutter:verify
 tools/flutter/package-release.sh --ci
 tools/flutter/package-release.sh --check
 tools/flutter/run-dart.sh format --output=none --set-exit-if-changed \
-  frameworks/flutter/bota_flutter_sdk/lib \
-  frameworks/flutter/bota_flutter_sdk/test \
-  frameworks/flutter/bota_flutter_sdk/example/lib
+  frameworks/flutter/bota_app_sdk/lib \
+  frameworks/flutter/bota_app_sdk/test \
+  frameworks/flutter/bota_app_sdk/example/lib
 ```
 
 The workflow conformance suite must discover all 33 scenarios from the

@@ -1,6 +1,6 @@
 {
   "name": "@bota.dev/web-app-sdk",
-  "version": "2.0.0-beta.0",
+  "version": "2.0.0-beta.1",
   "description": "Bota SDK for Web Bluetooth applications",
   "type": "module",
   "license": "MIT",

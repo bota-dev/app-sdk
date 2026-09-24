@@ -19,10 +19,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 
 ## Current Authority
 
-- Current synchronized source is `2.0.0-beta.0`: Apple `BotaAppSDK`, Android
+- Current synchronized source candidate is `2.0.0-beta.1`: Apple `BotaAppSDK`, Android
   `dev.bota:bota-app-sdk`, RN `@bota.dev/react-native-app-sdk`, Web
   `@bota.dev/web-app-sdk`, Flutter `bota_app_sdk`. Apple SwiftPM/CocoaPods,
-  Android Maven, both npm artifacts, and Flutter pub.dev are public and verified.
+  Android Maven, both npm artifacts, and Flutter pub.dev remain public and verified
+  at `2.0.0-beta.0`; beta.1 publication is not yet claimed.
   Public native consumers and fresh Flutter Android/iOS release builds passed.
   Final release attachment was recovered manually; the immutable tagged run
   retains its final-step failure. Never run checkout-free `gh release` commands
@@ -30,7 +31,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   Flutter's as `flutter-release-manifest.json`. See
   `docs/releasing.md` for current release state.
   Published Flutter Android beta.0 requires the explicit SDK-path workaround;
-  main's normal-install lookup fix needs a subsequent release. See
+  beta.1 includes the normal-install lookup fix. See
   `release/evidence/2.0.0-beta.0-public-consumers.md` for exact post-publication
   consumer results and the remaining gate.
   See `docs/migrations/app-sdk-package-names.md`. Preserve historical releases,

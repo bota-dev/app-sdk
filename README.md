@@ -1,5 +1,9 @@
 # Bota App SDK
 
+Current source prepares `2.0.0-beta.1`, including the Flutter Android normal-install
+fix. The installation examples below remain on verified public `2.0.0-beta.0`
+until the protected release and registry-consumer gates complete.
+
 The `2.0.0-beta.0` release uses explicit App SDK package names. Apple SwiftPM
 and CocoaPods, Android Maven, React Native npm, Web npm, and Flutter pub.dev
 artifacts are public and verified. Clean public native consumers and fresh

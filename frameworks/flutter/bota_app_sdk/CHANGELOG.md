@@ -1,6 +1,13 @@
 # Changelog
 
-## 2.0.0-beta.0 (unreleased)
+## 2.0.0-beta.1
+
+- Resolve the Android Flutter SDK from the consumer's standard
+  `local.properties` configuration, with `FLUTTER_ROOT` as a fallback.
+  Normal applications no longer need the `BOTA_FLUTTER_HOME` workaround.
+- Pin Apple and Android dependencies to synchronized `2.0.0-beta.1`.
+
+## 2.0.0-beta.0
 
 - Rename the public package and Dart library to `bota_app_sdk` as part of the
   Bota App SDK family. Replace the old facade dependency and imports; do not
