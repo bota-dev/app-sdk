@@ -28,9 +28,9 @@ failure. Current tooling passes `--repo "$GITHUB_REPOSITORY"` and publishes the
 Flutter manifest as `flutter-release-manifest.json`, preserving the existing
 native `release-manifest.json`. See the
 [publication record](../release/evidence/2.0.0-beta.0-publication.md).
-React Native trusted publishing and Flutter's restricted GitHub publisher are
-saved. Web's grant still requires its security-key confirmation. No automated
-OIDC upload has yet been demonstrated for the new names; the next legitimate
+React Native and Web trusted publishers and Flutter's restricted GitHub
+publisher are saved and verified. No automated OIDC upload has yet been
+demonstrated for the new names; the next legitimate
 version must verify that path. This does not prevent installing the published beta.
 Hardware acceptance remains NOT RUN; Demo and Bota One were not upgraded.
 
@@ -443,6 +443,25 @@ Each package has one trusted publisher. Preserve old-package publishers for
 maintenance and historical recovery. npm requires a package to exist before
 this grant can be configured; staged publication cannot create a new package.
 See [npm trust](https://docs.npmjs.com/cli/v12/commands/npm-trust/).
+
+Both npm grants are saved and verified as of 2026-09-24. Web setup completed
+through an interactive npm 12.0.2 `trust github` command after the website
+repeatedly returned to authentication without saving. Its successful command
+result and fresh package-settings readback matched the exact grant above, with
+`publish` and npm's baseline `stage publish` permissions. Package access and
+maintainers were unchanged. If the UI loses a pending save, use the supported
+CLI and keep its single authentication request alive until it completes:
+
+```bash
+npx --yes npm@12.0.2 trust github @bota.dev/web-app-sdk \
+  --repo bota-dev/app-sdk --file release.yml --env release \
+  --allow-publish --allow-stage-publish --yes --browser=false
+```
+
+This is the completed setup command, not a routine release step. Do not rerun
+it or replace an existing grant without checking the saved configuration.
+Keep security-key approval interactive; do not copy its temporary credentials
+into repository files or CI secrets.
 
 On 2026-09-24, the release owner approved this one-time bootstrap for
 `2.0.0-beta.0`, replacing the impossible pre-tag publisher prerequisite:

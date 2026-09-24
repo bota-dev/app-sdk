@@ -52,9 +52,9 @@ and device logs over one shared Rust/WASM runtime. Unit, packed-consumer, and
 automated Chromium gates passed. Supervised physical-device acceptance remains
 open; background browser behavior remains unsupported. Final release evidence
 was attached manually after a checkout-free GitHub CLI step failed; see the
-[publication record](release/evidence/2.0.0-beta.0-publication.md). React Native
-and Flutter automated-publisher settings are saved; Web configuration remains
-open. An automated upload under the new names still needs verification on the
+[publication record](release/evidence/2.0.0-beta.0-publication.md). React Native,
+Web, and Flutter automated-publisher settings are saved and verified. An
+automated upload under the new names still needs verification on the
 next release, separate from the verified packages now available to install.
 
 ### Historical Release Attempts

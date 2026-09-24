@@ -13,8 +13,8 @@
 **Status:** Tasks 1-5 complete. Main CI `35965596618`, license and security
 checks passed at `dd672a5865ba460ca3e97420e97461eb096dfb4f`, including both
 required Android x86 emulator lanes. Task 6 package publication is verified;
-Web automated-publisher setup remains open; React Native and Flutter settings
-are saved, but new-name automated uploads still need verification.
+React Native, Web, and Flutter automated-publisher settings are saved and
+verified, but new-name automated uploads still need verification.
 Immutable tag `v2.0.0-beta.0` uses the verified five-platform CI inventory;
 release run `35971649362` passed all packaging gates and has approved native
 publication. Android Central, the Apple SwiftPM archive, and both renamed npm
@@ -22,9 +22,10 @@ packages are public and verified. The resumed publish job passed by restoring
 the exact signed Central inputs and verifying the occupied npm versions, with
 no replacement uploads. Historical npm versions/tags are unchanged. The owner
 approved retaining the registry-created new-name `latest` tags at beta.0;
-future betas must not advance them. React Native trusted publishing is saved;
-Web's exact grant is still awaiting its security-key confirmation. CocoaPods
-publication and public SwiftPM/API 26/API 35 consumers passed. After CDN index
+future betas must not advance them. Both npm trusted publishers are saved;
+Web's exact grant was created through npm 12.0.2's interactive CLI and verified
+on the package settings page after website saves repeatedly required auth.
+CocoaPods publication and public SwiftPM/API 26/API 35 consumers passed. After CDN index
 propagation, the no-override CocoaPods consumer and ordered Flutter candidate
 passed, including fresh Android/iOS release builds. Flutter was published once
 using the owner login; both workflows verified its exact 57-file public archive.
@@ -523,7 +524,7 @@ an explicit external gate; never bypass it to mark this task complete.
   require green CI/license/security checks at that exact revision. Download
   `release-candidate-<commit>` and verify its five-platform inventory and source
   revision. Local builds alone are not the tag's candidate authority.
-- [ ] Verify organization access to all five new identities and configure
+- [x] Verify organization access to all five new identities and configure
   their package-specific publication authorization. Keep old npm publisher
   settings intact for old-version recovery. Follow official registry bootstrap
   procedures for first publication, using only approved exact artifacts; do

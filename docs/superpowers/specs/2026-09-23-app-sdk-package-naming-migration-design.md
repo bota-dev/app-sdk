@@ -3,9 +3,9 @@
 **Status:** Migration design approved on 2026-09-23. Source migration and
 version-aware recovery are implemented on main. Exact-candidate CI and all five
 package publications are verified at `2.0.0-beta.0`; final evidence attachment
-was recovered manually without moving the tag. React Native and Flutter
-publisher settings are saved; Web setup and proof of new-name automated uploads
-remain open. Physical-device acceptance is NOT RUN; application
+was recovered manually without moving the tag. React Native, Web, and Flutter
+publisher settings are saved and verified; proof of new-name automated uploads
+remains open. Physical-device acceptance is NOT RUN; application
 rollout is unchanged. See the release runbook for evidence and follow-ups.
 
 ## Intent
