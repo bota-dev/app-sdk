@@ -1,5 +1,10 @@
 # AGENTS.md
 
+## CI policy
+
+- Never add CI-skip markers or bypass required checks. Local verification supplements CI; it never replaces it.
+- Run CI and License Gate for the exact pushed revision, using their existing manual dispatch when a feature-branch push has no automatic trigger. Require successful CI before merge or release.
+
 CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `workflow_dispatch` plus automatic pull-request and main-push triggers on the CI and license workflows. CI concurrency must preserve every main run and cancel only superseded pull-request runs. Run Android unit tests separately from parallel lint and APK assembly. The xtask manifest uses `toml` 1.x; validate future major changes with the full Rust and tooling workflow. Keep root TypeScript on 6.x while `tools/baseline/react-native-api-contract.mjs` depends on its stable compiler API; TypeScript 7 exposes the replacement compiler API only through `typescript/unstable/*` and requires a deliberate contract-extractor migration. Async teardown and backpressure tests must wait for explicit actor or coroutine signals for each phase, including pump entry before asserting a flow's `finally` block and separate core/host cancellation completion, instead of sampling scheduling-dependent state. Use five-second test-only settlement watchdogs around those signals so loaded CI workers still expose real deadlocks without creating one-second scheduling races. Non-timeout transfer-control tests use a 30-second fixture cleanup deadline because they exercise multi-dispatcher teardown after the release build; dedicated timeout tests inject their own short deadline, and production retains its one-second cleanup contract.
 
 ## Repository Purpose
