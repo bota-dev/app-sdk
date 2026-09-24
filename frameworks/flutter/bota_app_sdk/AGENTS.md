@@ -37,6 +37,14 @@ the Flutter application owns its plugin classpath. The standalone
 and Kotlin `2.1.20`. Use `LibraryExtension` and Kotlin `compilerOptions` APIs so
 the plugin also compiles inside the pinned Flutter-generated consumer.
 
+Normal consumers resolve the Flutter SDK from the application's
+`local.properties` (`flutter.sdk`), with `FLUTTER_ROOT` as a fallback.
+`flutterSdkPath` and `BOTA_FLUTTER_HOME` remain explicit standalone-test
+overrides. The full consumer gate must unset both Flutter environment variables
+for its Android build, so test setup cannot hide a broken normal installation.
+Published `2.0.0-beta.0` still requires the documented explicit-path workaround;
+the lookup fix is source-only until the next release.
+
 `android/sdk-version.toml` is packaged with the plugin and must match the root
 `sdk-version.toml`. Local consumer tests reserve the `dev.bota` group for the
 fresh repository under `target/android-m2`; they must not resolve a cached or

@@ -1,4 +1,5 @@
 import com.android.build.api.dsl.LibraryExtension
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -21,7 +22,11 @@ require(overrideVersion == null || overrideVersion == sdkVersion) {
 
 val flutterSdkPath = providers.gradleProperty("flutterSdkPath").orNull
     ?: System.getenv("BOTA_FLUTTER_HOME")
-    ?: error("flutterSdkPath or BOTA_FLUTTER_HOME is required")
+    ?: rootProject.file("local.properties").takeIf { it.isFile }?.let { file ->
+        Properties().apply { file.inputStream().use { load(it) } }.getProperty("flutter.sdk")
+    }
+    ?: System.getenv("FLUTTER_ROOT")
+    ?: error("Flutter SDK not found: set flutter.sdk in the application's local.properties")
 val flutterJar = file("$flutterSdkPath/bin/cache/artifacts/engine/android-arm64/flutter.jar")
 require(flutterJar.isFile) { "Flutter embedding JAR is missing: $flutterJar" }
 

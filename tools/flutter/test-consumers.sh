@@ -261,7 +261,8 @@ perl -0pi -e \
   cd "$consumer"
   GRADLE_OPTS="${GRADLE_OPTS:-} -Dorg.gradle.daemon=false" \
     GRADLE_USER_HOME="$consumer_gradle_home" \
-    "$workspace_root/tools/flutter/run-flutter.sh" build apk \
+    env -u BOTA_FLUTTER_HOME -u FLUTTER_ROOT \
+    "$flutter_home/bin/flutter" build apk \
     --release --target lib/main.dart
 )
 android_output="$consumer/build/app/outputs/flutter-apk/app-release.apk"

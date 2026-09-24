@@ -2,10 +2,10 @@
 
 ## Package Name Migration
 
-The 2.x candidate is `bota_app_sdk`, with `BotaAppSDK` on Apple and
+The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
 `dev.bota:bota-app-sdk` on Android. Replace the old dependency and Dart imports;
 do not install both packages in the same application. Historical 1.x releases
-remain under `bota_flutter_sdk`. The new candidate is not yet published.
+remain under `bota_flutter_sdk`. Version `2.0.0-beta.0` is published on pub.dev.
 
 The explicit Pigeon `dart_package_name` remains `bota_flutter_sdk`. This is
 an internal message-channel identity, not the pub.dev package name; preserving
@@ -20,13 +20,13 @@ The source facade is implemented and passes local build and release-consumer
 gates. The package was not part of the published synchronized `1.1.0` release.
 `1.2.0-beta.0` is occupied by an immutable non-Flutter tag and must not be
 reused. `1.2.0-beta.7` was partially published without a CocoaPod or Flutter
-package. The renamed `2.0.0-beta.0` candidate is not yet published on pub.dev.
-Until it is published and verified, consume
-this package only from an exact source revision for development.
+package. The renamed `2.0.0-beta.0` archive is published and verified; physical
+device acceptance remains separate. See the Android build workaround below
+when consuming this immutable first beta.
 
 ## Install
 
-After the first Flutter beta is published, pin its exact prerelease version:
+Pin the exact prerelease version:
 
 ```yaml
 dependencies:
@@ -82,6 +82,20 @@ permissions to `android/app/src/main/AndroidManifest.xml`:
 The SDK reports missing authorization; it never displays a system permission
 prompt. The application must request the applicable runtime permissions before
 scanning or connecting.
+
+### Android Beta.0 Build Workaround
+
+Published `2.0.0-beta.0` requires the Flutter SDK directory explicitly:
+
+```bash
+BOTA_FLUTTER_HOME=/path/to/flutter flutter build apk --release
+```
+
+Use the directory containing `bin/flutter`, not the executable itself. The
+source fix also reads the application's standard `android/local.properties`
+`flutter.sdk` entry (or `FLUTTER_ROOT`), so normal Flutter builds do not require
+this Bota-specific variable. That fix needs a subsequent release; it does not
+change the already-published beta.0 archive.
 
 ## Configure And Destroy
 
@@ -276,7 +290,7 @@ discovery, connection, status, recording control and batch transfer,
 provisioning, connection settings, upload ownership, WiFi, OTA, sanitized
 device logs, remove-only deprovision, and authenticated factory reset.
 
-Prereleases use exact `1.x.y-beta.n` versions. Applications must opt into each
+Prereleases use exact `2.x.y-beta.n` versions. Applications must opt into each
 beta explicitly; no Flutter package from the historical `1.1.0` release should
 be inferred or installed.
 
