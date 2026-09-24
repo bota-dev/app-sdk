@@ -5,8 +5,12 @@
 `2.0.0-beta.1` is the selected synchronized release candidate. It includes the
 Flutter Android SDK-path fix and the release workflow corrections made after
 beta.0. The owner authorized normal CI and protected publication for this
-version. Local [preflight](../release/evidence/2.0.0-beta.1-preflight.md) passed;
-publication and fresh public-consumer verification are pending.
+version. Local [preflight](../release/evidence/2.0.0-beta.1-preflight.md) and exact
+main/tag CI gates passed. Apple SwiftPM/CocoaPods, Android Maven, and both npm
+packages are published. RN/Web OIDC uploads and fresh public RN/Web consumers
+passed; Flutter publication is held while the CocoaPods CDN index propagates.
+See the [publication record](../release/evidence/2.0.0-beta.1-publication.md)
+for exact checks and recovery attempts. Synchronized completion is not yet claimed.
 Only the new npm `beta` tags may advance; `latest` stays at `2.0.0-beta.0`, and
 all legacy packages and tags remain unchanged. Hardware acceptance remains
 NOT RUN and application rollout is separate.

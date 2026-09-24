@@ -22,8 +22,11 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 - Current synchronized source candidate is `2.0.0-beta.1`: Apple `BotaAppSDK`, Android
   `dev.bota:bota-app-sdk`, RN `@bota.dev/react-native-app-sdk`, Web
   `@bota.dev/web-app-sdk`, Flutter `bota_app_sdk`. Apple SwiftPM/CocoaPods,
-  Android Maven, both npm artifacts, and Flutter pub.dev remain public and verified
-  at `2.0.0-beta.0`; beta.1 publication is not yet claimed.
+  Android Maven, and both npm artifacts are now public at beta.1. New-name npm
+  OIDC uploads and public RN/Web consumers passed. Flutter remains pending the
+  CocoaPods CDN index and ordered publication gates; beta.0 remains the last
+  complete five-platform release. See
+  `release/evidence/2.0.0-beta.1-publication.md`.
   Public native consumers and fresh Flutter Android/iOS release builds passed.
   Final release attachment was recovered manually; the immutable tagged run
   retains its final-step failure. Never run checkout-free `gh release` commands
