@@ -14,12 +14,13 @@ into the native Apple and Android SDKs.
 
 ## Install
 
-Version `2.0.0-beta.0` is published on npm.
+This source prepares synchronized `2.0.0-beta.1`; use the exact pin below after
+publication. Version `2.0.0-beta.0` remains the previous published release.
 Remove `@bota.dev/react-native-sdk` before adding the replacement; do not
 co-install both. Production maintenance 0.0.x consumers need not migrate.
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.0
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.1
 npx pod-install
 ```
 

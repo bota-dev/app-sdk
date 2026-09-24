@@ -454,8 +454,8 @@ exact-version installation, permissions, backend callbacks, serial-strict
 reconnect, retained encrypted batch handoff, WiFi, OTA, remove-only
 deprovision, authenticated reset, and unsupported targets.
 
-The historical `1.2.0-beta.0` tag identifies non-Flutter source and remains
-unchanged. Package publication does not establish physical-device acceptance.
+`1.2.0-beta.0` is occupied by an immutable non-Flutter tag and must not be reused.
+Package publication does not establish physical-device acceptance.
 
 ## Web Beta Installation
 
