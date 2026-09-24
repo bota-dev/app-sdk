@@ -1,5 +1,6 @@
 import {
   BotaDeviceClient,
+  type ConnectedDevice,
   type ControlManager,
   type DeviceManager,
   type LogManager,
@@ -31,6 +32,9 @@ const managerInstances: readonly [
 ]
 
 void managerInstances
+
+const selectedDevice: Promise<ConnectedDevice> = client.devices.connectSelected()
+void selectedDevice
 
 // @ts-expect-error Managers are instance types, not root constructor values.
 void sdk.DeviceManager

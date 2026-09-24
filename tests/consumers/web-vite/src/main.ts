@@ -145,6 +145,12 @@ onClick('#connect', async () => {
   state.connectedSerial = connected.serialNumber
 })
 
+onClick('#connect-selected', async () => {
+  const connected = await client.devices.connectSelected()
+  state.connection = 'connected'
+  state.connectedSerial = connected.serialNumber
+})
+
 onClick('#disconnect', async () => {
   await client.devices.disconnect()
   state.connection = 'disconnected'

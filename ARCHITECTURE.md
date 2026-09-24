@@ -1008,10 +1008,15 @@ construction remains client-owned, and applications use `client.devices`,
 `client.recordings`, `client.provisioning`, `client.wifi`, `client.controls`,
 `client.ota`, and `client.logs`.
 
-Connection always starts with the browser's explicit device picker and requires
-the caller's expected serial number. The advertised name is only a picker
-filter and display value. The device is published only after the Device
-Information serial characteristic matches through the Rust workflow. Every
+Picker connection has two explicit paths. `connect({ expectedSerialNumber })`
+requires an exact match to a known application device record. The source-only
+`connectSelected()` addition (not in published `2.0.0-beta.1`) opens the same
+picker and uses Rust's existing `ConnectSelected` workflow to learn a fresh
+Device Information serial before the application registers or binds the device.
+It neither registers nor provisions automatically. The advertised name remains
+only a picker filter and display value. Both paths retain the same lifecycle
+ownership and persist only a successfully read identity; reconnect always
+requires the expected serial. Every
 snapshot reads and verifies that serial again, then returns optional model,
 hardware, and firmware identity, decoded device status, and a fresh decoded
 encrypted-upload-v2 capability value when characteristic `0406` exists.

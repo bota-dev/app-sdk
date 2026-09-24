@@ -177,6 +177,25 @@ test('picker cancellation maps to the stable public error', async () => {
   )
 })
 
+test('known-device connect rejects non-string serials before the picker', async (t) => {
+  for (const [name, value] of [
+    ['null', null],
+    ['undefined', undefined],
+    ['number', 123],
+    ['boolean', true],
+    ['object', { toString: () => 'GDPPSBZJN6' }],
+  ] as const) {
+    await t.test(name, async () => {
+      const { manager, transport } = await createManager()
+      await assert.rejects(
+        manager.connect({ expectedSerialNumber: value as unknown as string }),
+        (error: unknown) => error instanceof BotaSDKError && error.code === 'invalid_input',
+      )
+      assert.deepEqual(transport.calls, [])
+    })
+  }
+})
+
 test('destroy while the picker is pending cancels before any GATT work', async () => {
   const transport = new FakeBrowserBluetoothTransport()
   let releasePicker!: () => void
@@ -306,6 +325,86 @@ test('a verified serial completes the shared Rust connection workflow', async ()
   assert.deepEqual(manager.connectedDevice, connected)
 })
 
+test('selected-device connection learns a fresh serial without backend registration', async () => {
+  const storage = memoryStorage()
+  const { manager, transport } = await createManager(
+    new FakeBrowserBluetoothTransport(),
+    storage,
+  )
+  transport.serialNumber = 'NEWDEVICE1'
+  const connecting = manager.connectSelected()
+
+  // The picker must open in the caller's user gesture, before any await.
+  assert.deepEqual(transport.calls, ['request_device'])
+  const connected = await connecting
+  assert.deepEqual(connected, {
+    id: 'browser-peripheral-1',
+    name: 'Bota Pin',
+    serialNumber: 'NEWDEVICE1',
+  })
+  assert.deepEqual(transport.calls, [
+    'request_device',
+    'connect:browser-peripheral-1',
+    'discover:browser-peripheral-1',
+    'read:browser-peripheral-1:180A:2A25',
+  ])
+  assert.equal(manager.connectedDevice?.serialNumber, 'NEWDEVICE1')
+  assert.equal(storage.savedHints.at(-1)?.serialNumber, 'NEWDEVICE1')
+
+  await manager.disconnect()
+  transport.serialNumber = 'OTHERDEVICE'
+  await assert.rejects(
+    manager.reconnect({ expectedSerialNumber: 'NEWDEVICE1' }),
+    (error: unknown) => error instanceof BotaSDKError && error.code === 'connection_failed',
+  )
+  assert.equal(manager.connectedDevice, null)
+})
+
+test('selected-device connection rejects an empty GATT serial without saving identity', async () => {
+  const storage = memoryStorage()
+  const { manager, transport } = await createManager(
+    new FakeBrowserBluetoothTransport(),
+    storage,
+  )
+  transport.serialNumber = ''
+
+  await assert.rejects(manager.connectSelected(), BotaSDKError)
+
+  assert.equal(manager.connectedDevice, null)
+  assert.deepEqual(storage.savedHints, [])
+  assert.ok(transport.calls.includes('disconnect:browser-peripheral-1'))
+})
+
+test('selected-device connection fails unsupported browsers before the picker', async () => {
+  const { manager, transport } = await createManager()
+  transport.isSupported = false
+
+  await assert.rejects(
+    manager.connectSelected(),
+    (error: unknown) => error instanceof BotaSDKError && error.code === 'unsupported_browser',
+  )
+  assert.deepEqual(transport.calls, [])
+})
+
+test('selected-device connection cannot publish a picker result after destruction', async () => {
+  const { manager, transport } = await createManager()
+  const picker = deferredVoid()
+  transport.pickerGate = picker.promise
+  const connecting = manager.connectSelected()
+  const rejected = assert.rejects(connecting, (error: unknown) =>
+    error instanceof BotaSDKError && error.code === 'cancelled')
+  const destroying = manager.destroy()
+  picker.resolve()
+
+  await rejected
+  await settleWithWatchdog(destroying, 'selected picker destruction')
+  assert.deepEqual(transport.calls, [
+    'request_device',
+    'disconnect:browser-peripheral-1',
+  ])
+  assert.equal(manager.connectedDevice, null)
+})
+
 test('a verified picker connection durably saves its exact browser identity', async () => {
   const storage = memoryStorage()
   const { manager, transport } = await createManager(
@@ -344,7 +443,7 @@ test('the public client composes picker persistence through the shared runtime',
     storage,
   })
 
-  await client.devices.connect({ expectedSerialNumber: 'GDPPSBZJN6' })
+  await client.devices.connectSelected()
 
   assert.equal(storage.savedHints.at(-1)?.browserDeviceId, transport.device.id)
   await client.destroy()

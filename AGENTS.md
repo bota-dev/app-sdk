@@ -267,7 +267,14 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   closed-tab execution. Every application provider callback receives its
   operation `AbortSignal`; host I/O must honor it, while the SDK stops waiting
   on cancellation, observes late settlement, and ignores late results. A
-  missing Web Bluetooth implementation must fail as
+  source-only `devices.connectSelected()` addition exposes the existing Rust
+  `ConnectSelected` workflow for pre-registration SN discovery. It opens the
+  picker synchronously from the caller's gesture, learns identity from fresh
+  GATT, and does not bind or provision. Known-record `connect` and every
+  `reconnect` remain serial-strict. This addition is not in published beta.1.
+  The packed Vite/Chromium consumer checks selected-device SN discovery with
+  an empty serial input and enforces the picker user-gesture requirement.
+  A missing Web Bluetooth implementation must fail as
   `unsupported_browser` before opening the picker, snapshots must re-verify the
   serial, and OTA reboot recovery may enumerate only the previously verified
   exact browser device ID. OTA reload recovery must validate compatible durable

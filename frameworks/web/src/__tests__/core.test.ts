@@ -157,6 +157,7 @@ function assertOwnership(envelope: EffectEnvelopeUnderTest, operation: string): 
 
 const bridge: CoreBridge = {
   startExactConnection: () => [],
+  startSelectedConnection: () => [],
   startReconnect: () => [],
   startProvisioning: () => [],
   startRecordingTransfer: () => [],

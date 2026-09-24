@@ -105,6 +105,20 @@ class WasmCoreAdapter implements CoreBridge {
     }
   }
 
+  startSelectedConnection(
+    input: Parameters<CoreBridge['startSelectedConnection']>[0],
+  ): CoreEffectEnvelope[] {
+    try {
+      return normalizeEffects(this.generated.startSelectedConnection(
+        input.peripheralId,
+        input.name,
+        input.cancellationId,
+      ))
+    } catch (error) {
+      throw normalizeCoreError(error, 'connect')
+    }
+  }
+
   startReconnect(
     input: Parameters<CoreBridge['startReconnect']>[0],
   ): CoreEffectEnvelope[] {

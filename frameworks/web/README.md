@@ -335,8 +335,9 @@ const bota = await createExampleClient({ organizationId, projectId, userId })
 
 ## Picker connection, reconnect, and snapshot
 
-The expected serial must come from the authenticated application device record.
-An advertised Bluetooth name is display/filter metadata only.
+For an existing device, the expected serial must come from the authenticated
+application device record. An advertised Bluetooth name is display/filter
+metadata only.
 
 ```ts
 connectButton.addEventListener('click', async () => {
@@ -360,6 +361,29 @@ console.log(reconnected.serialNumber, snapshot.status.batteryPercent)
 browser device ID, waits for prior notification teardown, and verifies the
 serial again. `readSnapshot()` repeats that verification before returning fresh
 identity, status, and capability values.
+
+### Discover identity before registration (unreleased source)
+
+The source-only `connectSelected()` addition is not included in published
+`2.0.0-beta.1`. It opens the browser picker and returns the selected device only
+after the shared Rust workflow reads and validates its physical serial number.
+Call it directly from a user gesture, with the client initialized beforehand:
+
+```ts
+addDeviceButton.addEventListener('click', async () => {
+  const device = await bota.devices.connectSelected()
+  // Use device.serialNumber in your authenticated registration/binding flow.
+  // Registration and binding do not happen automatically in the SDK.
+})
+```
+
+No manual SN entry, backend record, storage, or provider is needed to discover
+the serial. Browser permission and a serial read are not proof of ownership.
+Provisioning still requires the application provider and tenant-scoped storage;
+show pairing success only after physical provisioning and backend confirmation.
+Use exact `connect` or `reconnect` for a known device, not discovery as a fallback
+after an identity mismatch. A null, missing, or non-string expected serial is
+invalid input, never an implicit request for discovery.
 
 ## Recording list and sync
 
