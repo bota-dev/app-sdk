@@ -1,9 +1,11 @@
 # App SDK Package Naming Migration
 
 **Status:** Migration design approved on 2026-09-23. Source migration and
-version-aware recovery implemented on local main; final candidate verification,
-main CI and registry authorization/publication remain pending. Physical-device
-acceptance is unchanged and NOT RUN for this candidate.
+version-aware recovery are implemented on main. Exact-candidate CI and all five
+package publications are verified at `2.0.0-beta.0`; final evidence attachment
+was recovered manually without moving the tag. Web and Flutter automated
+publisher setup remains open. Physical-device acceptance is NOT RUN; application
+rollout is unchanged. See the release runbook for evidence and follow-ups.
 
 ## Intent
 

@@ -12,18 +12,26 @@ a renamed package. Registry authentication and transport failures stop the run.
 
 The renamed `2.0.0-beta.0` candidate passed main CI at
 `dd672a5865ba460ca3e97420e97461eb096dfb4f`. Its immutable tag is pushed and
-registry rollout is partial: Android Central, Apple SwiftPM/CocoaPods,
-and both renamed npm packages passed exact-artifact verification. Release run
+all five packages are public and verified: Android Central, Apple
+SwiftPM/CocoaPods, both renamed npm packages, and Flutter pub.dev. Release run
 `35971649362` resumed from its preserved signed Central inputs without another
-upload. React Native trusted publishing is saved; Web's grant still requires
-its security-key confirmation. Clean SwiftPM and API 26/35 Maven consumers
-passed. The ordered Flutter job stopped at its public CocoaPods consumer:
-Trunk and the exact CDN podspec are correct, but the CDN version index does
-not yet list the new pod. A clean local consumer reproduces that failure.
-Wait for normal CDN resolution before retrying the failed job; do not replace
-the public dependency with a local override. The owner pub.dev login is
-authorized, but no Flutter upload has occurred. This is not yet synchronized
-publication.
+native/npm upload. After the CocoaPods CDN index propagated, clean public
+SwiftPM/CocoaPods and API 26/35 Maven consumers passed. The ordered Flutter
+candidate matched the tagged inventory and passed fresh Android/iOS release
+builds. The owner published it once; public verification matched all 57 files.
+The separate Flutter workflow verified the occupied version and skipped upload.
+
+The final evidence-attachment job failed because `gh` ran without a checkout
+or explicit repository. Its verified artifacts were attached manually without
+replacing existing assets; the tag remains immutable and its run retains that
+failure. Current tooling passes `--repo "$GITHUB_REPOSITORY"` and publishes the
+Flutter manifest as `flutter-release-manifest.json`, preserving the existing
+native `release-manifest.json`. See the
+[publication record](../release/evidence/2.0.0-beta.0-publication.md).
+React Native trusted publishing is saved; Web's grant still requires its
+security-key confirmation, and future pub.dev automation remains unconfigured.
+These automation follow-ups do not prevent installation of the published beta.
+Hardware acceptance remains NOT RUN; Demo and Bota One were not upgraded.
 
 Release tooling distinguishes historical major-0/1 identifiers from the
 approved major-2 App SDK identifiers. Manifest version 2 is retained because
@@ -452,6 +460,13 @@ On 2026-09-24, the release owner approved this one-time bootstrap for
    workflow only after public archive verification so the occupied-version
    path skips a second upload. Future pub.dev automation requires its own
    verified publisher configuration.
+
+For a manual Flutter bootstrap, extract the verified ordered archive outside
+any Git checkout. An ignored `target/` directory inside the repository causes
+pub to exclude the entire package. Run the pinned publication dry run with
+zero warnings, verify every file against the candidate inventory, then publish
+without modifying package files. Pub may change tar metadata/compression;
+public acceptance compares the normalized digest and every file checksum.
 
 This approval authorizes a beta rollout, not hardware acceptance. Physical
 device testing remains NOT RUN. Do not weaken an automated gate or change the

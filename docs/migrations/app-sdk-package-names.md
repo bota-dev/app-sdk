@@ -1,9 +1,9 @@
 # App SDK Package Names
 
 Status: `2.0.0-beta.0` Apple SwiftPM/CocoaPods, Android Maven, React Native npm,
-and Web npm artifacts are public and verified. Clean SwiftPM and API 26/35
-Maven consumers passed. Flutter publication remains in progress; the Flutter
-instructions below are preparation only. Hardware acceptance remains NOT RUN. See the
+Web npm, and Flutter pub.dev artifacts are public and verified. Clean public
+native consumers and fresh Flutter Android/iOS release builds passed. Hardware
+acceptance remains NOT RUN. See the
 [release runbook](../releasing.md) for the current publication checkpoint.
 
 **Bota App SDK** connects applications to physical Bota devices. The future

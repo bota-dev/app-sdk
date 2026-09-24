@@ -12,7 +12,8 @@
 
 **Status:** Tasks 1-5 complete. Main CI `35965596618`, license and security
 checks passed at `dd672a5865ba460ca3e97420e97461eb096dfb4f`, including both
-required Android x86 emulator lanes. Task 6 registry rollout is in progress.
+required Android x86 emulator lanes. Task 6 package publication is verified;
+Web and Flutter automated-publisher setup remains open.
 Immutable tag `v2.0.0-beta.0` uses the verified five-platform CI inventory;
 release run `35971649362` passed all packaging gates and has approved native
 publication. Android Central, the Apple SwiftPM archive, and both renamed npm
@@ -22,13 +23,15 @@ no replacement uploads. Historical npm versions/tags are unchanged. The owner
 approved retaining the registry-created new-name `latest` tags at beta.0;
 future betas must not advance them. React Native trusted publishing is saved;
 Web's exact grant is still awaiting its security-key confirmation. CocoaPods
-publication and public SwiftPM/API 26/API 35 consumers passed. The ordered
-Flutter candidate stopped at public CocoaPods resolution: its exact CDN
-podspec is present but the version index omits the new pod. A clean local
-consumer reproduces the failure. Retry only after normal CDN resolution;
-preserve the no-override gate. Its owner pub.dev login is authorized, but no
-Flutter upload has occurred. See `docs/releasing.md` for the bounded
-first-publication approval and recovery procedure.
+publication and public SwiftPM/API 26/API 35 consumers passed. After CDN index
+propagation, the no-override CocoaPods consumer and ordered Flutter candidate
+passed, including fresh Android/iOS release builds. Flutter was published once
+using the owner login; both workflows verified its exact 57-file public archive.
+The separate workflow skipped upload. The final evidence-attachment job failed
+without a checkout/repository argument and was recovered manually, attaching
+eleven new assets without overwriting native evidence. The tag and failed run
+remain immutable; the main workflow fix has two regression tests and 91/91
+release-tooling tests. See `docs/releasing.md` for the bootstrap and recovery.
 
 Local evidence: release tooling 87/87, general tooling 103/103, strict Apple
 suite 200 tests (9 physical skips), RN lifecycle 32/32 and fresh iOS/Android
@@ -525,15 +528,17 @@ an explicit external gate; never bypass it to mark this task complete.
   new-name versions as read-only preflight evidence. Recheck the intended tag
   is unused. Create the annotated tag only from the approved main-CI inventory
   using the source and inventory digest format in `docs/releasing.md`.
-- [ ] Run the existing protected release order: native dependencies, exact npm
+- [x] Run the existing protected release order: native dependencies, exact npm
   artifacts, public Apple/Android consumers, exact Flutter candidate, pub.dev
   bootstrap/automated publication, public Flutter verification. Preserve
   signed deployment state across uncertain attempts and retry the same
   immutable candidates, not a newly packed archive.
+  Publication verification passed; final attachment was recovered manually as
+  documented above, not by moving the immutable tag.
 - [ ] Verify public bytes, resolved native dependency versions, npm beta tags,
   and unchanged legacy tags. Run public SwiftPM/CocoaPods, Maven, RN, Web, and
   Flutter consumer checks. Attach evidence through the existing release process.
-- [ ] Report source migration, package publication, application rollout, and
+- [x] Report source migration, package publication, application rollout, and
   hardware acceptance separately. Do not upgrade Demo/Bota One or claim
   physical acceptance as part of a package-name release.
 

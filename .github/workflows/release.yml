@@ -1232,8 +1232,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "$GITHUB_REF_NAME" \
+          mv target/flutter-release/release-manifest.json \
+            target/flutter-release/flutter-release-manifest.json
+          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
             target/flutter-release/* \
             target/flutter-publication/* \
             --clobber
-          gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
