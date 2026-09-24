@@ -13,7 +13,7 @@
       "sourceTest": "__tests__/encryptedUploadV2RecordingManager.test.ts#accepts canonical profile 3 for an ordinary upload through receipt-confirmed deletion",
       "rustTest": "encrypted_upload_v2_workflow::staging_notification_precedes_receipt_and_only_receipt_acceptance_emits_confirm",
       "runtimeTests": {
-        "apple": "platforms/apple/Tests/BotaAppleSDKTests/EncryptedUploadV2HostRoutingTests.swift#testRealCoreEnginePreservesStagingBeforeReceiptAndConfirmation",
+        "apple": "platforms/apple/Tests/BotaAppSDKTests/EncryptedUploadV2HostRoutingTests.swift#testRealCoreEnginePreservesStagingBeforeReceiptAndConfirmation",
         "android": "platforms/android/sdk/src/test/kotlin/dev/bota/sdk/internal/host/EncryptedUploadV2TransferHostTest.kt#successfulConfirmHandoffIsAtomicBeforeHostContinuation",
         "targetReactNative": "frameworks/react-native/test/device-client.test.mjs#encrypted upload v2 selects only an opaque native registration and maps progress"
       },
@@ -32,7 +32,7 @@
       "sourceTest": "__tests__/encryptedUploadV2RecordingManager.test.ts#never confirms or downgrades after a v2 finalization failure",
       "rustTest": "encrypted_upload_v2_workflow::mixed_profile_and_host_failure_are_terminal_without_fallback_or_confirm",
       "runtimeTests": {
-        "apple": "platforms/apple/Tests/BotaAppleSDKTests/RecordingManagerTests.swift#testEncryptedV2ReadsFreshSnapshotBeforeApplicationSelectionAndStartsOnlyV2",
+        "apple": "platforms/apple/Tests/BotaAppSDKTests/RecordingManagerTests.swift#testEncryptedV2ReadsFreshSnapshotBeforeApplicationSelectionAndStartsOnlyV2",
         "android": "platforms/android/sdk/src/test/kotlin/dev/bota/sdk/internal/host/EncryptedUploadV2TransferHostTest.kt#mixedProfileTransportEmitsTheDedicatedRustWorkflowEvent",
         "targetReactNative": "frameworks/react-native/test/device-client.test.mjs#a v2 provider failure must not invoke the legacy transfer"
       },
@@ -52,7 +52,7 @@
       "sourceTest": "__tests__/encryptedUploadV2RecordingManager.test.ts#aborts and cancels when the consumer stops an unconfirmed generator",
       "rustTest": "encrypted_upload_v2_workflow::cancellation_after_selection_has_abort_and_no_fallback_or_confirm",
       "runtimeTests": {
-        "apple": "platforms/apple/Tests/BotaAppleSDKTests/RecordingManagerTests.swift#testEncryptedV2CallerCancellationCancelsTheRunningEngineBeforeCompletion",
+        "apple": "platforms/apple/Tests/BotaAppSDKTests/RecordingManagerTests.swift#testEncryptedV2CallerCancellationCancelsTheRunningEngineBeforeCompletion",
         "android": "platforms/android/sdk/src/test/kotlin/dev/bota/sdk/internal/bluetooth/EncryptedUploadV2TransferControlTest.kt#cancellationBeforeConfirmAbortsAndNeverSendsConfirm",
         "targetReactNative": "frameworks/react-native/test/device-client.test.mjs#a v2 provider failure must not invoke the legacy transfer"
       },
@@ -71,7 +71,7 @@
       "sourceTest": "__tests__/encryptedUploadV2RecordingManager.test.ts#resumes the same accepted replacement checkpoint without resetting its offset",
       "rustTest": "encrypted_upload_v2_workflow::resume_repair_persists_before_ack_and_returns_ownership_to_the_transfer",
       "runtimeTests": {
-        "apple": "platforms/apple/Tests/BotaAppleSDKTests/EncryptedUploadV2TransferHostTests.swift#testCheckpointSavePrecedesWindowAckAndResumesTheStartStreamToEOF",
+        "apple": "platforms/apple/Tests/BotaAppSDKTests/EncryptedUploadV2TransferHostTests.swift#testCheckpointSavePrecedesWindowAckAndResumesTheStartStreamToEOF",
         "android": "platforms/android/sdk/src/test/kotlin/dev/bota/sdk/internal/bluetooth/EncryptedUploadV2TransferReceiverTest.kt#resumeTruncatesUncommittedTailAndVerifiesPrefix",
         "targetReactNative": "frameworks/react-native/test/device-client.test.mjs#encrypted upload v2 selects only an opaque native registration and maps progress"
       },

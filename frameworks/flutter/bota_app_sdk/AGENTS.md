@@ -2,11 +2,14 @@
 
 ## Scope
 
-This directory is the public `bota_flutter_sdk` plugin. Dart is a typed facade;
-`BotaAppleSDK` and `dev.bota:bota-android-sdk` retain Bluetooth, files, network
+This directory is the `bota_app_sdk` source candidate. Dart is a typed facade;
+`BotaAppSDK` and `dev.bota:bota-app-sdk` retain Bluetooth, files, network
 resources, and workflow execution.
 
 ## Invariants
+
+- Keep the Pigeon channel prefix `bota_flutter_sdk` and plugin classes unchanged.
+  New public package names are not evidence of registry or physical acceptance.
 
 - Support Flutter iOS 15+ and Android API 26+ only. Do not advertise Web,
   macOS, Windows, Linux, or native live-audio streaming.

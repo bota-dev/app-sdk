@@ -1,5 +1,10 @@
 # Architecture
 
+The 2.x source candidate uses explicit App SDK distribution names; registry
+publication and physical acceptance remain separate, pending gates. See the
+[migration guide](docs/migrations/app-sdk-package-names.md). Historical release
+records below retain their original names and versions.
+
 ## Purpose
 
 `app-sdk` is the source monorepo for the Bota App SDK family. It consolidates
@@ -68,7 +73,7 @@ an uncertain publish is recoverable without attempting to replace an immutable
 npm version. The npm package trusts `bota-dev/app-sdk`, `release.yml`, and the
 `release` environment; no long-lived npm write token enters GitHub Actions.
 The Web package follows the same immutable-candidate rule. CI builds its WASM
-bridge with host paths remapped, packs `@bota.dev/web-sdk` once with the pinned
+bridge with host paths remapped, packs `@bota.dev/web-app-sdk` once with the pinned
 npm CLI, and installs that exact tarball in a clean Vite consumer. Package
 verification records per-file hashes plus raw and normalized tarball hashes;
 the production ESM/WASM consumer and pinned Chromium behavior suite run against
@@ -337,7 +342,7 @@ collection and cancels status before a connection transition or destruction.
 Objective-C++ implements only the generated TurboModule spec, typed discovery,
 status, recording-state, provisioning, and reset-grant event emission, and
 promise conversion. The pod uses React Native
-0.86's iOS 15.1 floor and resolves the exact matching `BotaAppleSDK` release;
+0.86's iOS 15.1 floor and resolves the exact matching `BotaAppSDK` release;
 the local package-path override exists only for source and CI builds. A
 disposable Objective-C++ and Swift CocoaPods application compiles and links the
 complete native chain.
@@ -515,7 +520,7 @@ The checked-in binary fixture contains only that consumer bytecode and binds
 the pinned legacy revision plus frozen API digest. Its metadata version must
 match the Kotlin 2.1 consumer floor; CI verifies that invariant without access
 to the private legacy repository.
-The clean consumer resolves only `dev.bota:bota-android-sdk`; coroutine and
+The clean consumer resolves only `dev.bota:bota-app-sdk`; coroutine and
 OkHttp types exposed by the public API are Maven API dependencies. The release
 coordinator accepted the native physical matrix for synchronized `1.1.0`.
 Central deployment `6c4384ae-fe6a-4ec4-b9b3-774e437f07f7` is published, and
@@ -745,7 +750,7 @@ universal iOS simulator, and universal macOS Rust archives. Public consumers
 use the root `Package.swift`, which compiles the same Swift facade source and
 downloads the matching `BotaDeviceSDKCore.xcframework.zip` from the immutable
 GitHub Release URL declared for that SDK version. SwiftPM verifies that archive
-against the checked-in checksum before exposing product `BotaAppleSDK`.
+against the checked-in checksum before exposing product `BotaAppSDK`.
 Release packaging rewrites Xcode-generated XCFramework metadata into one
 canonical plist so archives built by supported Xcode versions have identical
 container metadata and checksums.
@@ -773,7 +778,7 @@ Swift does not contain a second wire parser.
 The Apple and Android fixture runners both execute all 39 frozen decode cases,
 including recording state and command-result compatibility.
 
-The public Flutter package is `frameworks/flutter/bota_flutter_sdk`. One
+The public Flutter package is `frameworks/flutter/bota_app_sdk`. One
 `BotaDeviceClient` and `PigeonBotaPlatform` belong to each Flutter engine. Dart
 exposes immutable device, settings, recording, WiFi, OTA, security, and error
 values through manager APIs; it does not own Bluetooth, network requests,
@@ -826,7 +831,7 @@ The Android plugin build reads the exact version from its packaged
 `android/sdk-version.toml`, resolved from the plugin project rather than the
 consumer build root. Package verification requires that copy to match the root
 `sdk-version.toml`; the build rejects a different Gradle override, requires API
-26 or newer, and resolves `dev.bota:bota-android-sdk:<version>`. Local adapter
+26 or newer, and resolves `dev.bota:bota-app-sdk:<version>`. Local adapter
 tests publish the same native Android artifact into the repository test Maven
 directory and configure the plugin from a temporary consumer root before
 compiling it. The consumable plugin does not declare AGP or Kotlin versions in
@@ -944,7 +949,7 @@ deterministic timestamps and entry order, verifies the root package checksum,
 and publishes the archive, SHA-256 and SwiftPM checksums, SPDX
 2.3 SBOM, repository license, and schema-validated artifact manifest. After
 publication, a fresh macOS package resolves the release through the public Git
-URL and imports only `BotaAppleSDK`, using bounded compiler parallelism on the
+URL and imports only `BotaAppSDK`, using bounded compiler parallelism on the
 hosted runner. The protected release environment is the manual approval
 boundary for hardware acceptance; automated CI does not claim physical-device
 results.

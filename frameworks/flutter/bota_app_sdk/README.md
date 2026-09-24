@@ -11,20 +11,17 @@ The explicit Pigeon `dart_package_name` remains `bota_flutter_sdk`. This is
 an internal message-channel identity, not the pub.dev package name; preserving
 it keeps native bridge routing unchanged. Plugin classes also remain unchanged.
 
-The remaining 1.x instructions below describe the historical package and will
-be migrated with the release documentation before publication.
-
-`bota_flutter_sdk` is the Flutter facade for the Bota App SDK. It supports
+`bota_app_sdk` is the Flutter facade for the Bota App SDK. It supports
 Flutter applications on iOS 15+ and Android API 26+ by delegating Bluetooth,
-file, network, and workflow ownership to `BotaAppleSDK` and
-`dev.bota:bota-android-sdk`.
+file, network, and workflow ownership to `BotaAppSDK` and
+`dev.bota:bota-app-sdk`.
 
 The source facade is implemented and passes local build and release-consumer
 gates. The package was not part of the published synchronized `1.1.0` release.
 `1.2.0-beta.0` is occupied by an immutable non-Flutter tag and must not be
 reused. `1.2.0-beta.7` was partially published without a CocoaPod or Flutter
-package. `1.2.0-beta.12` is the selected synchronized replacement candidate but
-is not yet published on pub.dev. Until it is published and verified, consume
+package. The renamed `2.0.0-beta.0` candidate is not yet published on pub.dev.
+Until it is published and verified, consume
 this package only from an exact source revision for development.
 
 ## Install
@@ -33,18 +30,18 @@ After the first Flutter beta is published, pin its exact prerelease version:
 
 ```yaml
 dependencies:
-  bota_flutter_sdk: 1.2.0-beta.12
+  bota_app_sdk: 2.0.0-beta.0
 ```
 
 For source development, point at an exact checkout rather than a moving branch:
 
 ```yaml
 dependencies:
-  bota_flutter_sdk:
+  bota_app_sdk:
     git:
       url: https://github.com/bota-dev/app-sdk.git
       ref: <exact-commit>
-      path: frameworks/flutter/bota_flutter_sdk
+      path: frameworks/flutter/bota_app_sdk
 ```
 
 Every Flutter package version must match the Apple and Android native artifact
@@ -292,7 +289,7 @@ disposable iOS and Android applications around those maintained example files.
 From the repository root:
 
 ```bash
-tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
+tools/flutter/run-flutter.sh test frameworks/flutter/bota_app_sdk/test
 tools/flutter/test-consumers.sh
 npm run flutter:verify
 # Available only after replacing occupied beta.0 across every version authority:

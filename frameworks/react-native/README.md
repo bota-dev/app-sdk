@@ -1,6 +1,6 @@
 # Bota SDK for React Native
 
-Bluetooth device SDK for Bota Pin and Bota Note applications. Version `1.1.0`
+Bluetooth device SDK for Bota Pin and Bota Note applications. The 2.x candidate
 preserves the public TypeScript API of `@bota.dev/react-native-sdk@0.0.65`
 while moving Bluetooth workflows and recording, streaming, and firmware bytes
 into the native Apple and Android SDKs.
@@ -14,8 +14,12 @@ into the native Apple and Android SDKs.
 
 ## Install
 
+Prepared instructions for `2.0.0-beta.0`; registry publication is pending.
+Remove `@bota.dev/react-native-sdk` before adding the replacement; do not
+co-install both. Production maintenance 0.0.x consumers need not migrate.
+
 ```bash
-npm install @bota.dev/react-native-sdk@1.1.0
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.0
 npx pod-install
 ```
 
@@ -42,7 +46,7 @@ plugins: [
 ## Configure
 
 ```ts
-import { BotaClient } from '@bota.dev/react-native-sdk';
+import { BotaClient } from '@bota.dev/react-native-app-sdk';
 
 await BotaClient.configure({
   environment: 'production',
@@ -60,7 +64,7 @@ The target encrypted-upload-v2 runtime is an additive `BotaDeviceSDK` API; it
 does not change the legacy `BotaClient` recording providers or events:
 
 ```ts
-import { BotaDeviceSDK } from '@bota.dev/react-native-sdk';
+import { BotaDeviceSDK } from '@bota.dev/react-native-app-sdk';
 
 await BotaDeviceSDK.recordings.syncEncryptedRecordingV2(
   device,

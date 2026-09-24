@@ -1,7 +1,7 @@
 # Bota SDK for Android
 
 This directory is the unpublished Android facade for the Bota App SDK family.
-It produces `dev.bota:bota-android-sdk` from the synchronized version in the
+It produces `dev.bota:bota-app-sdk` from the synchronized version in the
 repository root. The AAR packages the frozen Rust ABI and a thin internal JNI
 ownership adapter. The public facade and one-major `com.bota.sdk` compatibility
 contract now pass JVM descriptor, source-consumer, precompiled-binary, API 26,

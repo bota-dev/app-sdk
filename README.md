@@ -1,5 +1,9 @@
 # Bota App SDK
 
+The `2.0.0-beta.0` source candidate uses explicit App SDK package names.
+Registry publication is pending. See the [package migration guide](docs/migrations/app-sdk-package-names.md)
+before changing dependencies; historical releases below retain their names.
+
 Source monorepo for the **Bota App SDK** family. The repository provides a
 shared Rust protocol and workflow core with platform-native Bluetooth
 transports and Apple, Android, React Native, Flutter, and Web facades. The Web
@@ -365,7 +369,7 @@ updates. Public recording, upload
 ownership, OTA, and device-log managers now expose typed async streams while
 keeping recording and firmware bytes in native files and accepting only opaque
 application-supplied upload identifiers. An unrelated Swift package now imports
-only `BotaAppleSDK`, runs a macOS smoke executable, and type-checks every public
+only `BotaAppSDK`, runs a macOS smoke executable, and type-checks every public
 manager. CI also compiles generic iOS device and simulator destinations with
 strict concurrency diagnostics, then produces a deterministic XCFramework zip,
 checksums, SPDX 2.3 SBOM, copied license, and validated release manifest as
@@ -378,7 +382,7 @@ package distributes the Apple facade for iOS and macOS while keeping the Rust
 core in a checksummed XCFramework. This release does not replace the production
 React Native maintenance line or claim published Flutter or Windows
 availability. Flutter is available only from an exact source revision until
-`1.2.0-beta.12` is published and verified on pub.dev.
+`2.0.0-beta.0` is published and verified on pub.dev.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and the
 [firmware compatibility matrix](protocol/compatibility/firmware-compatibility.json).
@@ -391,18 +395,18 @@ In Xcode, choose **File > Add Package Dependencies** and enter:
 https://github.com/bota-dev/app-sdk.git
 ```
 
-Select the exact version `1.1.0`, then add the
-`BotaAppleSDK` product to an iOS 15+ or macOS 13+ target. Swift packages can
+After publication is verified, select exact version `2.0.0-beta.0`, then add the
+`BotaAppSDK` product to an iOS 15+ or macOS 13+ target. Swift packages can
 declare the dependency directly:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "1.1.0")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.0")
 ```
 
 Import and configure the client from application code:
 
 ```swift
-import BotaAppleSDK
+import BotaAppSDK
 
 let bota = BotaDeviceClient.shared
 try await bota.configure()
@@ -415,33 +419,33 @@ provide the Bluetooth usage description shown to users.
 
 ## Android Beta Installation
 
-Pin the exact synchronized beta version from Maven Central:
+After publication is verified, pin the exact synchronized Maven Central beta:
 
 ```kotlin
-implementation("dev.bota:bota-android-sdk:1.1.0")
+implementation("dev.bota:bota-app-sdk:2.0.0-beta.0")
 ```
 
 ## Flutter Beta Candidate
 
 The Flutter facade supports iOS 15+ and Android API 26+. Its source and local
 build gates are prepared, but the package is not published. See the
-[Flutter integration guide](frameworks/flutter/bota_flutter_sdk/README.md) for
+[Flutter integration guide](frameworks/flutter/bota_app_sdk/README.md) for
 exact-version installation, permissions, backend callbacks, serial-strict
 reconnect, retained encrypted batch handoff, WiFi, OTA, remove-only
 deprovision, authenticated reset, and unsupported targets.
 
 The historical `1.2.0-beta.0` preparation cannot be published from this source
-because that immutable tag identifies non-Flutter source. `1.2.0-beta.12` is the
+because that immutable tag identifies non-Flutter source. `2.0.0-beta.0` is the
 selected synchronized prerelease and every version authority is prepared for
 local candidate verification. This does not claim publication.
 
 ## Web Beta Installation
 
-The published beta.11 remains available for supervised testing. After beta.12
-completes, install its exact version:
+Historical packages remain available under their original names. After the
+renamed candidate is published and verified, install its exact version:
 
 ```bash
-npm install @bota.dev/web-sdk@1.2.0-beta.12
+npm install @bota.dev/web-app-sdk@2.0.0-beta.0
 ```
 
 Web Bluetooth requires a secure context and a browser implementation that
@@ -450,7 +454,7 @@ show its device picker. The serial number must come from the authenticated
 Portal device record; the SDK does not trust the advertised device name.
 
 ```ts
-import { BotaDeviceClient } from '@bota.dev/web-sdk'
+import { BotaDeviceClient } from '@bota.dev/web-app-sdk'
 
 const bota = await BotaDeviceClient.create()
 
@@ -489,7 +493,7 @@ Bota API implicitly.
 
 ### Web capability matrix
 
-| Capability | `1.2.0-beta.12` candidate |
+| Capability | `2.0.0-beta.0` candidate |
 |---|---|
 | Explicit picker connect and exact-serial snapshot | Implemented, foreground only; the picker must start from a user gesture |
 | Exact authorized-device reconnect | Implemented when `navigator.bluetooth.getDevices()` is available; never falls back by name |
@@ -573,7 +577,7 @@ tools/android/package-release.sh --check
 tools/android/install-release-repository.sh target/android-release target/android-m2
 tools/android/test-emulator-lane.sh --api 26
 tools/android/test-emulator-lane.sh --api 35
-tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
+tools/flutter/run-flutter.sh test frameworks/flutter/bota_app_sdk/test
 tools/flutter/test-android-adapter.sh
 tools/flutter/test-consumers.sh
 npm run flutter:verify
@@ -589,7 +593,7 @@ The replacement React Native package has its own lockfile so its native
 toolchain does not enlarge the root tooling install. Its committed Codegen
 contract is generated by React Native 0.86.3 for both iOS and Android. The
 React Native pod therefore uses that release's iOS 15.1 floor. By default it
-resolves the exact matching `BotaAppleSDK` release tag;
+resolves the exact matching `BotaAppSDK` release tag;
 `BOTA_APPLE_SDK_PACKAGE_PATH` is only a source and CI override and must not be
 used in a published application dependency. CI selects Xcode 26.3 and Ruby
 3.3.12 explicitly and uses the locked Ruby toolchain. Main CI tests the nested
@@ -597,7 +601,7 @@ local package after building its XCFramework from source; the tag release
 resolves the default remote package URL to the exact synchronized version after
 publishing its binary archive.
 
-On Android, the package consumes `dev.bota:bota-android-sdk` at the same
+On Android, the package consumes `dev.bota:bota-app-sdk` at the same
 `sdk-version.toml` version. CI reconstructs a local Maven repository from the
 immutable release payload, verifies the AAR digest, and runs the checked-in
 Codegen/Kotlin consumer with
@@ -625,19 +629,17 @@ approval are configured.
 to the **Bota App SDK** family. Customer-facing documentation and package names
 follow this matrix:
 
-The matrix below describes the current packages. A
-[planned naming migration](docs/superpowers/specs/2026-09-23-app-sdk-package-naming-migration-design.md)
-will include `App` in public package identifiers to distinguish the App SDK
-from the future API SDK. The migration design is approved; implementation is
-pending. No new package names are available from this change.
+The matrix describes the 2.x source candidate, not published availability.
+Historical 1.x and production RN 0.0.x retain their old identities. See the
+[migration guide](docs/migrations/app-sdk-package-names.md).
 
 | Platform | Documentation name | Package or module identifier |
 |---|---|---|
-| Apple | Bota SDK for Apple platforms | `BotaAppleSDK` |
-| Android | Bota SDK for Android | `dev.bota:bota-android-sdk` |
-| React Native | Bota SDK for React Native | `@bota.dev/react-native-sdk` |
-| Flutter | Bota SDK for Flutter | `bota_flutter_sdk` |
-| Web | Bota SDK for Web | `@bota.dev/web-sdk` |
+| Apple | Bota SDK for Apple platforms | `BotaAppSDK` |
+| Android | Bota SDK for Android | `dev.bota:bota-app-sdk` |
+| React Native | Bota SDK for React Native | `@bota.dev/react-native-app-sdk` |
+| Flutter | Bota SDK for Flutter | `bota_app_sdk` |
+| Web | Bota SDK for Web | `@bota.dev/web-app-sdk` |
 | Windows | Bota SDK for Windows | `Bota.WindowsSdk` |
 | Electron | Bota SDK for Electron | `@bota.dev/electron-sdk`, only when a dedicated native desktop bridge exists |
 

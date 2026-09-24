@@ -181,7 +181,7 @@ root manifests:
 ```bash
 tools/apple/package-release.sh --write-package-manifest
 swift package dump-package
-git diff -- Package.swift platforms/apple/BotaAppleSDK.podspec
+git diff -- Package.swift platforms/apple/BotaAppSDK.podspec
 ```
 
 The explicit preparation mode builds from the current working snapshot,
@@ -189,7 +189,7 @@ computes its SwiftPM and CocoaPods checksums, and changes only the two public
 package manifests; this permits a
 synchronized version change and its generated checksums to land in one commit.
 Review and commit both manifests. The CocoaPods source is a checksummed
-`BotaAppleSDK.cocoapods.zip` containing Swift sources and the generated
+`BotaAppSDK.cocoapods.zip` containing Swift sources and the generated
 XCFramework; it must not use `prepare_command`, which Trunk rejects for new
 pods. Then rerun the normal check-only mode from the
 new clean commit:
@@ -243,7 +243,7 @@ tools/apple/test-package.sh
 tools/apple/test-consumer.sh
 tools/apple/package-release.sh
 tools/apple/test-pod-archive.sh
-tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
+tools/flutter/run-flutter.sh test frameworks/flutter/bota_app_sdk/test
 tools/flutter/test-android-adapter.sh
 tools/flutter/test-consumers.sh
 npm run flutter:verify
@@ -328,13 +328,13 @@ logs, or uploaded artifacts.
 - `BotaDeviceSDKCore.xcframework.zip`
 - `BotaDeviceSDKCore.xcframework.zip.sha256`
 - `BotaDeviceSDKCore.xcframework.swiftpm-checksum`
-- `BotaAppleSDK.spdx.json`
+- `BotaAppSDK.spdx.json`
 - `LICENSE`
 - `release-manifest.json`
 
 Future Apple packaging emits release manifest version 2 with
 `sdkFamily: "bota-app-sdk"` and artifact fields `platform: "apple"` and
-`packageIdentifier: "BotaAppleSDK"`. The public JSON Schema and Rust validator
+`packageIdentifier: "BotaAppSDK"`. The public JSON Schema and Rust validator
 require every version 2 platform/package identifier to be one exact pair from
 the public package matrix; independently valid platform and package values
 cannot be mixed.
@@ -373,7 +373,7 @@ must:
    removing the prior exact-version Android directory.
 3. Generate a complete disposable Flutter iOS/Android application and use an
    isolated Gradle home.
-4. Resolve `BotaAppleSDK` from the exact local package and reserve the
+4. Resolve `BotaAppSDK` from the exact local package and reserve the
    `dev.bota` group for the exact local Android repository.
 5. Produce a new Android release APK and unsigned iOS release application.
 
@@ -383,7 +383,7 @@ never release evidence by themselves. A consumer failure must not fall back to
 an earlier application build, cached native candidate, remote Maven artifact,
 or remote Apple package.
 
-The first Flutter beta may be published only after every `1.2.0-beta.12` version
+The first Flutter beta may be published only after every `2.0.0-beta.0` version
 authority changes together and the Apple
 and Android artifacts at that exact version are public with passing no-override
 consumers. The initial pub.dev publication mechanism must be deliberately
@@ -393,7 +393,7 @@ publication is downloaded and compared with the candidate's exact file hashes
 and normalized archive SHA-256 before release completion.
 
 `tools/flutter/package-release.sh --check` refuses occupied
-`1.2.0-beta.0`. For selected `1.2.0-beta.12`, it writes
+`1.2.0-beta.0`. For selected `2.0.0-beta.0`, it writes
 only deterministic evidence to `target/flutter-release/`: the candidate
 archive, exact package inventory, v2 release manifest, dependency lock and
 graph, hosted-package license hashes, normalized dry-run output, and fixed
@@ -415,13 +415,13 @@ candidate as check mode.
 
 ## Publish
 
-Before tagging, configure npm trusted publishers for both
-`@bota.dev/react-native-sdk` and `@bota.dev/web-sdk` with organization
+Before tagging the renamed candidate, configure npm trusted publishers for
+`@bota.dev/react-native-app-sdk` and `@bota.dev/web-app-sdk` with organization
 `bota-dev`, repository `app-sdk`, workflow `release.yml`, environment
 `release`, and allowed action `npm publish`. Each package has one trusted
-publisher. Replace the legacy React Native repository publisher instead of
-retaining both. The Web package's first publication must also use this
-protected workflow; do not bootstrap it from a developer token.
+publisher. Preserve old-package publishers for maintenance and historical
+recovery. First publication requires approved exact artifacts and the registry's
+bootstrap procedure; do not create dummy packages or stored npm write tokens.
 
 This workflow owns npm `beta`; the legacy React Native repository owns npm
 `latest`. Every npm publication command includes `--tag beta`, verifies the
@@ -486,10 +486,10 @@ install its own Node.js dependencies before running repository tooling.
    workflow artifact downloaded inside the protected job; its flat filenames
    intentionally are not mixed with Apple's colliding `LICENSE` and manifest
    assets.
-8. Publishes or verifies the exact `BotaAppleSDK` CocoaPod through a protected
+8. Publishes or verifies the exact `BotaAppSDK` CocoaPod through a protected
    reusable workflow, then creates unrelated no-override SwiftPM and CocoaPods
    consumers. The SwiftPM smoke compiles an executable importing only
-   `BotaAppleSDK`. It deliberately
+   `BotaAppSDK`. It deliberately
    does not launch a Bluetooth-capable process on the headless runner. It uses
    one non-batched Swift compiler job to keep memory bounded.
 9. Rebuilds the exact Flutter candidate only after the public Apple and Android

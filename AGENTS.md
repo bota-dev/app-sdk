@@ -19,6 +19,14 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 
 ## Current Authority
 
+- Current synchronized source is `2.0.0-beta.0`: Apple `BotaAppSDK`, Android
+  `dev.bota:bota-app-sdk`, RN `@bota.dev/react-native-app-sdk`, Web
+  `@bota.dev/web-app-sdk`, Flutter `bota_app_sdk`. Publication is pending.
+  See `docs/migrations/app-sdk-package-names.md`. Preserve historical releases,
+  maintenance RN 0.0.x, runtime APIs, native/Codegen/Pigeon identities and
+  storage namespaces. Current recovery must still verify old tagged layouts
+  and resume exact preserved artifacts.
+
 - [`@bota.dev/react-native-sdk`](https://github.com/bota-dev/react-native-sdk)
   remains the production behavioral reference until migration gates pass.
 - The Bota workspace normally checks it out at `../react-native-sdk`.
@@ -92,7 +100,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 - `tools/flutter/package-release.sh --ci` is the automatic PR/main verification
   path. It runs the complete non-publishing Flutter and fresh-consumer gates,
   emits `candidate-ready=false`, and leaves no Flutter release directory only
-  for occupied `1.2.0-beta.0`. Selected synchronized `1.2.0-beta.12` emits
+  for occupied `1.2.0-beta.0`. Selected synchronized `2.0.0-beta.0` emits
   `candidate-ready=true` and preserves the candidate.
   `tools/flutter/package-release.sh --check` is the strict non-publishing
   release gate for beta.1 and later; it must refuse beta.0. It preserves only
@@ -235,7 +243,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   One must each produce release-mode iOS and Android Expo bundles before
   preview or production rollout.
 - `frameworks/web` is the foreground browser facade and publishes as
-  `@bota.dev/web-sdk`. It uses the shared Rust workflows for exact connection,
+  `@bota.dev/web-app-sdk`. It uses the shared Rust workflows for exact connection,
   provisioning, recording transfer, encrypted upload v2, firmware update, and
   device logs; TypeScript owns Web Bluetooth, durable browser storage, and
   application provider boundaries. Keep backend calls behind configured
@@ -389,7 +397,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   digests, not generated build directories.
 - The React Native Apple pod uses the React Native 0.86 iOS 15.1 floor and
   requires CocoaPods 1.13 or newer. It resolves the exact matching
-  `BotaAppleSDK` release by default; `BOTA_APPLE_SDK_PACKAGE_PATH` is only for
+  `BotaAppSDK` release by default; `BOTA_APPLE_SDK_PACKAGE_PATH` is only for
   local source and CI verification.
 - React Native Apple CI selects Xcode 26.3 and Ruby 3.3.12 and uses
   `frameworks/react-native/Gemfile.lock` for Bundler 2.6.9, CocoaPods 1.16.2,
@@ -700,7 +708,7 @@ npm run test:workflows -- --sdk-path ../react-native-sdk
 (cd frameworks/react-native && bundle _2.6.9_ exec npm run test:apple:integration)
 # Run only after the matching public tag and Apple archive exist:
 (cd frameworks/react-native && bundle _2.6.9_ exec npm run test:apple:remote-resolution)
-tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test
+tools/flutter/run-flutter.sh test frameworks/flutter/bota_app_sdk/test
 tools/flutter/test-android-adapter.sh
 tools/flutter/test-consumers.sh
 npm run flutter:verify
