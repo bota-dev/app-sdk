@@ -1,7 +1,8 @@
 # Architecture
 
-The 2.x source candidate uses explicit App SDK distribution names; registry
-publication and physical acceptance remain separate, pending gates. See the
+The 2.x source uses explicit App SDK distribution names. Apple SwiftPM and
+CocoaPods, Android Maven, and both npm artifacts are public at `2.0.0-beta.0`;
+Flutter publication and physical acceptance remain separate, pending gates. See the
 [migration guide](docs/migrations/app-sdk-package-names.md). Historical release
 records below retain their original names and versions.
 

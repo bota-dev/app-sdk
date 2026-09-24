@@ -21,7 +21,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 
 - Current synchronized source is `2.0.0-beta.0`: Apple `BotaAppSDK`, Android
   `dev.bota:bota-app-sdk`, RN `@bota.dev/react-native-app-sdk`, Web
-  `@bota.dev/web-app-sdk`, Flutter `bota_app_sdk`. Publication is pending.
+  `@bota.dev/web-app-sdk`, Flutter `bota_app_sdk`. Apple SwiftPM/CocoaPods,
+  Android Maven, and both npm artifacts are public and verified. Public SwiftPM
+  and API 26/35 Maven consumers passed; Flutter remains gated. See
+  `docs/releasing.md` for current release state.
   See `docs/migrations/app-sdk-package-names.md`. Preserve historical releases,
   maintenance RN 0.0.x, runtime APIs, native/Codegen/Pigeon identities and
   storage namespaces. Current recovery must still verify old tagged layouts

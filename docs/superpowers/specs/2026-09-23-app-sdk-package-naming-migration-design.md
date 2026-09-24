@@ -58,7 +58,10 @@ make new packages appear compatible with old inventories.
 - Publish new npm packages explicitly under `beta`; do not deliberately promote
   any beta to `latest`. Verify the new package's registry state after its first
   publication, including whether `latest` exists, rather than assuming it has
-  the old package's tag history.
+  the old package's tag history. Bootstrap exception approved on 2026-09-24:
+  npm assigned `latest -> 2.0.0-beta.0` despite `--tag beta` and rejected its
+  removal. Retain that first-version tag on the two new names only; later betas
+  must not advance it. All historical tags remain unchanged.
 - Existing consumers stay on their exact old versions until explicitly
   migrated. New Apple consumers retain the same Git repository URL but change
   the selected product, imports, and exact version.

@@ -15,13 +15,20 @@ checks passed at `dd672a5865ba460ca3e97420e97461eb096dfb4f`, including both
 required Android x86 emulator lanes. Task 6 registry rollout is in progress.
 Immutable tag `v2.0.0-beta.0` uses the verified five-platform CI inventory;
 release run `35971649362` passed all packaging gates and has approved native
-publication. Android Central and the Apple SwiftPM archive are public and
-verified. CI stopped at the expected absent npm trusted-publisher boundary;
-the interactive npm approval session then ended without completing. Both new
-npm names remain absent and old versions/tags are unchanged. The release
-owner approved the one-time interactive bootstrap documented in
-`docs/releasing.md`; resume it with a fresh owner security-key confirmation.
-CocoaPods, public consumers, and Flutter remain pending.
+publication. Android Central, the Apple SwiftPM archive, and both renamed npm
+packages are public and verified. The resumed publish job passed by restoring
+the exact signed Central inputs and verifying the occupied npm versions, with
+no replacement uploads. Historical npm versions/tags are unchanged. The owner
+approved retaining the registry-created new-name `latest` tags at beta.0;
+future betas must not advance them. React Native trusted publishing is saved;
+Web's exact grant is still awaiting its security-key confirmation. CocoaPods
+publication and public SwiftPM/API 26/API 35 consumers passed. The ordered
+Flutter candidate stopped at public CocoaPods resolution: its exact CDN
+podspec is present but the version index omits the new pod. A clean local
+consumer reproduces the failure. Retry only after normal CDN resolution;
+preserve the no-override gate. Its owner pub.dev login is authorized, but no
+Flutter upload has occurred. See `docs/releasing.md` for the bounded
+first-publication approval and recovery procedure.
 
 Local evidence: release tooling 87/87, general tooling 103/103, strict Apple
 suite 200 tests (9 physical skips), RN lifecycle 32/32 and fresh iOS/Android

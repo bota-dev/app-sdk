@@ -12,10 +12,18 @@ a renamed package. Registry authentication and transport failures stop the run.
 
 The renamed `2.0.0-beta.0` candidate passed main CI at
 `dd672a5865ba460ca3e97420e97461eb096dfb4f`. Its immutable tag is pushed and
-registry rollout is partial: Android Central and the public Apple SwiftPM
-binary passed exact-byte verification. npm bootstrap requires a fresh owner
-security-key approval; CocoaPods, public consumers, and Flutter remain gated.
-This is not yet synchronized publication.
+registry rollout is partial: Android Central, Apple SwiftPM/CocoaPods,
+and both renamed npm packages passed exact-artifact verification. Release run
+`35971649362` resumed from its preserved signed Central inputs without another
+upload. React Native trusted publishing is saved; Web's grant still requires
+its security-key confirmation. Clean SwiftPM and API 26/35 Maven consumers
+passed. The ordered Flutter job stopped at its public CocoaPods consumer:
+Trunk and the exact CDN podspec are correct, but the CDN version index does
+not yet list the new pod. A clean local consumer reproduces that failure.
+Wait for normal CDN resolution before retrying the failed job; do not replace
+the public dependency with a local override. The owner pub.dev login is
+authorized, but no Flutter upload has occurred. This is not yet synchronized
+publication.
 
 Release tooling distinguishes historical major-0/1 identifiers from the
 approved major-2 App SDK identifiers. Manifest version 2 is retained because
@@ -449,9 +457,26 @@ This approval authorizes a beta rollout, not hardware acceptance. Physical
 device testing remains NOT RUN. Do not weaken an automated gate or change the
 immutable tag to recover publication.
 
-This workflow owns npm `beta`; the legacy React Native repository owns npm
-`latest`. Every npm publication command includes `--tag beta`, verifies the
-candidate `dist.shasum`, and proves that `latest` is unchanged.
+This workflow owns npm `beta`; the legacy React Native repository owns that
+historical package's `latest`. Every npm publication command includes
+`--tag beta`, verifies the candidate `dist.shasum`, and proves that existing
+`latest` tags are unchanged.
+
+The registry assigned both `beta` and `latest` to the first renamed RN upload
+despite the explicit `--tag beta`; its authenticated `latest` removal returned
+HTTP 400. On 2026-09-24 the release owner approved retaining
+`latest -> 2.0.0-beta.0` on the two new npm identities only. The Web bootstrap
+received the same tags. Keep these first-version `latest` tags pinned until a
+separately approved stable-channel change; subsequent beta releases update
+only `beta`. Never remove, move, or recreate a historical package tag as part
+of this exception. The packages and GitHub release remain prereleases.
+
+First-package version endpoints can become visible before the package-level
+metadata. If upload succeeds but immediate tag verification fails, query the
+occupied version and compare its exact archive before retrying verification;
+never attempt to upload that version again. Record both the registry-created
+tags and their explicit owner approval instead of treating the failed initial
+check as synchronized release success.
 
 After the release commit is on `main`, wait for its `CI` workflow to complete.
 The `Release candidate inventory` job downloads the Apple, Android, React

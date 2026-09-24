@@ -1,8 +1,12 @@
 # Bota App SDK
 
-The `2.0.0-beta.0` source candidate uses explicit App SDK package names.
-Registry publication is pending. See the [package migration guide](docs/migrations/app-sdk-package-names.md)
-before changing dependencies; historical releases below retain their names.
+The `2.0.0-beta.0` release uses explicit App SDK package names. Apple SwiftPM
+and CocoaPods, Android Maven, React Native npm, and Web npm artifacts are
+public and verified. Clean SwiftPM and API 26/35 Maven consumers passed;
+Flutter publication remains in progress. This is not yet a completed
+synchronized release. See the
+[package migration guide](docs/migrations/app-sdk-package-names.md) before
+changing dependencies; historical releases below retain their names.
 
 Source monorepo for the **Bota App SDK** family. The repository provides a
 shared Rust protocol and workflow core with platform-native Bluetooth
