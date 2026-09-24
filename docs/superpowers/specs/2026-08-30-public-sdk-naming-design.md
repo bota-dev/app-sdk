@@ -5,8 +5,8 @@
 **2026-09-23 follow-up:** This document describes the implemented naming used by
 existing releases. The approved direction for future package names now includes
 `App`; see the [migration design](2026-09-23-app-sdk-package-naming-migration-design.md).
-Its compatibility and release mechanics remain under review. Existing releases
-are not renamed by that decision.
+Its compatibility and release mechanics are approved, but implementation is
+pending. Existing releases are not renamed by that decision.
 
 ## Decision
 

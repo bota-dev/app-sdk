@@ -1,6 +1,6 @@
 # App SDK Package Naming Migration
 
-**Status:** Naming direction approved; migration design awaiting review.
+**Status:** Migration design approved on 2026-09-23; implementation planning.
 
 ## Intent
 
@@ -38,8 +38,8 @@ identifiers must be decided before their own release gates.
 
 Apple `1.0.0` and the synchronized `1.1.0` artifacts already exist. Calling the
 current line beta does not make a Swift product or module rename non-breaking.
-Propose **`2.0.0-beta.0`** as the first synchronized version under the new names,
-subject to the implementation review and an unoccupied-version check.
+Use **`2.0.0-beta.0`** as the first synchronized version under the new names,
+subject to an unoccupied-version check before selecting the candidate.
 
 All five target distributions still use one version from `sdk-version.toml`.
 Update the release-channel validator deliberately: allow the new major beta
@@ -155,7 +155,8 @@ artifact. A name change never authorizes repacking an occupied version.
 
 ## Review Boundary
 
-This document records the approved naming direction and proposes the breaking
-version and migration mechanics. Implementation planning follows review of
-those mechanics. No source identifiers, registry settings, package versions,
-or application dependencies are changed by this documentation-only step.
+This document records the approved naming direction, breaking version, and
+migration mechanics. The [implementation plan](../plans/2026-09-23-app-sdk-package-naming-migration.md)
+turns those decisions into testable changes. No source identifiers, registry
+settings, package versions, or application dependencies are changed by this
+documentation-only step.
