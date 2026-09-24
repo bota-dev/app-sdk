@@ -22,6 +22,28 @@ pub mod release {
         ("windows", "Bota.WindowsSdk"),
         ("electron", "@bota.dev/electron-sdk"),
     ];
+    const RENAMED_APP_SDK_PACKAGES: &[(&str, &str)] = &[
+        ("apple", "BotaAppSDK"),
+        ("android", "dev.bota:bota-app-sdk"),
+        ("react-native", "@bota.dev/react-native-app-sdk"),
+        ("flutter", "bota_app_sdk"),
+        ("web", "@bota.dev/web-app-sdk"),
+    ];
+
+    fn public_packages(version: &str) -> Result<&'static [(&'static str, &'static str)], String> {
+        match parse_version("sdkVersion", version)?.major {
+            0 | 1 => Ok(APP_SDK_PACKAGES),
+            2 => Ok(RENAMED_APP_SDK_PACKAGES),
+            _ => Err(format!("unsupported SDK package version {version}")),
+        }
+    }
+
+    fn public_package(platform: &str, version: &str) -> Result<&'static str, String> {
+        public_packages(version)?
+            .iter()
+            .find_map(|(candidate, package)| (*candidate == platform).then_some(*package))
+            .ok_or_else(|| format!("unsupported SDK package platform {platform}"))
+    }
     const ANDROID_GRADLE_DISTRIBUTION_URL: &str =
         "https\\://services.gradle.org/distributions/gradle-8.13-bin.zip";
     const ANDROID_GRADLE_DISTRIBUTION_SHA256: &str =
@@ -154,15 +176,17 @@ pub mod release {
         parse_version("release tag", tag_version)?;
 
         let expected: SdkVersion = parse_toml_file(&root.join("sdk-version.toml"))?;
+        let flutter_name = public_package("flutter", &expected.version)?;
+        let flutter_root = root.join("frameworks/flutter").join(flutter_name);
+        let apple_name = public_package("apple", &expected.version)?;
         if tag_version != expected.version {
             return Err(format!(
                 "release tag {tag} does not match sdk-version.toml {}",
                 expected.version
             ));
         }
-        let flutter_android: SdkVersion = parse_toml_file(
-            &root.join("frameworks/flutter/bota_flutter_sdk/android/sdk-version.toml"),
-        )?;
+        let flutter_android: SdkVersion =
+            parse_toml_file(&flutter_root.join("android/sdk-version.toml"))?;
         require_version(
             "Flutter packaged Android SDK",
             &flutter_android.version,
@@ -193,9 +217,8 @@ pub mod release {
             &expected.version,
         )?;
 
-        let flutter_pubspec_contents =
-            fs::read_to_string(root.join("frameworks/flutter/bota_flutter_sdk/pubspec.yaml"))
-                .map_err(|error| format!("cannot read Flutter pubspec.yaml: {error}"))?;
+        let flutter_pubspec_contents = fs::read_to_string(flutter_root.join("pubspec.yaml"))
+            .map_err(|error| format!("cannot read Flutter pubspec.yaml: {error}"))?;
         let flutter_pubspec: PackageVersion = serde_yaml_ng::from_str(&flutter_pubspec_contents)
             .map_err(|error| format!("invalid Flutter pubspec.yaml: {error}"))?;
         require_version(
@@ -205,7 +228,10 @@ pub mod release {
         )?;
 
         let flutter_swift_package = fs::read_to_string(
-            root.join("frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Package.swift"),
+            flutter_root
+                .join("ios")
+                .join(flutter_name)
+                .join("Package.swift"),
         )
         .map_err(|error| format!("cannot read Flutter Package.swift: {error}"))?;
         let flutter_apple_version = unique_quoted_assignment(
@@ -226,8 +252,8 @@ pub mod release {
         require_version("Android Gradle project", android_version, &expected.version)?;
 
         let apple_podspec =
-            fs::read_to_string(root.join("platforms/apple/BotaAppleSDK.podspec"))
-                .map_err(|error| format!("cannot read BotaAppleSDK.podspec: {error}"))?;
+            fs::read_to_string(root.join(format!("platforms/apple/{apple_name}.podspec")))
+                .map_err(|error| format!("cannot read {apple_name}.podspec: {error}"))?;
         let apple_pod_version = unique_quoted_assignment(
             &apple_podspec,
             "spec.version = \"",
@@ -501,7 +527,11 @@ pub mod release {
             }
             _ => return Err("manifestVersion must be 1 or 2".to_owned()),
         }
-        parse_version("sdkVersion", &manifest.sdk_version)?;
+        let sdk_version = parse_version("sdkVersion", &manifest.sdk_version)?;
+        let packages = public_packages(&manifest.sdk_version)?;
+        if sdk_version.major >= 2 && manifest.manifest_version != 2 {
+            return Err("major-two SDK requires manifestVersion 2".to_owned());
+        }
         if let Some(expected_sdk_version) = expected_sdk_version
             && manifest.sdk_version != expected_sdk_version
         {
@@ -561,7 +591,7 @@ pub mod release {
                     artifact.package_identifier.as_deref().ok_or_else(|| {
                         format!("artifact {} is missing packageIdentifier", artifact.name)
                     })?;
-                if !APP_SDK_PACKAGES.contains(&(platform, package_identifier)) {
+                if !packages.contains(&(platform, package_identifier)) {
                     return Err(format!(
                         "artifact packageIdentifier {package_identifier} does not match platform {platform}"
                     ));
@@ -606,8 +636,9 @@ pub mod release {
         artifact: &Artifact,
         manifest: &ReleaseManifest,
     ) -> Result<(), String> {
-        if artifact.package_identifier.as_deref() != Some("bota_flutter_sdk") {
-            return Err("Flutter packageIdentifier must be bota_flutter_sdk".to_owned());
+        let flutter_name = public_package("flutter", &manifest.sdk_version)?;
+        if artifact.package_identifier.as_deref() != Some(flutter_name) {
+            return Err(format!("Flutter packageIdentifier must be {flutter_name}"));
         }
         if !artifact
             .capabilities

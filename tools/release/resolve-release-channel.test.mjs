@@ -18,6 +18,18 @@ const testPolicy = {
   requirePrereleaseForNewTags: true,
 };
 
+test('the renamed major-two SDK remains a beta release', () => {
+  for (const mode of ['new', 'recovery']) {
+    assert.deepEqual(
+      resolveReleaseChannel({ ref: 'v2.0.0-beta.0', mode, policy: testPolicy }),
+      { version: '2.0.0-beta.0', npmTag: 'beta', githubPrerelease: true },
+    );
+  }
+  for (const ref of ['v2.0.0', 'v2.0.0-rc.1', 'v2.0.0-beta.0+build', 'v3.0.0-beta.0']) {
+    assert.throws(() => resolveReleaseChannel({ ref, mode: 'new', policy: testPolicy }));
+  }
+});
+
 test('new App SDK releases resolve to beta and GitHub prerelease', () => {
   assert.deepEqual(
     resolveReleaseChannel({

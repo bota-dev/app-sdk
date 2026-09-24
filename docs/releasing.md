@@ -1,5 +1,20 @@
 # Releasing The Bota App SDK
 
+## Package Name Migration
+
+Release tooling distinguishes historical major-0/1 identifiers from the
+approved major-2 App SDK identifiers. Manifest version 2 is retained because
+the evidence fields do not change; its package matrix is selected by the
+validated SDK major. Major 2 cannot use manifest version 1 to bypass identity
+checks. Historical manifests and tagged-source layouts remain supported by
+current recovery tooling.
+
+Major-2 releases remain beta-only. The source migration and publication are
+separate gates; see the [migration design](superpowers/specs/2026-09-23-app-sdk-package-naming-migration-design.md).
+Do not use these checks as evidence that any renamed package is already public.
+
+## Existing Release Line
+
 Published synchronized beta `1.1.0` includes the Apple `BotaAppleSDK` Swift
 package for iOS 15+ and macOS 13+, the Android Maven package, and the React
 Native package. `1.2.0-beta.0` is occupied by an immutable annotated tag for

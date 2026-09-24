@@ -22,21 +22,34 @@
       },
       "then": {
         "required": ["sdkFamily"],
-        "properties": {
-          "artifacts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/platformPackagePair"
+        "if": { "properties": { "sdkVersion": { "type": "string", "pattern": "^2\\." } } },
+        "then": {
+          "properties": {
+            "artifacts": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/renamedPlatformPackagePair" }
+            }
+          }
+        },
+        "else": {
+          "properties": {
+            "artifacts": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/platformPackagePair" }
             }
           }
         }
       }
+    },
+    {
+      "if": { "properties": { "sdkVersion": { "type": "string", "pattern": "^2\\." } } },
+      "then": { "properties": { "manifestVersion": { "const": 2 } } }
     }
   ],
   "properties": {
     "manifestVersion": { "enum": [1, 2] },
     "sdkFamily": { "const": "bota-app-sdk" },
-    "sdkVersion": { "$ref": "#/$defs/semanticVersion" },
+    "sdkVersion": { "$ref": "#/$defs/semanticVersion", "type": "string", "pattern": "^[012]\\." },
     "sourceRevision": { "$ref": "#/$defs/gitRevision" },
     "protocolFixtureDigest": { "$ref": "#/$defs/sha256" },
     "firmwareCompatibility": {
@@ -107,7 +120,7 @@
               ],
               "properties": {
                 "platform": { "const": "flutter" },
-                "packageIdentifier": { "const": "bota_flutter_sdk" }
+                "packageIdentifier": { "enum": ["bota_flutter_sdk", "bota_app_sdk"] }
               }
             }
           }
@@ -116,6 +129,17 @@
     }
   },
   "$defs": {
+    "renamedPlatformPackagePair": {
+      "type": "object",
+      "required": ["platform", "packageIdentifier"],
+      "oneOf": [
+        { "properties": { "platform": { "const": "apple" }, "packageIdentifier": { "const": "BotaAppSDK" } } },
+        { "properties": { "platform": { "const": "android" }, "packageIdentifier": { "const": "dev.bota:bota-app-sdk" } } },
+        { "properties": { "platform": { "const": "react-native" }, "packageIdentifier": { "const": "@bota.dev/react-native-app-sdk" } } },
+        { "properties": { "platform": { "const": "flutter" }, "packageIdentifier": { "const": "bota_app_sdk" } } },
+        { "properties": { "platform": { "const": "web" }, "packageIdentifier": { "const": "@bota.dev/web-app-sdk" } } }
+      ]
+    },
     "platformPackagePair": {
       "type": "object",
       "oneOf": [

@@ -10,7 +10,10 @@
 
 **Spec:** [Approved naming migration](../specs/2026-09-23-app-sdk-package-naming-migration-design.md).
 
-**Status:** Prepared for review; no implementation tasks completed.
+**Status:** Executing. Task 1 complete; Tasks 2-6 pending.
+
+Task 1 verification: 21 focused Node tests, 75 release tests, and 46 Rust
+manifest/readiness tests passed after the new cases failed as expected.
 
 ## Global Constraints
 
@@ -59,7 +62,7 @@ stay unchanged. Preserve manifest versions 1 and 2; select the version-2
 package matrix by the validated SDK major rather than introducing another
 manifest format for unchanged fields.
 
-- [ ] Add the identity tests before implementation:
+- [x] Add the identity tests before implementation:
 
 ```javascript
 import assert from 'node:assert/strict';
@@ -86,13 +89,13 @@ test('package identities separate historical and renamed releases', () => {
 });
 ```
 
-- [ ] Run `node --test tools/release/package-identities.test.mjs` and confirm
+- [x] Run `node --test tools/release/package-identities.test.mjs` and confirm
   failure from the missing module. Implement the helper using existing SemVer
   validation in `parseReleaseRef`, then select the old map for majors 0/1 and
   the five new entries for major 2. Reject unknown platforms/majors. Retain
   historical Windows/Electron entries only in the old map; this does not
   authorize publishing them.
-- [ ] Add Node/schema and Rust tests that construct synthetic in-memory v2
+- [x] Add Node/schema and Rust tests that construct synthetic in-memory v2
   manifests from the unchanged beta.12 fixture: set the SDK/artifact versions
   to `2.0.0-beta.0`, map all five package identifiers, and require acceptance.
   For each platform, restore only its old identifier and require rejection.
@@ -100,7 +103,7 @@ test('package identities separate historical and renamed releases', () => {
   Keep all existing checksum, inventory, generator, and capability checks.
   Reject a manifest-v1 major-2 candidate instead of letting it bypass identity
   validation. Keep immutable v1 and v2 examples unchanged.
-- [ ] Mirror identity selection in Rust and JSON Schema. In `verify_release`,
+- [x] Mirror identity selection in Rust and JSON Schema. In `verify_release`,
   choose the old/new Flutter directory and Apple podspec path from the parsed
   canonical version before reading files. Preserve this path map:
 
@@ -111,11 +114,11 @@ test('package identities separate historical and renamed releases', () => {
      platforms/apple/BotaAppSDK.podspec
 ```
 
-- [ ] Add channel tests for new `2.0.0-beta.0`, historical beta recovery, and
+- [x] Add channel tests for new `2.0.0-beta.0`, historical beta recovery, and
   historical `1.1.0` recovery; reject bare stable, `rc`, leading-zero, build
   metadata, `0.0.x`, and unapproved-major release inputs. Keep historical
   `1.x.y-beta.n` support and add only `2.x.y-beta.n` to the existing policy.
-- [ ] Run the focused gates and commit `feat(release): support App SDK package identities`:
+- [x] Run the focused gates and commit `feat(release): support App SDK package identities`:
 
 ```bash
 node --test tools/release/package-identities.test.mjs tools/release/resolve-release-channel.test.mjs tools/release/release-manifest-schema.test.mjs

@@ -9,6 +9,67 @@ fn example() -> serde_json::Value {
     serde_json::from_str(&contents).unwrap()
 }
 
+const RENAMED_PACKAGES: &[(&str, &str)] = &[
+    ("apple", "BotaAppSDK"),
+    ("android", "dev.bota:bota-app-sdk"),
+    ("react-native", "@bota.dev/react-native-app-sdk"),
+    ("flutter", "bota_app_sdk"),
+    ("web", "@bota.dev/web-app-sdk"),
+];
+
+fn validate_renamed(mutate: impl FnOnce(&mut serde_json::Value)) -> Result<(), String> {
+    let mut manifest = example();
+    manifest["sdkVersion"] = "2.0.0-beta.0".into();
+    for artifact in manifest["artifacts"].as_array_mut().unwrap() {
+        artifact["version"] = "2.0.0-beta.0".into();
+        artifact["packageIdentifier"] = RENAMED_PACKAGES
+            .iter()
+            .find(|(platform, _)| artifact["platform"] == *platform)
+            .unwrap()
+            .1
+            .into();
+    }
+    mutate(&mut manifest);
+    let directory = std::env::temp_dir().join(format!(
+        "bota-renamed-manifest-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    fs::create_dir_all(&directory).unwrap();
+    let path = directory.join("manifest.json");
+    fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    let result = xtask::release::validate_manifest_format_and_semantics(&path);
+    fs::remove_dir_all(directory).unwrap();
+    result
+}
+
+#[test]
+fn renamed_major_two_manifest_is_valid() {
+    assert!(validate_renamed(|_| {}).is_ok());
+}
+
+#[test]
+fn renamed_manifest_cannot_bypass_identity_checks() {
+    assert!(validate_renamed(|manifest| manifest["manifestVersion"] = 1.into()).is_err());
+    for historical in example()["artifacts"].as_array().unwrap() {
+        assert!(
+            validate_renamed(|manifest| {
+                let artifact = manifest["artifacts"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|artifact| artifact["platform"] == historical["platform"])
+                    .unwrap();
+                artifact["packageIdentifier"] = historical["packageIdentifier"].clone();
+            })
+            .is_err()
+        );
+    }
+}
+
 fn validate_modified(
     name: &str,
     mutate: impl FnOnce(&mut serde_json::Value),

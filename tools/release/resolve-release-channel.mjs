@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
-const APP_SDK_BETA = /^1\.(0|[1-9]\d*)\.(0|[1-9]\d*)-beta\.(0|[1-9]\d*)$/;
+const APP_SDK_BETA = /^[12]\.(0|[1-9]\d*)\.(0|[1-9]\d*)-beta\.(0|[1-9]\d*)$/;
 const HISTORICAL_STABLE_RECOVERY = '1.1.0';
 const policyUrl = new URL('../../release/channel-policy.json', import.meta.url);
 
@@ -40,7 +40,7 @@ export function resolveReleaseChannel({ ref, mode, policy }) {
 
   const version = parseReleaseRef(ref);
   if (mode === 'new' && !APP_SDK_BETA.test(version)) {
-    throw new Error(`new App SDK version ${version} must match 1.x.y-beta.n`);
+    throw new Error(`new App SDK version ${version} must match 1.x.y-beta.n or 2.x.y-beta.n`);
   }
   if (
     mode === 'recovery' &&
@@ -48,7 +48,7 @@ export function resolveReleaseChannel({ ref, mode, policy }) {
     !APP_SDK_BETA.test(version)
   ) {
     throw new Error(
-      `App SDK recovery only supports 1.x.y-beta.n or historical ${HISTORICAL_STABLE_RECOVERY}; got ${version}`,
+      `App SDK recovery only supports 1.x.y-beta.n or historical ${HISTORICAL_STABLE_RECOVERY}, or 2.x.y-beta.n; got ${version}`,
     );
   }
 
