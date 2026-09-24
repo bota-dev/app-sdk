@@ -61,6 +61,8 @@ The installer selects the available RubyGems executable on the runner; it does
 not assume a Homebrew Ruby path exists on GitHub's macOS image.
 The public consumer invokes the pinned gem with RubyGems' `_1.16.2_` version
 selector, because the runner can have a newer CocoaPods gem installed globally.
+The macOS public-pod consumer uses portable `grep` for its lockfile checks;
+GitHub's runner image does not include ripgrep.
 Apple consumers add
 `https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
 compiles the Swift facade source and downloads a checksummed

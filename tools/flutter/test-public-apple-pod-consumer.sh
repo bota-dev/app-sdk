@@ -76,11 +76,11 @@ EOF
   cd "$temporary"
   "${pod_command[@]}" install --repo-update
 )
-if rg -q '^EXTERNAL SOURCES:' "$temporary/Podfile.lock"; then
+if grep -q '^EXTERNAL SOURCES:' "$temporary/Podfile.lock"; then
   echo "Public CocoaPods consumer resolved a local source" >&2
   exit 1
 fi
-rg -q "BotaAppleSDK \($VERSION\)" "$temporary/Podfile.lock"
+grep -Fq "BotaAppleSDK ($VERSION)" "$temporary/Podfile.lock"
 xcodebuild \
   -workspace "$temporary/PublicPodConsumer.xcworkspace" \
   -scheme PublicPodConsumer \
