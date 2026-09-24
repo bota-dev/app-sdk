@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.0-beta.0 (unreleased)
+
+- Rename the public package and Dart library to `bota_app_sdk` as part of the
+  Bota App SDK family. Replace the old facade dependency and imports; do not
+  install both names together.
+- Depend on the synchronized `BotaAppSDK` Apple product and
+  `dev.bota:bota-app-sdk` Android artifact. Native applications must be rebuilt.
+- Preserve runtime APIs, internal Pigeon channels and persistence identities.
+  Existing releases and production React Native 0.0.x remain unchanged.
+- Publication and physical-device acceptance remain pending.
+
 ## 1.2.0-beta.12 (unreleased)
 
 - Replaced the partially published beta.11 tag after the macOS runner selected
