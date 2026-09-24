@@ -10,7 +10,24 @@
 
 **Spec:** [Approved naming migration](../specs/2026-09-23-app-sdk-package-naming-migration-design.md).
 
-**Status:** Executing. Task 1 complete; Tasks 2-6 pending.
+**Status:** Executing. Tasks 1-3 and 5 complete. Task 4 package verification is in progress;
+Task 6 main CI and registry rollout remain pending.
+
+Local evidence: release tooling 87/87, general tooling 103/103, strict Apple
+suite 200 tests (9 physical skips), RN lifecycle 32/32 and fresh iOS/Android
+consumers, Flutter 86/86 and Apple/Android adapter consumers, Web packed
+consumer and 7 browser tests. Android deterministic four-ABI packaging and
+legacy source/binary consumers passed. API26/35 x86 emulator lanes require CI:
+this arm64 Mac has only arm64 images. Physical acceptance remains NOT RUN.
+
+Documentation: app-sdk migration guide committed locally; public SDK reference
+and changelog rendered successfully and committed separately. Internal naming
+matrix/index changes were included in concurrent docs commit `03631b8`; no
+history was rewritten. Unrelated existing docs changes were preserved.
+
+Task 3 final gate: 87 release tests, 15 manifest tests and 32 readiness tests
+passed using the fresh 2.x example. Explicit historical tests still validate
+immutable beta.12 sources independently of the current version authority.
 
 Task 1 verification: 21 focused Node tests, 75 release tests, and 46 Rust
 manifest/readiness tests passed after the new cases failed as expected.
@@ -138,7 +155,7 @@ push a tag or call the tree release-ready between these tasks.
 bytes, bridge IDs, and persistence identities do not. The identity helper from
 Task 1 supplies expected names to generators and verification tools.
 
-- [ ] Add red renderer tests to the existing Swift/podspec generator suites:
+- [x] Add red renderer tests to the existing Swift/podspec generator suites:
 
 ```javascript
 test('major two changes the facade but not its core binary identity', () => {
@@ -157,11 +174,11 @@ test('major two changes the facade but not its core binary identity', () => {
   and source path. Retain old-version renderer cases unchanged. Add negative
   cases to RN, Web, and Flutter package-verifier tests for old package names at
   version 2 and mismatched Apple/Maven dependencies.
-- [ ] Check local and remote `v2.0.0-beta.0` tag occupancy, without creating a
+- [x] Check local and remote `v2.0.0-beta.0` tag occupancy, without creating a
   tag. Query candidate versions by exact registry name before selecting the
   version. Treat registry authentication/transport errors as unknown, not as
   availability. Stop for a new version decision if occupied.
-- [ ] Rename these tracked paths using Git-aware moves:
+- [x] Rename these tracked paths using Git-aware moves:
 
 ```text
 platforms/apple/Sources/BotaAppleSDK -> platforms/apple/Sources/BotaAppSDK
@@ -181,25 +198,25 @@ frameworks/flutter/bota_app_sdk/ios/bota_app_sdk/Sources/bota_flutter_sdk -> fra
   source filename to `BotaAppSDK.swift`; preserve its existing public
   `BotaAppleSDKVersion` enum and update only its version value. Renaming that
   metadata type is unnecessary for the distribution change.
-- [ ] Change the Android artifact in `platforms/android/sdk/build.gradle.kts`
+- [x] Change the Android artifact in `platforms/android/sdk/build.gradle.kts`
   to `bota-app-sdk`; change all current consumer and framework dependencies to
   `dev.bota:bota-app-sdk`. Do not change `dev.bota.sdk` or `com.bota.sdk` package
   declarations. Update native manifest/SBOM/archive generators and local Maven
   staging/verification paths using version-aware identities where they also
   inspect old artifacts.
-- [ ] Set npm package names in RN/Web and Flutter's `pubspec.yaml`, library
+- [x] Set npm package names in RN/Web and Flutter's `pubspec.yaml`, library
   imports, example dependency, iOS product/pod metadata, and repository path
   to the approved names. Keep RN `BotaDeviceSDK.podspec`, native module, Codegen
   config, public exports, and its frozen maintenance-baseline metadata intact.
   Regenerate npm lock metadata with the pinned npm CLI, without upgrading
   resolved dependencies.
-- [ ] Set `2.0.0-beta.0` in every current authority: root/npm packages and
+- [x] Set `2.0.0-beta.0` in every current authority: root/npm packages and
   lockfiles; core/FFI/WASM, xtask, ffi-smoke, and uniffi-bindgen Cargo manifests
   and workspace lock; Android `VERSION_NAME`; Swift public version constant;
   Flutter pubspec, packaged Android TOML, exact Swift dependency; compatibility
   matrix; RN generated contract version via its generator. Do not replace
   version strings in historical examples, evidence, or regression fixtures.
-- [ ] Preserve the explicit Pigeon channel name while changing output paths:
+- [x] Preserve the explicit Pigeon channel name while changing output paths:
 
 ```json
 {
@@ -214,12 +231,12 @@ frameworks/flutter/bota_app_sdk/ios/bota_app_sdk/Sources/bota_flutter_sdk -> fra
   and verifier tests. Regenerate with `npm run flutter:generate`; compare the
   set of `dev.flutter.pigeon.*` channel strings against the pre-change files
   in all three languages. Require equality. Keep plugin classes unchanged.
-- [ ] Update `tools/react-native/verify-package.mjs`, `tools/web/verify-package.mjs`,
+- [x] Update `tools/react-native/verify-package.mjs`, `tools/web/verify-package.mjs`,
   `tools/flutter/verify-package.mjs`, `verify-pigeon.mjs`, and
   `verify-publication.mjs`, plus their tests and shell consumer paths. Reuse
   version-aware identities for historical archive verification. Do not rename
   retained native runtime IDs through broad replacements.
-- [ ] Run the focused gates, inspect the rename diff, and commit
+- [x] Run the focused gates, inspect the rename diff, and commit
   `feat(sdk): adopt App SDK distribution names`:
 
 ```bash
@@ -241,14 +258,14 @@ inventory tooling; `tools/xtask/tests/release_readiness.rs`; release-gate tests.
 Recovery resolves names from the verified tag's version and preserved
 inventories, never from the current workspace version or an arbitrary input.
 
-- [ ] Add a red historical-source test using a disposable extraction of
+- [x] Add a red historical-source test using a disposable extraction of
   `v1.2.0-beta.12`. Build current xtask, then invoke its `release verify-tag`
   command from that extracted root. It must resolve old Flutter/Apple paths.
   Exercise the same helper with a current temporary-tree fixture. Keep this
   read-only to repositories and completely offline after local tag extraction.
   Also test signed Central recovery with both coordinate layouts, a preserved
   deployment UUID, and mismatched-name rejection before network access.
-- [ ] Parameterize current publication and recovery names with the Task 1
+- [x] Parameterize current publication and recovery names with the Task 1
   helper. For example, derive RN's exact name using the validated version:
 
 ```bash
@@ -263,12 +280,12 @@ PACKAGE_SPEC="$RN_PACKAGE@$RELEASE_VERSION"
   paths, CocoaPods archive/Trunk lookup, Flutter public URLs, and post-publish
   consumers. Continue restoring the exact signed ZIP and resuming its recorded
   UUID; never rebuild signing bytes on recovery.
-- [ ] Update CI paths, cache paths, artifact names, Swift schemes, and Flutter
+- [x] Update CI paths, cache paths, artifact names, Swift schemes, and Flutter
   working directories. Keep the deliberately historical public beta.11
   CocoaPods smoke on `BotaAppleSDK`; make the public-pod consumer choose its
   pod/import by the requested version so it also tests new `BotaAppSDK`.
   Preserve Flutter's ordered prerequisites and `always()` success conditions.
-- [ ] Add npm publication tests with mocked registry responses for: first
+- [x] Add npm publication tests with mocked registry responses for: first
   package 404, existing matching hash, mismatched hash, delayed visibility,
   registry 401/403, and transport failure. Only a confirmed package/version
   absence permits first publication; never turn every failed lookup into empty
@@ -277,11 +294,11 @@ PACKAGE_SPEC="$RN_PACKAGE@$RELEASE_VERSION"
   publication and require equality. A missing `latest` on a new package is
   legitimate; unexpected creation/movement must be reported, not silently
   changed on the old package.
-- [ ] Test that new candidates resolve only new native dependencies, old
+- [x] Test that new candidates resolve only new native dependencies, old
   recovery resolves old dependencies, and the new Flutter publisher works from
   `frameworks/flutter/bota_app_sdk`. Use existing readiness/gate suites rather
   than replacing behavioral assertions with token-presence checks alone.
-- [ ] Run and commit `fix(release): publish renamed packages with historical recovery`:
+- [x] Run and commit `fix(release): publish renamed packages with historical recovery`:
 
 ```bash
 npm run test:release
@@ -295,7 +312,7 @@ git diff --check
 **Interfaces:** Exact local artifacts feed clean consumers. No registry writes,
 release tags, app rollout, or physical device writes occur in this task.
 
-- [ ] Install locked dependencies with pinned Node/npm, prepare the exact
+- [x] Install locked dependencies with pinned Node/npm, prepare the exact
   maintenance references, and run early checks that do not require the new
   release example:
 
@@ -364,7 +381,7 @@ tools/flutter/test-consumers.sh
   command. Pack RN with `npm@12.0.2 pack --json` from its package directory
   into `target/react-native-release` and preserve the JSON result; Web's
   consumer gate already preserves its exact tarball in `target/web-release`.
-- [ ] Seed the new manifest template from the unchanged historical structure
+- [x] Seed the new manifest template from the unchanged historical structure
   and newly built non-Flutter files. Do not copy old artifact hashes. The
   Flutter writer fills the final entry from its freshly verified inventory.
   Run this generated-data command from the repository root:
@@ -429,7 +446,7 @@ current naming spec. In their owning repositories, update
 `internal-docs/App SDK Architecture.md` and `docs/api-reference/client-sdks.mdx`
 after reading their instructions and preserving unrelated edits.
 
-- [ ] Write exact old/new installation and import examples, including:
+- [x] Write exact old/new installation and import examples, including:
 
 ```text
 Swift: import BotaAppSDK; product BotaAppSDK; exact tag 2.0.0-beta.0
@@ -443,16 +460,16 @@ Dart: import 'package:bota_app_sdk/bota_app_sdk.dart';
   is verified public. Explain removing the old dependency before adding its
   replacement, rebuilding RN/Flutter native apps, and leaving maintenance RN
   installations unchanged. Do not suggest installing both facade names.
-- [ ] Replace current naming matrices, not historical release records. Record
+- [x] Replace current naming matrices, not historical release records. Record
   internal-name exceptions, version-aware recovery, registry bootstrap gates,
   and the unchanged hardware acceptance status. Update the internal docs index
   and run its required `scripts/gen-llms-full.py` generator when that repo changes.
-- [ ] Search all public/internal docs and every repository's README, AGENTS,
+- [x] Search all public/internal docs and every repository's README, AGENTS,
   and ARCHITECTURE for both old and new tokens. Classify remaining old hits as
   historical evidence, maintenance instructions, preserved bridge identity,
   or a missed current reference. Inspect links and run the owning repo's doc
   checks. Keep commits separate by repository and purpose.
-- [ ] Commit `docs: explain App SDK package migration`, marking implementation
+- [x] Commit `docs: explain App SDK package migration`, marking implementation
   complete only for verified source/build changes, not for pending publication.
 
 ## Task 6: Main CI And Registry Rollout

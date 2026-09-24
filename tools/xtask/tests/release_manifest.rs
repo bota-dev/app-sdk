@@ -4,7 +4,7 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-fn example() -> serde_json::Value {
+fn historical_example() -> serde_json::Value {
     let contents = fs::read_to_string(root().join("release/examples/1.2.0-beta.12.json")).unwrap();
     serde_json::from_str(&contents).unwrap()
 }
@@ -18,7 +18,7 @@ const RENAMED_PACKAGES: &[(&str, &str)] = &[
 ];
 
 fn validate_renamed(mutate: impl FnOnce(&mut serde_json::Value)) -> Result<(), String> {
-    let mut manifest = example();
+    let mut manifest = historical_example();
     manifest["sdkVersion"] = "2.0.0-beta.0".into();
     for artifact in manifest["artifacts"].as_array_mut().unwrap() {
         artifact["version"] = "2.0.0-beta.0".into();
@@ -54,7 +54,7 @@ fn renamed_major_two_manifest_is_valid() {
 #[test]
 fn renamed_manifest_cannot_bypass_identity_checks() {
     assert!(validate_renamed(|manifest| manifest["manifestVersion"] = 1.into()).is_err());
-    for historical in example()["artifacts"].as_array().unwrap() {
+    for historical in historical_example()["artifacts"].as_array().unwrap() {
         assert!(
             validate_renamed(|manifest| {
                 let artifact = manifest["artifacts"]
@@ -74,7 +74,8 @@ fn validate_modified(
     name: &str,
     mutate: impl FnOnce(&mut serde_json::Value),
 ) -> Result<(), String> {
-    let mut manifest = example();
+    let contents = fs::read_to_string(root().join("release/examples/2.0.0-beta.0.json")).unwrap();
+    let mut manifest = serde_json::from_str(&contents).unwrap();
     mutate(&mut manifest);
     let path = root()
         .join("release/examples")
@@ -87,7 +88,7 @@ fn validate_modified(
 
 #[test]
 fn example_release_manifest_is_valid() {
-    let manifest = root().join("release/examples/1.2.0-beta.12.json");
+    let manifest = root().join("release/examples/2.0.0-beta.0.json");
 
     let result = xtask::release::validate_manifest(&manifest);
 

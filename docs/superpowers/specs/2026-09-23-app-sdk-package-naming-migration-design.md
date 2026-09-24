@@ -1,6 +1,9 @@
 # App SDK Package Naming Migration
 
-**Status:** Migration design approved on 2026-09-23; implementation planning.
+**Status:** Migration design approved on 2026-09-23. Source migration and
+version-aware recovery implemented on local main; final candidate verification,
+main CI and registry authorization/publication remain pending. Physical-device
+acceptance is unchanged and NOT RUN for this candidate.
 
 ## Intent
 
