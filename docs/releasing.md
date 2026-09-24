@@ -57,6 +57,8 @@ version after the gem install. The next candidate installs CocoaPods into an
 isolated gem directory with a dedicated executable path. Main CI first uses
 that same installer to compile a public beta.11 CocoaPods consumer on macOS;
 the tagged Flutter job then uses it for its matching public version.
+The installer selects the available RubyGems executable on the runner; it does
+not assume a Homebrew Ruby path exists on GitHub's macOS image.
 Apple consumers add
 `https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
 compiles the Swift facade source and downloads a checksummed

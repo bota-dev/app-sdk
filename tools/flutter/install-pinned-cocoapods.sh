@@ -5,17 +5,23 @@ test "$(uname -s)" = Darwin
 test -n "${RUNNER_TEMP:-}"
 test -n "${GITHUB_ENV:-}"
 
-ruby_bin=/opt/homebrew/opt/ruby/bin
-test -x "$ruby_bin/gem"
+if [[ -x /opt/homebrew/opt/ruby/bin/gem ]]; then
+  gem_binary=/opt/homebrew/opt/ruby/bin/gem
+else
+  gem_binary="$(command -v gem)"
+fi
+echo "Installing isolated CocoaPods with $gem_binary"
 gem_home="$RUNNER_TEMP/bota-cocoapods-gems"
 gem_bin="$RUNNER_TEMP/bota-cocoapods-bin"
-"$ruby_bin/gem" install --no-document cocoapods -v 1.16.2 \
+"$gem_binary" install --no-document cocoapods -v 1.16.2 \
   --install-dir "$gem_home" --bindir "$gem_bin"
 
-gem_path="$gem_home:$("$ruby_bin/gem" env path)"
+gem_path="$gem_home:$("$gem_binary" env path)"
 pod_binary="$gem_bin/pod"
 test -x "$pod_binary"
-test "$(GEM_HOME="$gem_home" GEM_PATH="$gem_path" "$pod_binary" --version)" = 1.16.2
+actual_version="$(GEM_HOME="$gem_home" GEM_PATH="$gem_path" "$pod_binary" --version)"
+echo "Isolated CocoaPods version: $actual_version"
+test "$actual_version" = 1.16.2
 
 {
   printf 'GEM_HOME=%s\n' "$gem_home"
