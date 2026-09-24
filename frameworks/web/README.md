@@ -7,13 +7,13 @@ checkpoints, and stable workflow errors; the application owns authentication,
 backend calls, user consent, and presentation.
 
 Historical `@bota.dev/web-sdk@1.2.0-beta.7` is public. The renamed
-`2.0.0-beta.0` candidate retains the foreground implementation; publication
-is pending and physical-device acceptance remains open. Remove the old
+`2.0.0-beta.0` distribution is also public; physical-device acceptance remains
+open. Remove the old
 dependency before adding its replacement. Storage namespaces do not change.
 
 ## Install
 
-After the synchronized candidate is published, pin its exact version:
+Pin the exact synchronized version:
 
 ```bash
 npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.0

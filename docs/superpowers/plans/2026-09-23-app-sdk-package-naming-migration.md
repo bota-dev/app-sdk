@@ -543,6 +543,12 @@ an explicit external gate; never bypass it to mark this task complete.
 - [ ] Verify public bytes, resolved native dependency versions, npm beta tags,
   and unchanged legacy tags. Run public SwiftPM/CocoaPods, Maven, RN, Web, and
   Flutter consumer checks. Attach evidence through the existing release process.
+  Post-publication checks are recorded in
+  `release/evidence/2.0.0-beta.0-public-consumers.md`. All named checks ran;
+  normal Flutter Android installation failed without a test-only SDK-path
+  override. Main fixes the lookup and the fresh source consumer gate passed.
+  Keep this item open until a subsequent public release passes without that
+  workaround; do not replace beta.0 or claim source verification as publication.
 - [x] Report source migration, package publication, application rollout, and
   hardware acceptance separately. Do not upgrade Demo/Bota One or claim
   physical acceptance as part of a package-name release.

@@ -90,6 +90,11 @@ import 'package:bota_app_sdk/bota_app_sdk.dart';
 Pigeon retains its internal `bota_flutter_sdk` channel prefix, native namespaces
 and plugin classes. Only public package/import and source paths change.
 
+On Android, published beta.0 requires `BOTA_FLUTTER_HOME` to point to the Flutter
+SDK directory when building. Main fixes this lookup, but the fix is not yet
+published. See the [workaround](../../frameworks/flutter/bota_app_sdk/README.md#android-beta0-build-workaround)
+and [consumer evidence](../../release/evidence/2.0.0-beta.0-public-consumers.md).
+
 ## Release Gates
 
 New identities need their own registry ownership and publisher setup; old

@@ -14,7 +14,7 @@ into the native Apple and Android SDKs.
 
 ## Install
 
-Prepared instructions for `2.0.0-beta.0`; registry publication is pending.
+Version `2.0.0-beta.0` is published on npm.
 Remove `@bota.dev/react-native-sdk` before adding the replacement; do not
 co-install both. Production maintenance 0.0.x consumers need not migrate.
 

@@ -29,6 +29,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   without an explicit repository; preserve the native manifest by attaching
   Flutter's as `flutter-release-manifest.json`. See
   `docs/releasing.md` for current release state.
+  Published Flutter Android beta.0 requires the explicit SDK-path workaround;
+  main's normal-install lookup fix needs a subsequent release. See
+  `release/evidence/2.0.0-beta.0-public-consumers.md` for exact post-publication
+  consumer results and the remaining gate.
   See `docs/migrations/app-sdk-package-names.md`. Preserve historical releases,
   maintenance RN 0.0.x, runtime APIs, native/Codegen/Pigeon identities and
   storage namespaces. Current recovery must still verify old tagged layouts

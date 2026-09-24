@@ -34,6 +34,12 @@ demonstrated for the new names; the next legitimate
 version must verify that path. This does not prevent installing the published beta.
 Hardware acceptance remains NOT RUN; Demo and Bota One were not upgraded.
 
+Post-publication consumer checks found a Flutter Android installation issue:
+published beta.0 needs `BOTA_FLUTTER_HOME` set to the Flutter SDK directory.
+Main fixes normal `local.properties` resolution and tests without that override;
+the immutable public archive still needs the workaround until a subsequent
+release. See [public consumer evidence](../release/evidence/2.0.0-beta.0-public-consumers.md).
+
 Release tooling distinguishes historical major-0/1 identifiers from the
 approved major-2 App SDK identifiers. Manifest version 2 is retained because
 the evidence fields do not change; its package matrix is selected by the
