@@ -162,7 +162,7 @@ jobs:
         working-directory: platforms/apple
         run: |
           xcodebuild \
-            -scheme BotaAppleSDK \
+            -scheme BotaAppSDK \
             -destination 'generic/platform=iOS' \
             -derivedDataPath ../../target/release-apple-ios-device \
             CODE_SIGNING_ALLOWED=NO \
@@ -174,7 +174,7 @@ jobs:
         working-directory: platforms/apple
         run: |
           xcodebuild \
-            -scheme BotaAppleSDK \
+            -scheme BotaAppSDK \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath ../../target/release-apple-ios-simulator \
             CODE_SIGNING_ALLOWED=NO \
@@ -452,6 +452,9 @@ jobs:
             echo "GITHUB_PRERELEASE=${{ steps.release-channel.outputs.github_prerelease }}"
           } >> "$GITHUB_ENV"
           test "${{ steps.release-channel.outputs.version }}" = "${GITHUB_REF_NAME#v}"
+          ANDROID_COORDINATE="$(node tools/release/package-identities.mjs android '${{ steps.release-channel.outputs.version }}')"
+          echo "ANDROID_COORDINATE=$ANDROID_COORDINATE" >> "$GITHUB_ENV"
+          echo "ANDROID_ARTIFACT=${ANDROID_COORDINATE#*:}" >> "$GITHUB_ENV"
           test "${{ steps.release-channel.outputs.npm_tag }}" = beta
           test "${{ steps.release-channel.outputs.github_prerelease }}" = true
 
@@ -564,8 +567,8 @@ jobs:
             --inventory target/android-release/central-bundle-files.json \
             --zip target/android-release/central-bundle.zip
           cmp \
-            "target/android-central-portal/dev/bota/bota-android-sdk/$RELEASE_VERSION/bota-android-sdk-$RELEASE_VERSION.aar" \
-            "target/android-release/bota-android-sdk-$RELEASE_VERSION.aar"
+            "target/android-central-portal/dev/bota/${ANDROID_ARTIFACT}/$RELEASE_VERSION/${ANDROID_ARTIFACT}-$RELEASE_VERSION.aar" \
+            "target/android-release/${ANDROID_ARTIFACT}-$RELEASE_VERSION.aar"
           echo 'preserved=true' >> "$GITHUB_OUTPUT"
 
       - name: Stage signed Maven Central repository
@@ -587,14 +590,14 @@ jobs:
           node tools/android/normalize-central-repository.mjs \
             --raw-repository target/android-central-raw \
             --portal-repository target/android-central-portal \
-            --coordinate dev.bota:bota-android-sdk \
+            --coordinate "$ANDROID_COORDINATE" \
             --version "$RELEASE_VERSION"
           cmp \
-            "target/android-central-portal/dev/bota/bota-android-sdk/$RELEASE_VERSION/bota-android-sdk-$RELEASE_VERSION.aar" \
-            "target/android-release/bota-android-sdk-$RELEASE_VERSION.aar"
+            "target/android-central-portal/dev/bota/${ANDROID_ARTIFACT}/$RELEASE_VERSION/${ANDROID_ARTIFACT}-$RELEASE_VERSION.aar" \
+            "target/android-release/${ANDROID_ARTIFACT}-$RELEASE_VERSION.aar"
           node tools/android/build-central-bundle.mjs build \
             --repository target/android-central-portal \
-            --coordinate dev.bota:bota-android-sdk \
+            --coordinate "$ANDROID_COORDINATE" \
             --version "$RELEASE_VERSION" \
             --source-revision "$(git rev-parse HEAD)" \
             --inventory target/android-release/central-bundle-files.json \
@@ -667,29 +670,7 @@ jobs:
           set -euo pipefail
           PACKAGE_PATH="$(find target/react-native-release -maxdepth 1 -type f -name '*.tgz' -print -quit)"
           test -n "$PACKAGE_PATH"
-          PACKAGE_SPEC="@bota.dev/react-native-sdk@$RELEASE_VERSION"
-          EXPECTED_SHASUM="$(sha1sum "$PACKAGE_PATH" | awk '{print $1}')"
-          LATEST_BEFORE="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/react-native-sdk dist-tags.latest)"
-          [[ "$LATEST_BEFORE" =~ ^0\.0\.[0-9]+$ ]]
-
-          if PUBLISHED_SHASUM="$(npx --yes "npm@$NPM_CLI_VERSION" view "$PACKAGE_SPEC" dist.shasum 2>/dev/null)"; then
-            test "$PUBLISHED_SHASUM" = "$EXPECTED_SHASUM"
-          else
-            npx --yes "npm@$NPM_CLI_VERSION" publish "$PACKAGE_PATH" --access public --tag "$NPM_DIST_TAG"
-          fi
-
-          PUBLISHED_SHASUM=""
-          for attempt in {1..30}; do
-            if PUBLISHED_SHASUM="$(npx --yes "npm@$NPM_CLI_VERSION" view "$PACKAGE_SPEC" dist.shasum 2>/dev/null)"; then
-              break
-            fi
-            sleep 10
-          done
-          test "$PUBLISHED_SHASUM" = "$EXPECTED_SHASUM"
-          LATEST_AFTER="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/react-native-sdk dist-tags.latest)"
-          PUBLISHED_BETA="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/react-native-sdk dist-tags.beta)"
-          test "$LATEST_AFTER" = "$LATEST_BEFORE"
-          test "$PUBLISHED_BETA" = "$RELEASE_VERSION"
+          node tools/release/publish-npm.mjs react-native "$RELEASE_VERSION" "$PACKAGE_PATH"
 
       - name: Publish or verify exact Web npm artifact
         shell: bash
@@ -699,31 +680,10 @@ jobs:
           test "${#WEB_PACKAGES[@]}" = 1
           PACKAGE_PATH="${WEB_PACKAGES[0]}"
           (cd target/web-release && sha256sum -c web-package-files.json.sha256)
-          node tools/web/verify-package.mjs "$PACKAGE_PATH"
+          node tools/web/verify-package.mjs "$PACKAGE_PATH" --sdk-version "$RELEASE_VERSION"
           test "$(jq -r .sourceRevision target/web-release/web-package-files.json)" = "$(git rev-parse HEAD)"
           test "$(jq -r .tarball.sha256 target/web-release/web-package-files.json)" = "$(sha256sum "$PACKAGE_PATH" | awk '{print $1}')"
-          PACKAGE_SPEC="@bota.dev/web-sdk@$RELEASE_VERSION"
-          EXPECTED_SHASUM="$(sha1sum "$PACKAGE_PATH" | awk '{print $1}')"
-          LATEST_BEFORE="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/web-sdk dist-tags.latest 2>/dev/null || true)"
-
-          if PUBLISHED_SHASUM="$(npx --yes "npm@$NPM_CLI_VERSION" view "$PACKAGE_SPEC" dist.shasum 2>/dev/null)"; then
-            test "$PUBLISHED_SHASUM" = "$EXPECTED_SHASUM"
-          else
-            npx --yes "npm@$NPM_CLI_VERSION" publish "$PACKAGE_PATH" --access public --tag "$NPM_DIST_TAG"
-          fi
-
-          PUBLISHED_SHASUM=""
-          for attempt in {1..30}; do
-            if PUBLISHED_SHASUM="$(npx --yes "npm@$NPM_CLI_VERSION" view "$PACKAGE_SPEC" dist.shasum 2>/dev/null)"; then
-              break
-            fi
-            sleep 10
-          done
-          test "$PUBLISHED_SHASUM" = "$EXPECTED_SHASUM"
-          LATEST_AFTER="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/web-sdk dist-tags.latest 2>/dev/null || true)"
-          PUBLISHED_BETA="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/web-sdk dist-tags.beta)"
-          test "$LATEST_AFTER" = "$LATEST_BEFORE"
-          test "$PUBLISHED_BETA" = "$RELEASE_VERSION"
+          node tools/release/publish-npm.mjs web "$RELEASE_VERSION" "$PACKAGE_PATH"
 
       - name: Preserve latest Central deployment state
         if: always()
@@ -827,6 +787,9 @@ jobs:
             echo "NPM_DIST_TAG=${{ steps.release-channel.outputs.npm_tag }}"
             echo "GITHUB_PRERELEASE=${{ steps.release-channel.outputs.github_prerelease }}"
           } >> "$GITHUB_ENV"
+          ANDROID_COORDINATE="$(node tools/release/package-identities.mjs android '${{ steps.release-channel.outputs.version }}')"
+          echo "ANDROID_COORDINATE=$ANDROID_COORDINATE" >> "$GITHUB_ENV"
+          echo "ANDROID_ARTIFACT=${ANDROID_COORDINATE#*:}" >> "$GITHUB_ENV"
           test "${{ steps.release-channel.outputs.npm_tag }}" = beta
           test "${{ steps.release-channel.outputs.github_prerelease }}" = true
 
@@ -974,29 +937,7 @@ jobs:
           set -euo pipefail
           PACKAGE_PATH="$(find target/recovered/react-native-release -maxdepth 1 -type f -name '*.tgz' -print -quit)"
           test -n "$PACKAGE_PATH"
-          PACKAGE_SPEC="@bota.dev/react-native-sdk@$RELEASE_VERSION"
-          EXPECTED_SHASUM="$(sha1sum "$PACKAGE_PATH" | awk '{print $1}')"
-          LATEST_BEFORE="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/react-native-sdk dist-tags.latest)"
-          [[ "$LATEST_BEFORE" =~ ^0\.0\.[0-9]+$ ]]
-
-          if PUBLISHED_SHASUM="$(npx --yes "npm@$NPM_CLI_VERSION" view "$PACKAGE_SPEC" dist.shasum 2>/dev/null)"; then
-            test "$PUBLISHED_SHASUM" = "$EXPECTED_SHASUM"
-          else
-            npx --yes "npm@$NPM_CLI_VERSION" publish "$PACKAGE_PATH" --access public --tag "$NPM_DIST_TAG"
-          fi
-
-          PUBLISHED_SHASUM=""
-          for attempt in {1..30}; do
-            if PUBLISHED_SHASUM="$(npx --yes "npm@$NPM_CLI_VERSION" view "$PACKAGE_SPEC" dist.shasum 2>/dev/null)"; then
-              break
-            fi
-            sleep 10
-          done
-          test "$PUBLISHED_SHASUM" = "$EXPECTED_SHASUM"
-          LATEST_AFTER="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/react-native-sdk dist-tags.latest)"
-          PUBLISHED_BETA="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/react-native-sdk dist-tags.beta)"
-          test "$LATEST_AFTER" = "$LATEST_BEFORE"
-          test "$PUBLISHED_BETA" = "$RELEASE_VERSION"
+          node tools/release/publish-npm.mjs react-native "$RELEASE_VERSION" "$PACKAGE_PATH"
 
       - name: Publish or verify exact Web npm artifact after recovery
         shell: bash
@@ -1008,28 +949,8 @@ jobs:
           (cd target/recovered/web-release && sha256sum -c web-package-files.json.sha256)
           test "$(jq -r .sourceRevision target/recovered/web-release/web-package-files.json)" = "$SOURCE_REVISION"
           test "$(jq -r .tarball.sha256 target/recovered/web-release/web-package-files.json)" = "$(sha256sum "$PACKAGE_PATH" | awk '{print $1}')"
-          PACKAGE_SPEC="@bota.dev/web-sdk@$RELEASE_VERSION"
-          EXPECTED_SHASUM="$(sha1sum "$PACKAGE_PATH" | awk '{print $1}')"
-          LATEST_BEFORE="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/web-sdk dist-tags.latest 2>/dev/null || true)"
-
-          if PUBLISHED_SHASUM="$(npx --yes "npm@$NPM_CLI_VERSION" view "$PACKAGE_SPEC" dist.shasum 2>/dev/null)"; then
-            test "$PUBLISHED_SHASUM" = "$EXPECTED_SHASUM"
-          else
-            npx --yes "npm@$NPM_CLI_VERSION" publish "$PACKAGE_PATH" --access public --tag "$NPM_DIST_TAG"
-          fi
-
-          PUBLISHED_SHASUM=""
-          for attempt in {1..30}; do
-            if PUBLISHED_SHASUM="$(npx --yes "npm@$NPM_CLI_VERSION" view "$PACKAGE_SPEC" dist.shasum 2>/dev/null)"; then
-              break
-            fi
-            sleep 10
-          done
-          test "$PUBLISHED_SHASUM" = "$EXPECTED_SHASUM"
-          LATEST_AFTER="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/web-sdk dist-tags.latest 2>/dev/null || true)"
-          PUBLISHED_BETA="$(npx --yes "npm@$NPM_CLI_VERSION" view @bota.dev/web-sdk dist-tags.beta)"
-          test "$LATEST_AFTER" = "$LATEST_BEFORE"
-          test "$PUBLISHED_BETA" = "$RELEASE_VERSION"
+          node tools/web/verify-package.mjs "$PACKAGE_PATH" --sdk-version "$RELEASE_VERSION"
+          node tools/release/publish-npm.mjs web "$RELEASE_VERSION" "$PACKAGE_PATH"
 
       - name: Publish recovered GitHub release
         env:
@@ -1190,8 +1111,9 @@ jobs:
         run: |
           tools/flutter/package-release.sh --check
           VERSION="${GITHUB_REF_NAME#v}"
+          FLUTTER_PACKAGE="$(node tools/release/package-identities.mjs flutter "$VERSION")"
           node tools/flutter/verify-publication.mjs verify-candidate \
-            --archive "target/flutter-release/bota_flutter_sdk-$VERSION.tar.gz" \
+            --archive "target/flutter-release/${FLUTTER_PACKAGE}-$VERSION.tar.gz" \
             --inventory target/flutter-release/package-inventory.json
           tools/release/write-candidate-inventory.sh \
             --source-revision "$(git rev-parse HEAD)" \
@@ -1246,8 +1168,9 @@ jobs:
         run: |
           set -euo pipefail
           RELEASE_VERSION="${GITHUB_REF_NAME#v}"
-          ARCHIVE="target/flutter-release/public-bota_flutter_sdk-$RELEASE_VERSION.tar.gz"
-          URL="https://pub.dev/api/archives/bota_flutter_sdk-$RELEASE_VERSION.tar.gz"
+          FLUTTER_PACKAGE="$(node tools/release/package-identities.mjs flutter "$RELEASE_VERSION")"
+          ARCHIVE="target/flutter-release/public-${FLUTTER_PACKAGE}-$RELEASE_VERSION.tar.gz"
+          URL="https://pub.dev/api/archives/${FLUTTER_PACKAGE}-$RELEASE_VERSION.tar.gz"
           for attempt in {1..120}; do
             if curl --fail --location --output "$ARCHIVE" "$URL"; then
               break
@@ -1266,7 +1189,7 @@ jobs:
         with:
           name: flutter-publication-${{ github.ref_name }}
           path: |
-            target/flutter-release/public-bota_flutter_sdk-*.tar.gz
+            target/flutter-release/public-*.tar.gz
             target/flutter-release/publication-evidence.json
           if-no-files-found: error
           compression-level: 0

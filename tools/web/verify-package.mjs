@@ -143,7 +143,7 @@ export function verifyPackageMetadata({
 
 export function verifyPackageTarball(
   tarballPath,
-  { workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..') } = {},
+  { workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..'), sdkVersion: expectedVersion } = {},
 ) {
   const absoluteTarball = resolve(tarballPath)
   const tarballStat = lstatSync(absoluteTarball)
@@ -161,7 +161,7 @@ export function verifyPackageTarball(
   const packageJson = JSON.parse(
     packageContents.get('package/package.json').toString('utf8'),
   )
-  const sdkVersion = readSdkVersion(resolve(workspaceRoot, 'sdk-version.toml'))
+  const sdkVersion = expectedVersion ?? readSdkVersion(resolve(workspaceRoot, 'sdk-version.toml'))
   verifyPackageMetadata({ packageJson, sdkVersion })
   const inventoryFiles = [...packageContents]
     .map(([path, contents]) => ({
@@ -491,6 +491,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const tarball = process.argv[2]
   const inventoryFlag = process.argv.indexOf('--inventory')
   const inventoryPath = inventoryFlag >= 0 ? process.argv[inventoryFlag + 1] : null
+  const versionFlag = process.argv.indexOf('--sdk-version')
+  const sdkVersion = versionFlag >= 0 ? process.argv[versionFlag + 1] : undefined
   if (!tarball) {
     console.error(
       'usage: node tools/web/verify-package.mjs <tarball> [--inventory <path>]',
@@ -499,8 +501,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   } else if (inventoryFlag >= 0 && !inventoryPath) {
     console.error('--inventory requires a path')
     process.exitCode = 2
+  } else if (versionFlag >= 0 && (!sdkVersion || sdkVersion.startsWith('--'))) {
+    throw new Error('--sdk-version requires a version')
   } else {
-    const inventory = verifyPackageTarball(tarball)
+    const inventory = verifyPackageTarball(tarball, { sdkVersion })
     if (inventoryPath) {
       const serialized = `${JSON.stringify(inventory, null, 2)}\n`
       writeFileSync(inventoryPath, serialized)

@@ -70,7 +70,7 @@ jobs:
           tools/android/package-release.sh --check
           tools/android/verify-publication.sh target/android-release
           node tools/android/check-maven-license-policy.mjs \
-            "target/android-release/bota-android-sdk-$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml).module" \
+            "target/android-release/bota-app-sdk-$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml).module" \
             target/android-release/BotaAndroidSDK.spdx.json \
             protocol/baseline/android-maven-license-policy.json
 

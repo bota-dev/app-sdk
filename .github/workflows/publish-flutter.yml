@@ -58,10 +58,11 @@ jobs:
             > target/flutter-release.zip
           unzip -q target/flutter-release.zip -d target/flutter-release
           VERSION="${GITHUB_REF_NAME#v}"
+          FLUTTER_PACKAGE="$(node tools/release/package-identities.mjs flutter "$VERSION")"
           test "$(jq -r .sourceRevision target/flutter-release/package-inventory.json)" \
             = "$SOURCE_REVISION"
           node tools/flutter/verify-publication.mjs verify-candidate \
-            --archive "target/flutter-release/bota_flutter_sdk-$VERSION.tar.gz" \
+            --archive "target/flutter-release/${FLUTTER_PACKAGE}-$VERSION.tar.gz" \
             --inventory target/flutter-release/package-inventory.json
 
       - name: Verify an occupied version or authorize OIDC publication
@@ -70,8 +71,9 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
-          ARCHIVE="target/flutter-release/public-bota_flutter_sdk-$VERSION.tar.gz"
-          URL="https://pub.dev/api/archives/bota_flutter_sdk-$VERSION.tar.gz"
+          FLUTTER_PACKAGE="$(node tools/release/package-identities.mjs flutter "$VERSION")"
+          ARCHIVE="target/flutter-release/public-${FLUTTER_PACKAGE}-$VERSION.tar.gz"
+          URL="https://pub.dev/api/archives/${FLUTTER_PACKAGE}-$VERSION.tar.gz"
           HTTP_CODE="$(curl --silent --show-error --location --retry 3 \
             --output "$ARCHIVE" --write-out '%{http_code}' "$URL")"
           case "$HTTP_CODE" in
@@ -99,4 +101,4 @@ jobs:
       contents: read
     uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
     with:
-      working-directory: frameworks/flutter/bota_flutter_sdk
+      working-directory: frameworks/flutter/bota_app_sdk

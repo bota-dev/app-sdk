@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Check out maintenance React Native workflow baseline
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -70,7 +72,7 @@ jobs:
         run: node tools/baseline/react-native-api-contract.mjs validate --contract protocol/baseline/react-native-public-api-0.0.65.json --baseline-metadata protocol/baseline/react-native-sdk-0.0.65.json
 
       - name: Validate release manifest
-        run: cargo xtask release validate release/examples/1.2.0-beta.12.json
+        run: cargo xtask release validate release/examples/2.0.0-beta.0.json
 
       - name: Check generated protocol constants
         run: cargo xtask protocol generate --check
@@ -274,7 +276,7 @@ jobs:
             --repository target/android-m2
 
       - name: Inspect packaged native libraries
-        run: tools/android/inspect-aar.sh "target/android-release/bota-android-sdk-$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml).aar"
+        run: tools/android/inspect-aar.sh "target/android-release/bota-app-sdk-$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml).aar"
 
       - name: Test React Native Android adapter consumer
         run: tools/react-native/test-android-adapter.sh --repository target/android-m2
@@ -384,7 +386,7 @@ jobs:
         working-directory: platforms/apple
         run: |
           xcodebuild \
-            -scheme BotaAppleSDK \
+            -scheme BotaAppSDK \
             -destination 'generic/platform=iOS' \
             -derivedDataPath ../../target/apple-ios-device \
             CODE_SIGNING_ALLOWED=NO \
@@ -396,7 +398,7 @@ jobs:
         working-directory: platforms/apple
         run: |
           xcodebuild \
-            -scheme BotaAppleSDK \
+            -scheme BotaAppSDK \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath ../../target/apple-ios-simulator \
             CODE_SIGNING_ALLOWED=NO \
@@ -489,7 +491,7 @@ jobs:
         run: |
           VERSION="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml)"
           node tools/flutter/verify-publication.mjs verify-candidate \
-            --archive "target/flutter-release/bota_flutter_sdk-$VERSION.tar.gz" \
+            --archive "target/flutter-release/bota_app_sdk-$VERSION.tar.gz" \
             --inventory target/flutter-release/package-inventory.json
 
       - name: Upload Flutter candidate

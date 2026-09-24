@@ -8,9 +8,9 @@ import { unzipSync } from 'fflate';
 
 import { inspectZip, verifyCentralBundle } from './build-central-bundle.mjs';
 import { primaryFiles, validatePublishedMetadata } from './normalize-central-repository.mjs';
+import { publicPackageIdentifier } from '../release/package-identities.mjs';
+import { parseReleaseRef } from '../release/resolve-release-channel.mjs';
 
-const PACKAGE_IDENTIFIER = 'dev.bota:bota-android-sdk';
-const VERSION = '1.2.0-beta.12';
 const API_ROOT = 'https://central.sonatype.com/api/v1/publisher';
 const MAVEN_ROOT = 'https://repo1.maven.org/maven2';
 const REVISION = /^[0-9a-f]{40}$/;
@@ -18,23 +18,24 @@ const SHA256 = /^[0-9a-f]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PORTAL_STATES = new Set(['PENDING', 'VALIDATING', 'VALIDATED', 'PUBLISHING', 'PUBLISHED', 'FAILED']);
 
-export function deploymentName(bundleSha256) {
+export function deploymentName(bundleSha256, version) {
   requireMatch('bundleSha256', bundleSha256, SHA256);
-  return `bota-android-sdk-${VERSION}-${bundleSha256.slice(0, 16)}`;
+  const artifact = publicPackageIdentifier('android', version).split(':')[1];
+  return `${artifact}-${version}-${bundleSha256.slice(0, 16)}`;
 }
 
-export function createDeploymentState({ sourceRevision, bundleSha256, inventorySha256, now = new Date() }) {
+export function createDeploymentState({ version, sourceRevision, bundleSha256, inventorySha256, now = new Date() }) {
   requireMatch('sourceRevision', sourceRevision, REVISION);
   requireMatch('bundleSha256', bundleSha256, SHA256);
   requireMatch('inventorySha256', inventorySha256, SHA256);
   return {
     schemaVersion: 1,
-    packageIdentifier: PACKAGE_IDENTIFIER,
-    version: VERSION,
+    packageIdentifier: publicPackageIdentifier('android', version),
+    version,
     sourceRevision,
     bundleSha256,
     inventorySha256,
-    deploymentName: deploymentName(bundleSha256),
+    deploymentName: deploymentName(bundleSha256, version),
     deploymentId: null,
     deploymentState: 'READY',
     updatedAt: now.toISOString(),
@@ -49,7 +50,7 @@ export async function loadDeploymentState(path, expected = {}) {
     throw new Error(`cannot read deployment state: ${error.message}`);
   }
   validateDeploymentState(state);
-  for (const field of ['sourceRevision', 'bundleSha256', 'inventorySha256']) {
+  for (const field of ['version', 'packageIdentifier', 'sourceRevision', 'bundleSha256', 'inventorySha256']) {
     if (expected[field] !== undefined && state[field] !== expected[field]) {
       throw new Error(`${field} does not match the expected release input`);
     }
@@ -282,7 +283,7 @@ export async function verifyArchivedBundle({ inventoryPath, bundlePath }) {
 export async function verifyArchivedRelease({ inventoryPath, bundlePath, statePath, sourceRevision }) {
   const inventory = await verifyArchivedBundle({ inventoryPath, bundlePath });
   const state = await loadDeploymentState(statePath);
-  if (inventory.coordinate !== PACKAGE_IDENTIFIER || inventory.version !== VERSION
+  if (inventory.coordinate !== state.packageIdentifier || inventory.version !== state.version
       || inventory.sourceRevision !== sourceRevision || state.sourceRevision !== sourceRevision) {
     throw new Error('archived release identity is invalid');
   }
@@ -307,7 +308,9 @@ export async function verifyPublishedArtifacts({
   if (digest(inventoryBytes) !== state.inventorySha256) throw new Error('inventorySha256 is invalid');
   const inventory = JSON.parse(inventoryBytes);
   validateInventory(inventory, state.sourceRevision);
-  const versionPrefix = `dev/bota/bota-android-sdk/${VERSION}/`;
+  if (inventory.coordinate !== state.packageIdentifier || inventory.version !== state.version) throw new Error('inventory release identity is invalid');
+  const artifact = inventory.coordinate.split(':')[1];
+  const versionPrefix = `dev/bota/${artifact}/${inventory.version}/`;
   const expectedNames = inventory.files.map((file) => {
     if (!file.path.startsWith(versionPrefix)) throw new Error('inventory path is outside the release coordinate');
     return file.path.slice(versionPrefix.length);
@@ -347,17 +350,16 @@ export async function verifyPublishedArtifacts({
     break;
   }
   if (!downloaded) throw new Error('published Maven verification did not complete');
-  await verifyDownloadedMavenFiles(downloaded);
+  await verifyDownloadedMavenFiles(downloaded, inventory);
 }
 
 function validateDeploymentState(state) {
   if (!state || state.schemaVersion !== 1) throw new Error('schemaVersion is invalid');
-  if (state.packageIdentifier !== PACKAGE_IDENTIFIER) throw new Error('packageIdentifier is invalid');
-  if (state.version !== VERSION) throw new Error('version is invalid');
+  if (state.packageIdentifier !== publicPackageIdentifier('android', state.version)) throw new Error('packageIdentifier is invalid');
   requireMatch('sourceRevision', state.sourceRevision, REVISION);
   requireMatch('bundleSha256', state.bundleSha256, SHA256);
   requireMatch('inventorySha256', state.inventorySha256, SHA256);
-  if (state.deploymentName !== deploymentName(state.bundleSha256)) throw new Error('deploymentName is invalid');
+  if (state.deploymentName !== deploymentName(state.bundleSha256, state.version)) throw new Error('deploymentName is invalid');
   if (!['READY', 'UPLOAD_UNCERTAIN', 'PUBLISH_UNCERTAIN', ...PORTAL_STATES].includes(state.deploymentState)) throw new Error('deploymentState is unknown');
   if (['READY', 'UPLOAD_UNCERTAIN'].includes(state.deploymentState)) {
     if (state.deploymentId !== null) throw new Error('deploymentId must be null for READY state');
@@ -373,14 +375,15 @@ function validateDeploymentState(state) {
 }
 
 function validateInventory(inventory, expectedRevision) {
-  if (!inventory || inventory.schemaVersion !== 1 || inventory.coordinate !== PACKAGE_IDENTIFIER
-      || inventory.version !== VERSION || !REVISION.test(inventory.sourceRevision)
+  if (!inventory || inventory.schemaVersion !== 1 || inventory.coordinate !== publicPackageIdentifier('android', inventory.version)
+      || !REVISION.test(inventory.sourceRevision)
       || (expectedRevision !== undefined && inventory.sourceRevision !== expectedRevision)
       || !Array.isArray(inventory.files) || inventory.files.length !== 30) {
     throw new Error('Central bundle inventory is invalid');
   }
-  const prefix = `dev/bota/bota-android-sdk/${VERSION}/`;
-  const expectedPaths = primaryFiles('bota-android-sdk', VERSION).flatMap((name) => [
+  const artifact = inventory.coordinate.split(':')[1];
+  const prefix = `dev/bota/${artifact}/${inventory.version}/`;
+  const expectedPaths = primaryFiles(artifact, inventory.version).flatMap((name) => [
     `${prefix}${name}`,
     `${prefix}${name}.asc`,
     ...['md5', 'sha1', 'sha256', 'sha512'].map((algorithm) => `${prefix}${name}.${algorithm}`),
@@ -415,10 +418,11 @@ function directoryEntries(html) {
   return [...new Set(names)].sort();
 }
 
-async function verifyDownloadedMavenFiles(files) {
-  const primary = primaryFiles('bota-android-sdk', VERSION);
+async function verifyDownloadedMavenFiles(files, { coordinate, version }) {
+  const artifact = coordinate.split(':')[1];
+  const primary = primaryFiles(artifact, version);
   for (const name of primary) if (!files.has(name)) throw new Error(`published Maven primary ${name} is missing`);
-  const aar = unzipSync(files.get(`bota-android-sdk-${VERSION}.aar`));
+  const aar = unzipSync(files.get(`${artifact}-${version}.aar`));
   const expectedLibraries = ['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64']
     .flatMap((abi) => ['libbota_android_jni.so', 'libbota_device_sdk_ffi.so'].map((library) => `jni/${abi}/${library}`))
     .sort();
@@ -430,7 +434,7 @@ async function verifyDownloadedMavenFiles(files) {
   const directory = await mkdtemp(join(tmpdir(), 'bota-published-maven-'));
   try {
     for (const name of primary) await writeFile(join(directory, name), files.get(name));
-    await validatePublishedMetadata({ repository: directory, coordinate: PACKAGE_IDENTIFIER, version: VERSION });
+    await validatePublishedMetadata({ repository: directory, coordinate, version });
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -486,10 +490,10 @@ async function main() {
     const bundleSha256 = digest(await readFile(options.bundle));
     const inventorySha256 = digest(await readFile(options.inventory));
     const inventory = JSON.parse(await readFile(options.inventory, 'utf8'));
-    if (inventory.coordinate !== PACKAGE_IDENTIFIER) throw new Error('inventory coordinate is invalid');
-    if (inventory.version !== VERSION) throw new Error('inventory version is invalid');
+    validateInventory(inventory);
     if (inventory.sourceRevision !== options['source-revision']) throw new Error('inventory sourceRevision is invalid');
     await persistDeploymentState(options.state, createDeploymentState({
+      version: inventory.version,
       sourceRevision: options['source-revision'],
       bundleSha256,
       inventorySha256,
@@ -505,11 +509,12 @@ async function main() {
     password: process.env.MAVEN_CENTRAL_PASSWORD,
   });
   if (command === 'recover-and-resume' || command === 'retry-failed') {
-    if (options['release-ref'] !== `refs/tags/v${VERSION}`) throw new Error('releaseRef is invalid');
+    const version = parseReleaseRef(options['release-ref']);
     await verifyArchivedBundle({ inventoryPath: options.inventory, bundlePath: options.bundle });
-    const state = await loadDeploymentState(options.state);
+    const state = await loadDeploymentState(options.state, { version });
     const inventory = JSON.parse(await readFile(options.inventory, 'utf8'));
     validateInventory(inventory, state.sourceRevision);
+    if (inventory.version !== state.version || inventory.coordinate !== state.packageIdentifier) throw new Error('inventory release identity is invalid');
     if (digest(await readFile(options.bundle)) !== state.bundleSha256) throw new Error('bundleSha256 is invalid');
     if (digest(await readFile(options.inventory)) !== state.inventorySha256) throw new Error('inventorySha256 is invalid');
     if (command === 'retry-failed') {

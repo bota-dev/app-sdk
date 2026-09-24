@@ -9,6 +9,8 @@ if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]
     exit 1
 fi
 
+APPLE_PACKAGE="$(node "$ROOT/tools/release/package-identities.mjs" apple "$VERSION")"
+
 mkdir -p "$ROOT/target"
 CONSUMER=$(mktemp -d "$ROOT/target/apple-remote-consumer.XXXXXX")
 cleanup() { rm -rf "$CONSUMER"; }
@@ -33,7 +35,7 @@ let package = Package(
         .executableTarget(
             name: "AppleRemoteConsumer",
             dependencies: [
-                .product(name: "BotaAppSDK", package: "app-sdk"),
+                .product(name: "${APPLE_PACKAGE}", package: "app-sdk"),
             ]
         ),
     ]
@@ -41,7 +43,7 @@ let package = Package(
 EOF
 
 cat > "$CONSUMER/Sources/AppleRemoteConsumer/main.swift" <<EOF
-import BotaAppSDK
+import ${APPLE_PACKAGE}
 
 @main
 enum AppleRemoteConsumer {
@@ -49,7 +51,7 @@ enum AppleRemoteConsumer {
         precondition(BotaAppleSDKVersion.current == "$VERSION")
         _ = BotaConfiguration()
         _ = BotaDeviceClient()
-        print("Resolved BotaAppSDK $VERSION")
+        print("Resolved ${APPLE_PACKAGE} $VERSION")
     }
 }
 EOF
@@ -61,4 +63,4 @@ swift build \
     -Xswiftc -disable-batch-mode \
     --product AppleRemoteConsumer
 
-printf 'BotaAppSDK %s public consumer compiled successfully\n' "$VERSION"
+printf '%s %s public consumer compiled successfully\n' "$APPLE_PACKAGE" "$VERSION"

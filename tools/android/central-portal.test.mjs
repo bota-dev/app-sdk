@@ -26,11 +26,38 @@ const bundleSha256 = 'b'.repeat(64);
 const inventorySha256 = 'c'.repeat(64);
 const deploymentId = '12345678-1234-4234-8234-123456789abc';
 
+test('renamed deployment recovery preserves the UUID and rejects old coordinates before I/O', async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), 'bota-central-renamed-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const statePath = join(directory, 'state.json');
+  const state = createDeploymentState({ version: '2.0.0-beta.0', sourceRevision, bundleSha256, inventorySha256 });
+  assert.equal(state.packageIdentifier, 'dev.bota:bota-app-sdk');
+  assert.equal(state.deploymentName, `bota-app-sdk-2.0.0-beta.0-${bundleSha256.slice(0, 16)}`);
+  state.deploymentId = deploymentId;
+  state.deploymentState = 'PUBLISHING';
+  await writeFile(statePath, JSON.stringify(state));
+  const calls = [];
+  const portal = {
+    upload: async () => assert.fail('must not upload'),
+    publish: async () => assert.fail('must not republish'),
+    status: async (id) => {
+      calls.push(id);
+      return { deploymentState: 'PUBLISHED', deploymentName: state.deploymentName };
+    },
+  };
+  await recoverDeployment({ statePath, deploymentId, portal, pollIntervalMs: 0 });
+  assert.deepEqual(calls, [deploymentId]);
+  state.packageIdentifier = coordinate;
+  await writeFile(statePath, JSON.stringify(state));
+  await assert.rejects(recoverDeployment({ statePath, deploymentId, portal }), /packageIdentifier/);
+  assert.deepEqual(calls, [deploymentId]);
+});
+
 async function stateFixture(t, deploymentState = 'READY') {
   const directory = await mkdtemp(join(tmpdir(), 'bota-central-state-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const statePath = join(directory, 'central-portal-state.json');
-  const state = createDeploymentState({ sourceRevision, bundleSha256, inventorySha256 });
+  const state = createDeploymentState({ version, sourceRevision, bundleSha256, inventorySha256 });
   state.deploymentState = deploymentState;
   if (deploymentState !== 'READY') state.deploymentId = deploymentId;
   await writeFile(statePath, `${JSON.stringify(state, null, 2)}\n`);
@@ -38,11 +65,11 @@ async function stateFixture(t, deploymentState = 'READY') {
 }
 
 test('creates deterministic READY state without credentials or a deployment ID', () => {
-  const state = createDeploymentState({ sourceRevision, bundleSha256, inventorySha256 });
+  const state = createDeploymentState({ version, sourceRevision, bundleSha256, inventorySha256 });
 
   assert.equal(state.packageIdentifier, 'dev.bota:bota-android-sdk');
   assert.equal(state.version, '1.2.0-beta.12');
-  assert.equal(state.deploymentName, deploymentName(bundleSha256));
+  assert.equal(state.deploymentName, deploymentName(bundleSha256, version));
   assert.equal(state.deploymentId, null);
   assert.equal(state.deploymentState, 'READY');
   assert.equal(JSON.stringify(state).includes('password'), false);
@@ -153,8 +180,8 @@ test('manual recovery adopts only the exact deterministic deployment identity', 
     status: async () => {
       calls.push('status');
       return calls.length === 1
-        ? { deploymentState: 'VALIDATING', deploymentName: deploymentName(bundleSha256) }
-        : { deploymentState: 'PUBLISHED', deploymentName: deploymentName(bundleSha256) };
+        ? { deploymentState: 'VALIDATING', deploymentName: deploymentName(bundleSha256, version) }
+        : { deploymentState: 'PUBLISHED', deploymentName: deploymentName(bundleSha256, version) };
     },
     publish: async () => assert.fail('must not publish while validating'),
   };
@@ -170,7 +197,7 @@ test('an uncertain publish is persisted and recovery polls before any retry', as
   const { statePath } = await stateFixture(t, 'VALIDATED');
   const portal = {
     upload: async () => assert.fail('must not upload'),
-    status: async () => ({ deploymentState: 'PUBLISHED', deploymentName: deploymentName(bundleSha256) }),
+    status: async () => ({ deploymentState: 'PUBLISHED', deploymentName: deploymentName(bundleSha256, version) }),
     publish: async () => { throw new Error('connection reset'); },
   };
 
@@ -194,12 +221,12 @@ test('a failed deployment can be superseded only by uploading the preserved bund
     status: async (id) => {
       calls.push(`status:${id}`);
       if (id === deploymentId) {
-        return { deploymentState: 'FAILED', deploymentName: deploymentName(bundleSha256) };
+        return { deploymentState: 'FAILED', deploymentName: deploymentName(bundleSha256, version) };
       }
       replacementPolls += 1;
       return {
         deploymentState: replacementPolls === 1 ? 'VALIDATED' : 'PUBLISHED',
-        deploymentName: deploymentName(bundleSha256),
+        deploymentName: deploymentName(bundleSha256, version),
       };
     },
     publish: async (id) => calls.push(`publish:${id}`),
@@ -227,8 +254,8 @@ test('a failed deployment can be superseded only by uploading the preserved bund
 
 test('failed-deployment retry rejects active and identity-mismatched deployments', async (t) => {
   for (const result of [
-    { deploymentState: 'VALIDATING', deploymentName: deploymentName(bundleSha256) },
-    { deploymentState: 'FAILED', deploymentName: deploymentName('d'.repeat(64)) },
+    { deploymentState: 'VALIDATING', deploymentName: deploymentName(bundleSha256, version) },
+    { deploymentState: 'FAILED', deploymentName: deploymentName('d'.repeat(64), version) },
   ]) {
     const { statePath } = await stateFixture(t);
     const portal = {
@@ -325,6 +352,7 @@ test('public Maven file verification does not require a directory index', async 
   });
   const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
   const state = createDeploymentState({
+    version,
     sourceRevision,
     bundleSha256: sha256(await readFile(bundlePath)),
     inventorySha256: sha256(await readFile(inventoryPath)),

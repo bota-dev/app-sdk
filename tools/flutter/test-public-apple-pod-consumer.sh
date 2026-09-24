@@ -12,6 +12,8 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 1
 fi
 
+APPLE_PACKAGE="$(node "$ROOT/tools/release/package-identities.mjs" apple "$VERSION")"
+
 unset BOTA_APPLE_SDK_PACKAGE_PATH
 required_cocoapods_version="1.16.2"
 homebrew_pod=""
@@ -37,8 +39,8 @@ cleanup() { rm -rf "$temporary"; }
 trap cleanup EXIT
 mkdir -p "$temporary/PublicPodConsumer"
 
-cat >"$temporary/PublicPodConsumer/main.swift" <<'SWIFT'
-import BotaAppleSDK
+cat >"$temporary/PublicPodConsumer/main.swift" <<SWIFT
+import ${APPLE_PACKAGE}
 import Foundation
 
 precondition(!BotaAppleSDKVersion.current.isEmpty)
@@ -68,7 +70,7 @@ platform :ios, '15.0'
 use_frameworks!
 
 target 'PublicPodConsumer' do
-  pod 'BotaAppleSDK', '$VERSION'
+  pod '${APPLE_PACKAGE}', '$VERSION'
 end
 EOF
 
@@ -80,7 +82,7 @@ if grep -q '^EXTERNAL SOURCES:' "$temporary/Podfile.lock"; then
   echo "Public CocoaPods consumer resolved a local source" >&2
   exit 1
 fi
-grep -Fq "BotaAppleSDK ($VERSION)" "$temporary/Podfile.lock"
+grep -Fq "${APPLE_PACKAGE} ($VERSION)" "$temporary/Podfile.lock"
 xcodebuild \
   -workspace "$temporary/PublicPodConsumer.xcworkspace" \
   -scheme PublicPodConsumer \
@@ -89,4 +91,4 @@ xcodebuild \
   -derivedDataPath "$temporary/DerivedData" \
   CODE_SIGNING_ALLOWED=NO \
   build
-echo "Public CocoaPods consumer resolved BotaAppleSDK $VERSION without overrides"
+echo "Public CocoaPods consumer resolved ${APPLE_PACKAGE} $VERSION without overrides"

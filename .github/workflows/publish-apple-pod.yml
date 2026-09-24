@@ -11,7 +11,7 @@ env:
 
 jobs:
   publish:
-    name: Publish and verify BotaAppleSDK
+    name: Publish and verify Apple SDK
     runs-on: macos-15
     environment: release
     permissions:
@@ -34,26 +34,27 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
+          APPLE_PACKAGE="$(node tools/release/package-identities.mjs apple "$VERSION")"
           test "$GITHUB_REF" = "refs/tags/v$VERSION"
           test "$(git cat-file -t "$GITHUB_REF_NAME")" = tag
           test "$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml)" = "$VERSION"
-          test "$(sed -n 's/.*spec.version = "\([^"]*\)".*/\1/p' platforms/apple/BotaAppleSDK.podspec)" = "$VERSION"
+          test "$(sed -n 's/.*spec.version = "\([^"]*\)".*/\1/p' platforms/apple/${APPLE_PACKAGE}.podspec)" = "$VERSION"
           (
             cd target/apple-release
             shasum -a 256 -c BotaDeviceSDKCore.xcframework.zip.sha256
-            shasum -a 256 -c BotaAppleSDK.cocoapods.zip.sha256
+            shasum -a 256 -c ${APPLE_PACKAGE}.cocoapods.zip.sha256
           )
           CHECKSUM="$(cat target/apple-release/BotaDeviceSDKCore.xcframework.swiftpm-checksum)"
           test "$CHECKSUM" = "$(swift package compute-checksum target/apple-release/BotaDeviceSDKCore.xcframework.zip)"
           grep -F "releases/download/v$VERSION/BotaDeviceSDKCore.xcframework.zip" Package.swift
           grep -F "checksum: \"$CHECKSUM\"" Package.swift
-          POD_CHECKSUM="$(shasum -a 256 target/apple-release/BotaAppleSDK.cocoapods.zip | awk '{print $1}')"
+          POD_CHECKSUM="$(shasum -a 256 target/apple-release/${APPLE_PACKAGE}.cocoapods.zip | awk '{print $1}')"
           node tools/release/generate-public-podspec.mjs \
             --sdk-version "$VERSION" \
             --artifact-checksum "$POD_CHECKSUM" \
-            --output platforms/apple/BotaAppleSDK.podspec \
+            --output platforms/apple/${APPLE_PACKAGE}.podspec \
             --check
-          ! grep -q 'prepare_command' platforms/apple/BotaAppleSDK.podspec
+          ! grep -q 'prepare_command' platforms/apple/${APPLE_PACKAGE}.podspec
 
       - name: Install exact CocoaPods client
         run: gem install --no-document cocoapods -v 1.16.2
@@ -65,9 +66,10 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
-          POD_URL="https://github.com/bota-dev/app-sdk/releases/download/v$VERSION/BotaAppleSDK.cocoapods.zip"
-          POD_CHECKSUM="$(shasum -a 256 target/apple-release/BotaAppleSDK.cocoapods.zip | awk '{print $1}')"
-          SPEC_URL="https://trunk.cocoapods.org/api/v1/pods/BotaAppleSDK/specs/$VERSION"
+          APPLE_PACKAGE="$(node tools/release/package-identities.mjs apple "$VERSION")"
+          POD_URL="https://github.com/bota-dev/app-sdk/releases/download/v$VERSION/${APPLE_PACKAGE}.cocoapods.zip"
+          POD_CHECKSUM="$(shasum -a 256 target/apple-release/${APPLE_PACKAGE}.cocoapods.zip | awk '{print $1}')"
+          SPEC_URL="https://trunk.cocoapods.org/api/v1/pods/${APPLE_PACKAGE}/specs/$VERSION"
           existing="$(mktemp)"
           fetch_public_spec() {
             local status
@@ -91,7 +93,7 @@ jobs:
           else
             test -n "$COCOAPODS_TRUNK_TOKEN"
             # Trunk may register the pod before its CLI finishes or times out.
-            pod trunk push platforms/apple/BotaAppleSDK.podspec || true
+            pod trunk push platforms/apple/${APPLE_PACKAGE}.podspec || true
           fi
           for attempt in {1..30}; do
             if fetch_public_spec; then

@@ -2,6 +2,17 @@
 
 ## Package Name Migration
 
+Current tooling selects publication identities from the verified release
+version. Central recovery preserves the signed bundle and deployment UUID;
+it never relabels an old deployment. npm publication uses
+`tools/release/publish-npm.mjs`: only a registry 404 authorizes a new upload,
+the exact tarball identity/hash is checked, `beta` is explicit, `latest` must
+not move, and the old package's dist-tags must remain unchanged when publishing
+a renamed package. Registry authentication and transport failures stop the run.
+
+The renamed `2.0.0-beta.0` candidate is under local verification, not yet a
+published release. Its new manifest must be generated from fresh artifacts.
+
 Release tooling distinguishes historical major-0/1 identifiers from the
 approved major-2 App SDK identifiers. Manifest version 2 is retained because
 the evidence fields do not change; its package matrix is selected by the

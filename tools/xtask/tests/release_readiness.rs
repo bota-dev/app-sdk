@@ -86,13 +86,13 @@ fn release_metadata_fixture() -> PathBuf {
         "frameworks/react-native/package.json",
         "frameworks/react-native/package-lock.json",
         "frameworks/web/package.json",
-        "frameworks/flutter/bota_flutter_sdk/pubspec.yaml",
-        "frameworks/flutter/bota_flutter_sdk/android/sdk-version.toml",
-        "frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Package.swift",
+        "frameworks/flutter/bota_app_sdk/pubspec.yaml",
+        "frameworks/flutter/bota_app_sdk/android/sdk-version.toml",
+        "frameworks/flutter/bota_app_sdk/ios/bota_app_sdk/Package.swift",
         "platforms/android/gradle.properties",
-        "platforms/apple/BotaAppleSDK.podspec",
+        "platforms/apple/BotaAppSDK.podspec",
         "protocol/compatibility/firmware-compatibility.json",
-        "release/examples/1.2.0-beta.12.json",
+        "release/examples/2.0.0-beta.0.json",
     ] {
         let destination = temp_root.join(path);
         fs::create_dir_all(destination.parent().unwrap()).unwrap();
@@ -140,10 +140,47 @@ fn occupied_flutter_release_fixture() -> PathBuf {
 
 #[test]
 fn version_tag_and_publishable_metadata_are_synchronized() {
-    let release = xtask::release::verify_release(&root(), "v1.2.0-beta.12").unwrap();
+    let release = xtask::release::verify_release(&root(), "v2.0.0-beta.0").unwrap();
 
-    assert_eq!(release.version, "1.2.0-beta.12");
+    assert_eq!(release.version, "2.0.0-beta.0");
     assert_eq!(release.crate_name, "bota-device-sdk-core");
+}
+
+#[test]
+fn current_verifier_accepts_immutable_historical_tag_layout() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let fixture = android_build_fixture();
+    let archive = Command::new("git")
+        .args(["archive", "v1.2.0-beta.12"])
+        .current_dir(root())
+        .output()
+        .unwrap();
+    assert!(archive.status.success());
+    let mut tar = Command::new("tar")
+        .args(["-x", "-C"])
+        .arg(&fixture)
+        .stdin(Stdio::piped())
+        .spawn()
+        .unwrap();
+    tar.stdin
+        .take()
+        .unwrap()
+        .write_all(&archive.stdout)
+        .unwrap();
+    assert!(tar.wait().unwrap().success());
+    let result = Command::new(env!("CARGO_BIN_EXE_xtask"))
+        .args(["release", "verify-tag", "v1.2.0-beta.12"])
+        .current_dir(&fixture)
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    fs::remove_dir_all(fixture).unwrap();
 }
 
 #[test]
@@ -151,42 +188,42 @@ fn every_public_package_version_copy_fails_closed_on_drift() {
     for (path, needle, replacement) in [
         (
             "package-lock.json",
-            "\"version\": \"1.2.0-beta.12\"",
+            "\"version\": \"2.0.0-beta.0\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/react-native/package.json",
-            "\"version\": \"1.2.0-beta.12\"",
+            "\"version\": \"2.0.0-beta.0\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/react-native/package-lock.json",
-            "\"version\": \"1.2.0-beta.12\"",
+            "\"version\": \"2.0.0-beta.0\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/web/package.json",
-            "\"version\": \"1.2.0-beta.12\"",
+            "\"version\": \"2.0.0-beta.0\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
-            "frameworks/flutter/bota_flutter_sdk/pubspec.yaml",
-            "version: 1.2.0-beta.12",
+            "frameworks/flutter/bota_app_sdk/pubspec.yaml",
+            "version: 2.0.0-beta.0",
             "version: 1.2.0-beta.2",
         ),
         (
-            "frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Package.swift",
-            "exact: \"1.2.0-beta.12\"",
+            "frameworks/flutter/bota_app_sdk/ios/bota_app_sdk/Package.swift",
+            "exact: \"2.0.0-beta.0\"",
             "exact: \"1.2.0-beta.2\"",
         ),
         (
             "platforms/android/gradle.properties",
-            "VERSION_NAME=1.2.0-beta.12",
+            "VERSION_NAME=2.0.0-beta.0",
             "VERSION_NAME=1.2.0-beta.2",
         ),
         (
-            "platforms/apple/BotaAppleSDK.podspec",
-            "spec.version = \"1.2.0-beta.12\"",
+            "platforms/apple/BotaAppSDK.podspec",
+            "spec.version = \"2.0.0-beta.0\"",
             "spec.version = \"1.2.0-beta.2\"",
         ),
     ] {
@@ -196,7 +233,7 @@ fn every_public_package_version_copy_fails_closed_on_drift() {
         assert!(contents.contains(needle));
         fs::write(&target, contents.replacen(needle, replacement, 1)).unwrap();
 
-        let error = xtask::release::verify_release(&fixture, "v1.2.0-beta.12").unwrap_err();
+        let error = xtask::release::verify_release(&fixture, "v2.0.0-beta.0").unwrap_err();
         assert!(
             error.contains("version") || error.contains("Version"),
             "{path}: {error}"
@@ -236,7 +273,7 @@ fn compatibility_metadata_reports_apple_and_the_android_release_candidate() {
 #[test]
 fn mismatched_or_unprefixed_tags_are_rejected() {
     let wrong_version = xtask::release::verify_release(&root(), "v1.0.0-alpha.1").unwrap_err();
-    let missing_prefix = xtask::release::verify_release(&root(), "1.2.0-beta.12").unwrap_err();
+    let missing_prefix = xtask::release::verify_release(&root(), "2.0.0-beta.0").unwrap_err();
 
     assert!(wrong_version.contains("does not match"));
     assert!(missing_prefix.contains("must start with v"));
@@ -244,7 +281,7 @@ fn mismatched_or_unprefixed_tags_are_rejected() {
 
 #[test]
 fn ci_workflow_validates_the_current_release_manifest() {
-    let release = xtask::release::verify_release(&root(), "v1.2.0-beta.12").unwrap();
+    let release = xtask::release::verify_release(&root(), "v2.0.0-beta.0").unwrap();
     let path = root().join(".github/workflows/ci.yml");
     let contents = fs::read_to_string(path).unwrap();
     let _: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
@@ -313,7 +350,7 @@ fn release_workflow_publishes_and_smokes_the_public_apple_package() {
     assert!(contents.contains("tools/apple/test-consumer.sh"));
     assert!(contents.contains("generic/platform=iOS'"));
     assert!(contents.contains("generic/platform=iOS Simulator'"));
-    assert!(contents.contains("-scheme BotaAppleSDK"));
+    assert!(contents.contains("-scheme BotaAppSDK"));
     assert!(!contents.contains("-scheme BotaDeviceSDK"));
     assert!(contents.contains("tools/apple/package-release.sh"));
     assert!(contents.contains("tools/apple/test-remote-consumer.sh"));
@@ -382,14 +419,9 @@ fn release_workflow_packs_publishes_and_verifies_the_react_native_package() {
     assert!(contents.contains("needs: [verify, apple, android, react-native, web]"));
     assert!(contents.contains("registry-url: https://registry.npmjs.org"));
     assert!(contents.contains("target/react-native-release"));
-    assert!(
-        contents.contains(
-            "npx --yes \"npm@$NPM_CLI_VERSION\" publish \"$PACKAGE_PATH\" --access public --tag \"$NPM_DIST_TAG\""
-        )
-    );
-    assert!(
-        contents.contains("npx --yes \"npm@$NPM_CLI_VERSION\" view \"$PACKAGE_SPEC\" dist.shasum")
-    );
+    assert!(contents.contains(
+        "node tools/release/publish-npm.mjs react-native \"$RELEASE_VERSION\" \"$PACKAGE_PATH\""
+    ));
     assert!(!contents.contains("NPM_TOKEN"));
     assert!(!contents.contains("NODE_AUTH_TOKEN"));
 }
@@ -421,7 +453,7 @@ fn web_package_version_and_release_artifact_are_synchronized() {
             .iter()
             .any(|artifact| {
                 artifact["platform"] == "web"
-                    && artifact["packageIdentifier"] == "@bota.dev/web-sdk"
+                    && artifact["packageIdentifier"] == "@bota.dev/web-app-sdk"
                     && artifact["version"] == expected
             })
     );
@@ -462,7 +494,11 @@ fn workflows_build_and_preserve_the_exact_web_candidate() {
     );
     assert!(release_contents.contains("name: web-release-${{ github.ref_name }}"));
     assert!(release_contents.contains("path: target/web-release/"));
-    assert!(release_contents.contains("@bota.dev/web-sdk@$RELEASE_VERSION"));
+    assert!(
+        release_contents.contains(
+            "node tools/release/publish-npm.mjs web \"$RELEASE_VERSION\" \"$PACKAGE_PATH\""
+        )
+    );
     let inventory_command = release["jobs"]["publish"]["steps"]
         .as_sequence()
         .unwrap()
@@ -728,7 +764,7 @@ fn flutter_release_is_ordered_after_public_native_dependencies_and_verified_befo
     assert!(!bootstrap_source.contains("flutter pub publish"));
     assert!(!bootstrap_source.contains("v1.2.0-beta.0"));
     assert!(bootstrap_source.contains("verify-publication.mjs verify-public"));
-    assert!(bootstrap_source.contains("api/archives/bota_flutter_sdk-"));
+    assert!(bootstrap_source.contains("api/archives/${FLUTTER_PACKAGE}-"));
     assert!(
         bootstrap["steps"]
             .as_sequence()
@@ -830,10 +866,10 @@ fn apple_pod_bootstrap_is_protected_exact_and_publicly_verified() {
     assert_eq!(publish["permissions"]["contents"].as_str(), Some("read"));
     assert!(contents.contains("COCOAPODS_TRUNK_TOKEN"));
     assert!(contents.contains("BotaDeviceSDKCore.xcframework.zip.sha256"));
-    assert!(contents.contains("pod trunk push platforms/apple/BotaAppleSDK.podspec"));
-    assert!(contents.contains("trunk.cocoapods.org/api/v1/pods/BotaAppleSDK/specs/"));
+    assert!(contents.contains("pod trunk push platforms/apple/${APPLE_PACKAGE}.podspec"));
+    assert!(contents.contains("trunk.cocoapods.org/api/v1/pods/${APPLE_PACKAGE}/specs/"));
     assert!(contents.contains("verify_public_spec"));
-    assert!(!contents.contains("pod spec cat BotaAppleSDK --version"));
+    assert!(!contents.contains("pod spec cat BotaAppSDK --version"));
     assert!(!contents.contains("BOTA_APPLE_SDK_PACKAGE_PATH"));
 }
 
@@ -865,7 +901,7 @@ fn future_flutter_publication_uses_the_official_oidc_workflow_without_secrets() 
     );
     assert_eq!(
         publish["with"]["working-directory"].as_str(),
-        Some("frameworks/flutter/bota_flutter_sdk")
+        Some("frameworks/flutter/bota_app_sdk")
     );
     assert!(!contents.contains("secrets:"));
     assert!(!contents.contains("PUB_TOKEN"));
@@ -944,9 +980,10 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     assert!(contents.contains("cargo build -p xtask"));
     assert!(contents.contains("git archive \"$RELEASE_TAG\""));
     assert!(contents.contains("../debug/xtask release verify-tag \"$RELEASE_TAG\""));
-    assert!(contents.contains("LATEST_BEFORE"));
-    assert!(contents.contains("test \"$LATEST_AFTER\" = \"$LATEST_BEFORE\""));
-    assert!(contents.contains("test \"$PUBLISHED_BETA\" = \"$RELEASE_VERSION\""));
+    let npm_publisher = fs::read_to_string(root().join("tools/release/publish-npm.mjs")).unwrap();
+    assert!(npm_publisher.contains("after.latest !== before.latest"));
+    assert!(npm_publisher.contains("after.beta !== version"));
+    assert!(npm_publisher.contains("historicalBefore"));
     assert!(contents.contains("gh release edit \"$RELEASE_TAG\" --draft=false --prerelease"));
     assert!(!contents.contains("central-dev.bota-bota-android-sdk-1.1.0"));
     assert!(!contents.contains("--version 1.1.0"));
@@ -997,13 +1034,20 @@ fn release_workflow_never_publishes_npm_without_the_beta_tag() {
     let contents = fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
     let npm_publish_lines = contents
         .lines()
-        .filter(|line| line.contains("npm@$NPM_CLI_VERSION") && line.contains(" publish "))
+        .filter(|line| line.contains("node tools/release/publish-npm.mjs "))
         .collect::<Vec<_>>();
 
     assert_eq!(npm_publish_lines.len(), 4);
     for line in npm_publish_lines {
-        assert!(line.contains("--tag \"$NPM_DIST_TAG\""), "{line}");
+        assert!(
+            line.contains("\"$RELEASE_VERSION\" \"$PACKAGE_PATH\""),
+            "{line}"
+        );
     }
+    let publisher = fs::read_to_string(root().join("tools/release/publish-npm.mjs")).unwrap();
+    assert!(publisher.contains("'--tag', 'beta'"));
+    assert!(publisher.contains("response.status === 404"));
+    assert!(publisher.contains("if (!response.ok) throw"));
 }
 
 #[test]
