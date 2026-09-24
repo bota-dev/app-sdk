@@ -126,10 +126,14 @@ remains a separate consumer rollout.
 ## Publishing Prerequisites
 
 Before tagging, verify registry availability and organization ownership for
-each new package. Configure and verify the exact npm trusted publishers and
-the CocoaPods/pub.dev ownership and bootstrap paths. Retain the protected
-GitHub release approval gate and existing signing/provenance protections.
-Do not introduce stored npm tokens to work around new-name setup.
+each new package and establish the CocoaPods/pub.dev bootstrap paths. Configure
+and verify the exact npm trusted publishers once the new packages exist.
+On 2026-09-24 the release owner explicitly approved first publishing the exact
+CI npm archives with an interactive login, after native publication, because
+npm cannot attach a publisher to a nonexistent package. Follow the bounded
+procedure in [the release runbook](../../releasing.md); this does not authorize
+dummy packages, stored npm automation tokens, or changes to old publishers.
+Retain the protected GitHub release approval gate and automated checks.
 
 Use the successful main-CI candidate inventory for the new tag. Preserve exact
 native and npm candidates, publish native dependencies before framework

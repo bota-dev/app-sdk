@@ -10,8 +10,12 @@ the exact tarball identity/hash is checked, `beta` is explicit, `latest` must
 not move, and the old package's dist-tags must remain unchanged when publishing
 a renamed package. Registry authentication and transport failures stop the run.
 
-The renamed `2.0.0-beta.0` candidate is under local verification, not yet a
-published release. Its new manifest must be generated from fresh artifacts.
+The renamed `2.0.0-beta.0` candidate passed main CI at
+`dd672a5865ba460ca3e97420e97461eb096dfb4f`. Its immutable tag is pushed and
+registry rollout is partial: Android Central and the public Apple SwiftPM
+binary passed exact-byte verification. npm bootstrap requires a fresh owner
+security-key approval; CocoaPods, public consumers, and Flutter remain gated.
+This is not yet synchronized publication.
 
 Release tooling distinguishes historical major-0/1 identifiers from the
 approved major-2 App SDK identifiers. Manifest version 2 is retained because
@@ -415,13 +419,35 @@ candidate as check mode.
 
 ## Publish
 
-Before tagging the renamed candidate, configure npm trusted publishers for
-`@bota.dev/react-native-app-sdk` and `@bota.dev/web-app-sdk` with organization
-`bota-dev`, repository `app-sdk`, workflow `release.yml`, environment
-`release`, and allowed action `npm publish`. Each package has one trusted
-publisher. Preserve old-package publishers for maintenance and historical
-recovery. First publication requires approved exact artifacts and the registry's
-bootstrap procedure; do not create dummy packages or stored npm write tokens.
+Configure npm trusted publishers for `@bota.dev/react-native-app-sdk` and
+`@bota.dev/web-app-sdk` with organization `bota-dev`, repository `app-sdk`,
+workflow `release.yml`, environment `release`, and allowed action `npm publish`.
+Each package has one trusted publisher. Preserve old-package publishers for
+maintenance and historical recovery. npm requires a package to exist before
+this grant can be configured; staged publication cannot create a new package.
+See [npm trust](https://docs.npmjs.com/cli/v12/commands/npm-trust/).
+
+On 2026-09-24, the release owner approved this one-time bootstrap for
+`2.0.0-beta.0`, replacing the impossible pre-tag publisher prerequisite:
+
+1. Tag only the verified main-CI five-platform candidate and approve the
+   protected native publication after all automated gates pass.
+2. Wait for exact Maven publication and public Apple binary verification, then
+   publish the exact CI npm archives using the owner's interactive login and
+   `tools/release/publish-npm.mjs`. Preserve the explicit `beta` tag and all
+   historical tags; never create a dummy version or store an automation token.
+3. Configure only the repository/workflow/environment/action grant above and
+   read it back. Resume the same tagged workflow, which verifies occupied npm
+   versions rather than replacing them. Preserve Central's signed inputs.
+4. After public native consumers pass, publish Flutter from the exact ordered
+   release candidate using the owner's pub.dev login. Approve its separate
+   workflow only after public archive verification so the occupied-version
+   path skips a second upload. Future pub.dev automation requires its own
+   verified publisher configuration.
+
+This approval authorizes a beta rollout, not hardware acceptance. Physical
+device testing remains NOT RUN. Do not weaken an automated gate or change the
+immutable tag to recover publication.
 
 This workflow owns npm `beta`; the legacy React Native repository owns npm
 `latest`. Every npm publication command includes `--tag beta`, verifies the

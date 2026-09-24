@@ -10,9 +10,18 @@
 
 **Spec:** [Approved naming migration](../specs/2026-09-23-app-sdk-package-naming-migration-design.md).
 
-**Status:** Tasks 1-3 and 5 complete. All locally available Task 4 gates passed;
-the required Android x86 emulator lanes remain for CI. Task 6 main CI and
-registry rollout remain pending.
+**Status:** Tasks 1-5 complete. Main CI `35965596618`, license and security
+checks passed at `dd672a5865ba460ca3e97420e97461eb096dfb4f`, including both
+required Android x86 emulator lanes. Task 6 registry rollout is in progress.
+Immutable tag `v2.0.0-beta.0` uses the verified five-platform CI inventory;
+release run `35971649362` passed all packaging gates and has approved native
+publication. Android Central and the Apple SwiftPM archive are public and
+verified. CI stopped at the expected absent npm trusted-publisher boundary;
+the interactive npm approval session then ended without completing. Both new
+npm names remain absent and old versions/tags are unchanged. The release
+owner approved the one-time interactive bootstrap documented in
+`docs/releasing.md`; resume it with a fresh owner security-key confirmation.
+CocoaPods, public consumers, and Flutter remain pending.
 
 Local evidence: release tooling 87/87, general tooling 103/103, strict Apple
 suite 200 tests (9 physical skips), RN lifecycle 32/32 and fresh iOS/Android
@@ -346,7 +355,7 @@ npm run test:workflows -- --sdk-path .ci/react-native-workflow-baseline
   If `.ci/react-native-workflow-baseline` is absent, populate it at the exact
   revision in compatibility metadata and install its locked dependencies.
   Do not use an arbitrary maintenance checkout for executable workflow proof.
-- [ ] Run native tests, build exact local archives, and install the Android
+- [x] Run native tests, build exact local archives, and install the Android
   candidate into the exclusive test repository. Use the existing local package
   scripts rather than remote release URLs that do not exist yet:
 
@@ -496,7 +505,7 @@ This is the external rollout phase, after implementation review. Missing
 registry ownership, interactive login, or protected-environment approval is
 an explicit external gate; never bypass it to mark this task complete.
 
-- [ ] Verify a clean reviewed `main`, push the implementation commits, and
+- [x] Verify a clean reviewed `main`, push the implementation commits, and
   require green CI/license/security checks at that exact revision. Download
   `release-candidate-<commit>` and verify its five-platform inventory and source
   revision. Local builds alone are not the tag's candidate authority.
@@ -505,7 +514,7 @@ an explicit external gate; never bypass it to mark this task complete.
   settings intact for old-version recovery. Follow official registry bootstrap
   procedures for first publication, using only approved exact artifacts; do
   not create dummy packages or stored npm write tokens.
-- [ ] Record old RN/Web dist-tags, available legacy versions, and occupied
+- [x] Record old RN/Web dist-tags, available legacy versions, and occupied
   new-name versions as read-only preflight evidence. Recheck the intended tag
   is unused. Create the annotated tag only from the approved main-CI inventory
   using the source and inventory digest format in `docs/releasing.md`.
