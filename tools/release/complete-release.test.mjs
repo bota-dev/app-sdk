@@ -19,3 +19,10 @@ test('Flutter completion preserves the previously published native manifest', ()
   assert.match(completion.slice(rename), /target\/flutter-release\/flutter-release-manifest\.json/);
   assert.ok(rename < completion.indexOf('gh release upload'));
 });
+
+test('Flutter OIDC upload requires the protected environment, not only its gate', async () => {
+  const flutterWorkflow = await readFile('.github/workflows/publish-flutter.yml', 'utf8');
+  const publisher = flutterWorkflow.slice(flutterWorkflow.indexOf('\n  publish:'));
+  assert.match(publisher, /uses: dart-lang\/setup-dart\/\.github\/workflows\/publish\.yml@v1/);
+  assert.match(publisher, /with:\n\s+environment: release\n/);
+});

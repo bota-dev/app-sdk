@@ -819,6 +819,11 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
   are not published to crates.io by this workflow.
 - The protected `release` environment is the human approval gate for external
   hardware acceptance. CI never manufactures physical-device evidence.
+- Flutter's pub.dev GitHub publisher requires `bota-dev/app-sdk`, `v{{version}}`
+  push events, and environment `release`. Pass `environment: release` to the
+  reusable upload workflow itself; protecting only its upstream gate does not
+  bind the upload's OIDC identity. Saved settings are not successful-upload
+  evidence; verify automation on the next legitimate version.
 - Never push a release tag until `cargo xtask release verify-tag vVERSION`,
   package verification, and all quality gates pass.
 

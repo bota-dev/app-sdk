@@ -28,9 +28,10 @@ failure. Current tooling passes `--repo "$GITHUB_REPOSITORY"` and publishes the
 Flutter manifest as `flutter-release-manifest.json`, preserving the existing
 native `release-manifest.json`. See the
 [publication record](../release/evidence/2.0.0-beta.0-publication.md).
-React Native trusted publishing is saved; Web's grant still requires its
-security-key confirmation, and future pub.dev automation remains unconfigured.
-These automation follow-ups do not prevent installation of the published beta.
+React Native trusted publishing and Flutter's restricted GitHub publisher are
+saved. Web's grant still requires its security-key confirmation. No automated
+OIDC upload has yet been demonstrated for the new names; the next legitimate
+version must verify that path. This does not prevent installing the published beta.
 Hardware acceptance remains NOT RUN; Demo and Bota One were not upgraded.
 
 Release tooling distinguishes historical major-0/1 identifiers from the
@@ -458,8 +459,18 @@ On 2026-09-24, the release owner approved this one-time bootstrap for
 4. After public native consumers pass, publish Flutter from the exact ordered
    release candidate using the owner's pub.dev login. Approve its separate
    workflow only after public archive verification so the occupied-version
-   path skips a second upload. Future pub.dev automation requires its own
-   verified publisher configuration.
+   path skips a second upload. Future pub.dev automation uses the separately
+   configured GitHub publisher below.
+
+Flutter automated publishing was saved and read back on 2026-09-24 for
+`bota_app_sdk`: repository `bota-dev/app-sdk`, tag pattern `v{{version}}`,
+push events only, and required environment `release`. Manual publishing remains
+enabled; workflow-dispatch and GCP publishing remain disabled. Package ownership
+is unchanged. `.github/workflows/publish-flutter.yml` passes `environment: release`
+to the reusable Dart publish workflow so the actual OIDC upload, not only its
+upstream candidate gate, requires the protected environment. The existing
+environment reviewer and branch/tag restrictions are unchanged. Do not publish
+a dummy version or replay the immutable bootstrap tag to test this configuration.
 
 For a manual Flutter bootstrap, extract the verified ordered archive outside
 any Git checkout. An ignored `target/` directory inside the repository causes

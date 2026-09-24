@@ -101,4 +101,5 @@ jobs:
       contents: read
     uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
     with:
+      environment: release
       working-directory: frameworks/flutter/bota_app_sdk

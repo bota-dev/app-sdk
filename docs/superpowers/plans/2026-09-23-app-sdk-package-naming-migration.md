@@ -13,7 +13,8 @@
 **Status:** Tasks 1-5 complete. Main CI `35965596618`, license and security
 checks passed at `dd672a5865ba460ca3e97420e97461eb096dfb4f`, including both
 required Android x86 emulator lanes. Task 6 package publication is verified;
-Web and Flutter automated-publisher setup remains open.
+Web automated-publisher setup remains open; React Native and Flutter settings
+are saved, but new-name automated uploads still need verification.
 Immutable tag `v2.0.0-beta.0` uses the verified five-platform CI inventory;
 release run `35971649362` passed all packaging gates and has approved native
 publication. Android Central, the Apple SwiftPM archive, and both renamed npm
@@ -30,8 +31,11 @@ using the owner login; both workflows verified its exact 57-file public archive.
 The separate workflow skipped upload. The final evidence-attachment job failed
 without a checkout/repository argument and was recovered manually, attaching
 eleven new assets without overwriting native evidence. The tag and failed run
-remain immutable; the main workflow fix has two regression tests and 91/91
-release-tooling tests. See `docs/releasing.md` for the bootstrap and recovery.
+remain immutable. Flutter's pub.dev GitHub grant was saved and read back with
+`v{{version}}` push events and required environment `release`; the main workflow
+now passes that environment to the actual reusable upload job. The completion
+and publisher fixes have three regression tests and 92/92 release-tooling tests.
+See `docs/releasing.md` for the bootstrap and recovery.
 
 Local evidence: release tooling 87/87, general tooling 103/103, strict Apple
 suite 200 tests (9 physical skips), RN lifecycle 32/32 and fresh iOS/Android
