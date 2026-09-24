@@ -696,6 +696,16 @@ fn flutter_release_is_ordered_after_public_native_dependencies_and_verified_befo
     assert!(contents.contains("tools/apple/test-remote-consumer.sh"));
     assert!(contents.contains("tools/flutter/test-public-apple-pod-consumer.sh"));
     assert!(contents.contains("tools/flutter/install-pinned-cocoapods.sh"));
+    for path in [
+        "tools/flutter/install-pinned-cocoapods.sh",
+        "tools/flutter/test-public-apple-pod-consumer.sh",
+    ] {
+        let script = fs::read_to_string(root().join(path)).unwrap();
+        assert!(
+            script.contains("_1.16.2_") || script.contains("_$required_cocoapods_version"),
+            "{path}"
+        );
+    }
     assert!(contents.contains("tools/android/test-consumer.sh --public --compile-only"));
     assert!(contents.contains("tools/flutter/package-release.sh --check"));
     assert!(contents.contains("name: flutter-release-${{ github.ref_name }}"));

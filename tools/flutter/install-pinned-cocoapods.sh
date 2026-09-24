@@ -19,7 +19,7 @@ gem_bin="$RUNNER_TEMP/bota-cocoapods-bin"
 gem_path="$gem_home:$("$gem_binary" env path)"
 pod_binary="$gem_bin/pod"
 test -x "$pod_binary"
-actual_version="$(GEM_HOME="$gem_home" GEM_PATH="$gem_path" "$pod_binary" --version)"
+actual_version="$(GEM_HOME="$gem_home" GEM_PATH="$gem_path" "$pod_binary" _1.16.2_ --version)"
 echo "Isolated CocoaPods version: $actual_version"
 test "$actual_version" = 1.16.2
 

@@ -59,6 +59,8 @@ that same installer to compile a public beta.11 CocoaPods consumer on macOS;
 the tagged Flutter job then uses it for its matching public version.
 The installer selects the available RubyGems executable on the runner; it does
 not assume a Homebrew Ruby path exists on GitHub's macOS image.
+The public consumer invokes the pinned gem with RubyGems' `_1.16.2_` version
+selector, because the runner can have a newer CocoaPods gem installed globally.
 Apple consumers add
 `https://github.com/bota-dev/app-sdk.git` in Xcode. The root `Package.swift`
 compiles the Swift facade source and downloads a checksummed

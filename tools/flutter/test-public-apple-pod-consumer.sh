@@ -19,15 +19,15 @@ if [[ -x /opt/homebrew/opt/ruby/bin/ruby ]]; then
   export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
   homebrew_pod="$(/opt/homebrew/opt/ruby/bin/ruby -e 'print Gem.bindir')/pod"
 fi
-pod_binary=""
+pod_command=()
 for candidate in "${POD_BINARY:-}" "$homebrew_pod" "$(command -v pod || true)"; do
   if [[ -n "$candidate" && -x "$candidate" ]] \
-    && [[ "$($candidate --version 2>/dev/null)" == "$required_cocoapods_version" ]]; then
-    pod_binary="$candidate"
+    && [[ "$("$candidate" "_$required_cocoapods_version"_ --version 2>/dev/null)" == "$required_cocoapods_version" ]]; then
+    pod_command=("$candidate" "_$required_cocoapods_version"_)
     break
   fi
 done
-if [[ -z "$pod_binary" ]]; then
+if [[ "${#pod_command[@]}" -eq 0 ]]; then
   echo "CocoaPods $required_cocoapods_version is required" >&2
   exit 1
 fi
@@ -74,7 +74,7 @@ EOF
 
 (
   cd "$temporary"
-  "$pod_binary" install --repo-update
+  "${pod_command[@]}" install --repo-update
 )
 if rg -q '^EXTERNAL SOURCES:' "$temporary/Podfile.lock"; then
   echo "Public CocoaPods consumer resolved a local source" >&2
