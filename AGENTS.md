@@ -19,24 +19,25 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 
 ## Current Authority
 
-- Current synchronized source candidate is `2.0.0-beta.1`: Apple `BotaAppSDK`, Android
+- Current synchronized published beta is `2.0.0-beta.1`: Apple `BotaAppSDK`, Android
   `dev.bota:bota-app-sdk`, RN `@bota.dev/react-native-app-sdk`, Web
   `@bota.dev/web-app-sdk`, Flutter `bota_app_sdk`. Apple SwiftPM/CocoaPods,
-  Android Maven, and both npm artifacts are now public at beta.1. New-name npm
-  OIDC uploads and public RN/Web consumers passed. Flutter remains pending the
-  CocoaPods CDN index and ordered publication gates; beta.0 remains the last
-  complete five-platform release. See
+  Android Maven, both npm artifacts, and Flutter pub.dev are public and verified.
+  Both protected release workflows passed, including actual new-name npm and
+  pub.dev OIDC uploads. New npm `beta` is beta.1; `latest` stays beta.0 and all
+  old packages/tags remain unchanged. See
   `release/evidence/2.0.0-beta.1-publication.md`.
   Public native consumers and fresh Flutter Android/iOS release builds passed.
-  Final release attachment was recovered manually; the immutable tagged run
-  retains its final-step failure. Never run checkout-free `gh release` commands
+  Beta.0's final release attachment was recovered manually; its immutable tagged
+  run retains its final-step failure. Beta.1 completed automatic attachment.
+  Never run checkout-free `gh release` commands
   without an explicit repository; preserve the native manifest by attaching
   Flutter's as `flutter-release-manifest.json`. See
   `docs/releasing.md` for current release state.
   Published Flutter Android beta.0 requires the explicit SDK-path workaround;
-  beta.1 includes the normal-install lookup fix. See
-  `release/evidence/2.0.0-beta.0-public-consumers.md` for exact post-publication
-  consumer results and the remaining gate.
+  published beta.1 includes the normal-install lookup fix. See
+  `release/evidence/2.0.0-beta.0-public-consumers.md` for the historical finding
+  and the beta.1 publication record for the passing hosted consumer checks.
   See `docs/migrations/app-sdk-package-names.md`. Preserve historical releases,
   maintenance RN 0.0.x, runtime APIs, native/Codegen/Pigeon identities and
   storage namespaces. Current recovery must still verify old tagged layouts
@@ -115,7 +116,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 - `tools/flutter/package-release.sh --ci` is the automatic PR/main verification
   path. It runs the complete non-publishing Flutter and fresh-consumer gates,
   emits `candidate-ready=false`, and leaves no Flutter release directory only
-  for occupied `1.2.0-beta.0`. Selected synchronized `2.0.0-beta.0` emits
+  for occupied `1.2.0-beta.0`. Selected synchronized `2.0.0-beta.1` emits
   `candidate-ready=true` and preserves the candidate.
   `tools/flutter/package-release.sh --check` is the strict non-publishing
   release gate for beta.1 and later; it must refuse beta.0. It preserves only

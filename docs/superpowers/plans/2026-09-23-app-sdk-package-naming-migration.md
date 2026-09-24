@@ -10,7 +10,14 @@
 
 **Spec:** [Approved naming migration](../specs/2026-09-23-app-sdk-package-naming-migration-design.md).
 
-**Status:** Tasks 1-5 complete. Main CI `35965596618`, license and security
+**Status:** Tasks 1-6 complete. Synchronized beta.1 publication and all public
+consumer gates passed, including normal hosted Flutter Android/iOS builds.
+RN, Web, and Flutter new-name OIDC uploads are verified. New npm `beta` is
+beta.1; `latest` remains beta.0 and legacy versions/tags are unchanged. See
+`release/evidence/2.0.0-beta.1-publication.md`. Physical acceptance remains
+NOT RUN and application rollout is separate.
+
+**Beta.0 history:** Main CI `35965596618`, license and security
 checks passed at `dd672a5865ba460ca3e97420e97461eb096dfb4f`, including both
 required Android x86 emulator lanes. Task 6 package publication is verified;
 React Native, Web, and Flutter automated-publisher settings are saved and
@@ -540,15 +547,15 @@ an explicit external gate; never bypass it to mark this task complete.
   immutable candidates, not a newly packed archive.
   Publication verification passed; final attachment was recovered manually as
   documented above, not by moving the immutable tag.
-- [ ] Verify public bytes, resolved native dependency versions, npm beta tags,
+- [x] Verify public bytes, resolved native dependency versions, npm beta tags,
   and unchanged legacy tags. Run public SwiftPM/CocoaPods, Maven, RN, Web, and
   Flutter consumer checks. Attach evidence through the existing release process.
   Post-publication checks are recorded in
   `release/evidence/2.0.0-beta.0-public-consumers.md`. All named checks ran;
   normal Flutter Android installation failed without a test-only SDK-path
-  override. Main fixes the lookup and the fresh source consumer gate passed.
-  Keep this item open until a subsequent public release passes without that
-  workaround; do not replace beta.0 or claim source verification as publication.
+  override. Published beta.1 fixes that lookup and normal hosted Android/iOS
+  release consumers passed. Completion is recorded in
+  `release/evidence/2.0.0-beta.1-publication.md`; immutable beta.0 was not replaced.
 - [x] Report source migration, package publication, application rollout, and
   hardware acceptance separately. Do not upgrade Demo/Bota One or claim
   physical acceptance as part of a package-name release.

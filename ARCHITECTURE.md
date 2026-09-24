@@ -2,7 +2,7 @@
 
 The 2.x source uses explicit App SDK distribution names. Apple SwiftPM and
 CocoaPods, Android Maven, both npm artifacts, and Flutter pub.dev are public at
-`2.0.0-beta.0`. Physical acceptance and application rollout remain separate,
+`2.0.0-beta.1`. Physical acceptance and application rollout remain separate,
 pending gates. See the
 [migration guide](docs/migrations/app-sdk-package-names.md). Historical release
 records below retain their original names and versions.

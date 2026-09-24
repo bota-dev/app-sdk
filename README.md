@@ -1,13 +1,7 @@
 # Bota App SDK
 
-Current source prepares `2.0.0-beta.1`, including the Flutter Android normal-install
-fix. Its Apple, Android, RN and Web artifacts are published; Flutter remains
-pending its ordered release gates. See the
-[publication record](release/evidence/2.0.0-beta.1-publication.md).
-The installation examples below remain on the complete `2.0.0-beta.0` release
-until every beta.1 registry-consumer gate completes.
-
-The `2.0.0-beta.0` release uses explicit App SDK package names. Apple SwiftPM
+The `2.0.0-beta.1` release uses explicit App SDK package names and includes the
+Flutter Android normal-install fix. Apple SwiftPM
 and CocoaPods, Android Maven, React Native npm, Web npm, and Flutter pub.dev
 artifacts are public and verified. Clean public native consumers and fresh
 Flutter Android/iOS release builds passed. Physical-device acceptance remains
@@ -19,7 +13,7 @@ Source monorepo for the **Bota App SDK** family. The repository provides a
 shared Rust protocol and workflow core with platform-native Bluetooth
 transports and Apple, Android, React Native, Flutter, and Web facades. The Web
 facade implements the browser-feasible foreground workflow surface for the
-`2.0.0-beta.0` release. Its supervised physical Chromium matrix has not run;
+`2.0.0-beta.1` release. Its supervised physical Chromium matrix has not run;
 the release owner requested beta rollout before that test. The Windows facade
 remains planned.
 
@@ -35,34 +29,35 @@ The synchronized App SDK is currently a beta. React Native consumers pin the
 exact prerelease:
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.0
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.1
 ```
 
 Apple and Android do not use npm dist-tags, so beta consumers pin the exact
 synchronized version shown in the installation sections below. New synchronized
 releases use `2.x.y-beta.n`; promotion to a stable channel is a separate release
-decision. The first new-name npm packages have both `beta` and `latest` pinned
-to `2.0.0-beta.0`; this owner-approved bootstrap exception is not stable
-promotion. Later betas must not advance `latest`. Historical npm tags are unchanged.
+decision. The new-name npm `beta` tags point to `2.0.0-beta.1`; `latest` stays
+at `2.0.0-beta.0` under the owner-approved bootstrap exception. This is not
+stable promotion. Later betas must not advance `latest`. Historical npm tags
+are unchanged.
 
-Flutter `bota_app_sdk@2.0.0-beta.0` is published on pub.dev and its complete
+Flutter `bota_app_sdk@2.0.0-beta.1` is published on pub.dev and its complete
 file inventory matches the approved candidate. Earlier 1.x candidates did not
 publish Flutter. Automatic PR/main CI runs verification and fresh consumer
 builds; publication remains a separate protected release action.
 
 ## Current Status
 
-The published synchronized beta is `2.0.0-beta.0`. Its source composes
+The published synchronized beta is `2.0.0-beta.1`. Its source composes
 the foreground Web managers for picker and authorized reconnect, snapshots,
 recording workflows, provisioning and settings, WiFi, recording control, OTA,
 and device logs over one shared Rust/WASM runtime. Unit, packed-consumer, and
 automated Chromium gates passed. Supervised physical-device acceptance remains
-open; background browser behavior remains unsupported. Final release evidence
-was attached manually after a checkout-free GitHub CLI step failed; see the
-[publication record](release/evidence/2.0.0-beta.0-publication.md). React Native,
-Web, and Flutter automated-publisher settings are saved and verified. An
-automated upload under the new names still needs verification on the
-next release, separate from the verified packages now available to install.
+open; background browser behavior remains unsupported. Both protected release
+workflows passed and attached the verified evidence. React Native, Web, and
+Flutter published through their new-name OIDC publishers without interactive
+registry authentication or token fallback. See the
+[publication record](release/evidence/2.0.0-beta.1-publication.md) for exact
+consumer checks and registry propagation recovery.
 
 ### Historical Release Attempts
 
@@ -398,7 +393,7 @@ is not inferred from CI and remains a human release approval. The root Swift
 package distributes the Apple facade for iOS and macOS while keeping the Rust
 core in a checksummed XCFramework. This release does not replace the production
 React Native maintenance line or claim Windows availability. Flutter is now
-published and verified as `bota_app_sdk@2.0.0-beta.0`.
+published and verified as `bota_app_sdk@2.0.0-beta.1`.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and the
 [firmware compatibility matrix](protocol/compatibility/firmware-compatibility.json).
@@ -411,12 +406,12 @@ In Xcode, choose **File > Add Package Dependencies** and enter:
 https://github.com/bota-dev/app-sdk.git
 ```
 
-Select exact version `2.0.0-beta.0`, then add the
+Select exact version `2.0.0-beta.1`, then add the
 `BotaAppSDK` product to an iOS 15+ or macOS 13+ target. Swift packages can
 declare the dependency directly:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.0")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.1")
 ```
 
 Import and configure the client from application code:
@@ -438,7 +433,7 @@ provide the Bluetooth usage description shown to users.
 Pin the exact synchronized Maven Central beta:
 
 ```kotlin
-implementation("dev.bota:bota-app-sdk:2.0.0-beta.0")
+implementation("dev.bota:bota-app-sdk:2.0.0-beta.1")
 ```
 
 ## Flutter Beta Installation
@@ -448,7 +443,7 @@ build gates passed and `bota_app_sdk` is public on pub.dev. Pin the exact versio
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.0
+  bota_app_sdk: 2.0.0-beta.1
 ```
 
 See the
@@ -466,7 +461,7 @@ Historical packages remain available under their original names. Install the
 renamed package at its verified exact version:
 
 ```bash
-npm install @bota.dev/web-app-sdk@2.0.0-beta.0
+npm install @bota.dev/web-app-sdk@2.0.0-beta.1
 ```
 
 Web Bluetooth requires a secure context and a browser implementation that
@@ -514,7 +509,7 @@ Bota API implicitly.
 
 ### Web capability matrix
 
-| Capability | `2.0.0-beta.0` candidate |
+| Capability | `2.0.0-beta.1` release |
 |---|---|
 | Explicit picker connect and exact-serial snapshot | Implemented, foreground only; the picker must start from a user gesture |
 | Exact authorized-device reconnect | Implemented when `navigator.bluetooth.getDevices()` is available; never falls back by name |

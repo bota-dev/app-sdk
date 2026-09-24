@@ -1,16 +1,17 @@
 # Releasing The Bota App SDK
 
-## Current Candidate
+## Current Release
 
-`2.0.0-beta.1` is the selected synchronized release candidate. It includes the
+`2.0.0-beta.1` is the published synchronized beta. It includes the
 Flutter Android SDK-path fix and the release workflow corrections made after
 beta.0. The owner authorized normal CI and protected publication for this
 version. Local [preflight](../release/evidence/2.0.0-beta.1-preflight.md) and exact
 main/tag CI gates passed. Apple SwiftPM/CocoaPods, Android Maven, and both npm
-packages are published. RN/Web OIDC uploads and fresh public RN/Web consumers
-passed; Flutter publication is held while the CocoaPods CDN index propagates.
+packages and Flutter are published. Both protected workflows passed, including
+actual RN/Web and Flutter OIDC uploads, public native consumers, the ordered
+Flutter Android/iOS build gates, and exact public archive verification.
 See the [publication record](../release/evidence/2.0.0-beta.1-publication.md)
-for exact checks and recovery attempts. Synchronized completion is not yet claimed.
+for exact checks and recovery attempts.
 Only the new npm `beta` tags may advance; `latest` stays at `2.0.0-beta.0`, and
 all legacy packages and tags remain unchanged. Hardware acceptance remains
 NOT RUN and application rollout is separate.
@@ -44,16 +45,16 @@ Flutter manifest as `flutter-release-manifest.json`, preserving the existing
 native `release-manifest.json`. See the
 [publication record](../release/evidence/2.0.0-beta.0-publication.md).
 React Native and Web trusted publishers and Flutter's restricted GitHub
-publisher are saved and verified. No automated OIDC upload has yet been
-demonstrated for the new names; the next legitimate
-version must verify that path. This does not prevent installing the published beta.
+publisher were saved and verified for beta.0. Beta.1 subsequently proved all
+three automated OIDC uploads without an interactive login or token fallback.
 Hardware acceptance remains NOT RUN; Demo and Bota One were not upgraded.
 
 Post-publication consumer checks found a Flutter Android installation issue:
 published beta.0 needs `BOTA_FLUTTER_HOME` set to the Flutter SDK directory.
 Main fixes normal `local.properties` resolution and tests without that override;
-the immutable public archive still needs the workaround until a subsequent
-release. See [public consumer evidence](../release/evidence/2.0.0-beta.0-public-consumers.md).
+the immutable beta.0 archive still needs that workaround. Published beta.1
+contains the fix. See [beta.0 consumer evidence](../release/evidence/2.0.0-beta.0-public-consumers.md)
+and the current publication record above.
 
 Release tooling distinguishes historical major-0/1 identifiers from the
 approved major-2 App SDK identifiers. Manifest version 2 is retained because
