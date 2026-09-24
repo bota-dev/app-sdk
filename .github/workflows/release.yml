@@ -664,6 +664,20 @@ jobs:
         id: central-readiness
         run: echo "published=true" >> "$GITHUB_OUTPUT"
 
+      - name: Open native bootstrap prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" target/apple-release/* target/react-native-release/* target/web-release/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease
+          APPLE_BINARY=target/apple-release/BotaDeviceSDKCore.xcframework.zip
+          curl --fail --location --retry 5 --retry-all-errors \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/BotaDeviceSDKCore.xcframework.zip" \
+            --output target/public-apple-binary.zip
+          cmp "$APPLE_BINARY" target/public-apple-binary.zip
+
       - name: Publish or verify exact npm artifact
         shell: bash
         run: |
@@ -701,15 +715,6 @@ jobs:
           if [[ -f target/central-portal-state.json ]]; then
             gh release upload "$RELEASE_TAG" target/central-portal-state.json --clobber
           fi
-
-      - name: Open native bootstrap prerelease
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh release upload "$RELEASE_TAG" target/apple-release/* target/react-native-release/* target/web-release/* --clobber
-          gh release edit "$RELEASE_TAG" --draft=false --prerelease
 
   publish-apple-pod:
     name: Publish Apple CocoaPod bootstrap
@@ -931,6 +936,23 @@ jobs:
             gh release upload "$RELEASE_TAG" target/central-portal-state.json --clobber
           fi
 
+      - name: Publish recovered GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "$RELEASE_TAG" \
+            target/recovered/apple-release/* \
+            target/recovered/react-native-release/* \
+            target/recovered/web-release/* \
+            --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease
+          APPLE_BINARY=target/recovered/apple-release/BotaDeviceSDKCore.xcframework.zip
+          curl --fail --location --retry 5 --retry-all-errors \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/BotaDeviceSDKCore.xcframework.zip" \
+            --output target/public-apple-binary.zip
+          cmp "$APPLE_BINARY" target/public-apple-binary.zip
+
       - name: Publish or verify exact npm artifact after recovery
         shell: bash
         run: |
@@ -951,17 +973,6 @@ jobs:
           test "$(jq -r .tarball.sha256 target/recovered/web-release/web-package-files.json)" = "$(sha256sum "$PACKAGE_PATH" | awk '{print $1}')"
           node tools/web/verify-package.mjs "$PACKAGE_PATH" --sdk-version "$RELEASE_VERSION"
           node tools/release/publish-npm.mjs web "$RELEASE_VERSION" "$PACKAGE_PATH"
-
-      - name: Publish recovered GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release upload "$RELEASE_TAG" \
-            target/recovered/apple-release/* \
-            target/recovered/react-native-release/* \
-            target/recovered/web-release/* \
-            --clobber
-          gh release edit "$RELEASE_TAG" --draft=false --prerelease
 
   smoke-public-package:
     name: Smoke public Apple package

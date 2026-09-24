@@ -15,6 +15,7 @@ const REQUIRED_FILES = [
   '.pubignore',
   'LICENSE',
   'analysis_options.yaml',
+  'android/build.gradle.kts',
   'android/sdk-version.toml',
   'android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt',
   'ios/bota_app_sdk.podspec',
@@ -177,6 +178,17 @@ export const verifyFlutterPackage = (root) => {
     'utf8'
   );
   const nativePodspec = readFileSync(applePodspec, 'utf8');
+  const androidBuild = readFileSync(resolve(packageRoot, 'android/build.gradle.kts'), 'utf8');
+  const facadeSets = [
+    [Array.from(pluginPodspec.matchAll(/spec\.dependency\s+["'](Bota[^"']+)["']/g), (match) => match[1]), 'BotaAppSDK'],
+    [Array.from(swiftPackage.matchAll(/\.product\(\s*name:\s*["'](Bota[^"']+)["']/g), (match) => match[1]), 'BotaAppSDK'],
+    [Array.from(androidBuild.matchAll(/["'](dev\.bota:[^"']+)["']/g), (match) => match[1]), 'dev.bota:bota-app-sdk:$sdkVersion'],
+  ];
+  for (const [dependencies, expected] of facadeSets) {
+    if (dependencies.length !== 1 || dependencies[0] !== expected) {
+      throw new Error(`Flutter native facade dependencies must contain only ${expected}`);
+    }
+  }
 
   expectEqual(pubspec.name, 'bota_app_sdk', (actual) =>
     `Flutter package name ${actual ?? '(missing)'} does not match bota_app_sdk`

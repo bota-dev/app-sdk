@@ -8,7 +8,7 @@ const legacyName = '@bota.dev/web-sdk';
 const shasum = 'a'.repeat(40);
 const legacyTags = { latest: '1.1.0', beta: '1.2.0-beta.12' };
 
-function fixture({ existing = false, delay = 0, mismatch = false, lookupStatus, legacyDrift = false } = {}) {
+function fixture({ existing = false, delay = 0, mismatch = false, lookupStatus, legacyDrift = false, crossPackageDrift = false } = {}) {
   let published = existing;
   let publishes = 0;
   let lookups = 0;
@@ -22,6 +22,7 @@ function fixture({ existing = false, delay = 0, mismatch = false, lookupStatus, 
       fetchImpl: async (url) => {
         if (lookupStatus) return new Response('', { status: lookupStatus });
         const path = decodeURIComponent(new URL(url).pathname.slice(1));
+        if (path === '@bota.dev/react-native-sdk') return Response.json({ 'dist-tags': { latest: '0.0.67', beta: crossPackageDrift && publishes ? version : '1.2.0-beta.12' } });
         if (path === legacyName) return Response.json({ 'dist-tags': { ...legacyTags, ...(legacyDrift && publishes ? { beta: version } : {}) } });
         if (path === packageName) return published
           ? Response.json({ 'dist-tags': { beta: version } }) : new Response('', { status: 404 });
@@ -68,6 +69,31 @@ test('wrong archive identity fails before registry or publication calls', async 
 test('historical dist-tag drift and exhausted visibility retries fail closed', async () => {
   await assert.rejects(publishExactNpmArtifact(fixture({ legacyDrift: true }).options), /historical.*tags/);
   await assert.rejects(publishExactNpmArtifact(fixture({ delay: 10 }).options), /not visible/);
+});
+
+test('publication protects the other legacy npm package even when upload fails', async () => {
+  for (const fails of [false, true]) {
+    const f = fixture({ crossPackageDrift: true });
+    const publish = f.options.publish;
+    f.options.publish = async () => { await publish(); if (fails) throw new Error('uncertain upload'); };
+    await assert.rejects(publishExactNpmArtifact(f.options), /historical.*tags/);
+  }
+});
+
+test('historical recovery also checks non-beta tags after an uncertain upload', async () => {
+  let attempted = false;
+  const version = '1.2.0-beta.12';
+  await assert.rejects(publishExactNpmArtifact({
+    platform: 'web', version, shasum,
+    packageMetadata: { name: legacyName, version },
+    publish: async () => { attempted = true; throw new Error('uncertain upload'); },
+    fetchImpl: async (url) => {
+      const path = decodeURIComponent(new URL(url).pathname.slice(1));
+      if (path === legacyName) return Response.json({ 'dist-tags': { latest: attempted ? version : '1.1.0' } });
+      if (path === '@bota.dev/react-native-sdk') return Response.json({ 'dist-tags': { latest: '0.0.67' } });
+      return new Response('', { status: 404 });
+    },
+  }), /historical.*tags/);
 });
 
 test('RN publication requires the legacy latest tag to remain on maintenance', async () => {

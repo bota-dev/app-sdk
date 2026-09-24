@@ -94,8 +94,12 @@ New identities need their own registry ownership and publisher setup; old
 package authorization does not transfer. Local and exact-revision main-CI
 gates precede publication, and native prerequisites precede RN/Flutter public
 consumers. npm uses `beta`, preserves old tags, and rejects ambiguous registry
-errors. RN publication also requires the legacy `latest` tag to remain on a
-stable `0.0.x` maintenance version. Recovery selects names from the verified release version and preserves
+errors. Each npm attempt snapshots both legacy packages and checks their tags
+even if publication fails. RN publication also requires the legacy `latest`
+tag to remain on a stable `0.0.x` maintenance version. The Apple binary is
+made public and compared byte-for-byte before npm publication on both normal
+and recovery paths. Flutter source validation rejects missing or mixed old/new
+native facade dependencies. Recovery selects names from the verified release version and preserves
 signed Central bytes and deployment UUIDs.
 
 Physical acceptance is **NOT RUN** for this candidate. Source tests, package

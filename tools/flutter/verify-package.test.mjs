@@ -36,6 +36,7 @@ const packageFiles = [
   '.pubignore',
   'LICENSE',
   'analysis_options.yaml',
+  'android/build.gradle.kts',
   'android/sdk-version.toml',
   'android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt',
   'ios/bota_app_sdk.podspec',
@@ -120,6 +121,7 @@ const createFixture = (prefix = 'bota-flutter-package-') => {
     let contents = 'fixture\n';
     if (file === '.pubignore') contents = validPubignore;
     if (file === 'android/sdk-version.toml') contents = 'version = "2.0.0-beta.0"\n';
+    if (file === 'android/build.gradle.kts') contents = 'implementation("dev.bota:bota-app-sdk:$sdkVersion")\n';
     if (file === 'pubspec.yaml') contents = validPubspec;
     if (file === 'ios/bota_app_sdk.podspec') contents = validPluginPodspec;
     if (file === 'ios/bota_app_sdk/Package.swift') contents = validSwiftPackage;
@@ -138,6 +140,26 @@ const replacePubspec = (packageRoot, from, to) => {
     validPubspec.replace(from, to)
   );
 };
+
+test('rejects missing, legacy, or mixed Flutter native facade dependencies', () => {
+  for (const [path, mutate] of [
+    ['android/build.gradle.kts', () => 'implementation("dev.bota:bota-android-sdk:$sdkVersion")'],
+    ['android/build.gradle.kts', (value) => `${value}\nimplementation("dev.bota:bota-android-sdk:$sdkVersion")`],
+    ['android/build.gradle.kts', () => 'implementation("dev.bota:bota-app-sdk:1.2.0-beta.12")'],
+    ['android/build.gradle.kts', () => ''],
+    ['ios/bota_app_sdk.podspec', (value) => `${value}\nspec.dependency "BotaAppleSDK", version`],
+    ['ios/bota_app_sdk/Package.swift', (value) => `${value}\n.product(name: "BotaAppleSDK", package: "app-sdk")`],
+  ]) {
+    const { root, packageRoot } = createFixture();
+    try {
+      const file = join(packageRoot, path);
+      writeFileSync(file, mutate(readFileSync(file, 'utf8')));
+      assert.throws(() => verifyFlutterPackage(root), /native facade dependencies/, path);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
 
 test('accepts the synchronized iOS and Android Flutter package metadata', () => {
   const { root } = createFixture();

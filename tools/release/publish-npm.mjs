@@ -16,7 +16,6 @@ export async function publishExactNpmArtifact({
   const name = publicPackageIdentifier(platform, version);
   if (packageMetadata?.name !== name || packageMetadata?.version !== version) throw new Error('npm artifact identity does not match release');
   if (!/^[a-f0-9]{40}$/.test(shasum)) throw new Error('npm artifact checksum is invalid');
-  const legacyName = publicPackageIdentifier(platform, '1.1.0');
   const lookup = async (path) => {
     const response = await fetchImpl(`https://registry.npmjs.org/${path}`, { signal: AbortSignal.timeout(60_000) });
     if (response.status === 404) return null;
@@ -30,8 +29,13 @@ export async function publishExactNpmArtifact({
     return metadata['dist-tags'];
   };
   const before = await tags(name);
-  const historicalBefore = name !== legacyName ? await tags(legacyName) : null;
-  if (platform === 'react-native' && !/^0\.0\.\d+$/.test((historicalBefore ?? before).latest ?? '')) {
+  const historicalBefore = new Map();
+  for (const historicalPlatform of ['react-native', 'web']) {
+    const legacyName = publicPackageIdentifier(historicalPlatform, '1.1.0');
+    historicalBefore.set(legacyName, legacyName === name ? before : await tags(legacyName));
+  }
+  const maintenance = historicalBefore.get(publicPackageIdentifier('react-native', '1.1.0'));
+  if (platform === 'react-native' && !/^0\.0\.\d+$/.test(maintenance.latest ?? '')) {
     throw new Error('npm maintenance latest tag must remain on a stable 0.0.x release');
   }
   const verify = (metadata) => {
@@ -39,23 +43,42 @@ export async function publishExactNpmArtifact({
     if (metadata.dist?.shasum !== shasum) throw new Error('npm registry checksum mismatch');
   };
   const path = `${encodeURIComponent(name)}/${version}`;
-  const existing = await lookup(path);
-  if (existing) verify(existing);
-  else await publish();
+  let publicationError;
+  try {
+    const existing = await lookup(path);
+    if (existing) verify(existing);
+    else await publish();
 
-  let visible = false;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const metadata = await lookup(path);
-    if (metadata) { verify(metadata); visible = true; break; }
-    if (attempt + 1 < maxAttempts) await sleep(10_000);
+    let visible = false;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const metadata = await lookup(path);
+      if (metadata) { verify(metadata); visible = true; break; }
+      if (attempt + 1 < maxAttempts) await sleep(10_000);
+    }
+    if (!visible) throw new Error('published npm version is not visible after bounded retries');
+    const after = await tags(name);
+    if (after.latest !== before.latest) throw new Error('npm latest tag unexpectedly changed');
+    if (after.beta !== version) throw new Error('npm beta tag does not match release');
+  } catch (error) {
+    publicationError = error;
   }
-  if (!visible) throw new Error('published npm version is not visible after bounded retries');
-  const after = await tags(name);
-  if (after.latest !== before.latest) throw new Error('npm latest tag unexpectedly changed');
-  if (after.beta !== version) throw new Error('npm beta tag does not match release');
-  if (historicalBefore && !isDeepStrictEqual(await tags(legacyName), historicalBefore)) {
-    throw new Error('historical npm dist-tags changed during new-name publication');
+  try {
+    for (const [legacyName, snapshot] of historicalBefore) {
+      const after = await tags(legacyName);
+      const expected = { ...snapshot };
+      if (legacyName === name) {
+        delete after.beta;
+        delete expected.beta;
+      }
+      if (!isDeepStrictEqual(after, expected)) {
+        throw new Error(`historical npm dist-tags changed during publication: ${legacyName}`);
+      }
+    }
+  } catch (error) {
+    if (publicationError) throw new AggregateError([publicationError, error], `${publicationError.message}; ${error.message}`);
+    throw error;
   }
+  if (publicationError) throw publicationError;
 }
 
 async function packageMetadata(file) {

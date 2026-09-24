@@ -10,8 +10,9 @@
 
 **Spec:** [Approved naming migration](../specs/2026-09-23-app-sdk-package-naming-migration-design.md).
 
-**Status:** Executing. Tasks 1-3 and 5 complete. Task 4 package verification is in progress;
-Task 6 main CI and registry rollout remain pending.
+**Status:** Tasks 1-3 and 5 complete. All locally available Task 4 gates passed;
+the required Android x86 emulator lanes remain for CI. Task 6 main CI and
+registry rollout remain pending.
 
 Local evidence: release tooling 87/87, general tooling 103/103, strict Apple
 suite 200 tests (9 physical skips), RN lifecycle 32/32 and fresh iOS/Android
@@ -28,6 +29,16 @@ history was rewritten. Unrelated existing docs changes were preserved.
 Task 3 final gate: 87 release tests, 15 manifest tests and 32 readiness tests
 passed using the fresh 2.x example. Explicit historical tests still validate
 immutable beta.12 sources independently of the current version authority.
+
+Independent review identified three release safeguards, now fixed with observed
+failing-then-passing tests: public Apple binary verification before either npm
+publication path, rejection of mixed Flutter native dependencies, and both old
+npm packages' tag protection even on uncertain upload. Final suites: 89 release
+tests, 104 tooling tests, full Rust workspace (including 33 readiness tests).
+Flutter's two fresh release-consumer runs produced the same candidate checksum;
+Android deterministic packaging, publication inventory and local installation
+passed. Historical manifests remain byte-for-byte unchanged. Registry
+authorization/public resolution, x86 CI and physical acceptance are not claimed.
 
 Task 1 verification: 21 focused Node tests, 75 release tests, and 46 Rust
 manifest/readiness tests passed after the new cases failed as expected.
@@ -360,7 +371,7 @@ tools/android/test-emulator-lane.sh --api 35
   requires a clean tracked tree: commit tested source checkpoints first, then
   generate candidate evidence. Never use an old checksum as a stand-in for a
   new build. Record generator-produced Swift/pod checksums and rerun checks.
-- [ ] Run framework gates and fresh consumers against the generated native
+- [x] Run framework gates and fresh consumers against the generated native
   candidates; inspect native dependencies and imports in the resulting locks:
 
 ```bash
@@ -417,7 +428,7 @@ writeFileSync(`release/examples/${version}.json`, `${JSON.stringify(manifest, nu
   This intermediate template is not valid release evidence and must not be
   committed or tagged before the next writer/gates complete. Do not add a
   permanent helper solely for this one-time generated-data step.
-- [ ] Generate the Flutter evidence and run the final complete gates:
+- [x] Generate the Flutter evidence and run the final complete gates:
 
 ```bash
 tools/flutter/package-release.sh --write-example
@@ -433,7 +444,7 @@ git diff --check
   byte-for-byte unchanged. If a gate requires a clean tree, first commit the
   locally validated generated output, then repeat the full gate; do not
   weaken the clean-tree check.
-- [ ] Commit generated checksums, inventories, and reviewed evidence as
+- [x] Commit generated checksums, inventories, and reviewed evidence as
   `chore(release): record renamed SDK candidate verification`. Record any
   unavailable platform gate as incomplete; do not substitute a static check
   or a cached consumer for a failing build.

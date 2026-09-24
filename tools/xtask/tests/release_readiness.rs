@@ -184,6 +184,36 @@ fn current_verifier_accepts_immutable_historical_tag_layout() {
 }
 
 #[test]
+fn public_apple_binary_is_verified_before_each_npm_publication_path() {
+    let workflow = fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
+    for (start, end) in [
+        ("  publish:\n", "  publish-apple-pod:\n"),
+        ("  recover-central:\n", "  smoke-public-package:\n"),
+    ] {
+        let job = workflow
+            .split_once(start)
+            .unwrap()
+            .1
+            .split_once(end)
+            .unwrap()
+            .0;
+        let open = job
+            .find("gh release edit \"$RELEASE_TAG\" --draft=false --prerelease")
+            .unwrap();
+        let verify = job.find("cmp \"$APPLE_BINARY\" target/public-apple-binary.zip");
+        let npm = job.find("node tools/release/publish-npm.mjs").unwrap();
+        assert!(
+            verify.is_some(),
+            "public Apple archive bytes must be verified"
+        );
+        assert!(
+            open < verify.unwrap() && verify.unwrap() < npm,
+            "native bootstrap must precede npm"
+        );
+    }
+}
+
+#[test]
 fn every_public_package_version_copy_fails_closed_on_drift() {
     for (path, needle, replacement) in [
         (
