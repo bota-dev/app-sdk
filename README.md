@@ -625,6 +625,12 @@ approval are configured.
 to the **Bota App SDK** family. Customer-facing documentation and package names
 follow this matrix:
 
+The matrix below describes the current packages. A
+[planned naming migration](docs/superpowers/specs/2026-09-23-app-sdk-package-naming-migration-design.md)
+will include `App` in public package identifiers to distinguish the App SDK
+from the future API SDK. The naming direction is approved; migration mechanics
+remain under review. No new package names are available from this change.
+
 | Platform | Documentation name | Package or module identifier |
 |---|---|---|
 | Apple | Bota SDK for Apple platforms | `BotaAppleSDK` |
