@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sdkVersion": "1.2.0-beta.11",
+  "sdkVersion": "1.2.0-beta.12",
   "firmwareBaseline": {
     "version": "1.0.17",
     "revision": "8b175a89374c9833bdaa67fe73ada6672618e5f7"

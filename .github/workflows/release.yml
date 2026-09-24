@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       releaseRef:
-        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.11
+        description: Exact annotated release tag ref, for example refs/tags/v1.2.0-beta.12
         required: true
         type: string
       centralDeploymentId:
@@ -1154,7 +1154,7 @@ jobs:
           toolchain: 1.98.0
           targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin,x86_64-apple-darwin,aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
 
-      - name: Install pinned Android and CocoaPods tooling
+      - name: Install pinned Android tooling
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           test -x "$SDKMANAGER"
@@ -1163,11 +1163,9 @@ jobs:
             "build-tools;35.0.0" \
             "ndk;28.2.13676358" \
             "cmake;3.22.1"
-          gem install --no-document cocoapods -v 1.16.2
-          POD_BINARY="$(ruby -e 'print Gem.bindir')/pod"
-          test -x "$POD_BINARY"
-          test "$("$POD_BINARY" --version)" = "1.16.2"
-          echo "POD_BINARY=$POD_BINARY" >> "$GITHUB_ENV"
+
+      - name: Install isolated CocoaPods toolchain
+        run: tools/flutter/install-pinned-cocoapods.sh
 
       - name: Install repository tooling
         run: npm ci

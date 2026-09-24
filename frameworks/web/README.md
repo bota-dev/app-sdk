@@ -6,7 +6,7 @@ Rust core compiled to WebAssembly. Rust owns protocol sequencing, integrity,
 checkpoints, and stable workflow errors; the application owns authentication,
 backend calls, user consent, and presentation.
 
-`1.2.0-beta.7` is public on npm. `1.2.0-beta.11` retains the same foreground
+`1.2.0-beta.7` is public on npm. `1.2.0-beta.12` retains the same foreground
 implementation while repairing Apple CocoaPods distribution. Automated package
 and Chromium gates pass; supervised physical-device acceptance remains open.
 
@@ -15,7 +15,7 @@ and Chromium gates pass; supervised physical-device acceptance remains open.
 After the synchronized candidate is published, pin its exact version:
 
 ```bash
-npm install @bota.dev/web-sdk@1.2.0-beta.11
+npm install @bota.dev/web-sdk@1.2.0-beta.12
 ```
 
 Use a secure context in a desktop Chromium browser with Web Bluetooth. The

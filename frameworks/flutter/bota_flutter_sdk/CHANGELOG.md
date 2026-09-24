@@ -1,15 +1,23 @@
 # Changelog
 
-## 1.2.0-beta.11 (unreleased)
+## 1.2.0-beta.12 (unreleased)
 
-- Replaced the partially published beta.10 tag after its Flutter consumer gate
-  could not locate the installed CocoaPods executable on the macOS runner.
+- Replaced the partially published beta.11 tag after the macOS runner selected
+  a different Ruby/CocoaPods installation despite installing the pinned gem.
+- Installed CocoaPods into an isolated gem directory, and added a public
+  beta.11 CocoaPods consumer check to main CI before another tag is cut.
 - Selected a new synchronized Flutter-bearing candidate after immutable
   non-Flutter `v1.2.0-beta.0` and unpublished `v1.2.0-beta.1` occupied their
   identities.
 - Synchronized Apple, Android, React Native, Flutter, Web, Rust, protocol, and
   release metadata for local candidate verification. This entry does not claim
   publication on pub.dev or any other registry.
+
+## 1.2.0-beta.11 (partially published)
+
+- Published Apple SwiftPM, CocoaPods, Android Maven, React Native npm, and Web
+  npm, but the Flutter candidate gate stopped at its exact CocoaPods version
+  check before pub.dev publication.
 
 ## 1.2.0-beta.10 (partially published)
 

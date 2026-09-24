@@ -41,7 +41,7 @@ test('creates deterministic READY state without credentials or a deployment ID',
   const state = createDeploymentState({ sourceRevision, bundleSha256, inventorySha256 });
 
   assert.equal(state.packageIdentifier, 'dev.bota:bota-android-sdk');
-  assert.equal(state.version, '1.2.0-beta.11');
+  assert.equal(state.version, '1.2.0-beta.12');
   assert.equal(state.deploymentName, deploymentName(bundleSha256));
   assert.equal(state.deploymentId, null);
   assert.equal(state.deploymentState, 'READY');

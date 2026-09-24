@@ -70,7 +70,7 @@ jobs:
         run: node tools/baseline/react-native-api-contract.mjs validate --contract protocol/baseline/react-native-public-api-0.0.65.json --baseline-metadata protocol/baseline/react-native-sdk-0.0.65.json
 
       - name: Validate release manifest
-        run: cargo xtask release validate release/examples/1.2.0-beta.11.json
+        run: cargo xtask release validate release/examples/1.2.0-beta.12.json
 
       - name: Check generated protocol constants
         run: cargo xtask protocol generate --check
@@ -473,6 +473,12 @@ jobs:
 
       - name: Install repository tooling
         run: npm ci
+
+      - name: Verify isolated CocoaPods toolchain with public predecessor
+        run: tools/flutter/install-pinned-cocoapods.sh
+
+      - name: Compile public beta.11 CocoaPods consumer
+        run: tools/flutter/test-public-apple-pod-consumer.sh 1.2.0-beta.11
 
       - name: Verify Flutter package and build candidate when releasable
         id: package

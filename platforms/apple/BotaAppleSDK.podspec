@@ -1,13 +1,13 @@
 Pod::Spec.new do |spec|
   spec.name = "BotaAppleSDK"
   spec.module_name = "BotaAppleSDK"
-  spec.version = "1.2.0-beta.11"
+  spec.version = "1.2.0-beta.12"
   spec.summary = "Bota App SDK for Apple platforms"
   spec.homepage = "https://docs.bota.dev"
   spec.license = { type: "Apache-2.0" }
   spec.author = "Bota"
   spec.source = {
-    http: "https://github.com/bota-dev/app-sdk/releases/download/v1.2.0-beta.11/BotaAppleSDK.cocoapods.zip",
+    http: "https://github.com/bota-dev/app-sdk/releases/download/v1.2.0-beta.12/BotaAppleSDK.cocoapods.zip",
     sha256: "6146760c76ed0c5c117ed40f7a46b9301adad1582362232b14bfc83f6df7eeaf",
   }
   spec.platforms = { ios: "15.0", osx: "13.0" }

@@ -1,6 +1,6 @@
 name: bota_flutter_sdk
 description: Flutter facade for connecting applications to Bota Pin and Bota Note devices.
-version: 1.2.0-beta.11
+version: 1.2.0-beta.12
 homepage: https://docs.bota.dev
 repository: https://github.com/bota-dev/app-sdk/tree/main/frameworks/flutter/bota_flutter_sdk
 environment:
