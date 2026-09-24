@@ -14,7 +14,7 @@ import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Parser } from 'tar'
 
-const EXPECTED_PACKAGE_NAME = '@bota.dev/web-sdk'
+import { publicPackageIdentifier } from '../release/package-identities.mjs'
 const EXPECTED_PACKAGE_MANAGER = 'npm@12.0.2'
 const EXPECTED_WASM_PATH =
   'package/dist/generated/bota_device_sdk_core_bg.wasm'
@@ -112,6 +112,7 @@ export function verifyPackageMetadata({
   sdkVersion,
   expectedPackageManager = EXPECTED_PACKAGE_MANAGER,
 }) {
+  const EXPECTED_PACKAGE_NAME = publicPackageIdentifier('web', sdkVersion)
   if (packageJson.name !== EXPECTED_PACKAGE_NAME) {
     throw new Error(`package name must be ${EXPECTED_PACKAGE_NAME}`)
   }

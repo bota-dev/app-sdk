@@ -32,7 +32,7 @@ kotlin {
 }
 
 dependencies {
-    implementation("dev.bota:bota-android-sdk:${providers.gradleProperty("botaSdkVersion").get()}")
+    implementation("dev.bota:bota-app-sdk:${providers.gradleProperty("botaSdkVersion").get()}")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test:rules:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")

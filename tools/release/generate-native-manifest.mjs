@@ -1,10 +1,10 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { publicPackageIdentifier } from './package-identities.mjs';
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const REVISION = /^[0-9a-f]{40}$/;
 const VERSION = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/;
-const PACKAGES = new Map([['apple', 'BotaAppleSDK'], ['android', 'dev.bota:bota-android-sdk']]);
 
 export function generateNativeManifest({ sdkVersion, sourceRevision, artifacts, baseline, compatibility }) {
   requireMatch('SDK version', sdkVersion, VERSION);
@@ -16,7 +16,8 @@ export function generateNativeManifest({ sdkVersion, sourceRevision, artifacts, 
   if (!Array.isArray(artifacts) || artifacts.length === 0) throw new Error('native manifest requires at least one artifact');
 
   const outputArtifacts = artifacts.map((artifact) => {
-    if (PACKAGES.get(artifact.platform) !== artifact.packageIdentifier) throw new Error(`package identifier does not match ${artifact.platform}`);
+    if (!['apple', 'android'].includes(artifact.platform)
+        || publicPackageIdentifier(artifact.platform, sdkVersion) !== artifact.packageIdentifier) throw new Error(`package identifier does not match ${artifact.platform}`);
     if (artifact.version !== sdkVersion) throw new Error(`artifact version ${artifact.version} does not match ${sdkVersion}`);
     if (typeof artifact.name !== 'string' || artifact.name === '' || typeof artifact.ecosystem !== 'string' || artifact.ecosystem === '') throw new Error('artifact name and ecosystem are required');
     requireDigest('artifact checksum', artifact.checksumSha256);
@@ -27,7 +28,8 @@ export function generateNativeManifest({ sdkVersion, sourceRevision, artifacts, 
       if (evidence?.reviewed !== true || typeof evidence.path !== 'string' || !/^release\/evidence\/.+\.md$/.test(evidence.path)) {
         throw new Error('Android capabilities require reviewed evidence');
       }
-      if (artifact.ecosystem !== 'maven' || !/^bota-android-sdk-.+\.aar$/.test(artifact.name)) throw new Error('Android Maven artifact is invalid');
+      const artifactId = artifact.packageIdentifier.split(':')[1];
+      if (artifact.ecosystem !== 'maven' || artifact.name !== `${artifactId}-${sdkVersion}.aar`) throw new Error('Android Maven artifact is invalid');
     }
     return {
       platform: artifact.platform,
@@ -96,7 +98,7 @@ async function main() {
   await readFile(evidencePath, 'utf8');
   const artifacts = [{
     platform: 'android',
-    packageIdentifier: 'dev.bota:bota-android-sdk',
+    packageIdentifier: publicPackageIdentifier('android', options['sdk-version']),
     name: options['android-artifact'],
     ecosystem: 'maven',
     version: options['sdk-version'],

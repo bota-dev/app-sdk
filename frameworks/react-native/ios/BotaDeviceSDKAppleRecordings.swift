@@ -1,4 +1,4 @@
-import BotaAppleSDK
+import BotaAppSDK
 import Foundation
 
 struct BotaDeviceSDKAppleRecordingFile: Equatable, Sendable {

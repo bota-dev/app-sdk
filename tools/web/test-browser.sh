@@ -23,7 +23,7 @@ if [[ ! -f "$TARBALL" ]]; then
   exit 1
 fi
 
-INSTALLED_PACKAGE="$CONSUMER_DIR/node_modules/@bota.dev/web-sdk"
+INSTALLED_PACKAGE="$CONSUMER_DIR/node_modules/@bota.dev/web-app-sdk"
 if [[ ! -d "$INSTALLED_PACKAGE" || -L "$INSTALLED_PACKAGE" ]]; then
   echo "packed Web SDK is not installed as a regular consumer package" >&2
   exit 1

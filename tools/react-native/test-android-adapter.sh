@@ -51,8 +51,8 @@ android_sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 
 version="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' "$workspace_root/sdk-version.toml")"
 [[ -n "$version" ]] || { echo "sdk-version.toml does not contain a version" >&2; exit 1; }
-release_aar="$release_directory/bota-android-sdk-$version.aar"
-repository_aar="$repository/dev/bota/bota-android-sdk/$version/bota-android-sdk-$version.aar"
+release_aar="$release_directory/bota-app-sdk-$version.aar"
+repository_aar="$repository/dev/bota/bota-app-sdk/$version/bota-app-sdk-$version.aar"
 [[ -s "$release_aar" ]] || { echo "packaged Android AAR not found: $release_aar" >&2; exit 1; }
 [[ -s "$repository_aar" ]] || { echo "repository Android AAR not found: $repository_aar" >&2; exit 1; }
 

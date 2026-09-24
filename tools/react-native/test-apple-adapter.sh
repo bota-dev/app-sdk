@@ -74,7 +74,7 @@ if [[ "$source_mode" == "remote" ]]; then
     expected_url = package.fetch("bota").fetch("apple").fetch("packageUrl")
     expected_version = package.fetch("version")
     pin = resolved.fetch("pins").find { |candidate| candidate["location"] == expected_url }
-    abort "BotaAppleSDK package URL was not resolved" if pin.nil?
+    abort "BotaAppSDK package URL was not resolved" if pin.nil?
     actual_version = pin.fetch("state").fetch("version")
     abort "expected #{expected_version}, resolved #{actual_version}" unless actual_version == expected_version
   ' "$package_root/package.json" "$resolved_file"

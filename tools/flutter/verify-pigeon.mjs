@@ -7,9 +7,9 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 export const generatedPigeonFiles = Object.freeze([
-  'frameworks/flutter/bota_flutter_sdk/lib/src/generated/bota_api.g.dart',
-  'frameworks/flutter/bota_flutter_sdk/ios/bota_flutter_sdk/Sources/bota_flutter_sdk/BotaApi.g.swift',
-  'frameworks/flutter/bota_flutter_sdk/android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt',
+  'frameworks/flutter/bota_app_sdk/lib/src/generated/bota_api.g.dart',
+  'frameworks/flutter/bota_app_sdk/ios/bota_app_sdk/Sources/bota_app_sdk/BotaApi.g.swift',
+  'frameworks/flutter/bota_app_sdk/android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt',
 ]);
 
 const runGenerator = (root, outputRoot) => new Promise((resolveRun, reject) => {

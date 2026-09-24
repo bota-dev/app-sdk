@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PACKAGE_PATH="frameworks/flutter/bota_flutter_sdk"
+PACKAGE_PATH="frameworks/flutter/bota_app_sdk"
 PACKAGE_ROOT="$ROOT/$PACKAGE_PATH"
 CONFIG="$PACKAGE_ROOT/pigeon_options.yaml"
 OUTPUT_ROOT="${BOTA_PIGEON_OUTPUT_ROOT:-$ROOT}"

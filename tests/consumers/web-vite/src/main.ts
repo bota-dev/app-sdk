@@ -6,7 +6,7 @@ import {
   type DeviceRecording,
   type RecordingSyncResult,
   type WiFiStatusInfo,
-} from '@bota.dev/web-sdk'
+} from '@bota.dev/web-app-sdk'
 
 const OPERATION_ID = 'browser-staged-upload'
 const RECORDING_UUID = 'a1b2c3d4-0000-0000-0000-000000000000'

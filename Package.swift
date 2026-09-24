@@ -3,13 +3,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "BotaAppleSDK",
+    name: "BotaAppSDK",
     platforms: [
         .iOS(.v15),
         .macOS(.v13),
     ],
     products: [
-        .library(name: "BotaAppleSDK", targets: ["BotaAppleSDK"]),
+        .library(name: "BotaAppSDK", targets: ["BotaAppSDK"]),
     ],
     targets: [
         .binaryTarget(
@@ -18,9 +18,9 @@ let package = Package(
             checksum: "bf1b4303bb1edab71bbdd2c6fe57a26a4470d41ea0383bb1ffaab7e614027d72"
         ),
         .target(
-            name: "BotaAppleSDK",
+            name: "BotaAppSDK",
             dependencies: ["BotaDeviceSDKC"],
-            path: "platforms/apple/Sources/BotaAppleSDK"
+            path: "platforms/apple/Sources/BotaAppSDK"
         ),
     ]
 )

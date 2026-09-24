@@ -1,4 +1,4 @@
-import BotaAppleSDK
+import BotaAppSDK
 import Foundation
 
 protocol BotaDeviceSDKAppleDeviceClient: Sendable {

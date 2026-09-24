@@ -32,11 +32,11 @@ verify_checksum() {
 }
 
 for name in \
-  "bota-android-sdk-$SDK_VERSION.aar" \
-  "bota-android-sdk-$SDK_VERSION.pom" \
-  "bota-android-sdk-$SDK_VERSION.module" \
-  "bota-android-sdk-$SDK_VERSION-sources.jar" \
-  "bota-android-sdk-$SDK_VERSION-javadoc.jar"
+  "bota-app-sdk-$SDK_VERSION.aar" \
+  "bota-app-sdk-$SDK_VERSION.pom" \
+  "bota-app-sdk-$SDK_VERSION.module" \
+  "bota-app-sdk-$SDK_VERSION-sources.jar" \
+  "bota-app-sdk-$SDK_VERSION-javadoc.jar"
 do
   test -s "$RELEASE_DIRECTORY/$name"
   for algorithm in md5 sha1 sha256 sha512; do
@@ -51,9 +51,9 @@ cmp "$ROOT/LICENSE" "$RELEASE_DIRECTORY/LICENSE"
 
 "$NODE" "$ROOT/tools/android/normalize-central-repository.mjs" verify-maven \
   --repository "$RELEASE_DIRECTORY" \
-  --coordinate dev.bota:bota-android-sdk \
+  --coordinate dev.bota:bota-app-sdk \
   --version "$SDK_VERSION"
-"$ROOT/tools/android/inspect-aar.sh" "$RELEASE_DIRECTORY/bota-android-sdk-$SDK_VERSION.aar"
+"$ROOT/tools/android/inspect-aar.sh" "$RELEASE_DIRECTORY/bota-app-sdk-$SDK_VERSION.aar"
 (cd "$ROOT" && cargo xtask release validate "$RELEASE_DIRECTORY/release-manifest.json")
 
 "$NODE" -e '
@@ -62,14 +62,14 @@ cmp "$ROOT/LICENSE" "$RELEASE_DIRECTORY/LICENSE"
   const manifest = require(manifestPath);
   const crypto = require("node:crypto");
   const fs = require("node:fs");
-  const aar = `${require("node:path").dirname(sbomPath)}/bota-android-sdk-${version}.aar`;
+  const aar = `${require("node:path").dirname(sbomPath)}/bota-app-sdk-${version}.aar`;
   const checksum = crypto.createHash("sha256").update(fs.readFileSync(aar)).digest("hex");
-  const sbomAar = sbom.files.find((entry) => entry.fileName === `bota-android-sdk-${version}.aar`);
+  const sbomAar = sbom.files.find((entry) => entry.fileName === `bota-app-sdk-${version}.aar`);
   if (sbom.spdxVersion !== "SPDX-2.3" || sbom.name !== `BotaAndroidSDK-${version}`
       || sbomAar?.checksums?.[0]?.checksumValue !== checksum) throw new Error("invalid Android SBOM");
   const artifact = manifest.artifacts.find((entry) => entry.platform === "android");
   if (manifest.manifestVersion !== 2 || manifest.sourceRevision !== revision
-      || artifact?.packageIdentifier !== "dev.bota:bota-android-sdk"
+      || artifact?.packageIdentifier !== "dev.bota:bota-app-sdk"
       || artifact?.version !== version || artifact?.ecosystem !== "maven"
       || artifact?.checksumSha256 !== checksum) throw new Error("invalid Android release manifest");
 ' "$RELEASE_DIRECTORY/BotaAndroidSDK.spdx.json" "$RELEASE_DIRECTORY/release-manifest.json" "$SDK_VERSION" "$SOURCE_REVISION"

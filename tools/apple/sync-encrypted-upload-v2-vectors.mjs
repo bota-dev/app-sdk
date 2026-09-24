@@ -13,7 +13,7 @@ const digestSource = path.join(
 );
 const destination = path.join(
   root,
-  "platforms/apple/Tests/BotaAppleSDKTests/Resources/EncryptedUploadV2Vectors",
+  "platforms/apple/Tests/BotaAppSDKTests/Resources/EncryptedUploadV2Vectors",
 );
 const check = process.argv.includes("--check");
 const jsonName = "encrypted-upload-v2.json";

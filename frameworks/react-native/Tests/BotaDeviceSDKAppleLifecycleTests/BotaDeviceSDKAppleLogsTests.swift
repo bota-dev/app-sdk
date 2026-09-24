@@ -1,4 +1,4 @@
-import BotaAppleSDK
+import BotaAppSDK
 import XCTest
 @testable import BotaDeviceSDKAppleAdapter
 

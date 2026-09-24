@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { publicPackageIdentifier } from './package-identities.mjs';
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const REVISION = /^[0-9a-f]{40}$/;
@@ -83,7 +84,7 @@ export function generateAppleSbom({
     spdxVersion: 'SPDX-2.3',
     dataLicense: 'CC0-1.0',
     SPDXID: 'SPDXRef-DOCUMENT',
-    name: `BotaAppleSDK-${sdkVersion}`,
+    name: `${publicPackageIdentifier('apple', sdkVersion)}-${sdkVersion}`,
     documentNamespace: `https://bota.dev/spdx/app-sdk/${sdkVersion}/${sourceRevision}`,
     creationInfo: {
       created,

@@ -6,5 +6,5 @@ public object BotaAndroidSDK {
         get() = BuildConfig.BOTA_SDK_VERSION
 
     public const val mavenGroup: String = "dev.bota"
-    public const val mavenArtifact: String = "bota-android-sdk"
+    public const val mavenArtifact: String = "bota-app-sdk"
 }

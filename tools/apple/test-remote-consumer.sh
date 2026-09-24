@@ -33,7 +33,7 @@ let package = Package(
         .executableTarget(
             name: "AppleRemoteConsumer",
             dependencies: [
-                .product(name: "BotaAppleSDK", package: "app-sdk"),
+                .product(name: "BotaAppSDK", package: "app-sdk"),
             ]
         ),
     ]
@@ -41,7 +41,7 @@ let package = Package(
 EOF
 
 cat > "$CONSUMER/Sources/AppleRemoteConsumer/main.swift" <<EOF
-import BotaAppleSDK
+import BotaAppSDK
 
 @main
 enum AppleRemoteConsumer {
@@ -49,7 +49,7 @@ enum AppleRemoteConsumer {
         precondition(BotaAppleSDKVersion.current == "$VERSION")
         _ = BotaConfiguration()
         _ = BotaDeviceClient()
-        print("Resolved BotaAppleSDK $VERSION")
+        print("Resolved BotaAppSDK $VERSION")
     }
 }
 EOF
@@ -61,4 +61,4 @@ swift build \
     -Xswiftc -disable-batch-mode \
     --product AppleRemoteConsumer
 
-printf 'BotaAppleSDK %s public consumer compiled successfully\n' "$VERSION"
+printf 'BotaAppSDK %s public consumer compiled successfully\n' "$VERSION"

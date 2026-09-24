@@ -5,6 +5,16 @@ import { renderPublicPodspec } from './generate-public-podspec.mjs';
 
 const checksum = 'a'.repeat(64);
 
+test('major two publishes a script-free BotaAppSDK facade', () => {
+  const spec = renderPublicPodspec({ sdkVersion: '2.0.0-beta.0', artifactChecksum: checksum });
+  assert.match(spec, /spec.name = "BotaAppSDK"/);
+  assert.match(spec, /spec.module_name = "BotaAppSDK"/);
+  assert.match(spec, /BotaAppSDK\.cocoapods\.zip/);
+  assert.match(spec, /Sources\/BotaAppSDK/);
+  assert.match(spec, /Artifacts\/BotaDeviceSDKCore\.xcframework/);
+  assert.doesNotMatch(spec, /BotaAppleSDK|prepare_command/);
+});
+
 test('renders a script-free, checksummed CocoaPods source archive', () => {
   const spec = renderPublicPodspec({ sdkVersion: '1.2.0-beta.12', artifactChecksum: checksum });
   assert.match(spec, /spec.version = "1\.2\.0-beta\.12"/);

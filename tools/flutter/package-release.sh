@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PACKAGE_PATH="frameworks/flutter/bota_flutter_sdk"
+PACKAGE_PATH="frameworks/flutter/bota_app_sdk"
 PACKAGE_ROOT="$ROOT/$PACKAGE_PATH"
 OUTPUT="$ROOT/target/flutter-release"
 MODE="${1:-}"
@@ -129,7 +129,7 @@ import { writeFile } from 'node:fs/promises';
 const [, , version, sourceRevision, output] = process.argv;
 const evidence = {
   schemaVersion: 1,
-  packageName: 'bota_flutter_sdk',
+  packageName: 'bota_app_sdk',
   version,
   sourceRevision,
   generator: { name: 'pigeon', version: '28.0.0' },
@@ -167,7 +167,7 @@ if [[ ! -s "$temporary/package-files.txt" ]]; then
   exit 1
 fi
 
-archive="$temporary/bota_flutter_sdk-$sdk_version.tar.gz"
+archive="$temporary/bota_app_sdk-$sdk_version.tar.gz"
 inventory="$temporary/package-inventory.json"
 node "$ROOT/tools/flutter/verify-publication.mjs" create-candidate \
   --package-root "$PACKAGE_ROOT" \

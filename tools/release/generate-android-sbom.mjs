@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { publicPackageIdentifier } from './package-identities.mjs';
 
 import { unzipSync } from 'fflate';
 
@@ -55,7 +56,7 @@ export function generateAndroidSbom({ sdkVersion, sourceRevision, artifactChecks
   relationships.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 
   const files = [{
-    SPDXID: 'SPDXRef-File-BotaAndroidSDK-AAR', fileName: `bota-android-sdk-${sdkVersion}.aar`,
+    SPDXID: 'SPDXRef-File-BotaAndroidSDK-AAR', fileName: `${publicPackageIdentifier('android', sdkVersion).split(':')[1]}-${sdkVersion}.aar`,
     checksums: [{ algorithm: 'SHA256', checksumValue: artifactChecksum }], licenseConcluded: 'MIT',
     licenseInfoInFiles: ['MIT'], copyrightText: 'Copyright (c) 2026 Bota',
   }, ...entries.map((entry, index) => ({

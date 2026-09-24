@@ -69,41 +69,41 @@ if find "$LOCAL_REPOSITORY" -type f -name '*.asc' -print -quit | grep . >/dev/nu
   exit 1
 fi
 
-MAVEN_VERSION_DIRECTORY="$LOCAL_REPOSITORY/dev/bota/bota-android-sdk/$SDK_VERSION"
+MAVEN_VERSION_DIRECTORY="$LOCAL_REPOSITORY/dev/bota/bota-app-sdk/$SDK_VERSION"
 rm -rf "$OUTPUT"
 mkdir -p "$OUTPUT"
 for name in \
-  "bota-android-sdk-$SDK_VERSION.aar" \
-  "bota-android-sdk-$SDK_VERSION.pom" \
-  "bota-android-sdk-$SDK_VERSION.module" \
-  "bota-android-sdk-$SDK_VERSION-sources.jar" \
-  "bota-android-sdk-$SDK_VERSION-javadoc.jar"
+  "bota-app-sdk-$SDK_VERSION.aar" \
+  "bota-app-sdk-$SDK_VERSION.pom" \
+  "bota-app-sdk-$SDK_VERSION.module" \
+  "bota-app-sdk-$SDK_VERSION-sources.jar" \
+  "bota-app-sdk-$SDK_VERSION-javadoc.jar"
 do
   cp "$MAVEN_VERSION_DIRECTORY/$name" "$OUTPUT/$name"
   for algorithm in md5 sha1 sha256 sha512; do
     openssl dgst "-$algorithm" -r "$OUTPUT/$name" | awk '{print $1}' > "$OUTPUT/$name.$algorithm"
   done
 done
-cmp "$TEMP/second.aar" "$OUTPUT/bota-android-sdk-$SDK_VERSION.aar"
+cmp "$TEMP/second.aar" "$OUTPUT/bota-app-sdk-$SDK_VERSION.aar"
 cp "$ROOT/LICENSE" "$OUTPUT/LICENSE"
 
 cargo metadata --manifest-path "$ROOT/Cargo.toml" --locked --format-version 1 > "$TEMP/cargo-metadata.json"
-AAR_CHECKSUM="$(shasum -a 256 "$OUTPUT/bota-android-sdk-$SDK_VERSION.aar" | awk '{print $1}')"
+AAR_CHECKSUM="$(shasum -a 256 "$OUTPUT/bota-app-sdk-$SDK_VERSION.aar" | awk '{print $1}')"
 "$NODE" "$ROOT/tools/release/generate-android-sbom.mjs" \
   --sdk-version "$SDK_VERSION" \
   --source-revision "$SOURCE_REVISION" \
   --artifact-checksum "$AAR_CHECKSUM" \
   --created-at "$CREATED_AT" \
-  --aar "$OUTPUT/bota-android-sdk-$SDK_VERSION.aar" \
+  --aar "$OUTPUT/bota-app-sdk-$SDK_VERSION.aar" \
   --cargo-metadata "$TEMP/cargo-metadata.json" \
-  --gradle-module "$OUTPUT/bota-android-sdk-$SDK_VERSION.module" \
+  --gradle-module "$OUTPUT/bota-app-sdk-$SDK_VERSION.module" \
   --maven-license-policy "$ROOT/protocol/baseline/android-maven-license-policy.json" \
   --output "$OUTPUT/BotaAndroidSDK.spdx.json"
 "$NODE" "$ROOT/tools/release/generate-native-manifest.mjs" \
   --sdk-version "$SDK_VERSION" \
   --source-revision "$SOURCE_REVISION" \
   --artifact-checksum "$AAR_CHECKSUM" \
-  --android-artifact "bota-android-sdk-$SDK_VERSION.aar" \
+  --android-artifact "bota-app-sdk-$SDK_VERSION.aar" \
   --android-evidence "$ROOT/release/evidence/1.1.0-android-facade.md" \
   --baseline "$ROOT/protocol/baseline/react-native-sdk-0.0.65.json" \
   --compatibility "$ROOT/protocol/compatibility/firmware-compatibility.json" \
@@ -111,7 +111,7 @@ AAR_CHECKSUM="$(shasum -a 256 "$OUTPUT/bota-android-sdk-$SDK_VERSION.aar" | awk 
 
 "$ROOT/tools/android/verify-publication.sh" "$OUTPUT"
 "$NODE" "$ROOT/tools/android/check-maven-license-policy.mjs" \
-  "$OUTPUT/bota-android-sdk-$SDK_VERSION.module" \
+  "$OUTPUT/bota-app-sdk-$SDK_VERSION.module" \
   "$OUTPUT/BotaAndroidSDK.spdx.json" \
   "$ROOT/protocol/baseline/android-maven-license-policy.json"
 if [[ -n "$(git -C "$ROOT" status --porcelain --untracked-files=normal)" ]]; then

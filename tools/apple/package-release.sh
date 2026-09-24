@@ -5,7 +5,7 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 OUTPUT="$ROOT/target/apple-release"
 ARTIFACT="$ROOT/platforms/apple/Artifacts/BotaDeviceSDKCore.xcframework"
 ARCHIVE="$OUTPUT/BotaDeviceSDKCore.xcframework.zip"
-POD_ARCHIVE="$OUTPUT/BotaAppleSDK.cocoapods.zip"
+POD_ARCHIVE="$OUTPUT/BotaAppSDK.cocoapods.zip"
 NODE=${NODE:-node}
 PACKAGE_MANIFEST_MODE=check
 
@@ -86,7 +86,7 @@ cp "$ROOT/LICENSE" "$OUTPUT/LICENSE"
 
 mkdir -p "$TEMP/pod/Artifacts" "$TEMP/pod/Sources"
 cp -R "$TEMP/archive/BotaDeviceSDKCore.xcframework" "$TEMP/pod/Artifacts/"
-cp -R "$ROOT/platforms/apple/Sources/BotaAppleSDK" "$TEMP/pod/Sources/"
+cp -R "$ROOT/platforms/apple/Sources/BotaAppSDK" "$TEMP/pod/Sources/"
 cp "$ROOT/LICENSE" "$TEMP/pod/LICENSE"
 find "$TEMP/pod" -exec touch -h -t 198001010000 {} +
 (
@@ -97,8 +97,8 @@ find "$TEMP/pod" -exec touch -h -t 198001010000 {} +
 )
 POD_CHECKSUM=$(shasum -a 256 "$POD_ARCHIVE" | awk '{print $1}')
 printf '%s  %s\n' "$POD_CHECKSUM" "$(basename "$POD_ARCHIVE")" \
-    > "$OUTPUT/BotaAppleSDK.cocoapods.zip.sha256"
-unzip -Z -1 "$POD_ARCHIVE" | grep -F -x 'Sources/BotaAppleSDK/BotaAppleSDK.swift' >/dev/null
+    > "$OUTPUT/BotaAppSDK.cocoapods.zip.sha256"
+unzip -Z -1 "$POD_ARCHIVE" | grep -F -x 'Sources/BotaAppSDK/BotaAppSDK.swift' >/dev/null
 unzip -Z -1 "$POD_ARCHIVE" | grep -F -x 'Artifacts/BotaDeviceSDKCore.xcframework/Info.plist' >/dev/null
 
 cargo metadata --manifest-path "$ROOT/Cargo.toml" --locked --format-version 1 \
@@ -116,7 +116,7 @@ $NODE "$ROOT/tools/release/generate-apple-sbom.mjs" \
     --created-at "$CREATED_AT" \
     --cargo-metadata "$TEMP/cargo-metadata.json" \
     --swift-dependencies "$TEMP/swift-dependencies.json" \
-    --output "$OUTPUT/BotaAppleSDK.spdx.json"
+    --output "$OUTPUT/BotaAppSDK.spdx.json"
 
 $NODE "$ROOT/tools/release/generate-apple-manifest.mjs" \
     --sdk-version "$SDK_VERSION" \
@@ -126,7 +126,7 @@ $NODE "$ROOT/tools/release/generate-apple-manifest.mjs" \
     --compatibility "$ROOT/protocol/compatibility/firmware-compatibility.json" \
     --output "$OUTPUT/release-manifest.json"
 
-if grep -F "$ROOT" "$OUTPUT/BotaAppleSDK.spdx.json" >/dev/null; then
+if grep -F "$ROOT" "$OUTPUT/BotaAppSDK.spdx.json" >/dev/null; then
     printf 'SPDX output contains the local checkout path\n' >&2
     exit 1
 fi
@@ -140,7 +140,7 @@ if [ "$PACKAGE_MANIFEST_MODE" = write ]; then
     $NODE "$ROOT/tools/release/generate-public-podspec.mjs" \
         --sdk-version "$SDK_VERSION" \
         --artifact-checksum "$POD_CHECKSUM" \
-        --output "$ROOT/platforms/apple/BotaAppleSDK.podspec"
+        --output "$ROOT/platforms/apple/BotaAppSDK.podspec"
 elif [ "$PACKAGE_MANIFEST_MODE" = check ]; then
     $NODE "$ROOT/tools/release/generate-public-swift-package.mjs" \
         --sdk-version "$SDK_VERSION" \
@@ -150,7 +150,7 @@ elif [ "$PACKAGE_MANIFEST_MODE" = check ]; then
     $NODE "$ROOT/tools/release/generate-public-podspec.mjs" \
         --sdk-version "$SDK_VERSION" \
         --artifact-checksum "$POD_CHECKSUM" \
-        --output "$ROOT/platforms/apple/BotaAppleSDK.podspec" \
+        --output "$ROOT/platforms/apple/BotaAppSDK.podspec" \
         --check
 fi
 swift package --package-path "$ROOT" dump-package >/dev/null

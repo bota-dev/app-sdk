@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { publicPackageIdentifier } from './package-identities.mjs';
 
 const VERSION = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/;
 const CHECKSUM = /^[0-9a-f]{64}$/;
@@ -12,22 +13,23 @@ export function renderPublicPodspec({ sdkVersion, artifactChecksum }) {
     throw new Error('artifact checksum must be a nonzero lowercase SHA-256 digest');
   }
 
+  const packageName = publicPackageIdentifier('apple', sdkVersion);
   return `Pod::Spec.new do |spec|
-  spec.name = "BotaAppleSDK"
-  spec.module_name = "BotaAppleSDK"
+  spec.name = "${packageName}"
+  spec.module_name = "${packageName}"
   spec.version = "${sdkVersion}"
   spec.summary = "Bota App SDK for Apple platforms"
   spec.homepage = "https://docs.bota.dev"
   spec.license = { type: "Apache-2.0" }
   spec.author = "Bota"
   spec.source = {
-    http: "https://github.com/bota-dev/app-sdk/releases/download/v${sdkVersion}/BotaAppleSDK.cocoapods.zip",
+    http: "https://github.com/bota-dev/app-sdk/releases/download/v${sdkVersion}/${packageName}.cocoapods.zip",
     sha256: "${artifactChecksum}",
   }
   spec.platforms = { ios: "15.0", osx: "13.0" }
   spec.cocoapods_version = ">= 1.13"
   spec.swift_version = "6.0"
-  spec.source_files = "{,platforms/apple/}Sources/BotaAppleSDK/**/*.swift"
+  spec.source_files = "{,platforms/apple/}Sources/${packageName}/**/*.swift"
   spec.vendored_frameworks =
     "{,platforms/apple/}Artifacts/BotaDeviceSDKCore.xcframework"
   spec.pod_target_xcconfig = {

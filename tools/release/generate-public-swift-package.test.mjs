@@ -5,6 +5,15 @@ import { renderPublicSwiftPackage } from './generate-public-swift-package.mjs';
 
 const checksum = 'a'.repeat(64);
 
+test('major two changes the facade but not its core binary identity', () => {
+  const manifest = renderPublicSwiftPackage({ sdkVersion: '2.0.0-beta.0', artifactChecksum: checksum });
+  assert.match(manifest, /name: "BotaAppSDK"/);
+  assert.match(manifest, /Sources\/BotaAppSDK/);
+  assert.match(manifest, /BotaDeviceSDKCore\.xcframework\.zip/);
+  assert.match(manifest, /name: "BotaDeviceSDKC"/);
+  assert.doesNotMatch(manifest, /BotaAppleSDK/);
+});
+
 test('public Swift package pins the matching Apple release artifact', () => {
   const manifest = renderPublicSwiftPackage({
     sdkVersion: '1.0.0',

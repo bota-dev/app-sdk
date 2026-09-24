@@ -16,7 +16,7 @@ abort "source mode must be local or remote" unless ["local", "remote"].include?(
 
 FileUtils.mkdir_p(output_dir)
 FileUtils.mkdir_p(output_dir.join("node_modules/@bota.dev"))
-FileUtils.ln_sf(package_root, output_dir.join("node_modules/@bota.dev/react-native-sdk"))
+FileUtils.ln_sf(package_root, output_dir.join("node_modules/@bota.dev/react-native-app-sdk"))
 FileUtils.ln_sf(react_native_path, output_dir.join("node_modules/react-native"))
 FileUtils.ln_sf(package_root.join("node_modules/react"), output_dir.join("node_modules/react"))
 
@@ -25,7 +25,7 @@ package_json = {
   "version" => "1.0.0",
   "private" => true,
   "dependencies" => {
-    "@bota.dev/react-native-sdk" => "file:#{package_root}",
+    "@bota.dev/react-native-app-sdk" => "file:#{package_root}",
     "react" => "19.2.3",
     "react-native" => "0.86.3",
   },

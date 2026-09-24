@@ -221,7 +221,7 @@ mavenPublishing {
     )
     coordinates(
         groupId = "dev.bota",
-        artifactId = "bota-android-sdk",
+        artifactId = "bota-app-sdk",
         version = project.version.toString(),
     )
     pom {

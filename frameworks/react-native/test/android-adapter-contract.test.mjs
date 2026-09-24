@@ -33,7 +33,7 @@ test('Android adapter package does not bypass the public facade', () => {
     compileSdkVersion: 36,
     coroutinesVersion: '1.10.2',
     kotlinVersion: '2.1.20',
-    mavenCoordinate: 'dev.bota:bota-android-sdk',
+    mavenCoordinate: 'dev.bota:bota-app-sdk',
     minSdkVersion: 26,
     namespace: 'dev.bota.sdk.reactnative',
   });

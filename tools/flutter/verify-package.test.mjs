@@ -38,10 +38,10 @@ const packageFiles = [
   'analysis_options.yaml',
   'android/sdk-version.toml',
   'android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt',
-  'ios/bota_flutter_sdk.podspec',
-  'ios/bota_flutter_sdk/Package.swift',
-  'ios/bota_flutter_sdk/Sources/bota_flutter_sdk/BotaApi.g.swift',
-  'lib/bota_flutter_sdk.dart',
+  'ios/bota_app_sdk.podspec',
+  'ios/bota_app_sdk/Package.swift',
+  'ios/bota_app_sdk/Sources/bota_app_sdk/BotaApi.g.swift',
+  'lib/bota_app_sdk.dart',
   'lib/src/generated/bota_api.g.dart',
   'pigeon_options.yaml',
   'pigeons/bota_api.dart',
@@ -50,11 +50,11 @@ const packageFiles = [
   'test/package_contract_test.dart',
 ];
 
-const validPubspec = `name: bota_flutter_sdk
+const validPubspec = `name: bota_app_sdk
 description: Flutter facade for connecting applications to Bota devices.
-version: 1.1.0
+version: 2.0.0-beta.0
 homepage: https://docs.bota.dev
-repository: https://github.com/bota-dev/app-sdk/tree/main/frameworks/flutter/bota_flutter_sdk
+repository: https://github.com/bota-dev/app-sdk/tree/main/frameworks/flutter/bota_app_sdk
 environment:
   sdk: ">=3.11.0 <4.0.0"
   flutter: ">=3.41.0"
@@ -80,18 +80,18 @@ flutter:
 const validPluginPodspec = `
 version = package.fetch("version")
 spec.swift_version = "5.0"
-spec.source_files = "bota_flutter_sdk/Sources/bota_flutter_sdk/**/*.swift"
-spec.dependency "BotaAppleSDK", version
+spec.source_files = "bota_app_sdk/Sources/bota_app_sdk/**/*.swift"
+spec.dependency "BotaAppSDK", version
 `;
 const validSwiftPackage = `
-.library(name: "bota-flutter-sdk", targets: ["bota_flutter_sdk"])
+.library(name: "bota-app-sdk", targets: ["bota_app_sdk"])
 .package(name: "FlutterFramework", path: "../FlutterFramework")
-.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "1.1.0")
-.product(name: "BotaAppleSDK", package: "app-sdk")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.0")
+.product(name: "BotaAppSDK", package: "app-sdk")
 swiftLanguageModes: [.v5]
 `;
 const validApplePodspec = `
-spec.version = "1.1.0"
+spec.version = "2.0.0-beta.0"
 spec.vendored_frameworks = "Artifacts/BotaDeviceSDKCore.xcframework"
 `;
 const validPubignore = `.dart_tool/
@@ -111,21 +111,21 @@ example/ios/Runner/GeneratedPluginRegistrant.m
 
 const createFixture = (prefix = 'bota-flutter-package-') => {
   const root = mkdtempSync(join(tmpdir(), prefix));
-  const packageRoot = join(root, 'frameworks', 'flutter', 'bota_flutter_sdk');
+  const packageRoot = join(root, 'frameworks', 'flutter', 'bota_app_sdk');
 
-  writeFileSync(join(root, 'sdk-version.toml'), 'version = "1.1.0"\n');
+  writeFileSync(join(root, 'sdk-version.toml'), 'version = "2.0.0-beta.0"\n');
   for (const file of packageFiles) {
     const path = join(packageRoot, file);
     mkdirSync(dirname(path), { recursive: true });
     let contents = 'fixture\n';
     if (file === '.pubignore') contents = validPubignore;
-    if (file === 'android/sdk-version.toml') contents = 'version = "1.1.0"\n';
+    if (file === 'android/sdk-version.toml') contents = 'version = "2.0.0-beta.0"\n';
     if (file === 'pubspec.yaml') contents = validPubspec;
-    if (file === 'ios/bota_flutter_sdk.podspec') contents = validPluginPodspec;
-    if (file === 'ios/bota_flutter_sdk/Package.swift') contents = validSwiftPackage;
+    if (file === 'ios/bota_app_sdk.podspec') contents = validPluginPodspec;
+    if (file === 'ios/bota_app_sdk/Package.swift') contents = validSwiftPackage;
     writeFileSync(path, contents);
   }
-  const applePodspec = join(root, 'platforms', 'apple', 'BotaAppleSDK.podspec');
+  const applePodspec = join(root, 'platforms', 'apple', 'BotaAppSDK.podspec');
   mkdirSync(dirname(applePodspec), { recursive: true });
   writeFileSync(applePodspec, validApplePodspec);
 
@@ -143,25 +143,31 @@ test('accepts the synchronized iOS and Android Flutter package metadata', () => 
   const { root } = createFixture();
 
   assert.deepEqual(verifyFlutterPackage(root), {
-    packageName: 'bota_flutter_sdk',
-    sdkVersion: '1.1.0',
+    packageName: 'bota_app_sdk',
+    sdkVersion: '2.0.0-beta.0',
   });
 });
 
 test('rejects a missing Flutter package', () => {
   const root = mkdtempSync(join(tmpdir(), 'bota-flutter-package-missing-'));
-  writeFileSync(join(root, 'sdk-version.toml'), 'version = "1.1.0"\n');
+  writeFileSync(join(root, 'sdk-version.toml'), 'version = "2.0.0-beta.0"\n');
 
   assert.throws(() => verifyFlutterPackage(root), /Flutter package is missing/);
 });
 
+test('rejects the historical package name for a major-two Flutter candidate', () => {
+  const { packageRoot, root } = createFixture();
+  replacePubspec(packageRoot, 'name: bota_app_sdk', 'name: bota_flutter_sdk');
+  assert.throws(() => verifyFlutterPackage(root), /package name.*bota_app_sdk/);
+});
+
 test('rejects Flutter package version drift from sdk-version.toml', () => {
   const { packageRoot, root } = createFixture();
-  replacePubspec(packageRoot, 'version: 1.1.0', 'version: 1.0.0');
+  replacePubspec(packageRoot, 'version: 2.0.0-beta.0', 'version: 1.0.0');
 
   assert.throws(
     () => verifyFlutterPackage(root),
-    /package version 1\.0\.0 does not match 1\.1\.0/
+    /package version 1\.0\.0 does not match 2\.0\.0-beta\.0/
   );
 });
 
@@ -174,7 +180,7 @@ test('rejects packaged Android version drift from sdk-version.toml', () => {
 
   assert.throws(
     () => verifyFlutterPackage(root),
-    /packaged Android SDK version 1\.0\.0 does not match 1\.1\.0/
+    /packaged Android SDK version 1\.0\.0 does not match 2\.0\.0-beta\.0/
   );
 });
 
@@ -229,18 +235,18 @@ test('rejects a non-exact Pigeon development dependency', () => {
 test('rejects Apple package version and language-mode drift', () => {
   const packageFixture = createFixture();
   writeFileSync(
-    join(packageFixture.packageRoot, 'ios/bota_flutter_sdk/Package.swift'),
-    validSwiftPackage.replace('exact: "1.1.0"', 'exact: "1.0.0"')
+    join(packageFixture.packageRoot, 'ios/bota_app_sdk/Package.swift'),
+    validSwiftPackage.replace('exact: "2.0.0-beta.0"', 'exact: "1.0.0"')
   );
   const podFixture = createFixture();
   writeFileSync(
-    join(podFixture.packageRoot, 'ios/bota_flutter_sdk.podspec'),
+    join(podFixture.packageRoot, 'ios/bota_app_sdk.podspec'),
     validPluginPodspec.replace('"5.0"', '"6.0"')
   );
 
   assert.throws(
     () => verifyFlutterPackage(packageFixture.root),
-    /pin the app-sdk dependency exactly to 1\.1\.0/
+    /pin the app-sdk dependency exactly to 2\.0\.0-beta\.0/
   );
   assert.throws(
     () => verifyFlutterPackage(podFixture.root),
@@ -251,7 +257,7 @@ test('rejects Apple package version and language-mode drift', () => {
 test('rejects a published Swift package with a local Apple dependency override', () => {
   const { packageRoot, root } = createFixture();
   writeFileSync(
-    join(packageRoot, 'ios/bota_flutter_sdk/Package.swift'),
+    join(packageRoot, 'ios/bota_app_sdk/Package.swift'),
     `import Foundation
 ${validSwiftPackage}
 let localPath = ProcessInfo.processInfo.environment["BOTA_APPLE_SDK_PACKAGE_PATH"]
@@ -260,20 +266,20 @@ let localPath = ProcessInfo.processInfo.environment["BOTA_APPLE_SDK_PACKAGE_PATH
 
   assert.throws(
     () => verifyFlutterPackage(root),
-    /must not contain a local BotaAppleSDK override/,
+    /must not contain a local BotaAppSDK override/,
   );
 });
 
 test('rejects a published Swift package with the wrong remote package identity', () => {
   const { packageRoot, root } = createFixture();
   writeFileSync(
-    join(packageRoot, 'ios/bota_flutter_sdk/Package.swift'),
-    validSwiftPackage.replace('package: "app-sdk"', 'package: "BotaAppleSDK"'),
+    join(packageRoot, 'ios/bota_app_sdk/Package.swift'),
+    validSwiftPackage.replace('package: "app-sdk"', 'package: "BotaAppSDK"'),
   );
 
   assert.throws(
     () => verifyFlutterPackage(root),
-    /reference BotaAppleSDK from the app-sdk package identity/,
+    /reference BotaAppSDK from the app-sdk package identity/,
   );
 });
 
@@ -330,8 +336,8 @@ test('rejects YAML aliases in the package manifest', () => {
   const { packageRoot, root } = createFixture();
   replacePubspec(
     packageRoot,
-    'version: 1.1.0',
-    'shared: &version 1.1.0\nversion: *version'
+    'version: 2.0.0-beta.0',
+    'shared: &version 2.0.0-beta.0\nversion: *version'
   );
 
   assert.throws(
@@ -344,11 +350,11 @@ test('rejects punctuation-named YAML anchors and aliases', () => {
   const anchorFixture = createFixture();
   replacePubspec(
     anchorFixture.packageRoot,
-    'version: 1.1.0',
-    'shared: &.shared 1.1.0\nversion: 1.1.0'
+    'version: 2.0.0-beta.0',
+    'shared: &.shared 2.0.0-beta.0\nversion: 2.0.0-beta.0'
   );
   const aliasFixture = createFixture();
-  replacePubspec(aliasFixture.packageRoot, 'version: 1.1.0', 'version: *.shared');
+  replacePubspec(aliasFixture.packageRoot, 'version: 2.0.0-beta.0', 'version: *.shared');
 
   assert.throws(
     () => verifyFlutterPackage(anchorFixture.root),
@@ -395,7 +401,7 @@ printf "arg=%s\\n" "$@"
     join(workspaceRoot, 'tools', 'flutter', 'run-flutter.sh'),
     [
       'test',
-      'frameworks/flutter/bota_flutter_sdk/test/package_contract_test.dart',
+      'frameworks/flutter/bota_app_sdk/test/package_contract_test.dart',
     ],
     {
       cwd: workspaceRoot,
@@ -407,7 +413,7 @@ printf "arg=%s\\n" "$@"
   assert.equal(result.status, 0, result.stderr);
   assert.match(
     result.stdout,
-    new RegExp(`cwd=${join(workspaceRoot, 'frameworks/flutter/bota_flutter_sdk')}`)
+    new RegExp(`cwd=${join(workspaceRoot, 'frameworks/flutter/bota_app_sdk')}`)
   );
   assert.match(result.stdout, /arg=test\/package_contract_test\.dart/);
 });

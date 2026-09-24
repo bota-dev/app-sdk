@@ -28,7 +28,7 @@ test('consumer verifies once and browser receives the exact inventory evidence',
     }
     mkdirSync(join(fixture, 'frameworks/web'), { recursive: true })
     mkdirSync(
-      join(fixture, 'tests/consumers/web-vite/node_modules/@bota.dev/web-sdk'),
+      join(fixture, 'tests/consumers/web-vite/node_modules/@bota.dev/web-app-sdk'),
       { recursive: true },
     )
     mkdirSync(join(fixture, 'bin'), { recursive: true })

@@ -1,6 +1,6 @@
 {
   "name": "@bota.dev/app-sdk-workspace",
-  "version": "1.2.0-beta.12",
+  "version": "2.0.0-beta.0",
   "private": true,
   "engines": {
     "node": ">=22"
@@ -13,10 +13,10 @@
     "check:licenses": "node scripts/check-licenses.mjs",
     "encrypted-upload-v2:vectors": "cargo xtask encrypted-upload-v2 vectors generate",
     "encrypted-upload-v2:vectors:check": "cargo xtask encrypted-upload-v2 vectors generate --check",
-    "flutter:analyze": "tools/flutter/run-flutter.sh analyze frameworks/flutter/bota_flutter_sdk",
+    "flutter:analyze": "tools/flutter/run-flutter.sh analyze frameworks/flutter/bota_app_sdk",
     "flutter:generate": "tools/flutter/generate-pigeon.sh",
     "flutter:generate:check": "node tools/flutter/verify-pigeon.mjs",
-    "flutter:test": "tools/flutter/run-flutter.sh test frameworks/flutter/bota_flutter_sdk/test",
+    "flutter:test": "tools/flutter/run-flutter.sh test frameworks/flutter/bota_app_sdk/test",
     "flutter:verify": "node tools/flutter/verify-package.mjs && tools/flutter/run-flutter.sh --version && npm run flutter:analyze && npm run flutter:test",
     "license-check": "npm run check:licenses",
     "react-native:verify": "node tools/react-native/verify-package.mjs",

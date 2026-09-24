@@ -1,5 +1,5 @@
 @testable import BotaDeviceSDKAppleAdapter
-import BotaAppleSDK
+import BotaAppSDK
 import Foundation
 import XCTest
 

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 workspace_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-plugin_root="$workspace_root/frameworks/flutter/bota_flutter_sdk"
+plugin_root="$workspace_root/frameworks/flutter/bota_app_sdk"
 example_root="$plugin_root/example"
 info_plist="$example_root/ios/Runner/Info.plist"
 android_manifest="$example_root/android/app/src/main/AndroidManifest.xml"
@@ -141,17 +141,17 @@ fi
 node "$workspace_root/tools/flutter/verify-package.mjs"
 npm --prefix "$workspace_root" run flutter:generate:check
 swift package dump-package \
-  --package-path "$plugin_root/ios/bota_flutter_sdk" \
+  --package-path "$plugin_root/ios/bota_app_sdk" \
   >"$consumer_root/flutter-public-package.json"
 
 "$workspace_root/tools/apple/build-xcframework.sh"
 [[ -d "$apple_artifact" ]] || {
-  echo "Fresh local BotaAppleSDK artifact is missing" >&2
+  echo "Fresh local BotaAppSDK artifact is missing" >&2
   exit 1
 }
 if ! grep -Eq "spec.version = \"$sdk_version\"" \
-  "$apple_package/BotaAppleSDK.podspec"; then
-  echo "Local BotaAppleSDK pod does not match $sdk_version" >&2
+  "$apple_package/BotaAppSDK.podspec"; then
+  echo "Local BotaAppSDK pod does not match $sdk_version" >&2
   exit 1
 fi
 local_plugin_root="$consumer_root/local-plugin"
@@ -163,7 +163,7 @@ rsync -a \
   --exclude example/build \
   --exclude example/pubspec.lock \
   "$plugin_root/" "$local_plugin_root/"
-SWIFT_MANIFEST="$local_plugin_root/ios/bota_flutter_sdk/Package.swift" \
+SWIFT_MANIFEST="$local_plugin_root/ios/bota_app_sdk/Package.swift" \
   APPLE_PACKAGE="$apple_package" SDK_VERSION="$sdk_version" node -e '
     const fs = require("node:fs");
     const path = process.env.SWIFT_MANIFEST;
@@ -173,25 +173,25 @@ SWIFT_MANIFEST="$local_plugin_root/ios/bota_flutter_sdk/Package.swift" \
       exact: "${process.env.SDK_VERSION}"
     ),`;
     const replacement = `.package(name: "app-sdk", path: ${JSON.stringify(process.env.APPLE_PACKAGE)}),`;
-    if (!source.includes(marker)) throw new Error("public BotaAppleSDK dependency marker changed");
+    if (!source.includes(marker)) throw new Error("public BotaAppSDK dependency marker changed");
     fs.writeFileSync(path, source.replace(marker, replacement));
   '
 swift package dump-package \
-  --package-path "$local_plugin_root/ios/bota_flutter_sdk" \
+  --package-path "$local_plugin_root/ios/bota_app_sdk" \
   >"$consumer_root/flutter-plugin-package.json"
 if ! grep -Fq "$apple_package" "$consumer_root/flutter-plugin-package.json"; then
-  echo "Flutter iOS plugin did not resolve the local BotaAppleSDK package" >&2
+  echo "Flutter iOS plugin did not resolve the local BotaAppSDK package" >&2
   exit 1
 fi
 
-android_candidate_dir="$android_repository/dev/bota/bota-android-sdk/$sdk_version"
+android_candidate_dir="$android_repository/dev/bota/bota-app-sdk/$sdk_version"
 if [[ -e "$android_candidate_dir" ]]; then
   find "$android_candidate_dir" -depth -delete
 fi
 "$android_root/gradlew" -p "$android_root" \
   :sdk:clean :sdk:publishMavenPublicationToLocalRepository
-android_aar="$android_candidate_dir/bota-android-sdk-$sdk_version.aar"
-android_pom="$android_candidate_dir/bota-android-sdk-$sdk_version.pom"
+android_aar="$android_candidate_dir/bota-app-sdk-$sdk_version.aar"
+android_pom="$android_candidate_dir/bota-app-sdk-$sdk_version.pom"
 require_file "$android_aar"
 require_file "$android_pom"
 if ! grep -Eq "<version>$sdk_version</version>" "$android_pom"; then
@@ -203,7 +203,7 @@ fi
   --no-pub \
   --platforms=ios,android \
   --org=dev.bota \
-  --project-name=bota_flutter_sdk_example \
+  --project-name=bota_app_sdk_example \
   "$consumer" </dev/null >/dev/null
 cp "$example_root/pubspec.yaml" "$consumer/pubspec.yaml"
 cp "$example_root/lib/main.dart" "$consumer/lib/main.dart"
@@ -272,11 +272,11 @@ GRADLE_USER_HOME="$consumer_gradle_home" \
   --no-daemon \
   :app:dependencyInsight \
   --configuration releaseRuntimeClasspath \
-  --dependency dev.bota:bota-android-sdk \
+  --dependency dev.bota:bota-app-sdk \
   >"$consumer_root/android-dependency.txt"
-if ! grep -Fq "dev.bota:bota-android-sdk:$sdk_version" \
+if ! grep -Fq "dev.bota:bota-app-sdk:$sdk_version" \
   "$consumer_root/android-dependency.txt"; then
-  echo "Flutter Android release did not resolve bota-android-sdk $sdk_version" >&2
+  echo "Flutter Android release did not resolve bota-app-sdk $sdk_version" >&2
   exit 1
 fi
 

@@ -8,6 +8,6 @@ internal class PackageSmokeTest {
     fun publicVersionComesFromTheFamilyAuthority() {
         assertEquals(System.getProperty("bota.test.sdkVersion"), BotaAndroidSDK.version)
         assertEquals("dev.bota", BotaAndroidSDK.mavenGroup)
-        assertEquals("bota-android-sdk", BotaAndroidSDK.mavenArtifact)
+        assertEquals("bota-app-sdk", BotaAndroidSDK.mavenArtifact)
     }
 }

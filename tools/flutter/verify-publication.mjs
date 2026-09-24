@@ -10,7 +10,7 @@ import { create, Parser } from 'tar';
 
 import { parsePubspec } from './verify-package.mjs';
 
-const EXPECTED_PACKAGE_NAME = 'bota_flutter_sdk';
+import { publicPackageIdentifier } from '../release/package-identities.mjs';
 const EXPECTED_GENERATOR = Object.freeze({ name: 'pigeon', version: '28.0.0' });
 const MAX_ARCHIVE_BYTES = 50 * 1024 * 1024;
 const MAX_FILE_BYTES = 16 * 1024 * 1024;
@@ -171,13 +171,14 @@ export async function inspectFlutterArchive(archive) {
   if (typeof pubspec.name !== 'string') throw new Error('Flutter archive pubspec is missing package name');
   if (typeof pubspec.version !== 'string') throw new Error('Flutter archive pubspec is missing package version');
 
+  const packageName = publicPackageIdentifier('flutter', pubspec.version);
   const swiftPackage = archivedFiles.find(
-    ({ path }) => path === 'ios/bota_flutter_sdk/Package.swift',
+    ({ path }) => path === `ios/${packageName}/Package.swift`,
   );
   if (
     swiftPackage
     && (swiftPackage.contents.includes('BOTA_APPLE_SDK_PACKAGE_PATH')
-      || /\.package\(name:\s*["']BotaAppleSDK["'][^)]*\bpath\s*:/s.test(
+      || /\.package\(name:\s*["']Bota(?:Apple|App)SDK["'][^)]*\bpath\s*:/s.test(
         swiftPackage.contents.toString('utf8'),
       ))
   ) {
@@ -255,6 +256,7 @@ function validateInventory(inventory) {
     'candidate inventory',
   );
   if (inventory.schemaVersion !== 1) throw new Error('candidate inventory schemaVersion must be 1');
+  const EXPECTED_PACKAGE_NAME = publicPackageIdentifier('flutter', inventory.version);
   if (inventory.packageName !== EXPECTED_PACKAGE_NAME) {
     throw new Error(`package name must be ${EXPECTED_PACKAGE_NAME}`);
   }
@@ -382,6 +384,7 @@ async function createCandidate(arguments_) {
     .split('\n')
     .filter(Boolean);
   const inspection = await createFlutterArchive({ archivePath: archive, files, packageRoot });
+  const EXPECTED_PACKAGE_NAME = publicPackageIdentifier('flutter', inspection.version);
   if (inspection.packageName !== EXPECTED_PACKAGE_NAME) {
     throw new Error(`package name must be ${EXPECTED_PACKAGE_NAME}`);
   }

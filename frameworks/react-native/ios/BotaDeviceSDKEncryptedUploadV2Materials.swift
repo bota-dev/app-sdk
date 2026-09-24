@@ -1,4 +1,4 @@
-import BotaAppleSDK
+import BotaAppSDK
 import Foundation
 
 /// Holds v2 application material entirely in native memory. JavaScript receives only

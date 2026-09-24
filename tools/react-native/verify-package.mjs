@@ -4,14 +4,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const EXPECTED_PACKAGE = '@bota.dev/react-native-sdk';
+import { publicPackageIdentifier } from '../release/package-identities.mjs';
 const EXPECTED_PACKAGE_MANAGER = 'npm@12.0.2';
 const EXPECTED_REACT_NATIVE_FLOOR = '0.86.3';
 const EXPECTED_NATIVE_MODULE = 'BotaDeviceSDK';
 const EXPECTED_CODEGEN_LIBRARY = 'BotaDeviceSDKSpec';
 const EXPECTED_APPLE_DEPLOYMENT_TARGET = '15.1';
 const EXPECTED_APPLE_PACKAGE_URL = 'https://github.com/bota-dev/app-sdk.git';
-const EXPECTED_APPLE_PRODUCT = 'BotaAppleSDK';
 const EXPECTED_COCOAPODS_VERSION = '1.13.0';
 const EXPECTED_LOCAL_APPLE_PATH_ENV = 'BOTA_APPLE_SDK_PACKAGE_PATH';
 const EXPECTED_SWIFT_VERSION = '6.0';
@@ -19,7 +18,6 @@ const EXPECTED_APPLE_SPM_WORKAROUND = 'scripts/bota_device_sdk_spm_workaround.rb
 const EXPECTED_ANDROID_COMPILE_SDK = 36;
 const EXPECTED_ANDROID_COROUTINES_VERSION = '1.10.2';
 const EXPECTED_ANDROID_KOTLIN_VERSION = '2.1.20';
-const EXPECTED_ANDROID_MAVEN_COORDINATE = 'dev.bota:bota-android-sdk';
 const EXPECTED_ANDROID_MIN_SDK = 26;
 const EXPECTED_ANDROID_NAMESPACE = 'dev.bota.sdk.reactnative';
 
@@ -43,6 +41,9 @@ const readArgument = (args, name, fallback) => {
 
 export const verifyPackage = ({ workspaceRoot, packageRoot }) => {
   const sdkVersion = readSdkVersion(resolve(workspaceRoot, 'sdk-version.toml'));
+  const EXPECTED_PACKAGE = publicPackageIdentifier('react-native', sdkVersion);
+  const EXPECTED_APPLE_PRODUCT = publicPackageIdentifier('apple', sdkVersion);
+  const EXPECTED_ANDROID_MAVEN_COORDINATE = publicPackageIdentifier('android', sdkVersion);
   const workspacePackage = readJson(resolve(workspaceRoot, 'package.json'));
   const packageJson = readJson(resolve(packageRoot, 'package.json'));
 

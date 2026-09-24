@@ -89,6 +89,31 @@ function candidateInventory(inspection) {
   };
 }
 
+test('major-two Flutter archives use the renamed identity and reject local Apple overrides', async () => {
+  const entries = validEntries().map((entry) => ({
+    ...entry,
+    path: entry.path.replaceAll('bota_flutter_sdk', 'bota_app_sdk'),
+    body: entry.body.replaceAll('bota_flutter_sdk', 'bota_app_sdk')
+      .replaceAll(version, '2.0.0-beta.0'),
+  }));
+  const bytes = archive(entries);
+  const inspection = await inspectFlutterArchive(bytes);
+  const inventory = {
+    ...candidateInventory(inspection),
+    packageName: 'bota_app_sdk',
+    version: '2.0.0-beta.0',
+  };
+  inventory.archive.name = 'bota_app_sdk-2.0.0-beta.0.tar.gz';
+  await verifyCandidateArchive({ archive: bytes, inventory });
+  await assert.rejects(
+    verifyCandidateArchive({ archive: bytes, inventory: { ...inventory, packageName } }),
+    /package name must be bota_app_sdk/,
+  );
+  const swift = entries.find((entry) => entry.path.endsWith('Package.swift'));
+  swift.body = '.package(name: "BotaAppSDK", path: "../local")';
+  await assert.rejects(inspectFlutterArchive(archive(entries)), /local Apple dependency override/);
+});
+
 test('creates the same normalized candidate archive from an exact sorted file list', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'bota-flutter-archive-'));
   t.after(async () => {

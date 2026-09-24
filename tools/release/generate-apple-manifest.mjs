@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { publicPackageIdentifier } from './package-identities.mjs';
 
 import { generateNativeManifest, supportedCompatibilityCapabilities } from './generate-native-manifest.mjs';
 
@@ -22,7 +23,7 @@ export function generateAppleManifest({
         name: 'BotaDeviceSDKCore.xcframework.zip',
         ecosystem: 'swiftpm',
         platform: 'apple',
-        packageIdentifier: 'BotaAppleSDK',
+        packageIdentifier: publicPackageIdentifier('apple', sdkVersion),
         version: sdkVersion,
         checksumSha256: artifactChecksum,
         capabilities,

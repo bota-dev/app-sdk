@@ -10,17 +10,17 @@ import {
 import { isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const PACKAGE_PATH = 'frameworks/flutter/bota_flutter_sdk';
+const PACKAGE_PATH = 'frameworks/flutter/bota_app_sdk';
 const REQUIRED_FILES = [
   '.pubignore',
   'LICENSE',
   'analysis_options.yaml',
   'android/sdk-version.toml',
   'android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt',
-  'ios/bota_flutter_sdk.podspec',
-  'ios/bota_flutter_sdk/Package.swift',
-  'ios/bota_flutter_sdk/Sources/bota_flutter_sdk/BotaApi.g.swift',
-  'lib/bota_flutter_sdk.dart',
+  'ios/bota_app_sdk.podspec',
+  'ios/bota_app_sdk/Package.swift',
+  'ios/bota_app_sdk/Sources/bota_app_sdk/BotaApi.g.swift',
+  'lib/bota_app_sdk.dart',
   'lib/src/generated/bota_api.g.dart',
   'pigeon_options.yaml',
   'pigeons/bota_api.dart',
@@ -164,22 +164,22 @@ export const verifyFlutterPackage = (root) => {
     .replaceAll('\r\n', '\n')
     .split('\n')
     .filter((line) => line.length > 0 && !line.startsWith('#'));
-  const applePodspec = resolve(workspaceRoot, 'platforms/apple/BotaAppleSDK.podspec');
+  const applePodspec = resolve(workspaceRoot, 'platforms/apple/BotaAppSDK.podspec');
   if (!existsSync(applePodspec)) {
-    throw new Error('Flutter package is missing platforms/apple/BotaAppleSDK.podspec');
+    throw new Error('Flutter package is missing platforms/apple/BotaAppSDK.podspec');
   }
   const pluginPodspec = readFileSync(
-    resolve(packageRoot, 'ios/bota_flutter_sdk.podspec'),
+    resolve(packageRoot, 'ios/bota_app_sdk.podspec'),
     'utf8'
   );
   const swiftPackage = readFileSync(
-    resolve(packageRoot, 'ios/bota_flutter_sdk/Package.swift'),
+    resolve(packageRoot, 'ios/bota_app_sdk/Package.swift'),
     'utf8'
   );
   const nativePodspec = readFileSync(applePodspec, 'utf8');
 
-  expectEqual(pubspec.name, 'bota_flutter_sdk', (actual) =>
-    `Flutter package name ${actual ?? '(missing)'} does not match bota_flutter_sdk`
+  expectEqual(pubspec.name, 'bota_app_sdk', (actual) =>
+    `Flutter package name ${actual ?? '(missing)'} does not match bota_app_sdk`
   );
   if (typeof pubspec.description !== 'string' || pubspec.description.length < 10) {
     throw new Error('Flutter package description is required');
@@ -189,7 +189,7 @@ export const verifyFlutterPackage = (root) => {
   );
   expectEqual(
     pubspec.repository,
-    'https://github.com/bota-dev/app-sdk/tree/main/frameworks/flutter/bota_flutter_sdk',
+    'https://github.com/bota-dev/app-sdk/tree/main/frameworks/flutter/bota_app_sdk',
     () => 'Flutter package repository must identify its monorepo directory'
   );
   expectEqual(pubspec.version, sdkVersion, (actual) =>
@@ -240,19 +240,19 @@ export const verifyFlutterPackage = (root) => {
   );
   expectMatch(
     pluginPodspec,
-    /spec\.dependency\s+["']BotaAppleSDK["']\s*,\s*version/,
-    'Flutter CocoaPods metadata must depend on the synchronized BotaAppleSDK version'
+    /spec\.dependency\s+["']BotaAppSDK["']\s*,\s*version/,
+    'Flutter CocoaPods metadata must depend on the synchronized BotaAppSDK version'
   );
   expectMatch(
     pluginPodspec,
-    /bota_flutter_sdk\/Sources\/bota_flutter_sdk\/\*\*\/\*\.swift/,
+    /bota_app_sdk\/Sources\/bota_app_sdk\/\*\*\/\*\.swift/,
     'Flutter CocoaPods metadata must compile the shared Swift source layout'
   );
   if (pluginPodspec.includes('spm_dependency')) {
     throw new Error('Flutter CocoaPods metadata must not depend on an optional SPM helper');
   }
   if (swiftPackage.includes('BOTA_APPLE_SDK_PACKAGE_PATH')) {
-    throw new Error('Flutter Swift package must not contain a local BotaAppleSDK override');
+    throw new Error('Flutter Swift package must not contain a local BotaAppSDK override');
   }
   expectMatch(
     swiftPackage,
@@ -274,8 +274,8 @@ export const verifyFlutterPackage = (root) => {
   );
   expectMatch(
     swiftPackage,
-    /\.product\(name:\s*["']BotaAppleSDK["']\s*,\s*package:\s*["']app-sdk["']\s*\)/,
-    'Flutter Swift package must reference BotaAppleSDK from the app-sdk package identity'
+    /\.product\(name:\s*["']BotaAppSDK["']\s*,\s*package:\s*["']app-sdk["']\s*\)/,
+    'Flutter Swift package must reference BotaAppSDK from the app-sdk package identity'
   );
   expectMatch(
     swiftPackage,
@@ -284,18 +284,18 @@ export const verifyFlutterPackage = (root) => {
   );
   expectMatch(
     swiftPackage,
-    /\.library\(name:\s*["']bota-flutter-sdk["']/,
+    /\.library\(name:\s*["']bota-app-sdk["']/,
     'Flutter Swift package product must use Flutter\'s derived library name'
   );
   expectMatch(
     nativePodspec,
     new RegExp(`spec\\.version\\s*=\\s*["']${sdkVersion.replaceAll('.', '\\.')}["']`),
-    `BotaAppleSDK pod version must match ${sdkVersion}`
+    `BotaAppSDK pod version must match ${sdkVersion}`
   );
   expectMatch(
     nativePodspec,
     /spec\.vendored_frameworks\s*=/,
-    'BotaAppleSDK pod must include the native XCFramework'
+    'BotaAppSDK pod must include the native XCFramework'
   );
 
   return { packageName: pubspec.name, sdkVersion };

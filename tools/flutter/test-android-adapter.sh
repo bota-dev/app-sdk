@@ -3,7 +3,7 @@
 set -euo pipefail
 
 workspace_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-plugin_android="$workspace_root/frameworks/flutter/bota_flutter_sdk/android"
+plugin_android="$workspace_root/frameworks/flutter/bota_app_sdk/android"
 android_root="$workspace_root/platforms/android"
 local_repository="$workspace_root/target/android-m2"
 flutter_version="$(node -p "require('$workspace_root/tools/flutter/flutter-version.json').version")"
@@ -56,15 +56,15 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "bota-flutter-android-consumer"
-include(":bota_flutter_sdk")
-project(":bota_flutter_sdk").projectDir = file("$plugin_android")
+include(":bota_app_sdk")
+project(":bota_app_sdk").projectDir = file("$plugin_android")
 EOF
 
-"$android_root/gradlew" -p "$consumer_root" :bota_flutter_sdk:tasks --quiet \
+"$android_root/gradlew" -p "$consumer_root" :bota_app_sdk:tasks --quiet \
   -PflutterSdkPath="$flutter_home" >/dev/null
 
 mismatch_log="$consumer_root/mismatched-version.log"
-if "$android_root/gradlew" -p "$consumer_root" :bota_flutter_sdk:tasks --quiet \
+if "$android_root/gradlew" -p "$consumer_root" :bota_app_sdk:tasks --quiet \
   -PflutterSdkPath="$flutter_home" \
   -PbotaAndroidSdkVersion=0.0.0 >"$mismatch_log" 2>&1; then
   echo "mismatched botaAndroidSdkVersion unexpectedly succeeded" >&2

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CONFIG="$ROOT/tools/flutter/flutter-version.json"
-PACKAGE_PATH="frameworks/flutter/bota_flutter_sdk"
+PACKAGE_PATH="frameworks/flutter/bota_app_sdk"
 PACKAGE_ROOT="$ROOT/$PACKAGE_PATH"
 
 config_value() {

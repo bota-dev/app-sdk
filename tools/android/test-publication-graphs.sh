@@ -77,13 +77,13 @@ ORG_GRADLE_PROJECT_signingInMemoryKeyPassword="$PASSPHRASE" \
 "$GRADLE" -p "$ANDROID_PROJECT" -PbotaProtectedSigning=true :sdk:stageSignedCentralRawRepository \
     --no-daemon --no-parallel --no-configuration-cache
 
-VERSION_DIRECTORY="$RAW_REPOSITORY/dev/bota/bota-android-sdk/$SDK_VERSION"
+VERSION_DIRECTORY="$RAW_REPOSITORY/dev/bota/bota-app-sdk/$SDK_VERSION"
 for name in \
-    "bota-android-sdk-$SDK_VERSION.aar" \
-    "bota-android-sdk-$SDK_VERSION.pom" \
-    "bota-android-sdk-$SDK_VERSION.module" \
-    "bota-android-sdk-$SDK_VERSION-sources.jar" \
-    "bota-android-sdk-$SDK_VERSION-javadoc.jar"
+    "bota-app-sdk-$SDK_VERSION.aar" \
+    "bota-app-sdk-$SDK_VERSION.pom" \
+    "bota-app-sdk-$SDK_VERSION.module" \
+    "bota-app-sdk-$SDK_VERSION-sources.jar" \
+    "bota-app-sdk-$SDK_VERSION-javadoc.jar"
 do
     "$GPG" --homedir "$GNUPGHOME" --batch --verify "$VERSION_DIRECTORY/$name.asc" "$VERSION_DIRECTORY/$name" >/dev/null 2>&1
 done
@@ -93,11 +93,11 @@ test "$RAW_COUNT" = 55
 node "$ROOT/tools/android/normalize-central-repository.mjs" \
     --raw-repository "$RAW_REPOSITORY" \
     --portal-repository "$PORTAL_REPOSITORY" \
-    --coordinate dev.bota:bota-android-sdk \
+    --coordinate dev.bota:bota-app-sdk \
     --version "$SDK_VERSION"
 node "$ROOT/tools/android/build-central-bundle.mjs" build \
     --repository "$PORTAL_REPOSITORY" \
-    --coordinate dev.bota:bota-android-sdk \
+    --coordinate dev.bota:bota-app-sdk \
     --version "$SDK_VERSION" \
     --source-revision "$(git -C "$ROOT" rev-parse HEAD)" \
     --inventory "$RELEASE_DIRECTORY/central-bundle-files.json" \
@@ -105,7 +105,7 @@ node "$ROOT/tools/android/build-central-bundle.mjs" build \
 cp "$RELEASE_DIRECTORY/central-bundle.zip" "$FIRST_ZIP"
 node "$ROOT/tools/android/build-central-bundle.mjs" build \
     --repository "$PORTAL_REPOSITORY" \
-    --coordinate dev.bota:bota-android-sdk \
+    --coordinate dev.bota:bota-app-sdk \
     --version "$SDK_VERSION" \
     --source-revision "$(git -C "$ROOT" rev-parse HEAD)" \
     --inventory "$RELEASE_DIRECTORY/central-bundle-files.json" \

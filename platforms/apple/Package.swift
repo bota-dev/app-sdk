@@ -3,13 +3,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "BotaAppleSDK",
+    name: "BotaAppSDK",
     platforms: [
         .iOS(.v15),
         .macOS(.v13),
     ],
     products: [
-        .library(name: "BotaAppleSDK", targets: ["BotaAppleSDK"]),
+        .library(name: "BotaAppSDK", targets: ["BotaAppSDK"]),
     ],
     targets: [
         .binaryTarget(
@@ -17,12 +17,12 @@ let package = Package(
             path: "Artifacts/BotaDeviceSDKCore.xcframework"
         ),
         .target(
-            name: "BotaAppleSDK",
+            name: "BotaAppSDK",
             dependencies: ["BotaDeviceSDKC"]
         ),
         .testTarget(
-            name: "BotaAppleSDKTests",
-            dependencies: ["BotaAppleSDK", "BotaDeviceSDKC"],
+            name: "BotaAppSDKTests",
+            dependencies: ["BotaAppSDK", "BotaDeviceSDKC"],
             resources: [
                 .copy("Resources/EncryptedUploadV2Vectors"),
                 .copy("Resources/ProtocolFixtures"),
@@ -30,8 +30,8 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "BotaAppleSDKPhysicalTests",
-            dependencies: ["BotaAppleSDK"]
+            name: "BotaAppSDKPhysicalTests",
+            dependencies: ["BotaAppSDK"]
         ),
     ]
 )

@@ -104,8 +104,8 @@ if [[ "$public_only" == true ]]; then
 fi
 
 version="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' "$ROOT/sdk-version.toml")"
-release_aar="$release_directory/bota-android-sdk-$version.aar"
-repository_aar="$repository/dev/bota/bota-android-sdk/$version/bota-android-sdk-$version.aar"
+release_aar="$release_directory/bota-app-sdk-$version.aar"
+repository_aar="$repository/dev/bota/bota-app-sdk/$version/bota-app-sdk-$version.aar"
 release_digest="$(shasum -a 256 "$release_aar" | awk '{print $1}')"
 test "$release_digest" = "$(shasum -a 256 "$repository_aar" | awk '{print $1}')"
 

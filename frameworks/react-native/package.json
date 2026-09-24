@@ -1,6 +1,6 @@
 {
-  "name": "@bota.dev/react-native-sdk",
-  "version": "1.2.0-beta.12",
+  "name": "@bota.dev/react-native-app-sdk",
+  "version": "2.0.0-beta.0",
   "description": "React Native facade for the Bota App SDK",
   "packageManager": "npm@12.0.2",
   "main": "lib/commonjs/index.js",
@@ -77,7 +77,7 @@
       "compileSdkVersion": 36,
       "coroutinesVersion": "1.10.2",
       "kotlinVersion": "2.1.20",
-      "mavenCoordinate": "dev.bota:bota-android-sdk",
+      "mavenCoordinate": "dev.bota:bota-app-sdk",
       "minSdkVersion": 26,
       "namespace": "dev.bota.sdk.reactnative"
     },
@@ -89,7 +89,7 @@
       "cocoapodsVersion": "1.13.0",
       "packageUrl": "https://github.com/bota-dev/app-sdk.git",
       "packageRequirement": "exactVersion",
-      "packageProduct": "BotaAppleSDK",
+      "packageProduct": "BotaAppSDK",
       "localPackagePathEnvironment": "BOTA_APPLE_SDK_PACKAGE_PATH"
     }
   },

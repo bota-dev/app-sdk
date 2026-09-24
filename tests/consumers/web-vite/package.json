@@ -1,5 +1,5 @@
 {
-  "name": "@bota.dev/web-sdk-vite-consumer",
+  "name": "@bota.dev/web-app-sdk-vite-consumer",
   "version": "0.0.0",
   "private": true,
   "type": "module",

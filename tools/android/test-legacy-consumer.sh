@@ -30,7 +30,7 @@ if [[ -z "$repository" ]]; then
   "$GRADLEW" -p "$ROOT/platforms/android" :sdk:publishMavenPublicationToLocalRepository >/dev/null
 fi
 repository="$(cd "$repository" && pwd)"
-test -s "$repository/dev/bota/bota-android-sdk/$version/bota-android-sdk-$version.aar"
+test -s "$repository/dev/bota/bota-app-sdk/$version/bota-app-sdk-$version.aar"
 
 arguments=(-PbotaSdkVersion="$version" -PbotaLegacyMode="$mode" "-PbotaSdkRepository=$repository")
 if [[ "$mode" == "binary" ]]; then

@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { publicPackageIdentifier } from './package-identities.mjs';
 
 const VERSION = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/;
 const CHECKSUM = /^[0-9a-f]{64}$/;
@@ -16,18 +17,19 @@ export function renderPublicSwiftPackage({ sdkVersion, artifactChecksum }) {
     throw new Error('artifact checksum must be a nonzero lowercase SHA-256 digest');
   }
 
+  const packageName = publicPackageIdentifier('apple', sdkVersion);
   return `// swift-tools-version: 6.0
 
 import PackageDescription
 
 let package = Package(
-    name: "BotaAppleSDK",
+    name: "${packageName}",
     platforms: [
         .iOS(.v15),
         .macOS(.v13),
     ],
     products: [
-        .library(name: "BotaAppleSDK", targets: ["BotaAppleSDK"]),
+        .library(name: "${packageName}", targets: ["${packageName}"]),
     ],
     targets: [
         .binaryTarget(
@@ -36,9 +38,9 @@ let package = Package(
             checksum: "${artifactChecksum}"
         ),
         .target(
-            name: "BotaAppleSDK",
+            name: "${packageName}",
             dependencies: ["BotaDeviceSDKC"],
-            path: "platforms/apple/Sources/BotaAppleSDK"
+            path: "platforms/apple/Sources/${packageName}"
         ),
     ]
 )

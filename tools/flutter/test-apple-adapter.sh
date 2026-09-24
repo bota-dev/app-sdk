@@ -3,7 +3,7 @@
 set -euo pipefail
 
 workspace_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-plugin_root="$workspace_root/frameworks/flutter/bota_flutter_sdk"
+plugin_root="$workspace_root/frameworks/flutter/bota_app_sdk"
 required_cocoapods_version="1.16.2"
 homebrew_pod=""
 if [[ -x /opt/homebrew/opt/ruby/bin/ruby ]]; then
@@ -42,7 +42,7 @@ mkdir -p \
   "$consumer_root/Sources/FlutterMacOS" \
   "$consumer_root/Tests/BotaFlutterSdkTests"
 
-find "$plugin_root/ios/bota_flutter_sdk/Sources/bota_flutter_sdk" -maxdepth 1 -name '*.swift' \
+find "$plugin_root/ios/bota_app_sdk/Sources/bota_app_sdk" -maxdepth 1 -name '*.swift' \
   -exec cp '{}' "$consumer_root/Sources/BotaFlutterSdk/" ';'
 find "$plugin_root/ios/Tests" -maxdepth 1 -name '*.swift' \
   -exec cp '{}' "$consumer_root/Tests/BotaFlutterSdkTests/" ';'
@@ -61,14 +61,14 @@ let package = Package(
         .target(name: "FlutterMacOS"),
         .target(
             name: "BotaFlutterSdk",
-            dependencies: ["FlutterMacOS", .product(name: "BotaAppleSDK", package: "apple")],
+            dependencies: ["FlutterMacOS", .product(name: "BotaAppSDK", package: "apple")],
             swiftSettings: [
                 .unsafeFlags(["-strict-concurrency=complete"]),
             ]
         ),
         .testTarget(
             name: "BotaFlutterSdkTests",
-            dependencies: ["BotaFlutterSdk", .product(name: "BotaAppleSDK", package: "apple")],
+            dependencies: ["BotaFlutterSdk", .product(name: "BotaAppSDK", package: "apple")],
             swiftSettings: [
                 .unsafeFlags(["-strict-concurrency=complete", "-warnings-as-errors"]),
             ]
@@ -161,7 +161,7 @@ create_flutter_consumer() {
     "$destination" >/dev/null
   "$workspace_root/tools/flutter/run-flutter.sh" pub add \
     --directory="$destination" \
-    "bota_flutter_sdk@{path: $dependency_root}" >/dev/null
+    "bota_app_sdk@{path: $dependency_root}" >/dev/null
 }
 
 cocoapods_consumer="$consumer_root/cocoapods-consumer"
@@ -195,7 +195,7 @@ flutter_ios_podfile_setup
 
 target 'Runner' do
   use_frameworks!
-  pod 'BotaAppleSDK', :path => '$workspace_root/platforms/apple'
+  pod 'BotaAppSDK', :path => '$workspace_root/platforms/apple'
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
 
@@ -221,7 +221,7 @@ rsync -a \
   --exclude example/build \
   --exclude example/pubspec.lock \
   "$plugin_root/" "$local_plugin_root/"
-SWIFT_MANIFEST="$local_plugin_root/ios/bota_flutter_sdk/Package.swift" \
+SWIFT_MANIFEST="$local_plugin_root/ios/bota_app_sdk/Package.swift" \
   APPLE_PACKAGE="$workspace_root/platforms/apple" \
   SDK_VERSION="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' "$workspace_root/sdk-version.toml")" \
   node -e '
@@ -233,7 +233,7 @@ SWIFT_MANIFEST="$local_plugin_root/ios/bota_flutter_sdk/Package.swift" \
       exact: "${process.env.SDK_VERSION}"
     ),`;
     const replacement = `.package(name: "app-sdk", path: ${JSON.stringify(process.env.APPLE_PACKAGE)}),`;
-    if (!source.includes(marker)) throw new Error("public BotaAppleSDK dependency marker changed");
+    if (!source.includes(marker)) throw new Error("public BotaAppSDK dependency marker changed");
     fs.writeFileSync(path, source.replace(marker, replacement));
   '
 create_flutter_consumer "$swiftpm_consumer" "$local_plugin_root"

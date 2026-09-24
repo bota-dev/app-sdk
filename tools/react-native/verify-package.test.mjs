@@ -66,7 +66,7 @@ const validPackage = () => ({
   },
 });
 
-const runVerifier = (mutate = () => {}) => {
+const runVerifier = (mutate = () => {}, version = '1.0.2') => {
   const root = mkdtempSync(join(tmpdir(), 'bota-rn-package-'));
   const packageRoot = join(root, 'frameworks', 'react-native');
   const androidSourceRoot = join(packageRoot, 'android', 'src', 'main');
@@ -75,12 +75,18 @@ const runVerifier = (mutate = () => {}) => {
   writeFileSync(join(androidSourceRoot, 'AndroidManifest.xml'), '<manifest />\n');
   writeFileSync(join(packageRoot, 'LICENSE'), 'MIT License\n');
   writeFileSync(join(packageRoot, 'README.md'), '# React Native SDK\n');
-  writeFileSync(join(root, 'sdk-version.toml'), 'version = "1.0.2"\n');
+  writeFileSync(join(root, 'sdk-version.toml'), `version = "${version}"\n`);
   writeFileSync(
     join(root, 'package.json'),
-    `${JSON.stringify({ version: '1.0.2', private: true })}\n`
+    `${JSON.stringify({ version, private: true })}\n`
   );
   const packageJson = validPackage();
+  packageJson.version = version;
+  if (version.startsWith('2.')) {
+    packageJson.name = '@bota.dev/react-native-app-sdk';
+    packageJson.bota.apple.packageProduct = 'BotaAppSDK';
+    packageJson.bota.android.mavenCoordinate = 'dev.bota:bota-app-sdk';
+  }
   mutate(packageJson);
   writeFileSync(
     join(packageRoot, 'package.json'),
@@ -95,6 +101,18 @@ const runVerifier = (mutate = () => {}) => {
 };
 
 const outputOf = (result) => `${result.stdout}${result.stderr}`;
+
+test('renamed RN metadata requires matching renamed native facades', () => {
+  const valid = runVerifier(() => {}, '2.0.0-beta.0');
+  assert.equal(valid.status, 0, outputOf(valid));
+  for (const mutate of [
+    (pkg) => { pkg.name = '@bota.dev/react-native-sdk'; },
+    (pkg) => { pkg.bota.apple.packageProduct = 'BotaAppleSDK'; },
+    (pkg) => { pkg.bota.android.mavenCoordinate = 'dev.bota:bota-android-sdk'; },
+  ]) {
+    assert.notEqual(runVerifier(mutate, '2.0.0-beta.0').status, 0);
+  }
+});
 
 test('accepts the publishable synchronized React Native package metadata', () => {
   const result = runVerifier();

@@ -37,11 +37,11 @@ kotlin {
 dependencies {
     if (mode.get() == "binary") {
         implementation(files(providers.gradleProperty("botaLegacyConsumerJar").get()))
-        runtimeOnly("dev.bota:bota-android-sdk:${sdkVersion.get()}")
+        runtimeOnly("dev.bota:bota-app-sdk:${sdkVersion.get()}")
     } else if (mode.get() == "capture") {
         compileOnly(files(providers.gradleProperty("botaLegacyAar").get()))
     } else {
-        implementation("dev.bota:bota-android-sdk:${sdkVersion.get()}")
+        implementation("dev.bota:bota-app-sdk:${sdkVersion.get()}")
     }
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

@@ -63,6 +63,18 @@ const validContents = new Map([
   [wasmPath, validWasm],
 ])
 
+test('major-two Web metadata requires the renamed package', () => {
+  const metadata = {
+    ...validMetadata,
+    sdkVersion: '2.0.0-beta.0',
+    packageJson: { ...validMetadata.packageJson, version: '2.0.0-beta.0', name: '@bota.dev/web-app-sdk' },
+  }
+  assert.doesNotThrow(() => packageVerifier.verifyPackageMetadata(metadata))
+  assert.throws(() => packageVerifier.verifyPackageMetadata({
+    ...metadata, packageJson: { ...metadata.packageJson, name: '@bota.dev/web-sdk' },
+  }), /package name/)
+})
+
 test('package verification rejects a missing WebAssembly artifact', () => {
   assert.throws(
     () =>
