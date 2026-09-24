@@ -271,7 +271,9 @@ matching native checkpoint before calling an application-owned provider for an
 explicit v2 decision. It never substitutes a legacy transfer after that
 selection; cancellation owns the operation before selection, records through
 engine startup, and reaches that exact workflow before it consumes output or
-cleanup begins. Its native checkpoint sidecar includes the
+cleanup begins. Already-claimed cancellation cleanup stays bound to its original
+runtime even if the caller finishes first or another operation replaces it.
+Its native checkpoint sidecar includes the
 session, sink, safe negotiated bounds, and highest contiguous sequence needed
 for exact resume and EOF validation.
 Apple's internal

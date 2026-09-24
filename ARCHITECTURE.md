@@ -226,6 +226,10 @@ records cancellation through engine startup, cancels that exact Rust workflow
 before it consumes output or performs non-success cleanup, and binds a
 resume to the checkpoint's exact transport session, sink, and safe negotiated
 bounds; it never infers or retries a legacy profile after that selection.
+Cancellation cleanup claimed before an actor hop retains the original runtime
+and executes even when the facade operation finishes first. Late cleanup must
+not cancel or finish a replacement operation. Tests await the cleanup callback
+separately from the cancelled caller's completion.
 Apple's
 serialized signed-blob writer uses the current CoreBluetooth
 write-with-response limit capped at 512 bytes, subscribes to `0407` before

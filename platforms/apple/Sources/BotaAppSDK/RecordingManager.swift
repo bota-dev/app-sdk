@@ -327,9 +327,10 @@ public actor RecordingManager {
         } onCancel: {
             let cancellation = lifecycle.requestCancellation()
             Task {
-                await self.cancel(
+                await self.cancelEncryptedUploadV2(
                     cancellationID,
                     lifecycle: lifecycle,
+                    runtime: runtime,
                     cancellation: cancellation
                 )
             }
@@ -619,18 +620,13 @@ public actor RecordingManager {
         await finish(id, runtime: runtime)
     }
 
-    private func cancel(
-        _ id: UUID,
-        lifecycle requestedLifecycle: EncryptedUploadV2OperationLifecycle? = nil,
-        cancellation requestedCancellation: EncryptedUploadV2OperationLifecycle.Cancellation? = nil
-    ) async {
+    private func cancel(_ id: UUID) async {
         guard activeCancellationID == id, let runtime else { return }
-        if let lifecycle = requestedLifecycle ?? activeEncryptedUploadV2Lifecycle {
+        if let lifecycle = activeEncryptedUploadV2Lifecycle {
             await cancelEncryptedUploadV2(
                 id,
                 lifecycle: lifecycle,
-                runtime: runtime,
-                cancellation: requestedCancellation
+                runtime: runtime
             )
         } else {
             activeTask?.cancel()
@@ -646,6 +642,11 @@ public actor RecordingManager {
         cancellation: EncryptedUploadV2OperationLifecycle.Cancellation? = nil
     ) async {
         let cancellation = cancellation ?? lifecycle.requestCancellation()
+        guard activeCancellationID == id else {
+            // Cleanup was claimed before the actor hop and still belongs to this runtime.
+            await performEncryptedUploadV2Cleanup(cancellation.cleanup, runtime: runtime)
+            return
+        }
         if cancellation.cancelEngine {
             do {
                 let completed = try await runtime.engine.cancelAndReportExactSettlement(id)

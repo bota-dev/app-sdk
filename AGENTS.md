@@ -633,6 +633,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   operation, request ID, and cancellation identity exactly.
 - Apple concurrency tests must await explicit callback handshakes; stream
   completion does not order background host-effect bookkeeping.
+  Encrypted-v2 cancellation cleanup claimed before an actor hop must still run
+  on the captured runtime after facade ownership ends; never discard it at an
+  active-operation guard or apply it to a replacement runtime.
 - `BotaDeviceClient.configure()` is idempotent until `destroy()`. Public device
   observation must finish on destroy, and status bytes must use the shared ABI
   decoder rather than a Swift parser.

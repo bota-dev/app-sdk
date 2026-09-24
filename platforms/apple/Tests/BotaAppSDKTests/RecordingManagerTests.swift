@@ -615,6 +615,12 @@ final class RecordingManagerTests: XCTestCase {
     }
 
     func testEncryptedV2CancellationTerminatesLateRegistrySuccessExactlyOnce() async throws {
+        for _ in 0..<100 {
+            try await checkEncryptedV2CancellationTerminatesLateRegistrySuccessExactlyOnce()
+        }
+    }
+
+    private func checkEncryptedV2CancellationTerminatesLateRegistrySuccessExactlyOnce() async throws {
         let runner = TransferWorkflowRunner { _ in [] }
         let registration = EncryptedUploadV2RegistrationGate()
         let termination = EncryptedUploadV2TerminalOutcomeRecorder()
@@ -631,7 +637,7 @@ final class RecordingManagerTests: XCTestCase {
             terminateEncryptedUploadV2Material: { _, outcome in await termination.record(outcome) }
         ))
 
-        let task = Task {
+        let task = Task(priority: .high) {
             try? await manager.syncEncryptedRecordingV2(
                 transferDevice(),
                 recording: recording,
@@ -641,10 +647,15 @@ final class RecordingManagerTests: XCTestCase {
         await waitForEncryptedV2Handshake("material registration") {
             await registration.waitUntilRequested()
         }
-        task.cancel()
-        await registration.resume()
+        await Task.detached(priority: .background) {
+            task.cancel()
+            await registration.resume()
+        }.value
         await waitForEncryptedV2Handshake("late-registration cancellation completion") {
             await task.value
+        }
+        await waitForEncryptedV2Handshake("late-registration preparation cleanup") {
+            await cancellation.waitUntilRecorded()
         }
 
         let registrationCount = await registration.count()
@@ -680,7 +691,7 @@ final class RecordingManagerTests: XCTestCase {
             await operation()
             expectation.fulfill()
         }
-        await fulfillment(of: [expectation], timeout: 1)
+        await fulfillment(of: [expectation], timeout: 5)
     }
 
     private static let encryptedV2Recording = EncryptedUploadV2Recording(
@@ -732,7 +743,19 @@ private actor EncryptedUploadV2TerminalOutcomeRecorder {
 
 private actor EncryptedUploadV2CancellationRecorder {
     private(set) var count = 0
-    func record() { count += 1 }
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func record() {
+        count += 1
+        continuation?.resume()
+        continuation = nil
+    }
+
+    func waitUntilRecorded() async {
+        guard count == 0 else { return }
+        await withCheckedContinuation { continuation = $0 }
+    }
+
     func value() -> Int { count }
 }
 

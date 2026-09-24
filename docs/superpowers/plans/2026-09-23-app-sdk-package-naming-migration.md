@@ -40,6 +40,13 @@ Android deterministic packaging, publication inventory and local installation
 passed. Historical manifests remain byte-for-byte unchanged. Registry
 authorization/public resolution, x86 CI and physical acceptance are not claimed.
 
+Main CI `35964197263` exposed an existing Apple cancellation race: cleanup
+claimed before an actor hop was discarded after facade ownership ended. A
+priority-skewed 100-attempt regression reproduced the missed callback locally.
+Cleanup now retains its original runtime and does not affect replacement work;
+the regression and the full 200-test Apple suite passed (9 physical skips).
+Publication remains gated on the replacement main-CI run and registry access.
+
 Task 1 verification: 21 focused Node tests, 75 release tests, and 46 Rust
 manifest/readiness tests passed after the new cases failed as expected.
 
