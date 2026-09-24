@@ -94,7 +94,8 @@ New identities need their own registry ownership and publisher setup; old
 package authorization does not transfer. Local and exact-revision main-CI
 gates precede publication, and native prerequisites precede RN/Flutter public
 consumers. npm uses `beta`, preserves old tags, and rejects ambiguous registry
-errors. Recovery selects names from the verified release version and preserves
+errors. RN publication also requires the legacy `latest` tag to remain on a
+stable `0.0.x` maintenance version. Recovery selects names from the verified release version and preserves
 signed Central bytes and deployment UUIDs.
 
 Physical acceptance is **NOT RUN** for this candidate. Source tests, package

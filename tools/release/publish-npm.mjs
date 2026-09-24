@@ -31,6 +31,9 @@ export async function publishExactNpmArtifact({
   };
   const before = await tags(name);
   const historicalBefore = name !== legacyName ? await tags(legacyName) : null;
+  if (platform === 'react-native' && !/^0\.0\.\d+$/.test((historicalBefore ?? before).latest ?? '')) {
+    throw new Error('npm maintenance latest tag must remain on a stable 0.0.x release');
+  }
   const verify = (metadata) => {
     if (metadata.name !== name || metadata.version !== version) throw new Error('npm registry artifact identity mismatch');
     if (metadata.dist?.shasum !== shasum) throw new Error('npm registry checksum mismatch');

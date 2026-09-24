@@ -8,16 +8,18 @@ export const version = '1.2.0-beta.12';
 const checksumAlgorithms = ['md5', 'sha1', 'sha256', 'sha512'];
 
 export async function createRawRepository(root, overrides = {}) {
-  const artifactDirectory = join(root, 'dev/bota/bota-android-sdk');
+  const version = overrides.version ?? '1.2.0-beta.12';
+  const artifact = overrides.artifact ?? 'bota-android-sdk';
+  const artifactDirectory = join(root, 'dev/bota', artifact);
   const versionDirectory = join(artifactDirectory, version);
   await mkdir(versionDirectory, { recursive: true });
 
   const primaries = new Map([
-    [`bota-android-sdk-${version}.aar`, Buffer.from(overrides.aar ?? 'aar-bytes')],
-    [`bota-android-sdk-${version}.pom`, Buffer.from(overrides.pom ?? mavenPom())],
-    [`bota-android-sdk-${version}.module`, Buffer.from(overrides.module ?? moduleMetadata())],
-    [`bota-android-sdk-${version}-sources.jar`, Buffer.from('source-bytes')],
-    [`bota-android-sdk-${version}-javadoc.jar`, Buffer.from('javadoc-bytes')],
+    [`${artifact}-${version}.aar`, Buffer.from(overrides.aar ?? 'aar-bytes')],
+    [`${artifact}-${version}.pom`, Buffer.from(overrides.pom ?? mavenPom(artifact, version))],
+    [`${artifact}-${version}.module`, Buffer.from(overrides.module ?? moduleMetadata(artifact, version))],
+    [`${artifact}-${version}-sources.jar`, Buffer.from('source-bytes')],
+    [`${artifact}-${version}-javadoc.jar`, Buffer.from('javadoc-bytes')],
   ]);
 
   for (const [name, contents] of primaries) {
@@ -25,7 +27,7 @@ export async function createRawRepository(root, overrides = {}) {
     await writeChecksummedFile(versionDirectory, `${name}.asc`, Buffer.from(`signature:${name}`));
   }
 
-  const metadata = Buffer.from(overrides.metadata ?? mavenMetadata());
+  const metadata = Buffer.from(overrides.metadata ?? mavenMetadata(artifact, version));
   await writeChecksummedFile(artifactDirectory, 'maven-metadata.xml', metadata);
   return { artifactDirectory, versionDirectory, primaries };
 }
@@ -54,12 +56,12 @@ function digest(algorithm, contents) {
   return createHash(algorithm).update(contents).digest('hex');
 }
 
-export function mavenPom() {
+export function mavenPom(artifact = 'bota-android-sdk', version = '1.2.0-beta.12') {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
   <modelVersion>4.0.0</modelVersion>
   <groupId>dev.bota</groupId>
-  <artifactId>bota-android-sdk</artifactId>
+  <artifactId>${artifact}</artifactId>
   <version>${version}</version>
   <name>Bota SDK for Android</name>
   <description>Android facade for connecting applications to Bota devices.</description>
@@ -75,10 +77,10 @@ export function mavenPom() {
 `;
 }
 
-function moduleMetadata() {
+function moduleMetadata(artifact, version) {
   return JSON.stringify({
     formatVersion: '1.1',
-    component: { group: 'dev.bota', module: 'bota-android-sdk', version },
+    component: { group: 'dev.bota', module: artifact, version },
     variants: [{
       name: 'release',
       dependencies: [{
@@ -90,11 +92,11 @@ function moduleMetadata() {
   });
 }
 
-function mavenMetadata() {
+function mavenMetadata(artifact, version) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <metadata>
   <groupId>dev.bota</groupId>
-  <artifactId>bota-android-sdk</artifactId>
+  <artifactId>${artifact}</artifactId>
   <versioning><latest>${version}</latest><release>${version}</release><versions><version>${version}</version></versions></versioning>
 </metadata>
 `;

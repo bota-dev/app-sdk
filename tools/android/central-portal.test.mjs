@@ -322,7 +322,9 @@ test('Central HTTP errors redact credentials and authorization material', async 
   );
 });
 
-test('public Maven file verification does not require a directory index', async (t) => {
+for (const [artifact, version] of [['bota-android-sdk', '1.2.0-beta.12'], ['bota-app-sdk', '2.0.0-beta.0']]) {
+test(`public Maven ${artifact} verification does not require a directory index`, async (t) => {
+  const coordinate = `dev.bota:${artifact}`;
   const directory = await mkdtemp(join(tmpdir(), 'bota-central-public-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const rawRepository = join(directory, 'android-central-raw');
@@ -334,7 +336,7 @@ test('public Maven file verification does not require a directory index', async 
     ['arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'].flatMap((abi) =>
       ['libbota_android_jni.so', 'libbota_device_sdk_ffi.so'].map((name) => [`jni/${abi}/${name}`, Uint8Array.of(1)])),
   );
-  await createRawRepository(rawRepository, { aar: zipSync(libraries) });
+  await createRawRepository(rawRepository, { aar: zipSync(libraries), artifact, version });
   await normalizeCentralRepository({
     rawRepository,
     portalRepository: repository,
@@ -414,3 +416,4 @@ test('public Maven file verification does not require a directory index', async 
     /published Maven files did not synchronize/,
   );
 });
+}

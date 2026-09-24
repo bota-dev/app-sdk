@@ -69,3 +69,21 @@ test('historical dist-tag drift and exhausted visibility retries fail closed', a
   await assert.rejects(publishExactNpmArtifact(fixture({ legacyDrift: true }).options), /historical.*tags/);
   await assert.rejects(publishExactNpmArtifact(fixture({ delay: 10 }).options), /not visible/);
 });
+
+test('RN publication requires the legacy latest tag to remain on maintenance', async () => {
+  for (const version of ['1.2.0-beta.12', '2.0.0-beta.0']) {
+    for (const latest of [undefined, '1.1.0', '0.0.67-beta.0']) {
+      const name = version.startsWith('2.') ? '@bota.dev/react-native-app-sdk' : '@bota.dev/react-native-sdk';
+      await assert.rejects(publishExactNpmArtifact({
+        platform: 'react-native', version, shasum,
+        packageMetadata: { name, version },
+        publish: async () => assert.fail('must not publish with invalid maintenance tag'),
+        fetchImpl: async (url) => {
+          const path = decodeURIComponent(new URL(url).pathname.slice(1));
+          if (path === '@bota.dev/react-native-sdk') return Response.json({ 'dist-tags': { latest } });
+          return new Response('', { status: 404 });
+        },
+      }), /maintenance latest/);
+    }
+  }
+});

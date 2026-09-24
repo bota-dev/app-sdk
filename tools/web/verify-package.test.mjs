@@ -75,6 +75,15 @@ test('major-two Web metadata requires the renamed package', () => {
   }), /package name/)
 })
 
+test('historical archive verification uses the release version, not current source version', () => {
+  withTarball(validContents, (path) => {
+    assert.throws(() => verifyPackageTarball(path, { sdkVersion: '2.0.0-beta.0' }), /package name/)
+    const inventory = verifyPackageTarball(path, { sdkVersion: '1.2.0-beta.12' })
+    assert.equal(inventory.version, '1.2.0-beta.12')
+    assert.equal(inventory.packageName, '@bota.dev/web-sdk')
+  })
+})
+
 test('package verification rejects a missing WebAssembly artifact', () => {
   assert.throws(
     () =>
