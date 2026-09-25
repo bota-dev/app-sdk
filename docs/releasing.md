@@ -1,5 +1,17 @@
 # Releasing The Bota App SDK
 
+## Current Candidate
+
+`2.0.0-beta.2` prepares the additive Web `devices.connectSelected()` API for
+reading a selected device's serial before application registration. It reuses
+the existing Rust connection workflow and Device Information GATT read; there
+is no new BLE protocol or automatic registration, binding, or provisioning.
+The owner requested merge and publication through normal CI. All five SDK
+versions remain synchronized; publication requires green main CI, its exact
+candidate inventory, and the protected release workflow. Registry publication
+and physical-device acceptance are not claimed by this preparation. Advance
+only npm `beta`; preserve `latest`, historical packages, and immutable tags.
+
 ## Current Release
 
 `2.0.0-beta.1` is the published synchronized beta. It includes the

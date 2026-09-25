@@ -92,7 +92,7 @@ fn release_metadata_fixture() -> PathBuf {
         "platforms/android/gradle.properties",
         "platforms/apple/BotaAppSDK.podspec",
         "protocol/compatibility/firmware-compatibility.json",
-        "release/examples/2.0.0-beta.1.json",
+        "release/examples/2.0.0-beta.2.json",
     ] {
         let destination = temp_root.join(path);
         fs::create_dir_all(destination.parent().unwrap()).unwrap();
@@ -140,9 +140,9 @@ fn occupied_flutter_release_fixture() -> PathBuf {
 
 #[test]
 fn version_tag_and_publishable_metadata_are_synchronized() {
-    let release = xtask::release::verify_release(&root(), "v2.0.0-beta.1").unwrap();
+    let release = xtask::release::verify_release(&root(), "v2.0.0-beta.2").unwrap();
 
-    assert_eq!(release.version, "2.0.0-beta.1");
+    assert_eq!(release.version, "2.0.0-beta.2");
     assert_eq!(release.crate_name, "bota-device-sdk-core");
 }
 
@@ -218,42 +218,42 @@ fn every_public_package_version_copy_fails_closed_on_drift() {
     for (path, needle, replacement) in [
         (
             "package-lock.json",
-            "\"version\": \"2.0.0-beta.1\"",
+            "\"version\": \"2.0.0-beta.2\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/react-native/package.json",
-            "\"version\": \"2.0.0-beta.1\"",
+            "\"version\": \"2.0.0-beta.2\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/react-native/package-lock.json",
-            "\"version\": \"2.0.0-beta.1\"",
+            "\"version\": \"2.0.0-beta.2\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/web/package.json",
-            "\"version\": \"2.0.0-beta.1\"",
+            "\"version\": \"2.0.0-beta.2\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/flutter/bota_app_sdk/pubspec.yaml",
-            "version: 2.0.0-beta.1",
+            "version: 2.0.0-beta.2",
             "version: 1.2.0-beta.2",
         ),
         (
             "frameworks/flutter/bota_app_sdk/ios/bota_app_sdk/Package.swift",
-            "exact: \"2.0.0-beta.1\"",
+            "exact: \"2.0.0-beta.2\"",
             "exact: \"1.2.0-beta.2\"",
         ),
         (
             "platforms/android/gradle.properties",
-            "VERSION_NAME=2.0.0-beta.1",
+            "VERSION_NAME=2.0.0-beta.2",
             "VERSION_NAME=1.2.0-beta.2",
         ),
         (
             "platforms/apple/BotaAppSDK.podspec",
-            "spec.version = \"2.0.0-beta.1\"",
+            "spec.version = \"2.0.0-beta.2\"",
             "spec.version = \"1.2.0-beta.2\"",
         ),
     ] {
@@ -263,7 +263,7 @@ fn every_public_package_version_copy_fails_closed_on_drift() {
         assert!(contents.contains(needle));
         fs::write(&target, contents.replacen(needle, replacement, 1)).unwrap();
 
-        let error = xtask::release::verify_release(&fixture, "v2.0.0-beta.1").unwrap_err();
+        let error = xtask::release::verify_release(&fixture, "v2.0.0-beta.2").unwrap_err();
         assert!(
             error.contains("version") || error.contains("Version"),
             "{path}: {error}"
@@ -303,7 +303,7 @@ fn compatibility_metadata_reports_apple_and_the_android_release_candidate() {
 #[test]
 fn mismatched_or_unprefixed_tags_are_rejected() {
     let wrong_version = xtask::release::verify_release(&root(), "v1.0.0-alpha.1").unwrap_err();
-    let missing_prefix = xtask::release::verify_release(&root(), "2.0.0-beta.1").unwrap_err();
+    let missing_prefix = xtask::release::verify_release(&root(), "2.0.0-beta.2").unwrap_err();
 
     assert!(wrong_version.contains("does not match"));
     assert!(missing_prefix.contains("must start with v"));
@@ -311,7 +311,7 @@ fn mismatched_or_unprefixed_tags_are_rejected() {
 
 #[test]
 fn ci_workflow_validates_the_current_release_manifest() {
-    let release = xtask::release::verify_release(&root(), "v2.0.0-beta.1").unwrap();
+    let release = xtask::release::verify_release(&root(), "v2.0.0-beta.2").unwrap();
     let path = root().join(".github/workflows/ci.yml");
     let contents = fs::read_to_string(path).unwrap();
     let _: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();

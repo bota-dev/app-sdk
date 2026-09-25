@@ -63,7 +63,7 @@ source package. Those overrides must retain the public package identity
 ## Release Candidate
 
 `tools/flutter/package-release.sh --check` is the complete local publication
-gate for selected synchronized `2.0.0-beta.1`; it must fail closed for occupied
+gate for selected synchronized `2.0.0-beta.2`; it must fail closed for occupied
 `1.2.0-beta.0`. It verifies
 synchronized metadata, Pigeon drift, formatting, analysis,
 all Dart tests, hosted dependency licenses, `flutter pub publish --dry-run`,

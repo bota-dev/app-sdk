@@ -24,6 +24,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 
 ## Current Authority
 
+- Current source prepares synchronized `2.0.0-beta.2` for Web selected-device
+  serial discovery. Publication remains gated by exact main CI and the protected
+  release workflow; the published version below is unchanged until verified.
+
 - Current synchronized published beta is `2.0.0-beta.1`: Apple `BotaAppSDK`, Android
   `dev.bota:bota-app-sdk`, RN `@bota.dev/react-native-app-sdk`, Web
   `@bota.dev/web-app-sdk`, Flutter `bota_app_sdk`. Apple SwiftPM/CocoaPods,
@@ -272,7 +276,7 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   closed-tab execution. Every application provider callback receives its
   operation `AbortSignal`; host I/O must honor it, while the SDK stops waiting
   on cancellation, observes late settlement, and ignores late results. A
-  source-only `devices.connectSelected()` addition exposes the existing Rust
+  `2.0.0-beta.2` candidate `devices.connectSelected()` addition exposes the existing Rust
   `ConnectSelected` workflow for pre-registration SN discovery. It opens the
   picker synchronously from the caller's gesture, learns identity from fresh
   GATT, and does not bind or provision. Known-record `connect` and every

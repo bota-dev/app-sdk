@@ -1,5 +1,10 @@
 # Bota App SDK
 
+Current source prepares synchronized `2.0.0-beta.2`, adding Web
+`devices.connectSelected()` for serial discovery before registration. The
+installation examples remain pinned to verified public `2.0.0-beta.1` until
+the protected CI release completes. See [release status](docs/releasing.md).
+
 The `2.0.0-beta.1` release uses explicit App SDK package names and includes the
 Flutter Android normal-install fix. Apple SwiftPM
 and CocoaPods, Android Maven, React Native npm, Web npm, and Flutter pub.dev
@@ -489,7 +494,7 @@ await bota.destroy()
 ```
 
 Construction without options remains valid for read-only connection and
-snapshot use. The source-only `devices.connectSelected()` addition reads a
+snapshot use. The `2.0.0-beta.2` candidate's `devices.connectSelected()` reads a
 selected device's SN before application registration, without a supplied serial.
 It is not included in published `2.0.0-beta.1`; see the
 [Web integration guide](frameworks/web/README.md#discover-identity-before-registration-unreleased-source).

@@ -13,11 +13,11 @@ dependency before adding its replacement. Storage namespaces do not change.
 
 ## Install
 
-This source prepares synchronized `2.0.0-beta.1`. After publication, pin the
+This source prepares synchronized `2.0.0-beta.2`. After publication, pin the
 exact version:
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.1
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.2
 ```
 
 Use a secure context in a desktop Chromium browser with Web Bluetooth. The
@@ -364,7 +364,7 @@ identity, status, and capability values.
 
 ### Discover identity before registration (unreleased source)
 
-The source-only `connectSelected()` addition is not included in published
+The beta.2 candidate's `connectSelected()` addition is not included in published
 `2.0.0-beta.1`. It opens the browser picker and returns the selected device only
 after the shared Rust workflow reads and validates its physical serial number.
 Call it directly from a user gesture, with the client initialized beforehand:

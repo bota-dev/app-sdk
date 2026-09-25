@@ -5,8 +5,9 @@
 The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
 `dev.bota:bota-app-sdk` on Android. Replace the old dependency and Dart imports;
 do not install both packages in the same application. Historical 1.x releases
-remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.1`.
-Version `2.0.0-beta.0` remains the previous published release.
+remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.2`.
+Version `2.0.0-beta.1` remains the verified published release until the protected
+CI release completes. Flutter runtime APIs are unchanged in this candidate.
 
 The explicit Pigeon `dart_package_name` remains `bota_flutter_sdk`. This is
 an internal message-channel identity, not the pub.dev package name; preserving
@@ -31,7 +32,7 @@ Pin the exact prerelease version after its publication:
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.1
+  bota_app_sdk: 2.0.0-beta.2
 ```
 
 For source development, point at an exact checkout rather than a moving branch:

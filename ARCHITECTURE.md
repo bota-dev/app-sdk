@@ -1009,7 +1009,7 @@ construction remains client-owned, and applications use `client.devices`,
 `client.ota`, and `client.logs`.
 
 Picker connection has two explicit paths. `connect({ expectedSerialNumber })`
-requires an exact match to a known application device record. The source-only
+requires an exact match to a known application device record. The beta.2 candidate
 `connectSelected()` addition (not in published `2.0.0-beta.1`) opens the same
 picker and uses Rust's existing `ConnectSelected` workflow to learn a fresh
 Device Information serial before the application registers or binds the device.
