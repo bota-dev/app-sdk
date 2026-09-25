@@ -19,6 +19,9 @@ struct EncryptedUploadV2TransferHostServices: Sendable {
     let uploadCiphertext: UploadCiphertext
     let confirmTransfer: ConfirmTransfer
     let nextWriteID: NextWriteID
+    var refreshUploadContext: @Sendable (@escaping EncryptedUploadV2ContextProvider, @escaping @Sendable () async throws -> Void) async throws -> Void = { _, _ in
+        throw NativeHostError.missingResource("encrypted upload v2 context relay")
+    }
 }
 
 actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
@@ -225,10 +228,17 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
                 && $0.recordingUUID == recordingUUID
                 && $0.recordingGeneration == recordingGeneration
         }
-        guard values.count <= 1 else {
+        let sorted = values.sorted { $0.ownerRevision > $1.ownerRevision }
+        if sorted.count > 1 {
+            guard let latest = sorted.first, let length = latest.ciphertextLength,
+                  let hash = latest.ciphertextSHA256, hash.count == 32,
+                  Set(sorted.map(\.ownerRevision)).count == sorted.count,
+                  Set(sorted.map(\.uploadSessionBytes)).count == sorted.count,
+                  sorted.allSatisfy({ $0.ciphertextLength == length && $0.ciphertextSHA256 == hash }) else {
             throw Self.failure(code: 11, detail: "multiple encrypted upload v2 checkpoints match recording identity")
+            }
         }
-        guard let value = values.first,
+        guard let value = sorted.first,
               let uploadSessionID = UUID(v2Bytes: value.uploadSessionBytes)
         else { return nil }
         return .init(
@@ -241,7 +251,9 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             transportSessionID: value.transportSessionID,
             sinkID: value.sinkID,
             windowPackets: value.windowPackets,
-            dataPayloadBytes: value.dataPayloadBytes
+            dataPayloadBytes: value.dataPayloadBytes,
+            ciphertextLength: value.ciphertextLength,
+            ciphertextSHA256: value.ciphertextSHA256
         )
     }
 
@@ -399,6 +411,13 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         preparedMaterialID = materialID
         preparedAuthorizationSHA256 = prepared.authorizationSHA256
         preparedMaterialLease = prepared.lease
+        let contextProvider = try await services.materialRegistry.contextProvider(id: materialID, lease: prepared.lease)
+        try await services.refreshUploadContext(contextProvider) {
+            try await services.materialRegistry.validate(id: materialID, lease: prepared.lease)
+        }
+        try validateGeneration(operationGeneration)
+        try await services.materialRegistry.validate(id: materialID, lease: prepared.lease)
+        try validateGeneration(operationGeneration)
         let writeID = services.nextWriteID()
         guard writeID != 0 else {
             throw Self.failure(code: 1, detail: "encrypted upload v2 signed-document write ID is zero")
@@ -841,6 +860,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             generation: operationGeneration,
             transportSessionID: transportSessionID
         )
+        try retireSupersededCheckpoints(activeTransfer.context)
         self.pendingCheckpoint = nil
         pendingMissingSequences = []
         persistedCoreCheckpoint = nil
@@ -879,7 +899,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         let operationGeneration = generation
         let transportSessionID = state.active.context.transportSessionID
         try Task.checkCancellation()
-        let request = try await state.services.materialRegistry.stagingRequest(
+        let shouldUpload = try await state.services.materialRegistry.shouldUploadCiphertext(
             id: state.materialID,
             lease: state.materialLease,
             evidence: state.completed.evidence
@@ -890,8 +910,22 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             materialID: state.materialID,
             evidence: state.completed.evidence
         )
-        try Task.checkCancellation()
-        try await state.services.uploadCiphertext(request, state.completed.fileURL)
+        try await state.active.receiver.verifyCompletedFile()
+        try validateCompletionOperation(
+            generation: operationGeneration, transportSessionID: transportSessionID,
+            materialID: state.materialID, evidence: state.completed.evidence
+        )
+        if shouldUpload {
+            let request = try await state.services.materialRegistry.stagingRequest(
+                id: state.materialID, lease: state.materialLease, evidence: state.completed.evidence
+            )
+            try validateCompletionOperation(
+                generation: operationGeneration, transportSessionID: transportSessionID,
+                materialID: state.materialID, evidence: state.completed.evidence
+            )
+            try Task.checkCancellation()
+            try await state.services.uploadCiphertext(request, state.completed.fileURL)
+        }
         try validateCompletionOperation(
             generation: operationGeneration,
             transportSessionID: transportSessionID,
@@ -981,6 +1015,14 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             transportSessionID: context.transportSessionID,
             materialID: materialID,
             evidence: completedTransfer.evidence
+        )
+        let contextProvider = try await services.materialRegistry.contextProvider(id: materialID, lease: materialLease)
+        try await services.refreshUploadContext(contextProvider) {
+            try await services.materialRegistry.validate(id: materialID, lease: materialLease)
+        }
+        try validateCompletionOperation(
+            generation: operationGeneration, transportSessionID: context.transportSessionID,
+            materialID: materialID, evidence: completedTransfer.evidence
         )
         try prepareConfirmedTransferForRelease(
             activeTransfer,
@@ -1098,6 +1140,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         _ transfer: ActiveTransfer,
         completed: EncryptedUploadV2CompletedTransferValue
     ) throws {
+        try retireSupersededCheckpoints(transfer.context)
         try checkpointStore.removeIfPresent(completed.fileURL)
         try checkpointStore.removeIfPresent(Self.checkpointURL(
             uploadSessionID: transfer.context.uploadSessionID,
@@ -1216,11 +1259,45 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             nextCiphertextOffset: nativeCheckpoint.nextCiphertextOffset,
             prefixSHA256: nativeCheckpoint.prefixSHA256,
             highestContiguousSequence: nativeCheckpoint.highestContiguousSequence,
-            requiresCoreRestart: requiresCoreRestart ? true : nil
+            requiresCoreRestart: requiresCoreRestart ? true : nil,
+            ciphertextLength: context.ciphertextLength,
+            ciphertextSHA256: context.ciphertextSHA256
         )
         let url = directory.appendingPathComponent(context.uploadSessionID.uuidString).appendingPathExtension("json")
         try checkpointStore.replace(JSONEncoder().encode(value), at: url)
         return value
+    }
+
+    private func retireSupersededCheckpoints(_ context: Context) throws {
+        let directory = rootDirectory.appendingPathComponent("Checkpoints", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: directory.path) else { return }
+        let urls = try FileManager.default.contentsOfDirectory(at: directory,
+            includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles])
+        var superseded: [(URL, PersistedEncryptedUploadV2Checkpoint)] = []
+        for url in urls where url.pathExtension == "json" {
+            guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) <= Self.maximumCheckpointSidecarBytes else {
+                throw Self.failure(code: 11, detail: "checkpoint sidecar is oversized")
+            }
+            let value = try JSONDecoder().decode(PersistedEncryptedUploadV2Checkpoint.self, from: Data(contentsOf: url))
+            guard value.serialNumber == context.serialNumber, value.recordingUUID == context.recordingUUID,
+                  value.recordingGeneration == context.recordingGeneration,
+                  value.uploadSessionBytes != context.uploadSessionBytes else { continue }
+            guard value.ownerRevision < context.ownerRevision,
+                  value.ciphertextLength == context.ciphertextLength,
+                  value.ciphertextSHA256 == context.ciphertextSHA256,
+                  let session = UUID(v2Bytes: value.uploadSessionBytes),
+                  url.deletingPathExtension().lastPathComponent == session.uuidString,
+                  UUID(uuidString: value.sinkID) != nil else {
+                throw Self.failure(code: 11, detail: "superseded checkpoint identity is uncertain")
+            }
+            superseded.append((url, value))
+        }
+        for (url, value) in superseded {
+            if value.sinkID != context.sinkID {
+                try checkpointStore.removeIfPresent(rootDirectory.appendingPathComponent(value.sinkID).appendingPathExtension("encrypted-upload-v2"))
+            }
+            try checkpointStore.removeIfPresent(url)
+        }
     }
 
     private static func checkpointURL(uploadSessionID: UUID, rootDirectory: URL) -> URL {
@@ -1449,6 +1526,8 @@ private struct PersistedEncryptedUploadV2Checkpoint: Codable, Sendable {
     let prefixSHA256: Data
     let highestContiguousSequence: UInt32?
     let requiresCoreRestart: Bool?
+    let ciphertextLength: UInt64?
+    let ciphertextSHA256: Data?
 
     var nativeCheckpoint: EncryptedUploadV2CheckpointValue {
         .init(
@@ -1469,6 +1548,8 @@ private struct PersistedEncryptedUploadV2Checkpoint: Codable, Sendable {
             && sinkID == context.sinkID
             && windowPackets == context.windowPackets
             && dataPayloadBytes == context.dataPayloadBytes
+            && (ciphertextLength == nil || ciphertextLength == context.ciphertextLength)
+            && (ciphertextSHA256 == nil || ciphertextSHA256 == context.ciphertextSHA256)
     }
 }
 

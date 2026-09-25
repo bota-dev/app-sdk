@@ -52,6 +52,71 @@ import java.util.UUID
 internal class CoreModelMapper(
     private val core: NativeCore = NativeCoreBridge(),
 ) : AutoCloseable {
+    fun consumeEncryptedUploadV2Catalog(sessionId: ULong, data: ByteArray): List<dev.bota.sdk.EncryptedUploadV2Recording>? = nativeCall {
+        val packet = core.decode(packet(0x0527, listOf(Field.unsigned(128, sessionId), Field.bytes(30, data))))
+        if (packet.fieldIds.isEmpty()) return@nativeCall null
+        val fields = PacketFields(packet)
+        if (fields.requiredULong(128) != sessionId) throw invalid("catalog session mismatch")
+        val count = fields.requiredInt(85)
+        val ids = fields.texts(13)
+        val generations = fields.unsigneds(129)
+        val storage = fields.unsigneds(147)
+        val completion = fields.unsigneds(146)
+        val started = fields.unsigneds(68)
+        val duration = fields.unsigneds(149)
+        val plaintext = fields.unsigneds(131)
+        val ciphertext = fields.unsigneds(130)
+        val hashes = packet.byteArrays(144)
+        if (listOf(ids.size, generations.size, storage.size, completion.size, started.size, duration.size,
+                plaintext.size, ciphertext.size, hashes.size).any { it != count }) {
+            throw invalid("catalog fields have inconsistent counts")
+        }
+        List(count) { index ->
+            if (started[index] > ULong.MAX_VALUE / 1_000u || duration[index] > ULong.MAX_VALUE / 1_000u) {
+                throw invalid("catalog time exceeds milliseconds range")
+            }
+            dev.bota.sdk.EncryptedUploadV2Recording(
+                ids[index], generations[index].toUIntExact("generation"), ciphertext[index], hashes[index],
+                started[index] * 1_000u, duration[index] * 1_000u, plaintext[index],
+                storage[index].toUByteExact("storage format"),
+            )
+        }
+    }
+
+    fun createEncryptedUploadV2List(sessionId: ULong): ByteArray = encode(0x0524, listOf(
+        Field.unsigned(127, 0x25u), Field.unsigned(128, sessionId),
+    ))
+
+    fun createEncryptedUploadV2ContextBegin(attemptId: UInt): ByteArray =
+        encode(0x0528, listOf(Field.unsigned(199, attemptId.toULong())))
+
+    fun decodeEncryptedUploadV2ContextSnapshot(data: ByteArray): EncryptedUploadV2ContextSnapshot {
+        val fields = decode(0x0529, data)
+        return EncryptedUploadV2ContextSnapshot(
+            fields.requiredUInt(199), fields.requiredUByte(200), fields.requiredUShort(24), fields.requiredBytes(33),
+        )
+    }
+
+    fun validateEncryptedUploadV2ContextDocument(kind: UByte, data: ByteArray): Unit = nativeCall {
+        core.decode(packet(0x052a, listOf(Field.unsigned(151, kind.toULong()), Field.bytes(30, data))))
+        Unit
+    }
+
+    fun validateEncryptedUploadV2Admission(data: ByteArray, replacement: Boolean = false): Unit = nativeCall {
+        core.decode(packet(0x052c, listOf(Field.bytes(30, data), Field.boolean(204, replacement))))
+        Unit
+    }
+
+    fun decodeEncryptedUploadV2Authorization(data: ByteArray): EncryptedUploadV2AuthorizationIdentity {
+        val fields = decode(0x052b, data)
+        return EncryptedUploadV2AuthorizationIdentity(
+            fields.requiredUByte(154), fields.requiredUByte(147), fields.requiredUByte(167),
+            fields.requiredUByte(201), fields.requiredUInt(69), fields.requiredUInt(165), fields.requiredUInt(129),
+            fields.requiredULong(202), fields.requiredULong(203), uuid(fields.requiredBytes(132)),
+            fields.requiredText(13), fields.requiredBytes(144),
+        )
+    }
+
     fun decodeDiagnosticEvents(data: ByteArray): DeviceDiagnosticsBatch? = nativeCall {
         mapDiagnosticFields(core.decode(packet(0x0525, listOf(Field.bytes(Protocol.Field.Value, data)))))
     }

@@ -88,6 +88,12 @@ internal class ManagerRuntimeFixture(
     var encryptedV2Calls: MutableList<String>? = null
     var encryptedV2CapabilityGate: (suspend () -> Unit)? = null
     var encryptedV2TerminateFailure: Throwable? = null
+    var encryptedV2Catalog = emptyList<EncryptedUploadV2Recording>()
+    var encryptedV2CatalogFailure: Throwable? = null
+    var encryptedV2CapabilityPresent = true
+    var encryptedV2AdmissionFailure: Throwable? = null
+    var encryptedV2Generation = 1L
+    var encryptedV2NonceRead: suspend () -> ByteArray = { ByteArray(16) { 9 } }
 
     val runtime = DeviceRuntime(
         engine = runner,
@@ -101,6 +107,7 @@ internal class ManagerRuntimeFixture(
         stopStatusUpdates = {},
         decodeStatus = { error("unused") },
         closeResources = {},
+        directRead = { _, _, _ -> encryptedV2NonceRead() },
         directWrite = { _, _, _, _ -> actions += "write" },
         directSubscribe = { _, _, _ ->
             actions += "subscribe"
@@ -131,13 +138,32 @@ internal class ManagerRuntimeFixture(
             encryptedV2CapabilityGate?.invoke()
             EncryptedUploadV2CapabilitySnapshot(
                 byteArrayOf(3), ByteArray(32),
-                EncryptedUploadV2Capabilities(1u, 408u, 580u, 157u, 18u, 4u, 18u),
+                EncryptedUploadV2Capabilities(0x17fu, 408u, 580u, 157u, 18u, 4u, 18u),
             )
         },
         encryptedUploadV2Checkpoint = { _, _, _ ->
             encryptedV2Calls?.add("checkpoint")
             null
         },
+        findEncryptedUploadV2Capabilities = {
+            encryptedV2CapabilityGate?.invoke()
+            if (encryptedV2CapabilityPresent) EncryptedUploadV2CapabilitySnapshot(
+                byteArrayOf(3), ByteArray(32), EncryptedUploadV2Capabilities(0x17fu, 408u, 580u, 157u, 18u, 4u, 18u),
+            ) else null
+        },
+        validateEncryptedUploadV2Admission = { _, _ -> encryptedV2AdmissionFailure?.let { throw it } },
+        decodeEncryptedUploadV2Authorization = {
+            dev.bota.sdk.internal.core.EncryptedUploadV2AuthorizationIdentity(
+                3u, 3u, 2u, 1u, 1u, 2u, 4u, 4_096u, 4_096u,
+                UUID.fromString("00112233-4455-6677-8899-aabbccddeeff"), recording.uuid, ByteArray(32),
+            )
+        },
+        listEncryptedUploadV2Catalog = { _, _ ->
+            actions += "v2-list"
+            encryptedV2CatalogFailure?.let { throw it }
+            encryptedV2Catalog
+        },
+        connectionGeneration = { encryptedV2Generation },
         encryptedUploadV2MaximumWriteLength = {
             encryptedV2Calls?.add("maximum-write")
             185

@@ -36,6 +36,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 public sealed interface RecordingSyncEvent {
     public data class Progress(public val progress: RecordingTransferProgress) : RecordingSyncEvent
@@ -70,6 +72,77 @@ public class RecordingManager internal constructor() {
     internal suspend fun detach() {
         transferMetadataBySinkId.clear()
         state.detach()
+    }
+
+    public suspend fun listEncryptedUploadV2Recordings(device: ConnectedDevice): List<EncryptedUploadV2Recording> =
+        catalogOperation(device) { runtime ->
+            val capability = runtime.readEncryptedUploadV2Capabilities(device.id)
+            runtime.validateEncryptedUploadV2Admission(capability.rawValue, false)
+            runtime.listEncryptedUploadV2Catalog(device.id, randomTransportSessionId())
+        }
+
+    public suspend fun listPendingRecordings(device: ConnectedDevice): List<PendingRecording> =
+        catalogOperation(device) { runtime ->
+            val capability = runtime.findEncryptedUploadV2Capabilities(device.id)
+            if (capability != null) runtime.validateEncryptedUploadV2Admission(capability.rawValue, false)
+            val legacy = readLegacyCatalog(runtime, device)
+            if (capability == null) return@catalogOperation legacy.map(PendingRecording::Legacy)
+            val encrypted = runtime.listEncryptedUploadV2Catalog(device.id, randomTransportSessionId())
+            val aliases = mutableSetOf<String>()
+            for (recording in encrypted) {
+                val alias = normalizedRecordingUuid(recording.uuid).substring(0, 8) + "-0000-0000-0000-000000000000"
+                if (!aliases.add(alias)) throw BotaSDKError.Core(
+                    BotaErrorCode.IntegrityFailed, BotaOperation.TransferRecording, false, null,
+                    "encrypted catalog contains colliding legacy aliases",
+                )
+            }
+            encrypted.map(PendingRecording::EncryptedV2) + legacy.filter {
+                normalizedRecordingUuid(it.uuid) !in aliases
+            }.map(PendingRecording::Legacy)
+        }
+
+    private suspend fun <T> catalogOperation(
+        device: ConnectedDevice,
+        read: suspend (dev.bota.sdk.internal.DeviceRuntime) -> T,
+    ): T {
+        val runtime = state.configuredRuntime()
+        val id = UUID.randomUUID()
+        state.begin(runtime, id, BotaOperation.TransferRecording, task = currentCoroutineContext()[kotlinx.coroutines.Job])
+        var failure: Throwable? = null
+        try {
+            runtime.authorize(BotaOperation.TransferRecording)
+            runtime.connection.require(device)
+            return read(runtime)
+        } catch (error: Throwable) {
+            val mapped = error.facadePublicError(BotaOperation.TransferRecording)
+            failure = mapped
+            throw mapped
+        } finally {
+            withContext(NonCancellable) { runCleanupAfter(failure, { state.finish(id) }) }
+        }
+    }
+
+    private suspend fun readLegacyCatalog(
+        runtime: dev.bota.sdk.internal.DeviceRuntime,
+        device: ConnectedDevice,
+    ): List<DeviceRecording> = coroutineScope {
+        var failure: Throwable? = null
+        try {
+            val notifications = runtime.directSubscribe(device.id, RecordingUUIDs.StorageService, RecordingUUIDs.RecordingList)
+            val pending = async(start = CoroutineStart.UNDISPATCHED) { notifications.firstOrNull() }
+            runtime.directWrite(device.id, RecordingUUIDs.StorageService, RecordingUUIDs.TransferControl,
+                runtime.createTransferCommand(TransferCommand.List))
+            runtime.parseRecordingList(pending.await() ?: byteArrayOf())
+        } catch (error: Throwable) {
+            failure = error
+            throw error
+        } finally {
+            withContext(NonCancellable) {
+                runCleanupAfter(failure, {
+                    runtime.directUnsubscribe(device.id, RecordingUUIDs.StorageService, RecordingUUIDs.RecordingList)
+                })
+            }
+        }
     }
 
     public suspend fun listRecordings(device: ConnectedDevice): List<DeviceRecording> {
@@ -211,9 +284,16 @@ public class RecordingManager internal constructor() {
         device: ConnectedDevice,
         recording: EncryptedUploadV2Recording,
         provider: EncryptedUploadV2ProfileProvider,
+    ): Unit = syncEncryptedRecordingV2(device, recording, UUID.randomUUID(), provider)
+
+    public suspend fun syncEncryptedRecordingV2(
+        device: ConnectedDevice,
+        recording: EncryptedUploadV2Recording,
+        operationId: UUID,
+        provider: EncryptedUploadV2ProfileProvider,
     ) {
         val runtime = state.configuredRuntime()
-        val cancellationId = UUID.randomUUID()
+        val cancellationId = operationId
         state.begin(
             runtime, cancellationId, BotaOperation.TransferRecording,
             task = currentCoroutineContext()[kotlinx.coroutines.Job]!!,
@@ -227,6 +307,7 @@ public class RecordingManager internal constructor() {
             runtime.authorize(BotaOperation.TransferRecording)
             runtime.connection.require(device)
             val capability = runtime.readEncryptedUploadV2Capabilities(device.id)
+            runtime.validateEncryptedUploadV2Admission(capability.rawValue, false)
             currentCoroutineContext().ensureActive()
             val checkpoint = runtime.encryptedUploadV2Checkpoint(
                 device.serialNumber, normalizedRecordingUuid(recording.uuid), recording.generation,
@@ -238,35 +319,75 @@ public class RecordingManager internal constructor() {
             )
             val maximumWindow = minOf(capability.capabilities.maximumWindowPackets.toInt(), maximumMissing)
             val maximumData = minOf(capability.capabilities.maximumDataPayloadBytes.toInt(), maximumFrameBytes - 28)
-            if (maximumFrameBytes < 128 || maximumWindow <= 0 || maximumData <= 0) {
+            if (maximumFrameBytes < 140 || maximumWindow <= 0 || maximumData <= 0) {
                 throw BotaSDKError.Core(
                     BotaErrorCode.UnsupportedCapability, BotaOperation.TransferRecording, false, null,
                     "encrypted upload v2 negotiated bounds are unusable",
                 )
             }
-            material = provider.select(EncryptedUploadV2ProviderContext(recording, capability, checkpoint))
+            val providerJob = currentCoroutineContext()[kotlinx.coroutines.Job]!!
+            val generation = runtime.connectionGeneration(device.id)
+            val nonceMutex = Mutex()
+            var providerActive = true
+            val providerContext = EncryptedUploadV2ProviderContext(recording, capability, checkpoint) {
+                nonceMutex.withLock {
+                    fun requireOwner() {
+                        providerJob.ensureActive()
+                        if (!providerActive || !state.isActive(cancellationId, runtime) ||
+                            runtime.connectionGeneration(device.id) != generation) throw cancelled(BotaOperation.TransferRecording)
+                        runtime.connection.require(device)
+                    }
+                    requireOwner()
+                    val nonce = runtime.directRead(device.id,
+                        dev.bota.sdk.internal.bluetooth.BotaBluetoothUUIDs.AuthService,
+                        dev.bota.sdk.internal.bluetooth.BotaBluetoothUUIDs.AuthNonce)
+                    requireOwner()
+                    if (nonce.size != 16) throw BotaSDKError.Core(
+                        BotaErrorCode.InvalidInput, BotaOperation.TransferRecording, false, null, "invalid auth nonce length",
+                    )
+                    nonce.copyOf()
+                }
+            }
+            try {
+                material = provider.select(providerContext)
+            } finally {
+                withContext(NonCancellable) { nonceMutex.withLock { providerActive = false } }
+            }
             currentCoroutineContext().ensureActive()
+            if (material.uploadContext == null) {
+                throw BotaSDKError.Core(
+                    BotaErrorCode.InvalidInput, BotaOperation.TransferRecording, false, null,
+                    "encrypted upload v2 requires an upload context provider",
+                )
+            }
+            if (runtime.connectionGeneration(device.id) != generation) throw cancelled(BotaOperation.TransferRecording)
             runtime.connection.require(device)
+            val authorization = runtime.decodeEncryptedUploadV2Authorization(material.authorization)
+            val replacement = dev.bota.sdk.internal.host.validateEncryptedUploadV2Material(
+                material, recording, checkpoint, authorization,
+            )
+            runtime.validateEncryptedUploadV2Admission(capability.rawValue, authorization.flags and 8u != 0u)
+            val resumableCheckpoint = checkpoint.takeUnless { replacement }
             val transportSessionId: ULong
             val sinkId: String
             val windowPackets: UShort
             val dataPayloadBytes: UShort
-            if (checkpoint != null) {
-                if (material.uploadSessionId != checkpoint.uploadSessionId ||
-                    material.ownerRevision != checkpoint.ownerRevision || checkpoint.transportSessionId == 0uL ||
-                    runCatching { UUID.fromString(checkpoint.sinkId) }.isFailure ||
-                    checkpoint.windowPackets == 0.toUShort() || checkpoint.dataPayloadBytes == 0.toUShort() ||
-                    checkpoint.windowPackets.toInt() > maximumWindow || checkpoint.dataPayloadBytes.toInt() > maximumData
+            if (resumableCheckpoint != null) {
+                if (resumableCheckpoint.transportSessionId == 0uL ||
+                    runCatching { UUID.fromString(resumableCheckpoint.sinkId) }.isFailure ||
+                    resumableCheckpoint.windowPackets == 0.toUShort() || resumableCheckpoint.dataPayloadBytes == 0.toUShort() ||
+                    resumableCheckpoint.windowPackets.toInt() > maximumWindow || resumableCheckpoint.dataPayloadBytes.toInt() > maximumData ||
+                    (resumableCheckpoint.checkpointIntervalBlocks != null && resumableCheckpoint.checkpointIntervalBlocks != capability.capabilities.durableCheckpointIntervalBlocks)
                 ) {
                     throw BotaSDKError.Core(
                         BotaErrorCode.IntegrityFailed, BotaOperation.TransferRecording, false, null,
                         "encrypted upload v2 checkpoint does not match selected material",
                     )
                 }
-                transportSessionId = checkpoint.transportSessionId
-                sinkId = checkpoint.sinkId
-                windowPackets = checkpoint.windowPackets
-                dataPayloadBytes = checkpoint.dataPayloadBytes
+                transportSessionId = resumableCheckpoint.transportSessionId
+                sinkId = resumableCheckpoint.sinkId
+                windowPackets = resumableCheckpoint.windowPackets
+                dataPayloadBytes = resumableCheckpoint.dataPayloadBytes
             } else {
                 transportSessionId = randomTransportSessionId()
                 sinkId = UUID.randomUUID().toString()
@@ -281,7 +402,7 @@ public class RecordingManager internal constructor() {
             val values = capability.capabilities
             val command = CoreCommand.transferEncryptedRecording(
                 EncryptedUploadV2CommandRequest(
-                    device.serialNumber, recording.uuid, recording.generation, 3u,
+                    device.serialNumber, recording.uuid, recording.generation, recording.storageFormat,
                     material.uploadSessionId, material.ownerRevision, transportSessionId,
                     material.materialId, sinkId, securityPolicy,
                     EncryptedUploadV2CapabilitiesValue(
@@ -365,6 +486,10 @@ public class RecordingManager internal constructor() {
                 { state.finish(cancellationId) },
             )
         }
+    }
+
+    public suspend fun cancelEncryptedRecordingV2(operationId: UUID) {
+        state.cancel(operationId, cancelTask = true)
     }
 
     public fun streamRecording(

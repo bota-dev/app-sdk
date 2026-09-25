@@ -75,6 +75,9 @@ internal fun Throwable.facadePublicError(operation: BotaOperation): Throwable = 
     is BotaSDKError -> this
     is CancellationException -> this
     is NativeCoreException -> toPublicError()
+    is dev.bota.sdk.internal.host.EncryptedUploadV2HostException -> BotaSDKError.Core(
+        botaErrorCode(errorCode), operation, retryable, protocolStatus, message ?: "encrypted upload failed",
+    )
     else -> BotaSDKError.Core(
         BotaErrorCode.Internal,
         operation,

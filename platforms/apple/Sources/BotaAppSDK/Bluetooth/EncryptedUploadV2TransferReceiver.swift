@@ -166,6 +166,13 @@ actor EncryptedUploadV2TransferReceiver {
         prepared = true
     }
 
+    func verifyCompletedFile() throws {
+        guard completed, try fileSize() == expectedCiphertextLength,
+              try Self.secureEqual(sha256Prefix(length: expectedCiphertextLength), expectedCiphertextSHA256) else {
+            throw EncryptedUploadV2TransferReceiverError.integrityMismatch
+        }
+    }
+
     func reconciliationCheckpoint(
         _ rejected: EncryptedUploadV2ResumeRejectionValue
     ) throws -> EncryptedUploadV2CheckpointValue {

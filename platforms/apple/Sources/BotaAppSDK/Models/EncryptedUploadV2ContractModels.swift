@@ -69,14 +69,43 @@ public struct EncryptedUploadV2Recording: Equatable, Sendable {
     public let generation: UInt32
     public let ciphertextLength: UInt64
     public let ciphertextSHA256: Data
+    public let startedAtMs: UInt64
+    public let durationMs: UInt64
+    public let plaintextLength: UInt64
+    public let storageFormat: UInt8
 
-    public init(uuid: String, generation: UInt32, ciphertextLength: UInt64, ciphertextSHA256: Data) {
+    public init(
+        uuid: String, generation: UInt32, ciphertextLength: UInt64, ciphertextSHA256: Data,
+        startedAtMs: UInt64 = 0, durationMs: UInt64 = 0,
+        plaintextLength: UInt64 = 0, storageFormat: UInt8 = 3
+    ) {
         self.uuid = uuid
         self.generation = generation
         self.ciphertextLength = ciphertextLength
         self.ciphertextSHA256 = ciphertextSHA256
+        self.startedAtMs = startedAtMs
+        self.durationMs = durationMs
+        self.plaintextLength = plaintextLength
+        self.storageFormat = storageFormat
     }
 }
+
+public enum PendingRecording: Equatable, Sendable {
+    case legacy(DeviceRecording)
+    case encryptedV2(EncryptedUploadV2Recording)
+}
+
+public struct EncryptedUploadV2ContextExchange: Sendable {
+    public let challenge: Data
+    public let exchangeProof: @Sendable (Data) async throws -> Data
+
+    public init(challenge: Data, exchangeProof: @escaping @Sendable (Data) async throws -> Data) {
+        self.challenge = challenge
+        self.exchangeProof = exchangeProof
+    }
+}
+
+public typealias EncryptedUploadV2ContextProvider = @Sendable (Data) async throws -> EncryptedUploadV2ContextExchange
 
 public struct EncryptedUploadV2Checkpoint: Equatable, Sendable {
     public let uploadSessionID: UUID
@@ -89,6 +118,8 @@ public struct EncryptedUploadV2Checkpoint: Equatable, Sendable {
     public let sinkID: String
     public let windowPackets: UInt16
     public let dataPayloadBytes: UInt16
+    public let ciphertextLength: UInt64?
+    public let ciphertextSHA256: Data?
 
     public init(
         uploadSessionID: UUID,
@@ -100,7 +131,9 @@ public struct EncryptedUploadV2Checkpoint: Equatable, Sendable {
         transportSessionID: UInt64,
         sinkID: String,
         windowPackets: UInt16,
-        dataPayloadBytes: UInt16
+        dataPayloadBytes: UInt16,
+        ciphertextLength: UInt64? = nil,
+        ciphertextSHA256: Data? = nil
     ) {
         self.uploadSessionID = uploadSessionID
         self.ownerRevision = ownerRevision
@@ -112,6 +145,8 @@ public struct EncryptedUploadV2Checkpoint: Equatable, Sendable {
         self.sinkID = sinkID
         self.windowPackets = windowPackets
         self.dataPayloadBytes = dataPayloadBytes
+        self.ciphertextLength = ciphertextLength
+        self.ciphertextSHA256 = ciphertextSHA256
     }
 }
 
@@ -119,15 +154,25 @@ public struct EncryptedUploadV2ProviderContext: Equatable, Sendable {
     public let recording: EncryptedUploadV2Recording
     public let capability: EncryptedUploadV2CapabilitySnapshot
     public let checkpoint: EncryptedUploadV2Checkpoint?
+    public let readAuthNonce: @Sendable () async throws -> Data
 
     public init(
         recording: EncryptedUploadV2Recording,
         capability: EncryptedUploadV2CapabilitySnapshot,
-        checkpoint: EncryptedUploadV2Checkpoint?
+        checkpoint: EncryptedUploadV2Checkpoint?,
+        readAuthNonce: @escaping @Sendable () async throws -> Data = {
+            throw BotaSDKError(code: .unsupportedCapability, operation: .transferRecording,
+                               retryable: false, detail: "operation-scoped auth nonce is unavailable")
+        }
     ) {
         self.recording = recording
         self.capability = capability
         self.checkpoint = checkpoint
+        self.readAuthNonce = readAuthNonce
+    }
+
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.recording == rhs.recording && lhs.capability == rhs.capability && lhs.checkpoint == rhs.checkpoint
     }
 }
 
@@ -151,6 +196,7 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
     public typealias Finalizer = @Sendable (EncryptedUploadV2TransferEvidence) async throws -> Void
     public typealias ReceiptProvider = @Sendable (EncryptedUploadV2TransferEvidence) async throws -> Data
     public typealias CancellationHandler = @Sendable () async throws -> Void
+    public typealias CiphertextUploadDecision = @Sendable (EncryptedUploadV2TransferEvidence) async throws -> Bool
 
     public let materialID: String
     public let recordingID: String
@@ -158,6 +204,8 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
     public let ownerRevision: UInt32
     public let policy: EncryptedUploadV2SecurityPolicy
     public let authorization: Data
+    public let uploadContext: EncryptedUploadV2ContextProvider?
+    public let shouldUploadCiphertext: CiphertextUploadDecision
     let stagingRequest: StagingRequest
     let submitManifest: ManifestSubmitter
     let finalize: Finalizer
@@ -176,7 +224,9 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
         submitManifest: @escaping ManifestSubmitter,
         finalize: @escaping Finalizer,
         completionReceipt: @escaping ReceiptProvider,
-        cancel: @escaping CancellationHandler = {}
+        cancel: @escaping CancellationHandler = {},
+        uploadContext: EncryptedUploadV2ContextProvider? = nil,
+        shouldUploadCiphertext: @escaping CiphertextUploadDecision = { _ in true }
     ) {
         self.materialID = materialID
         self.recordingID = recordingID
@@ -189,6 +239,8 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
         self.finalize = finalize
         self.completionReceipt = completionReceipt
         cancellationHandler = cancel
+        self.uploadContext = uploadContext
+        self.shouldUploadCiphertext = shouldUploadCiphertext
     }
 
     var provider: EncryptedUploadV2MaterialProvider {
@@ -198,11 +250,13 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
             submitManifest: { try await submitManifest($0.manifest, $0.evidence) },
             finalize: finalize,
             completionReceipt: completionReceipt,
-            cancel: { try await cancellation.run(cancellationHandler) }
+            cancel: { try await cancellation.run(cancellationHandler) },
+            uploadContext: uploadContext,
+            shouldUploadCiphertext: shouldUploadCiphertext
         )
     }
 
-    func cancelPreparation() async {
+    public func cancelPreparation() async {
         try? await cancellation.run(cancellationHandler)
     }
 }

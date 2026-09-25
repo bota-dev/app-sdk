@@ -880,6 +880,100 @@ final class CoreModelMapper: @unchecked Sendable {
         }
     }
 
+    func createEncryptedUploadV2ContextBegin(attemptID: UInt32) throws -> Data {
+        try encode(0x0528, fields: [.unsigned(id: 199, value: UInt64(attemptID))])
+    }
+
+    func decodeEncryptedUploadV2ContextSnapshot(_ data: Data) throws -> EncryptedUploadV2ContextSnapshot {
+        let fields = try decode(0x0529, data)
+        return .init(attemptID: try fields.requiredUInt32(199), state: try fields.requiredUInt8(200),
+                     result: try fields.requiredUInt16(24), payload: try fields.requiredBytes(33))
+    }
+
+    func validateEncryptedUploadV2ContextDocument(kind: UInt8, data: Data) throws {
+        _ = try client.protocolDecode(Self.protocolPacket(kind: 0x052a, fields: [
+            .unsigned(id: 151, value: UInt64(kind)), .bytes(id: 30, value: data),
+        ]))
+    }
+
+    func createEncryptedUploadV2List(transportSessionID: UInt64) throws -> Data {
+        try encode(0x0524, fields: [
+            .unsigned(id: 127, value: 0x25), .unsigned(id: 128, value: transportSessionID),
+        ])
+    }
+
+    func validateEncryptedUploadV2Admission(_ capability: Data) throws {
+        _ = try client.protocolDecode(Self.protocolPacket(kind: 0x052c, fields: [
+            .bytes(id: 30, value: capability), .bool(id: 204, value: false),
+        ]))
+    }
+
+    func decodeEncryptedUploadV2Catalog(_ data: Data, transportSessionID: UInt64) throws -> [EncryptedUploadV2Recording]? {
+        let packet = try client.protocolDecode(Self.protocolPacket(kind: 0x0527, fields: [
+            .unsigned(id: 128, value: transportSessionID), .bytes(id: 30, value: data),
+        ]))
+        guard !packet.fields.isEmpty else { return nil }
+        let fields = PacketFields(packet.fields)
+        let count = try fields.requiredInt(85)
+        let uuids = fields.texts(13)
+        let generations = fields.unsigneds(129)
+        let formats = fields.unsigneds(147)
+        let starts = fields.unsigneds(68)
+        let durations = fields.unsigneds(149)
+        let plaintext = fields.unsigneds(131)
+        let ciphertext = fields.unsigneds(130)
+        let hashes = fields.bytes(144)
+        guard [uuids.count, generations.count, formats.count, starts.count, durations.count,
+               plaintext.count, ciphertext.count, hashes.count].allSatisfy({ $0 == count }) else {
+            throw Self.invalid("v2 catalog fields have inconsistent counts")
+        }
+        return try (0..<count).map { index in
+            let start = starts[index].multipliedReportingOverflow(by: 1000)
+            let duration = durations[index].multipliedReportingOverflow(by: 1000)
+            guard !start.overflow, !duration.overflow else { throw Self.invalid("v2 catalog time overflow") }
+            return EncryptedUploadV2Recording(
+                uuid: uuids[index], generation: try Self.uint32(generations[index], "recording generation"),
+                ciphertextLength: ciphertext[index], ciphertextSHA256: hashes[index],
+                startedAtMs: start.partialValue, durationMs: duration.partialValue, plaintextLength: plaintext[index],
+                storageFormat: try Self.uint8(formats[index], "storage format")
+            )
+        }
+    }
+
+    func validateEncryptedUploadV2Selection(
+        material: EncryptedUploadV2Material, recording: EncryptedUploadV2Recording,
+        capability: EncryptedUploadV2CapabilitySnapshot, checkpoint: EncryptedUploadV2Checkpoint?
+    ) throws {
+        let auth = try decode(0x052b, material.authorization)
+        let flags = try auth.requiredUInt16(69)
+        let replacement = flags & 8 != 0
+        _ = try client.protocolDecode(Self.protocolPacket(kind: 0x052c, fields: [
+            .bytes(id: 30, value: capability.rawValue), .bool(id: 204, value: replacement),
+        ]))
+        let policy: UInt8 = switch material.policy { case .legacyAllowed: 0; case .v2Preferred: 1; case .v2Required: 2 }
+        guard material.ownerRevision > 0, material.ownerRevision <= Int32.max,
+              try auth.requiredUInt32(165) == material.ownerRevision,
+              try auth.requiredUInt8(154) == 3, recording.storageFormat == 3,
+              try auth.requiredUInt8(147) == recording.storageFormat,
+              try auth.requiredUInt8(167) == policy,
+              try auth.requiredUInt8(201) & 1 != 0, flags & ~0xf == 0, flags & 1 != 0,
+              try auth.requiredBytes(132) == Self.bytes(of: material.uploadSessionID),
+              try auth.requiredText(13).lowercased() == recording.uuid.lowercased(),
+              try auth.requiredUInt32(129) == recording.generation,
+              try auth.requiredUInt64(202) == recording.ciphertextLength,
+              try auth.requiredUInt64(203) == recording.ciphertextLength,
+              try auth.requiredBytes(144) == recording.ciphertextSHA256
+        else { throw Self.invalid("v2 authorization does not match selected recording and material") }
+        if let checkpoint,
+           checkpoint.uploadSessionID != material.uploadSessionID || checkpoint.ownerRevision != material.ownerRevision {
+            guard replacement, material.ownerRevision > checkpoint.ownerRevision,
+                  material.uploadSessionID != checkpoint.uploadSessionID,
+                  checkpoint.ciphertextLength == recording.ciphertextLength,
+                  checkpoint.ciphertextSHA256 == recording.ciphertextSHA256
+            else { throw Self.invalid("v2 replacement does not match retained checkpoint identity") }
+        }
+    }
+
     private func decode(_ kind: UInt32, _ data: Data) throws -> PacketFields {
         do {
             let packet = try client.protocolDecode(Self.protocolPacket(kind: kind, fields: [

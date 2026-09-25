@@ -61,6 +61,9 @@ internal class EncryptedUploadV2TransferHostServices(
     val nextWriteId: () -> UInt,
     val encodeAcknowledgement: (dev.bota.sdk.internal.bluetooth.EncryptedUploadV2WindowAcknowledgement) -> ByteArray,
     val encodeConfirm: (ULong, UUID, String, UInt, UInt, ByteArray) -> ByteArray,
+    val refreshUploadContext: suspend (dev.bota.sdk.EncryptedUploadV2ContextProvider) -> Unit = {
+        error("upload context exchange unavailable")
+    },
 )
 
 internal class EncryptedUploadV2TransferHost(
@@ -144,6 +147,7 @@ internal class EncryptedUploadV2TransferHost(
             value.uploadSessionId, value.ownerRevision, value.revision, value.nextCiphertextOffset,
             value.prefixSha256, value.highestContiguousSequence, value.transportSessionId,
             value.sinkId, value.windowPackets, value.dataPayloadBytes,
+            value.ciphertextLength, value.ciphertextSha256, value.checkpointIntervalBlocks,
         )
     }
 
@@ -320,6 +324,7 @@ internal class EncryptedUploadV2TransferHost(
         requireValue(activeContext == null && materialLease == null, "another encrypted upload v2 session is active", 8u)
         val materialId = requiredText(effect, 12)
         val prepared = services.materialRegistry.preparedMaterial(materialId)
+        services.materialRegistry.refreshUploadContext(materialId, prepared.lease, services.refreshUploadContext)
         services.sendSignedDocument(1u, nonzeroWriteId(), prepared.authorization, 408u)
         preparedMaterialId = materialId
         preparedAuthorizationSha256 = prepared.authorizationSha256
@@ -486,6 +491,8 @@ internal class EncryptedUploadV2TransferHost(
             context.uploadSessionId, context.ownerRevision, context.transportSessionId,
             context.sinkId, context.windowPackets, context.dataPayloadBytes, checkpoint.revision,
             checkpoint.nextCiphertextOffset, checkpoint.prefixSha256, checkpoint.highestContiguousSequence,
+            ciphertextLength = context.ciphertextLength, ciphertextSha256 = context.ciphertextSha256,
+            checkpointIntervalBlocks = context.checkpointInterval,
         )
         services.checkpointStore.save(persisted)
         receiver?.checkpointDidPersist(checkpoint)
@@ -519,8 +526,28 @@ internal class EncryptedUploadV2TransferHost(
 
     private fun stageArtifacts(effect: CoreEffect) = flow {
         val state = completionState(effect, requireSink = true)
-        val request = services.materialRegistry.stagingRequest(state.context.materialId, state.lease, state.completed.evidence)
-        services.uploadCiphertext(request, state.completed.file)
+        val shouldUpload = services.materialRegistry.shouldUploadCiphertext(state.context.materialId, state.lease, state.completed.evidence)
+        withContext(Dispatchers.IO) {
+            val digest = MessageDigest.getInstance("SHA-256")
+            var length = 0uL
+            Files.newInputStream(state.completed.file).use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    length += count.toULong()
+                    digest.update(buffer, 0, count)
+                }
+            }
+            requireValue(length == state.completed.evidence.ciphertextLength &&
+                MessageDigest.isEqual(digest.digest(), state.completed.evidence.ciphertextSha256),
+                "staged ciphertext identity changed", 18u)
+        }
+        if (shouldUpload) {
+            val request = services.materialRegistry.stagingRequest(state.context.materialId, state.lease, state.completed.evidence)
+            services.uploadCiphertext(request, state.completed.file)
+        }
         services.materialRegistry.submitManifest(
             state.context.materialId, state.lease, state.completed.manifest, state.completed.evidence,
         )
@@ -551,6 +578,7 @@ internal class EncryptedUploadV2TransferHost(
         requireValue(!synchronized(stateLock) { cancellationStarted }, "transfer cancellation already started", 16u)
         requireValue(requiredText(effect, 12) == context.materialId, "CONFIRM material is stale")
         requireValue(MessageDigest.isEqual(requiredBytes(effect, 162), receipt.receiptSha256), "CONFIRM receipt is stale")
+        services.materialRegistry.refreshUploadContext(context.materialId, lease, services.refreshUploadContext)
         services.checkpointStore.delete(context.uploadSessionId)
         if (Files.deleteIfExists(completed.file)) syncDirectory(completed.file.parent)
         services.sendSignedDocument(2u, nonzeroWriteId(), receipt.receipt, 336u)

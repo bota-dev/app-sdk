@@ -30,6 +30,10 @@ public class EncryptedUploadV2Recording(
     public val generation: UInt,
     public val ciphertextLength: ULong,
     ciphertextSha256: ByteArray,
+    public val startedAtMs: ULong = 0u,
+    public val durationMs: ULong = 0u,
+    public val plaintextLength: ULong = 0u,
+    public val storageFormat: UByte = 3u,
 ) {
     private val storedCiphertextSha256: ByteArray = ciphertextSha256.copyOf()
     public val ciphertextSha256: ByteArray get() = storedCiphertextSha256.copyOf()
@@ -46,15 +50,21 @@ public class EncryptedUploadV2Checkpoint(
     public val sinkId: String,
     public val windowPackets: UShort,
     public val dataPayloadBytes: UShort,
+    public val ciphertextLength: ULong? = null,
+    ciphertextSha256: ByteArray? = null,
+    public val checkpointIntervalBlocks: UInt? = null,
 ) {
     private val storedPrefixSha256: ByteArray = prefixSha256.copyOf()
     public val prefixSha256: ByteArray get() = storedPrefixSha256.copyOf()
+    private val storedCiphertextSha256 = ciphertextSha256?.copyOf()
+    public val ciphertextSha256: ByteArray? get() = storedCiphertextSha256?.copyOf()
 }
 
 public class EncryptedUploadV2ProviderContext(
     public val recording: EncryptedUploadV2Recording,
     public val capability: EncryptedUploadV2CapabilitySnapshot,
     public val checkpoint: EncryptedUploadV2Checkpoint?,
+    public val readAuthNonce: suspend () -> ByteArray = { error("auth nonce read unavailable") },
 )
 
 public enum class EncryptedUploadV2SecurityPolicy {
@@ -88,6 +98,8 @@ public class EncryptedUploadV2Material(
     internal val finalize: suspend (EncryptedUploadV2TransferEvidence) -> Unit,
     internal val completionReceipt: suspend (EncryptedUploadV2TransferEvidence) -> ByteArray,
     private val cancel: suspend () -> Unit = {},
+    public val uploadContext: EncryptedUploadV2ContextProvider? = null,
+    internal val shouldUploadCiphertext: suspend (EncryptedUploadV2TransferEvidence) -> Boolean = { true },
 ) {
     private val storedAuthorization: ByteArray = authorization.copyOf()
     internal val authorization: ByteArray get() = storedAuthorization.copyOf()
@@ -97,7 +109,25 @@ public class EncryptedUploadV2Material(
         if (cancelled.compareAndSet(false, true)) cancel()
     }
 
+    public suspend fun cancelPreparation(): Unit = cancelOnce()
+
     override fun toString(): String = "EncryptedUploadV2Material(<redacted>)"
+}
+
+public class EncryptedUploadV2ContextExchange(
+    challenge: ByteArray,
+    internal val exchangeProof: suspend (ByteArray) -> ByteArray,
+) {
+    private val storedChallenge = challenge.copyOf()
+    public val challenge: ByteArray get() = storedChallenge.copyOf()
+    override fun toString(): String = "EncryptedUploadV2ContextExchange(<redacted>)"
+}
+
+public typealias EncryptedUploadV2ContextProvider = suspend (ByteArray) -> EncryptedUploadV2ContextExchange
+
+public sealed interface PendingRecording {
+    public data class Legacy(public val recording: dev.bota.sdk.model.DeviceRecording) : PendingRecording
+    public data class EncryptedV2(public val recording: EncryptedUploadV2Recording) : PendingRecording
 }
 
 public fun interface EncryptedUploadV2ProfileProvider {

@@ -13,6 +13,10 @@ internal open class BluetoothTransportException(
     message: String,
 ) : NativeHostException(platformCode, message)
 
+internal class BluetoothCharacteristicNotFoundException : BluetoothTransportException(
+    404, "GATT characteristic was not discovered",
+)
+
 internal data class ConfirmedBluetoothDisconnect(val peripheralId: String, val generation: Long)
 
 internal interface BluetoothDriver : AutoCloseable {

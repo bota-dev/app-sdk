@@ -362,7 +362,8 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
                 submitManifest: { _ in },
                 finalize: { _ in },
                 completionReceipt: { _ in Data(repeating: 0xb2, count: 336) },
-                cancel: {}
+                cancel: {},
+                uploadContext: { _ in .init(challenge: Data(), exchangeProof: { _ in Data() }) }
             )
         )
         let host = EncryptedUploadV2TransferHost(
@@ -375,7 +376,8 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
                 sendSignedDocument: { _, _, _, _ in await gate.suspendFirst() },
                 uploadCiphertext: { _, _ in },
                 confirmTransfer: { _, _ in },
-                nextWriteID: { 7 }
+                nextWriteID: { 7 },
+                refreshUploadContext: { _, validate in try await validate() }
             )
         )
         let firstEffect = fixture.prepareEffect()
@@ -401,6 +403,18 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
     }
 
     func testCompletionServicesStageOpaqueArtifactsBeforeReceiptGatedConfirm() async throws {
+        try await checkCompletionServices(shouldUpload: true)
+    }
+
+    func testAlreadyStagedCiphertextSkipsPutButStillCompletesReceiptFlow() async throws {
+        try await checkCompletionServices(shouldUpload: false)
+    }
+
+    func testSkippedPutStillRejectsTamperedFileEvidence() async throws {
+        try await checkCompletionServices(shouldUpload: false, tamper: true)
+    }
+
+    private func checkCompletionServices(shouldUpload: Bool, tamper: Bool = false) async throws {
         let fixture = try Fixture()
         let authorization = Data(repeating: 0xa1, count: 408)
         let receipt = Data(repeating: 0xb2, count: 336)
@@ -426,7 +440,12 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
                     await calls.append(.receipt)
                     return receipt
                 },
-                cancel: { await calls.append(.cancel) }
+                cancel: { await calls.append(.cancel) },
+                uploadContext: { _ in .init(challenge: Data(), exchangeProof: { _ in Data() }) },
+                shouldUploadCiphertext: { _ in
+                    if tamper { try Data("tampered".utf8).write(to: fixture.fileURL) }
+                    return shouldUpload
+                }
             )
         )
         let services = EncryptedUploadV2TransferHostServices(
@@ -441,7 +460,8 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
                 await calls.append(.confirm(frame))
                 await confirmedCommit.suspendFirst()
             },
-            nextWriteID: { 7 }
+            nextWriteID: { 7 },
+            refreshUploadContext: { _, validate in try await validate(); await calls.append(.context) }
         )
         let host = EncryptedUploadV2TransferHost(
             rootDirectory: fixture.root,
@@ -480,6 +500,15 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
         fixture.sendManifestAndEOF()
         _ = try await transfer.next()
 
+        if tamper {
+            do {
+                _ = try await Self.collect(await host.execute(fixture.stageEffect()))
+                XCTFail("Skipped PUT must still verify the ciphertext file")
+            } catch {}
+            let values = await calls.values
+            XCTAssertEqual(values, [.context, .signed(kind: 1, document: authorization)])
+            return
+        }
         let stageEvents = try await Self.collect(await host.execute(fixture.stageEffect()))
         XCTAssertEqual(stageEvents, [.init(kind: EncryptedUploadV2Abi.eventArtifactsStaged)])
         let receiptEvents = try await Self.collect(await host.execute(fixture.awaitReceiptEffect()))
@@ -509,7 +538,7 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
             XCTFail("Expected failed durable cleanup to prevent device confirmation")
         } catch {}
         let callsAfterCleanupFailure = await calls.values.count
-        XCTAssertEqual(callsAfterCleanupFailure, callsBeforeMismatchedConfirm)
+        XCTAssertEqual(callsAfterCleanupFailure, callsBeforeMismatchedConfirm + 1, "A fresh context precedes first receipt admission")
         let remainsRegisteredAfterCleanupFailure = await registry.contains(id: "material-id")
         XCTAssertTrue(remainsRegisteredAfterCleanupFailure)
         directorySync.setShouldFail(false)
@@ -533,14 +562,10 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
         XCTAssertTrue(cancellationStillSeesExactSettlement)
 
         let values = await calls.values
-        XCTAssertEqual(values.count, 8)
-        XCTAssertEqual(values[0], .signed(kind: 1, document: authorization))
-        XCTAssertEqual(values[1], .stagingRequest)
-        XCTAssertEqual(values[2], .upload(fixture.ciphertext))
-        XCTAssertEqual(values[3], .manifest(fixture.manifest))
-        XCTAssertEqual(values[4], .finalize)
-        XCTAssertEqual(values[5], .receipt)
-        XCTAssertEqual(values[6], .signed(kind: 2, document: receipt))
+        let expected: [EncryptedUploadV2CompletionCall] = [.context, .signed(kind: 1, document: authorization)]
+            + (shouldUpload ? [.stagingRequest, .upload(fixture.ciphertext)] : [])
+            + [.manifest(fixture.manifest), .finalize, .receipt, .context, .context, .signed(kind: 2, document: receipt)]
+        XCTAssertEqual(Array(values.dropLast()), expected)
         let confirms = values.compactMap { value -> Data? in
             guard case let .confirm(frame) = value else { return nil }
             return frame
@@ -626,6 +651,15 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
         let controlsBeforeAck = await controls.values
         XCTAssertTrue(controlsBeforeAck.isEmpty)
 
+        var predecessor = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: fixture.checkpointURL)) as? [String: Any])
+        let predecessorSession = UUID()
+        predecessor["ownerRevision"] = 8
+        predecessor["uploadSessionBytes"] = withUnsafeBytes(of: predecessorSession.uuid) { Data($0) }.base64EncodedString()
+        let predecessorURL = fixture.checkpointURL.deletingLastPathComponent()
+            .appendingPathComponent(predecessorSession.uuidString).appendingPathExtension("json")
+        try JSONSerialization.data(withJSONObject: predecessor).write(to: predecessorURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: predecessorURL.path))
+
         let ackEvents = try await Self.collect(await host.execute(
             fixture.checkpointEffect(kind: EncryptedUploadV2Abi.effectAcknowledgeWindow, checkpoint: checkpoint)
         ))
@@ -635,6 +669,7 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
         )])
         let controlsAfterAck = await controls.values
         XCTAssertEqual(controlsAfterAck.count, 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: predecessorURL.path), "Retire predecessor only after the new durable ACK")
 
         fixture.sendManifestAndEOF()
         let next = try await start.next()
@@ -1699,6 +1734,7 @@ private actor CapturedNativeCheckpoint {
 }
 
 private enum EncryptedUploadV2CompletionCall: Equatable, Sendable {
+    case context
     case signed(kind: UInt8, document: Data)
     case stagingRequest
     case upload(Data)

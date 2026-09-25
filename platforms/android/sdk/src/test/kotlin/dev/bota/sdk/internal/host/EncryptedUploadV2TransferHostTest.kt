@@ -1,6 +1,6 @@
 package dev.bota.sdk.internal.host
 
-import dev.bota.sdk.EncryptedUploadV2Material
+import dev.bota.sdk.EncryptedUploadV2Material as NativeEncryptedUploadV2Material
 import dev.bota.sdk.EncryptedUploadV2SecurityPolicy
 import dev.bota.sdk.BotaErrorCode
 import dev.bota.sdk.BotaOperation
@@ -50,6 +50,26 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EncryptedUploadV2TransferHostTest {
+    private fun EncryptedUploadV2Material(
+        materialId: String,
+        recordingId: String,
+        uploadSessionId: UUID,
+        ownerRevision: UInt,
+        policy: EncryptedUploadV2SecurityPolicy,
+        authorization: ByteArray,
+        stagingRequest: suspend (dev.bota.sdk.EncryptedUploadV2TransferEvidence) -> Request,
+        submitManifest: suspend (ByteArray, dev.bota.sdk.EncryptedUploadV2TransferEvidence) -> Unit,
+        finalize: suspend (dev.bota.sdk.EncryptedUploadV2TransferEvidence) -> Unit,
+        completionReceipt: suspend (dev.bota.sdk.EncryptedUploadV2TransferEvidence) -> ByteArray,
+        cancel: suspend () -> Unit = {},
+        shouldUploadCiphertext: suspend (dev.bota.sdk.EncryptedUploadV2TransferEvidence) -> Boolean = { true },
+    ) = NativeEncryptedUploadV2Material(
+        materialId, recordingId, uploadSessionId, ownerRevision, policy, authorization,
+        stagingRequest, submitManifest, finalize, completionReceipt, cancel,
+        uploadContext = { dev.bota.sdk.EncryptedUploadV2ContextExchange(ByteArray(196)) { ByteArray(264) } },
+        shouldUploadCiphertext = shouldUploadCiphertext,
+    )
+
     @Test
     fun lostAckReconcilesZeroAndNonzeroPrefixesBeforeRetransmission() = runTest {
         for (offset in listOf(0, 2)) {
@@ -339,6 +359,7 @@ class EncryptedUploadV2TransferHostTest {
         val registry = registry(AtomicInteger())
         val services = EncryptedUploadV2TransferHostServices(
             registry, store,
+            refreshUploadContext = {},
             openTransfer = { _, checkpoint ->
                 assertEquals(2u, checkpoint!!.revision)
                 val rejectedOffset = if (failure in listOf("ahead", "equal")) 4uL else offset.toULong()
@@ -414,6 +435,7 @@ class EncryptedUploadV2TransferHostTest {
 
     @Test
     fun successfulConfirmHandoffIsAtomicBeforeHostContinuation() = runTest {
+        for (shouldUpload in listOf(true, false)) {
         val actions = mutableListOf<String>()
         val cancelled = AtomicInteger()
         val registry = EncryptedUploadV2MaterialRegistry()
@@ -438,6 +460,7 @@ class EncryptedUploadV2TransferHostTest {
                 ByteArray(336) { 2 }
             },
             cancel = { cancelled.incrementAndGet() },
+            shouldUploadCiphertext = { shouldUpload },
         )
         registry.register(materialId, material)
         val payloads = Channel<EncryptedUploadV2TransferPayload>(Channel.UNLIMITED)
@@ -533,15 +556,16 @@ class EncryptedUploadV2TransferHostTest {
 
         assertEquals(
             listOf(
-                "signed-1", "control-7", "staging-request", "upload", "manifest",
-                "finalize", "receipt", "signed-2", "control-8", "release",
-            ),
+                "context", "signed-1", "control-7", "staging-request", "upload", "manifest",
+                "finalize", "receipt", "context", "signed-2", "control-8", "release",
+            ).filter { shouldUpload || it !in listOf("staging-request", "upload") },
             actions,
         )
         assertEquals(0, cancelled.get())
         assertFalse(Files.exists(root.resolve("$SinkId.encrypted-upload-v2")))
         start.cancel()
         host.close()
+        }
     }
 
     @Test
@@ -800,6 +824,7 @@ class EncryptedUploadV2TransferHostTest {
         val journals = TestJournals()
         val services = EncryptedUploadV2TransferHostServices(
             registry, EncryptedUploadV2CheckpointStore(journals),
+            refreshUploadContext = {},
             openTransfer = { _, _ -> entered.complete(Unit); awaitCancellation() },
             sendControl = { _, _, _ -> }, confirmTransfer = { _, _, _ -> },
             abortTransfer = { actions += "abort-$it" },
@@ -1052,6 +1077,7 @@ class EncryptedUploadV2TransferHostTest {
         val confirmationOwnerPresent = AtomicBoolean(false)
         val services = EncryptedUploadV2TransferHostServices(
             registry, EncryptedUploadV2CheckpointStore(TestJournals()),
+            refreshUploadContext = { actions += "context" },
             openTransfer = { _, _ -> EncryptedUploadV2OpenResult.Opened(payloads.receiveAsFlow()) },
             sendControl = { _, value, _ -> actions += "control-${value.single()}" },
             confirmTransfer = { _, value, writeSucceeded ->
@@ -1109,6 +1135,7 @@ class EncryptedUploadV2TransferHostTest {
         actions: MutableList<String>,
     ) = EncryptedUploadV2TransferHostServices(
         registry, EncryptedUploadV2CheckpointStore(TestJournals()),
+        refreshUploadContext = {},
         openTransfer = { _, _ -> error("replace in test") },
         sendControl = { _, _, _ -> }, confirmTransfer = { _, _, _ -> },
         abortTransfer = { actions += "abort-$it" },
@@ -1121,6 +1148,7 @@ class EncryptedUploadV2TransferHostTest {
         open: suspend (dev.bota.sdk.internal.core.EncryptedUploadV2StartRequest, dev.bota.sdk.internal.bluetooth.EncryptedUploadV2CheckpointValue?) -> EncryptedUploadV2OpenResult,
     ) = EncryptedUploadV2TransferHostServices(
         materialRegistry = materialRegistry,
+        refreshUploadContext = refreshUploadContext,
         checkpointStore = checkpointStore,
         openTransfer = open,
         sendControl = sendControl,

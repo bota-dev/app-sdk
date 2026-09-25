@@ -237,7 +237,8 @@ final class RecordingManagerTests: XCTestCase {
                 submitManifest: { _, _ in },
                 finalize: { _ in },
                 completionReceipt: { _ in Data(repeating: 0xd4, count: 336) },
-                cancel: {}
+                cancel: {},
+                uploadContext: { _ in .init(challenge: Data(), exchangeProof: { _ in Data() }) }
             )
         }
 
@@ -715,7 +716,8 @@ final class RecordingManagerTests: XCTestCase {
             submitManifest: { _, _ in },
             finalize: { _ in },
             completionReceipt: { _ in Data(repeating: 0xd4, count: 336) },
-            cancel: { await cancellation?.record() }
+            cancel: { await cancellation?.record() },
+            uploadContext: { _ in .init(challenge: Data(), exchangeProof: { _ in Data() }) }
         )
     }
 

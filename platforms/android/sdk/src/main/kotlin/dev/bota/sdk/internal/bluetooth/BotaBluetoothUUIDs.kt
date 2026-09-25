@@ -26,6 +26,7 @@ internal object BotaBluetoothUUIDs {
     val RecordingTransferV2: UUID = botaUuid(0x0004, 0x0009)
     val TransferStatusV2: UUID = botaUuid(0x0004, 0x000a)
     val RecordingListV2: UUID = botaUuid(0x0004, 0x000b)
+    val UploadContextV2: UUID = botaUuid(0x0004, 0x000c)
     val AuthService: UUID = botaUuid(0x0005, 0x0000)
     val DevicePublicKey: UUID = botaUuid(0x0005, 0x0001)
     val AuthNonce: UUID = botaUuid(0x0005, 0x0002)

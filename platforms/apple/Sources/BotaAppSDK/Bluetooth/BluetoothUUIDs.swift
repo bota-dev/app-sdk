@@ -26,6 +26,7 @@ enum BotaBluetoothUUIDs {
     static let recordingTransferV2 = "B07A0004-0009-1000-8000-00805F9B34FB"
     static let transferStatusV2 = "B07A0004-000A-1000-8000-00805F9B34FB"
     static let recordingListV2 = "B07A0004-000B-1000-8000-00805F9B34FB"
+    static let uploadContextV2 = "B07A0004-000C-1000-8000-00805F9B34FB"
     static let devicePublicKey = "B07A0005-0001-1000-8000-00805F9B34FB"
     static let authNonce = "B07A0005-0002-1000-8000-00805F9B34FB"
     static let backendPublicKey = "B07A0005-0003-1000-8000-00805F9B34FB"

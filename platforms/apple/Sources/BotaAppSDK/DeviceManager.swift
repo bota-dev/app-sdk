@@ -82,6 +82,8 @@ struct DeviceRuntime: Sendable {
     let decodeDiagnosticEvents: @Sendable (Data) throws -> DeviceDiagnosticsBatch?
     let createDiagnosticCommand: @Sendable (String?) throws -> Data
     let readEncryptedUploadV2Capabilities: @Sendable (String) async throws -> EncryptedUploadV2CapabilitySnapshot
+    let listEncryptedUploadV2Recordings: @Sendable (String) async throws -> [EncryptedUploadV2Recording]
+    let validateEncryptedUploadV2Selection: @Sendable (EncryptedUploadV2Material, EncryptedUploadV2Recording, EncryptedUploadV2CapabilitySnapshot, EncryptedUploadV2Checkpoint?) throws -> Void
     let encryptedUploadV2Checkpoint: @Sendable (String, String, UInt32) async throws -> EncryptedUploadV2Checkpoint?
     let encryptedUploadV2MaximumWriteLength: @Sendable (String) async throws -> Int
     let registerEncryptedUploadV2Material: @Sendable (String, EncryptedUploadV2Material) async throws -> Void
@@ -160,6 +162,12 @@ struct DeviceRuntime: Sendable {
         readEncryptedUploadV2Capabilities: @escaping @Sendable
             (String) async throws -> EncryptedUploadV2CapabilitySnapshot = { _ in
             throw NativeHostError.missingResource("encrypted upload v2 capabilities")
+        },
+        listEncryptedUploadV2Recordings: @escaping @Sendable (String) async throws -> [EncryptedUploadV2Recording] = { _ in
+            throw NativeHostError.missingResource("encrypted upload v2 catalog")
+        },
+        validateEncryptedUploadV2Selection: @escaping @Sendable (EncryptedUploadV2Material, EncryptedUploadV2Recording, EncryptedUploadV2CapabilitySnapshot, EncryptedUploadV2Checkpoint?) throws -> Void = {
+            try CoreModelMapper().validateEncryptedUploadV2Selection(material: $0, recording: $1, capability: $2, checkpoint: $3)
         },
         encryptedUploadV2Checkpoint: @escaping @Sendable
             (String, String, UInt32) async throws -> EncryptedUploadV2Checkpoint? = { _, _, _ in nil },
@@ -269,6 +277,8 @@ struct DeviceRuntime: Sendable {
         self.decodeDiagnosticEvents = decodeDiagnosticEvents
         self.createDiagnosticCommand = createDiagnosticCommand
         self.readEncryptedUploadV2Capabilities = readEncryptedUploadV2Capabilities
+        self.listEncryptedUploadV2Recordings = listEncryptedUploadV2Recordings
+        self.validateEncryptedUploadV2Selection = validateEncryptedUploadV2Selection
         self.encryptedUploadV2Checkpoint = encryptedUploadV2Checkpoint
         self.encryptedUploadV2MaximumWriteLength = encryptedUploadV2MaximumWriteLength
         self.registerEncryptedUploadV2Material = registerEncryptedUploadV2Material

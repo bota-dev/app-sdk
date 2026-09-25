@@ -62,12 +62,82 @@ public actor RecordingManager {
         let operationID = UUID()
         try await begin(operationID, operation: .transferRecording, runtime: runtime)
         do {
+            let values = try await readLegacyCatalog(device, operationID: operationID, runtime: runtime)
+            await finish(operationID, runtime: runtime)
+            return values
+        } catch {
+            await finish(operationID, runtime: runtime)
+            throw error
+        }
+    }
+
+    public func listEncryptedUploadV2Recordings(_ device: ConnectedDevice) async throws -> [EncryptedUploadV2Recording] {
+        let runtime = try configuredRuntime()
+        let generation = try await runtime.connection.generation(for: device)
+        let operationID = UUID()
+        try await begin(operationID, operation: .transferRecording, runtime: runtime)
+        do {
+            let values = try await runtime.listEncryptedUploadV2Recordings(device.id)
+            try requireActive(operationID)
+            try await runtime.connection.require(device, generation: generation)
+            await finish(operationID, runtime: runtime)
+            return values
+        } catch {
+            await finish(operationID, runtime: runtime)
+            throw facadePublicError(error)
+        }
+    }
+
+    public func listPendingRecordings(_ device: ConnectedDevice) async throws -> [PendingRecording] {
+        let runtime = try configuredRuntime()
+        let generation = try await runtime.connection.generation(for: device)
+        let operationID = UUID()
+        try await begin(operationID, operation: .transferRecording, runtime: runtime)
+        do {
+            let hasV2: Bool
+            do {
+                _ = try await runtime.readEncryptedUploadV2Capabilities(device.id)
+                hasV2 = true
+            } catch CentralDriverError.characteristicNotFound(let uuid)
+                where uuid.caseInsensitiveCompare(BotaBluetoothUUIDs.storageTransferCapabilitiesV2) == .orderedSame {
+                hasV2 = false
+            }
+            try requireActive(operationID)
+            try await runtime.connection.require(device, generation: generation)
+            let legacy = try await readLegacyCatalog(device, operationID: operationID, runtime: runtime)
+            try requireActive(operationID)
+            try await runtime.connection.require(device, generation: generation)
+            let encrypted = hasV2 ? try await runtime.listEncryptedUploadV2Recordings(device.id) : []
+            try requireActive(operationID)
+            try await runtime.connection.require(device, generation: generation)
+            var aliases = Set<String>()
+            for recording in encrypted {
+                let alias = String(recording.uuid.prefix(8)).lowercased() + "-0000-0000-0000-000000000000"
+                guard aliases.insert(alias).inserted else {
+                    throw BotaSDKError(code: .integrityFailed, operation: .transferRecording,
+                                       retryable: false, detail: "v2 catalog contains colliding legacy aliases")
+                }
+            }
+            let values = encrypted.map(PendingRecording.encryptedV2)
+                + legacy.filter { !aliases.contains($0.uuid.lowercased()) }.map(PendingRecording.legacy)
+            await finish(operationID, runtime: runtime)
+            return values
+        } catch {
+            await finish(operationID, runtime: runtime)
+            throw facadePublicError(error)
+        }
+    }
+
+    private func readLegacyCatalog(_ device: ConnectedDevice, operationID: UUID, runtime: DeviceRuntime) async throws -> [DeviceRecording] {
+        do {
             let notifications = try await runtime.directSubscribe(
                 device.id,
                 BotaBluetoothUUIDs.storageService,
                 BotaBluetoothUUIDs.recordingList
             )
             let command = try runtime.createTransferCommand(.list)
+            try requireActive(operationID)
+            try Task.checkCancellation()
             try await runtime.directWrite(
                 device.id,
                 BotaBluetoothUUIDs.storageService,
@@ -81,7 +151,8 @@ public actor RecordingManager {
                 BotaBluetoothUUIDs.storageService,
                 BotaBluetoothUUIDs.recordingList
             )
-            await finish(operationID, runtime: runtime)
+            try requireActive(operationID)
+            try Task.checkCancellation()
             return try runtime.parseRecordingList(data)
         } catch {
             try? await runtime.directUnsubscribe(
@@ -89,7 +160,6 @@ public actor RecordingManager {
                 BotaBluetoothUUIDs.storageService,
                 BotaBluetoothUUIDs.recordingList
             )
-            await finish(operationID, runtime: runtime)
             throw error
         }
     }
@@ -136,9 +206,10 @@ public actor RecordingManager {
     public func syncEncryptedRecordingV2(
         _ device: ConnectedDevice,
         recording: EncryptedUploadV2Recording,
+        operationID: UUID = UUID(),
         provider: @escaping EncryptedUploadV2ProfileProvider
     ) async throws {
-        let cancellationID = UUID()
+        let cancellationID = operationID
         let runtime = try configuredRuntime()
         let lifecycle = EncryptedUploadV2OperationLifecycle()
         return try await withTaskCancellationHandler {
@@ -146,7 +217,7 @@ public actor RecordingManager {
             activeEncryptedUploadV2Lifecycle = lifecycle
             do {
                 try Task.checkCancellation()
-                try await runtime.connection.require(device)
+                let connectionGeneration = try await runtime.connection.generation(for: device)
                 try requireActive(cancellationID)
                 let capability = try await runtime.readEncryptedUploadV2Capabilities(device.id)
                 try requireActive(cancellationID)
@@ -172,7 +243,8 @@ public actor RecordingManager {
                     Int(capability.capabilities.maximumDataPayloadBytes),
                     maximumFrameBytes - 28
                 )
-                guard maximumFrameBytes >= 128,
+                // START is 128 bytes, but the mandatory START_ACK requires 140.
+                guard maximumFrameBytes >= 140,
                       maximumWindowPackets > 0,
                       maximumDataPayloadBytes > 0,
                       let negotiatedMaximumWindowPackets = UInt16(exactly: maximumWindowPackets),
@@ -188,22 +260,33 @@ public actor RecordingManager {
                 let material = try await provider(.init(
                     recording: recording,
                     capability: capability,
-                    checkpoint: checkpoint
+                    checkpoint: checkpoint,
+                    readAuthNonce: { [weak self] in
+                        guard let self else { throw facadeCancelled(operation: .transferRecording) }
+                        return try await self.readEncryptedUploadV2AuthNonce(
+                            device, operationID: cancellationID, generation: connectionGeneration, runtime: runtime
+                        )
+                    }
                 ))
                 await performEncryptedUploadV2Cleanup(lifecycle.accept(material), runtime: runtime)
                 try requireActive(cancellationID)
                 try Task.checkCancellation()
-                try await runtime.connection.require(device)
+                try await runtime.connection.require(device, generation: connectionGeneration)
                 try requireActive(cancellationID)
+
+                guard material.uploadContext != nil else {
+                    throw BotaSDKError(code: .unsupportedCapability, operation: .transferRecording,
+                                       retryable: false, detail: "encrypted upload v2 requires an upload context provider")
+                }
+                try runtime.validateEncryptedUploadV2Selection(material, recording, capability, checkpoint)
 
                 let transportSessionID: UInt64
                 let sinkID: String
                 let windowPackets: UInt16
                 let dataPayloadBytes: UInt16
-                if let checkpoint {
-                    guard material.uploadSessionID == checkpoint.uploadSessionID,
-                          material.ownerRevision == checkpoint.ownerRevision,
-                          checkpoint.transportSessionID != 0,
+                if let checkpoint, material.uploadSessionID == checkpoint.uploadSessionID,
+                   material.ownerRevision == checkpoint.ownerRevision {
+                    guard checkpoint.transportSessionID != 0,
                           UUID(uuidString: checkpoint.sinkID) != nil,
                           checkpoint.windowPackets > 0,
                           checkpoint.dataPayloadBytes > 0,
@@ -231,7 +314,7 @@ public actor RecordingManager {
                     serialNumber: device.serialNumber,
                     recordingUUID: recording.uuid,
                     recordingGeneration: recording.generation,
-                    storageFormat: 3,
+                    storageFormat: recording.storageFormat,
                     uploadSessionID: material.uploadSessionID,
                     ownerRevision: material.ownerRevision,
                     transportSessionID: transportSessionID,
@@ -454,6 +537,30 @@ public actor RecordingManager {
             try await runtime.engine.cancel(id)
             await finishCancellation(id, runtime: runtime)
         }
+    }
+
+    public func cancelEncryptedUploadV2Operation(_ operationID: UUID) async throws {
+        guard activeCancellationID == operationID, activeEncryptedUploadV2Lifecycle != nil else { return }
+        try await cancelCurrentOperation()
+    }
+
+    private func readEncryptedUploadV2AuthNonce(
+        _ device: ConnectedDevice, operationID: UUID, generation: UUID, runtime: DeviceRuntime
+    ) async throws -> Data {
+        try requireActive(operationID)
+        try Task.checkCancellation()
+        try await runtime.connection.require(device, generation: generation)
+        try requireActive(operationID)
+        let nonce = try await runtime.directRead(device.id, BotaBluetoothUUIDs.authService, BotaBluetoothUUIDs.authNonce)
+        try requireActive(operationID)
+        try Task.checkCancellation()
+        try await runtime.connection.require(device, generation: generation)
+        try requireActive(operationID)
+        guard nonce.count == 16 else {
+            throw BotaSDKError(code: .invalidInput, operation: .transferRecording,
+                               retryable: false, detail: "auth nonce must contain exactly 16 bytes")
+        }
+        return nonce
     }
 
     private func consumeTransfer(
@@ -685,7 +792,7 @@ public actor RecordingManager {
     }
 
     private func requireActive(_ id: UUID) throws {
-        guard activeCancellationID == id else {
+        guard activeCancellationID == id, activeEncryptedUploadV2Lifecycle?.isCancelled != true else {
             throw facadeCancelled(operation: .transferRecording)
         }
     }
@@ -723,6 +830,8 @@ private final class EncryptedUploadV2OperationLifecycle: @unchecked Sendable {
     private var didTerminate = false
     private var completed = false
     private var engineCancellationSettled = false
+
+    var isCancelled: Bool { lock.withLock { cancellationRequested } }
 
     func accept(_ material: EncryptedUploadV2Material) -> Cleanup {
         lock.withLock {

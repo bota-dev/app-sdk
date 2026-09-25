@@ -11,6 +11,23 @@ import org.junit.Test
 
 internal class EncryptedUploadV2CodecTest {
     @Test
+    fun catalogAndContextAdditionsUseFreshRustAbi() {
+        CoreModelMapper().use { mapper ->
+            assertEquals("25020000090000000000000000000000", mapper.createEncryptedUploadV2List(9u).toHex())
+            assertEquals("6502000007000000", mapper.createEncryptedUploadV2ContextBegin(7u).toHex())
+            val snapshot = mapper.decodeEncryptedUploadV2ContextSnapshot(
+                "66020100070000000000100001010101010101010101010101010101".hexBytes(),
+            )
+            assertEquals(7u, snapshot.attemptId)
+            assertArrayEquals(ByteArray(16) { 1 }, snapshot.payload)
+            mapper.validateEncryptedUploadV2Admission("010218007f03000000040004f40010000800000010000000".hexBytes(), true)
+            assertThrows(Throwable::class.java) {
+                mapper.validateEncryptedUploadV2Admission("010218007f00000000040004f40010000800000010000000".hexBytes())
+            }
+        }
+    }
+
+    @Test
     fun everyCapabilitySelectionReadsAndHashesFresh0406Bytes() = runBlocking {
         val first = "010218007f00000000040004f40010000800000010000000".hexBytes()
         val second = "010218007f00000000040004c80008000400000002000000".hexBytes()

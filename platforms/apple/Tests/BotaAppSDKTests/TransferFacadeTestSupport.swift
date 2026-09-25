@@ -228,6 +228,7 @@ func transferRuntime(
         },
         directUnsubscribe: { _, _, characteristic in await recorder.unsubscribe(characteristic) },
         readEncryptedUploadV2Capabilities: encryptedUploadV2Capabilities,
+        validateEncryptedUploadV2Selection: { _, _, _, _ in },
         encryptedUploadV2Checkpoint: encryptedUploadV2Checkpoint,
         encryptedUploadV2MaximumWriteLength: encryptedUploadV2MaximumWriteLength,
         registerEncryptedUploadV2Material: registerEncryptedUploadV2Material,

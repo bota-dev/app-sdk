@@ -14,6 +14,23 @@ import org.junit.Test
 
 class EncryptedUploadV2CheckpointStoreTest {
     @Test
+    fun ciphertextIdentitySurvivesReopenAndHistoricalAbsenceStaysAbsent() = runTest {
+        for (withIdentity in listOf(true, false)) {
+            val journals = MemoryJournals()
+            val original = checkpoint(UUID.randomUUID(), revision = 2u).let {
+                if (withIdentity) it.copy(ciphertextLength = 4_096u, ciphertextSha256 = ByteArray(32) { 7 },
+                    checkpointIntervalBlocks = 4u) else it
+            }
+            EncryptedUploadV2CheckpointStore(journals).save(original)
+            val reopened = EncryptedUploadV2CheckpointStore(journals).load(original.uploadSessionId)!!
+            assertEquals(original.ciphertextLength, reopened.ciphertextLength)
+            assertTrue(original.ciphertextSha256.contentEquals(reopened.ciphertextSha256))
+            assertEquals(original.checkpointIntervalBlocks, reopened.checkpointIntervalBlocks)
+            assertTrue(original.coreCheckpoint.contentEquals(reopened.coreCheckpoint))
+        }
+    }
+
+    @Test
     fun replayBoundarySurvivesReopenWithoutChangingOpaqueRustBytes() = runTest {
         val journals = MemoryJournals()
         val original = checkpoint(UUID.randomUUID(), revision = 2u)
@@ -35,7 +52,7 @@ class EncryptedUploadV2CheckpointStoreTest {
         val journals = MemoryJournals()
         val original = checkpoint(UUID.randomUUID(), revision = 2u)
         EncryptedUploadV2CheckpointStore(journals).save(original)
-        val sidecar = firstCatalogSidecar(journals.values.getValue(CatalogName)).dropLast(1).toByteArray()
+        val sidecar = firstCatalogSidecar(journals.values.getValue(CatalogName)).dropLast(2).toByteArray()
         ByteBuffer.wrap(sidecar).putInt(4, 1)
         journals.values[CatalogName] = ByteBuffer.allocate(16 + sidecar.size)
             .putInt(0x4256324c).putInt(1).putInt(1).putInt(sidecar.size).put(sidecar).array()
