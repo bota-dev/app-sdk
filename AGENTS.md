@@ -24,6 +24,15 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 
 ## Current Authority
 
+- Unpublished Demo migration adds mixed legacy/v2 catalog discovery, native
+  upload-context relay, exact-operation cancellation, scoped native nonce
+  access and structural signed-owner replacement checks. See
+  `docs/parity/v2-demo-*.md`. Applications own backend HTTP; no opaque upload
+  material or recording bytes cross RN. Historical checkpoints without
+  ciphertext identity permit same-owner resume only. Matching native artifacts
+  and a new application binary are required; no published beta or physical
+  acceptance is implied and v2 compatibility flags remain disabled.
+
 - Unpublished maintenance parity work targets reference commit
   `318974f925a573cf04b0d624978bee04784af09b`, separately from the immutable
   0.0.65 public API baseline. See [maintenance parity](docs/parity/README.md)

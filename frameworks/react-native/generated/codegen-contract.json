@@ -1141,6 +1141,34 @@
                 "typeAnnotation": {
                   "type": "StringTypeAnnotation"
                 }
+              },
+              {
+                "name": "startedAtMs",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "durationMs",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "plaintextLength",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "storageFormat",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
               }
             ]
           },
@@ -1366,6 +1394,34 @@
                 "optional": true,
                 "typeAnnotation": {
                   "type": "BooleanTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativePendingRecording": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "profile",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "legacy",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeDeviceRecording"
+                }
+              },
+              {
+                "name": "encrypted",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeEncryptedUploadV2Recording"
                 }
               }
             ]
@@ -3453,6 +3509,77 @@
               }
             },
             {
+              "name": "listPendingRecordings",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "ArrayTypeAnnotation",
+                    "elementType": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativePendingRecording"
+                    }
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "cancelEncryptedRecordingV2",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "operationId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "releaseEncryptedUploadV2Material",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "materialRegistrationId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
               "name": "resolveEncryptedUploadV2Profile",
               "optional": false,
               "typeAnnotation": {
@@ -3915,11 +4042,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "c5cf6b1790932c7d8e3db40828c35528d00c2d9767a6344e84a4dc4092b4bc87"
+        "sha256": "b63ae90d7b856526c6cff3d8f53d5705935d5dafceac79101a05651b244f791e"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "04e6ba09881afe6a429e39438f512a1f164dfd6e47a992b4fe486ed924c5ad05"
+        "sha256": "c6016f6841d7450acc24a9d5f5d74e4561f1eec1d7d5cdb04bc760c075d830dc"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -3931,23 +4058,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "5f4f551857bc1c8d4c616d01f1c064a93472e90e66a913441acbf9e3a8593612"
+        "sha256": "e16fbdc9f13585c244d6d75064a78c34bb942ab992ca3eeeebf5b80f1285eb62"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "f868d979c724908bee8e5b9f90301feaaabb521b04c4dad7a06cd575b4f93f65"
+        "sha256": "353536b9ec5e64a723cf9986e39707129dc9e5cc4fc40a16d4623152f69d9611"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "18260dda755c82802822a96b94f7b625b19f3172e03000c3ce3d515e95ff3fcc"
+        "sha256": "57bbdd0381e69aa6396c660234c9e26f8f7c89aaaba7e216a957b946d904899c"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "5f4f551857bc1c8d4c616d01f1c064a93472e90e66a913441acbf9e3a8593612"
+        "sha256": "e16fbdc9f13585c244d6d75064a78c34bb942ab992ca3eeeebf5b80f1285eb62"
       }
     ]
   },
-  "contractDigest": "cb63f294f674e0e4e0bcdfab4473d494458e411c8f607318cea82944a06f8b72"
+  "contractDigest": "8c3375f1cb7b9f4997e2058d4cf4dafa4865c79a32010cb22670576a0e39a041"
 }

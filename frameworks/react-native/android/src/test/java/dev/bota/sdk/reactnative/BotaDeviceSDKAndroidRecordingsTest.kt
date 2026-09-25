@@ -33,13 +33,199 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import okhttp3.Request
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertArrayEquals
 import org.junit.Test
 
 class BotaDeviceSDKAndroidRecordingsTest {
+    @Test
+    fun pendingCatalogPreservesMixedProfilesAndExactDecimalMetadata() = runTest {
+        val encrypted = encryptedRecording()
+        val client = TestAndroidRecordingClient(recording(), context(encrypted))
+        val recordings = BotaDeviceSDKAndroidRecordings(client)
+        val entries = recordings.listPendingRecordings(connectedDevice())
+        assertEquals(2, entries.size)
+        assertEquals(recording(), (entries[0] as dev.bota.sdk.PendingRecording.Legacy).recording)
+        val metadata = (entries[1] as dev.bota.sdk.PendingRecording.EncryptedV2).recording.toBridgeValue()
+        assertEquals(encrypted.uuid, metadata.uuid)
+        assertEquals("18446744073709551615", metadata.ciphertextLength)
+        assertEquals("9007199254740993", metadata.startedAtMs)
+        assertEquals("9007199254740994", metadata.durationMs)
+        assertEquals("9007199254740995", metadata.plaintextLength)
+        assertEquals(3, metadata.storageFormat)
+        assertEquals("5a".repeat(32), metadata.ciphertextSha256)
+        assertTrue(metadata.javaClass.declaredFields.none { it.type == ByteArray::class.java })
+    }
+
+    @Test
+    fun preCancelledEncryptedOperationNeverEntersNativeSdk() = runTest {
+        val client = TestAndroidRecordingClient(recording(), context())
+        val recordings = BotaDeviceSDKAndroidRecordings(client)
+        recordings.cancelEncryptedRecordingV2("pre-cancelled")
+        val outcome = runCatching {
+            recordings.syncEncryptedRecordingV2(connectedDevice(), encryptedRecording(), "pre-cancelled", {}, {})
+        }
+        assertTrue(outcome.exceptionOrNull() is CancellationException)
+        assertTrue(client.encryptedOperationIds.isEmpty())
+        assertTrue(client.cancelledEncryptedIds.isEmpty())
+    }
+
+    @Test
+    fun cancellationWhileProfilePendingJoinsExactNativeCleanup() = runTest {
+        checkPendingCancellation(bulk = false)
+    }
+
+    @Test
+    fun bulkCancellationWhileProfilePendingJoinsExactNativeCleanup() = runTest {
+        checkPendingCancellation(bulk = true)
+    }
+
+    private suspend fun kotlinx.coroutines.test.TestScope.checkPendingCancellation(bulk: Boolean) {
+        val client = TestAndroidRecordingClient(recording(), context())
+        val recordings = BotaDeviceSDKAndroidRecordings(client)
+        val requested = CompletableDeferred<BotaEncryptedUploadV2ProfileRequest>()
+        val cleanupEntered = CompletableDeferred<Unit>()
+        val cleanupReleased = CompletableDeferred<Unit>()
+        client.encryptedFinally = {
+            withContext(NonCancellable) { cleanupEntered.complete(Unit); cleanupReleased.await() }
+        }
+        val sync = launch {
+            runCatching { recordings.syncEncryptedRecordingV2(connectedDevice(), encryptedRecording(), "pending",
+                { requested.complete(it) }, {}) }
+        }
+        withTimeout(5_000) { requested.await() }
+        val cancel = async {
+            if (bulk) recordings.cancelAll() else recordings.cancelEncryptedRecordingV2("pending")
+        }
+        withTimeout(5_000) { cleanupEntered.await() }
+        assertFalse(cancel.isCompleted)
+        cleanupReleased.complete(Unit)
+        withTimeout(5_000) { cancel.await() }
+        assertTrue(sync.isCompleted)
+        assertEquals(client.encryptedOperationIds, client.cancelledEncryptedIds)
+        assertTrue(runCatching { BotaDeviceSDKEncryptedUploadV2Materials.readAuthNonce("pending") }.isFailure)
+    }
+
+    @Test
+    fun selfCancellationCompletesNativeCleanupWithoutJoiningItsOwnJob() = runTest {
+        val client = TestAndroidRecordingClient(recording(), context())
+        val recordings = BotaDeviceSDKAndroidRecordings(client)
+        var cleanupFinished = false
+        client.cancelEncrypted = { yield(); cleanupFinished = true }
+        client.beforeEncrypted = { recordings.cancelEncryptedRecordingV2("self") }
+        val sync = launch {
+            runCatching { recordings.syncEncryptedRecordingV2(connectedDevice(), encryptedRecording(), "self", {}, {}) }
+        }
+        withTimeout(5_000) { sync.join() }
+        assertTrue(cleanupFinished)
+        assertEquals(client.encryptedOperationIds, client.cancelledEncryptedIds)
+    }
+
+    @Test
+    fun resolvedMaterialIsReleasedWhenCancellationWinsBeforeProviderDelivery() = runTest {
+        var releases = 0
+        val selected = material { releases++ }
+        val registration = BotaDeviceSDKEncryptedUploadV2Materials.register(selected)
+        val client = TestAndroidRecordingClient(recording(), context())
+        val recordings = BotaDeviceSDKAndroidRecordings(client)
+        val requested = CompletableDeferred<BotaEncryptedUploadV2ProfileRequest>()
+        val sync = launch {
+            runCatching { recordings.syncEncryptedRecordingV2(connectedDevice(), encryptedRecording(), "delivery",
+                { requested.complete(it) }, {}) }
+        }
+        val request = withTimeout(5_000) { requested.await() }
+        recordings.resolveEncryptedUploadV2Profile(request.requestId, "encrypted_upload_v2",
+            selected.uploadSessionId.toString(), selected.ownerRevision, "v2_required", registration)
+        sync.cancel()
+        withTimeout(5_000) { sync.join() }
+        assertEquals(1, releases)
+        assertNull(client.encryptedMaterialId)
+        assertNull(BotaDeviceSDKEncryptedUploadV2Materials.remove(registration))
+    }
+
+    @Test
+    fun lateProfileResolutionAndReleaseAreIdempotentAndDoNotRetainMaterial() = runTest {
+        var releases = 0
+        val selected = material { releases++ }
+        val registration = BotaDeviceSDKEncryptedUploadV2Materials.register(selected)
+        val recordings = BotaDeviceSDKAndroidRecordings(TestAndroidRecordingClient(recording(), context()))
+        val outcome = runCatching { recordings.resolveEncryptedUploadV2Profile("obsolete", "encrypted_upload_v2",
+            selected.uploadSessionId.toString(), selected.ownerRevision, "v2_required", registration) }
+        assertTrue(outcome.isFailure)
+        assertEquals(1, releases)
+        BotaDeviceSDKEncryptedUploadV2Materials.release(registration)
+        BotaDeviceSDKEncryptedUploadV2Materials.release(registration)
+        assertEquals(1, releases)
+        assertNull(BotaDeviceSDKEncryptedUploadV2Materials.remove(registration))
+    }
+
+    @Test
+    fun nonceLeaseEndsOnRejectOrResolveAndRejectsAnInFlightStaleRead() = runTest {
+        for (resolve in listOf(false, true)) {
+            val reading = CompletableDeferred<Unit>()
+            val nonceReady = CompletableDeferred<ByteArray>()
+            val client = TestAndroidRecordingClient(recording(), context(readNonce = {
+                reading.complete(Unit); nonceReady.await()
+            }))
+            val recordings = BotaDeviceSDKAndroidRecordings(client)
+            val requested = CompletableDeferred<BotaEncryptedUploadV2ProfileRequest>()
+            val operationId = "nonce-$resolve"
+            val sync = launch {
+                runCatching { recordings.syncEncryptedRecordingV2(connectedDevice(), encryptedRecording(), operationId,
+                    { requested.complete(it) }, {}) }
+            }
+            val request = withTimeout(5_000) { requested.await() }
+            val read = async { runCatching { BotaDeviceSDKEncryptedUploadV2Materials.readAuthNonce(operationId) } }
+            withTimeout(5_000) { reading.await() }
+            if (resolve) {
+                val selected = material()
+                recordings.resolveEncryptedUploadV2Profile(request.requestId, "encrypted_upload_v2",
+                    selected.uploadSessionId.toString(), selected.ownerRevision, "v2_required",
+                    BotaDeviceSDKEncryptedUploadV2Materials.register(selected))
+            } else recordings.rejectEncryptedUploadV2Profile(request.requestId, "application_material_rejected")
+            nonceReady.complete(ByteArray(16))
+            assertTrue(withTimeout(5_000) { read.await() }.isFailure)
+            assertTrue(runCatching { BotaDeviceSDKEncryptedUploadV2Materials.readAuthNonce(operationId) }.isFailure)
+            withTimeout(5_000) { sync.join() }
+        }
+    }
+
+    @Test
+    fun registryNonceIsCopiedAndCannotSurviveAnOperationLeaseReplacement() = runTest {
+        val nonce = ByteArray(16) { 5 }
+        BotaDeviceSDKEncryptedUploadV2Materials.registerContext("lease", context(readNonce = { nonce }))
+        try {
+            val value = BotaDeviceSDKEncryptedUploadV2Materials.readAuthNonce("lease")
+            value.fill(1)
+            assertArrayEquals(ByteArray(16) { 5 }, nonce)
+            val readStarted = CompletableDeferred<Unit>()
+            val finishRead = CompletableDeferred<Unit>()
+            BotaDeviceSDKEncryptedUploadV2Materials.removeContext("lease")
+            BotaDeviceSDKEncryptedUploadV2Materials.registerContext("lease", context(readNonce = {
+                readStarted.complete(Unit); finishRead.await(); nonce
+            }))
+            val read = async { runCatching { BotaDeviceSDKEncryptedUploadV2Materials.readAuthNonce("lease") } }
+            withTimeout(5_000) { readStarted.await() }
+            BotaDeviceSDKEncryptedUploadV2Materials.removeContext("lease")
+            BotaDeviceSDKEncryptedUploadV2Materials.registerContext("lease", context(readNonce = { ByteArray(16) { 7 } }))
+            finishRead.complete(Unit)
+            assertTrue(withTimeout(5_000) { read.await() }.isFailure)
+            assertArrayEquals(ByteArray(16) { 7 }, BotaDeviceSDKEncryptedUploadV2Materials.readAuthNonce("lease"))
+        } finally { BotaDeviceSDKEncryptedUploadV2Materials.removeContext("lease") }
+    }
+
     @Test
     fun encryptedUploadV2UsesOneShotNativeMaterialAndSafeBridgeValues() = runTest {
         val recordingUuid = "00112233-4455-6677-8899-aabbccddeeff"
@@ -98,14 +284,16 @@ class BotaDeviceSDKAndroidRecordingsTest {
             "operation-1",
             onProfileRequest = { request ->
                 requests += request
-                recordings.resolveEncryptedUploadV2Profile(
-                    request.requestId,
-                    "encrypted_upload_v2",
-                    uploadSessionId.toString(),
-                    2u,
-                    "v2_required",
-                    registrationId,
-                )
+                launch {
+                    recordings.resolveEncryptedUploadV2Profile(
+                        request.requestId,
+                        "encrypted_upload_v2",
+                        uploadSessionId.toString(),
+                        2u,
+                        "v2_required",
+                        registrationId,
+                    )
+                }
             },
             onProgress = progress::add,
         )
@@ -281,6 +469,23 @@ class BotaDeviceSDKAndroidRecordingsTest {
         isEncrypted = true,
     )
 
+    private fun encryptedRecording() = EncryptedUploadV2Recording(
+        "00112233-4455-6677-8899-aabbccddeeff", 4u, ULong.MAX_VALUE, ByteArray(32) { 0x5a },
+        9007199254740993u, 9007199254740994u, 9007199254740995u, 3u,
+    )
+
+    private fun context(recording: EncryptedUploadV2Recording = encryptedRecording(),
+        readNonce: suspend () -> ByteArray = { ByteArray(16) { 6 } },
+    ) = EncryptedUploadV2ProviderContext(recording,
+        EncryptedUploadV2CapabilitySnapshot(ByteArray(24), ByteArray(32),
+            EncryptedUploadV2Capabilities(0x37fu, 580u, 580u, 128u, 8u, 1u, 8u)), null, readNonce)
+
+    private fun material(cancel: suspend () -> Unit = {}) = EncryptedUploadV2Material(
+        "native-material", encryptedRecording().uuid, UUID.fromString("10213243-5465-7687-98a9-bacbdcedfe0f"),
+        2u, EncryptedUploadV2SecurityPolicy.V2Required, ByteArray(408),
+        { Request.Builder().url("https://native.invalid/stage").build() }, { _, _ -> }, {}, { ByteArray(336) }, cancel,
+    )
+
     private class TestAndroidRecordingClient(
         private val recording: DeviceRecording,
         private val encryptedUploadV2Context: EncryptedUploadV2ProviderContext? = null,
@@ -289,9 +494,18 @@ class BotaDeviceSDKAndroidRecordingsTest {
         var cancelled = false
         val sinkIds = mutableListOf<String>()
         var encryptedMaterialId: String? = null
+        val encryptedOperationIds = mutableListOf<UUID>()
+        val cancelledEncryptedIds = mutableListOf<UUID>()
+        var beforeEncrypted: suspend () -> Unit = {}
+        var encryptedFinally: suspend () -> Unit = {}
+        var cancelEncrypted: suspend () -> Unit = {}
 
         override suspend fun listRecordings(device: ConnectedDevice): List<DeviceRecording> =
             listOf(recording)
+
+        override suspend fun listPendingRecordings(device: ConnectedDevice): List<dev.bota.sdk.PendingRecording> =
+            listOfNotNull(dev.bota.sdk.PendingRecording.Legacy(recording),
+                encryptedUploadV2Context?.let { dev.bota.sdk.PendingRecording.EncryptedV2(it.recording) })
 
         override fun syncRecording(
             device: ConnectedDevice,
@@ -308,11 +522,22 @@ class BotaDeviceSDKAndroidRecordingsTest {
         override suspend fun syncEncryptedRecordingV2(
             device: ConnectedDevice,
             recording: EncryptedUploadV2Recording,
+            operationId: UUID,
             provider: EncryptedUploadV2ProfileProvider,
         ) {
+            encryptedOperationIds += operationId
             encryptedUploadV2Error?.let { throw it }
             val context = requireNotNull(encryptedUploadV2Context)
-            encryptedMaterialId = provider.select(context).materialId
+            try {
+                beforeEncrypted()
+                encryptedMaterialId = provider.select(context).materialId
+            } finally { encryptedFinally() }
+        }
+
+        override suspend fun cancelEncryptedRecordingV2(operationId: UUID) {
+            cancelledEncryptedIds += operationId
+            cancelEncrypted()
+            cancelled = true
         }
 
         override suspend fun confirmRecording(device: ConnectedDevice, recordingUuid: String) = Unit

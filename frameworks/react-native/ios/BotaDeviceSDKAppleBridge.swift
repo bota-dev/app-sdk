@@ -801,6 +801,48 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
+    @objc(listPendingRecordingsWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:completion:)
+    public func listPendingRecordings(
+        id: String, serialNumber: String, deviceType: String, firmwareVersion: String,
+        hardwareRevision: String?, isProvisioned: Bool, connectionState: String, mtu: Double,
+        completion: @escaping @Sendable ([[String: Any]]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let values = try await recordings.listPendingRecordings(Self.connectedDevice(
+                    id: id, serialNumber: serialNumber, deviceType: deviceType,
+                    firmwareVersion: firmwareVersion, hardwareRevision: hardwareRevision,
+                    isProvisioned: isProvisioned, connectionState: connectionState, mtu: mtu
+                ))
+                completion(values.map { value in
+                    switch value {
+                    case let .legacy(recording):
+                        ["profile": "legacy", "legacy": Self.recording(recording)]
+                    case let .encryptedV2(recording):
+                        ["profile": "encrypted_upload_v2", "encrypted": BotaDeviceSDKAppleRecordings.encryptedUploadV2Recording(recording)]
+                    }
+                }, nil)
+            } catch { completion(nil, error as NSError) }
+        }
+    }
+
+    @objc(cancelEncryptedRecordingV2WithOperationID:completion:)
+    public func cancelEncryptedRecordingV2(
+        operationID: String, completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do { try await recordings.cancelEncryptedRecordingV2(operationID); completion(nil) }
+            catch { completion(error as NSError) }
+        }
+    }
+
+    @objc(releaseEncryptedUploadV2MaterialWithRegistrationID:completion:)
+    public func releaseEncryptedUploadV2Material(
+        registrationID: String, completion: @escaping @Sendable () -> Void
+    ) {
+        Task { await BotaDeviceSDKEncryptedUploadV2Materials.release(registrationID); completion() }
+    }
+
     @objc(syncRecordingWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:recordingUUID:startedAtMilliseconds:durationMilliseconds:fileSize:codec:isEncrypted:sinkID:onProgress:completion:)
     public func syncRecording(
         id: String,
@@ -867,7 +909,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
-    @objc(syncEncryptedRecordingV2WithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:recordingUUID:generation:ciphertextLength:ciphertextSHA256:operationID:onProfileRequest:onProgress:completion:)
+    @objc(syncEncryptedRecordingV2WithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:recordingUUID:generation:ciphertextLength:ciphertextSHA256:startedAtMs:durationMs:plaintextLength:storageFormat:operationID:onProfileRequest:onProgress:completion:)
     public func syncEncryptedRecordingV2(
         id: String,
         serialNumber: String,
@@ -881,6 +923,10 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         generation: Double,
         ciphertextLength: String,
         ciphertextSHA256: String,
+        startedAtMs: String?,
+        durationMs: String?,
+        plaintextLength: String?,
+        storageFormat: NSNumber?,
         operationID: String,
         onProfileRequest: @escaping @Sendable ([String: Any]) -> Void,
         onProgress: @escaping @Sendable ([String: Any]) -> Void,
@@ -896,6 +942,9 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                     throw BotaDeviceSDKAppleBridgeInputError.invalidUnsignedInteger
                 }
                 let digest = try Self.sha256Data(ciphertextSHA256)
+                guard let format = UInt8(exactly: try Self.unsignedInteger(storageFormat?.doubleValue ?? 3)) else {
+                    throw BotaDeviceSDKAppleBridgeInputError.invalidUnsignedInteger
+                }
                 try await recordings.syncEncryptedRecordingV2(
                     Self.connectedDevice(
                         id: id,
@@ -911,7 +960,11 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                         uuid: recordingUUID,
                         generation: generationValue,
                         ciphertextLength: length,
-                        ciphertextSHA256: digest
+                        ciphertextSHA256: digest,
+                        startedAtMs: try Self.catalogDecimal(startedAtMs),
+                        durationMs: try Self.catalogDecimal(durationMs),
+                        plaintextLength: try Self.catalogDecimal(plaintextLength),
+                        storageFormat: format
                     ),
                     operationID: operationID,
                     onProfileRequest: onProfileRequest,
@@ -922,6 +975,14 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                 completion(error as NSError)
             }
         }
+    }
+
+    private static func catalogDecimal(_ text: String?) throws -> UInt64 {
+        guard let text else { return 0 }
+        guard let value = UInt64(text), String(value) == text else {
+            throw BotaDeviceSDKAppleBridgeInputError.invalidUnsignedInteger
+        }
+        return value
     }
 
     @objc(resolveEncryptedUploadV2ProfileWithRequestID:profile:uploadSessionID:ownerRevision:securityPolicy:materialRegistrationID:completion:)

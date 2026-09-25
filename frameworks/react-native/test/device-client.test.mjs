@@ -1027,7 +1027,8 @@ test('encrypted upload v2 selects only an opaque native registration and maps pr
     (value) => progress.push(value)
   );
 
-  assert.deepEqual(contexts, [encryptedUploadV2ProviderContext]);
+  const operationId = fixture.calls[0][3];
+  assert.deepEqual(contexts, [{ operationId, ...encryptedUploadV2ProviderContext }]);
   assert.deepEqual(progress, [
     {
       recordingUuid: encryptedUploadV2Recording.uuid,
@@ -1050,7 +1051,6 @@ test('encrypted upload v2 selects only an opaque native registration and maps pr
       totalBytes: '4096',
     },
   ]);
-  const operationId = fixture.calls[0][3];
   assert.match(operationId, /^[0-9a-f-]{36}$/);
   assert.deepEqual(fixture.calls, [
     [

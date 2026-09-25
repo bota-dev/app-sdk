@@ -3,7 +3,113 @@ import Foundation
 import XCTest
 @testable import BotaDeviceSDKAppleAdapter
 
+private actor BridgeNonceGate {
+    private var continuation: CheckedContinuation<Data, Never>?
+    private var released = false
+    func read() async -> Data {
+        if released { return Data(repeating: 1, count: 16) }
+        return await withCheckedContinuation { continuation = $0 }
+    }
+    func release() {
+        released = true
+        continuation?.resume(returning: Data(repeating: 1, count: 16))
+        continuation = nil
+    }
+}
+
+private func bridgeV2Context(
+    nonce: @escaping @Sendable () async throws -> Data
+) -> EncryptedUploadV2ProviderContext {
+    .init(
+        recording: .init(uuid: "00112233-4455-6677-8899-aabbccddeeff", generation: 4,
+                         ciphertextLength: 4_096, ciphertextSHA256: Data(repeating: 0x5a, count: 32)),
+        capability: .init(rawValue: Data(), sha256: Data(repeating: 0x6b, count: 32),
+                          capabilities: .init(flags: 0x17f, maximumSignedBlobBytes: 1_024,
+                            maximumManifestBytes: 1_024, maximumDataPayloadBytes: 4_096,
+                            maximumWindowPackets: 8, durableCheckpointIntervalBlocks: 256,
+                            maximumMissingSequences: 16)),
+        checkpoint: nil, readAuthNonce: nonce
+    )
+}
+
 final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
+    func testV2CancellationStopsExactPendingProviderAndClosesNonceContext() async throws {
+        try await checkV2Cancellation(bulk: false)
+    }
+
+    func testV2BulkCancellationStopsExactPendingProviderAndClosesNonceContext() async throws {
+        try await checkV2Cancellation(bulk: true)
+    }
+
+    private func checkV2Cancellation(bulk: Bool) async throws {
+        let context = bridgeV2Context { Data(repeating: 1, count: 16) }
+        let client = TestAppleRecordingClient(
+            recording: DeviceRecording(uuid: "legacy", startedAt: .distantPast, durationMs: 0,
+                                       fileSizeBytes: 0, codec: .known(.opus16k), isEncrypted: false),
+            encryptedUploadV2Context: context
+        )
+        let recordings = BotaDeviceSDKAppleRecordings(client: client)
+        let requested = expectation(description: "native profile requested")
+        let operationID = UUID().uuidString
+        let task = Task {
+            try await recordings.syncEncryptedRecordingV2(
+                connectedDevice(), recording: context.recording, operationID: operationID,
+                onProfileRequest: { _ in requested.fulfill() }, onProgress: { _ in }
+            )
+        }
+        await fulfillment(of: [requested], timeout: 5)
+        let nonce = try await BotaDeviceSDKEncryptedUploadV2Materials.readAuthNonce(operationID)
+        XCTAssertEqual(nonce, Data(repeating: 1, count: 16))
+        if bulk { await recordings.cancelAll() }
+        else { try await recordings.cancelEncryptedRecordingV2(operationID) }
+        do { try await task.value; XCTFail("cancelled provider must not complete") }
+        catch { XCTAssertTrue(error is CancellationError) }
+        do {
+            _ = try await BotaDeviceSDKEncryptedUploadV2Materials.readAuthNonce(operationID)
+            XCTFail("closed operation must not read a nonce")
+        } catch {}
+    }
+
+    func testV2NonceReadRejectsRemovedAndReplacedLease() async throws {
+        let entered = expectation(description: "nonce read started")
+        let gate = BridgeNonceGate()
+        let operationID = UUID().uuidString
+        try BotaDeviceSDKEncryptedUploadV2Materials.registerContext(operationID, context: bridgeV2Context {
+            entered.fulfill()
+            return await gate.read()
+        })
+        let task = Task { try await BotaDeviceSDKEncryptedUploadV2Materials.readAuthNonce(operationID) }
+        await fulfillment(of: [entered], timeout: 5)
+        BotaDeviceSDKEncryptedUploadV2Materials.removeContext(operationID)
+        try BotaDeviceSDKEncryptedUploadV2Materials.registerContext(
+            operationID, context: bridgeV2Context { Data(repeating: 2, count: 16) }
+        )
+        await gate.release()
+        do { _ = try await task.value; XCTFail("replacement lease must reject old nonce") }
+        catch {}
+        BotaDeviceSDKEncryptedUploadV2Materials.removeContext(operationID)
+    }
+
+    func testV2PreCancelledOperationNeverRequestsMaterial() async throws {
+        let context = bridgeV2Context { Data(repeating: 1, count: 16) }
+        let client = TestAppleRecordingClient(
+            recording: DeviceRecording(uuid: "legacy", startedAt: .distantPast, durationMs: 0,
+                                       fileSizeBytes: 0, codec: .known(.opus16k), isEncrypted: false),
+            encryptedUploadV2Context: context
+        )
+        let recordings = BotaDeviceSDKAppleRecordings(client: client)
+        let operationID = UUID().uuidString
+        try await recordings.cancelEncryptedRecordingV2(operationID)
+        do {
+            try await recordings.syncEncryptedRecordingV2(
+                connectedDevice(), recording: context.recording, operationID: operationID,
+                onProfileRequest: { _ in XCTFail("pre-cancelled operation requested material") },
+                onProgress: { _ in XCTFail("pre-cancelled operation emitted progress") }
+            )
+            XCTFail("pre-cancelled operation must fail")
+        } catch { XCTAssertTrue(error is CancellationError) }
+    }
+
     func testEncryptedUploadV2UsesOneShotNativeMaterialAndSafeBridgeValues() async throws {
         let recordingUUID = "00112233-4455-6677-8899-aabbccddeeff"
         let uploadSessionID = UUID(uuidString: "10213243-5465-7687-98a9-bacbdcedfe0f")!
@@ -99,6 +205,7 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
         XCTAssertEqual(Set(request.keys), ["requestId", "operationId", "recording", "capability", "checkpoint"])
         XCTAssertEqual(Set((request["recording"] as! [String: Any]).keys), [
             "uuid", "generation", "ciphertextLength", "ciphertextSha256",
+            "startedAtMs", "durationMs", "plaintextLength", "storageFormat",
         ])
         let capability = request["capability"] as! [String: Any]
         XCTAssertEqual(Set(capability.keys), [
@@ -438,6 +545,12 @@ private actor TestAppleRecordingClient: BotaDeviceSDKAppleRecordingClient {
         [recording]
     }
 
+    func listPendingRecordings(_ device: ConnectedDevice) async throws -> [PendingRecording] {
+        [.legacy(recording)]
+    }
+
+    func cancelEncryptedUploadV2Operation(_ operationID: UUID) async throws { cancelled = true }
+
     func syncRecording(
         _ device: ConnectedDevice,
         recording: DeviceRecording,
@@ -461,6 +574,7 @@ private actor TestAppleRecordingClient: BotaDeviceSDKAppleRecordingClient {
     func syncEncryptedRecordingV2(
         _ device: ConnectedDevice,
         recording: EncryptedUploadV2Recording,
+        operationID: UUID,
         provider: @escaping EncryptedUploadV2ProfileProvider
     ) async throws {
         if let encryptedUploadV2Error { throw encryptedUploadV2Error }

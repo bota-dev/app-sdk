@@ -19,6 +19,8 @@ export type {
   BotaEncryptedUploadV2ProgressPhase,
   BotaEncryptedUploadV2ProviderContext,
   BotaEncryptedUploadV2Recording,
+  BotaEncryptedUploadV2PendingRecording,
+  BotaEncryptedUploadV2SyncOptions,
   BotaEncryptedUploadV2SecurityPolicy,
   BotaDeprovisionResult,
   BotaDeviceSDKDeviceClient,

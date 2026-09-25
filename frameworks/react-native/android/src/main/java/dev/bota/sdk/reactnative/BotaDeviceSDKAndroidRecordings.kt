@@ -11,6 +11,7 @@ import dev.bota.sdk.EncryptedUploadV2Material
 import dev.bota.sdk.EncryptedUploadV2ProfileProvider
 import dev.bota.sdk.EncryptedUploadV2ProviderContext
 import dev.bota.sdk.EncryptedUploadV2Recording
+import dev.bota.sdk.PendingRecording
 import dev.bota.sdk.RecordingSyncEvent
 import dev.bota.sdk.RecordingTransferMetadata
 import dev.bota.sdk.UploadOwnershipEvent
@@ -28,11 +29,19 @@ import dev.bota.sdk.model.StreamingUploadMethod
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 
 internal interface BotaDeviceSDKAndroidRecordingClient {
     suspend fun listRecordings(device: ConnectedDevice): List<DeviceRecording>
+    suspend fun listPendingRecordings(device: ConnectedDevice): List<PendingRecording>
 
     fun syncRecording(
         device: ConnectedDevice,
@@ -45,8 +54,11 @@ internal interface BotaDeviceSDKAndroidRecordingClient {
     suspend fun syncEncryptedRecordingV2(
         device: ConnectedDevice,
         recording: EncryptedUploadV2Recording,
+        operationId: UUID,
         provider: EncryptedUploadV2ProfileProvider,
     )
+
+    suspend fun cancelEncryptedRecordingV2(operationId: UUID)
 
     suspend fun confirmRecording(device: ConnectedDevice, recordingUuid: String)
 
@@ -90,6 +102,10 @@ internal data class BotaEncryptedUploadV2Recording(
     val generation: UInt,
     val ciphertextLength: String,
     val ciphertextSha256: String,
+    val startedAtMs: String,
+    val durationMs: String,
+    val plaintextLength: String,
+    val storageFormat: Int,
 )
 
 internal data class BotaEncryptedUploadV2Capability(
@@ -200,11 +216,15 @@ internal fun BotaEncryptedUploadV2Progress.toWritableMap(): WritableMap = Argume
     protocolStatus?.let { putDouble("protocolStatus", it.toDouble()) }
 }
 
-private fun BotaEncryptedUploadV2Recording.toWritableMap(): WritableMap = Arguments.createMap().apply {
+internal fun BotaEncryptedUploadV2Recording.toWritableMap(): WritableMap = Arguments.createMap().apply {
     putString("uuid", uuid)
     putDouble("generation", generation.toDouble())
     putString("ciphertextLength", ciphertextLength)
     putString("ciphertextSha256", ciphertextSha256)
+    putString("startedAtMs", startedAtMs)
+    putString("durationMs", durationMs)
+    putString("plaintextLength", plaintextLength)
+    putInt("storageFormat", storageFormat)
 }
 
 private fun BotaEncryptedUploadV2Capability.toWritableMap(): WritableMap = Arguments.createMap().apply {
@@ -241,6 +261,9 @@ internal class BotaDeviceSDKSharedAndroidRecordingClient(
     override suspend fun listRecordings(device: ConnectedDevice): List<DeviceRecording> =
         client.recordings.listRecordings(device)
 
+    override suspend fun listPendingRecordings(device: ConnectedDevice): List<PendingRecording> =
+        client.recordings.listPendingRecordings(device)
+
     override fun syncRecording(
         device: ConnectedDevice,
         recording: DeviceRecording,
@@ -258,9 +281,14 @@ internal class BotaDeviceSDKSharedAndroidRecordingClient(
     override suspend fun syncEncryptedRecordingV2(
         device: ConnectedDevice,
         recording: EncryptedUploadV2Recording,
+        operationId: UUID,
         provider: EncryptedUploadV2ProfileProvider,
     ) {
-        client.recordings.syncEncryptedRecordingV2(device, recording, provider)
+        client.recordings.syncEncryptedRecordingV2(device, recording, operationId, provider)
+    }
+
+    override suspend fun cancelEncryptedRecordingV2(operationId: UUID) {
+        client.recordings.cancelEncryptedRecordingV2(operationId)
     }
 
     override suspend fun confirmRecording(device: ConnectedDevice, recordingUuid: String) {
@@ -316,11 +344,17 @@ internal class BotaDeviceSDKAndroidRecordings(
         CompletableDeferred<StreamingUploadDestination>
     >()
     private data class EncryptedUploadV2Request(
+        val operationId: String,
         val recording: EncryptedUploadV2Recording,
         val material: CompletableDeferred<EncryptedUploadV2Material>,
-    )
+    ) {
+        @Volatile var selectedMaterial: EncryptedUploadV2Material? = null
+    }
     private val encryptedUploadV2Requests =
         ConcurrentHashMap<String, EncryptedUploadV2Request>()
+    private data class EncryptedUploadV2Operation(val id: UUID, val job: Job)
+    private val encryptedUploadV2Operations = ConcurrentHashMap<String, EncryptedUploadV2Operation>()
+    private val cancelledEncryptedUploadV2Operations = ConcurrentHashMap.newKeySet<String>()
     private val finalizeRequests = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
     @Volatile private var activeStreamingSessionId: String? = null
 
@@ -333,6 +367,31 @@ internal class BotaDeviceSDKAndroidRecordings(
 
     suspend fun listRecordings(device: ConnectedDevice): List<DeviceRecording> =
         client.listRecordings(device)
+
+    suspend fun listPendingRecordings(device: ConnectedDevice): List<PendingRecording> =
+        client.listPendingRecordings(device)
+
+    suspend fun cancelEncryptedRecordingV2(operationId: String) {
+        val caller = currentCoroutineContext().job
+        cancelledEncryptedUploadV2Operations.add(operationId)
+        val operation = encryptedUploadV2Operations[operationId]
+        operation?.job?.cancel()
+        encryptedUploadV2Requests.entries.forEach { (id, request) ->
+            if (request.operationId == operationId && encryptedUploadV2Requests.remove(id, request)) {
+                request.material.completeExceptionally(CancellationException())
+            }
+        }
+        BotaDeviceSDKEncryptedUploadV2Materials.removeContext(operationId)
+        if (operation != null) {
+            withContext(NonCancellable) {
+                try {
+                    client.cancelEncryptedRecordingV2(operation.id)
+                } finally {
+                    if (operation.job !== caller) operation.job.join()
+                }
+            }
+        }
+    }
 
     suspend fun syncRecording(
         device: ConnectedDevice,
@@ -364,10 +423,16 @@ internal class BotaDeviceSDKAndroidRecordings(
         onProfileRequest: (BotaEncryptedUploadV2ProfileRequest) -> Unit,
         onProgress: (BotaEncryptedUploadV2Progress) -> Unit,
     ) {
+        val operation = EncryptedUploadV2Operation(UUID.randomUUID(), currentCoroutineContext().job)
+        check(encryptedUploadV2Operations.putIfAbsent(operationId, operation) == null) {
+            "encrypted upload v2 operation is already active"
+        }
         try {
+            if (cancelledEncryptedUploadV2Operations.contains(operationId)) throw CancellationException()
             client.syncEncryptedRecordingV2(
                 device,
                 recording,
+                operation.id,
                 EncryptedUploadV2ProfileProvider { context ->
                     val completedBytes = context.checkpoint?.nextCiphertextOffset?.toString() ?: "0"
                     val checkpointRevision = context.checkpoint?.revision
@@ -384,17 +449,24 @@ internal class BotaDeviceSDKAndroidRecordings(
                         context,
                         onProfileRequest,
                     )
-                    onProgress(BotaEncryptedUploadV2Progress(
-                        operationId,
-                        recording.uuid,
-                        "transferring",
-                        completedBytes,
-                        recording.ciphertextLength.toString(),
-                        checkpointRevision,
-                    ))
-                    material
+                    try {
+                        currentCoroutineContext().ensureActive()
+                        onProgress(BotaEncryptedUploadV2Progress(
+                            operationId,
+                            recording.uuid,
+                            "transferring",
+                            completedBytes,
+                            recording.ciphertextLength.toString(),
+                            checkpointRevision,
+                        ))
+                        material
+                    } catch (error: Throwable) {
+                        withContext(NonCancellable) { material.cancelPreparation() }
+                        throw error
+                    }
                 },
             )
+            currentCoroutineContext().ensureActive()
             onProgress(BotaEncryptedUploadV2Progress(
                 operationId,
                 recording.uuid,
@@ -415,10 +487,13 @@ internal class BotaDeviceSDKAndroidRecordings(
                 protocolStatus = failure.protocolStatus,
             ))
             throw error
+        } finally {
+            BotaDeviceSDKEncryptedUploadV2Materials.removeContext(operationId)
+            encryptedUploadV2Operations.remove(operationId, operation)
         }
     }
 
-    fun resolveEncryptedUploadV2Profile(
+    suspend fun resolveEncryptedUploadV2Profile(
         requestId: String,
         profile: String,
         uploadSessionId: String,
@@ -427,26 +502,41 @@ internal class BotaDeviceSDKAndroidRecordings(
         materialRegistrationId: String,
     ) {
         val request = encryptedUploadV2Requests.remove(requestId)
-            ?: error("encrypted upload v2 profile request is no longer pending")
-        runCatching {
+        if (request == null) {
+            withContext(NonCancellable) { BotaDeviceSDKEncryptedUploadV2Materials.release(materialRegistrationId) }
+            error("encrypted upload v2 profile request is no longer pending")
+        }
+        BotaDeviceSDKEncryptedUploadV2Materials.removeContext(request.operationId)
+        var selected: EncryptedUploadV2Material? = null
+        try {
             require(profile == "encrypted_upload_v2") {
                 "encrypted upload v2 requires an explicit matching profile"
             }
-            BotaDeviceSDKEncryptedUploadV2Materials.consume(
+            selected = BotaDeviceSDKEncryptedUploadV2Materials.consume(
                 materialRegistrationId,
                 request.recording,
                 UUID.fromString(uploadSessionId),
                 ownerRevision,
                 securityPolicy,
             )
-        }.onSuccess { request.material.complete(it) }
-            .onFailure { request.material.completeExceptionally(it) }
-            .getOrThrow()
+            request.selectedMaterial = selected
+            check(request.material.complete(selected)) {
+                "encrypted upload v2 profile request is no longer pending"
+            }
+        } catch (error: Throwable) {
+            request.material.completeExceptionally(error)
+            withContext(NonCancellable) {
+                if (selected != null) selected.cancelPreparation()
+                else BotaDeviceSDKEncryptedUploadV2Materials.release(materialRegistrationId)
+            }
+            throw error
+        }
     }
 
     fun rejectEncryptedUploadV2Profile(requestId: String, errorCode: String) {
         val request = encryptedUploadV2Requests.remove(requestId)
             ?: error("encrypted upload v2 profile request is no longer pending")
+        BotaDeviceSDKEncryptedUploadV2Materials.removeContext(request.operationId)
         val error = if (errorCode == "application_material_rejected") {
             IllegalStateException("encrypted upload v2 material was rejected")
         } else {
@@ -575,6 +665,9 @@ internal class BotaDeviceSDKAndroidRecordings(
     }
 
     suspend fun cancelAll() {
+        val operations = encryptedUploadV2Operations.toMap()
+        operations.values.forEach { it.job.cancel() }
+        operations.keys.forEach { runCatching { cancelEncryptedRecordingV2(it) } }
         rejectPendingRequests("recording operations were cancelled")
         runCatching { client.cancelCurrentOperation() }
     }
@@ -608,21 +701,34 @@ internal class BotaDeviceSDKAndroidRecordings(
         val requestId = UUID.randomUUID().toString()
         val deferred = CompletableDeferred<EncryptedUploadV2Material>()
         val request = EncryptedUploadV2Request(
+            operationId,
             context.recording,
             deferred,
         )
+        BotaDeviceSDKEncryptedUploadV2Materials.registerContext(operationId, context)
         encryptedUploadV2Requests[requestId] = request
-        onRequest(BotaEncryptedUploadV2ProfileRequest(
-            requestId,
-            operationId,
-            context.recording.toBridgeValue(),
-            context.capability.toBridgeValue(),
-            context.checkpoint?.toBridgeValue(),
-        ))
+        var delivered = false
         return try {
-            deferred.await()
+            if (cancelledEncryptedUploadV2Operations.contains(operationId)) throw CancellationException()
+            onRequest(BotaEncryptedUploadV2ProfileRequest(
+                requestId,
+                operationId,
+                context.recording.toBridgeValue(),
+                context.capability.toBridgeValue(),
+                context.checkpoint?.toBridgeValue(),
+            ))
+            deferred.await().also {
+                currentCoroutineContext().ensureActive()
+                delivered = true
+            }
         } finally {
             encryptedUploadV2Requests.remove(requestId, request)
+            BotaDeviceSDKEncryptedUploadV2Materials.removeContext(operationId)
+            if (!delivered) {
+                // A completed deferred can still lose to prompt coroutine cancellation.
+                deferred.cancel()
+                withContext(NonCancellable) { request.selectedMaterial?.cancelPreparation() }
+            }
         }
     }
 
@@ -651,7 +757,10 @@ internal class BotaDeviceSDKAndroidRecordings(
 
     private fun rejectPendingRequests(message: String) {
         val error = IllegalStateException(message)
-        encryptedUploadV2Requests.values.forEach { it.material.completeExceptionally(error) }
+        encryptedUploadV2Requests.values.forEach {
+            BotaDeviceSDKEncryptedUploadV2Materials.removeContext(it.operationId)
+            it.material.completeExceptionally(error)
+        }
         destinationRequests.values.forEach { it.completeExceptionally(error) }
         finalizeRequests.values.forEach { it.completeExceptionally(error) }
         destinationRequests.clear()
@@ -660,12 +769,16 @@ internal class BotaDeviceSDKAndroidRecordings(
     }
 }
 
-private fun EncryptedUploadV2Recording.toBridgeValue(): BotaEncryptedUploadV2Recording =
+internal fun EncryptedUploadV2Recording.toBridgeValue(): BotaEncryptedUploadV2Recording =
     BotaEncryptedUploadV2Recording(
         uuid,
         generation,
         ciphertextLength.toString(),
         ciphertextSha256.toHex(),
+        startedAtMs.toString(),
+        durationMs.toString(),
+        plaintextLength.toString(),
+        storageFormat.toInt(),
     )
 
 private fun EncryptedUploadV2CapabilitySnapshot.toBridgeValue(): BotaEncryptedUploadV2Capability {

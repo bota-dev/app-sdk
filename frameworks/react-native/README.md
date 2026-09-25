@@ -15,7 +15,7 @@ into the native Apple and Android SDKs.
 ## Install
 
 This source prepares synchronized `2.0.0-beta.2`; use the exact pin below after
-publication. Version `2.0.0-beta.0` remains the previous published release.
+publication. Version `2.0.0-beta.1` remains the previous published release.
 Remove `@bota.dev/react-native-sdk` before adding the replacement; do not
 co-install both. Production maintenance 0.0.x consumers need not migrate.
 
@@ -26,6 +26,12 @@ npx pod-install
 
 Rebuild the native iOS and Android applications after installation. An Expo Go
 runtime cannot load this native module; use a development or production build.
+
+An application-native upload pod may depend on `BotaDeviceSDK`. With static
+SwiftPM linkage, the SDK's CocoaPods workaround normalizes the module-map path
+in both aggregate and dependent-pod cached build settings. This preserves the
+path when Expo later writes macro flags. Do not work around missing module maps
+by adding another copy of the Apple SDK.
 
 Expo prebuild and EAS projects must set the Android minimum SDK explicitly. Add
 the Expo-compatible `expo-build-properties` package and configure it in the app
@@ -91,6 +97,33 @@ release, and hardware gates pass; this API does not advertise device support.
 Its target-facade tests and the maintenance SDK `0.0.67` runtime tests are
 cross-referenced by the same canonical v2 workflow evidence in CI and tagged
 release verification. The frozen public compatibility surface remains `0.0.65`.
+
+### Unpublished Native App Integration
+
+Current source adds `BotaDeviceSDK.recordings.listPendingRecordings(device)`.
+It returns legacy recordings and v2 entries tagged by `storageFormat: 3`, with
+the full UUID/generation, ciphertext length/hash and catalog metadata. Catalog
+errors do not silently downgrade to legacy listing. These changes require
+matching native source and a newly built application; beta.1 is insufficient.
+
+The v2 sync method accepts a fifth argument `{ signal, operationId }`. The
+optional operation ID is a fresh UUID shared with an application-native
+adapter; cancellation stops and awaits that exact operation. Native provider
+contexts expose an operation-scoped `readAuthNonce` callback. An RN application's
+Swift/Kotlin adapter can call
+`BotaDeviceSDKEncryptedUploadV2Materials.readAuthNonce(operationId)` while the
+profile request is pending; it must not make a competing public BLE read.
+
+Native material must supply `uploadContext`, which relays opaque challenge/proof
+documents through the application backend. The SDK owns the bounded device
+handshake before authorization and the first completion receipt. Ordinary v2
+requires capability mask `0x17f`; expired-session replacement requires `0x37f`.
+Neither the app nor SDK verifies backend signatures or trusts the phone clock
+as a substitute for device verification. Cancellation discards late native
+material via `cancelPreparation`; it does not delete recoverable recordings.
+Historical checkpoints without ciphertext identity may resume the same owner
+but cannot authorize replacement. See `docs/parity/v2-demo-*.md` for evidence
+and limitations. Hardware and publication gates remain unchanged.
 
 ## Unpublished Maintenance Additions
 

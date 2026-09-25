@@ -10,6 +10,7 @@ struct BotaDeviceSDKAppleRecordingFile: Equatable, Sendable {
 
 protocol BotaDeviceSDKAppleRecordingClient: Sendable {
     func listRecordings(_ device: ConnectedDevice) async throws -> [DeviceRecording]
+    func listPendingRecordings(_ device: ConnectedDevice) async throws -> [PendingRecording]
     func syncRecording(
         _ device: ConnectedDevice,
         recording: DeviceRecording,
@@ -19,8 +20,10 @@ protocol BotaDeviceSDKAppleRecordingClient: Sendable {
     func syncEncryptedRecordingV2(
         _ device: ConnectedDevice,
         recording: EncryptedUploadV2Recording,
+        operationID: UUID,
         provider: @escaping EncryptedUploadV2ProfileProvider
     ) async throws
+    func cancelEncryptedUploadV2Operation(_ operationID: UUID) async throws
     func confirmRecording(_ device: ConnectedDevice, recordingUUID: String) async throws
     func observeUploadOwnership(
         _ device: ConnectedDevice,
@@ -51,6 +54,10 @@ struct BotaDeviceSDKSharedAppleRecordingClient: BotaDeviceSDKAppleRecordingClien
         try await recordings.listRecordings(device)
     }
 
+    func listPendingRecordings(_ device: ConnectedDevice) async throws -> [PendingRecording] {
+        try await recordings.listPendingRecordings(device)
+    }
+
     func syncRecording(
         _ device: ConnectedDevice,
         recording: DeviceRecording,
@@ -71,13 +78,19 @@ struct BotaDeviceSDKSharedAppleRecordingClient: BotaDeviceSDKAppleRecordingClien
     func syncEncryptedRecordingV2(
         _ device: ConnectedDevice,
         recording: EncryptedUploadV2Recording,
+        operationID: UUID,
         provider: @escaping EncryptedUploadV2ProfileProvider
     ) async throws {
         try await recordings.syncEncryptedRecordingV2(
             device,
             recording: recording,
+            operationID: operationID,
             provider: provider
         )
+    }
+
+    func cancelEncryptedUploadV2Operation(_ operationID: UUID) async throws {
+        try await recordings.cancelEncryptedUploadV2Operation(operationID)
     }
 
     func confirmRecording(_ device: ConnectedDevice, recordingUUID: String) async throws {
@@ -156,10 +169,14 @@ actor BotaDeviceSDKAppleRecordings {
     private let client: any BotaDeviceSDKAppleRecordingClient
     private let fileSize: @Sendable (String) throws -> UInt64
     private struct EncryptedUploadV2Request {
+        let operationID: String
         let recording: EncryptedUploadV2Recording
         let continuation: CheckedContinuation<EncryptedUploadV2Material, Error>
     }
     private var encryptedUploadV2Requests: [String: EncryptedUploadV2Request] = [:]
+    private var encryptedUploadV2Operations: [String: UUID] = [:]
+    private var encryptedUploadV2Tasks: [String: Task<Void, Error>] = [:]
+    private var cancelledEncryptedUploadV2Operations: Set<String> = []
     private var destinationRequests: [
         String: CheckedContinuation<StreamingUploadDestination, Error>
     ] = [:]
@@ -184,6 +201,10 @@ actor BotaDeviceSDKAppleRecordings {
 
     func listRecordings(_ device: ConnectedDevice) async throws -> [DeviceRecording] {
         try await client.listRecordings(device)
+    }
+
+    func listPendingRecordings(_ device: ConnectedDevice) async throws -> [PendingRecording] {
+        try await client.listPendingRecordings(device)
     }
 
     func syncRecording(
@@ -223,10 +244,50 @@ actor BotaDeviceSDKAppleRecordings {
         onProfileRequest: @escaping @Sendable ([String: Any]) -> Void,
         onProgress: @escaping @Sendable ([String: Any]) -> Void
     ) async throws {
+        guard encryptedUploadV2Operations[operationID] == nil else {
+            throw RecordingError.invalidEncryptedUploadV2Selection
+        }
+        guard !cancelledEncryptedUploadV2Operations.contains(operationID) else { throw CancellationError() }
+        let nativeID = UUID()
+        let task = Task {
+            try Task.checkCancellation()
+            try await self.runEncryptedRecordingV2(
+                device,
+                recording: recording,
+                operationID: operationID,
+                nativeID: nativeID,
+                onProfileRequest: onProfileRequest,
+                onProgress: onProgress
+            )
+        }
+        encryptedUploadV2Operations[operationID] = nativeID
+        encryptedUploadV2Tasks[operationID] = task
+        defer {
+            encryptedUploadV2Operations.removeValue(forKey: operationID)
+            encryptedUploadV2Tasks.removeValue(forKey: operationID)
+            BotaDeviceSDKEncryptedUploadV2Materials.removeContext(operationID)
+        }
+        try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+            Task { try? await self.cancelEncryptedRecordingV2(operationID) }
+        }
+    }
+
+    private func runEncryptedRecordingV2(
+        _ device: ConnectedDevice,
+        recording: EncryptedUploadV2Recording,
+        operationID: String,
+        nativeID: UUID,
+        onProfileRequest: @escaping @Sendable ([String: Any]) -> Void,
+        onProgress: @escaping @Sendable ([String: Any]) -> Void
+    ) async throws {
         do {
             try await client.syncEncryptedRecordingV2(
                 device,
-                recording: recording
+                recording: recording,
+                operationID: nativeID
             ) { context in
                 let completedBytes = String(context.checkpoint?.nextCiphertextOffset ?? 0)
                 let checkpointRevision = context.checkpoint?.revision
@@ -276,6 +337,25 @@ actor BotaDeviceSDKAppleRecordings {
         }
     }
 
+    func cancelEncryptedRecordingV2(_ operationID: String) async throws {
+        cancelledEncryptedUploadV2Operations.insert(operationID)
+        let task = encryptedUploadV2Tasks[operationID]
+        task?.cancel()
+        let pending = encryptedUploadV2Requests.filter { $0.value.operationID == operationID }
+        for (id, request) in pending {
+            encryptedUploadV2Requests.removeValue(forKey: id)
+            request.continuation.resume(throwing: CancellationError())
+        }
+        BotaDeviceSDKEncryptedUploadV2Materials.removeContext(operationID)
+        var cancellationError: Error?
+        if let nativeID = encryptedUploadV2Operations[operationID] {
+            do { try await client.cancelEncryptedUploadV2Operation(nativeID) }
+            catch { cancellationError = error }
+        }
+        _ = await task?.result
+        if let cancellationError { throw cancellationError }
+    }
+
     func resolveEncryptedUploadV2Profile(
         requestID: String,
         profile: String,
@@ -287,6 +367,7 @@ actor BotaDeviceSDKAppleRecordings {
         guard let request = encryptedUploadV2Requests.removeValue(forKey: requestID) else {
             throw RecordingError.missingEncryptedUploadV2Request
         }
+        BotaDeviceSDKEncryptedUploadV2Materials.removeContext(request.operationID)
         do {
             guard profile == "encrypted_upload_v2",
                   let sessionID = UUID(uuidString: uploadSessionID)
@@ -311,6 +392,7 @@ actor BotaDeviceSDKAppleRecordings {
         guard let request = encryptedUploadV2Requests.removeValue(forKey: requestID) else {
             throw RecordingError.missingEncryptedUploadV2Request
         }
+        BotaDeviceSDKEncryptedUploadV2Materials.removeContext(request.operationID)
         guard errorCode == "application_material_rejected" else {
             request.continuation.resume(throwing: RecordingError.invalidEncryptedUploadV2Selection)
             throw RecordingError.invalidEncryptedUploadV2Selection
@@ -465,6 +547,9 @@ actor BotaDeviceSDKAppleRecordings {
     }
 
     func cancelAll() async {
+        let operationIDs = Array(encryptedUploadV2Tasks.keys)
+        for id in operationIDs { encryptedUploadV2Tasks[id]?.cancel() }
+        for id in operationIDs { try? await cancelEncryptedRecordingV2(id) }
         rejectPendingRequests(message: "recording operations were cancelled")
         try? await client.cancelCurrentOperation()
     }
@@ -474,9 +559,13 @@ actor BotaDeviceSDKAppleRecordings {
         context: EncryptedUploadV2ProviderContext,
         onRequest: @escaping @Sendable ([String: Any]) -> Void
     ) async throws -> EncryptedUploadV2Material {
+        guard encryptedUploadV2Operations[operationID] != nil,
+              !cancelledEncryptedUploadV2Operations.contains(operationID) else { throw CancellationError() }
         let requestID = UUID().uuidString.lowercased()
+        try BotaDeviceSDKEncryptedUploadV2Materials.registerContext(operationID, context: context)
         return try await withCheckedThrowingContinuation { continuation in
             encryptedUploadV2Requests[requestID] = .init(
+                operationID: operationID,
                 recording: context.recording,
                 continuation: continuation
             )
@@ -537,12 +626,15 @@ actor BotaDeviceSDKAppleRecordings {
         destinationRequests.removeAll()
         finalizeRequests.removeAll()
         encryptedUploadV2Requests.removeAll()
-        encryptedUploadV2.forEach { $0.continuation.resume(throwing: error) }
+        encryptedUploadV2.forEach {
+            BotaDeviceSDKEncryptedUploadV2Materials.removeContext($0.operationID)
+            $0.continuation.resume(throwing: error)
+        }
         destinations.forEach { $0.resume(throwing: error) }
         finalizations.forEach { $0.resume(throwing: error) }
     }
 
-    private static func encryptedUploadV2Recording(
+    static func encryptedUploadV2Recording(
         _ recording: EncryptedUploadV2Recording
     ) -> [String: Any] {
         [
@@ -550,6 +642,10 @@ actor BotaDeviceSDKAppleRecordings {
             "generation": recording.generation,
             "ciphertextLength": String(recording.ciphertextLength),
             "ciphertextSha256": recording.ciphertextSHA256.hexString,
+            "startedAtMs": String(recording.startedAtMs),
+            "durationMs": String(recording.durationMs),
+            "plaintextLength": String(recording.plaintextLength),
+            "storageFormat": Int(recording.storageFormat),
         ]
     }
 

@@ -156,6 +156,16 @@ export type NativeEncryptedUploadV2Recording = {
   generation: number;
   ciphertextLength: string;
   ciphertextSha256: string;
+  startedAtMs?: string;
+  durationMs?: string;
+  plaintextLength?: string;
+  storageFormat?: number;
+};
+
+export type NativePendingRecording = {
+  profile: string;
+  legacy?: NativeDeviceRecording;
+  encrypted?: NativeEncryptedUploadV2Recording;
 };
 
 export type NativeEncryptedUploadV2Capability = {
@@ -535,6 +545,9 @@ export interface Spec extends TurboModule {
     recording: NativeEncryptedUploadV2Recording,
     operationId: string
   ) => Promise<void>;
+  listPendingRecordings: (device: NativeConnectedDevice) => Promise<ReadonlyArray<NativePendingRecording>>;
+  cancelEncryptedRecordingV2: (operationId: string) => Promise<void>;
+  releaseEncryptedUploadV2Material: (materialRegistrationId: string) => Promise<void>;
   resolveEncryptedUploadV2Profile: (
     requestId: string,
     decision: NativeEncryptedUploadV2ProfileDecision

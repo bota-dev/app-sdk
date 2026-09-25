@@ -227,6 +227,37 @@ internal class BotaDeviceSDKModule(
         }
     }
 
+    override fun listPendingRecordings(device: ReadableMap, promise: Promise) {
+        launchValue(promise) {
+            Arguments.createArray().apply {
+                recordings.listPendingRecordings(device.toConnectedDevice()).forEach { recording ->
+                    pushMap(Arguments.createMap().apply {
+                        when (recording) {
+                            is dev.bota.sdk.PendingRecording.Legacy -> {
+                                putString("profile", "legacy")
+                                putMap("legacy", recording.recording.toWritableMap())
+                            }
+                            is dev.bota.sdk.PendingRecording.EncryptedV2 -> {
+                                putString("profile", "encrypted_upload_v2")
+                                putMap("encrypted", recording.recording.toBridgeValue().toWritableMap())
+                            }
+                        }
+                    })
+                }
+            }
+        }
+    }
+
+    override fun cancelEncryptedRecordingV2(operationId: String, promise: Promise) {
+        launchEncryptedUploadV2(promise) { recordings.cancelEncryptedRecordingV2(operationId) }
+    }
+
+    override fun releaseEncryptedUploadV2Material(materialRegistrationId: String, promise: Promise) {
+        launchEncryptedUploadV2(promise) {
+            BotaDeviceSDKEncryptedUploadV2Materials.release(materialRegistrationId)
+        }
+    }
+
     override fun syncRecording(
         device: ReadableMap,
         recording: ReadableMap,
@@ -268,7 +299,7 @@ internal class BotaDeviceSDKModule(
         decision: ReadableMap,
         promise: Promise,
     ) {
-        launch(promise) {
+        launchEncryptedUploadV2(promise) {
             recordings.resolveEncryptedUploadV2Profile(
                 requestId,
                 decision.getString("profile")
@@ -289,7 +320,7 @@ internal class BotaDeviceSDKModule(
         errorCode: String,
         promise: Promise,
     ) {
-        launch(promise) { recordings.rejectEncryptedUploadV2Profile(requestId, errorCode) }
+        launchEncryptedUploadV2(promise) { recordings.rejectEncryptedUploadV2Profile(requestId, errorCode) }
     }
 
     override fun startStreaming(
@@ -731,7 +762,22 @@ private fun ReadableMap.toEncryptedUploadV2Recording(): EncryptedUploadV2Recordi
         getDouble("generation").toUnsignedInt(),
         length,
         digest,
+        optionalCatalogInteger("startedAtMs"),
+        optionalCatalogInteger("durationMs"),
+        optionalCatalogInteger("plaintextLength"),
+        if (hasKey("storageFormat") && !isNull("storageFormat")) {
+            getDouble("storageFormat").toUnsignedInt().also { require(it <= 255u) }.toUByte()
+        } else 3u,
     )
+}
+
+private fun ReadableMap.optionalCatalogInteger(key: String): ULong {
+    if (!hasKey(key) || isNull(key)) return 0u
+    val value = getString(key) ?: error("encrypted upload v2 catalog integer is required")
+    require(value.matches(Regex("0|[1-9][0-9]*"))) {
+        "encrypted upload v2 catalog integer is invalid"
+    }
+    return value.toULongOrNull() ?: error("encrypted upload v2 catalog integer exceeds its bound")
 }
 
 private fun String.sha256Bytes(): ByteArray {

@@ -19,6 +19,15 @@ private normative design before merge.
 
 ## Boundaries
 
+The unpublished native App integration adds a typed mixed recording catalog
+and upload-context codecs in Rust. Apple and Android own GATT context exchange,
+native files, checkpoint identity, exact-operation cancellation and opaque
+material lifetime. React Native carries catalog/progress metadata and opaque
+registration IDs only; the application-native adapter owns authenticated
+backend HTTP and its exact-scope recovery journal. This does not change the
+firmware/release/hardware gates or enable v2 compatibility metadata. See
+`docs/parity/v2-demo-*.md` for local verification and retained limitations.
+
 - Rust owns wire parsing, serialization, cryptographic envelopes, deterministic
   workflow state, retries, checkpoints, and stable errors.
 - Swift/CoreBluetooth, Kotlin/BluetoothGatt, C#/WinRT GATT, and TypeScript/Web

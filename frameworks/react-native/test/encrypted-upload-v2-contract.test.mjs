@@ -36,6 +36,14 @@ test('encrypted upload v2 Codegen exposes only the approved metadata aliases', (
         : `(${property.typeAnnotation.name})`
     }`;
   const expectedProperties = {
+    NativeDeviceRecording: [
+      'codec!:StringTypeAnnotation',
+      'durationMs!:NumberTypeAnnotation',
+      'fileSize!:NumberTypeAnnotation',
+      'isEncrypted!:BooleanTypeAnnotation',
+      'startedAtMs!:NumberTypeAnnotation',
+      'uuid!:StringTypeAnnotation',
+    ],
     NativeEncryptedUploadV2Capability: [
       'durableCheckpointIntervalBlocks!:NumberTypeAnnotation',
       'encodingVersion!:NumberTypeAnnotation',
@@ -90,14 +98,23 @@ test('encrypted upload v2 Codegen exposes only the approved metadata aliases', (
     NativeEncryptedUploadV2Recording: [
       'ciphertextLength!:StringTypeAnnotation',
       'ciphertextSha256!:StringTypeAnnotation',
+      'durationMs?:StringTypeAnnotation',
       'generation!:NumberTypeAnnotation',
+      'plaintextLength?:StringTypeAnnotation',
+      'startedAtMs?:StringTypeAnnotation',
+      'storageFormat?:NumberTypeAnnotation',
       'uuid!:StringTypeAnnotation',
+    ],
+    NativePendingRecording: [
+      'encrypted?:TypeAliasTypeAnnotation(NativeEncryptedUploadV2Recording)',
+      'legacy?:TypeAliasTypeAnnotation(NativeDeviceRecording)',
+      'profile!:StringTypeAnnotation',
     ],
   };
 
   const v2Aliases = Object.fromEntries(
     Object.entries(module.aliasMap)
-      .filter(([name]) => name.startsWith('NativeEncryptedUploadV2'))
+      .filter(([name]) => name.startsWith('NativeEncryptedUploadV2') || ['NativeDeviceRecording', 'NativePendingRecording'].includes(name))
       .map(([name, alias]) => [
         name,
         alias.properties.map(signature).sort(),
@@ -122,7 +139,7 @@ test('encrypted upload v2 Codegen exposes only the approved metadata aliases', (
   const v2Methods = Object.fromEntries(
     module.spec.methods
       .filter((method) =>
-        /Encrypted(?:UploadV2|RecordingV2)/.test(method.name)
+        /Encrypted(?:UploadV2|RecordingV2)/.test(method.name) || method.name === 'listPendingRecordings'
       )
       .map((method) => [
         method.name,
@@ -130,9 +147,18 @@ test('encrypted upload v2 Codegen exposes only the approved metadata aliases', (
       ])
   );
   assert.deepEqual(v2Methods, {
+    cancelEncryptedRecordingV2: [
+      'operationId!:StringTypeAnnotation',
+    ],
+    listPendingRecordings: [
+      'device!:TypeAliasTypeAnnotation(NativeConnectedDevice)',
+    ],
     rejectEncryptedUploadV2Profile: [
       'requestId!:StringTypeAnnotation',
       'errorCode!:StringTypeAnnotation',
+    ],
+    releaseEncryptedUploadV2Material: [
+      'materialRegistrationId!:StringTypeAnnotation',
     ],
     resolveEncryptedUploadV2Profile: [
       'requestId!:StringTypeAnnotation',
@@ -144,6 +170,14 @@ test('encrypted upload v2 Codegen exposes only the approved metadata aliases', (
       'operationId!:StringTypeAnnotation',
     ],
   });
+  for (const method of module.spec.methods.filter((method) => Object.hasOwn(v2Methods, method.name))) {
+    assert.deepEqual(method.typeAnnotation.returnTypeAnnotation, {
+      type: 'PromiseTypeAnnotation',
+      elementType: method.name === 'listPendingRecordings'
+        ? { type: 'ArrayTypeAnnotation', elementType: { type: 'TypeAliasTypeAnnotation', name: 'NativePendingRecording' } }
+        : { type: 'VoidTypeAnnotation' },
+    }, method.name);
+  }
 });
 
 test('encrypted upload v2 Codegen rejects bulk data and sensitive native material', () => {
@@ -151,12 +185,12 @@ test('encrypted upload v2 Codegen rejects bulk data and sensitive native materia
   const aliases = contract.schema.modules.NativeBotaDeviceSDK.aliasMap;
   const module = contract.schema.modules.NativeBotaDeviceSDK;
   const names = Object.entries(aliases)
-    .filter(([name]) => name.startsWith('NativeEncryptedUploadV2'))
+    .filter(([name]) => name.startsWith('NativeEncryptedUploadV2') || ['NativeDeviceRecording', 'NativePendingRecording'].includes(name))
     .flatMap(([, alias]) => alias.properties.map((property) => property.name))
     .concat(
       module.spec.methods
         .filter((method) =>
-          /Encrypted(?:UploadV2|RecordingV2)/.test(method.name)
+          /Encrypted(?:UploadV2|RecordingV2)/.test(method.name) || method.name === 'listPendingRecordings'
         )
         .flatMap((method) =>
           method.typeAnnotation.params.map((parameter) => parameter.name)
@@ -209,6 +243,7 @@ test('encrypted upload v2 vector digest matches generated Rust evidence', () => 
 test('React Native runtime does not contain v2 transfer opcodes or characteristics', () => {
   const managers = join(packageRoot, 'src/managers');
   const runtimePaths = [
+    join(packageRoot, 'src/client.ts'),
     join(packageRoot, 'src/ble/constants.ts'),
     ...readdirSync(managers)
       .filter((name) => name.endsWith('.ts'))
@@ -221,7 +256,7 @@ test('React Native runtime does not contain v2 transfer opcodes or characteristi
     source,
     /(?:encrypted.?upload.?v2.{0,80}0x20|0x20.{0,80}encrypted.?upload.?v2)/is
   );
-  for (const suffix of ['0006', '0007', '0008', '0009', '000A', '000B']) {
+  for (const suffix of ['0006', '0007', '0008', '0009', '000A', '000B', '000C']) {
     assert.equal(
       source.toUpperCase().includes(
         `B07A0004-${suffix}-1000-8000-00805F9B34FB`
