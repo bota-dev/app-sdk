@@ -159,6 +159,21 @@ mod wasm {
             to_js(&effects)
         }
 
+        #[wasm_bindgen(js_name = startSelectedConnection)]
+        pub fn start_selected_connection(
+            &mut self,
+            peripheral_id: &str,
+            name: Option<String>,
+            cancellation_id: &[u8],
+        ) -> Result<JsValue, JsValue> {
+            let cancellation_id = fixed_bytes(cancellation_id, "cancellation ID")?;
+            let effects = self
+                .inner
+                .start_selected_connection(peripheral_id, name.as_deref(), cancellation_id)
+                .map_err(error_to_js)?;
+            to_js(&effects)
+        }
+
         #[wasm_bindgen(js_name = startReconnect)]
         pub fn start_reconnect(&mut self, input: JsValue) -> Result<JsValue, JsValue> {
             let input: ReconnectInput = from_js(input)?;

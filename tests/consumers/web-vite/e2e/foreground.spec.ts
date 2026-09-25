@@ -36,6 +36,23 @@ test('picker connection requires a real click and the exact serial', async ({ pa
   expect(await fakeMetric(page, 'requestDeviceCalls')).toBe(3)
 })
 
+test('selected-device picker learns the serial without manual entry', async ({ page }) => {
+  await installBrowserFakes(page)
+  await page.goto('/')
+  await expect.poll(() => state(page, 'ready')).toBe(true)
+  await page.locator('#serial').fill('')
+  expect(await page.locator('#connect-selected').count()).toBe(1)
+
+  await page.evaluate(() => {
+    document.querySelector<HTMLButtonElement>('#connect-selected')?.click()
+  })
+  await expect.poll(() => state(page, 'error')).toBe('permission_denied')
+
+  await page.locator('#connect-selected').click()
+  await expect.poll(() => state(page, 'connectedSerial')).toBe(SERIAL)
+  expect(await fakeMetric(page, 'requestDeviceCalls')).toBe(2)
+})
+
 test('authorized reconnect uses the persisted exact device without a picker', async ({ page }) => {
   await installBrowserFakes(page)
   await page.goto('/')

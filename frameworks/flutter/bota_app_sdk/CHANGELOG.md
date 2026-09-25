@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.0-beta.2
+
+- Pin Apple and Android dependencies to synchronized `2.0.0-beta.2` alongside
+  the Web selected-device discovery addition. Flutter runtime APIs are unchanged.
+
 ## 2.0.0-beta.1
 
 - Resolve the Android Flutter SDK from the consumer's standard

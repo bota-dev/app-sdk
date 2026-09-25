@@ -661,6 +661,7 @@ export interface CoreIntegrityHasher {
 
 export interface CoreBridge {
   startExactConnection(input: CoreConnectionInput): CoreEffectEnvelope[]
+  startSelectedConnection(input: Omit<CoreConnectionInput, 'expectedSerialNumber'>): CoreEffectEnvelope[]
   startReconnect(input: CoreReconnectInput): CoreEffectEnvelope[]
   startProvisioning(input: CoreProvisioningInput): CoreEffectEnvelope[]
   startRecordingTransfer(input: CoreRecordingTransferInput): CoreEffectEnvelope[]

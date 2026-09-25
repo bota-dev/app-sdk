@@ -1,5 +1,10 @@
 # AGENTS.md
 
+## CI policy
+
+- Never add CI-skip markers or bypass required checks. Local verification supplements CI; it never replaces it.
+- Run CI and License Gate for the exact pushed revision, using their existing manual dispatch when a feature-branch push has no automatic trigger. Require successful CI before merge or release.
+
 CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `workflow_dispatch` plus automatic pull-request and main-push triggers on the CI and license workflows. CI concurrency must preserve every main run and cancel only superseded pull-request runs. Run Android unit tests separately from parallel lint and APK assembly. The xtask manifest uses `toml` 1.x; validate future major changes with the full Rust and tooling workflow. Keep root TypeScript on 6.x while `tools/baseline/react-native-api-contract.mjs` depends on its stable compiler API; TypeScript 7 exposes the replacement compiler API only through `typescript/unstable/*` and requires a deliberate contract-extractor migration. Async teardown and backpressure tests must wait for explicit actor or coroutine signals for each phase, including pump entry before asserting a flow's `finally` block and separate core/host cancellation completion, instead of sampling scheduling-dependent state. Use five-second test-only settlement watchdogs around those signals so loaded CI workers still expose real deadlocks without creating one-second scheduling races. Non-timeout transfer-control tests use a 30-second fixture cleanup deadline because they exercise multi-dispatcher teardown after the release build; dedicated timeout tests inject their own short deadline, and production retains its one-second cleanup contract.
 
 ## Repository Purpose
@@ -26,6 +31,10 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   verification, and explicit byte-store/connection-ownership limits. This does
   not change beta.1, enable v2 runtime metadata, or establish hardware/app
   acceptance.
+
+- Current source prepares synchronized `2.0.0-beta.2` for Web selected-device
+  serial discovery. Publication remains gated by exact main CI and the protected
+  release workflow; the published version below is unchanged until verified.
 
 - Current synchronized published beta is `2.0.0-beta.1`: Apple `BotaAppSDK`, Android
   `dev.bota:bota-app-sdk`, RN `@bota.dev/react-native-app-sdk`, Web
@@ -276,7 +285,14 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   closed-tab execution. Every application provider callback receives its
   operation `AbortSignal`; host I/O must honor it, while the SDK stops waiting
   on cancellation, observes late settlement, and ignores late results. A
-  missing Web Bluetooth implementation must fail as
+  `2.0.0-beta.2` candidate `devices.connectSelected()` addition exposes the existing Rust
+  `ConnectSelected` workflow for pre-registration SN discovery. It opens the
+  picker synchronously from the caller's gesture, learns identity from fresh
+  GATT, and does not bind or provision. Known-record `connect` and every
+  `reconnect` remain serial-strict. This addition is not in published beta.1.
+  The packed Vite/Chromium consumer checks selected-device SN discovery with
+  an empty serial input and enforces the picker user-gesture requirement.
+  A missing Web Bluetooth implementation must fail as
   `unsupported_browser` before opening the picker, snapshots must re-verify the
   serial, and OTA reboot recovery may enumerate only the previously verified
   exact browser device ID. OTA reload recovery must validate compatible durable

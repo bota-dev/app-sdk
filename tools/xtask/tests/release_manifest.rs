@@ -74,7 +74,7 @@ fn validate_modified(
     name: &str,
     mutate: impl FnOnce(&mut serde_json::Value),
 ) -> Result<(), String> {
-    let contents = fs::read_to_string(root().join("release/examples/2.0.0-beta.1.json")).unwrap();
+    let contents = fs::read_to_string(root().join("release/examples/2.0.0-beta.2.json")).unwrap();
     let mut manifest = serde_json::from_str(&contents).unwrap();
     mutate(&mut manifest);
     let path = root()
@@ -88,7 +88,7 @@ fn validate_modified(
 
 #[test]
 fn example_release_manifest_is_valid() {
-    let manifest = root().join("release/examples/2.0.0-beta.1.json");
+    let manifest = root().join("release/examples/2.0.0-beta.2.json");
 
     let result = xtask::release::validate_manifest(&manifest);
 
