@@ -169,6 +169,8 @@ pub mod kind {
     pub const PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_TRANSFER_OR_STATUS: u32 = 0x0522;
     pub const PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB: u32 = 0x0523;
     pub const PROTOCOL_ENCODE_ENCRYPTED_UPLOAD_V2_TRANSFER: u32 = 0x0524;
+    pub const PROTOCOL_DECODE_DIAGNOSTICS: u32 = 0x0525;
+    pub const PROTOCOL_ENCODE_DIAGNOSTIC_COMMAND: u32 = 0x0526;
 }
 
 pub mod field_type {
@@ -350,6 +352,34 @@ pub mod field_id {
     pub const MANIFEST_LENGTH: u32 = 168;
     pub const MAX_DATA_PAYLOAD_BYTES: u32 = 169;
     pub const MAX_WINDOW_PACKETS: u32 = 170;
+    pub const DIAGNOSTIC_SCHEMA_VERSION: u32 = 171;
+    pub const DIAGNOSTIC_EVENT_COUNT: u32 = 172;
+    pub const DIAGNOSTIC_EVENT_ID: u32 = 173;
+    pub const DIAGNOSTIC_EVENT_TYPE: u32 = 174;
+    pub const DIAGNOSTIC_REASON_CODE: u32 = 175;
+    pub const DIAGNOSTIC_UPTIME_MS: u32 = 176;
+    pub const DIAGNOSTIC_SIGNATURE: u32 = 177;
+    pub const DIAGNOSTIC_FIRMWARE_BUILD_ID: u32 = 178;
+    pub const DIAGNOSTIC_SUBSYSTEM: u32 = 179;
+    pub const DIAGNOSTIC_STATE_BEFORE_EVENT: u32 = 180;
+    pub const DIAGNOSTIC_HAS_REPORT: u32 = 181;
+    pub const DIAGNOSTIC_CPU_ID: u32 = 182;
+    pub const DIAGNOSTIC_CPU_EMU: u32 = 183;
+    pub const DIAGNOSTIC_CORE_EMU: u32 = 184;
+    pub const DIAGNOSTIC_HSB_EMU: u32 = 185;
+    pub const DIAGNOSTIC_AUDIO_EMU: u32 = 186;
+    pub const DIAGNOSTIC_WIRELESS_EMU: u32 = 187;
+    pub const DIAGNOSTIC_TASK: u32 = 188;
+    pub const DIAGNOSTIC_RETI: u32 = 189;
+    pub const DIAGNOSTIC_RETS: u32 = 190;
+    pub const DIAGNOSTIC_PC_TRACE_COUNT: u32 = 191;
+    pub const DIAGNOSTIC_PC_TRACE: u32 = 192;
+    pub const DIAGNOSTIC_HEAP_FREE_BYTES: u32 = 193;
+    pub const DIAGNOSTIC_TASK_STACK_REMAINING_BYTES: u32 = 194;
+    pub const DIAGNOSTIC_BREADCRUMB_COUNT: u32 = 195;
+    pub const DIAGNOSTIC_DELTA_MS: u32 = 196;
+    pub const DIAGNOSTIC_BREADCRUMB_CODE: u32 = 197;
+    pub const DIAGNOSTIC_BREADCRUMB_ARG0: u32 = 198;
 }
 
 #[repr(C)]

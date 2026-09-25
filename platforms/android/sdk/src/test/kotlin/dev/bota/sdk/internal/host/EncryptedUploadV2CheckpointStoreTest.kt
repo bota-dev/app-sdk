@@ -14,6 +14,56 @@ import org.junit.Test
 
 class EncryptedUploadV2CheckpointStoreTest {
     @Test
+    fun replayBoundarySurvivesReopenWithoutChangingOpaqueRustBytes() = runTest {
+        val journals = MemoryJournals()
+        val original = checkpoint(UUID.randomUUID(), revision = 2u)
+        val recovered = original.copy(
+            revision = 1u, nextCiphertextOffset = 1024u, highestContiguousSequence = 0u,
+            replayBoundary = EncryptedUploadV2ReplayBoundary(2u, 2048u),
+        )
+        EncryptedUploadV2CheckpointStore(journals).save(recovered)
+        val reopened = EncryptedUploadV2CheckpointStore(journals).load(original.uploadSessionId)!!
+        assertEquals(1u, reopened.revision)
+        assertEquals(1024uL, reopened.nextCiphertextOffset)
+        assertEquals(0u, reopened.highestContiguousSequence)
+        assertEquals(EncryptedUploadV2ReplayBoundary(2u, 2048u), reopened.replayBoundary)
+        assertTrue(original.coreCheckpoint.contentEquals(reopened.coreCheckpoint))
+    }
+
+    @Test
+    fun readsVersionOneCatalogSidecarsWithoutAReplayBoundary() = runTest {
+        val journals = MemoryJournals()
+        val original = checkpoint(UUID.randomUUID(), revision = 2u)
+        EncryptedUploadV2CheckpointStore(journals).save(original)
+        val sidecar = firstCatalogSidecar(journals.values.getValue(CatalogName)).dropLast(1).toByteArray()
+        ByteBuffer.wrap(sidecar).putInt(4, 1)
+        journals.values[CatalogName] = ByteBuffer.allocate(16 + sidecar.size)
+            .putInt(0x4256324c).putInt(1).putInt(1).putInt(sidecar.size).put(sidecar).array()
+        val reopened = EncryptedUploadV2CheckpointStore(journals).load(original.uploadSessionId)!!
+        assertEquals(2u, reopened.revision)
+        assertNull(reopened.replayBoundary)
+        assertTrue(original.coreCheckpoint.contentEquals(reopened.coreCheckpoint))
+    }
+
+    @Test
+    fun replayBoundaryCanBeCrossedOneCoordinateAtATime() = runTest {
+        for ((revision, offset) in listOf(2u to 4096uL, 3u to 1024uL)) {
+            val journals = MemoryJournals()
+            val original = checkpoint(UUID.randomUUID(), revision = 2u)
+            val replayed = original.copy(
+                revision = revision, nextCiphertextOffset = offset,
+                replayBoundary = EncryptedUploadV2ReplayBoundary(2u, 2048u),
+            )
+            EncryptedUploadV2CheckpointStore(journals).save(replayed)
+            val reopened = EncryptedUploadV2CheckpointStore(journals).load(original.uploadSessionId)!!
+            assertEquals(revision, reopened.revision)
+            assertEquals(offset, reopened.nextCiphertextOffset)
+            assertEquals(replayed.replayBoundary, reopened.replayBoundary)
+            assertTrue(original.coreCheckpoint.contentEquals(reopened.coreCheckpoint))
+        }
+    }
+
+    @Test
     fun persistsExactResumeMetadataAndIndexesOnlyNonSecretIdentity() = runTest {
         val journals = MemoryJournals()
         val store = EncryptedUploadV2CheckpointStore(journals)

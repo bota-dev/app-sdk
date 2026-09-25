@@ -62,6 +62,10 @@ export type {
   DeviceConnectionSettings,
   DeviceFlags,
   DeviceLogEvent,
+  DeviceDiagnosticEvent,
+  DeviceDiagnosticEventType,
+  DeviceDiagnosticReasonCode,
+  DeviceDiagnosticsBatch,
   DeviceState,
   DeviceStatus,
   DeviceType,
@@ -87,6 +91,9 @@ export type {
 export type {
   AudioCodec,
   DeviceRecording,
+  RecordingDataStore,
+  UploadRecoveryContext,
+  UploadRecoveryProvider,
   StreamingSessionEvents,
   StreamingState,
   StreamingSyncOptions,
@@ -118,13 +125,16 @@ export type {
   FirmwareInfo,
   OtaProgress,
   OtaStage,
+  RecordingManagerOptions,
   UploadInfoProvider,
 } from './managers/types';
 
 export { DeviceLogDecoder } from './ble/deviceLogs';
+export { DeviceDiagnosticsDecoder, diagnosticEventIdCommand } from './ble/deviceDiagnostics';
 export { DeviceManager } from './managers/DeviceManager';
 export { OTAManager } from './managers/OTAManager';
 export { RecordingManager } from './managers/RecordingManager';
+export const UPLOAD_RECOVERY_VERSION = 1;
 export { StreamingSession } from './managers/StreamingSession';
 export {
   BotaError,

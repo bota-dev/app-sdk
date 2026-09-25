@@ -188,7 +188,7 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
             isEncrypted: true
         )
         let client = TestAppleRecordingClient(recording: recording)
-        let recordings = BotaDeviceSDKAppleRecordings(client: client)
+        let recordings = BotaDeviceSDKAppleRecordings(client: client, fileSize: { _ in 48_036 })
         let progress = RecordingProgressCapture()
 
         let listed = try await recordings.listRecordings(connected)
@@ -204,7 +204,8 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
         XCTAssertEqual(result, .init(
             localPath: "/tmp/bota-recordings/recording-1.ogg",
             isE2EEncrypted: true,
-            contentSHA256Hex: String(repeating: "5a", count: 32)
+            contentSHA256Hex: String(repeating: "5a", count: 32),
+            fileSizeBytes: 48_036
         ))
         let progressSnapshot = progress.snapshot()
         XCTAssertEqual(

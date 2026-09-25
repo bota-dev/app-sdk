@@ -176,7 +176,7 @@ class BotaDeviceSDKAndroidRecordingsTest {
             isEncrypted = true,
         )
         val client = TestAndroidRecordingClient(recording)
-        val recordings = BotaDeviceSDKAndroidRecordings(client)
+        val recordings = BotaDeviceSDKAndroidRecordings(client, fileSize = { 48_036L })
         val progress = mutableListOf<RecordingTransferProgress>()
 
         assertEquals(listOf(recording), recordings.listRecordings(connected))
@@ -185,6 +185,7 @@ class BotaDeviceSDKAndroidRecordingsTest {
                 "/tmp/bota-recordings/recording-1.ogg",
                 true,
                 "5a".repeat(32),
+                48_036L,
             ),
             recordings.syncRecording(connected, recording, "sink-1", progress::add),
         )

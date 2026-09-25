@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import Ajv2020 from 'ajv/dist/2020.js';
+import { verifyMaintenanceApiContract } from './react-native-api-contract.mjs';
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 
@@ -60,10 +61,10 @@ export function readWorkflowSuites(directory) {
 export function collectMaintenanceRuntimeTestFiles(suites) {
   return [...new Set(
     suites
-      .filter((suite) => suite.workflow === 'encrypted-upload-v2')
       .flatMap((suite) =>
         suite.scenarios.map((scenario) => scenario.sourceTest.split('#', 1)[0])
       )
+      .filter((path) => /\.(test|spec)\.[cm]?[jt]sx?$/.test(path))
   )].sort();
 }
 
@@ -298,6 +299,9 @@ function parseArguments(args) {
       case '--sdk-path':
         options.sdkPath = args[++index];
         break;
+      case '--expected-commit':
+        options.expectedRevision = args[++index];
+        break;
       case '--allow-dirty':
         options.allowDirty = true;
         break;
@@ -312,10 +316,7 @@ function parseArguments(args) {
     }
   }
   if (!options.sdkPath) {
-    options.sdkPath = process.env.BOTA_REACT_NATIVE_SDK_PATH ?? [
-      '../react-native-sdk',
-      '../../react-native-sdk',
-    ].find((candidate) => existsSync(join(candidate, 'package.json')));
+    options.sdkPath = process.env.BOTA_REACT_NATIVE_SDK_PATH;
   }
   if (!options.sdkPath) {
     throw new Error(
@@ -362,10 +363,21 @@ export function verifyWorkflowEvidence(options) {
     throw new Error(`workflow evidence failed:\n${errors.join('\n')}`);
   }
 
+  const maintenancePath = compatibility.reactNativeMaintenanceBaseline?.contract;
+  if (!maintenancePath) throw new Error('selected maintenance additions contract is required');
+  const maintenance = readJson(resolve(repository, maintenancePath));
+  const maintenanceApi = verifyMaintenanceApiContract({ sdkPath,
+    contract: maintenance, compatibility,
+    frozenContract: join(repository, 'protocol/baseline/react-native-public-api-0.0.65.json'),
+    expectedRevision: options.expectedRevision,
+  });
+
   const rustTests = [...new Set(
     suites.flatMap((suite) => suite.scenarios.map((scenario) => scenario.rustTest))
   )].sort();
-  const maintenanceTests = collectMaintenanceRuntimeTestFiles(suites);
+  const maintenanceTests = [...new Set([
+    ...collectMaintenanceRuntimeTestFiles(suites), ...maintenance.runtimeTestFiles,
+  ])].sort();
   if (options.runMaintenanceTests && maintenanceTests.length) {
     run(
       'npm',
@@ -398,8 +410,11 @@ export function verifyWorkflowEvidence(options) {
     scenarios: suites.reduce((count, suite) => count + suite.scenarios.length, 0),
     rustTests: rustTests.length,
     maintenanceRuntimeTests: maintenanceTests.length,
+    executedRustTests: options.runRustTests ? rustTests.length : 0,
+    executedMaintenanceTestFiles: options.runMaintenanceTests ? maintenanceTests.length : 0,
     reactNativeVersion: packageVersion,
     reactNativeRevision: sourceRevision,
+    maintenanceApi,
     dirty: Boolean(dirty),
   };
 }

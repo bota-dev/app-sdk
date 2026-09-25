@@ -3,7 +3,7 @@
  */
 
 import type { DeviceStatus, StorageInfo } from './Device';
-import type { SyncProgress, UploadTask } from './Recording';
+import type { RecordingDataStore, SyncProgress, UploadRecoveryProvider, UploadTask } from './Recording';
 
 /**
  * SDK log level
@@ -14,6 +14,10 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'none';
  * SDK configuration options
  */
 export interface BotaConfig {
+  /** Refreshes credentials for retained native recordings after restart. */
+  uploadRecoveryProvider?: UploadRecoveryProvider;
+  /** Unsupported compatibility option: byte callbacks cannot cross the bridge. */
+  recordingDataStore?: RecordingDataStore;
   /** Environment for API endpoint (development, gamma, or production) */
   environment?: 'development' | 'gamma' | 'production';
   /** Enable background sync (default: true) */

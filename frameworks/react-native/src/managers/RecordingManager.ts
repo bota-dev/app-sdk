@@ -16,7 +16,9 @@ import type {
   UploadTask,
 } from '../models/Recording';
 import type { RecordingManagerEvents } from '../models/Status';
-import type { UploadInfoProvider } from './types';
+import type { RecordingManagerOptions, UploadInfoProvider } from './types';
+import { NativeUploadQueue } from './NativeUploadQueue';
+import { rejectRecordingDataStore } from './uploadRecoveryMetadata';
 import {
   StreamingSession,
   setStreamingSessionTerminalHandler,
@@ -85,26 +87,30 @@ const observeProgress = <T>(
 
 export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
   private readonly client: BotaDeviceSDKClient;
-  private tasks: UploadTask[] = [];
+  private readonly queue: NativeUploadQueue;
   private initialized = false;
-  private paused = false;
   private destroyed = false;
   private activeStreamingSession: StreamingSession | null = null;
 
-  constructor() {
+  constructor();
+  constructor(options: RecordingManagerOptions);
+  constructor(options: RecordingManagerOptions = {}) {
     super();
+    rejectRecordingDataStore(options.recordingDataStore);
     this.client = getCompatibilityClient();
+    this.queue = new NativeUploadQueue(this.client.recordings, options.uploadRecoveryProvider);
+    this.queue.on('queueUpdated', tasks => this.emit('queueUpdated', tasks));
+    this.queue.on('uploadStarted', id => this.emit('uploadStarted', id));
+    this.queue.on('uploadProgress', (id, progress) => this.emit('uploadProgress', id, progress));
+    this.queue.on('uploadCompleted', (id, recordingId) => this.emit('uploadCompleted', id, recordingId));
+    this.queue.on('uploadFailed', (id, error) => this.emit('uploadFailed', id, error));
   }
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
     this.assertAlive();
-    this.tasks = (await this.client.recordings.loadUploadQueue()).map((task) => ({
-      ...task,
-      createdAt: new Date(task.createdAt),
-      updatedAt: new Date(task.updatedAt),
-      status: task.status === 'uploading' ? 'pending' : task.status,
-    }));
+    await this.queue.initialize();
+    this.assertAlive();
     this.initialized = true;
   }
 
@@ -133,6 +139,10 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
     uploadInfo: UploadInfo
   ): AsyncGenerator<SyncProgress> {
     this.assertReady();
+    if (uploadInfo.signal?.aborted) {
+      uploadInfo.dispose?.();
+      throw new Error('Upload authorization context cancelled');
+    }
     this.emit('syncStarted', recording.uuid);
     const sinkId = createOpaqueId();
     const now = new Date();
@@ -140,6 +150,9 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
       id: createTaskId(),
       recordingId: uploadInfo.recordingId,
       deviceId: device.id,
+      recordingUuid: recording.uuid,
+      recoveryScope: uploadInfo.recoveryScope,
+      fileSizeBytes: recording.fileSizeBytes,
       localPath: '',
       uploadUrl: uploadInfo.uploadUrl,
       ...(uploadInfo.uploadToken ? { uploadToken: uploadInfo.uploadToken } : {}),
@@ -150,10 +163,33 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
       createdAt: now,
       updatedAt: now,
     };
-    this.tasks.push(task);
-    await this.persistTasks();
-    this.emitQueueUpdated();
+    const recovered = uploadInfo.recoveryScope && this.queue.all().find(value =>
+      value.recoveryScope === uploadInfo.recoveryScope && value.recordingId === uploadInfo.recordingId &&
+      value.deviceId === device.id && value.recordingUuid === recording.uuid && !!value.localPath
+    );
+    if (recovered) {
+      const adopted = this.queue.offerCredentials(recovered.id, uploadInfo);
+      try {
+        await this.queue.run(recovered.id);
+        this.assertReady();
+        if (uploadInfo.signal?.aborted) throw new Error('Upload authorization context cancelled');
+        await this.client.recordings.confirmRecording(device, recording.uuid);
+        this.assertReady();
+        yield this.emitSyncProgress(recording.uuid, { stage: 'completed', progress: 1, recordingId: recovered.recordingId, contentSha256: recovered.contentSha256 });
+        this.emit('syncCompleted', recording.uuid, recovered.recordingId);
+      } finally {
+        if (!adopted) uploadInfo.dispose?.();
+      }
+      return;
+    }
+    try {
+      await this.queue.add(task, uploadInfo);
+    } catch (error) {
+      uploadInfo.dispose?.();
+      throw error;
+    }
 
+    let uploadAttempted = false;
     try {
       yield this.emitSyncProgress(recording.uuid, {
         stage: 'preparing',
@@ -193,10 +229,19 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
           'Device delivered encrypted recording data without an upload relay'
         );
       }
-      await this.updateTask(task.id, {
+      this.assertReady();
+      if (uploadInfo.signal?.aborted || !this.queue.get(task.id)) throw new Error('Upload cancelled');
+      const nativeSize = 'fileSizeBytes' in transferResult && typeof transferResult.fileSizeBytes === 'number'
+        ? transferResult.fileSizeBytes : undefined;
+      if (nativeSize !== undefined && (!Number.isSafeInteger(nativeSize) || nativeSize < 0)) throw new Error('Invalid native recording file size');
+      if (nativeSize === undefined && uploadInfo.complete) throw new Error('Host completion requires actual native recording file size');
+      // Route selection comes from native transfer metadata, never list flags.
+      uploadInfo = { ...uploadInfo, relay: transferResult.e2eEncrypted ? uploadInfo.relay : undefined };
+      await this.queue.update(task.id, {
         localPath: transferResult.localPath,
+        fileSizeBytes: nativeSize ?? (transferResult.e2eEncrypted ? undefined : recording.fileSizeBytes),
         contentSha256: transferResult.contentSha256,
-        relay: transferResult.e2eEncrypted ? uploadInfo.relay : undefined,
+        relayUpload: transferResult.e2eEncrypted,
       });
 
       yield this.emitSyncProgress(recording.uuid, {
@@ -206,8 +251,9 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
         totalBytes: recording.fileSizeBytes,
         contentSha256: transferResult.contentSha256,
       });
+      uploadAttempted = true;
       const upload = observeProgress((onProgress) =>
-        this.runUpload(task.id, onProgress)
+        this.queue.run(task.id, onProgress)
       );
       while (true) {
         const value = await upload.next();
@@ -228,7 +274,10 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
         stage: 'completing',
         progress: 0.5,
       });
+      this.assertReady();
+      if (uploadInfo.signal?.aborted || !this.queue.get(task.id)) throw new Error('Upload cancelled');
       await this.client.recordings.confirmRecording(device, recording.uuid);
+      this.assertReady();
       const completed = this.emitSyncProgress(recording.uuid, {
         stage: 'completed',
         progress: 1,
@@ -239,12 +288,13 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
       this.emit('syncCompleted', recording.uuid, uploadInfo.recordingId);
     } catch (error) {
       const failure = error instanceof Error ? error : new Error(String(error));
-      if (this.requireTask(task.id).status !== 'completed') {
-        await this.updateTask(task.id, {
+      if (!this.destroyed && this.queue.get(task.id)?.status === 'pending' && !this.queue.get(task.id)?.localPath) {
+        await this.queue.update(task.id, {
           status: 'failed',
-          errorMessage: failure.message,
+          errorMessage: 'Recording transfer failed',
         });
       }
+      if (this.destroyed) throw failure;
       yield this.emitSyncProgress(recording.uuid, {
         stage: 'failed',
         progress: 0,
@@ -252,6 +302,8 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
       });
       this.emit('syncFailed', recording.uuid, failure);
       throw failure;
+    } finally {
+      if (!uploadAttempted) this.queue.discardCredentials(task.id);
     }
   }
 
@@ -392,13 +444,13 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
   }
 
   getPendingUploads(): UploadTask[] {
-    return this.tasks.filter(
+    return this.queue.all().filter(
       (task) => task.status === 'pending' || task.status === 'uploading'
     );
   }
 
   getAllUploads(): UploadTask[] {
-    return this.tasks.map((task) => ({ ...task }));
+    return this.queue.all();
   }
 
   startStreamingSync(
@@ -435,97 +487,41 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
   }
 
   async cancelUpload(taskId: string): Promise<void> {
-    await this.client.recordings.cancelRecordingUpload(taskId);
-    this.tasks = this.tasks.filter((task) => task.id !== taskId);
-    await this.persistTasks();
-    this.emitQueueUpdated();
+    this.assertReady();
+    await this.queue.cancel(taskId);
   }
 
   async retryFailedUploads(): Promise<void> {
     this.assertReady();
-    if (this.paused) return;
-    for (const task of this.tasks.filter((value) => value.status === 'failed')) {
-      await this.updateTask(task.id, {
-        status: 'pending',
-        retryCount: task.retryCount + 1,
-        errorMessage: undefined,
-      });
-      try {
-        await this.runUpload(task.id);
-      } catch {
-        // Keep failed tasks available for the next explicit retry.
-      }
-    }
+    await this.queue.retryFailed();
   }
 
   async clearCompletedUploads(): Promise<void> {
-    this.tasks = this.tasks.filter((task) => task.status !== 'completed');
-    await this.persistTasks();
-    this.emitQueueUpdated();
+    this.assertReady();
+    await this.queue.clearCompleted();
   }
 
   async clearAllUploads(): Promise<void> {
-    const ids = this.tasks.map((task) => task.id);
-    await Promise.all(
-      ids.map((taskId) =>
-        this.client.recordings.cancelRecordingUpload(taskId).catch(() => undefined)
-      )
-    );
-    this.tasks = [];
-    await this.persistTasks();
-    this.emitQueueUpdated();
+    this.assertReady();
+    await this.queue.clearAll();
   }
 
   pauseUploads(): void {
-    this.paused = true;
+    this.queue.pause();
   }
 
   resumeUploads(): void {
-    this.paused = false;
-    void this.retryFailedUploads();
+    this.queue.resume();
   }
 
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.queue.destroy();
     this.activeStreamingSession?.abort();
     this.activeStreamingSession = null;
-    void this.client.recordings.destroyCompatibilityOperations().catch(() => undefined);
     this.removeAllListeners();
     this.initialized = false;
-  }
-
-  private async runUpload(
-    taskId: string,
-    onProgress?: (progress: BotaRecordingTransferProgress) => void
-  ): Promise<void> {
-    if (this.paused) throw new Error('Upload queue is paused');
-    const task = this.requireTask(taskId);
-    await this.updateTask(taskId, { status: 'uploading', errorMessage: undefined });
-    this.emit('uploadStarted', taskId);
-    try {
-      await this.client.recordings.uploadRecordingFile(
-        this.requireTask(taskId),
-        (progress) => {
-          onProgress?.(progress);
-          const ratio =
-            progress.totalBytes > 0
-              ? Math.min(progress.completedBytes / progress.totalBytes, 1)
-              : 0;
-          this.emit('uploadProgress', taskId, ratio);
-        }
-      );
-      await this.updateTask(taskId, { status: 'completed', errorMessage: undefined });
-      this.emit('uploadCompleted', taskId, task.recordingId);
-    } catch (error) {
-      const failure = error instanceof Error ? error : new Error(String(error));
-      await this.updateTask(taskId, {
-        status: 'failed',
-        errorMessage: failure.message,
-      });
-      this.emit('uploadFailed', taskId, failure);
-      throw failure;
-    }
   }
 
   private emitSyncProgress(
@@ -534,35 +530,6 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
   ): SyncProgress {
     this.emit('syncProgress', recordingUuid, progress);
     return progress;
-  }
-
-  private requireTask(taskId: string): UploadTask {
-    const task = this.tasks.find((value) => value.id === taskId);
-    if (!task) throw new Error(`Upload task not found: ${taskId}`);
-    return task;
-  }
-
-  private async updateTask(
-    taskId: string,
-    patch: Partial<UploadTask>
-  ): Promise<void> {
-    const index = this.tasks.findIndex((task) => task.id === taskId);
-    if (index < 0) throw new Error(`Upload task not found: ${taskId}`);
-    this.tasks[index] = {
-      ...this.tasks[index],
-      ...patch,
-      updatedAt: new Date(),
-    };
-    await this.persistTasks();
-    this.emitQueueUpdated();
-  }
-
-  private async persistTasks(): Promise<void> {
-    await this.client.recordings.saveUploadQueue(this.tasks);
-  }
-
-  private emitQueueUpdated(): void {
-    this.emit('queueUpdated', this.getAllUploads());
   }
 
   private assertReady(): void {

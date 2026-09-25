@@ -4,7 +4,8 @@ import Foundation
 
 enum EncryptedUploadV2TransferOpenResult: Sendable {
     case opened(AsyncThrowingStream<Data, Error>)
-    case resumeRejected
+    case openedReader(EncryptedUploadV2NotificationReader)
+    case resumeRejected(EncryptedUploadV2ResumeRejectionValue, retry: EncryptedUploadV2TransferHost.OpenTransfer)
 }
 
 struct EncryptedUploadV2TransferHostServices: Sendable {
@@ -56,6 +57,13 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         let reader: EncryptedUploadV2NotificationReader
     }
 
+    private struct Reconciliation: Sendable {
+        let context: Context
+        let cancellationID: CoreCancellationID
+        let generation: UInt64
+        let retry: OpenTransfer
+    }
+
     private let rootDirectory: URL
     private let mapper: CoreModelMapper
     private let openTransfer: OpenTransfer
@@ -86,6 +94,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
     private var confirmationCancellationID: CoreCancellationID?
     private var confirmationAttempted = false
     private var cancellationClaimed = false
+    private var reconciliation: Reconciliation?
 
     init(
         rootDirectory: URL,
@@ -118,32 +127,12 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             rootDirectory: rootDirectory,
             mapper: mapper,
             openTransfer: { request, checkpoint in
+                let connectionGeneration = await transferControl.connectionGeneration
                 let peripheralID = try await resolvePeripheralID()
-                if let checkpoint {
-                    let decision = try await transferControl.resume(
-                        peripheralID: peripheralID,
-                        request: .init(
-                            transportSessionID: request.transportSessionID,
-                            uploadSessionID: request.uploadSessionID,
-                            recordingUUID: request.recordingUUID,
-                            recordingGeneration: request.recordingGeneration,
-                            checkpointRevision: checkpoint.revision,
-                            nextCiphertextOffset: checkpoint.nextCiphertextOffset,
-                            prefixSHA256: checkpoint.prefixSHA256,
-                            windowPackets: request.windowPackets,
-                            dataPayloadBytes: request.dataPayloadBytes
-                        )
-                    )
-                    if case .rejected = decision { return .resumeRejected }
-                } else {
-                    _ = try await transferControl.start(
-                        peripheralID: peripheralID,
-                        request: request
-                    )
-                }
-                return .opened(try await transferControl.claimNotificationStream(
-                    transportSessionID: request.transportSessionID
-                ))
+                return try await Self.open(
+                    control: transferControl, peripheralID: peripheralID,
+                    connectionGeneration: connectionGeneration, request: request, checkpoint: checkpoint
+                )
             },
             sendControl: { frame in
                 guard frame.count >= 12 else {
@@ -167,6 +156,51 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             },
             services: services
         )
+    }
+
+    private static func open(
+        control: EncryptedUploadV2TransferControl,
+        peripheralID: String,
+        connectionGeneration: UInt64,
+        request: EncryptedUploadV2StartRequestValue,
+        checkpoint: EncryptedUploadV2CheckpointValue?,
+        retry: Bool = false
+    ) async throws -> EncryptedUploadV2TransferOpenResult {
+        if let checkpoint, checkpoint.nextCiphertextOffset > 0 {
+            let decision = try await control.resume(
+                peripheralID: peripheralID,
+                request: .init(
+                    transportSessionID: request.transportSessionID,
+                    uploadSessionID: request.uploadSessionID,
+                    recordingUUID: request.recordingUUID,
+                    recordingGeneration: request.recordingGeneration,
+                    checkpointRevision: checkpoint.revision,
+                    nextCiphertextOffset: checkpoint.nextCiphertextOffset,
+                    prefixSHA256: checkpoint.prefixSHA256,
+                    windowPackets: request.windowPackets,
+                    dataPayloadBytes: request.dataPayloadBytes
+                ),
+                expectedConnectionGeneration: connectionGeneration,
+                retryRejectedSession: retry,
+                retainRejectedSubscription: true
+            )
+            if case let .rejected(value) = decision {
+                return .resumeRejected(value, retry: { request, checkpoint in
+                    try await Self.open(
+                        control: control, peripheralID: peripheralID,
+                        connectionGeneration: connectionGeneration, request: request,
+                        checkpoint: checkpoint, retry: true
+                    )
+                })
+            }
+        } else {
+            _ = try await control.start(
+                peripheralID: peripheralID, request: request,
+                expectedConnectionGeneration: connectionGeneration,
+                retryRejectedSession: retry
+            )
+        }
+        return .openedReader(try await control.claimNotificationReader(transportSessionID: request.transportSessionID))
     }
 
     func checkpoint(
@@ -280,6 +314,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             throw Self.failure(code: 11, detail: "encrypted upload v2 ABORT material does not match")
         }
         generation &+= 1
+        reconciliation = nil
         let active = activeTransfer
         let sessionID = retainedTransportSessionID ?? openingTransportSessionID
         let openingTask = self.openingTask
@@ -298,9 +333,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
 
         var openedDuringCancellation = false
         if let openingTask {
-            if case let .success(result) = await openingTask.result,
-               case .opened = result
-            {
+            if case .success = await openingTask.result {
                 openedDuringCancellation = true
             }
         }
@@ -390,6 +423,14 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             throw Self.failure(code: 1, detail: "upload session UUID is invalid")
         }
         let url = Self.checkpointURL(uploadSessionID: uploadSessionID, rootDirectory: rootDirectory)
+        if let reconciliation {
+            try validateReconciliation(effect)
+            guard reconciliation.context.uploadSessionBytes == bytes else {
+                throw Self.failure(code: 11, detail: "reconciliation checkpoint deletion identity does not match")
+            }
+            // Rust clears its old monotonic checkpoint; retain the independently proved native prefix.
+            return Self.empty()
+        }
         try checkpointStore.removeIfPresent(url)
         if loadedCheckpoint?.uploadSessionBytes == bytes { loadedCheckpoint = nil }
         return Self.empty()
@@ -433,7 +474,8 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         loadedCheckpoint = value
         return Self.single(.init(
             kind: EncryptedUploadV2Abi.eventCheckpointLoaded,
-            fields: [.bytes(id: EncryptedUploadV2Abi.fieldCheckpoint, value: value.coreCheckpoint)]
+            fields: value.requiresCoreRestart == true ? []
+                : [.bytes(id: EncryptedUploadV2Abi.fieldCheckpoint, value: value.coreCheckpoint)]
         ))
     }
 
@@ -444,8 +486,12 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         guard UUID(uuidString: sinkID) != nil else {
             throw Self.failure(code: 1, detail: "encrypted upload v2 sink ID is invalid")
         }
-        let nextOffset = try effect.packet.fields.v2RequiredUnsigned(EncryptedUploadV2Abi.fieldOffset)
+        var nextOffset = try effect.packet.fields.v2RequiredUnsigned(EncryptedUploadV2Abi.fieldOffset)
         if let loadedCheckpoint {
+            if loadedCheckpoint.requiresCoreRestart == true, nextOffset == 0 {
+                try validateReconciliation(effect)
+                nextOffset = loadedCheckpoint.nextCiphertextOffset
+            }
             guard loadedCheckpoint.sinkID == sinkID,
                   loadedCheckpoint.nextCiphertextOffset == nextOffset
             else {
@@ -558,7 +604,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
     ) async throws -> AsyncThrowingStream<CoreHostEventPayload, Error> {
         guard activeTransfer == nil,
               openingTransportSessionID == nil,
-              retainedTransportSessionID == nil
+              retainedTransportSessionID == nil || reconciliation != nil
         else {
             throw Self.failure(
                 code: 8,
@@ -581,7 +627,14 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         acceptedReceipt = nil
         let coreCheckpoint = effect.packet.fields.v2OptionalBytes(EncryptedUploadV2Abi.fieldCheckpoint)
         let checkpoint: EncryptedUploadV2CheckpointValue
-        if let coreCheckpoint {
+        let retry = reconciliation?.retry
+        if loadedCheckpoint?.requiresCoreRestart == true {
+            try validateReconciliation(effect)
+            guard coreCheckpoint == nil, let loadedCheckpoint, loadedCheckpoint.matches(context) else {
+                throw Self.failure(code: 11, detail: "reconciled checkpoint identity does not match START")
+            }
+            checkpoint = loadedCheckpoint.nativeCheckpoint
+        } else if let coreCheckpoint {
             guard let loadedCheckpoint,
                   loadedCheckpoint.coreCheckpoint == coreCheckpoint,
                   loadedCheckpoint.matches(context)
@@ -640,7 +693,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             dataPayloadBytes: context.dataPayloadBytes
         )
         let task = Task {
-            try await openTransfer(request, coreCheckpoint == nil ? nil : checkpoint)
+            try await (retry ?? openTransfer)(request, checkpoint.nextCiphertextOffset == 0 ? nil : checkpoint)
         }
         openingTask = task
         let opened: EncryptedUploadV2TransferOpenResult
@@ -660,18 +713,37 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         }
         openingTransportSessionID = nil
         openingTask = nil
-        guard case let .opened(notifications) = opened else {
-            return AsyncThrowingStream { continuation in
-                continuation.yield(.init(kind: EncryptedUploadV2Abi.eventResumeRejected))
-                continuation.finish()
-            }
-        }
         retainedTransportSessionID = context.transportSessionID
-        let reader = EncryptedUploadV2NotificationReader(
-            notifications,
-            maximumBufferedBytes: Self.maximumNotificationBufferBytes,
-            maximumBufferedEvents: min(Int(context.windowPackets) + 582, 4_096)
-        )
+        let reader: EncryptedUploadV2NotificationReader
+        switch opened {
+        case let .resumeRejected(rejected, retry):
+            guard let coreCheckpoint, reconciliation == nil,
+                  loadedCheckpoint?.requiresCoreRestart != true
+            else {
+                throw Self.failure(code: 11, detail: "repeated encrypted upload v2 resume rejection")
+            }
+            let candidate = try await receiver.reconciliationCheckpoint(rejected)
+            try validateGeneration(startGeneration)
+            try Task.checkCancellation()
+            loadedCheckpoint = try persist(
+                coreCheckpoint: coreCheckpoint, nativeCheckpoint: candidate,
+                context: context, rootDirectory: rootDirectory, requiresCoreRestart: true
+            )
+            reconciliation = Reconciliation(
+                context: context, cancellationID: effect.cancellationID,
+                generation: startGeneration, retry: retry
+            )
+            return Self.single(.init(kind: EncryptedUploadV2Abi.eventResumeRejected))
+        case let .opened(stream):
+            reader = EncryptedUploadV2NotificationReader(
+                stream, maximumBufferedBytes: Self.maximumNotificationBufferBytes,
+                maximumBufferedEvents: min(Int(context.windowPackets) + 582, 4_096)
+            )
+            reconciliation = nil
+        case let .openedReader(retainedReader):
+            reader = retainedReader
+            reconciliation = nil
+        }
         activeTransfer = ActiveTransfer(
             context: context,
             receiver: receiver,
@@ -695,6 +767,20 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             )
         }
         return pair.stream
+    }
+
+    private func validateReconciliation(_ effect: CoreEffect) throws {
+        try Task.checkCancellation()
+        guard !cancellationClaimed else {
+            throw Self.failure(code: 16, detail: "encrypted upload v2 reconciliation was cancelled")
+        }
+        if let reconciliation {
+            guard reconciliation.generation == generation,
+                  reconciliation.cancellationID == effect.cancellationID
+            else {
+                throw Self.failure(code: 16, detail: "encrypted upload v2 reconciliation owner changed")
+            }
+        }
     }
 
     private func saveCheckpoint(
@@ -1110,7 +1196,8 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         coreCheckpoint: Data,
         nativeCheckpoint: EncryptedUploadV2CheckpointValue,
         context: Context,
-        rootDirectory: URL
+        rootDirectory: URL,
+        requiresCoreRestart: Bool = false
     ) throws -> PersistedEncryptedUploadV2Checkpoint {
         let directory = rootDirectory.appendingPathComponent("Checkpoints", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -1128,7 +1215,8 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             revision: nativeCheckpoint.revision,
             nextCiphertextOffset: nativeCheckpoint.nextCiphertextOffset,
             prefixSHA256: nativeCheckpoint.prefixSHA256,
-            highestContiguousSequence: nativeCheckpoint.highestContiguousSequence
+            highestContiguousSequence: nativeCheckpoint.highestContiguousSequence,
+            requiresCoreRestart: requiresCoreRestart ? true : nil
         )
         let url = directory.appendingPathComponent(context.uploadSessionID.uuidString).appendingPathExtension("json")
         try checkpointStore.replace(JSONEncoder().encode(value), at: url)
@@ -1360,6 +1448,7 @@ private struct PersistedEncryptedUploadV2Checkpoint: Codable, Sendable {
     let nextCiphertextOffset: UInt64
     let prefixSHA256: Data
     let highestContiguousSequence: UInt32?
+    let requiresCoreRestart: Bool?
 
     var nativeCheckpoint: EncryptedUploadV2CheckpointValue {
         .init(
@@ -1404,6 +1493,7 @@ actor EncryptedUploadV2NotificationReader {
     private var bufferedBytes = 0
     private var waiter: CheckedContinuation<Event, Never>?
     private var collectionTask: Task<Void, Never>?
+    private(set) var sourceIsOpen = true
     private var paused = false
     private var terminal: Event?
     private var observedCount = 0
@@ -1427,14 +1517,17 @@ actor EncryptedUploadV2NotificationReader {
                 for try await value in stream {
                     guard self.push(.value(value)) else { return }
                 }
+                if !Task.isCancelled { sourceIsOpen = false }
                 _ = self.push(.finished)
             } catch {
+                if !Task.isCancelled { sourceIsOpen = false }
                 _ = self.push(.failed(error))
             }
         }
     }
 
     func next() async throws -> Data? {
+        try Task.checkCancellation()
         guard !paused else {
             throw EncryptedUploadV2NotificationReaderError.payloadWhilePaused
         }
@@ -1445,13 +1538,24 @@ actor EncryptedUploadV2NotificationReader {
         } else if let terminal {
             event = terminal
         } else {
-            event = await withCheckedContinuation { waiter = $0 }
+            event = await withTaskCancellationHandler {
+                await withCheckedContinuation { waiter = $0 }
+            } onCancel: {
+                Task { await self.cancel() }
+            }
         }
+        try Task.checkCancellation()
         switch event {
         case let .value(value): return value
         case .finished: return nil
         case let .failed(error): throw error
         }
+    }
+
+    func checkOpen() throws {
+        try Task.checkCancellation()
+        if let terminal { try Self.resolve(terminal) }
+        guard sourceIsOpen else { throw EncryptedUploadV2NotificationReaderError.cancelled }
     }
 
     func pause() throws {
@@ -1506,6 +1610,8 @@ actor EncryptedUploadV2NotificationReader {
         }
         if let waiter {
             self.waiter = nil
+            if case .finished = event { terminal = event }
+            if case .failed = event { terminal = event }
             waiter.resume(returning: event)
         } else {
             switch event {

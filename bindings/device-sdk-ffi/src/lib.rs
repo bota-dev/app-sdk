@@ -19,7 +19,7 @@ pub use packet::{
 use bota_device_sdk_core::{
     engine::{CancellationId, EffectRequest, Event, WorkflowEngine, WorkflowStatus},
     error::{DeviceSdkError, ErrorCode, Operation},
-    protocol::DeviceLogDecoder,
+    protocol::{DeviceDiagnosticsDecoder, DeviceLogDecoder},
 };
 use error::internal_error;
 use std::{
@@ -34,6 +34,7 @@ struct EngineBridge {
     engine: WorkflowEngine,
     outputs: VecDeque<EffectRequest>,
     log_decoder: DeviceLogDecoder,
+    diagnostics_decoder: DeviceDiagnosticsDecoder,
     last_error: Option<DeviceSdkError>,
 }
 
@@ -292,6 +293,12 @@ unsafe fn protocol_call(
     }
     let packet = unsafe { *packet };
     if packet.abi_version != ABI_VERSION {
+        if packet.kind == packet_kind::PROTOCOL_DECODE_DIAGNOSTICS {
+            unsafe { out_packet.write(ptr::null_mut()) };
+            if let Ok(mut bridge) = unsafe { &*engine }.bridge.lock() {
+                bridge.diagnostics_decoder.reset();
+            }
+        }
         return BotaDeviceSdkStatusV1::UnsupportedAbi;
     }
 
@@ -323,7 +330,8 @@ unsafe fn protocol_call(
 /// # Safety
 ///
 /// All pointers must be live for this call. A successful packet must be freed
-/// exactly once. Stateful log decoding is scoped to `engine`.
+/// exactly once. Stateful log and diagnostics decoding is scoped to `engine`.
+/// Diagnostics with an empty VALUE resets the pending read; reset before LIST.
 pub unsafe extern "C" fn bota_device_sdk_v1_protocol_decode(
     engine: *mut BotaDeviceSdkEngineV1,
     packet: *const BotaDeviceSdkPacketViewV1,
@@ -331,6 +339,9 @@ pub unsafe extern "C" fn bota_device_sdk_v1_protocol_decode(
 ) -> BotaDeviceSdkStatusV1 {
     unsafe {
         protocol_call(engine, packet, out_packet, |bridge, packet| {
+            if packet.kind == packet_kind::PROTOCOL_DECODE_DIAGNOSTICS {
+                return protocol::decode_diagnostics(packet, &mut bridge.diagnostics_decoder);
+            }
             protocol::decode(packet, &mut bridge.log_decoder)
         })
     }

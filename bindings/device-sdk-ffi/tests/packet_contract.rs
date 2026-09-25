@@ -132,6 +132,76 @@ fn encrypted_upload_v2_contract_inspection_allocations_are_additive() {
 }
 
 #[test]
+fn diagnostic_allocations_are_additive_and_match_the_public_header() {
+    assert_eq!(packet_kind::PROTOCOL_DECODE_DIAGNOSTICS, 0x0525);
+    assert_eq!(packet_kind::PROTOCOL_ENCODE_DIAGNOSTIC_COMMAND, 0x0526);
+    let fields = [
+        (
+            "DIAGNOSTIC_SCHEMA_VERSION",
+            field_id::DIAGNOSTIC_SCHEMA_VERSION,
+        ),
+        ("DIAGNOSTIC_EVENT_COUNT", field_id::DIAGNOSTIC_EVENT_COUNT),
+        ("DIAGNOSTIC_EVENT_ID", field_id::DIAGNOSTIC_EVENT_ID),
+        ("DIAGNOSTIC_EVENT_TYPE", field_id::DIAGNOSTIC_EVENT_TYPE),
+        ("DIAGNOSTIC_REASON_CODE", field_id::DIAGNOSTIC_REASON_CODE),
+        ("DIAGNOSTIC_UPTIME_MS", field_id::DIAGNOSTIC_UPTIME_MS),
+        ("DIAGNOSTIC_SIGNATURE", field_id::DIAGNOSTIC_SIGNATURE),
+        (
+            "DIAGNOSTIC_FIRMWARE_BUILD_ID",
+            field_id::DIAGNOSTIC_FIRMWARE_BUILD_ID,
+        ),
+        ("DIAGNOSTIC_SUBSYSTEM", field_id::DIAGNOSTIC_SUBSYSTEM),
+        (
+            "DIAGNOSTIC_STATE_BEFORE_EVENT",
+            field_id::DIAGNOSTIC_STATE_BEFORE_EVENT,
+        ),
+        ("DIAGNOSTIC_HAS_REPORT", field_id::DIAGNOSTIC_HAS_REPORT),
+        ("DIAGNOSTIC_CPU_ID", field_id::DIAGNOSTIC_CPU_ID),
+        ("DIAGNOSTIC_CPU_EMU", field_id::DIAGNOSTIC_CPU_EMU),
+        ("DIAGNOSTIC_CORE_EMU", field_id::DIAGNOSTIC_CORE_EMU),
+        ("DIAGNOSTIC_HSB_EMU", field_id::DIAGNOSTIC_HSB_EMU),
+        ("DIAGNOSTIC_AUDIO_EMU", field_id::DIAGNOSTIC_AUDIO_EMU),
+        ("DIAGNOSTIC_WIRELESS_EMU", field_id::DIAGNOSTIC_WIRELESS_EMU),
+        ("DIAGNOSTIC_TASK", field_id::DIAGNOSTIC_TASK),
+        ("DIAGNOSTIC_RETI", field_id::DIAGNOSTIC_RETI),
+        ("DIAGNOSTIC_RETS", field_id::DIAGNOSTIC_RETS),
+        (
+            "DIAGNOSTIC_PC_TRACE_COUNT",
+            field_id::DIAGNOSTIC_PC_TRACE_COUNT,
+        ),
+        ("DIAGNOSTIC_PC_TRACE", field_id::DIAGNOSTIC_PC_TRACE),
+        (
+            "DIAGNOSTIC_HEAP_FREE_BYTES",
+            field_id::DIAGNOSTIC_HEAP_FREE_BYTES,
+        ),
+        (
+            "DIAGNOSTIC_TASK_STACK_REMAINING_BYTES",
+            field_id::DIAGNOSTIC_TASK_STACK_REMAINING_BYTES,
+        ),
+        (
+            "DIAGNOSTIC_BREADCRUMB_COUNT",
+            field_id::DIAGNOSTIC_BREADCRUMB_COUNT,
+        ),
+        ("DIAGNOSTIC_DELTA_MS", field_id::DIAGNOSTIC_DELTA_MS),
+        (
+            "DIAGNOSTIC_BREADCRUMB_CODE",
+            field_id::DIAGNOSTIC_BREADCRUMB_CODE,
+        ),
+        (
+            "DIAGNOSTIC_BREADCRUMB_ARG0",
+            field_id::DIAGNOSTIC_BREADCRUMB_ARG0,
+        ),
+    ];
+    let header = include_str!("../include/bota_device_sdk.h");
+    assert!(header.contains("BOTA_DEVICE_SDK_V1_PROTOCOL_DECODE_DIAGNOSTICS = 0x0525;"));
+    assert!(header.contains("BOTA_DEVICE_SDK_V1_PROTOCOL_ENCODE_DIAGNOSTIC_COMMAND = 0x0526;"));
+    for (index, (name, value)) in fields.iter().enumerate() {
+        assert_eq!(*value, 171 + index as u32);
+        assert!(header.contains(&format!("BOTA_DEVICE_SDK_V1_FIELD_{name} = {value};")));
+    }
+}
+
+#[test]
 fn owned_packet_view_preserves_scalar_utf8_and_binary_fields_until_free() {
     let packet = BotaDeviceSdkPacketV1::new(packet_kind::COMMAND_CONNECT)
         .with_i64(field_id::RSSI, -67)

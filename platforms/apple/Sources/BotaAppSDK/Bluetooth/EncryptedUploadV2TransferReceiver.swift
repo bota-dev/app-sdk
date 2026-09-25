@@ -166,6 +166,30 @@ actor EncryptedUploadV2TransferReceiver {
         prepared = true
     }
 
+    func reconciliationCheckpoint(
+        _ rejected: EncryptedUploadV2ResumeRejectionValue
+    ) throws -> EncryptedUploadV2CheckpointValue {
+        guard prepared, !terminal, !completed,
+              rejected.transportSessionID == transportSessionID,
+              rejected.reason == 0x000f,
+              rejected.checkpointRevision < checkpoint.revision,
+              rejected.nextCiphertextOffset < checkpoint.nextCiphertextOffset,
+              (rejected.nextCiphertextOffset == 0) == (rejected.checkpointRevision == 0),
+              Self.secureEqual(
+                try sha256Prefix(length: rejected.nextCiphertextOffset), rejected.prefixSHA256
+              )
+        else {
+            throw EncryptedUploadV2TransferReceiverError.checkpointMismatch
+        }
+        // A resumed transport restarts packet numbering; the old transport's sequence is not reusable.
+        return .init(
+            revision: rejected.checkpointRevision,
+            nextCiphertextOffset: rejected.nextCiphertextOffset,
+            prefixSHA256: rejected.prefixSHA256,
+            highestContiguousSequence: rejected.nextCiphertextOffset == 0 ? nil : 0
+        )
+    }
+
     func receive(_ rawValue: Data) throws -> EncryptedUploadV2TransferReceiverEvent? {
         guard prepared, !terminal, !completed else {
             throw EncryptedUploadV2TransferReceiverError.notPrepared

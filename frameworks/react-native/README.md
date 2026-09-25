@@ -92,6 +92,30 @@ Its target-facade tests and the maintenance SDK `0.0.67` runtime tests are
 cross-referenced by the same canonical v2 workflow evidence in CI and tagged
 release verification. The frozen public compatibility surface remains `0.0.65`.
 
+## Unpublished Maintenance Additions
+
+Current source follows the diagnostic and upload-recovery additions from
+maintenance SDK commit `318974f925a573cf04b0d624978bee04784af09b`. These additions
+are not part of the published `2.0.0-beta.1` package.
+
+- `BotaClient.devices.readDiagnosticEvents(device)` returns a bounded batch.
+  Reading does not delete it. After the application durably accepts events,
+  call `acknowledgeDiagnosticEvents(device, acceptedEventIds)` with their exact
+  16-character lowercase hexadecimal IDs. The native `BotaDeviceSDK.logs` API
+  exposes the same methods. Firmware must support the diagnostics service.
+- Configure `uploadRecoveryProvider` to refresh upload credentials for the
+  original recording and account/project scope after restart. Only non-secret
+  queue metadata persists; recording bytes stay in native files. Completion
+  acknowledgement is required before releasing recoverable files.
+- Legacy `RecordingDataStore` JavaScript byte callbacks are not supported.
+  Supplying one fails configuration explicitly. Use the native file store and
+  credential/completion callbacks instead; this is a migration adaptation,
+  not byte-store API equivalence.
+
+See the repository's `docs/parity/` notes for recovery contracts and test
+coverage. This does not enable encrypted-v2 device support or complete the
+separate physical-device and application rollout gates.
+
 ## Documentation
 
 See [docs.bota.dev](https://docs.bota.dev) for pairing, provisioning,

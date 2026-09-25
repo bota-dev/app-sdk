@@ -25,6 +25,7 @@ actor EncryptedUploadV2TransferControl {
     private var cleanupUncertain = false
     private var confirmationWriteAttemptedSessionID: UInt64?
     private var confirmationCancellationClaimedSessionID: UInt64?
+    private(set) var connectionGeneration: UInt64 = 0
 
     init(
         mapper: CoreModelMapper,
@@ -70,7 +71,9 @@ actor EncryptedUploadV2TransferControl {
         peripheralID: String,
         request: EncryptedUploadV2StartRequestValue,
         replyTimeoutNanoseconds: UInt64 = defaultReplyTimeoutNanoseconds,
-        cleanupTimeoutNanoseconds: UInt64 = defaultCleanupTimeoutNanoseconds
+        cleanupTimeoutNanoseconds: UInt64 = defaultCleanupTimeoutNanoseconds,
+        expectedConnectionGeneration: UInt64? = nil,
+        retryRejectedSession: Bool = false
     ) async throws -> EncryptedUploadV2StartAcknowledgementValue {
         let frame = try mapper.createEncryptedUploadV2Start(
             transportSessionID: request.transportSessionID,
@@ -91,6 +94,9 @@ actor EncryptedUploadV2TransferControl {
             failedMessageType: Self.startMessageType,
             replyTimeoutNanoseconds: replyTimeoutNanoseconds,
             cleanupTimeoutNanoseconds: cleanupTimeoutNanoseconds,
+            expectedConnectionGeneration: expectedConnectionGeneration,
+            retryRejectedSession: retryRejectedSession,
+            maximumBufferedEvents: min(Int(request.windowPackets) + 582, 4_096),
             retainSubscription: { _ in true }
         ) { value in
             guard case let .startAccepted(acknowledgement) = value else { return nil }
@@ -125,7 +131,10 @@ actor EncryptedUploadV2TransferControl {
         peripheralID: String,
         request: EncryptedUploadV2ResumeRequestValue,
         replyTimeoutNanoseconds: UInt64 = defaultReplyTimeoutNanoseconds,
-        cleanupTimeoutNanoseconds: UInt64 = defaultCleanupTimeoutNanoseconds
+        cleanupTimeoutNanoseconds: UInt64 = defaultCleanupTimeoutNanoseconds,
+        expectedConnectionGeneration: UInt64? = nil,
+        retryRejectedSession: Bool = false,
+        retainRejectedSubscription: Bool = false
     ) async throws -> EncryptedUploadV2ResumeDecision {
         let frame = try mapper.createEncryptedUploadV2ResumeRequest(
             transportSessionID: request.transportSessionID,
@@ -145,9 +154,12 @@ actor EncryptedUploadV2TransferControl {
             failedMessageType: Self.resumeRequestMessageType,
             replyTimeoutNanoseconds: replyTimeoutNanoseconds,
             cleanupTimeoutNanoseconds: cleanupTimeoutNanoseconds,
+            expectedConnectionGeneration: expectedConnectionGeneration,
+            retryRejectedSession: retryRejectedSession,
+            maximumBufferedEvents: min(Int(request.windowPackets) + 582, 4_096),
             retainSubscription: { decision in
                 if case .accepted = decision { return true }
-                return false
+                return retainRejectedSubscription
             }
         ) { value in
             switch value {
@@ -181,17 +193,21 @@ actor EncryptedUploadV2TransferControl {
         }
         switch terminal {
         case let .value(decision):
+            if case .rejected = decision { activeTransfer?.rejected = true }
             return decision
         case let .deviceError(error):
             throw Self.deviceRejection(error)
         }
     }
 
-    func resetAfterConfirmedDisconnect() {
+    func resetAfterConfirmedDisconnect() async {
+        connectionGeneration &+= 1
         cleanupUncertain = false
+        let reader = activeTransfer?.reader
         activeTransfer = nil
         confirmationWriteAttemptedSessionID = nil
         confirmationCancellationClaimedSessionID = nil
+        await reader?.cancel()
     }
 
     func confirmationAttemptedOrClaimCancellation(transportSessionID: UInt64) -> Bool {
@@ -218,9 +234,20 @@ actor EncryptedUploadV2TransferControl {
                 detail: "the active encrypted transfer notification stream is already claimed"
             )
         }
+        guard !transfer.rejected else {
+            throw Self.error(code: .unexpectedEvent, detail: "a rejected transfer has no claimable payload stream")
+        }
         transfer.notificationStreamClaimed = true
         activeTransfer = transfer
         return transfer.notifications
+    }
+
+    func claimNotificationReader(transportSessionID: UInt64) throws -> EncryptedUploadV2NotificationReader {
+        _ = try claimNotificationStream(transportSessionID: transportSessionID)
+        guard let transfer = activeTransfer else {
+            throw Self.error(code: .identityMismatch, detail: "encrypted transfer notification owner is missing")
+        }
+        return transfer.reader
     }
 
     func writeActiveTransferFrame(
@@ -245,6 +272,9 @@ actor EncryptedUploadV2TransferControl {
                 detail: "active encrypted transfer frame is malformed or belongs to another session"
             )
         }
+        try await transfer.reader.checkOpen()
+        try validateConnection(transfer.connectionGeneration)
+        try Task.checkCancellation()
         try await write(transfer.peripheralID, frame)
     }
 
@@ -285,6 +315,8 @@ actor EncryptedUploadV2TransferControl {
         }
         exchangeActive = true
         defer { exchangeActive = false }
+        try await transfer.reader.checkOpen()
+        try validateConnection(transfer.connectionGeneration)
         try Task.checkCancellation()
         guard confirmationCancellationClaimedSessionID != transportSessionID else {
             throw Self.error(
@@ -305,7 +337,9 @@ actor EncryptedUploadV2TransferControl {
         let cleaned = await cleanup(
             peripheralID: transfer.peripheralID,
             abort: nil,
-            timeoutNanoseconds: cleanupTimeoutNanoseconds
+            timeoutNanoseconds: cleanupTimeoutNanoseconds,
+            connectionGeneration: transfer.connectionGeneration,
+            reader: transfer.reader
         )
         activeTransfer = nil
         guard cleaned else {
@@ -344,8 +378,10 @@ actor EncryptedUploadV2TransferControl {
         )
         let cleaned = await cleanup(
             peripheralID: transfer.peripheralID,
-            abort: abort,
-            timeoutNanoseconds: cleanupTimeoutNanoseconds
+            abort: transfer.rejected ? nil : abort,
+            timeoutNanoseconds: cleanupTimeoutNanoseconds,
+            connectionGeneration: transfer.connectionGeneration,
+            reader: transfer.reader
         )
         activeTransfer = nil
         guard cleaned else {
@@ -363,10 +399,24 @@ actor EncryptedUploadV2TransferControl {
         failedMessageType: UInt8,
         replyTimeoutNanoseconds: UInt64,
         cleanupTimeoutNanoseconds: UInt64,
+        expectedConnectionGeneration: UInt64?,
+        retryRejectedSession: Bool,
+        maximumBufferedEvents: Int,
         retainSubscription: @escaping @Sendable (Value) -> Bool,
         match: @escaping @Sendable (EncryptedUploadV2TransferControlValue) throws -> Value?
     ) async throws -> MatchedTransferControlReply<Value> {
-        guard !exchangeActive, activeTransfer == nil else {
+        let connectionGeneration = expectedConnectionGeneration ?? self.connectionGeneration
+        try validateConnection(connectionGeneration)
+        let retained = retryRejectedSession ? activeTransfer : nil
+        if retryRejectedSession {
+            guard let retained, retained.rejected, !retained.notificationStreamClaimed,
+                  retained.peripheralID == peripheralID, retained.transportSessionID == transportSessionID,
+                  retained.connectionGeneration == connectionGeneration
+            else {
+                throw Self.error(code: .notConnected, detail: "the rejected transfer connection is no longer owned")
+            }
+        }
+        guard !exchangeActive, activeTransfer == nil || retained != nil else {
             throw Self.error(
                 code: .operationInProgress,
                 detail: "another encrypted transfer-control owner is active"
@@ -385,17 +435,29 @@ actor EncryptedUploadV2TransferControl {
             transportSessionID: transportSessionID,
             reason: Self.cleanupAbortReason
         )
-        let notifications = try await subscribe(peripheralID)
+        let reader: EncryptedUploadV2NotificationReader
+        if let retained {
+            reader = retained.reader
+        } else {
+            reader = EncryptedUploadV2NotificationReader(
+                try await subscribe(peripheralID), maximumBufferedBytes: 1_048_576,
+                maximumBufferedEvents: maximumBufferedEvents
+            )
+            await reader.start()
+        }
+        let notifications = AsyncThrowingStream<Data, Error>(unfolding: { try await reader.next() })
         var sent = false
         var terminalReleasesDevice = false
         var cleanupAttempted = false
 
         do {
+            try validateConnection(connectionGeneration)
+            try await reader.checkOpen()
             let reply = try await withThrowingTaskGroup(
                 of: MatchedTransferControlReply<Value>.self
             ) { group in
                 group.addTask {
-                    for try await data in notifications {
+                    while let data = try await reader.next() {
                         let value = try self.mapper.decodeEncryptedUploadV2TransferControl(data)
                         guard value.transportSessionID == transportSessionID else {
                             throw Self.error(
@@ -430,6 +492,9 @@ actor EncryptedUploadV2TransferControl {
                 }
                 do {
                     try Task.checkCancellation()
+                    try validateConnection(connectionGeneration)
+                    try await reader.checkOpen()
+                    try validateConnection(connectionGeneration)
                     sent = true
                     try await write(peripheralID, frame)
                     group.addTask {
@@ -453,6 +518,7 @@ actor EncryptedUploadV2TransferControl {
                     throw error
                 }
             }
+            try validateConnection(connectionGeneration)
             let retain = switch reply {
             case let .value(value): retainSubscription(value)
             case .deviceError: false
@@ -462,7 +528,9 @@ actor EncryptedUploadV2TransferControl {
                 activeTransfer = ActiveEncryptedUploadV2Transfer(
                     peripheralID: peripheralID,
                     transportSessionID: transportSessionID,
-                    notifications: notifications
+                    notifications: notifications,
+                    reader: reader,
+                    connectionGeneration: connectionGeneration
                 )
                 confirmationWriteAttemptedSessionID = nil
                 confirmationCancellationClaimedSessionID = nil
@@ -474,7 +542,9 @@ actor EncryptedUploadV2TransferControl {
             guard await cleanup(
                 peripheralID: peripheralID,
                 abort: nil,
-                timeoutNanoseconds: cleanupTimeoutNanoseconds
+                timeoutNanoseconds: cleanupTimeoutNanoseconds,
+                connectionGeneration: connectionGeneration,
+                reader: reader
             ) else {
                 throw Self.error(
                     code: .uploadOwnershipUnknown,
@@ -487,9 +557,12 @@ actor EncryptedUploadV2TransferControl {
                 _ = await cleanup(
                     peripheralID: peripheralID,
                     abort: sent && !terminalReleasesDevice ? abort : nil,
-                    timeoutNanoseconds: cleanupTimeoutNanoseconds
+                    timeoutNanoseconds: cleanupTimeoutNanoseconds,
+                    connectionGeneration: connectionGeneration,
+                    reader: reader
                 )
             }
+            if self.connectionGeneration == connectionGeneration { activeTransfer = nil }
             throw error
         }
     }
@@ -497,28 +570,45 @@ actor EncryptedUploadV2TransferControl {
     private func cleanup(
         peripheralID: String,
         abort: Data?,
-        timeoutNanoseconds: UInt64
+        timeoutNanoseconds: UInt64,
+        connectionGeneration: UInt64,
+        reader: EncryptedUploadV2NotificationReader
     ) async -> Bool {
+        guard self.connectionGeneration == connectionGeneration, await reader.sourceIsOpen else {
+            await reader.cancel()
+            return true
+        }
         let write = self.write
         let unsubscribe = self.unsubscribe
         let completed = await Self.boundedCleanup(timeoutNanoseconds: timeoutNanoseconds) {
             var firstError: Error?
             if let abort {
                 do {
+                    try await self.validateConnection(connectionGeneration)
+                    guard await reader.sourceIsOpen else { return }
                     try await write(peripheralID, abort)
                 } catch {
                     firstError = error
                 }
             }
             do {
+                try await self.validateConnection(connectionGeneration)
+                guard await reader.sourceIsOpen else { return }
                 try await unsubscribe(peripheralID)
             } catch {
                 if firstError == nil { firstError = error }
             }
             if let firstError { throw firstError }
         }
-        if !completed { cleanupUncertain = true }
+        await reader.cancel()
+        if !completed, self.connectionGeneration == connectionGeneration { cleanupUncertain = true }
         return completed
+    }
+
+    private func validateConnection(_ expected: UInt64) throws {
+        guard connectionGeneration == expected else {
+            throw Self.error(code: .notConnected, detail: "encrypted transfer connection was replaced")
+        }
     }
 
     private static func boundedCleanup(
@@ -586,7 +676,10 @@ private struct ActiveEncryptedUploadV2Transfer: Sendable {
     let peripheralID: String
     let transportSessionID: UInt64
     let notifications: AsyncThrowingStream<Data, Error>
+    let reader: EncryptedUploadV2NotificationReader
+    let connectionGeneration: UInt64
     var notificationStreamClaimed = false
+    var rejected = false
 }
 
 private enum MatchedTransferControlReply<Value: Sendable>: Sendable {

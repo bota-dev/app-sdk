@@ -9,6 +9,8 @@ import java.util.UUID
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+internal data class EncryptedUploadV2ReplayBoundary(val revision: UInt, val offset: ULong)
+
 internal data class PersistedEncryptedUploadV2Checkpoint(
     val coreCheckpoint: ByteArray,
     val serialNumber: String,
@@ -24,6 +26,7 @@ internal data class PersistedEncryptedUploadV2Checkpoint(
     val nextCiphertextOffset: ULong,
     val prefixSha256: ByteArray,
     val highestContiguousSequence: UInt?,
+    val replayBoundary: EncryptedUploadV2ReplayBoundary? = null,
 )
 
 internal class EncryptedUploadV2CheckpointStore(private val journals: JournalStore) {
@@ -181,6 +184,11 @@ internal class EncryptedUploadV2CheckpointStore(private val journals: JournalSto
                 output.writeBounded(value.prefixSha256, DigestBytes)
                 output.writeBoolean(value.highestContiguousSequence != null)
                 value.highestContiguousSequence?.let { output.writeInt(it.toInt()) }
+                output.writeBoolean(value.replayBoundary != null)
+                value.replayBoundary?.let {
+                    output.writeInt(it.revision.toInt())
+                    output.writeLong(it.offset.toLong())
+                }
             }
             bytes.toByteArray()
         }
@@ -188,7 +196,9 @@ internal class EncryptedUploadV2CheckpointStore(private val journals: JournalSto
     private fun decode(value: ByteArray): PersistedEncryptedUploadV2Checkpoint {
         if (value.size > MaximumSidecarBytes) invalid("checkpoint sidecar is oversized")
         return DataInputStream(ByteArrayInputStream(value)).use { input ->
-            if (input.readInt() != Magic || input.readInt() != Version) invalid("checkpoint sidecar header is invalid")
+            if (input.readInt() != Magic) invalid("checkpoint sidecar header is invalid")
+            val version = input.readInt()
+            if (version !in 1..Version) invalid("checkpoint sidecar version is invalid")
             val decoded = PersistedEncryptedUploadV2Checkpoint(
                 coreCheckpoint = input.readBounded(MaximumCoreCheckpointBytes),
                 serialNumber = input.readBounded(MaximumIdentifierBytes).decodeToString(),
@@ -204,9 +214,17 @@ internal class EncryptedUploadV2CheckpointStore(private val journals: JournalSto
                 nextCiphertextOffset = input.readLong().toULong(),
                 prefixSha256 = input.readBounded(DigestBytes),
                 highestContiguousSequence = if (input.readBoolean()) input.readInt().toUInt() else null,
+                replayBoundary = if (version >= 2 && input.readBoolean()) {
+                    EncryptedUploadV2ReplayBoundary(input.readInt().toUInt(), input.readLong().toULong())
+                } else null,
             )
             if (input.available() != 0 || decoded.prefixSha256.size != DigestBytes) {
                 invalid("checkpoint sidecar payload is invalid")
+            }
+            decoded.replayBoundary?.let {
+                if ((it.revision < decoded.revision && it.offset <= decoded.nextCiphertextOffset) ||
+                    it.offset > Long.MAX_VALUE.toULong()
+                ) invalid("checkpoint replay boundary is invalid")
             }
             decoded
         }
@@ -241,7 +259,7 @@ internal class EncryptedUploadV2CheckpointStore(private val journals: JournalSto
         const val MaximumCatalogEntries = 64
         const val MaximumCatalogBytes = 4 * 1024 * 1024
         const val Magic = 0x42563243
-        const val Version = 1
+        const val Version = 2
         const val DigestBytes = 32
         const val MaximumIdentifierBytes = 128
         const val MaximumCoreCheckpointBytes = 32 * 1024

@@ -1,4 +1,10 @@
-import type { DeviceRecording, UploadInfo } from '../models/Recording';
+import type { DeviceRecording, RecordingDataStore, UploadInfo, UploadRecoveryProvider } from '../models/Recording';
+
+export interface RecordingManagerOptions {
+  uploadRecoveryProvider?: UploadRecoveryProvider;
+  /** Unsupported: recording bytes remain native-owned. Configuration throws. */
+  recordingDataStore?: RecordingDataStore;
+}
 
 export type UploadInfoProvider = (
   recording: DeviceRecording

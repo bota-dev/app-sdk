@@ -11,7 +11,12 @@
   },
   "reactNativeWorkflowBaseline": {
     "version": "0.0.67",
-    "revision": "e11fde5be40027ec6cf1985fc0eadb00ece23e65"
+    "revision": "318974f925a573cf04b0d624978bee04784af09b"
+  },
+  "reactNativeMaintenanceBaseline": {
+    "version": "0.0.67",
+    "revision": "318974f925a573cf04b0d624978bee04784af09b",
+    "contract": "protocol/baseline/react-native-maintenance-additions-0.0.67.json"
   },
   "nativeAbi": {
     "version": 1,

@@ -10,13 +10,14 @@ use bota_device_sdk_core::{
         HeartbeatConnections, IdleTimeout, PowerManagement, RecordingUuid,
     },
     protocol::{
-        AckType, CommonHeaderV2, ConfirmV2, DeviceCommand, DeviceLogDecoder,
-        EncryptedUploadV2SignedBlob, EncryptedUploadV2Transfer, FirmwareStatus,
-        RecordingControlCommand, ResumeV2, StartV2, TransferCommand, TransferPacket,
-        WiFiScanUpdate, WindowAckV2, decode_encrypted_upload_v2_capabilities,
-        decode_encrypted_upload_v2_signed_blob, decode_encrypted_upload_v2_status,
-        decode_encrypted_upload_v2_transfer, encode_ack, encode_bounded_payload,
-        encode_connection_settings, encode_device_command, encode_encrypted_upload_v2_signed_blob,
+        AckType, CommonHeaderV2, ConfirmV2, DeviceCommand, DeviceDiagnosticsBatch,
+        DeviceDiagnosticsDecoder, DeviceLogDecoder, DiagnosticCommand, EncryptedUploadV2SignedBlob,
+        EncryptedUploadV2Transfer, FirmwareStatus, RecordingControlCommand, ResumeV2, StartV2,
+        TransferCommand, TransferPacket, WiFiScanUpdate, WindowAckV2,
+        decode_encrypted_upload_v2_capabilities, decode_encrypted_upload_v2_signed_blob,
+        decode_encrypted_upload_v2_status, decode_encrypted_upload_v2_transfer, encode_ack,
+        encode_bounded_payload, encode_connection_settings, encode_device_command,
+        encode_diagnostic_command, encode_encrypted_upload_v2_signed_blob,
         encode_encrypted_upload_v2_transfer, encode_firmware_data, encode_firmware_upload_start,
         encode_firmware_upload_verify, encode_firmware_window_ack, encode_ota_status,
         encode_provisioning_chunks, encode_recording_control_command, encode_time_sync,
@@ -28,6 +29,111 @@ use bota_device_sdk_core::{
         parse_wifi_status_info,
     },
 };
+
+pub(crate) unsafe fn decode_diagnostics(
+    packet: &BotaDeviceSdkPacketViewV1,
+    decoder: &mut DeviceDiagnosticsDecoder,
+) -> Result<BotaDeviceSdkPacketV1, DeviceSdkError> {
+    let result = (|| {
+        validate_packet(packet)?;
+        let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
+        fields.validate_allowed(&[field_id::VALUE])?;
+        // Check the borrowed slice length before required_bytes allocates a copy.
+        if packet.field_count == 1
+            && unsafe { (*packet.fields).data.len } > wire::DIAGNOSTIC_MAX_PACKET_BYTES as u64
+        {
+            return Err(invalid("diagnostic packet exceeds 20 bytes"));
+        }
+        let value = fields.required_bytes(field_id::VALUE)?;
+        let output = BotaDeviceSdkPacketV1::new(packet.kind);
+        Ok(match decoder.push(&value)? {
+            Some(batch) => diagnostic_batch(output, batch),
+            None => output,
+        })
+    })();
+    if result.is_err() {
+        decoder.reset();
+    }
+    result
+}
+
+fn diagnostic_batch(
+    mut output: BotaDeviceSdkPacketV1,
+    batch: DeviceDiagnosticsBatch,
+) -> BotaDeviceSdkPacketV1 {
+    output = output
+        .with_u64(
+            field_id::DIAGNOSTIC_SCHEMA_VERSION,
+            u64::from(batch.schema_version),
+        )
+        .with_u64(field_id::DIAGNOSTIC_EVENT_COUNT, batch.events.len() as u64);
+    for event in batch.events {
+        output = output
+            .with_text(field_id::DIAGNOSTIC_EVENT_ID, event.event_id)
+            .with_text(field_id::DIAGNOSTIC_EVENT_TYPE, event.event_type)
+            .with_text(field_id::DIAGNOSTIC_REASON_CODE, event.reason_code)
+            .with_u64(field_id::DIAGNOSTIC_UPTIME_MS, u64::from(event.uptime_ms))
+            .with_text(field_id::DIAGNOSTIC_SIGNATURE, event.signature)
+            .with_text(
+                field_id::DIAGNOSTIC_FIRMWARE_BUILD_ID,
+                event.firmware_build_id,
+            )
+            .with_text(field_id::DIAGNOSTIC_SUBSYSTEM, event.subsystem)
+            .with_text(
+                field_id::DIAGNOSTIC_STATE_BEFORE_EVENT,
+                event.state_before_event,
+            )
+            .with_bool(field_id::DIAGNOSTIC_HAS_REPORT, event.report.is_some());
+        let Some(report) = event.report else {
+            continue;
+        };
+        output = output
+            .with_u64(field_id::DIAGNOSTIC_CPU_ID, u64::from(report.fault.cpu_id))
+            .with_text(field_id::DIAGNOSTIC_CPU_EMU, report.fault.cpu_emu)
+            .with_text(field_id::DIAGNOSTIC_CORE_EMU, report.fault.core_emu)
+            .with_text(field_id::DIAGNOSTIC_HSB_EMU, report.fault.hsb_emu)
+            .with_text(field_id::DIAGNOSTIC_AUDIO_EMU, report.fault.audio_emu)
+            .with_text(field_id::DIAGNOSTIC_WIRELESS_EMU, report.fault.wireless_emu);
+        output = optional_text(output, field_id::DIAGNOSTIC_TASK, report.execution.task);
+        output = optional_text(output, field_id::DIAGNOSTIC_RETI, report.execution.reti);
+        output = optional_text(output, field_id::DIAGNOSTIC_RETS, report.execution.rets);
+        output = output.with_u64(
+            field_id::DIAGNOSTIC_PC_TRACE_COUNT,
+            report.execution.pc_trace.len() as u64,
+        );
+        for pc in report.execution.pc_trace {
+            output = output.with_text(field_id::DIAGNOSTIC_PC_TRACE, pc);
+        }
+        if let Some(runtime) = report.runtime {
+            if let Some(value) = runtime.heap_free_bytes {
+                output = output.with_u64(field_id::DIAGNOSTIC_HEAP_FREE_BYTES, u64::from(value));
+            }
+            if let Some(value) = runtime.task_stack_remaining_bytes {
+                output = output.with_u64(
+                    field_id::DIAGNOSTIC_TASK_STACK_REMAINING_BYTES,
+                    u64::from(value),
+                );
+            }
+        }
+        output = output.with_u64(
+            field_id::DIAGNOSTIC_BREADCRUMB_COUNT,
+            report.breadcrumbs.len() as u64,
+        );
+        for breadcrumb in report.breadcrumbs {
+            output = output
+                .with_i64(
+                    field_id::DIAGNOSTIC_DELTA_MS,
+                    i64::from(breadcrumb.delta_ms),
+                )
+                .with_text(field_id::DIAGNOSTIC_BREADCRUMB_CODE, breadcrumb.code)
+                .with_i64(
+                    field_id::DIAGNOSTIC_BREADCRUMB_ARG0,
+                    i64::from(breadcrumb.arg0),
+                );
+        }
+    }
+    output
+}
 
 pub(crate) unsafe fn decode(
     packet: &BotaDeviceSdkPacketViewV1,
@@ -356,6 +462,20 @@ pub(crate) unsafe fn encode(
     validate_packet(packet)?;
     let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
     let bytes = match packet.kind {
+        packet_kind::PROTOCOL_ENCODE_DIAGNOSTIC_COMMAND => {
+            match fields.required_u64(field_id::COMMAND)? {
+                command if command == u64::from(wire::DEVICE_DIAGNOSTICS_CMD_LIST) => {
+                    fields.validate_allowed(&[field_id::COMMAND])?;
+                    encode_diagnostic_command(DiagnosticCommand::List)?
+                }
+                command if command == u64::from(wire::DEVICE_DIAGNOSTICS_CMD_ACK) => {
+                    fields.validate_allowed(&[field_id::COMMAND, field_id::DIAGNOSTIC_EVENT_ID])?;
+                    let event_id = fields.required_text(field_id::DIAGNOSTIC_EVENT_ID)?;
+                    encode_diagnostic_command(DiagnosticCommand::Acknowledge(&event_id))?
+                }
+                _ => return Err(invalid("unknown diagnostic command")),
+            }
+        }
         packet_kind::PROTOCOL_ENCODE_ACK => {
             fields.validate_allowed(&[field_id::ACK_TYPE, field_id::SEQUENCE])?;
             encode_ack(

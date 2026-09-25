@@ -4,7 +4,7 @@
   "baseline": {
     "package": "@bota.dev/react-native-sdk",
     "version": "0.0.67",
-    "revision": "e11fde5be40027ec6cf1985fc0eadb00ece23e65"
+    "revision": "318974f925a573cf04b0d624978bee04784af09b"
   },
   "scenarios": [
     {
@@ -68,7 +68,7 @@
     {
       "name": "encrypted-upload-v2-checkpoint-resume",
       "classification": "resume",
-      "sourceTest": "__tests__/encryptedUploadV2RecordingManager.test.ts#resumes the same accepted replacement checkpoint without resetting its offset",
+      "sourceTest": "__tests__/encryptedUploadV2RecordingManager.test.ts#resumes the same accepted checkpoint across negotiated payload changes",
       "rustTest": "encrypted_upload_v2_workflow::resume_repair_persists_before_ack_and_returns_ownership_to_the_transfer",
       "runtimeTests": {
         "apple": "platforms/apple/Tests/BotaAppSDKTests/EncryptedUploadV2TransferHostTests.swift#testCheckpointSavePrecedesWindowAckAndResumesTheStartStreamToEOF",

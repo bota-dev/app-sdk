@@ -74,6 +74,47 @@ services:
       - { name: CHAR_DEVICE_LOG_DATA, uuid: B07A0007-0002-1000-8000-00805F9B34FB }
 
 constantGroups:
+  device_diagnostics_commands:
+    DEVICE_DIAGNOSTICS_CMD_LIST: 16
+    DEVICE_DIAGNOSTICS_CMD_ACK: 17
+    DEVICE_DIAGNOSTICS_CMD_CAPABILITIES: 18
+  device_diagnostics_events:
+    DEVICE_DIAGNOSTICS_EVT_META: 144
+    DEVICE_DIAGNOSTICS_EVT_SIGNATURE: 145
+    DEVICE_DIAGNOSTICS_EVT_END: 146
+    DEVICE_DIAGNOSTICS_EVT_ACK: 147
+    DEVICE_DIAGNOSTICS_EVT_CAPABILITIES: 148
+    DEVICE_DIAGNOSTICS_EVT_DETAIL: 149
+  diagnostic_event_types:
+    DIAGNOSTIC_EVENT_RESET: 1
+    DIAGNOSTIC_EVENT_WATCHDOG: 2
+    DIAGNOSTIC_EVENT_HARD_FAULT: 3
+    DIAGNOSTIC_EVENT_STORAGE: 4
+    DIAGNOSTIC_EVENT_POWER: 5
+    DIAGNOSTIC_EVENT_RADIO: 6
+    DIAGNOSTIC_EVENT_SECURITY: 7
+  diagnostic_subsystems:
+    DIAGNOSTIC_SUBSYSTEM_SYSTEM: 0
+    DIAGNOSTIC_SUBSYSTEM_AUDIO: 1
+    DIAGNOSTIC_SUBSYSTEM_WIRELESS: 2
+    DIAGNOSTIC_SUBSYSTEM_STORAGE: 3
+    DIAGNOSTIC_SUBSYSTEM_POWER: 4
+    DIAGNOSTIC_SUBSYSTEM_SECURITY: 5
+  diagnostic_states:
+    DIAGNOSTIC_STATE_BOOT: 0
+    DIAGNOSTIC_STATE_DEEP_STANDBY: 1
+    DIAGNOSTIC_STATE_RECORDING: 2
+    DIAGNOSTIC_STATE_UPLOAD_PREPARING: 3
+    DIAGNOSTIC_STATE_UPLOADING: 4
+    DIAGNOSTIC_STATE_ERROR_RECOVERY: 5
+    DIAGNOSTIC_STATE_FULL_SLEEP: 6
+  diagnostic_detail_versions:
+    DIAGNOSTIC_DETAIL_VERSION: 1
+  diagnostic_detail_flags:
+    DIAGNOSTIC_DETAIL_HAS_REPORT: 1
+  diagnostic_runtime_flags:
+    DIAGNOSTIC_RUNTIME_HEAP_FREE: 1
+    DIAGNOSTIC_RUNTIME_STACK_REMAINING: 2
   device_types:
     DEVICE_TYPE_PIN: 1
     DEVICE_TYPE_PIN_4G: 2
@@ -294,6 +335,28 @@ constantGroups:
     ENCRYPTED_UPLOAD_V2_MODE_STREAMING: 2
 
 wordConstantGroups:
+  diagnostic_reasons:
+    DIAGNOSTIC_REASON_WATCHDOG_TIMEOUT: 1
+    DIAGNOSTIC_REASON_CPU_ILLEGAL_INSTRUCTION: 2
+    DIAGNOSTIC_REASON_CPU_MISALIGNED_ACCESS: 3
+    DIAGNOSTIC_REASON_CPU_STACK_OVERFLOW: 4
+    DIAGNOSTIC_REASON_CPU_USAGE_FAULT: 5
+    DIAGNOSTIC_REASON_MEMORY_PROTECTION_FAULT: 6
+    DIAGNOSTIC_REASON_INVALID_REGISTER_READ: 7
+    DIAGNOSTIC_REASON_INVALID_REGISTER_WRITE: 8
+    DIAGNOSTIC_REASON_AUDIO_SUBSYSTEM_FAULT: 9
+    DIAGNOSTIC_REASON_WIRELESS_SUBSYSTEM_FAULT: 10
+    DIAGNOSTIC_REASON_FLASH_MMU_FAULT: 11
+    DIAGNOSTIC_REASON_LOW_VOLTAGE_RESET: 12
+    DIAGNOSTIC_REASON_UNKNOWN_CPU_EXCEPTION: 255
+  diagnostic_breadcrumbs:
+    DIAGNOSTIC_BREADCRUMB_BOOT: 1
+    DIAGNOSTIC_BREADCRUMB_STANDBY_ENTERED: 2
+    DIAGNOSTIC_BREADCRUMB_RECORDING_STARTED: 3
+    DIAGNOSTIC_BREADCRUMB_UPLOAD_PREPARING: 4
+    DIAGNOSTIC_BREADCRUMB_UPLOAD_STARTED: 5
+    DIAGNOSTIC_BREADCRUMB_ERROR_RECOVERY: 6
+    DIAGNOSTIC_BREADCRUMB_FULL_SLEEP: 7
   encrypted_upload_v2_suites:
     ENCRYPTED_UPLOAD_V2_STORAGE_SUITE_CHACHA20_POLY1305_HKDF_SHA256_HMAC_SHA256: 1
     ENCRYPTED_UPLOAD_V2_LOCAL_WRAP_SUITE_CHACHA20_POLY1305_HKDF_SHA256: 1
@@ -360,6 +423,69 @@ asciiStrings:
   ENCRYPTED_UPLOAD_V2_DOMAIN_PUBLICATION: bota/enc-v2/publication/v1
 
 layouts:
+  DIAGNOSTIC_META:
+    minimumLength: 17
+    fixedLength: 17
+    fields:
+      - { name: opcode, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: index, offset: 1, width: 1, encoding: u8 }
+      - { name: event_type, offset: 2, width: 1, encoding: enum_u8 }
+      - { name: reason, offset: 3, width: 2, encoding: u16_le }
+      - { name: uptime_ms, offset: 5, width: 4, encoding: u32_le }
+      - { name: event_id, offset: 9, width: 8, encoding: u64_le }
+  DIAGNOSTIC_SIGNATURE:
+    minimumLength: 10
+    fixedLength: 10
+    fields:
+      - { name: opcode, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: index, offset: 1, width: 1, encoding: u8 }
+      - { name: signature, offset: 2, width: 8, encoding: u64_le }
+  DIAGNOSTIC_END:
+    minimumLength: 2
+    fixedLength: 2
+    fields:
+      - { name: opcode, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: count, offset: 1, width: 1, encoding: u8 }
+  DIAGNOSTIC_DETAIL_CHUNK:
+    minimumLength: 6
+    fields:
+      - { name: opcode, offset: 0, width: 1, encoding: enum_u8 }
+      - { name: index, offset: 1, width: 1, encoding: u8 }
+      - { name: offset, offset: 2, width: 2, encoding: u16_le }
+      - { name: total, offset: 4, width: 2, encoding: u16_le }
+      - { name: payload, offset: 6, width: 0, encoding: bytes_tail }
+  DIAGNOSTIC_DETAIL:
+    minimumLength: 176
+    fixedLength: 176
+    fields:
+      - { name: version, offset: 0, width: 1, encoding: u8 }
+      - { name: flags, offset: 1, width: 1, encoding: bitmask_u8 }
+      - { name: firmware_build_id, offset: 2, width: 12, encoding: ascii }
+      - { name: subsystem, offset: 14, width: 1, encoding: enum_u8 }
+      - { name: state, offset: 15, width: 1, encoding: enum_u8 }
+      - { name: cpu_id, offset: 16, width: 1, encoding: u8 }
+      - { name: pc_count, offset: 17, width: 1, encoding: u8 }
+      - { name: breadcrumb_count, offset: 18, width: 1, encoding: u8 }
+      - { name: runtime_mask, offset: 19, width: 1, encoding: bitmask_u8 }
+      - { name: cpu_emu, offset: 20, width: 4, encoding: u32_le }
+      - { name: core_emu, offset: 24, width: 4, encoding: u32_le }
+      - { name: hsb_emu, offset: 28, width: 4, encoding: u32_le }
+      - { name: audio_emu, offset: 32, width: 4, encoding: u32_le }
+      - { name: wireless_emu, offset: 36, width: 4, encoding: u32_le }
+      - { name: reti, offset: 40, width: 4, encoding: u32_le }
+      - { name: rets, offset: 44, width: 4, encoding: u32_le }
+      - { name: pc_trace, offset: 48, width: 24, encoding: bytes }
+      - { name: heap_free_bytes, offset: 72, width: 4, encoding: u32_le }
+      - { name: task_stack_remaining_bytes, offset: 76, width: 4, encoding: u32_le }
+      - { name: task, offset: 80, width: 16, encoding: ascii }
+      - { name: breadcrumbs, offset: 96, width: 80, encoding: bytes }
+  DIAGNOSTIC_BREADCRUMB:
+    minimumLength: 10
+    fixedLength: 10
+    fields:
+      - { name: delta_ms, offset: 0, width: 4, encoding: i32_le }
+      - { name: code, offset: 4, width: 2, encoding: u16_le }
+      - { name: arg0, offset: 6, width: 4, encoding: i32_le }
   DEVICE_STATUS:
     minimumLength: 14
     fields:
@@ -887,6 +1013,10 @@ layouts:
       - { name: reserved, offset: 22, width: 2, encoding: zero }
 
 limits:
+  DIAGNOSTIC_MAX_EVENTS: 256
+  DIAGNOSTIC_MAX_PACKET_BYTES: 20
+  DIAGNOSTIC_MAX_PC_TRACE: 6
+  DIAGNOSTIC_MAX_BREADCRUMBS: 8
   DEFAULT_MTU: 23
   MAX_MTU: 512
   TRANSFER_WINDOW_SIZE: 4

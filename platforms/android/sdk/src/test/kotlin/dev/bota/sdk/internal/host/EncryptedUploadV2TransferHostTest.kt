@@ -6,6 +6,8 @@ import dev.bota.sdk.BotaErrorCode
 import dev.bota.sdk.BotaOperation
 import dev.bota.sdk.BotaSDKError
 import dev.bota.sdk.internal.bluetooth.EncryptedUploadV2OpenResult
+import dev.bota.sdk.internal.bluetooth.EncryptedUploadV2CheckpointValue
+import dev.bota.sdk.internal.core.EncryptedUploadV2ResumeRejection
 import dev.bota.sdk.internal.core.CoreCancellationId
 import dev.bota.sdk.internal.core.CoreEffect
 import dev.bota.sdk.internal.core.CoreEffectKind
@@ -48,6 +50,368 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EncryptedUploadV2TransferHostTest {
+    @Test
+    fun lostAckReconcilesZeroAndNonzeroPrefixesBeforeRetransmission() = runTest {
+        for (offset in listOf(0, 2)) {
+            val fixture = recoveryFixture(offset)
+            try {
+                val events = fixture.host.execute(fixture.start).toList()
+                assertEquals(
+                    listOf(HostEventKind.EncryptedUploadV2TransferStarted, HostEventKind.EncryptedUploadV2TransferCompleted),
+                    events.map { it.kind },
+                )
+                assertEquals(listOf("persist:4", "retry:$offset", "persist:4", "ack:4"), fixture.actions)
+                assertTrue(Files.readAllBytes(fixture.file).contentEquals(byteArrayOf(3, 4, 5, 6)))
+                val saved = fixture.store.load(UploadSession)!!
+                assertEquals(4uL, saved.nextCiphertextOffset)
+                assertTrue(saved.coreCheckpoint.contentEquals(byteArrayOf(99)))
+            } finally {
+                fixture.host.close()
+            }
+        }
+    }
+
+    @Test
+    fun replayRepairsMissingPacketsBeforePersistingOrAcknowledging() = runTest {
+        val fixture = recoveryFixture(0, repairFirstWindow = true)
+        try {
+            val events = fixture.host.execute(fixture.start).toList()
+            assertEquals(HostEventKind.EncryptedUploadV2TransferCompleted, events.last().kind)
+            assertEquals(listOf("persist:4", "retry:0", "repair:[1]", "persist:4", "ack:4"), fixture.actions)
+        } finally {
+            fixture.host.close()
+        }
+    }
+
+    @Test
+    fun failedReplayPersistenceCannotSendACleanWindowAck() = runTest {
+        val fixture = recoveryFixture(2, "replay-persistence")
+        try {
+            val error = runCatching { fixture.host.execute(fixture.start).toList() }.exceptionOrNull()
+            assertTrue(error is IllegalStateException)
+            assertEquals(2uL, fixture.store.load(UploadSession)!!.nextCiphertextOffset)
+            assertEquals(4L, Files.size(fixture.file))
+            assertEquals(listOf("persist:4", "retry:2"), fixture.actions)
+        } finally {
+            fixture.host.close()
+        }
+    }
+
+    @Test
+    fun unsafeReconciliationPreservesCiphertextAndDurableEvidence() = runTest {
+        for (failure in listOf("digest", "owner", "ahead", "equal", "inconsistent", "foreign", "persistence", "repeat")) {
+            val fixture = recoveryFixture(2, failure)
+            try {
+                val error = runCatching { fixture.host.execute(fixture.start).toList() }.exceptionOrNull()
+                assertTrue("$failure: $error", error != null)
+                val expectedSize = if (failure == "repeat") 2L else 4L
+                assertEquals(failure, expectedSize, Files.size(fixture.file))
+                assertEquals(failure, expectedSize.toULong(), fixture.store.load(UploadSession)!!.nextCiphertextOffset)
+                assertEquals(failure, if (failure == "repeat") 1 else 0, fixture.actions.count { it.startsWith("retry:") })
+            } finally {
+                fixture.host.close()
+            }
+        }
+    }
+
+    @Test
+    fun connectionChangeDuringPersistenceCannotRetryOrTruncate() = runTest {
+        val fixture = recoveryFixture(2, "reconnect")
+        try {
+            val error = runCatching { fixture.host.execute(fixture.start).toList() }.exceptionOrNull()
+            assertEquals(12u, (error as EncryptedUploadV2HostException).errorCode)
+            assertEquals(4L, Files.size(fixture.file))
+            assertEquals(2uL, fixture.store.load(UploadSession)!!.nextCiphertextOffset)
+            assertTrue(fixture.actions.none { it.startsWith("retry:") })
+        } finally {
+            fixture.host.close()
+        }
+    }
+
+    @Test
+    fun cancellationClaimDuringPersistenceCannotRetryOrTruncate() = runTest {
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val fixture = recoveryFixture(2, onPersist = {
+            entered.complete(Unit)
+            withContext(NonCancellable) { release.await() }
+        })
+        try {
+            val running = async(Dispatchers.Default) {
+                runCatching { fixture.host.execute(fixture.start).toList() }.exceptionOrNull()
+            }
+            withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { entered.await() } }
+            assertFalse(fixture.host.confirmationAttemptedOrClaimCancellation(CoreCancellationId(0u, 0u)))
+            release.complete(Unit)
+            val error = withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { running.await() } }
+            assertEquals(16u, (error as EncryptedUploadV2HostException).errorCode)
+            assertEquals(4L, Files.size(fixture.file))
+            assertTrue(fixture.actions.none { it.startsWith("retry:") })
+        } finally {
+            release.complete(Unit)
+            fixture.host.close()
+        }
+    }
+
+    @Test
+    fun callerCancellationJoinsPersistenceWithoutRetrying() = runTest {
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val fixture = recoveryFixture(2, onPersist = {
+            entered.complete(Unit)
+            withContext(NonCancellable) { release.await() }
+        })
+        try {
+            val running = async(Dispatchers.Default) { fixture.host.execute(fixture.start).toList() }
+            withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { entered.await() } }
+            running.cancel()
+            release.complete(Unit)
+            withContext(Dispatchers.Default) { withTimeout(AsyncSettlementTimeoutMilliseconds) { running.join() } }
+            assertEquals(4L, Files.size(fixture.file))
+            assertTrue(fixture.actions.none { it.startsWith("retry:") })
+        } finally {
+            release.complete(Unit)
+            fixture.host.close()
+        }
+    }
+
+    @Test
+    fun firstForwardWindowReturnsToRustCheckpointSaveAndAcknowledgement() = runTest {
+        val fixture = recoveryFixture(2, windowRevision = 3u)
+        try {
+            val events = fixture.host.execute(fixture.start).produceIn(this)
+            assertEquals(HostEventKind.EncryptedUploadV2TransferStarted, events.receive().kind)
+            val staged = events.receive()
+            assertEquals(HostEventKind.EncryptedUploadV2WindowStaged, staged.kind)
+            assertEquals(3uL, staged.fields.filterIsInstance<CoreField.Unsigned>().single { it.id == 133 }.value)
+            fixture.host.execute(effect(CoreEffectKind.EncryptedUploadV2SaveCheckpoint, CoreField.Bytes(28, byteArrayOf(100)))).toList()
+            fixture.host.execute(effect(CoreEffectKind.EncryptedUploadV2AcknowledgeWindow, CoreField.Bytes(28, byteArrayOf(100)))).toList()
+            assertEquals(HostEventKind.EncryptedUploadV2TransferCompleted, events.receive().kind)
+            val saved = fixture.store.load(UploadSession)!!
+            assertEquals(3u, saved.revision)
+            assertEquals(null, saved.replayBoundary)
+            assertTrue(saved.coreCheckpoint.contentEquals(byteArrayOf(100)))
+        } finally {
+            fixture.host.close()
+        }
+    }
+
+    @Test
+    fun rewindowedReplayCanCrossEitherRustProgressBoundaryFirst() = runTest {
+        for ((firstOffset, firstRevision) in listOf(6 to 2u, 3 to 3u)) {
+            val length = if (firstOffset == 6) 8 else 6
+            val fixture = recoveryFixture(
+                2, windowRevision = firstRevision, ciphertext = ByteArray(length) { (it + 3).toByte() },
+                windowEnds = listOf(firstOffset, length),
+            )
+            try {
+                val events = fixture.host.execute(fixture.start).produceIn(this)
+                assertEquals(HostEventKind.EncryptedUploadV2TransferStarted, events.receive().kind)
+                assertEquals(HostEventKind.EncryptedUploadV2WindowStaged, events.receive().kind)
+                assertEquals(listOf("persist:4", "retry:2", "persist:$firstOffset", "ack:$firstOffset"), fixture.actions)
+                val replayed = fixture.store.load(UploadSession)!!
+                assertEquals(firstRevision, replayed.revision)
+                assertEquals(firstOffset.toULong(), replayed.nextCiphertextOffset)
+                assertEquals(EncryptedUploadV2ReplayBoundary(2u, 4u), replayed.replayBoundary)
+                assertTrue(replayed.coreCheckpoint.contentEquals(byteArrayOf(99)))
+                fixture.host.execute(effect(CoreEffectKind.EncryptedUploadV2SaveCheckpoint, CoreField.Bytes(28, byteArrayOf(100)))).toList()
+                fixture.host.execute(effect(CoreEffectKind.EncryptedUploadV2AcknowledgeWindow, CoreField.Bytes(28, byteArrayOf(100)))).toList()
+                assertEquals(HostEventKind.EncryptedUploadV2TransferCompleted, events.receive().kind)
+                val completed = fixture.store.load(UploadSession)!!
+                assertEquals(length.toULong(), completed.nextCiphertextOffset)
+                assertEquals(firstRevision + 1u, completed.revision)
+                assertEquals(null, completed.replayBoundary)
+                assertTrue(completed.coreCheckpoint.contentEquals(byteArrayOf(100)))
+            } finally {
+                fixture.host.close()
+            }
+        }
+    }
+
+    @Test
+    fun processRestartAfterRewindowedReplayUsesNativePrefix() = runTest {
+        for ((firstOffset, firstRevision) in listOf(6 to 2u, 3 to 3u)) {
+            val length = if (firstOffset == 6) 8 else 6
+            val fixture = recoveryFixture(
+                2, windowRevision = firstRevision, ciphertext = ByteArray(length) { (it + 3).toByte() },
+                windowEnds = listOf(firstOffset, length),
+            )
+            try {
+                val events = fixture.host.execute(fixture.start).catch { error ->
+                    assertEquals(16u, (error as EncryptedUploadV2HostException).errorCode)
+                }.produceIn(this)
+                assertEquals(HostEventKind.EncryptedUploadV2TransferStarted, events.receive().kind)
+                assertEquals(HostEventKind.EncryptedUploadV2WindowStaged, events.receive().kind)
+            } finally {
+                fixture.host.close()
+            }
+            val restarted = EncryptedUploadV2TransferHost(fixture.file.parent, fixture.services)
+            try {
+                val loaded = restarted.execute(loadEffect()).toList().single()
+                assertTrue(loaded.fields.filterIsInstance<CoreField.Bytes>().single().value.contentEquals(byteArrayOf(99)))
+                restarted.execute(effect(CoreEffectKind.EncryptedUploadV2TruncateSink,
+                    CoreField.Text(14, SinkId), CoreField.Unsigned(39, 4u),
+                )).toList()
+                assertEquals(firstOffset.toLong(), Files.size(fixture.file))
+                assertEquals(firstRevision, fixture.store.load(UploadSession)!!.revision)
+            } finally {
+                restarted.close()
+            }
+        }
+    }
+
+    @Test
+    fun processRestartUsesDurableNativePrefixWithoutRewritingRustCheckpoint() = runTest {
+        val fixture = recoveryFixture(2, "reconnect")
+        runCatching { fixture.host.execute(fixture.start).toList() }
+        fixture.host.close()
+        val services = fixture.services.copyForOpen { request, checkpoint ->
+            assertEquals(1u, checkpoint!!.revision)
+            assertEquals(2uL, checkpoint.nextCiphertextOffset)
+            assertEquals(2uL, request.nextCiphertextOffset)
+            assertEquals(2L, Files.size(fixture.file))
+            EncryptedUploadV2OpenResult.Opened(flow { awaitCancellation() })
+        }
+        val restarted = EncryptedUploadV2TransferHost(fixture.file.parent, services)
+        // The first host terminated its material; a new process registers fresh material.
+        services.materialRegistry.register("material-1",
+            EncryptedUploadV2Material("material-1", "recording-1", UploadSession, 2u,
+                EncryptedUploadV2SecurityPolicy.V2Required, ByteArray(408),
+                { error("unused") }, { _, _ -> }, {}, { ByteArray(336) }, {},
+            )
+        )
+        try {
+            val loaded = restarted.execute(loadEffect()).toList().single()
+            assertTrue(loaded.fields.filterIsInstance<CoreField.Bytes>().single().value.contentEquals(byteArrayOf(99)))
+            restarted.execute(effect(CoreEffectKind.EncryptedUploadV2TruncateSink,
+                CoreField.Text(14, SinkId), CoreField.Unsigned(39, 4u),
+            )).toList()
+            restarted.execute(effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, "material-1"))).toList()
+            val events = restarted.execute(fixture.start).catch { error ->
+                assertEquals(16u, (error as EncryptedUploadV2HostException).errorCode)
+            }.produceIn(this)
+            assertEquals(HostEventKind.EncryptedUploadV2TransferStarted, events.receive().kind)
+            restarted.cancel(CoreCancellationId(0u, 0u))
+            runCatching { events.receive() }
+        } finally {
+            restarted.close()
+        }
+    }
+
+    private data class RecoveryFixture(
+        val host: EncryptedUploadV2TransferHost,
+        val start: CoreEffect,
+        val store: EncryptedUploadV2CheckpointStore,
+        val file: java.nio.file.Path,
+        val actions: MutableList<String>,
+        val services: EncryptedUploadV2TransferHostServices,
+    )
+
+    private suspend fun recoveryFixture(
+        offset: Int,
+        failure: String? = null,
+        windowRevision: UInt = 2u,
+        repairFirstWindow: Boolean = false,
+        ciphertext: ByteArray = byteArrayOf(3, 4, 5, 6),
+        windowEnds: List<Int> = listOf(ciphertext.size),
+        onPersist: suspend () -> Unit = {},
+    ): RecoveryFixture {
+        val actions = mutableListOf<String>()
+        val root = Files.createTempDirectory("bota-v2-lost-ack")
+        val file = root.resolve("$SinkId.encrypted-upload-v2")
+        Files.write(file, ciphertext.copyOf(4))
+        val journals = TestJournals()
+        val store = EncryptedUploadV2CheckpointStore(journals)
+        val original = PersistedEncryptedUploadV2Checkpoint(
+            byteArrayOf(99), "EVFXXW67KP", RecordingId, 4u, UploadSession, 2u, 9u, SinkId,
+            1u, 4u, 2u, 4u, sha(ciphertext.copyOf(4)), 9u,
+        )
+        store.save(original)
+        var connected = true
+        var journalWrites = 0
+        journals.beforeWrite = {
+            journalWrites++
+            if (failure == "persistence" || (failure == "replay-persistence" && journalWrites == 2)) error("disk failure")
+            actions += "persist:${Files.size(file)}"
+            if (failure == "reconnect") connected = false
+            onPersist()
+        }
+        val registry = registry(AtomicInteger())
+        val services = EncryptedUploadV2TransferHostServices(
+            registry, store,
+            openTransfer = { _, checkpoint ->
+                assertEquals(2u, checkpoint!!.revision)
+                val rejectedOffset = if (failure in listOf("ahead", "equal")) 4uL else offset.toULong()
+                EncryptedUploadV2OpenResult.ResumeRejected(
+                    EncryptedUploadV2ResumeRejection(
+                        if (failure == "foreign") 10u else 9u,
+                        if (failure == "owner") 0x13u else 0x0fu,
+                        if (failure == "ahead") 3u else if (failure == "equal") 2u
+                        else if (failure == "inconsistent" || offset == 0) 0u else 1u,
+                        rejectedOffset,
+                        if (failure == "digest") ByteArray(32) else sha(ciphertext.copyOf(offset)),
+                    ),
+                    assertActive = {
+                        if (!connected) throw EncryptedUploadV2HostException(12u, true, message = "connection changed")
+                    },
+                    retry = { reconciled ->
+                        actions += "retry:${reconciled.nextCiphertextOffset}"
+                        assertEquals(offset.toLong(), Files.size(file))
+                        assertEquals(offset.toULong(), store.load(UploadSession)!!.nextCiphertextOffset)
+                        assertEquals(if (offset == 0) null else 0u, reconciled.highestContiguousSequence)
+                        if (failure == "repeat") throw EncryptedUploadV2HostException(11u, false, message = "repeated reject")
+                        EncryptedUploadV2OpenResult.Opened(flow {
+                            if (repairFirstWindow) emit(EncryptedUploadV2TransferPayload.WindowEnd(
+                                EncryptedUploadV2WindowEndValue(9u, 0u, 1u, 1u, 4u, sha(ciphertext), windowRevision),
+                            ))
+                            var packetOffset = offset
+                            windowEnds.forEachIndexed { index, end ->
+                                val sequence = (index + 1).toUInt()
+                                emit(EncryptedUploadV2TransferPayload.Data(
+                                    EncryptedUploadV2DataValue(9u, sequence, packetOffset.toULong(), ciphertext.copyOfRange(packetOffset, end)),
+                                ))
+                                emit(EncryptedUploadV2TransferPayload.WindowEnd(
+                                    EncryptedUploadV2WindowEndValue(9u, index.toUInt(), sequence, sequence,
+                                        end.toULong(), sha(ciphertext.copyOf(end)), windowRevision + index.toUInt()),
+                                ))
+                                packetOffset = end
+                            }
+                            val manifest = ByteArray(580)
+                            emit(EncryptedUploadV2TransferPayload.ManifestChunk(
+                                EncryptedUploadV2ManifestChunkValue(9u, 580u, 0u, sha(manifest), manifest),
+                            ))
+                            emit(EncryptedUploadV2TransferPayload.Eof(
+                                EncryptedUploadV2EofValue(9u, windowEnds.size.toUInt(), windowEnds.size.toUInt(),
+                                    ciphertext.size.toULong(), sha(ciphertext), sha(manifest)),
+                            ))
+                        })
+                    },
+                )
+            },
+            sendControl = { _, _, next ->
+                actions += if (next is dev.bota.sdk.internal.bluetooth.EncryptedUploadV2TransferContinuation.Repair) {
+                    "repair:${next.sequences}"
+                } else "ack:${Files.size(file)}"
+            },
+            confirmTransfer = { _, _, _ -> }, abortTransfer = {}, releaseTransfer = {},
+            sendSignedDocument = { _, _, _, _ -> }, uploadCiphertext = { _, _ -> }, cancelUploads = {},
+            nextWriteId = { 1u }, encodeAcknowledgement = { byteArrayOf(7) },
+            encodeConfirm = { _, _, _, _, _, _ -> byteArrayOf(8) },
+        )
+        val host = EncryptedUploadV2TransferHost(root, services)
+        host.execute(loadEffect()).toList()
+        val prepared = host.execute(effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, "material-1"))).toList()
+        val authorization = prepared.single().fields.filterIsInstance<CoreField.Bytes>().single().value
+        val start = startEffect("material-1", authorization, ciphertext, checkpoint = original.coreCheckpoint, dataBytes = 4u)
+        return RecoveryFixture(host, start, store, file, actions, services)
+    }
+
+    private fun loadEffect() = effect(
+        CoreEffectKind.EncryptedUploadV2LoadCheckpoint, CoreField.Bytes(132, uuidBytes(UploadSession)),
+        CoreField.Text(3, "EVFXXW67KP"), CoreField.Text(13, RecordingId),
+        CoreField.Unsigned(129, 4u), CoreField.Unsigned(165, 2u),
+    )
+
     @Test
     fun successfulConfirmHandoffIsAtomicBeforeHostContinuation() = runTest {
         val actions = mutableListOf<String>()
@@ -777,16 +1141,19 @@ class EncryptedUploadV2TransferHostTest {
         authorizationSha: ByteArray,
         ciphertext: ByteArray,
         cancellationId: CoreCancellationId = CoreCancellationId(0u, 0u),
+        checkpoint: ByteArray? = null,
+        dataBytes: ULong = 2u,
     ) = effect(
         CoreEffectKind.EncryptedUploadV2StartTransfer,
         CoreField.Text(3, "EVFXXW67KP"), CoreField.Text(13, RecordingId), CoreField.Unsigned(129, 4u),
         CoreField.Unsigned(147, 3u), CoreField.Bytes(132, uuidBytes(UploadSession)), CoreField.Unsigned(165, 2u),
         CoreField.Unsigned(128, 9u), CoreField.Text(12, materialId), CoreField.Text(14, SinkId),
         CoreField.Unsigned(137, 0x7fu), CoreField.Unsigned(138, 408u), CoreField.Unsigned(139, 580u),
-        CoreField.Unsigned(169, 2u), CoreField.Unsigned(170, 1u), CoreField.Unsigned(140, 1u),
-        CoreField.Unsigned(141, 1u), CoreField.Unsigned(134, 1u), CoreField.Unsigned(135, 2u),
+        CoreField.Unsigned(169, dataBytes), CoreField.Unsigned(170, 1u), CoreField.Unsigned(140, 1u),
+        CoreField.Unsigned(141, 1u), CoreField.Unsigned(134, 1u), CoreField.Unsigned(135, dataBytes),
         CoreField.Unsigned(130, ciphertext.size.toULong()), CoreField.Bytes(144, sha(ciphertext)),
         CoreField.Bytes(161, authorizationSha),
+        *checkpoint?.let { arrayOf(CoreField.Bytes(28, it)) }.orEmpty(),
         cancellationId = cancellationId,
     )
 
@@ -823,8 +1190,9 @@ class EncryptedUploadV2TransferHostTest {
 }
 
 private class TestJournals : JournalStore {
+    var beforeWrite: suspend () -> Unit = {}
     private val values = mutableMapOf<String, ByteArray>()
     override suspend fun read(name: String): ByteArray? = values[name]
-    override suspend fun write(name: String, value: ByteArray) { values[name] = value.copyOf() }
+    override suspend fun write(name: String, value: ByteArray) { beforeWrite(); values[name] = value.copyOf() }
     override suspend fun delete(name: String) { values.remove(name) }
 }

@@ -1,4 +1,5 @@
 mod cursor;
+mod diagnostics;
 mod encode;
 mod encrypted_upload_v2;
 mod logs;
@@ -10,6 +11,7 @@ mod settings;
 mod status;
 mod transfer;
 
+pub use diagnostics::*;
 pub use encode::*;
 pub use encrypted_upload_v2::*;
 pub use logs::*;

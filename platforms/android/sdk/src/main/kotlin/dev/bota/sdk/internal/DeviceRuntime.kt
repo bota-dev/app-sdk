@@ -91,6 +91,10 @@ internal class DeviceRuntime(
         error("direct subscription unavailable")
     },
     val directUnsubscribe: suspend (String, UUID, UUID) -> Unit = { _, _, _ -> },
+    val decodeDiagnosticEvents: (ByteArray) -> dev.bota.sdk.model.DeviceDiagnosticsBatch? = {
+        error("diagnostics decoder unavailable")
+    },
+    val createDiagnosticCommand: (String?) -> ByteArray = { error("diagnostics command encoder unavailable") },
     val delay: suspend (Long) -> Unit = { milliseconds -> kotlinx.coroutines.delay(milliseconds) },
     val parseRecordingState: (ByteArray) -> RecordingState = {
         error("recording-state decoder unavailable")
@@ -335,6 +339,8 @@ internal class DeviceRuntime(
                     directWrite = { peripheralId, service, characteristic, value ->
                         driver.write(peripheralId, service, characteristic, value, withResponse = true)
                     },
+                    decodeDiagnosticEvents = mapper::decodeDiagnosticEvents,
+                    createDiagnosticCommand = mapper::createDiagnosticCommand,
                     directSubscribe = { peripheralId, service, characteristic ->
                         driver.subscribe(peripheralId, service, characteristic).map { it.value }
                     },

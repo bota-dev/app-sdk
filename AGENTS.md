@@ -19,6 +19,14 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 
 ## Current Authority
 
+- Unpublished maintenance parity work targets reference commit
+  `318974f925a573cf04b0d624978bee04784af09b`, separately from the immutable
+  0.0.65 public API baseline. See [maintenance parity](docs/parity/README.md)
+  for diagnostics, native-file upload recovery, lost-WINDOW_ACK reconciliation,
+  verification, and explicit byte-store/connection-ownership limits. This does
+  not change beta.1, enable v2 runtime metadata, or establish hardware/app
+  acceptance.
+
 - Current synchronized published beta is `2.0.0-beta.1`: Apple `BotaAppSDK`, Android
   `dev.bota:bota-app-sdk`, RN `@bota.dev/react-native-app-sdk`, Web
   `@bota.dev/web-app-sdk`, Flutter `bota_app_sdk`. Apple SwiftPM/CocoaPods,
@@ -235,8 +243,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   fresh capability, recording, checkpoint, session, progress, and stable-error
   metadata. Applications register the complete v2 material once in the Apple
   or Android `BotaDeviceSDKEncryptedUploadV2Materials` registry and return only
-  its opaque registration ID through JavaScript. Keep `BotaClient`, legacy
-   managers and events frozen, and never add an implicit legacy fallback.
+  its opaque registration ID through JavaScript. Preserve `BotaClient`, legacy
+  manager and event compatibility; track newer maintenance additions separately,
+  and never add an implicit legacy fallback.
 - React Native compatibility requires the frozen public API surface digest in
   addition to protocol fixtures and workflow traces. Internal legacy modules
   outside `src/index.ts` are not part of that public contract.

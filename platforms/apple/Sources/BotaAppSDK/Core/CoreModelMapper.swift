@@ -8,6 +8,74 @@ final class CoreModelMapper: @unchecked Sendable {
         self.client = try client ?? CoreAbiClient()
     }
 
+    func decodeDiagnosticEvents(_ data: Data) throws -> DeviceDiagnosticsBatch? {
+        try Self.diagnosticBatch(from: decode(0x0525, data).values)
+    }
+
+    func createDiagnosticCommand(_ acceptedEventId: String?) throws -> Data {
+        var fields: [CoreField] = [.unsigned(id: 97, value: acceptedEventId == nil ? 0x10 : 0x11)]
+        if let acceptedEventId { fields.append(.text(id: 173, value: acceptedEventId)) }
+        return try encode(0x0526, fields: fields)
+    }
+
+    // These are typed C ABI fields, not BLE payload bytes. Each event starts at field 173.
+    static func diagnosticBatch(from values: [CoreField]) throws -> DeviceDiagnosticsBatch? {
+        if values.isEmpty { return nil }
+        let fields = PacketFields(values)
+        let starts = values.indices.filter { index in
+            if case .text(id: 173, value: _) = values[index] { return true }
+            return false
+        }
+        guard starts.count == (try fields.requiredInt(172)) else {
+            throw invalid("diagnostic event count mismatch")
+        }
+        let events = try starts.indices.map { index in
+            let end = index + 1 < starts.count ? starts[index + 1] : values.endIndex
+            let event = PacketFields(Array(values[starts[index]..<end]))
+            let report = try event.requiredBool(181) ? diagnosticReport(event) : nil
+            return DeviceDiagnosticEvent(
+                eventId: try event.requiredText(173), eventType: try event.requiredText(174),
+                reasonCode: try event.requiredText(175), uptimeMs: try event.requiredUInt32(176),
+                signature: try event.requiredText(177), firmwareBuildId: try event.requiredText(178),
+                subsystem: try event.requiredText(179), stateBeforeEvent: try event.requiredText(180),
+                report: report
+            )
+        }
+        return DeviceDiagnosticsBatch(schemaVersion: try fields.requiredInt(171), events: events)
+    }
+
+    private static func diagnosticReport(_ fields: PacketFields) throws -> DeviceDiagnosticReport {
+        let trace = fields.texts(192)
+        let codes = fields.texts(197)
+        let deltas = fields.signeds(196)
+        let arguments = fields.signeds(198)
+        let count = try fields.requiredInt(195)
+        guard trace.count == (try fields.requiredInt(191)),
+              codes.count == count, deltas.count == count, arguments.count == count else {
+            throw invalid("diagnostic report count mismatch")
+        }
+        let breadcrumbs = try codes.indices.map { index in
+            guard let delta = Int32(exactly: deltas[index]), let argument = Int32(exactly: arguments[index]) else {
+                throw invalid("diagnostic breadcrumb exceeds Int32")
+            }
+            return DeviceDiagnosticBreadcrumb(deltaMs: delta, code: codes[index], arg0: argument)
+        }
+        let heap = try fields.optionalUInt32(193)
+        let stack = try fields.optionalUInt32(194)
+        return DeviceDiagnosticReport(
+            fault: DeviceDiagnosticFault(
+                cpuId: try fields.requiredInt(182), cpuEmu: try fields.requiredText(183),
+                coreEmu: try fields.requiredText(184), hsbEmu: try fields.requiredText(185),
+                audioEmu: try fields.requiredText(186), wirelessEmu: try fields.requiredText(187)
+            ),
+            execution: DeviceDiagnosticExecution(
+                task: fields.text(188), reti: fields.text(189), rets: fields.text(190), pcTrace: trace
+            ),
+            runtime: heap == nil && stack == nil ? nil : .init(heapFreeBytes: heap, taskStackRemainingBytes: stack),
+            breadcrumbs: breadcrumbs.isEmpty ? nil : breadcrumbs
+        )
+    }
+
     func parseDeviceStatus(_ data: Data) throws -> DeviceStatus {
         let fields = try decode(UInt32(BOTA_DEVICE_SDK_V1_PROTOCOL_DECODE_DEVICE_STATUS), data)
         let timestamp = try fields.requiredUInt32(UInt32(BOTA_DEVICE_SDK_V1_FIELD_TIMESTAMP))
@@ -1073,6 +1141,13 @@ private struct PacketFields {
     func unsigneds(_ id: UInt32) -> [UInt64] {
         values.compactMap { field in
             guard case let .unsigned(fieldID, value) = field, fieldID == id else { return nil }
+            return value
+        }
+    }
+
+    func signeds(_ id: UInt32) -> [Int64] {
+        values.compactMap { field in
+            guard case let .signed(fieldID, value) = field, fieldID == id else { return nil }
             return value
         }
     }

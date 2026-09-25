@@ -93,6 +93,7 @@ public struct BotaConfiguration: @unchecked Sendable {
             return DeviceRuntime(
                 engine: CoreEngineActor(abi: try CoreAbiClient(), host: executor),
                 capabilities: .all,
+                authorize: { _ in try Self.validateBluetoothAuthorization() },
                 connection: connection,
                 disconnect: { peripheralID in
                     try await bluetooth.disconnect(peripheralID: peripheralID)
@@ -161,6 +162,8 @@ public struct BotaConfiguration: @unchecked Sendable {
                         characteristicUUID: characteristicUUID
                     )
                 },
+                decodeDiagnosticEvents: { try mapper.decodeDiagnosticEvents($0) },
+                createDiagnosticCommand: { try mapper.createDiagnosticCommand($0) },
                 readEncryptedUploadV2Capabilities: { peripheralID in
                     try await encryptedUploadV2Capabilities.readFresh(peripheralID: peripheralID)
                 },

@@ -9,16 +9,34 @@ import java.util.UUID
 internal class DeviceConnectionRegistry {
     private val lock = Any()
     private var current: ConnectedDevice? = null
+    private var connectionGeneration: UUID = UUID.randomUUID()
 
     fun set(device: ConnectedDevice) {
-        synchronized(lock) { current = device }
+        synchronized(lock) { connectionGeneration = UUID.randomUUID(); current = device }
     }
 
     fun clear() {
-        synchronized(lock) { current = null }
+        synchronized(lock) { connectionGeneration = UUID.randomUUID(); current = null }
     }
 
     fun current(): ConnectedDevice? = synchronized(lock) { current }
+
+    fun generation(device: ConnectedDevice): UUID = synchronized(lock) {
+        require(device)
+        connectionGeneration
+    }
+
+    fun ownsGeneration(generation: UUID): Boolean = synchronized(lock) { connectionGeneration == generation }
+
+    fun require(device: ConnectedDevice, generation: UUID) {
+        synchronized(lock) {
+            require(device)
+            if (connectionGeneration != generation) throw BotaSDKError.Core(
+                BotaErrorCode.NotConnected, BotaOperation.ReadDeviceLogs, retryable = true,
+                protocolStatus = null, detail = "the diagnostic connection was replaced",
+            )
+        }
+    }
 
     fun require(device: ConnectedDevice) {
         val matches = synchronized(lock) {

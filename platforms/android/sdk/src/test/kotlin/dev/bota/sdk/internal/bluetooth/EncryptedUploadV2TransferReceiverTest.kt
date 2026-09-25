@@ -97,6 +97,21 @@ class EncryptedUploadV2TransferReceiverTest {
     }
 
     @Test
+    fun corruptResumePrefixDoesNotDestroyTheRetainedTail() {
+        val root = Files.createTempDirectory("bota-v2-corrupt-resume")
+        val sink = UUID.randomUUID().toString()
+        val file = root.resolve("$sink.encrypted-upload-v2")
+        val bytes = "corrupted-tail".encodeToByteArray()
+        Files.write(file, bytes)
+        val receiver = EncryptedUploadV2TransferReceiver(
+            root, sink, 9u, 9u, sha("committed".encodeToByteArray()), 4u, 2u, 2u,
+            EncryptedUploadV2CheckpointValue(2u, 9u, sha("committed".encodeToByteArray()), 3u),
+        )
+        assertThrows(EncryptedUploadV2TransferReceiverException::class.java) { receiver.prepare() }
+        assertTrue(Files.readAllBytes(file).contentEquals(bytes))
+    }
+
+    @Test
     fun rejectsNextWindowTrafficWhileRepairIsPending() {
         val root = Files.createTempDirectory("bota-v2-phase")
         val ciphertext = "abcdef".encodeToByteArray()

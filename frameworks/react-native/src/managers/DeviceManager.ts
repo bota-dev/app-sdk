@@ -16,6 +16,7 @@ import type {
   ConnectedDevice,
   DeviceConnectionSettings,
   DeviceLogEvent,
+  DeviceDiagnosticsBatch,
   DeviceStatus,
   DeviceWiFiScanResult,
   DiscoveredDevice,
@@ -483,6 +484,16 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     return idempotentRemoval(() => {
       void this.removeExpected(this.logSubscriptions, device.id, promise);
     });
+  }
+
+  async readDiagnosticEvents(device: ConnectedDevice): Promise<DeviceDiagnosticsBatch> {
+    this.requireConnected(device.id);
+    return this.client.logs.readDiagnosticEvents(device);
+  }
+
+  async acknowledgeDiagnosticEvents(device: ConnectedDevice, acceptedEventIds: string[]): Promise<void> {
+    this.requireConnected(device.id);
+    await this.client.logs.acknowledgeDiagnosticEvents(device, acceptedEventIds);
   }
 
   async readConnectionSettings(

@@ -5,6 +5,7 @@ struct BotaDeviceSDKAppleRecordingFile: Equatable, Sendable {
     let localPath: String
     let isE2EEncrypted: Bool
     let contentSHA256Hex: String?
+    let fileSizeBytes: UInt64
 }
 
 protocol BotaDeviceSDKAppleRecordingClient: Sendable {
@@ -153,6 +154,7 @@ actor BotaDeviceSDKAppleRecordings {
     }
 
     private let client: any BotaDeviceSDKAppleRecordingClient
+    private let fileSize: @Sendable (String) throws -> UInt64
     private struct EncryptedUploadV2Request {
         let recording: EncryptedUploadV2Recording
         let continuation: CheckedContinuation<EncryptedUploadV2Material, Error>
@@ -166,9 +168,18 @@ actor BotaDeviceSDKAppleRecordings {
 
     init(
         client: any BotaDeviceSDKAppleRecordingClient =
-            BotaDeviceSDKSharedAppleRecordingClient()
+            BotaDeviceSDKSharedAppleRecordingClient(),
+        fileSize: @escaping @Sendable (String) throws -> UInt64 = { path in
+            let attributes = try FileManager.default.attributesOfItem(atPath: path)
+            guard attributes[.type] as? FileAttributeType == .typeRegular,
+                  let size = attributes[.size] as? NSNumber else {
+                throw CocoaError(.fileReadCorruptFile)
+            }
+            return size.uint64Value
+        }
     ) {
         self.client = client
+        self.fileSize = fileSize
     }
 
     func listRecordings(_ device: ConnectedDevice) async throws -> [DeviceRecording] {
@@ -200,7 +211,8 @@ actor BotaDeviceSDKAppleRecordings {
         return BotaDeviceSDKAppleRecordingFile(
             localPath: path,
             isE2EEncrypted: metadata?.isE2EEncrypted ?? false,
-            contentSHA256Hex: metadata?.contentSHA256Hex
+            contentSHA256Hex: metadata?.contentSHA256Hex,
+            fileSizeBytes: try fileSize(path)
         )
     }
 

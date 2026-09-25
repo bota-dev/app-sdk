@@ -68,6 +68,7 @@ extension CoreEngineActor: CoreWorkflowRunning {}
 struct DeviceRuntime: Sendable {
     let engine: any CoreWorkflowRunning
     let capabilities: CoreCapabilities
+    let authorize: @Sendable (BotaOperation) throws -> Void
     let connection: DeviceConnectionRegistry
     let operations: DeviceOperationCoordinator
     let disconnect: @Sendable (String) async throws -> Void
@@ -78,6 +79,8 @@ struct DeviceRuntime: Sendable {
     let directWrite: @Sendable (String, String, String, Data) async throws -> Void
     let directSubscribe: @Sendable (String, String, String) async throws -> AsyncThrowingStream<Data, Error>
     let directUnsubscribe: @Sendable (String, String, String) async throws -> Void
+    let decodeDiagnosticEvents: @Sendable (Data) throws -> DeviceDiagnosticsBatch?
+    let createDiagnosticCommand: @Sendable (String?) throws -> Data
     let readEncryptedUploadV2Capabilities: @Sendable (String) async throws -> EncryptedUploadV2CapabilitySnapshot
     let encryptedUploadV2Checkpoint: @Sendable (String, String, UInt32) async throws -> EncryptedUploadV2Checkpoint?
     let encryptedUploadV2MaximumWriteLength: @Sendable (String) async throws -> Int
@@ -127,6 +130,7 @@ struct DeviceRuntime: Sendable {
     init(
         engine: any CoreWorkflowRunning,
         capabilities: CoreCapabilities,
+        authorize: @escaping @Sendable (BotaOperation) throws -> Void = { _ in },
         connection: DeviceConnectionRegistry = DeviceConnectionRegistry(),
         operations: DeviceOperationCoordinator = DeviceOperationCoordinator(),
         disconnect: @escaping @Sendable (String) async throws -> Void,
@@ -147,6 +151,12 @@ struct DeviceRuntime: Sendable {
             throw NativeHostError.missingResource("direct device subscription")
         },
         directUnsubscribe: @escaping @Sendable (String, String, String) async throws -> Void = { _, _, _ in },
+        decodeDiagnosticEvents: @escaping @Sendable (Data) throws -> DeviceDiagnosticsBatch? = { _ in
+            throw NativeHostError.missingResource("diagnostics decoder")
+        },
+        createDiagnosticCommand: @escaping @Sendable (String?) throws -> Data = { _ in
+            throw NativeHostError.missingResource("diagnostics command encoder")
+        },
         readEncryptedUploadV2Capabilities: @escaping @Sendable
             (String) async throws -> EncryptedUploadV2CapabilitySnapshot = { _ in
             throw NativeHostError.missingResource("encrypted upload v2 capabilities")
@@ -245,6 +255,7 @@ struct DeviceRuntime: Sendable {
     ) {
         self.engine = engine
         self.capabilities = capabilities
+        self.authorize = authorize
         self.connection = connection
         self.operations = operations
         self.disconnect = disconnect
@@ -255,6 +266,8 @@ struct DeviceRuntime: Sendable {
         self.directWrite = directWrite
         self.directSubscribe = directSubscribe
         self.directUnsubscribe = directUnsubscribe
+        self.decodeDiagnosticEvents = decodeDiagnosticEvents
+        self.createDiagnosticCommand = createDiagnosticCommand
         self.readEncryptedUploadV2Capabilities = readEncryptedUploadV2Capabilities
         self.encryptedUploadV2Checkpoint = encryptedUploadV2Checkpoint
         self.encryptedUploadV2MaximumWriteLength = encryptedUploadV2MaximumWriteLength

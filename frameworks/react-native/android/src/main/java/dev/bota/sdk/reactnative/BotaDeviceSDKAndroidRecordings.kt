@@ -74,6 +74,7 @@ internal fun BotaDeviceSDKAndroidRecordings.BotaRecordingFile.toWritableMap(): W
     Arguments.createMap().apply {
         putString("localPath", localPath)
         putBoolean("e2eEncrypted", isE2EEncrypted)
+        putDouble("fileSizeBytes", fileSizeBytes.toDouble())
         contentSha256Hex?.let { putString("contentSha256", it) }
     }
 
@@ -304,6 +305,11 @@ internal class BotaDeviceSDKSharedAndroidRecordingClient(
 internal class BotaDeviceSDKAndroidRecordings(
     private val client: BotaDeviceSDKAndroidRecordingClient =
         BotaDeviceSDKSharedAndroidRecordingClient(),
+    private val fileSize: (String) -> Long = { path ->
+        val file = java.nio.file.Paths.get(path)
+        check(java.nio.file.Files.isRegularFile(file)) { "recording transfer did not produce a regular file" }
+        java.nio.file.Files.size(file)
+    },
 ) {
     private val destinationRequests = ConcurrentHashMap<
         String,
@@ -322,6 +328,7 @@ internal class BotaDeviceSDKAndroidRecordings(
         val localPath: String,
         val isE2EEncrypted: Boolean,
         val contentSha256Hex: String?,
+        val fileSizeBytes: Long,
     )
 
     suspend fun listRecordings(device: ConnectedDevice): List<DeviceRecording> =
@@ -346,6 +353,7 @@ internal class BotaDeviceSDKAndroidRecordings(
             localPath,
             metadata?.isE2EEncrypted ?: false,
             metadata?.contentSha256Hex,
+            fileSize(localPath),
         )
     }
 

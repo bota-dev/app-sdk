@@ -99,9 +99,19 @@ acceptance gates.
 
 The public TypeScript surface remains frozen against `0.0.65` at that revision.
 Executable workflow evidence is a separate authority: maintenance SDK `0.0.67`
-at revision `e11fde5be40027ec6cf1985fc0eadb00ece23e65`. CI and tagged-release
+at revision `318974f925a573cf04b0d624978bee04784af09b`. CI and tagged-release
 verification run its referenced v2 tests without changing the public-surface
 contract.
+
+The newer maintenance additions have a separate explicit contract, rather than
+weakening the frozen surface check. Unpublished source now includes typed
+diagnostics read/acknowledgement on Apple, Android and RN, native-file RN upload
+recovery with fresh exact-scope credentials, and Apple/Android lost-WINDOW_ACK
+resume reconciliation. These changes do not imply complete cross-platform or
+hardware parity. JavaScript `RecordingDataStore` byte callbacks are unsupported
+by the native-file architecture and fail explicitly during configuration.
+The feature-specific notes under `docs/parity/` describe the boundaries and
+tests; published beta.1 and encrypted-v2 capability metadata remain unchanged.
 
 Its public TypeScript entrypoint is frozen separately in
 `protocol/baseline/react-native-public-api-0.0.65.json`. The semantic contract

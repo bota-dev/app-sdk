@@ -5,8 +5,7 @@ import XCTest
 
 final class EncryptedUploadV2TransferControlTests: XCTestCase {
     func testCoreBluetoothRouteWrites0408AndReceivesAndCleansUp0409() async throws {
-        let driver = FakeCentralDriver()
-        await driver.setSubscriptionNotifications([Self.startAcknowledgement()])
+        let driver = TransferControlCentralDriver(notifications: [Self.startAcknowledgement()])
         let control = EncryptedUploadV2TransferControl(
             bluetooth: CoreBluetoothHost(driver: driver),
             mapper: try CoreModelMapper()
@@ -135,6 +134,37 @@ final class EncryptedUploadV2TransferControlTests: XCTestCase {
         let snapshot = await probe.snapshot()
         XCTAssertEqual(snapshot.frames.map(\.first), [0x20, 0x21])
         XCTAssertEqual(snapshot.frames.last, frame)
+    }
+
+    func testClosedNotificationSourcePreventsFurtherWritesAndCleanupOnReplacement() async throws {
+        let probe = TransferControlProbe(notifications: [Self.startAcknowledgement()])
+        let control = try Self.control(probe)
+        _ = try await control.start(peripheralID: "peripheral-1", request: Self.startRequest())
+        var notifications = try await control.claimNotificationStream(
+            transportSessionID: Self.transportSessionID
+        ).makeAsyncIterator()
+        await probe.finishNotifications()
+        let terminal = try await notifications.next()
+        XCTAssertNil(terminal)
+        let frame = try CoreModelMapper().createEncryptedUploadV2WindowAcknowledgement(
+            transportSessionID: Self.transportSessionID, windowIndex: 1, highestContiguousSequence: 3,
+            nextCiphertextOffset: 12, prefixSHA256: Data(repeating: 0x55, count: 32),
+            checkpointRevision: 2, missingSequences: []
+        )
+        do {
+            try await control.writeActiveTransferFrame(transportSessionID: Self.transportSessionID, frame: frame)
+            XCTFail("A closed notification source cannot authorize a write")
+        } catch {}
+        do {
+            try await control.confirmActiveTransferFrame(
+                transportSessionID: Self.transportSessionID, frame: Self.confirmFrame()
+            )
+            XCTFail("A closed notification source cannot authorize CONFIRM")
+        } catch {}
+        try await control.abortActiveTransfer(transportSessionID: Self.transportSessionID, reason: 0xff)
+        let snapshot = await probe.snapshot()
+        XCTAssertEqual(snapshot.frames.map(\.first), [0x20])
+        XCTAssertEqual(snapshot.calls, [.subscribe, .write])
     }
 
     func testConfirmWritesOnlyForClaimedSessionThenReleasesSubscriptionOwnership() async throws {
@@ -645,10 +675,11 @@ private actor TransferControlProbe {
         if data.first == 0x23, suspendConfirm {
             await withCheckedContinuation { confirmContinuation = $0 }
         }
-        guard data.first != 0x24 else { return }
+        guard data.first == 0x20 || data.first == 0x22 else { return }
         notifications.forEach { notificationContinuation?.yield($0) }
-        if !notifications.isEmpty { notificationContinuation?.finish() }
     }
+
+    func finishNotifications() { notificationContinuation?.finish() }
 
     func unsubscribe(peripheralID: String) async throws {
         calls.append(.unsubscribe)
@@ -678,4 +709,36 @@ private actor TransferControlProbe {
     func snapshot() -> (calls: [TransferControlCall], frames: [Data]) {
         (calls, frames)
     }
+}
+
+private actor TransferControlCentralDriver: CentralDriver {
+    let probe: TransferControlProbe
+    private(set) var characteristicLog: [String] = []
+
+    init(notifications: [Data]) { probe = TransferControlProbe(notifications: notifications) }
+
+    func subscribe(peripheralID: String, serviceUUID: String, characteristicUUID: String) async throws -> AsyncThrowingStream<Data, Error> {
+        characteristicLog.append("subscribe:\(serviceUUID):\(characteristicUUID)")
+        return try await probe.subscribe(peripheralID: peripheralID)
+    }
+
+    func write(peripheralID: String, serviceUUID: String, characteristicUUID: String, data: Data, withResponse: Bool) async throws {
+        characteristicLog.append("write:\(serviceUUID):\(characteristicUUID):\(withResponse)")
+        await probe.write(peripheralID: peripheralID, data: data)
+    }
+
+    func unsubscribe(peripheralID: String, serviceUUID: String, characteristicUUID: String) async throws {
+        characteristicLog.append("unsubscribe:\(serviceUUID):\(characteristicUUID)")
+        try await probe.unsubscribe(peripheralID: peripheralID)
+    }
+
+    func connectedPeripherals(serviceUUIDs: [String]) async -> [CentralAdvertisement] { [] }
+    func startScan(allowDuplicates: Bool) async throws -> AsyncThrowingStream<CentralAdvertisement, Error> { throw CentralDriverError.bluetoothUnavailable }
+    func stopScan() async throws { throw CentralDriverError.bluetoothUnavailable }
+    func connect(peripheralID: String) async throws { throw CentralDriverError.bluetoothUnavailable }
+    func discoverServices(peripheralID: String, serviceUUIDs: [String]) async throws -> [String] { throw CentralDriverError.bluetoothUnavailable }
+    func discoverCharacteristics(peripheralID: String, serviceUUIDs: [String]) async throws { throw CentralDriverError.bluetoothUnavailable }
+    func disconnect(peripheralID: String) async throws { throw CentralDriverError.bluetoothUnavailable }
+    func read(peripheralID: String, serviceUUID: String, characteristicUUID: String) async throws -> Data { throw CentralDriverError.bluetoothUnavailable }
+    func maximumWriteValueLength(peripheralID: String, withResponse: Bool) async throws -> Int { throw CentralDriverError.bluetoothUnavailable }
 }

@@ -30,6 +30,20 @@ export interface DeviceRecording {
  * (obtained by calling customer's API, not Bota API directly)
  */
 export interface UploadInfo {
+  /** Non-secret account/project/environment identity. Must match during recovery. */
+  recoveryScope?: string;
+  /** Skip sending the object; complete must still acknowledge host durability. */
+  alreadyUploaded?: boolean;
+  /** Resolve only after the backend durably acknowledges this exact recording. */
+  complete?: (context: {
+    fileSizeBytes: number;
+    contentSha256?: string;
+    signal: AbortSignal;
+  }) => Promise<void>;
+  /** Aborted by the host when this authorization context becomes invalid. */
+  signal?: AbortSignal;
+  /** Releases host listeners/leases after the attempt, including cancellation. */
+  dispose?: () => void;
   /** Pre-signed S3 URL for upload */
   uploadUrl: string;
   /** Recording ID assigned by Bota API (rec_*) */
@@ -54,6 +68,37 @@ export interface UploadInfo {
     bearerToken: string;
   };
 }
+
+/** Maintenance compatibility shape only. JS byte stores are unsupported by the
+ * native-owned facade; supplying one throws before native configuration. */
+export interface RecordingDataStore {
+  saveRecordingData(input: {
+    deviceId: string;
+    recordingUuid: string;
+    data: Uint8Array;
+  }): Promise<string>;
+  loadRecordingData(localPath: string): Promise<Uint8Array>;
+  deleteRecordingData(localPath: string): Promise<void>;
+}
+
+/** Metadata only. The host must refresh credentials for this exact identity. */
+export interface UploadRecoveryContext {
+  taskId: string;
+  recordingId: string;
+  deviceId: string;
+  recordingUuid: string;
+  recoveryScope?: string;
+  fileSizeBytes?: number;
+  relayUpload: boolean;
+  contentType?: string;
+  contentSha256?: string;
+  signal: AbortSignal;
+}
+
+/** Null parks an unavailable account without consuming the retry budget. */
+export type UploadRecoveryProvider = (
+  context: UploadRecoveryContext
+) => Promise<UploadInfo | null>;
 
 /**
  * Sync progress stages
@@ -102,6 +147,13 @@ export type UploadTaskStatus = 'pending' | 'uploading' | 'completed' | 'failed';
  * Upload task in the queue
  */
 export interface UploadTask {
+  recordingUuid?: string;
+  recoveryScope?: string;
+  fileSizeBytes?: number;
+  relayUpload?: boolean;
+  nextAttemptAt?: number;
+  /** Volatile compatibility field; never included in queue persistence. */
+  complete?: UploadInfo['complete'];
   /** Unique task identifier */
   id: string;
   /** Recording ID from Bota API */

@@ -5,6 +5,351 @@ import XCTest
 @testable import BotaAppSDK
 
 final class EncryptedUploadV2TransferHostTests: XCTestCase {
+    func testLostAckReconcilesToZeroBeforeRestart() async throws {
+        try await checkLostAckRecovery(offset: 0)
+    }
+
+    func testLostAckReconcilesToVerifiedNonzeroPrefixBeforeResume() async throws {
+        try await checkLostAckRecovery(offset: 2)
+    }
+
+    private func checkLostAckRecovery(offset: UInt64) async throws {
+        let fixture = try Fixture.lostAck()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let checkpoint = try await seedLostAckCheckpoint(fixture)
+        let transport = LostAckTransport(replies: [
+            fixture.resumeRejection(offset: offset), fixture.openingAccepted(offset: offset),
+        ])
+        let (host, _) = try lostAckHost(fixture, transport: transport)
+        let (core, firstStart) = try await coreReadyToStart(fixture, host: host)
+        let rejected = try await dispatch(core, host: host, effect: firstStart)
+        XCTAssertEqual(rejected.map(\.kind), [EncryptedUploadV2Abi.eventResumeRejected])
+        let persisted = try await host.checkpoint(
+            serialNumber: fixture.serialNumber, recordingUUID: fixture.recordingUUID, recordingGeneration: 7
+        )
+        XCTAssertEqual(persisted?.revision, offset == 0 ? 0 : 1)
+        XCTAssertEqual(persisted?.nextCiphertextOffset, offset)
+        XCTAssertEqual(persisted?.highestContiguousSequence, offset == 0 ? nil : 0)
+        XCTAssertEqual(try Data(contentsOf: fixture.fileURL), fixture.ciphertext, "Persist before truncate")
+        let sidecar = try Data(contentsOf: fixture.checkpointURL)
+
+        _ = try await dispatch(core, host: host, effect: nextEffect(core, kind: EncryptedUploadV2Abi.effectDeleteCheckpoint))
+        XCTAssertEqual(try Data(contentsOf: fixture.checkpointURL), sidecar, "Core restart must retain recovery evidence")
+        _ = try await dispatch(core, host: host, effect: nextEffect(core, kind: EncryptedUploadV2Abi.effectTruncateSink))
+        XCTAssertEqual(try Data(contentsOf: fixture.fileURL), Data(fixture.ciphertext.prefix(Int(offset))))
+        let retryStart = try nextEffect(core, kind: EncryptedUploadV2Abi.effectStartTransfer)
+        var stream = await host.execute(retryStart).makeAsyncIterator()
+        let started = try await stream.next()
+        XCTAssertEqual(started?.kind, EncryptedUploadV2Abi.eventTransferStarted)
+        try core.dispatch(CoreHostEvent(effect: retryStart, payload: XCTUnwrap(started)).packet)
+        let openings = await transport.frames
+        XCTAssertEqual(openings.map(\.first), [0x22, offset == 0 ? 0x20 : 0x22])
+        let mapper = try CoreModelMapper()
+        let expectedRetry = offset == 0
+            ? try mapper.createEncryptedUploadV2Start(
+                transportSessionID: fixture.transportSessionID, uploadSessionID: fixture.uploadSessionID,
+                recordingUUID: fixture.recordingUUID, recordingGeneration: 7,
+                authorizationSHA256: Data(repeating: 0x66, count: 32), checkpointRevision: 0,
+                nextCiphertextOffset: 0, prefixSHA256: Data(SHA256.hash(data: Data())),
+                windowPackets: 4, dataPayloadBytes: 300
+            )
+            : try mapper.createEncryptedUploadV2ResumeRequest(
+                transportSessionID: fixture.transportSessionID, uploadSessionID: fixture.uploadSessionID,
+                recordingUUID: fixture.recordingUUID, recordingGeneration: 7, checkpointRevision: 1,
+                nextCiphertextOffset: offset, prefixSHA256: Data(SHA256.hash(data: fixture.ciphertext.prefix(Int(offset)))),
+                windowPackets: 4, dataPayloadBytes: 300
+            )
+        XCTAssertEqual(openings.last, expectedRetry)
+        await transport.yield(Self.dataPacket(
+            sessionID: fixture.transportSessionID, sequence: 1, offset: offset,
+            bytes: Data(fixture.ciphertext.dropFirst(Int(offset)))
+        ))
+        await transport.yield(Self.windowEnd(
+            sessionID: fixture.transportSessionID, windowIndex: 0, firstSequence: 1, lastSequence: 1,
+            nextOffset: 272, prefixSHA256: fixture.ciphertextSHA256, checkpointRevision: offset == 0 ? 1 : 2
+        ))
+        let staged = try await stream.next()
+        XCTAssertEqual(staged?.kind, EncryptedUploadV2Abi.eventWindowStaged)
+        try core.dispatch(CoreHostEvent(effect: retryStart, payload: XCTUnwrap(staged)).packet)
+        _ = try await dispatch(core, host: host, effect: nextEffect(core, kind: EncryptedUploadV2Abi.effectSaveCheckpoint))
+        _ = try await dispatch(core, host: host, effect: nextEffect(core, kind: EncryptedUploadV2Abi.effectAcknowledgeWindow))
+        for offset in stride(from: 0, to: 580, by: 300) {
+            await transport.yield(Self.manifestChunk(
+                sessionID: fixture.transportSessionID, totalLength: 580, offset: UInt16(offset),
+                digest: fixture.manifestSHA256, bytes: Data(fixture.manifest[offset..<min(offset + 300, 580)])
+            ))
+        }
+        await transport.yield(Self.eof(
+            sessionID: fixture.transportSessionID, finalSequence: 1, ciphertextLength: 272,
+            ciphertextSHA256: fixture.ciphertextSHA256, manifestSHA256: fixture.manifestSHA256
+        ))
+        let completed = try await stream.next()
+        XCTAssertEqual(completed?.kind, EncryptedUploadV2Abi.eventTransferCompleted)
+        try core.dispatch(CoreHostEvent(effect: retryStart, payload: XCTUnwrap(completed)).packet)
+        _ = try nextEffect(core, kind: EncryptedUploadV2Abi.effectStageArtifacts)
+        XCTAssertEqual(try Data(contentsOf: fixture.fileURL), fixture.ciphertext)
+        _ = try await Self.collect(await host.execute(fixture.abortEffect()))
+        XCTAssertFalse(checkpoint.isEmpty)
+    }
+
+    func testLostAckUnsafeRejectionsRetainEvidenceWithoutRestart() async throws {
+        for scenario in ["digest", "owner", "ahead", "equalRevision", "equalOffset", "zeroRevision", "zeroOffset", "foreign"] {
+            let fixture = try Fixture.lostAck()
+            defer { try? FileManager.default.removeItem(at: fixture.root) }
+            let checkpoint = try await seedLostAckCheckpoint(fixture)
+            let before = try Data(contentsOf: fixture.checkpointURL)
+            let offset: UInt64 = scenario == "ahead" || scenario == "equalOffset" ? 272 : scenario == "zeroOffset" ? 0 : 2
+            let revision: UInt32 = scenario == "ahead" ? 3 : scenario == "equalRevision" ? 2 : scenario == "zeroRevision" ? 0 : 1
+            let transport = LostAckTransport(replies: [fixture.resumeRejection(
+                offset: offset, revision: revision, reason: scenario == "owner" ? 0x13 : 0x0f,
+                prefix: scenario == "digest" ? Data(repeating: 0, count: 32) : nil,
+                sessionID: scenario == "foreign" ? fixture.transportSessionID + 1 : nil
+            )])
+            let (host, _) = try lostAckHost(fixture, transport: transport)
+            _ = try await Self.collect(await host.execute(fixture.loadEffect()))
+            do {
+                _ = try await Self.collect(await host.execute(fixture.startEffect(checkpoint: checkpoint)))
+                XCTFail("Unsafe rejection must fail without a core restart: \(scenario)")
+            } catch {}
+            XCTAssertEqual(try Data(contentsOf: fixture.checkpointURL), before, scenario)
+            XCTAssertEqual(try Data(contentsOf: fixture.fileURL), fixture.ciphertext, scenario)
+            let openings = await transport.frames.filter { $0.first == 0x20 || $0.first == 0x22 }
+            XCTAssertEqual(openings.count, 1, scenario)
+        }
+    }
+
+    func testLostAckPersistenceFailureDoesNotTruncateOrRetry() async throws {
+        let fixture = try Fixture.lostAck()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let checkpoint = try await seedLostAckCheckpoint(fixture)
+        let before = try Data(contentsOf: fixture.checkpointURL)
+        let transport = LostAckTransport(replies: [fixture.resumeRejection(offset: 2)])
+        let (host, _) = try lostAckHost(fixture, transport: transport)
+        _ = try await Self.collect(await host.execute(fixture.loadEffect()))
+        let directory = fixture.checkpointURL.deletingLastPathComponent()
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path) }
+        do {
+            _ = try await Self.collect(await host.execute(fixture.startEffect(checkpoint: checkpoint)))
+            XCTFail("Persistence failure must prevent reconciliation")
+        } catch {}
+        XCTAssertEqual(try Data(contentsOf: fixture.checkpointURL), before)
+        XCTAssertEqual(try Data(contentsOf: fixture.fileURL), fixture.ciphertext)
+        let frames = await transport.frames
+        XCTAssertEqual(frames.map(\.first), [0x22])
+    }
+
+    func testLostAckRepeatedRejectionCannotRollbackAgain() async throws {
+        let fixture = try Fixture.lostAck()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let checkpoint = try await seedLostAckCheckpoint(fixture)
+        let transport = LostAckTransport(replies: [fixture.resumeRejection(offset: 2), fixture.resumeRejection(offset: 0)])
+        let (host, _) = try lostAckHost(fixture, transport: transport)
+        _ = try await Self.collect(await host.execute(fixture.loadEffect()))
+        _ = try await Self.collect(await host.execute(fixture.startEffect(checkpoint: checkpoint)))
+        _ = try await Self.collect(await host.execute(fixture.deleteEffect()))
+        _ = try await Self.collect(await host.execute(fixture.truncateEffect(nextOffset: 0)))
+        let before = try Data(contentsOf: fixture.checkpointURL)
+        do {
+            _ = try await Self.collect(await host.execute(fixture.startEffect()))
+            XCTFail("A second rejection cannot authorize another rollback")
+        } catch {}
+        XCTAssertEqual(try Data(contentsOf: fixture.checkpointURL), before)
+        XCTAssertEqual(try Data(contentsOf: fixture.fileURL), Data("ab".utf8))
+        let frames = await transport.frames
+        XCTAssertEqual(frames.map(\.first), [0x22, 0x22])
+    }
+
+    func testLostAckRetryCannotWriteToReplacementConnection() async throws {
+        let fixture = try Fixture.lostAck()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let checkpoint = try await seedLostAckCheckpoint(fixture)
+        let transport = LostAckTransport(replies: [fixture.resumeRejection(offset: 0), fixture.startAcknowledgement()])
+        let (host, control) = try lostAckHost(fixture, transport: transport)
+        _ = try await Self.collect(await host.execute(fixture.loadEffect()))
+        _ = try await Self.collect(await host.execute(fixture.startEffect(checkpoint: checkpoint)))
+        await control.resetAfterConfirmedDisconnect()
+        _ = try await Self.collect(await host.execute(fixture.deleteEffect()))
+        _ = try await Self.collect(await host.execute(fixture.truncateEffect(nextOffset: 0)))
+        var retry = await host.execute(fixture.startEffect()).makeAsyncIterator()
+        do {
+            _ = try await retry.next()
+            XCTFail("An old reconciliation cannot open a replacement connection")
+        } catch {}
+        do {
+            _ = try await Self.collect(await host.execute(fixture.abortEffect()))
+        } catch let error as BotaSDKError {
+            XCTAssertEqual(error.code, .identityMismatch, "The old connection has no remaining cleanup owner")
+        }
+        let frames = await transport.frames
+        XCTAssertEqual(frames.map(\.first), [0x22], "No stale START, RESUME or ABORT")
+    }
+
+    func testLostAckReloadAfterPersistenceUsesNativePrefixWithoutDecodingCoreCheckpoint() async throws {
+        for offset: UInt64 in [0, 2] {
+            let fixture = try Fixture.lostAck()
+            defer { try? FileManager.default.removeItem(at: fixture.root) }
+            let checkpoint = try await seedLostAckCheckpoint(fixture)
+            let (firstHost, _) = try lostAckHost(fixture, transport: LostAckTransport(replies: [fixture.resumeRejection(offset: offset)]))
+            _ = try await Self.collect(await firstHost.execute(fixture.loadEffect()))
+            _ = try await Self.collect(await firstHost.execute(fixture.startEffect(checkpoint: checkpoint)))
+            _ = try await Self.collect(await firstHost.execute(fixture.abortEffect()))
+            XCTAssertEqual(try Data(contentsOf: fixture.fileURL), fixture.ciphertext)
+
+            let transport = LostAckTransport(replies: [fixture.openingAccepted(offset: offset)])
+            let (host, _) = try lostAckHost(fixture, transport: transport)
+            let (_, start) = try await coreReadyToStart(fixture, host: host)
+            XCTAssertEqual(try Data(contentsOf: fixture.fileURL), Data(fixture.ciphertext.prefix(Int(offset))))
+            var stream = await host.execute(start).makeAsyncIterator()
+            let started = try await stream.next()
+            XCTAssertEqual(started?.kind, EncryptedUploadV2Abi.eventTransferStarted)
+            let frames = await transport.frames
+            XCTAssertEqual(frames.map(\.first), [offset == 0 ? 0x20 : 0x22])
+            _ = try await Self.collect(await host.execute(fixture.abortEffect()))
+        }
+    }
+
+    func testLostAckCancelledOrForeignRestartCannotDeleteEvidence() async throws {
+        for foreign in [false, true] {
+            let fixture = try Fixture.lostAck()
+            defer { try? FileManager.default.removeItem(at: fixture.root) }
+            let checkpoint = try await seedLostAckCheckpoint(fixture)
+            let transport = LostAckTransport(replies: [fixture.resumeRejection(offset: 2)])
+            let (host, _) = try lostAckHost(fixture, transport: transport)
+            _ = try await Self.collect(await host.execute(fixture.loadEffect()))
+            _ = try await Self.collect(await host.execute(fixture.startEffect(checkpoint: checkpoint)))
+            let before = try Data(contentsOf: fixture.checkpointURL)
+            var effect = fixture.deleteEffect()
+            if foreign {
+                let packet = effect.packet
+                effect = try CoreEffect(packet: .init(
+                    kind: packet.kind, operation: packet.operation, requestID: packet.requestID,
+                    cancellationHigh: packet.cancellationHigh, cancellationLow: packet.cancellationLow + 1,
+                    fields: packet.fields
+                ))
+            } else {
+                let committed = await host.confirmationAttemptedOrClaimCancellation(effect.cancellationID)
+                XCTAssertFalse(committed)
+            }
+            do {
+                _ = try await Self.collect(await host.execute(effect))
+                XCTFail("A stale restart must not delete the durable prefix")
+            } catch {}
+            XCTAssertEqual(try Data(contentsOf: fixture.checkpointURL), before)
+            XCTAssertEqual(try Data(contentsOf: fixture.fileURL), fixture.ciphertext)
+            _ = try await Self.collect(await host.execute(fixture.abortEffect()))
+        }
+    }
+
+    func testLostAckClosedOriginalSubscriptionCannotBeReplacedForRetry() async throws {
+        let fixture = try Fixture.lostAck()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let checkpoint = try await seedLostAckCheckpoint(fixture)
+        let transport = LostAckTransport(replies: [fixture.resumeRejection(offset: 2), fixture.openingAccepted(offset: 2)])
+        let (host, _) = try lostAckHost(fixture, transport: transport)
+        _ = try await Self.collect(await host.execute(fixture.loadEffect()))
+        _ = try await Self.collect(await host.execute(fixture.startEffect(checkpoint: checkpoint)))
+        await transport.unsubscribe()
+        _ = try await Self.collect(await host.execute(fixture.deleteEffect()))
+        _ = try await Self.collect(await host.execute(fixture.truncateEffect(nextOffset: 0)))
+        var stream = await host.execute(fixture.startEffect()).makeAsyncIterator()
+        do {
+            _ = try await stream.next()
+            XCTFail("Closed original notifications must stop retry")
+        } catch {}
+        let frames = await transport.frames
+        let subscriptions = await transport.subscriptionCount
+        XCTAssertEqual(frames.map(\.first), [0x22])
+        XCTAssertEqual(subscriptions, 1)
+    }
+
+    private func seedLostAckCheckpoint(_ fixture: Fixture) async throws -> Data {
+        let host = EncryptedUploadV2TransferHost(
+            rootDirectory: fixture.root, mapper: try CoreModelMapper(),
+            openTransfer: { _, _ in .opened(fixture.notifications.stream) }, sendControl: { _ in }
+        )
+        let (core, start) = try await coreReadyToStart(fixture, host: host)
+        var stream = await host.execute(start).makeAsyncIterator()
+        let started = try await stream.next()
+        try core.dispatch(CoreHostEvent(effect: start, payload: XCTUnwrap(started)).packet)
+        fixture.notifications.continuation.yield(Self.dataPacket(
+            sessionID: fixture.transportSessionID, sequence: 9, offset: 0, bytes: fixture.ciphertext
+        ))
+        fixture.notifications.continuation.yield(Self.windowEnd(
+            sessionID: fixture.transportSessionID, windowIndex: 1, firstSequence: 9, lastSequence: 9,
+            nextOffset: UInt64(fixture.ciphertext.count), prefixSHA256: fixture.ciphertextSHA256, checkpointRevision: 2
+        ))
+        let staged = try await stream.next()
+        try core.dispatch(CoreHostEvent(effect: start, payload: XCTUnwrap(staged)).packet)
+        let save = try nextEffect(core, kind: EncryptedUploadV2Abi.effectSaveCheckpoint)
+        let checkpoint = try XCTUnwrap(save.packet.fields.compactMap { field -> Data? in
+            if case let .bytes(28, bytes) = field { return bytes }
+            return nil
+        }.first)
+        _ = try await dispatch(core, host: host, effect: save)
+        _ = try await Self.collect(await host.execute(fixture.abortEffect()))
+        return checkpoint
+    }
+
+    private func coreReadyToStart(
+        _ fixture: Fixture, host: EncryptedUploadV2TransferHost
+    ) async throws -> (CoreAbiClient, CoreEffect) {
+        let core = try CoreAbiClient()
+        let fields = fixture.startEffect().packet.fields.filter {
+            if case .bytes(161, _) = $0 { return false }
+            return true
+        }
+        try core.start(.init(
+            kind: EncryptedUploadV2Abi.commandTransferEncryptedRecording, operation: 0, requestID: 0,
+            cancellationHigh: 2, cancellationLow: 3, fields: fields
+        ), capabilities: CoreCapabilities.all.rawValue)
+        _ = try await dispatch(core, host: host, effect: nextEffect(core, kind: EncryptedUploadV2Abi.effectLoadCheckpoint))
+        _ = try await dispatch(core, host: host, effect: nextEffect(core, kind: EncryptedUploadV2Abi.effectTruncateSink))
+        let prepare = try nextEffect(core, kind: EncryptedUploadV2Abi.effectPrepareSession)
+        try core.dispatch(CoreHostEvent(effect: prepare, kind: EncryptedUploadV2Abi.eventSessionPrepared, fields: [
+            .bytes(id: 161, value: Data(repeating: 0x66, count: 32)),
+        ]).packet)
+        return (core, try nextEffect(core, kind: EncryptedUploadV2Abi.effectStartTransfer))
+    }
+
+    private func nextEffect(_ core: CoreAbiClient, kind: UInt32) throws -> CoreEffect {
+        while let packet = try core.pollOutput() {
+            if packet.kind == 0x0328 { continue } // Byte-count progress has no host callback.
+            if packet.kind >= 0x0400 {
+                let notification = try CoreNotification(packet: packet)
+                XCTAssertNotEqual(notification.kind, .failed)
+                continue
+            }
+            XCTAssertEqual(packet.kind, kind)
+            return try CoreEffect(packet: packet)
+        }
+        throw XCTUnwrapFailure.missingEffect
+    }
+
+    private func dispatch(
+        _ core: CoreAbiClient, host: EncryptedUploadV2TransferHost, effect: CoreEffect
+    ) async throws -> [CoreHostEventPayload] {
+        let events = try await Self.collect(await host.execute(effect))
+        for event in events { try core.dispatch(CoreHostEvent(effect: effect, payload: event).packet) }
+        return events
+    }
+
+    private enum XCTUnwrapFailure: Error { case missingEffect }
+
+    private func lostAckHost(
+        _ fixture: Fixture, transport: LostAckTransport
+    ) throws -> (EncryptedUploadV2TransferHost, EncryptedUploadV2TransferControl) {
+        let mapper = try CoreModelMapper()
+        let control = EncryptedUploadV2TransferControl(
+            mapper: mapper, subscribe: { _ in await transport.subscribe() },
+            write: { _, frame in await transport.write(frame) }, unsubscribe: { _ in await transport.unsubscribe() }
+        )
+        return (EncryptedUploadV2TransferHost(
+            rootDirectory: fixture.root, mapper: mapper, transferControl: control,
+            resolvePeripheralID: { "peripheral-1" }
+        ), control)
+    }
+
     func testCompletionOperationsRejectConcurrentReentry() async throws {
         let fixture = try Fixture()
         let gate = SuspendedFirstCompletionCall()
@@ -464,7 +809,7 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
         let emptyHost = EncryptedUploadV2TransferHost(
             rootDirectory: fixture.root,
             mapper: try CoreModelMapper(),
-            openTransfer: { _, _ in .resumeRejected },
+            openTransfer: { _, _ in .opened(fixture.notifications.stream) },
             sendControl: { _ in }
         )
         let afterDelete = try await Self.collect(await emptyHost.execute(fixture.loadEffect()))
@@ -889,10 +1234,16 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
         let transportSessionID: UInt64 = 0x0000_1122_3344_5566
         let uploadSessionID = UUID(uuidString: "10111213-1415-1617-1819-1a1b1c1d1e1f")!
         let ciphertext: Data
+        let dataPayloadBytes: UInt16
         let manifest = Data((0..<580).map { UInt8($0 % 251) })
 
-        init(ciphertext: Data = Data("abcd".utf8)) throws {
+        init(ciphertext: Data = Data("abcd".utf8), dataPayloadBytes: UInt16 = 4) throws {
             self.ciphertext = ciphertext
+            self.dataPayloadBytes = dataPayloadBytes
+        }
+
+        static func lostAck() throws -> Self {
+            try Self(ciphertext: Data("abcd".utf8) + Data(repeating: 0, count: 268), dataPayloadBytes: 300)
         }
 
         var uploadSessionBytes: Data {
@@ -931,12 +1282,12 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
                 .unsigned(id: 137, value: 0x7f),
                 .unsigned(id: 138, value: 1024),
                 .unsigned(id: 139, value: 580),
-                .unsigned(id: 169, value: 4),
+                .unsigned(id: 169, value: UInt64(dataPayloadBytes)),
                 .unsigned(id: 170, value: 4),
                 .unsigned(id: 140, value: 1),
                 .unsigned(id: 141, value: 2),
                 .unsigned(id: 134, value: 4),
-                .unsigned(id: 135, value: 4),
+                .unsigned(id: 135, value: UInt64(dataPayloadBytes)),
                 .unsigned(id: 130, value: UInt64(ciphertext.count)),
                 .bytes(id: 144, value: ciphertextSHA256),
                 .bytes(id: 161, value: authorizationSHA256),
@@ -1153,11 +1504,38 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
             data.appendLE(UInt64(ciphertext.count))
             data.append(ciphertextSHA256)
             data.appendLE(UInt16(4))
-            data.appendLE(UInt16(4))
+            data.appendLE(dataPayloadBytes)
             data.appendLE(UInt32(1))
             data.appendLE(UInt32(0))
             data.appendLE(UInt64(0))
             data.append(Data(SHA256.hash(data: Data())))
+            return data
+        }
+
+        func resumeRejection(
+            offset: UInt64, revision: UInt32? = nil, reason: UInt16 = 0x0f,
+            prefix: Data? = nil, sessionID: UInt64? = nil
+        ) -> Data {
+            var data = EncryptedUploadV2TransferHostTests.header(type: 0x46, sessionID: sessionID ?? transportSessionID)
+            data.appendLE(reason)
+            data.appendLE(UInt16(0))
+            data.appendLE(revision ?? (offset == 0 ? 0 : 1))
+            data.appendLE(offset)
+            data.append(prefix ?? Data(SHA256.hash(data: ciphertext.prefix(Int(offset)))))
+            return data
+        }
+
+        func openingAccepted(offset: UInt64) -> Data {
+            if offset == 0 { return startAcknowledgement() }
+            var data = EncryptedUploadV2TransferHostTests.header(type: 0x45, sessionID: transportSessionID)
+            data.append(uploadSessionBytes)
+            data.append(Self.uuidBytes(recordingUUID))
+            data.appendLE(UInt32(7))
+            data.appendLE(UInt32(1))
+            data.appendLE(offset)
+            data.append(Data(SHA256.hash(data: ciphertext.prefix(Int(offset)))))
+            data.appendLE(UInt16(4))
+            data.appendLE(dataPayloadBytes)
             return data
         }
 
@@ -1267,6 +1645,31 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
 private actor SentControls {
     private(set) var values: [Data] = []
     func append(_ value: Data) { values.append(value) }
+}
+
+private actor LostAckTransport {
+    private var replies: [Data]
+    private var continuation: AsyncThrowingStream<Data, Error>.Continuation?
+    private(set) var frames: [Data] = []
+    private(set) var subscriptionCount = 0
+
+    init(replies: [Data]) { self.replies = replies }
+
+    func subscribe() -> AsyncThrowingStream<Data, Error> {
+        subscriptionCount += 1
+        return AsyncThrowingStream { continuation = $0 }
+    }
+
+    func write(_ frame: Data) {
+        frames.append(frame)
+        if frame.first == 0x20 || frame.first == 0x22 {
+            if replies.isEmpty { continuation?.finish() }
+            else { continuation?.yield(replies.removeFirst()) }
+        }
+    }
+
+    func yield(_ data: Data) { continuation?.yield(data) }
+    func unsubscribe() { continuation?.finish(); continuation = nil }
 }
 
 private actor TransferHostTransport {

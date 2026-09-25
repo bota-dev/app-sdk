@@ -37,6 +37,9 @@ import type {
   DeviceStatus,
   DeviceType,
   DeviceLogEvent,
+  DeviceDiagnosticEventType,
+  DeviceDiagnosticReasonCode,
+  DeviceDiagnosticsBatch,
   DiscoveredDevice,
   PairingState,
   ReconnectOptions,
@@ -287,6 +290,8 @@ export type BotaDeviceSDKOTAClient = {
 };
 
 export type BotaDeviceSDKLogClient = {
+  readDiagnosticEvents(device: ConnectedDevice): Promise<DeviceDiagnosticsBatch>;
+  acknowledgeDiagnosticEvents(device: ConnectedDevice, acceptedEventIds: string[]): Promise<void>;
   subscribe(
     device: ConnectedDevice,
     onLine: (line: DeviceLogEvent) => void
@@ -319,6 +324,7 @@ export type BotaDeviceSDKRecordingClient = {
     localPath: string;
     e2eEncrypted: boolean;
     contentSha256?: string;
+    fileSizeBytes: number;
   }>;
   syncEncryptedRecordingV2(
     device: ConnectedDevice,
@@ -335,6 +341,7 @@ export type BotaDeviceSDKRecordingClient = {
     onProgress?: (progress: BotaRecordingTransferProgress) => void
   ): Promise<void>;
   cancelRecordingUpload(taskId: string): Promise<void>;
+  releaseRecordingFile(taskId: string, localPath: string): Promise<void>;
   loadUploadQueue(): Promise<UploadTask[]>;
   saveUploadQueue(tasks: UploadTask[]): Promise<void>;
   destroyCompatibilityOperations(): Promise<void>;
@@ -710,6 +717,7 @@ const toNativeRecordingUploadRequest = (
   recordingId: task.recordingId,
   deviceId: task.deviceId,
   localPath: task.localPath,
+  ...(task.fileSizeBytes === undefined ? {} : { fileSizeBytes: task.fileSizeBytes }),
   uploadUrl: task.uploadUrl,
   ...(task.uploadToken ? { uploadToken: task.uploadToken } : {}),
   ...(task.completeUrl ? { completeUrl: task.completeUrl } : {}),
@@ -724,9 +732,13 @@ const toNativeRecordingUploadRequest = (
 });
 
 const parseUploadQueue = (serialized: string): UploadTask[] => {
-  const value: unknown = JSON.parse(serialized || '[]');
-  if (!Array.isArray(value)) return [];
+  const value: unknown = JSON.parse(serialized);
+  if (!Array.isArray(value)) throw new Error('Invalid upload recovery journal');
   return value.map((task) => {
+    if (!task || typeof task !== 'object' || Array.isArray(task) ||
+        typeof task.createdAt !== 'string' || typeof task.updatedAt !== 'string') {
+      throw new Error('Invalid upload recovery journal');
+    }
     const candidate = task as UploadTask & {
       createdAt: string | Date;
       updatedAt: string | Date;
@@ -1148,6 +1160,10 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
       await requireNativeModule().cancelRecordingUpload(taskId);
     },
 
+    async releaseRecordingFile(taskId, localPath) {
+      await requireNativeModule().releaseRecordingFile(taskId, localPath);
+    },
+
     async loadUploadQueue() {
       return parseUploadQueue(
         await requireNativeModule().loadCompatibilityUploadQueue()
@@ -1278,6 +1294,30 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
   };
 
   const logs: BotaDeviceSDKLogClient = {
+    async readDiagnosticEvents(device) {
+      const batch = await requireNativeModule().readDiagnosticEvents(toNativeConnectedDevice(device));
+      if (batch.schema_version !== 1) throw new Error('Unsupported diagnostic batch schema');
+      return {
+        schema_version: 1,
+        events: batch.events.map(({ report, ...event }) => ({
+          ...event,
+          event_type: event.event_type as DeviceDiagnosticEventType,
+          reason_code: event.reason_code as DeviceDiagnosticReasonCode,
+          ...(report ? { report: {
+            fault: report.fault,
+            execution: { ...report.execution, pc_trace: [...report.execution.pc_trace] },
+            ...(report.runtime ? { runtime: report.runtime } : {}),
+            ...(report.breadcrumbs ? { breadcrumbs: [...report.breadcrumbs] } : {}),
+          } } : {}),
+        })),
+      };
+    },
+    async acknowledgeDiagnosticEvents(device, acceptedEventIds) {
+      if (acceptedEventIds.some((id) => !/^[0-9a-f]{16}$/.test(id))) {
+        throw new Error('Diagnostic event_id must be 16 lowercase hex characters');
+      }
+      await requireNativeModule().acknowledgeDiagnosticEvents(toNativeConnectedDevice(device), [...acceptedEventIds]);
+    },
     async subscribe(device, onLine) {
       const module = requireNativeModule();
       const eventSubscription = module.onDeviceLog((line) => {

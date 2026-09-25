@@ -456,6 +456,266 @@
               }
             ]
           },
+          "NativeDiagnosticBreadcrumb": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "delta_ms",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "code",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "arg0",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeDiagnosticEvent": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "event_id",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "event_type",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "reason_code",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "uptime_ms",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "signature",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "firmware_build_id",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "subsystem",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "state_before_event",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "report",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeDiagnosticReport"
+                }
+              }
+            ]
+          },
+          "NativeDiagnosticExecution": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "task",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "reti",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "rets",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "pc_trace",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "ArrayTypeAnnotation",
+                  "elementType": {
+                    "type": "StringTypeAnnotation"
+                  }
+                }
+              }
+            ]
+          },
+          "NativeDiagnosticFault": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "cpu_id",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "cpu_emu",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "core_emu",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "hsb_emu",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "audio_emu",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "wireless_emu",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeDiagnosticReport": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "fault",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeDiagnosticFault"
+                }
+              },
+              {
+                "name": "execution",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeDiagnosticExecution"
+                }
+              },
+              {
+                "name": "runtime",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "TypeAliasTypeAnnotation",
+                  "name": "NativeDiagnosticRuntime"
+                }
+              },
+              {
+                "name": "breadcrumbs",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "ArrayTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeDiagnosticBreadcrumb"
+                  }
+                }
+              }
+            ]
+          },
+          "NativeDiagnosticRuntime": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "heap_free_bytes",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "task_stack_remaining_bytes",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              }
+            ]
+          },
+          "NativeDiagnosticsBatch": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "schema_version",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "events",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "ArrayTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeDiagnosticEvent"
+                  }
+                }
+              }
+            ]
+          },
           "NativeDiscoveredDevice": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -1294,6 +1554,13 @@
                 "typeAnnotation": {
                   "type": "StringTypeAnnotation"
                 }
+              },
+              {
+                "name": "fileSizeBytes",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
               }
             ]
           },
@@ -1352,6 +1619,13 @@
                 "optional": false,
                 "typeAnnotation": {
                   "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "fileSizeBytes",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
                 }
               },
               {
@@ -3003,6 +3277,63 @@
               }
             },
             {
+              "name": "readDiagnosticEvents",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "TypeAliasTypeAnnotation",
+                    "name": "NativeDiagnosticsBatch"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "acknowledgeDiagnosticEvents",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "device",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeConnectedDevice"
+                    }
+                  },
+                  {
+                    "name": "acceptedEventIds",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "ArrayTypeAnnotation",
+                      "elementType": {
+                        "type": "StringTypeAnnotation"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
               "name": "stopStatusUpdates",
               "optional": false,
               "typeAnnotation": {
@@ -3247,6 +3578,35 @@
                 "params": [
                   {
                     "name": "taskId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "releaseRecordingFile",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "taskId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "localPath",
                     "optional": false,
                     "typeAnnotation": {
                       "type": "StringTypeAnnotation"
@@ -3555,11 +3915,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "82e288251f50d1c53d3640e979585242ef07eb838872f5db48c37e4cb3c839cd"
+        "sha256": "c5cf6b1790932c7d8e3db40828c35528d00c2d9767a6344e84a4dc4092b4bc87"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "d8f56a124885f1c415f263c729e2f6c436133745a7ad4ade3edf8360b2596f54"
+        "sha256": "04e6ba09881afe6a429e39438f512a1f164dfd6e47a992b4fe486ed924c5ad05"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -3571,23 +3931,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "4b354a2d62aa5113c5eb78c395bb706ded19e5663d91a692e6e0c3f5cb7c4412"
+        "sha256": "5f4f551857bc1c8d4c616d01f1c064a93472e90e66a913441acbf9e3a8593612"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "1ed6a1cdf0005a89698fc1efb606feaa7b0f3a7db32ec044d03fe18a58eeafdb"
+        "sha256": "f868d979c724908bee8e5b9f90301feaaabb521b04c4dad7a06cd575b4f93f65"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "b82ad40be5f970788d4ad43b4152c48ec389bb91d56cd7f50ae23741e4ead9c2"
+        "sha256": "18260dda755c82802822a96b94f7b625b19f3172e03000c3ce3d515e95ff3fcc"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "4b354a2d62aa5113c5eb78c395bb706ded19e5663d91a692e6e0c3f5cb7c4412"
+        "sha256": "5f4f551857bc1c8d4c616d01f1c064a93472e90e66a913441acbf9e3a8593612"
       }
     ]
   },
-  "contractDigest": "06be80912746cdb154585b1a3f12ce9062e3a91b44cee97410405517eaf331f3"
+  "contractDigest": "6b945d192b076f5fefa41990b18e2bcf7c28d18e6382917cbf6e31c31acede1a"
 }

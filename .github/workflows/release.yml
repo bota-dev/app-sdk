@@ -53,7 +53,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: bota-dev/react-native-sdk
-          ref: e11fde5be40027ec6cf1985fc0eadb00ece23e65
+          ref: 318974f925a573cf04b0d624978bee04784af09b
           path: .ci/react-native-workflow-baseline
 
       - name: Set up Node.js

@@ -855,6 +855,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                 var value: [String: Any] = [
                     "localPath": result.localPath,
                     "e2eEncrypted": result.isE2EEncrypted,
+                    "fileSizeBytes": result.fileSizeBytes,
                 ]
                 if let contentSHA256Hex = result.contentSHA256Hex {
                     value["contentSha256"] = contentSHA256Hex
@@ -1126,11 +1127,12 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
-    @objc(uploadRecordingFileWithTaskID:recordingID:localPath:uploadURL:uploadToken:completeURL:contentType:contentSHA256:relayURL:relayBearerToken:onProgress:completion:)
+    @objc(uploadRecordingFileWithTaskID:recordingID:localPath:fileSizeBytes:uploadURL:uploadToken:completeURL:contentType:contentSHA256:relayURL:relayBearerToken:onProgress:completion:)
     public func uploadRecordingFile(
         taskID: String,
         recordingID: String,
         localPath: String,
+        fileSizeBytes: NSNumber?,
         uploadURL: String,
         uploadToken: String?,
         completeURL: String?,
@@ -1143,6 +1145,11 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
     ) {
         Task {
             do {
+                let expectedSize = try fileSizeBytes.map { value -> Int64 in
+                    let integer = try Self.unsignedInteger(value.doubleValue)
+                    guard integer <= UInt64(Int64.max) else { throw CocoaError(.fileReadCorruptFile) }
+                    return Int64(integer)
+                }
                 try await recordingUploads.upload(.init(
                     taskID: taskID,
                     recordingID: recordingID,
@@ -1153,7 +1160,8 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                     contentType: contentType,
                     contentSHA256: contentSHA256,
                     relayURL: relayURL,
-                    relayBearerToken: relayBearerToken
+                    relayBearerToken: relayBearerToken,
+                    fileSizeBytes: expectedSize
                 )) { progress in
                     onProgress([
                         "taskId": progress.taskID,
@@ -1161,6 +1169,22 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                         "totalBytes": progress.totalBytes,
                     ])
                 }
+                completion(nil)
+            } catch {
+                completion(error as NSError)
+            }
+        }
+    }
+
+    @objc(releaseRecordingFileWithTaskID:localPath:completion:)
+    public func releaseRecordingFile(
+        taskID: String,
+        localPath: String,
+        completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                try await recordingUploads.release(taskID: taskID, localPath: localPath)
                 completion(nil)
             } catch {
                 completion(error as NSError)
@@ -1356,6 +1380,43 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
             } catch {
                 completion(error as NSError)
             }
+        }
+    }
+
+    @objc(readDiagnosticEventsWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:completion:)
+    public func readDiagnosticEvents(
+        id: String, serialNumber: String, deviceType: String, firmwareVersion: String,
+        hardwareRevision: String?, isProvisioned: Bool, connectionState: String, mtu: Double,
+        completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let device = try Self.connectedDevice(
+                    id: id, serialNumber: serialNumber, deviceType: deviceType,
+                    firmwareVersion: firmwareVersion, hardwareRevision: hardwareRevision,
+                    isProvisioned: isProvisioned, connectionState: connectionState, mtu: mtu
+                )
+                completion(diagnosticBatchPayload(try await logs.readDiagnosticEvents(device)), nil)
+            } catch { completion(nil, error as NSError) }
+        }
+    }
+
+    @objc(acknowledgeDiagnosticEventsWithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:acceptedEventIds:completion:)
+    public func acknowledgeDiagnosticEvents(
+        id: String, serialNumber: String, deviceType: String, firmwareVersion: String,
+        hardwareRevision: String?, isProvisioned: Bool, connectionState: String, mtu: Double,
+        acceptedEventIds: [String], completion: @escaping @Sendable (NSError?) -> Void
+    ) {
+        Task {
+            do {
+                let device = try Self.connectedDevice(
+                    id: id, serialNumber: serialNumber, deviceType: deviceType,
+                    firmwareVersion: firmwareVersion, hardwareRevision: hardwareRevision,
+                    isProvisioned: isProvisioned, connectionState: connectionState, mtu: mtu
+                )
+                try await logs.acknowledgeDiagnosticEvents(device, acceptedEventIds: acceptedEventIds)
+                completion(nil)
+            } catch { completion(error as NSError) }
         }
     }
 
