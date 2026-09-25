@@ -53,6 +53,7 @@ services:
       - { name: CHAR_RECORDING_TRANSFER_V2, uuid: B07A0004-0009-1000-8000-00805F9B34FB, introduced: encrypted-upload-v2-contract-v1 }
       - { name: CHAR_TRANSFER_STATUS_V2, uuid: B07A0004-000A-1000-8000-00805F9B34FB, introduced: encrypted-upload-v2-contract-v1 }
       - { name: CHAR_RECORDING_LIST_V2, uuid: B07A0004-000B-1000-8000-00805F9B34FB, introduced: encrypted-upload-v2-contract-v1 }
+      - { name: CHAR_UPLOAD_CONTEXT_V2, uuid: B07A0004-000C-1000-8000-00805F9B34FB, introduced: encrypted-upload-v2-upload-context-v1 }
   - name: SERVICE_BOTA_AUTH
     uuid: B07A0005-0000-1000-8000-00805F9B34FB
     characteristics:
@@ -291,6 +292,12 @@ constantGroups:
   encrypted_upload_v2_blob_kinds:
     ENCRYPTED_UPLOAD_V2_BLOB_KIND_AUTHORIZATION: 1
     ENCRYPTED_UPLOAD_V2_BLOB_KIND_RECEIPT: 2
+    ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_CHALLENGE: 3
+    ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_RESULT: 4
+  encrypted_upload_v2_context:
+    ENCRYPTED_UPLOAD_V2_CONTEXT_BEGIN: 101
+    ENCRYPTED_UPLOAD_V2_CONTEXT_SNAPSHOT: 102
+    ENCRYPTED_UPLOAD_V2_CONTEXT_DOCUMENT_VERSION: 1
   encrypted_upload_v2_blob_messages:
     ENCRYPTED_UPLOAD_V2_BLOB_BEGIN: 96
     ENCRYPTED_UPLOAD_V2_BLOB_DATA: 97
@@ -398,6 +405,11 @@ dwordConstantGroups:
     ENCRYPTED_UPLOAD_V2_CAP_AUTHENTICATED_RECEIPT: 32
     ENCRYPTED_UPLOAD_V2_CAP_BATCH: 64
     ENCRYPTED_UPLOAD_V2_CAP_STREAMING: 128
+    ENCRYPTED_UPLOAD_V2_CAP_UPLOAD_CONTEXT: 256
+    ENCRYPTED_UPLOAD_V2_CAP_EXPIRED_SESSION_RECOVERY: 512
+    ENCRYPTED_UPLOAD_V2_CAP_KNOWN_MASK: 1023
+    ENCRYPTED_UPLOAD_V2_CAP_CONTEXT_REQUIRED_MASK: 383
+    ENCRYPTED_UPLOAD_V2_CAP_RECOVERY_REQUIRED_MASK: 895
 
 byteStrings:
   ENCRYPTED_UPLOAD_V2_STORAGE_MAGIC: 424f5441454e4332
@@ -405,6 +417,8 @@ byteStrings:
   UPLOAD_AUTHORIZATION_V2_MAGIC: 424f544141555432
   UPLOAD_MANIFEST_V2_MAGIC: 424f54414d4e4632
   COMPLETION_RECEIPT_V2_MAGIC: 424f544152435054
+  UPLOAD_CONTEXT_CHALLENGE_MAGIC: 424f544143545851
+  UPLOAD_CONTEXT_RESULT_MAGIC: 424f544143545852
 
 asciiStrings:
   ENCRYPTED_UPLOAD_V2_DOMAIN_LOCAL_WRAP: bota/enc-v2/local-wrap/v1
@@ -423,6 +437,38 @@ asciiStrings:
   ENCRYPTED_UPLOAD_V2_DOMAIN_PUBLICATION: bota/enc-v2/publication/v1
 
 layouts:
+  UPLOAD_CONTEXT_BEGIN:
+    minimumLength: 8
+    fixedLength: 8
+    fields:
+      - { name: opcode, offset: 0, width: 1, encoding: u8 }
+      - { name: version, offset: 1, width: 1, encoding: u8 }
+      - { name: reserved, offset: 2, width: 2, encoding: zero }
+      - { name: attempt_id, offset: 4, width: 4, encoding: u32_le }
+  UPLOAD_CONTEXT_SNAPSHOT:
+    minimumLength: 12
+    fields:
+      - { name: opcode, offset: 0, width: 1, encoding: u8 }
+      - { name: version, offset: 1, width: 1, encoding: u8 }
+      - { name: state, offset: 2, width: 1, encoding: u8 }
+      - { name: reserved, offset: 3, width: 1, encoding: zero }
+      - { name: attempt_id, offset: 4, width: 4, encoding: u32_le }
+      - { name: result, offset: 8, width: 2, encoding: u16_le }
+      - { name: payload_length, offset: 10, width: 2, encoding: u16_le }
+  UPLOAD_CONTEXT_CHALLENGE:
+    minimumLength: 196
+    fixedLength: 196
+    fields:
+      - { name: magic, offset: 0, width: 8, encoding: ascii }
+      - { name: version, offset: 8, width: 2, encoding: u16_le }
+      - { name: total_length, offset: 10, width: 2, encoding: u16_le }
+  UPLOAD_CONTEXT_RESULT:
+    minimumLength: 264
+    fixedLength: 264
+    fields:
+      - { name: magic, offset: 0, width: 8, encoding: ascii }
+      - { name: version, offset: 8, width: 2, encoding: u16_le }
+      - { name: total_length, offset: 10, width: 2, encoding: u16_le }
   DIAGNOSTIC_META:
     minimumLength: 17
     fixedLength: 17
@@ -1013,6 +1059,9 @@ layouts:
       - { name: reserved, offset: 22, width: 2, encoding: zero }
 
 limits:
+  UPLOAD_CONTEXT_NONCE_LENGTH: 16
+  UPLOAD_CONTEXT_PROOF_MIN_LENGTH: 116
+  UPLOAD_CONTEXT_PROOF_MAX_LENGTH: 366
   DIAGNOSTIC_MAX_EVENTS: 256
   DIAGNOSTIC_MAX_PACKET_BYTES: 20
   DIAGNOSTIC_MAX_PC_TRACE: 6

@@ -127,7 +127,7 @@ final class ProtocolCodecTests: XCTestCase {
         ))
         XCTAssertEqual(
             try String(contentsOf: digestURL, encoding: .utf8),
-            "02afe605d1e038a3ed6d300671baead78475e186f66744a72954787734c0cc6a\n"
+            "71af9eb02c92ac694c51630d1cad2d7614db7d5d9435df0999d36bd1170d21af\n"
         )
     }
 

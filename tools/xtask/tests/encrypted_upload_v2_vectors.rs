@@ -2,6 +2,29 @@ use serde_json::Value;
 use std::{collections::BTreeSet, fs, path::PathBuf};
 
 #[test]
+fn unknown_capability_vector_uses_a_bit_outside_the_current_known_mask() {
+    let bundle = bundle_json();
+    let case = bundle["cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["name"] == "ble-capability-unknown-flag")
+        .unwrap();
+    let encoded = case["inputHex"].as_str().unwrap();
+    let bytes: Vec<u8> = (0..encoded.len())
+        .step_by(2)
+        .map(|index| u8::from_str_radix(&encoded[index..index + 2], 16).unwrap())
+        .collect();
+    assert!(
+        bota_device_sdk_core::protocol::decode_encrypted_upload_v2_capabilities(&bytes).is_err(),
+        "the unknown-capability fixture must not advertise only known bits"
+    );
+    let flags = u32::from_le_bytes(bytes[4..8].try_into().unwrap());
+    assert_eq!(flags & !0x3ff, 0x400);
+    assert_eq!(case["expectedError"], "noncanonical_encoding");
+}
+
+#[test]
 fn encrypted_upload_v2_vectors_are_deterministic_and_current() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let first = xtask::encrypted_upload_v2::generated_bundle(&root).unwrap();

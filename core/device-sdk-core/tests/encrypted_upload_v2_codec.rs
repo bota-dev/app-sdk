@@ -62,7 +62,7 @@ fn reserved_bytes_and_unknown_critical_bits_are_rejected() {
     assert_noncanonical(decode_encrypted_upload_v2_capabilities(&capability));
 
     let mut capability = valid_capability();
-    capability[4..8].copy_from_slice(&0x100_u32.to_le_bytes());
+    capability[4..8].copy_from_slice(&0x400_u32.to_le_bytes());
     assert_noncanonical(decode_encrypted_upload_v2_capabilities(&capability));
 
     let mut abort = valid_transfer(16, 0x24);

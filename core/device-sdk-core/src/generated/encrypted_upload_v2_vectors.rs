@@ -3,4 +3,4 @@
 // Do not edit by hand.
 
 pub const ENCRYPTED_UPLOAD_V2_VECTOR_SHA256: &str =
-    "02afe605d1e038a3ed6d300671baead78475e186f66744a72954787734c0cc6a";
+    "71af9eb02c92ac694c51630d1cad2d7614db7d5d9435df0999d36bd1170d21af";

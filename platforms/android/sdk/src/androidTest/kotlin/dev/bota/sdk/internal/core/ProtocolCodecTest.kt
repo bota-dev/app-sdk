@@ -157,7 +157,7 @@ class ProtocolCodecTest {
         val digest = assets.open("EncryptedUploadV2Vectors/encrypted-upload-v2.sha256")
             .bufferedReader()
             .use { it.readText() }
-        assertEquals("02afe605d1e038a3ed6d300671baead78475e186f66744a72954787734c0cc6a\n", digest)
+        assertEquals("71af9eb02c92ac694c51630d1cad2d7614db7d5d9435df0999d36bd1170d21af\n", digest)
     }
 
     private fun encode(fixture: JSONObject, operation: String): ByteArray {
