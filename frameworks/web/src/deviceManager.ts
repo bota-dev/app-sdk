@@ -105,6 +105,16 @@ export class DeviceManager {
 
   async connect(options: ConnectOptions): Promise<ConnectedDevice> {
     this.validateConnectionRequest(options.expectedSerialNumber, 'connect')
+    return this.connectPicked(options.expectedSerialNumber)
+  }
+
+  /** Opens the browser picker and learns the selected device's SN from GATT. Call from a user gesture. */
+  async connectSelected(): Promise<ConnectedDevice> {
+    return this.connectPicked(null)
+  }
+
+  private async connectPicked(expectedSerialNumber: string | null): Promise<ConnectedDevice> {
+    if (this.destroyed) throw new BotaSDKError('cancelled', 'connect')
     if (!this.isSupported) {
       throw new BotaSDKError('unsupported_browser', 'connect')
     }
@@ -126,17 +136,23 @@ export class DeviceManager {
       const result = await this.runtime.run(
         operationId('connect', cancellationId),
         cancellationId,
-        () => this.core.startExactConnection({
-          expectedSerialNumber: options.expectedSerialNumber,
-          peripheralId: picked.id,
-          name: picked.name,
-          cancellationId,
-        }),
+        () => expectedSerialNumber === null
+          ? this.core.startSelectedConnection({
+            peripheralId: picked.id,
+            name: picked.name,
+            cancellationId,
+          })
+          : this.core.startExactConnection({
+            expectedSerialNumber,
+            peripheralId: picked.id,
+            name: picked.name,
+            cancellationId,
+          }),
         { persistence: this.persistenceHost },
       )
       return this.publishConnectedDevice(
         result,
-        options.expectedSerialNumber,
+        expectedSerialNumber,
         'connect',
       )
     } catch (error) {
@@ -394,7 +410,7 @@ export class DeviceManager {
     operation: 'connect' | 'reconnect',
   ): void {
     if (this.destroyed) throw new BotaSDKError('cancelled', operation)
-    if (!SERIAL_PATTERN.test(expectedSerialNumber)) {
+    if (typeof expectedSerialNumber !== 'string' || !SERIAL_PATTERN.test(expectedSerialNumber)) {
       throw new BotaSDKError('invalid_input', operation)
     }
   }
@@ -420,7 +436,7 @@ export class DeviceManager {
 
   private publishConnectedDevice(
     result: WorkflowResult,
-    expectedSerialNumber: string,
+    expectedSerialNumber: string | null,
     operation: 'connect' | 'reconnect' | 'update_firmware',
   ): ConnectedDevice {
     if (this.destroyed) throw new BotaSDKError('cancelled', operation)
@@ -430,7 +446,7 @@ export class DeviceManager {
     if (!established || established.kind !== 'connection_established') {
       throw new BotaSDKError('internal_error', operation)
     }
-    if (established.serialNumber !== expectedSerialNumber) {
+    if (expectedSerialNumber !== null && established.serialNumber !== expectedSerialNumber) {
       throw new BotaSDKError('identity_mismatch', operation)
     }
     const device = this.runtime.registeredDevice(

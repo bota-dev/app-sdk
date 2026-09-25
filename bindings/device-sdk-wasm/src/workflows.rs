@@ -62,6 +62,25 @@ impl BridgeCore {
         )
     }
 
+    pub fn start_selected_connection(
+        &mut self,
+        peripheral_id: &str,
+        name: Option<&str>,
+        cancellation_id: [u8; 16],
+    ) -> Result<Vec<EffectRequest>, DeviceSdkError> {
+        self.start(
+            Command::ConnectSelected {
+                candidate: DeviceCandidate {
+                    peripheral_id: peripheral_id.to_owned(),
+                    name: name.map(str::to_owned),
+                    advertised_address: None,
+                    rssi: 0,
+                },
+            },
+            cancellation_id,
+        )
+    }
+
     pub fn start_reconnect(
         &mut self,
         expected_serial: &str,

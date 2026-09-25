@@ -489,7 +489,12 @@ await bota.destroy()
 ```
 
 Construction without options remains valid for read-only connection and
-snapshot use. Durable foreground workflows require a non-empty tenant
+snapshot use. The source-only `devices.connectSelected()` addition reads a
+selected device's SN before application registration, without a supplied serial.
+It is not included in published `2.0.0-beta.1`; see the
+[Web integration guide](frameworks/web/README.md#discover-identity-before-registration-unreleased-source).
+Known-device connection and every reconnect remain serial-strict.
+Durable foreground workflows require a non-empty tenant
 `storageNamespace`; a custom storage adapter must report that exact namespace.
 On logout or tenant switch, await `destroy()` and then
 `clearPersistedData()` so active owners and subscriptions settle before only
