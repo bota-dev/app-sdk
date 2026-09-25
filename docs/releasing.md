@@ -6,6 +6,7 @@
 reading a selected device's serial before application registration. It reuses
 the existing Rust connection workflow and Device Information GATT read; there
 is no new BLE protocol or automatic registration, binding, or provisioning.
+Local checks are recorded in the [beta.2 preflight](../release/evidence/2.0.0-beta.2-preflight.md).
 The owner requested merge and publication through normal CI. All five SDK
 versions remain synchronized; publication requires green main CI, its exact
 candidate inventory, and the protected release workflow. Registry publication

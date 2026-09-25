@@ -497,7 +497,7 @@ Construction without options remains valid for read-only connection and
 snapshot use. The `2.0.0-beta.2` candidate's `devices.connectSelected()` reads a
 selected device's SN before application registration, without a supplied serial.
 It is not included in published `2.0.0-beta.1`; see the
-[Web integration guide](frameworks/web/README.md#discover-identity-before-registration-unreleased-source).
+[Web integration guide](frameworks/web/README.md#discover-identity-before-registration).
 Known-device connection and every reconnect remain serial-strict.
 Durable foreground workflows require a non-empty tenant
 `storageNamespace`; a custom storage adapter must report that exact namespace.

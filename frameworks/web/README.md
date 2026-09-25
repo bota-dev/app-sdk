@@ -362,9 +362,9 @@ browser device ID, waits for prior notification teardown, and verifies the
 serial again. `readSnapshot()` repeats that verification before returning fresh
 identity, status, and capability values.
 
-### Discover identity before registration (unreleased source)
+### Discover identity before registration
 
-The beta.2 candidate's `connectSelected()` addition is not included in published
+`connectSelected()` requires `2.0.0-beta.2` or later; it is not included in
 `2.0.0-beta.1`. It opens the browser picker and returns the selected device only
 after the shared Rust workflow reads and validates its physical serial number.
 Call it directly from a user gesture, with the client initialized beforehand:
