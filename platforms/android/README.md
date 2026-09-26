@@ -55,6 +55,12 @@ destroyed or replaced runtime cannot publish connection state. Multiple status
 collectors share device notification ownership, so one collector stopping does
 not disable notifications for the others.
 
+After serial verification, connect and reconnect read the standard Device
+Information firmware revision (`180A/2A26`) afresh and report the current
+Android negotiated MTU. An advertisement's cached firmware string is not
+authoritative after OTA. Metadata reads remain within connection ownership;
+failure disconnects the incomplete link without publishing a connected device.
+
 ## Secure device lifecycle
 
 `ProvisioningManager` resolves tokens and endpoint bytes through an
@@ -83,6 +89,11 @@ updates. Temporary and long-lived subscriptions are released exactly once.
 ## Recording, OTA, and logs
 
 `RecordingManager` lists recordings through subscribe-before-write BLE access,
+using Storage `0002` for recording-list notifications and `0004` for transfer
+control. Both `listRecordings` and the legacy branch of `listPendingRecordings`
+use these same protocol-manifest UUIDs. Missing v2 capability (`0406`) permits
+legacy catalog discovery only; it is not permission to downgrade a v2 upload.
+The manager
 syncs encrypted or plaintext recording bytes into a native no-backup file, and
 returns its `Path` only after the reducer completes durable finalization.
 Upload ownership emits only device-completed, device-preserved, or authorized
@@ -113,7 +124,13 @@ compatibility metadata and does not claim physical-device support.
 `OTAManager` accepts a `FirmwareImage` containing an OkHttp `Request`. The URL,
 headers, downloaded image, and blob path remain in Android hosts; Rust receives
 only the opaque download ID, the CRC32 calculated from the durable native file,
-and bounded bytes. `DeviceLogManager` emits complete
+and bounded bytes. Repeated cancellation of a settled ordinary workflow is
+idempotent; a cancelled log stream is not an uncertain upload confirmation.
+Actual upload CONFIRM settlement retains its exact-completion requirement.
+Concurrent stop paths join serialized cancellation; the runtime cancels old
+effect collectors but waits for the STOP/unsubscribe effects emitted by the
+core before returning, so a following GATT operation cannot overtake cleanup.
+`DeviceLogManager` emits complete
 sanitized `DeviceLogLine` values. These APIs are cold Kotlin `Flow`s, and
 collector termination, explicit cancellation, failure, success, and client
 destroy all release their native registrations and shared operation owner.
@@ -218,6 +235,13 @@ negotiates MTU 517, while the following Rust-requested discovery effect verifies
 that a Bota service exists. API 33+ uses value-bearing write APIs and older
 versions use the legacy characteristic and descriptor fields. CCCD writes occur
 only after local notification state changes.
+
+The host expands the core's 16-bit and 32-bit Bluetooth UUIDs to Android's
+128-bit base UUID before GATT access, including Device Information `180A` and
+Serial Number `2A25`. Subscription callbacks retain the core's original UUID
+string instead of Java's lowercase rendering, so workflow event matching does
+not change at the platform boundary. These fixes are local source changes,
+not a claim about already published beta artifacts.
 
 The SDK filters scans by Bota service UUID or manufacturer ID and never uses an
 advertised name as identity. It merges system-connected peripherals with live

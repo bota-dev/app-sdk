@@ -706,6 +706,6 @@ private fun dev.bota.sdk.internal.core.CoreNotification.transferProgress(
 
 private object RecordingUUIDs {
     val StorageService: UUID = UUID.fromString("b07a0004-0000-1000-8000-00805f9b34fb")
-    val RecordingList: UUID = UUID.fromString("b07a0004-0001-1000-8000-00805f9b34fb")
-    val TransferControl: UUID = UUID.fromString("b07a0004-0002-1000-8000-00805f9b34fb")
+    val RecordingList: UUID = UUID.fromString("b07a0004-0002-1000-8000-00805f9b34fb")
+    val TransferControl: UUID = UUID.fromString("b07a0004-0004-1000-8000-00805f9b34fb")
 }

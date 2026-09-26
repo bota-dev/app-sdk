@@ -22,7 +22,9 @@ final class RecordingManagerTests: XCTestCase {
         XCTAssertTrue(recordings[0].isEncrypted)
         let subscriptions = await recorder.subscriptions
         let writes = await recorder.writes
-        XCTAssertEqual(subscriptions, [BotaBluetoothUUIDs.recordingList])
+        XCTAssertEqual(subscriptions, ["B07A0004-0002-1000-8000-00805F9B34FB"])
+        XCTAssertEqual(writes.map(\.service), ["B07A0004-0000-1000-8000-00805F9B34FB"])
+        XCTAssertEqual(writes.map(\.characteristic), ["B07A0004-0004-1000-8000-00805F9B34FB"])
         XCTAssertEqual(writes.map(\.data), [Data([1])])
     }
 

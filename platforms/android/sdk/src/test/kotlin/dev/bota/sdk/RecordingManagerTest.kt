@@ -82,6 +82,7 @@ class RecordingManagerTest {
         val manager = RecordingManager()
         manager.attach(fixture.runtime)
         assertEquals(listOf(PendingRecording.Legacy(fixture.recording)), manager.listPendingRecordings(fixture.device))
+        assertLegacyCatalogCharacteristics(fixture)
         assertTrue("v2-list" !in fixture.actions)
         manager.detach()
     }
@@ -386,7 +387,17 @@ class RecordingManagerTest {
 
         assertEquals(listOf(fixture.recording), recordings)
         assertEquals(listOf("subscribe", "collect", "encode-List", "write", "unsubscribe"), fixture.actions)
+        assertLegacyCatalogCharacteristics(fixture)
         manager.detach()
+    }
+
+    private fun assertLegacyCatalogCharacteristics(fixture: ManagerRuntimeFixture) {
+        val service = UUID.fromString("b07a0004-0000-1000-8000-00805f9b34fb")
+        val list = UUID.fromString("b07a0004-0002-1000-8000-00805f9b34fb")
+        val control = UUID.fromString("b07a0004-0004-1000-8000-00805f9b34fb")
+        assertEquals(listOf(service to list), fixture.subscribedCharacteristics)
+        assertEquals(listOf(service to control), fixture.writtenCharacteristics)
+        assertEquals(listOf(service to list), fixture.unsubscribedCharacteristics)
     }
 
     @Test

@@ -4,6 +4,15 @@ Apple and Android expose durable device diagnostic reads and explicit accepted-I
 acknowledgements through the existing `DeviceLogManager` (`client.logs`).
 These APIs do not upload diagnostics or decide whether a backend accepted them.
 
+Live debug logs and persistent diagnostics are different firmware capabilities.
+The tagged firmware `v1.0.17` handles live-log START/STOP but does not implement
+persistent-diagnostics LIST (`0x10`). A device exposing `0007` or streaming logs
+therefore does not prove support for `readDiagnosticEvents`. Firmware without
+LIST can time out; that is not an empty batch and must never trigger ACK or
+queue clearing. The SDK does not infer capability from a version string, since
+custom builds can retain the same version. Persistent-diagnostics hardware
+acceptance requires a firmware build implementing the complete LIST/END contract.
+
 ## Public API
 
 ```swift

@@ -78,6 +78,9 @@ internal class ManagerRuntimeFixture(
         isEncrypted = true,
     )
     val actions = mutableListOf<String>()
+    val subscribedCharacteristics = mutableListOf<Pair<UUID, UUID>>()
+    val writtenCharacteristics = mutableListOf<Pair<UUID, UUID>>()
+    val unsubscribedCharacteristics = mutableListOf<Pair<UUID, UUID>>()
     val sinkPaths = mutableMapOf<String, Path>()
     val removedSinks = mutableListOf<String>()
     val streamingSinks = mutableListOf<String>()
@@ -108,8 +111,12 @@ internal class ManagerRuntimeFixture(
         decodeStatus = { error("unused") },
         closeResources = {},
         directRead = { _, _, _ -> encryptedV2NonceRead() },
-        directWrite = { _, _, _, _ -> actions += "write" },
-        directSubscribe = { _, _, _ ->
+        directWrite = { _, service, characteristic, _ ->
+            writtenCharacteristics += service to characteristic
+            actions += "write"
+        },
+        directSubscribe = { _, service, characteristic ->
+            subscribedCharacteristics += service to characteristic
             actions += "subscribe"
             flow {
                 actions += "collect"
@@ -117,7 +124,10 @@ internal class ManagerRuntimeFixture(
                 emit(byteArrayOf(1))
             }
         },
-        directUnsubscribe = { _, _, _ -> actions += "unsubscribe" },
+        directUnsubscribe = { _, service, characteristic ->
+            unsubscribedCharacteristics += service to characteristic
+            actions += "unsubscribe"
+        },
         parseRecordingList = { recordingList },
         createTransferCommand = { command ->
             actions += "encode-${command::class.simpleName}"
