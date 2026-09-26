@@ -478,6 +478,13 @@ blocked work, and manual selection preempts background reconnect ownership.
 Scan identity uses peripheral IDs plus advertised manufacturer data; names are
 display metadata only. The host checks location permission through API 30 and
 scan/connect permissions on API 31+ before an effect reaches the platform.
+Apple and Android finish serial-verified connections with a fresh standard
+Device Information firmware revision read (`180A/2A26`). They do not reuse a
+scan-time firmware string after reconnect/OTA. The connected-device MTU is the
+negotiated Android MTU; Apple reports the usable without-response write payload
+plus the three-byte ATT header, not the potentially larger long-write limit.
+These reads remain inside connection ownership, and failure tears down the
+incomplete link before the manager permits a retry.
 Android non-secret checkpoints, reconnect identity, and exact factory-reset
 receipts use AtomicFile journals under application no-backup storage. Secret
 values are AES-GCM ciphertext bound to opaque keys, with the non-exportable key

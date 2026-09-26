@@ -124,9 +124,9 @@ actor CoreBluetoothHost: BluetoothHost {
         }
     }
 
-    func maximumWriteValueLength(peripheralID: String) async throws -> Int {
+    func maximumWriteValueLength(peripheralID: String, withResponse: Bool = true) async throws -> Int {
         try await serialized(peripheralID) {
-            try await driver.maximumWriteValueLength(peripheralID: peripheralID, withResponse: true)
+            try await driver.maximumWriteValueLength(peripheralID: peripheralID, withResponse: withResponse)
         }
     }
 

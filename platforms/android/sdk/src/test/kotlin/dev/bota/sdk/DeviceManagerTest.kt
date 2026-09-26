@@ -40,6 +40,50 @@ import org.junit.Test
 
 class DeviceManagerTest {
     @Test
+    fun metadataReadFailureDisconnectsAndReleasesConnectionOperation() = runTest {
+        val fixture = RuntimeFixture(
+            runner = FakeWorkflowRunner(connectionResponses()),
+            firmwareRead = { error("metadata read failed") },
+        )
+        val manager = DeviceManager()
+        manager.attach(fixture.runtime)
+        repeat(2) {
+            val error = runCatching { manager.connect(DiscoveredDevice(id = "peripheral-1", rssi = -30)) }
+            assertTrue(error.isFailure)
+            assertEquals(null, fixture.runtime.connection.current())
+        }
+        assertEquals(listOf("peripheral-1", "peripheral-1"), fixture.disconnects)
+        manager.detach()
+    }
+
+    @Test
+    fun reconnectRefreshesFirmwareAndMtu() = runTest {
+        val fixture = RuntimeFixture(runner = FakeWorkflowRunner(connectionResponses()))
+        val manager = DeviceManager()
+        manager.attach(fixture.runtime)
+        val connected = manager.reconnect("SERIAL-1")
+        assertEquals("1.0.17", connected.firmwareVersion)
+        assertEquals(512, connected.mtu)
+        manager.detach()
+    }
+
+    @Test
+    fun connectionReadsFreshFirmwareFromDeviceInformation() = runTest {
+        val fixture = RuntimeFixture(runner = FakeWorkflowRunner(connectionResponses()))
+        val manager = DeviceManager()
+        manager.attach(fixture.runtime)
+
+        val connected = manager.connect(
+            "SERIAL-1", DiscoveredDevice(id = "peripheral-1", rssi = -30, firmwareVersion = "stale"),
+        )
+
+        assertEquals("1.0.17", connected.firmwareVersion)
+        assertEquals(512, connected.mtu)
+        assertEquals(connected, fixture.runtime.connection.current())
+        manager.detach()
+    }
+
+    @Test
     fun authorizationFailsBeforeCoreStarts() = runTest {
         val runner = FakeWorkflowRunner()
         var granted = false
@@ -456,6 +500,7 @@ internal class RuntimeFixture(
     readStatus: suspend (String) -> ByteArray = { error("status unavailable") },
     statusUpdates: suspend (String) -> Flow<ByteArray> = { flowOf() },
     decodeStatus: (ByteArray) -> DeviceStatus = { error("decoder unavailable") },
+    firmwareRead: suspend (String) -> ByteArray = { "1.0.17\u0000".toByteArray() },
 ) {
     var closeCount = 0
     val disconnects = mutableListOf<String>()
@@ -470,6 +515,12 @@ internal class RuntimeFixture(
         stopStatusUpdates = { stoppedStatusUpdates += it },
         decodeStatus = decodeStatus,
         closeResources = { closeCount += 1 },
+        connectionMtu = { 512 },
+        directRead = { id, service, characteristic ->
+            assertEquals(UUID.fromString("0000180a-0000-1000-8000-00805f9b34fb"), service)
+            assertEquals(UUID.fromString("00002a26-0000-1000-8000-00805f9b34fb"), characteristic)
+            firmwareRead(id)
+        },
     )
 }
 

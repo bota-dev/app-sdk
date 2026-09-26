@@ -70,6 +70,7 @@ struct DeviceRuntime: Sendable {
     let capabilities: CoreCapabilities
     let authorize: @Sendable (BotaOperation) throws -> Void
     let connection: DeviceConnectionRegistry
+    let connectionMtu: @Sendable (String) async throws -> Int
     let operations: DeviceOperationCoordinator
     let disconnect: @Sendable (String) async throws -> Void
     let readStatus: @Sendable (String) async throws -> DeviceStatus
@@ -134,6 +135,7 @@ struct DeviceRuntime: Sendable {
         capabilities: CoreCapabilities,
         authorize: @escaping @Sendable (BotaOperation) throws -> Void = { _ in },
         connection: DeviceConnectionRegistry = DeviceConnectionRegistry(),
+        connectionMtu: @escaping @Sendable (String) async throws -> Int = { _ in 23 },
         operations: DeviceOperationCoordinator = DeviceOperationCoordinator(),
         disconnect: @escaping @Sendable (String) async throws -> Void,
         readStatus: @escaping @Sendable (String) async throws -> DeviceStatus = { _ in
@@ -265,6 +267,7 @@ struct DeviceRuntime: Sendable {
         self.capabilities = capabilities
         self.authorize = authorize
         self.connection = connection
+        self.connectionMtu = connectionMtu
         self.operations = operations
         self.disconnect = disconnect
         self.readStatus = readStatus
@@ -566,7 +569,21 @@ public actor DeviceManager {
                     break
                 }
             }
+            if var device = established {
+                let firmware = try await runtime.directRead(
+                    device.id, BotaBluetoothUUIDs.deviceInformationService, BotaBluetoothUUIDs.firmwareRevision
+                )
+                device.firmwareVersion = String(decoding: firmware, as: UTF8.self)
+                    .replacingOccurrences(of: "\0", with: "")
+                device.mtu = try await runtime.connectionMtu(device.id)
+                try Task.checkCancellation()
+                guard activeOperation?.cancellationID == command.cancellationID else {
+                    throw CancellationError()
+                }
+                established = device
+            }
         } catch {
+            if let established { try? await runtime.disconnect(established.id) }
             await finishOperation(command.cancellationID)
             throw Self.publicError(error)
         }

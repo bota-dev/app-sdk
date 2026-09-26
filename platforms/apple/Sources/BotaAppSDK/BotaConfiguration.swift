@@ -130,6 +130,10 @@ public struct BotaConfiguration: @unchecked Sendable {
                 capabilities: .all,
                 authorize: { _ in try Self.validateBluetoothAuthorization() },
                 connection: connection,
+                connectionMtu: { peripheralID in
+                    // Without-response payload size excludes the three-byte ATT header.
+                    try await bluetooth.maximumWriteValueLength(peripheralID: peripheralID, withResponse: false) + 3
+                },
                 disconnect: { peripheralID in
                     try await bluetooth.disconnect(peripheralID: peripheralID)
                 },

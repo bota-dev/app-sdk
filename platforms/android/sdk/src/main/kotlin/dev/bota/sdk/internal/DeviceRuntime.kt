@@ -80,6 +80,7 @@ internal class DeviceRuntime(
     val decodeStatus: (ByteArray) -> DeviceStatus,
     private val closeResources: () -> Unit,
     val connection: DeviceConnectionRegistry = DeviceConnectionRegistry(),
+    val connectionMtu: (String) -> Int = { 23 },
     val operations: DeviceOperationCoordinator = DeviceOperationCoordinator(),
     val directRead: suspend (String, UUID, UUID) -> ByteArray = { _, _, _ ->
         error("direct read unavailable")
@@ -381,6 +382,7 @@ internal class DeviceRuntime(
                     decodeStatus = mapper::parseDeviceStatus,
                     closeResources = { closeAll(*closeActions.asReversed().toTypedArray()) },
                     connection = connection,
+                    connectionMtu = { driver.maximumWriteLength(it) + 3 },
                     directRead = driver::read,
                     directWrite = { peripheralId, service, characteristic, value ->
                         driver.write(peripheralId, service, characteristic, value, withResponse = true)
