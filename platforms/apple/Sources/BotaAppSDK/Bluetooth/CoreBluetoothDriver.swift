@@ -202,6 +202,7 @@ final class CoreBluetoothDriver: NSObject, CentralDriver, @unchecked Sendable {
     private let queueKey = DispatchSpecificKey<Void>()
     private var manager: CBCentralManager!
     private var peripherals: [UUID: CBPeripheral] = [:]
+    private var connectionIdentities: [UUID: String] = [:]
     private var characteristics: [CharacteristicKey: CBCharacteristic] = [:]
     private var scanContinuation: AsyncThrowingStream<CentralAdvertisement, Error>.Continuation?
     private var connectContinuations: [UUID: CheckedContinuation<Void, Error>] = [:]
@@ -218,6 +219,21 @@ final class CoreBluetoothDriver: NSObject, CentralDriver, @unchecked Sendable {
         super.init()
         queue.setSpecific(key: queueKey, value: ())
         manager = CBCentralManager(delegate: self, queue: queue)
+    }
+
+    /// Local adapter state only; no discovery or GATT operation.
+    func connectionIdentity(peripheralID: String) async -> String? {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                guard let id = UUID(uuidString: peripheralID),
+                      self.manager.state == .poweredOn,
+                      self.peripherals[id]?.state == .connected else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: self.connectionIdentities[id])
+            }
+        }
     }
 
     func connectedPeripherals(serviceUUIDs: [String]) async -> [CentralAdvertisement] {
@@ -283,6 +299,9 @@ final class CoreBluetoothDriver: NSObject, CentralDriver, @unchecked Sendable {
                     return
                 }
                 if peripheral.state == .connected {
+                    if self.connectionIdentities[id] == nil {
+                        self.connectionIdentities[id] = UUID().uuidString
+                    }
                     continuation.resume()
                     return
                 }
@@ -569,6 +588,7 @@ extension CoreBluetoothDriver: CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         peripheral.delegate = self
+        connectionIdentities[peripheral.identifier] = UUID().uuidString
         connectContinuations.removeValue(forKey: peripheral.identifier)?.resume()
     }
 
@@ -579,6 +599,7 @@ extension CoreBluetoothDriver: CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         let id = peripheral.identifier
+        connectionIdentities.removeValue(forKey: id)
         disconnectContinuations.removeValue(forKey: id)?.resume()
         failPending(id, error: error ?? CentralDriverError.disconnected(id.uuidString))
     }

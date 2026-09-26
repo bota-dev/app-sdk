@@ -11,7 +11,8 @@ public struct BotaConfiguration: @unchecked Sendable {
         runtimeFactory = {
             try Self.validateBluetoothAuthorization()
             let root = configuredDirectory ?? Self.defaultApplicationSupportDirectory()
-            let bluetooth = CoreBluetoothHost(driver: CoreBluetoothDriver())
+            let driver = CoreBluetoothDriver()
+            let bluetooth = CoreBluetoothHost(driver: driver)
             let mapper = try CoreModelMapper()
             let encryptedUploadV2Capabilities = EncryptedUploadV2CapabilityReader(
                 read: { peripheralID, serviceUUID, characteristicUUID in
@@ -97,6 +98,7 @@ public struct BotaConfiguration: @unchecked Sendable {
                 disconnect: { peripheralID in
                     try await bluetooth.disconnect(peripheralID: peripheralID)
                 },
+                connectionIdentity: { await driver.connectionIdentity(peripheralID: $0) },
                 readStatus: { peripheralID in
                     let data = try await bluetooth.read(
                         peripheralID: peripheralID,

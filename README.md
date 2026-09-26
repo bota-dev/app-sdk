@@ -1,5 +1,32 @@
 # Bota App SDK
 
+## Client presence (unreleased source)
+
+Web, Apple, Android, React Native and Flutter expose passive
+`clientPresence.nextReport(deviceId)` metadata (Apple uses `deviceID:`).
+Use the SDK connection handle, not a backend `dev_*` ID. Null means no current
+verified connection. Reports contain only schema version, a random in-memory
+connection session, increasing sequence, platform and generated SDK identity.
+Reconnect rotates the session; disconnect/destroy invalidate it. Native getters
+also check local transport ownership, without a GATT read or a network request.
+
+The host must first obtain a fresh device status, then explicitly attach this
+metadata to its existing authenticated heartbeat with the matching project,
+device and binding generation. Map native/framework camelCase fields to the
+heartbeat's snake_case `client_context` fields. An optional developer-supplied
+app identifier belongs to the host; the SDK does not infer app names, collect
+phone identifiers, or persist a client identity. Reports are diagnostics, not
+device attestation or command authority. Command routing is unchanged.
+
+The maintenance React Native SDK and deployed host applications are separate
+adoption steps. This source API is not evidence of a published package or
+physical-device acceptance.
+
+Verification caveat: the full Apple package gate still reproduces the existing
+`ble-capability-unknown-flag` vector mismatch on the task's unchanged base.
+Presence/lifecycle and adapter checks are tracked separately; no full-suite or
+release-ready claim is made while that encryption-vector gate remains red.
+
 Current source prepares synchronized `2.0.0-beta.2`, adding Web
 `devices.connectSelected()` for serial discovery before registration. The
 installation examples remain pinned to verified public `2.0.0-beta.1` until

@@ -183,6 +183,7 @@ dependencies {
     api(libs.okhttp)
 
     testImplementation(libs.junit)
+    testImplementation(libs.json) // Replay the canonical client-presence JSON fixture on the JVM.
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockwebserver)
 

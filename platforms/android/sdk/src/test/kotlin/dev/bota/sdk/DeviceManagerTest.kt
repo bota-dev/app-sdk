@@ -40,6 +40,46 @@ import org.junit.Test
 
 class DeviceManagerTest {
     @Test
+    fun identityMismatchInvalidatesEarlierPresenceForTheSameHandle() = runTest {
+        val manager = DeviceManager()
+        manager.attach(RuntimeFixture(runner = FakeWorkflowRunner(connectionResponses())).runtime)
+        val selected = DiscoveredDevice("peripheral-1", rssi = -30)
+        manager.connect("SERIAL-1", selected)
+        assertTrue(manager.nextClientReport(selected.id) != null)
+        assertTrue(runCatching { manager.connect("SERIAL-2", selected) }.isFailure)
+        assertEquals(null, manager.nextClientReport(selected.id))
+        manager.detach()
+    }
+
+    @Test
+    fun presenceUsesVerifiedConnectionAndStopsAfterTransportLoss() = runTest {
+        val runner = FakeWorkflowRunner(connectionResponses())
+        var transport: String? = "initial"
+        val fixture = RuntimeFixture(runner = runner, connectionIdentity = { transport })
+        val client = BotaDeviceClient()
+        client.configure(BotaConfiguration { fixture.runtime })
+        assertEquals(null, client.clientPresence.nextReport("peripheral-1"))
+        client.devices.connect("SERIAL-1", DiscoveredDevice("peripheral-1", rssi = -30))
+        val first = client.clientPresence.nextReport("peripheral-1")
+        val second = client.clientPresence.nextReport("peripheral-1")
+        assertEquals(1L, first?.sequence)
+        assertEquals(2L, second?.sequence)
+        assertEquals(first?.sessionId, second?.sessionId)
+        assertEquals(null, client.clientPresence.nextReport("wrong"))
+        transport = null
+        assertEquals(null, client.clientPresence.nextReport("peripheral-1"))
+        transport = "replacement"
+        assertEquals(null, client.clientPresence.nextReport("peripheral-1"))
+        client.devices.connect("SERIAL-1", DiscoveredDevice("peripheral-1", rssi = -30))
+        val replacement = client.clientPresence.nextReport("peripheral-1")
+        assertTrue(first?.sessionId != replacement?.sessionId)
+        assertEquals(1L, replacement?.sequence)
+        client.destroy()
+        assertEquals(null, client.clientPresence.nextReport("peripheral-1"))
+        assertEquals(2, runner.commands.size)
+    }
+
+    @Test
     fun authorizationFailsBeforeCoreStarts() = runTest {
         val runner = FakeWorkflowRunner()
         var granted = false
@@ -456,6 +496,7 @@ internal class RuntimeFixture(
     readStatus: suspend (String) -> ByteArray = { error("status unavailable") },
     statusUpdates: suspend (String) -> Flow<ByteArray> = { flowOf() },
     decodeStatus: (ByteArray) -> DeviceStatus = { error("decoder unavailable") },
+    connectionIdentity: (String) -> String? = { "connection" },
 ) {
     var closeCount = 0
     val disconnects = mutableListOf<String>()
@@ -464,6 +505,7 @@ internal class RuntimeFixture(
         engine = runner,
         capabilities = capabilities,
         authorize = authorize,
+        connectionIdentity = connectionIdentity,
         disconnect = { disconnects += it },
         readStatus = readStatus,
         statusUpdates = statusUpdates,

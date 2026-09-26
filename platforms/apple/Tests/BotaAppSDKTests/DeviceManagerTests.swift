@@ -5,7 +5,70 @@ import XCTest
 
 @testable import BotaAppSDK
 
+private actor PresenceTransport {
+    var id: String? = "initial"
+    func set(_ id: String?) { self.id = id }
+}
+
 final class DeviceManagerTests: XCTestCase {
+    func testIdentityMismatchInvalidatesEarlierPresenceForTheSameHandle() async throws {
+        let runner = FakeWorkflowRunner(responses: { command in
+            if command.packet.fields.text(UInt32(BOTA_DEVICE_SDK_V1_FIELD_SERIAL_NUMBER)) == "SERIAL-1" {
+                return connectionResponse(command)
+            }
+            return [notification(UInt32(BOTA_DEVICE_SDK_V1_NOTIFICATION_FAILED), fields: [
+                .unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_ERROR_CODE), value: 11),
+                .bool(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_RETRYABLE), value: false),
+            ])]
+        })
+        let manager = DeviceManager()
+        await manager.attach(runtime(runner: runner))
+        let selected = DiscoveredDevice(id: "first", rssi: -30)
+        _ = try await manager.connect(serialNumber: "SERIAL-1", device: selected)
+        let first = await manager.nextClientReport(deviceID: selected.id)
+        XCTAssertNotNil(first)
+        do {
+            _ = try await manager.connect(serialNumber: "SERIAL-2", device: selected)
+            XCTFail("expected identity rejection")
+        } catch {}
+        let rejected = await manager.nextClientReport(deviceID: selected.id)
+        XCTAssertNil(rejected)
+        await manager.detach()
+    }
+
+    func testPresenceUsesVerifiedConnectionAndStopsAfterTransportLoss() async throws {
+        let runner = FakeWorkflowRunner(responses: connectionResponse)
+        let transport = PresenceTransport()
+        let client = BotaDeviceClient()
+        let configured = runtime(runner: runner, connectionIdentity: { _ in await transport.id })
+        try await client.configure(BotaConfiguration { configured })
+        let initial = try await client.clientPresence.nextReport(deviceID: "first")
+        XCTAssertNil(initial)
+        _ = try await client.devices.connect(serialNumber: "SERIAL-1", device: .init(id: "first", rssi: -30))
+        let first = try await client.clientPresence.nextReport(deviceID: "first")
+        let second = try await client.clientPresence.nextReport(deviceID: "first")
+        let wrong = try await client.clientPresence.nextReport(deviceID: "wrong")
+        XCTAssertEqual(first?.sequence, 1)
+        XCTAssertEqual(second?.sequence, 2)
+        XCTAssertEqual(first?.sessionID, second?.sessionID)
+        XCTAssertNil(wrong)
+        await transport.set(nil)
+        let lost = try await client.clientPresence.nextReport(deviceID: "first")
+        XCTAssertNil(lost)
+        await transport.set("replacement")
+        let unverified = try await client.clientPresence.nextReport(deviceID: "first")
+        XCTAssertNil(unverified)
+        _ = try await client.devices.connect(serialNumber: "SERIAL-1", device: .init(id: "first", rssi: -30))
+        let replacement = try await client.clientPresence.nextReport(deviceID: "first")
+        XCTAssertNotEqual(first?.sessionID, replacement?.sessionID)
+        XCTAssertEqual(replacement?.sequence, 1)
+        await client.destroy()
+        let destroyed = try await client.clientPresence.nextReport(deviceID: "first")
+        XCTAssertNil(destroyed)
+        let commands = await runner.commands
+        XCTAssertEqual(commands.count, 2, "metadata must not create core/Bluetooth commands")
+    }
+
     func testDeniedBluetoothAuthorizationHasAStablePublicError() throws {
         XCTAssertThrowsError(try BotaConfiguration.validateBluetoothAuthorization(.denied)) { error in
             guard let error = error as? BotaSDKError else {
@@ -207,12 +270,14 @@ final class DeviceManagerTests: XCTestCase {
     private func runtime(
         runner: FakeWorkflowRunner,
         disconnect: @escaping @Sendable (String) async throws -> Void = { _ in },
-        status: DeviceStatus? = nil
+        status: DeviceStatus? = nil,
+        connectionIdentity: @escaping @Sendable (String) async -> String? = { _ in "connection" }
     ) -> DeviceRuntime {
         DeviceRuntime(
             engine: runner,
             capabilities: [.bluetooth, .timer, .persistence, .networkTransfer],
             disconnect: disconnect,
+            connectionIdentity: connectionIdentity,
             readStatus: { _ in
                 guard let status else { throw CentralDriverError.bluetoothUnavailable }
                 return status

@@ -1002,8 +1002,13 @@ disconnect/destroy invalidate it. Disconnect listener ownership fences late
 callbacks from a replaced connection. Reports expose only platform and public
 facade package/version plus session/sequence; the host owns any authorized
 heartbeat egress and binding scope. The shared lifecycle fixtures live under
-`protocol/client-presence/`; this Web evidence does not establish native or
-framework parity. `cargo xtask client-identity generate` derives all facade
+`protocol/client-presence/`. The source native getters use actor/lock-confined
+session state and check local adapter connection identity before issuing a
+report, failing closed on disconnect or a replaced transport. React Native
+Codegen and Flutter Pigeon relay native metadata, substituting only generated
+facade package/version labels; they do not mint a second session. Native and
+framework build evidence is tracked separately from Web and physical tests.
+`cargo xtask client-identity generate` derives all facade
 identity constants from `sdk-version.toml` and the existing public package
 matrix; `npm run check` rejects drift. No BLE wire protocol is added.
 
