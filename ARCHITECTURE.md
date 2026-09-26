@@ -998,6 +998,20 @@ resolve a grant or resend destructive opcode `0x06`.
 `frameworks/web` is a publishable ESM facade over the private
 `bindings/device-sdk-wasm` bridge. Browser code owns Web Bluetooth lifecycle;
 the WASM core owns exact connection sequencing and protocol decoding.
+The Web transport expands the core's short service/characteristic UUID strings
+before native GATT lookup as well as caching. Chromium treats a string such as
+`2A25` as a name, not a numeric UUID alias; passing it unchanged prevents the
+serial read. In addition, Chrome blocklists the standard `180A/2A25` identifier.
+The Web adapter maps only that logical read to read-only Bota Identity service
+`B07A0008-0000-1000-8000-00805F9B34FB`, characteristic `B07A0008-0001-1000-8000-00805F9B34FB`.
+Firmware returns the same manufacturing serial. Picker optional services include
+Identity; old firmware without it fails closed. All shared serial verification
+(connection, reconnect, snapshot and guarded operations) stays unchanged, as do
+native transports. Packed-consumer fakes retain native `BluetoothUUID` validation
+and reject the standard blocklisted read. Matching flashed firmware and the rebuilt
+local Web tarball passed real Chrome exact-serial connection and snapshot Refresh
+on 2026-09-25 (evidence in `docs/testing/web-physical-device.md`). Published SDK
+and production Portal rollout remain separate; serial equality is not authorization.
 `BotaDeviceClient` composes exactly one shared runtime, one operation
 coordinator, and one instance of each public foreground manager. Read-only
 construction needs neither storage nor providers. Durable construction uses a
@@ -1020,6 +1034,11 @@ requires the expected serial. Every
 snapshot reads and verifies that serial again, then returns optional model,
 hardware, and firmware identity, decoded device status, and a fresh decoded
 encrypted-upload-v2 capability value when characteristic `0406` exists.
+The canonical manifest and shared decoder recognize the firmware's upload-context
+(bit 8) and expired-session-recovery (bit 9) advertisements, including the
+physical-device value `0x37f`. Unknown bits remain rejected. Decoding these bits
+does not implement or authorize the corresponding workflows; upload admission
+and signed-context requirements are unchanged.
 If client destruction races an open picker, the eventual picker result is
 rejected as cancelled before it can become the active device or start GATT
 work. If destruction races later connection work, the captured device is

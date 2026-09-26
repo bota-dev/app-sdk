@@ -13,6 +13,43 @@ rollouts before production-device testing. This is a version-specific
 exception to the prepublication gate, not physical-device acceptance; keep
 each result open until its exact package is tested.
 
+## Known browser identity blocker (2026-09-25)
+
+A diagnostic run of the local `2.0.0-beta.2` Web candidate against a Bota Note
+reached GATT connection and service discovery, then failed the serial read:
+`SecurityError: getCharacteristic(s) called with blocklisted UUID`. The requested
+characteristic was Device Information Serial Number String (`0x2A25`). The
+[Web Bluetooth GATT blocklist](https://github.com/WebBluetoothCG/registries/blob/master/gatt_blocklist.txt)
+excludes that standardized identifier for privacy reasons. Canonicalizing its
+UUID does not make it accessible.
+
+The approved source extension appends read-only Bota Identity service
+`B07A0008-0000-1000-8000-00805F9B34FB`, serial characteristic
+`B07A0008-0001-1000-8000-00805F9B34FB`, to firmware without changing old ATT
+records. The Web transport maps shared serial reads to it; the Rust exact-SN
+workflow and native transports are unchanged. Automated checks cover the
+blocklist and exact identity. After the user flashed the Identity extension,
+the 2026-09-25 Chrome run passed connection and snapshot serial verification.
+The next failure was the shared decoder rejecting the real 24-byte capability
+value `[1,2,24,0,127,3,0,0,0,4,0,4,228,1,44,0,1,0,0,0,44,0,0,0]`:
+upload-context/recovery bits made flags `0x37f`, beyond its old bits 0–7 mask.
+Rust codec and real-WASM snapshot regressions now cover that packet; the
+canonical manifest/decoder recognizes bits 8/9 without loosening unknown-bit
+validation or changing upload authorization. The rebuilt local packed artifact
+(`SHA-256 bada46213b2f32aa345c818c42a25ddb7fc5424c0350e58aff27b6c0b432a6a3`)
+then passed real Chrome connection and Refresh against serial `GDPPSBZJN6`.
+The local Portal displayed firmware `1.0.18`, model `BOTA_DEV`, hardware `1.0`,
+battery 100%, storage 116/7454 MB, zero pending recordings, Idle, and v2
+Advertised. Fresh captures were 2026-09-25 20:32:49 and 20:33:12 America/Los_Angeles.
+One earlier retry remained pending and was abandoned by reloading; this is not
+evidence of bounded connection latency. This is read-only local integration
+evidence, not published-package or production deployment acceptance. Reopen the
+picker after upgrading so its service grant includes Identity. Do not bypass browser protections, substitute the
+advertised name or browser device ID for the serial, or report automated fake-GATT
+success as physical acceptance. This diagnostic is not a completed release matrix
+and does not change the historical candidate results below. No recording,
+provisioning, reset, or firmware-update operation was attempted.
+
 ## Safety boundary
 
 Before touching a device:

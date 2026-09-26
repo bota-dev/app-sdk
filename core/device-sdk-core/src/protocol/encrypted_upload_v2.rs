@@ -248,7 +248,9 @@ pub fn decode_encrypted_upload_v2_capabilities(
         | protocol::ENCRYPTED_UPLOAD_V2_CAP_AUTHENTICATED_MANIFEST
         | protocol::ENCRYPTED_UPLOAD_V2_CAP_AUTHENTICATED_RECEIPT
         | protocol::ENCRYPTED_UPLOAD_V2_CAP_BATCH
-        | protocol::ENCRYPTED_UPLOAD_V2_CAP_STREAMING;
+        | protocol::ENCRYPTED_UPLOAD_V2_CAP_STREAMING
+        | protocol::ENCRYPTED_UPLOAD_V2_CAP_UPLOAD_CONTEXT
+        | protocol::ENCRYPTED_UPLOAD_V2_CAP_EXPIRED_SESSION_RECOVERY;
     require_known_bits(flags, known_flags, "capability flags")?;
     require_zero(
         cursor.slice(

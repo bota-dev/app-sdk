@@ -25,6 +25,16 @@ initial `connect()` call must run directly from a user gesture because it opens
 the browser picker. A previously authorized exact device may be reconnected
 without a picker only when `navigator.bluetooth.getDevices()` is available.
 
+The beta.2 candidate fixes short UUID lookup and the browser's blocked standard
+serial read. It requires firmware exposing read-only Bota Identity service
+`B07A0008-0000-1000-8000-00805F9B34FB`, serial characteristic
+`B07A0008-0001-1000-8000-00805F9B34FB`. This returns the same serial as `0x2A25`,
+which Chrome blocks. Exact serial verification is unchanged; firmware without
+this endpoint cannot connect through Web and fails closed. Native SDKs keep
+their standard serial read. These source fixes require matching firmware and
+Web package releases before installed consumers get them. After upgrading,
+select the device in the picker again to grant access to the new service.
+
 ## Create a client and provide backend boundaries
 
 Read-only connect and snapshot use require no storage or provider. Durable or
@@ -360,7 +370,10 @@ console.log(reconnected.serialNumber, snapshot.status.batteryPercent)
 `reconnect()` enumerates previously authorized devices, selects only the saved
 browser device ID, waits for prior notification teardown, and verifies the
 serial again. `readSnapshot()` repeats that verification before returning fresh
-identity, status, and capability values.
+identity, status, and capability values. Capability decoding recognizes firmware
+upload-context and expired-session-recovery bits (`0x37f` for the current batch
+profile); this is not evidence that every advertised workflow has passed Web
+hardware acceptance. Unknown capability bits still fail closed.
 
 ### Discover identity before registration
 
