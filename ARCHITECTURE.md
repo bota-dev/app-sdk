@@ -19,7 +19,7 @@ private normative design before merge.
 
 ## Boundaries
 
-The unpublished native App integration adds a typed mixed recording catalog
+The beta.3 candidate native App integration adds a typed mixed recording catalog
 and upload-context codecs in Rust. Apple and Android own GATT context exchange,
 native files, checkpoint identity, exact-operation cancellation and opaque
 material lifetime. React Native carries catalog/progress metadata and opaque
@@ -1038,7 +1038,7 @@ construction remains client-owned, and applications use `client.devices`,
 `client.ota`, and `client.logs`.
 
 Picker connection has two explicit paths. `connect({ expectedSerialNumber })`
-requires an exact match to a known application device record. The beta.2 candidate
+requires an exact match to a known application device record. The beta.3 candidate
 `connectSelected()` addition (not in published `2.0.0-beta.1`) opens the same
 picker and uses Rust's existing `ConnectSelected` workflow to learn a fresh
 Device Information serial before the application registers or binds the device.

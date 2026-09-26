@@ -2,16 +2,22 @@
 
 ## Current Candidate
 
-`2.0.0-beta.2` prepares the additive Web `devices.connectSelected()` API for
-reading a selected device's serial before application registration. It reuses
-the existing Rust connection workflow and Device Information GATT read; there
-is no new BLE protocol or automatic registration, binding, or provisioning.
-Local checks are recorded in the [beta.2 preflight](../release/evidence/2.0.0-beta.2-preflight.md).
-The owner requested merge and publication through normal CI. All five SDK
-versions remain synchronized; publication requires green main CI, its exact
-candidate inventory, and the protected release workflow. Registry publication
-and physical-device acceptance are not claimed by this preparation. Advance
-only npm `beta`; preserve `latest`, historical packages, and immutable tags.
+`2.0.0-beta.3` prepares the maintenance-parity and native encrypted-upload-v2
+integration, Android reconnect/catalog fixes, and legacy transfer burst/final
+ACK corrections. It also includes the preceding Web selected-device serial
+discovery. All five SDK versions remain synchronized. See the
+[beta.3 preflight](../release/evidence/2.0.0-beta.3-preflight.md) for exact scope,
+verification, and hardware limits. The owner requested publication after one
+successful Android BLE encrypted batch upload and cloud playback. This is not
+cross-platform hardware acceptance; v2 compatibility flags remain disabled.
+Publication requires green exact main CI, its five-platform candidate inventory,
+and the protected release workflow. Advance only npm `beta`; preserve `latest`,
+historical packages, and immutable tags.
+
+`v2.0.0-beta.2` is occupied and partially published. Run `36082976764` published
+and verified Maven and exposed the GitHub prerelease, then stopped when the
+public Apple archive URL returned HTTP 404. npm, CocoaPods and Flutter steps
+did not complete. Do not move that tag or describe it as a synchronized release.
 
 ## Current Release
 

@@ -41,9 +41,13 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   not change beta.1, enable v2 runtime metadata, or establish hardware/app
   acceptance.
 
-- Current source prepares synchronized `2.0.0-beta.2` for Web selected-device
-  serial discovery. Publication remains gated by exact main CI and the protected
-  release workflow; the published version below is unchanged until verified.
+- Current source prepares synchronized `2.0.0-beta.3` for maintenance parity,
+  native v2 integration, reconnect and transfer corrections, plus Web selected
+  serial discovery. One Android BLE encrypted upload/cloud playback passed with
+  a local Demo native identity fix; this is not other-platform or recovery
+  acceptance and does not enable v2 metadata. See the beta.3 preflight.
+  Beta.2 is occupied and partially published; never reuse its tag. Publication
+  remains gated by exact main CI and the protected release workflow.
 
 - Current synchronized published beta is `2.0.0-beta.1`: Apple `BotaAppSDK`, Android
   `dev.bota:bota-app-sdk`, RN `@bota.dev/react-native-app-sdk`, Web
