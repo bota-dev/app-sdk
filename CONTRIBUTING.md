@@ -73,6 +73,12 @@ capabilities through the shipping Rust decoder to catch stale rejection
 expectations. Regenerate Apple/Android vector resources and update their
 digest assertions together; historical release evidence remains immutable.
 
+Flutter source changes also invalidate the unpublished synchronized release
+example's exact package inventory. Regenerate that template from the committed
+package source (excluding unrelated working-tree edits), review changed paths
+and hashes, and rerun the complete CI candidate gate. Do not loosen template
+comparison, reuse an older candidate, or alter a published version's example.
+
 Flutter changes use the repository-local Flutter `3.47.2` and Dart `3.13.2`
 toolchain. The wrapper downloads and verifies the official archive under
 `target/flutter-sdk`; `BOTA_FLUTTER_HOME` is accepted only when it reports the
