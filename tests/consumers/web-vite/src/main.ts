@@ -5,6 +5,7 @@ import {
   type DeviceLogLine,
   type DeviceRecording,
   type RecordingSyncResult,
+  type SdkClientContext,
   type WiFiStatusInfo,
 } from '@bota.dev/web-app-sdk'
 
@@ -37,6 +38,7 @@ declare global {
     __botaConsumerTest: {
       holdProvider(): void
       resolveProvider(): void
+      nextPresence(): Promise<SdkClientContext | null>
     }
   }
 }
@@ -61,6 +63,9 @@ let providerGate: Promise<void> | null = null
 let resolveProviderGate: (() => void) | null = null
 
 window.__botaConsumerTest = {
+  nextPresence() {
+    return client.clientPresence.nextReport(client.devices.connectedDevice?.id ?? '')
+  },
   holdProvider() {
     providerGate = new Promise<void>((resolve) => {
       resolveProviderGate = resolve

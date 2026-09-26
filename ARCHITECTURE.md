@@ -995,6 +995,18 @@ resolve a grant or resend destructive opcode `0x06`.
 
 ## Web facade
 
+Source-preview `client.clientPresence.nextReport(deviceId)` is passive metadata
+owned by the existing verified connection. It performs no BLE or HTTP work;
+connection completion creates a random session, reconnect rotates it, and
+disconnect/destroy invalidate it. Disconnect listener ownership fences late
+callbacks from a replaced connection. Reports expose only platform and public
+facade package/version plus session/sequence; the host owns any authorized
+heartbeat egress and binding scope. The shared lifecycle fixtures live under
+`protocol/client-presence/`; this Web evidence does not establish native or
+framework parity. `cargo xtask client-identity generate` derives all facade
+identity constants from `sdk-version.toml` and the existing public package
+matrix; `npm run check` rejects drift. No BLE wire protocol is added.
+
 `frameworks/web` is a publishable ESM facade over the private
 `bindings/device-sdk-wasm` bridge. Browser code owns Web Bluetooth lifecycle;
 the WASM core owns exact connection sequencing and protocol decoding.

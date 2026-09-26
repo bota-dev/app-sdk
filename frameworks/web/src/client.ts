@@ -1,4 +1,5 @@
 import type { CoreLoader } from './core.ts'
+import type { ClientPresence } from './clientPresence.ts'
 import { ControlManager } from './controlManager.ts'
 import {
   destroyDeviceManagerAfter,
@@ -41,6 +42,7 @@ export interface BotaDeviceClientOptions {
 }
 
 export class BotaDeviceClient {
+  readonly clientPresence: ClientPresence
   readonly devices: DeviceManager
   readonly controls: ControlManager
   readonly provisioning: ProvisioningManager
@@ -66,6 +68,7 @@ export class BotaDeviceClient {
     this.runtime = runtime
     this.storage = storage
     this.devices = devices
+    this.clientPresence = devices.clientPresence
     this.controls = controls
     this.provisioning = provisioning
     this.ota = ota

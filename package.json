@@ -9,7 +9,7 @@
     "baseline:native": "node tools/baseline/verify-native-baselines.mjs",
     "baseline:react-native": "node tools/baseline/compare-react-native.mjs",
     "baseline:react-native:api": "node tools/baseline/react-native-api-contract.mjs verify --contract protocol/baseline/react-native-public-api-0.0.65.json",
-    "check": "npm run check:licenses",
+    "check": "cargo xtask client-identity generate --check && npm run check:licenses",
     "check:licenses": "node scripts/check-licenses.mjs",
     "encrypted-upload-v2:vectors": "cargo xtask encrypted-upload-v2 vectors generate",
     "encrypted-upload-v2:vectors:check": "cargo xtask encrypted-upload-v2 vectors generate --check",

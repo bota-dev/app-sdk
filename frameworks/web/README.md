@@ -35,6 +35,36 @@ their standard serial read. These source fixes require matching firmware and
 Web package releases before installed consumers get them. After upgrading,
 select the device in the picker again to grant access to the new service.
 
+## Local client metadata (source preview)
+
+`client.clientPresence.nextReport(device.id)` returns a local diagnostic report
+for the currently verified SDK device handle, or `null` when disconnected. It
+does not read Bluetooth, call a backend, or start a timer. The report contains
+`schema_version`, random per-connection `session_id`, increasing `sequence`,
+`platform`, and release-generated `sdk_package` / `sdk_version`. Reconnect
+rotates the session; disconnect and destroy invalidate it. A stale disconnect
+callback cannot clear a newer connection's report.
+
+```ts
+const device = await client.devices.connect({ expectedSerialNumber })
+const context = await client.clientPresence.nextReport(device.id)
+// Local-only by default. No HTTP is performed by this getter.
+```
+
+An integrating host may attach this report to its existing authenticated
+heartbeat relay after obtaining fresh device readings and verifying the same
+device/project/binding still owns the connection. The host adds the captured
+binding generation and, optionally, a developer-supplied app identifier. Reuse
+the same report for an immediate retry; never queue/replay stale observations.
+Stop reporting on hidden pages, logout, disconnect, or scope change. App
+identifier, SDK version and serial matching are not attestation or permission
+to deliver commands. Do not include phone names, persistent installation IDs,
+URLs, full user agents, location, or credentials. Metadata is self-reported
+operational information, not proof of continuous physical connectivity.
+
+This additive API is source-only until the next verified package publication;
+it is not present in the published beta.1 package.
+
 ## Create a client and provide backend boundaries
 
 Read-only connect and snapshot use require no storage or provider. Durable or
