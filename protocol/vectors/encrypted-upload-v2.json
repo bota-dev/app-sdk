@@ -1898,7 +1898,7 @@
       "name": "ble-capability-unknown-flag",
       "category": "ble",
       "operation": "decodeCapabilities",
-      "inputHex": "010218007f01000000040004f40010000800000010000000",
+      "inputHex": "010218007f04000000040004f40010000800000010000000",
       "context": {},
       "expectedError": "noncanonical_encoding"
     },

@@ -14,6 +14,27 @@ fn encrypted_upload_v2_vectors_are_deterministic_and_current() {
 }
 
 #[test]
+fn generated_negative_capabilities_are_rejected_by_the_shipping_decoder() {
+    let bundle = bundle_json();
+    for case in bundle["cases"].as_array().unwrap() {
+        if case["operation"] != "decodeCapabilities" || case["expectedError"].is_null() {
+            continue;
+        }
+        let hex = case["inputHex"].as_str().unwrap();
+        let bytes: Vec<u8> = (0..hex.len())
+            .step_by(2)
+            .map(|offset| u8::from_str_radix(&hex[offset..offset + 2], 16).unwrap())
+            .collect();
+        assert!(
+            bota_device_sdk_core::protocol::decode_encrypted_upload_v2_capabilities(&bytes)
+                .is_err(),
+            "negative capability vector was accepted: {}",
+            case["name"]
+        );
+    }
+}
+
+#[test]
 fn bundle_covers_every_required_category() {
     let bundle = bundle_json();
     let names: BTreeSet<_> = bundle["cases"]

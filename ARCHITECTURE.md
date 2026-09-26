@@ -1141,6 +1141,10 @@ local artifact; the browser stage validates the original inventory, source
 revision, tarball hash, and installed regular-file hashes without parsing the
 archive again before the production ESM/WASM Chromium cases run. CI then
 preserves the tarball and inventory unchanged for protected beta publication.
+The Linux test browser enables only Blink `WebBluetooth` so the fake GATT
+boundary uses Chromium's native UUID validator, with a preflight that rejects
+un-normalized string aliases. This is test configuration, not a browser
+permission bypass or a supported-platform expansion.
 The supervised Chromium/device matrix in
 `docs/testing/web-physical-device.md` is a separate release gate. Automated
 Chromium cases use deterministic fake Bluetooth and cannot satisfy it. For

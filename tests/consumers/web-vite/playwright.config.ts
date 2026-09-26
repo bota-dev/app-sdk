@@ -10,6 +10,9 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:4173',
     browserName: 'chromium',
     headless: true,
+    // Linux does not expose BluetoothUUID by default. Keep the native UUID
+    // validator in the fake-GATT gate without enabling unrelated features.
+    launchOptions: { args: ['--enable-blink-features=WebBluetooth'] },
   },
   webServer: {
     command: 'npm run preview',

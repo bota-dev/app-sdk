@@ -57,11 +57,21 @@ PLAYWRIGHT_BROWSERS_PATH="$PWD/target/playwright-browsers" \
 That command builds the WASM package, runs the Web unit/type/package suites,
 packs one tarball, installs only that artifact into the Vite consumer, and runs
 automated Chromium with deterministic fake Bluetooth. It does not prove a real
-device. Release acceptance separately follows
+device. The test-only browser explicitly enables Blink's `WebBluetooth`
+feature so Linux exposes the native `BluetoothUUID` validator used at the
+fake GATT boundary. A consumer preflight checks that validator; do not replace
+it with a permissive UUID mock or change users' browser settings.
+Release acceptance separately follows
 [`docs/testing/web-physical-device.md`](docs/testing/web-physical-device.md);
 never mark a physical row passed from Playwright output, and never run its
 state-changing provisioning, settings, WiFi, recording-control, transfer, OTA,
 or deprovision cases without the supervised prerequisites in that runbook.
+
+When capability bits become recognized, regenerate the malformed capability
+vector with a still-unknown bit. The xtask suite decodes generated negative
+capabilities through the shipping Rust decoder to catch stale rejection
+expectations. Regenerate Apple/Android vector resources and update their
+digest assertions together; historical release evidence remains immutable.
 
 Flutter changes use the repository-local Flutter `3.47.2` and Dart `3.13.2`
 toolchain. The wrapper downloads and verifies the official archive under
