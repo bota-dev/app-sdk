@@ -65,6 +65,12 @@ await BotaClient.waitForBluetooth();
 The `BotaClient.devices`, `BotaClient.recordings`, and `BotaClient.ota`
 managers become available after configuration completes.
 
+Discovery exposes the manufacturer-advertised `macAddress` as uppercase,
+colon-separated bytes (`AA:BB:CC:DD:EE:FF`), preserving the legacy React Native
+registration contract. Compact native addresses are formatted at the RN
+boundary; missing or malformed advertised values become `null`. The peripheral
+`id` is unchanged and is never substituted for an absent advertised MAC.
+
 ## Encrypted upload v2
 
 The target encrypted-upload-v2 runtime is an additive `BotaDeviceSDK` API; it

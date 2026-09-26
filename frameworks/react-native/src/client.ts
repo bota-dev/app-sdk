@@ -448,6 +448,13 @@ export type BotaDeviceSDKClient = {
   getState(): Promise<BotaDeviceSDKState>;
 };
 
+const formatAdvertisedMac = (value: string | undefined): string | null => {
+  if (!value || !/^(?:[0-9a-f]{12}|(?:[0-9a-f]{2}:){5}[0-9a-f]{2})$/i.test(value)) {
+    return null;
+  }
+  return value.replace(/:/g, '').toUpperCase().match(/.{2}/g)!.join(':');
+};
+
 const mapDiscoveredDevice = (
   device: NativeDiscoveredDevice
 ): DiscoveredDevice => ({
@@ -455,7 +462,7 @@ const mapDiscoveredDevice = (
   name: device.name ?? '',
   deviceType: (device.deviceType ?? 'bota_pin') as DeviceType,
   firmwareVersion: device.firmwareVersion ?? '',
-  macAddress: device.macAddress ?? null,
+  macAddress: formatAdvertisedMac(device.macAddress),
   pairingState: (device.pairingState ?? 'unpaired') as PairingState,
   rssi: device.rssi,
   discoveredAt: new Date(device.discoveredAtMs),

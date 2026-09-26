@@ -635,6 +635,43 @@ test('device scan preserves the frozen JavaScript filters', async () => {
   assert.deepEqual(devices.map((device) => device.id), ['note-ready']);
 });
 
+test('device scan exposes advertised MACs in the legacy registration format', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+  const devices = [];
+  const subscription = await client.devices.startScan({}, device => devices.push(device));
+  const cases = [
+    ['aabbccddeeff', 'AA:BB:CC:DD:EE:FF'],
+    ['00112233440a', '00:11:22:33:44:0A'],
+    ['aa:bb:cc:dd:ee:ff', 'AA:BB:CC:DD:EE:FF'],
+    ['AA:BB:CC:DD:EE:FF', 'AA:BB:CC:DD:EE:FF'],
+    [undefined, null],
+    ['', null],
+    ['not-a-mac', null],
+    ['aa:bbccddeeff', null],
+  ];
+  for (const [macAddress] of cases) fixture.emitDiscovery({ ...discovered, macAddress });
+  assert.deepEqual(devices.map(device => device.macAddress), cases.map(([, expected]) => expected));
+  assert.ok(devices.every(device => device.id === 'peripheral-1'));
+  subscription.remove();
+});
+
+test('compatibility discovery cache retains the registration-ready MAC', async () => {
+  const { DeviceManager } = require('../lib/commonjs/managers/DeviceManager.js');
+  const { setCompatibilityClientForTesting } = require('../lib/commonjs/compatibility/runtime.js');
+  const fixture = nativeFixture();
+  setCompatibilityClientForTesting(createBotaDeviceSDK(fixture.module));
+  const manager = new DeviceManager();
+  try {
+    await manager.startScan();
+    fixture.emitDiscovery(discovered);
+    assert.equal(manager.getDiscoveredDevices()[0].macAddress, 'AA:BB:CC:DD:EE:FF');
+  } finally {
+    manager.stopScan();
+    setCompatibilityClientForTesting(null);
+  }
+});
+
 test('device connection delegates selected identity and strict reconnect separately', async () => {
   const fixture = nativeFixture();
   const client = createBotaDeviceSDK(fixture.module);
