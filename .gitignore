@@ -35,6 +35,7 @@
 /frameworks/web/src/generated/
 /tests/consumers/web-vite/node_modules/
 /tests/consumers/web-vite/dist/
+/tests/consumers/web-vite/test-results/
 
 # Platform build outputs
 /.build/
