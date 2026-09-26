@@ -74,6 +74,14 @@ fn start_with_checkpoint(
     engine: &mut WorkflowEngine,
     checkpoint: Option<WorkflowCheckpoint>,
 ) -> (RequestId, RequestId) {
+    start_with_write_completion(engine, checkpoint, true)
+}
+
+fn start_with_write_completion(
+    engine: &mut WorkflowEngine,
+    checkpoint: Option<WorkflowCheckpoint>,
+    complete_write: bool,
+) -> (RequestId, RequestId) {
     let started = engine
         .start(command(), &capabilities(), CANCELLATION)
         .unwrap();
@@ -124,12 +132,14 @@ fn start_with_checkpoint(
                     && payload.first() == Some(&2)
         )
     });
-    engine
-        .dispatch(host(
-            start_request,
-            HostEventKind::Ble(BleEvent::WriteCompleted),
-        ))
-        .unwrap();
+    if complete_write {
+        engine
+            .dispatch(host(
+                start_request,
+                HostEventKind::Ble(BleEvent::WriteCompleted),
+            ))
+            .unwrap();
+    }
     (subscription_request, start_request)
 }
 
@@ -139,6 +149,124 @@ fn data(sequence: u16, payload: &[u8]) -> Vec<u8> {
     bytes.extend_from_slice(&(payload.len() as u16).to_le_bytes());
     bytes.extend_from_slice(payload);
     bytes
+}
+
+#[test]
+fn burst_packets_wait_for_durable_appends_without_loss() {
+    let mut engine = WorkflowEngine::default();
+    let (subscription, _) = start_with_checkpoint(&mut engine, None);
+    let first = engine
+        .dispatch(host(
+            subscription,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                value: data(0, &[1, 2]),
+            }),
+        ))
+        .unwrap();
+    let first_append = request_id(&first, |effect| {
+        matches!(
+            effect,
+            Effect::RecordingSink(RecordingSinkEffect::Append { sequence: 0, .. })
+        )
+    });
+    for value in [data(1, &[3, 4]), data(1, &[3, 4]), eof(2, 0xb63cfbcd)] {
+        assert!(
+            engine
+                .dispatch(host(
+                    subscription,
+                    HostEventKind::Ble(BleEvent::Notification {
+                        characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                        value,
+                    })
+                ))
+                .expect("in-flight sink must not drop a notification")
+                .is_empty()
+        );
+    }
+    let second = engine
+        .dispatch(host(
+            first_append,
+            HostEventKind::RecordingSinkAppendCompleted { durable_units: 2 },
+        ))
+        .unwrap();
+    let second_append = request_id(&second, |effect| {
+        matches!(effect,
+        Effect::RecordingSink(RecordingSinkEffect::Append { sequence: 1, payload, .. }) if payload == &[3, 4])
+    });
+    let finalized = engine
+        .dispatch(host(
+            second_append,
+            HostEventKind::RecordingSinkAppendCompleted { durable_units: 4 },
+        ))
+        .unwrap();
+    assert!(finalized.iter().any(|request| matches!(
+        request.effect,
+        Effect::RecordingSink(RecordingSinkEffect::Finalize {
+            expected_crc32: Some(0xb63cfbcd),
+            ..
+        })
+    )));
+    assert!(!finalized.iter().any(|request| matches!(&request.effect,
+        Effect::Ble(BleEffect::Write { payload, .. }) if payload.first() == Some(&3))));
+}
+
+#[test]
+fn early_data_waits_for_start_write_completion() {
+    let mut engine = WorkflowEngine::default();
+    let (subscription, start) = start_with_write_completion(&mut engine, None, false);
+    assert!(
+        engine
+            .dispatch(host(
+                subscription,
+                HostEventKind::Ble(BleEvent::Notification {
+                    characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                    value: data(0, &[1, 2]),
+                })
+            ))
+            .unwrap()
+            .is_empty()
+    );
+    let appending = engine
+        .dispatch(host(start, HostEventKind::Ble(BleEvent::WriteCompleted)))
+        .unwrap();
+    assert!(appending.iter().any(|request| matches!(&request.effect,
+        Effect::RecordingSink(RecordingSinkEffect::Append { sequence: 0, payload, .. }) if payload == &[1, 2])));
+}
+
+#[test]
+fn queued_transfer_overflow_fails_without_confirming_device_deletion() {
+    for packet in [data(0, &[]), data(0, &vec![7; 1024])] {
+        let mut engine = WorkflowEngine::default();
+        let (subscription, _) = start_with_write_completion(&mut engine, None, false);
+        let mut failed = false;
+        for _ in 0..257 {
+            let effects = engine
+                .dispatch(host(
+                    subscription,
+                    HostEventKind::Ble(BleEvent::Notification {
+                        characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                        value: packet.clone(),
+                    }),
+                ))
+                .unwrap();
+            assert!(!effects.iter().any(|request| matches!(&request.effect,
+                Effect::Ble(BleEffect::Write { payload, .. }) if payload.first() == Some(&3))));
+            if effects.iter().any(|request| {
+                matches!(
+                    request.effect,
+                    Effect::Notify(WorkflowNotification::Failed { .. })
+                )
+            }) {
+                failed = true;
+                break;
+            }
+        }
+        assert!(
+            failed,
+            "queue must bound both packet count and retained bytes"
+        );
+    }
 }
 
 fn eof(sequence: u16, checksum: u32) -> Vec<u8> {
@@ -529,7 +657,7 @@ fn disconnect_retains_durable_sink_for_retry_and_cancel_never_confirms_delete() 
             characteristic_uuid,
             payload,
             ..
-        }) if characteristic_uuid == CHAR_RECORDING_TRANSFER
+        }) if characteristic_uuid == CHAR_TRANSFER_CONTROL
             && payload.first() == Some(&ACK_TYPE_ABORT)
     )));
     assert!(cancelled.iter().any(|request| matches!(
@@ -583,8 +711,9 @@ fn integrity_failure_nacks_and_never_confirms_delete() {
         .unwrap();
     assert!(failed.iter().any(|request| matches!(
         &request.effect,
-        Effect::Ble(BleEffect::Write { payload, .. })
-            if payload.first() == Some(&ACK_TYPE_NACK)
+        Effect::Ble(BleEffect::Write { characteristic_uuid, payload, .. })
+            if characteristic_uuid == CHAR_TRANSFER_CONTROL
+                && payload.first() == Some(&ACK_TYPE_NACK)
     )));
     assert!(!failed.iter().any(|request| matches!(
         &request.effect,
@@ -649,7 +778,7 @@ fn confirm_delete_occurs_only_after_durable_sink_finalization_and_final_ack() {
                 characteristic_uuid,
                 payload,
                 ..
-            }) if characteristic_uuid == CHAR_RECORDING_TRANSFER
+            }) if characteristic_uuid == CHAR_TRANSFER_CONTROL
                 && payload.first() == Some(&ACK_TYPE_ACK)
         )
     });

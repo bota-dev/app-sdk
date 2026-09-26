@@ -695,7 +695,10 @@ orders truncate, append, checkpoint, final integrity verification, final ACK,
 and device delete without persisting file paths or payload bytes. Firmware
 restarts a resumed transfer at sequence zero, so the reducer skips sequence
 numbers already represented by the durable checkpoint before appending new
-data.
+data. Notifications arriving during START completion or durable append wait in
+a bounded FIFO (256 packets, 128 KiB); overflow fails without confirming device
+deletion. Final ACK, NACK and Abort use the writable `TRANSFER_CONTROL` (0404),
+not the notify-only `RECORDING_TRANSFER` (0403).
 
 Upload handoff does not carry presigned URLs or credentials. The application
 supplies opaque upload-session and destination IDs, while the reducer reads

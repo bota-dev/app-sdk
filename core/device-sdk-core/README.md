@@ -19,7 +19,14 @@ Reset success is durably journaled before receipt and replay can resume without
 resending the destructive command. Recording bytes remain in a host-owned sink;
 the core checkpoints only byte and sequence counters, restarts the device stream
 from sequence zero, and confirms device deletion only after the sink has passed
-its durable integrity check. Encrypted transfers persist the backend relay wire
+its durable integrity check. Legacy transfer notifications arriving before the
+START write callback or during a durable sink append are queued in order, up to
+256 packets and 128 KiB. Draining preserves sequence, duplicate and CRC checks;
+overflow fails the transfer without confirming device deletion. Final ACK, NACK
+and Abort writes use `TRANSFER_CONTROL` (0404), never the notify-only
+`RECORDING_TRANSFER` (0403). This shared-core
+behavior is regression-tested; it does not establish physical upload acceptance.
+Encrypted transfers persist the backend relay wire
 format directly: the session public key and salt precede length-framed
 ciphertext chunks, so plaintext never enters the SDK. Upload handoff keeps
 destination data host-owned
