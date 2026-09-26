@@ -187,6 +187,9 @@ const provisioning: ProvisioningProvider = {
   },
 }
 
+// Each attempt reads a fresh 16-byte device nonce before invoking prepare.
+// The host forwards it as nonce_d to its authorized recording-grant endpoint.
+// Missing/malformed nonce fails closed. Do not retain callback bytes or grants.
 const recordingControl: RecordingControlProvider = {
   async prepare(context) {
     const response = await postHost<{ grantBase64: string }>(
@@ -196,6 +199,7 @@ const recordingControl: RecordingControlProvider = {
         serialNumber: context.serialNumber,
         action: context.action,
         authorityId: context.authorityId,
+        nonceHex: Array.from(context.nonce, byte => byte.toString(16).padStart(2, '0')).join(''),
       },
       context.signal,
     )

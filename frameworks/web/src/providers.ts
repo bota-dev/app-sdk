@@ -42,6 +42,8 @@ export interface RecordingControlProvider {
     serialNumber: string
     action: 'start' | 'stop'
     authorityId: string
+    /** Fresh device session nonce. Copy for asynchronous use; scrubbed at settlement. */
+    nonce: Uint8Array
     signal: AbortSignal
   }): Promise<{ grant: Uint8Array }>
 }

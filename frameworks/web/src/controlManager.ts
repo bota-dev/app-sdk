@@ -6,6 +6,8 @@ import {
   type BotaOperation,
 } from './errors.ts'
 import {
+  AUTH_NONCE_CHARACTERISTIC,
+  BOTA_AUTH_SERVICE,
   BOTA_CONTROL_SERVICE,
   DEVICE_COMMAND_CHARACTERISTIC,
   DEVICE_INFORMATION_SERVICE,
@@ -110,13 +112,21 @@ export class ControlManager {
       return await this.runManaged(request.signal, async (signal) => {
         const { device, serialNumber } = await this.verifyConnectedDevice(signal)
         let grant: Uint8Array | null = null
+        let nonce: Uint8Array | null = null
         try {
+          nonce = await gattStep(this.transport.read(
+            device, BOTA_AUTH_SERVICE, AUTH_NONCE_CHARACTERISTIC,
+          ), signal)
+          if (nonce.byteLength !== 16) {
+            throw new BotaSDKError('protocol_error', 'recording_control')
+          }
           let prepared: Awaited<ReturnType<RecordingControlProvider['prepare']>>
           const pending = this.provider!.prepare({
             operationId,
             serialNumber,
             action,
             authorityId: request.authorityId,
+            nonce,
             signal,
           })
           try {
@@ -154,6 +164,7 @@ export class ControlManager {
           )
         } finally {
           grant?.fill(0)
+          nonce?.fill(0)
         }
       })
     } catch (error) {
