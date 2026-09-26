@@ -62,7 +62,7 @@ fn reserved_bytes_and_unknown_critical_bits_are_rejected() {
     assert_noncanonical(decode_encrypted_upload_v2_capabilities(&capability));
 
     let mut capability = valid_capability();
-    capability[4..8].copy_from_slice(&0x100_u32.to_le_bytes());
+    capability[4..8].copy_from_slice(&0x400_u32.to_le_bytes());
     assert_noncanonical(decode_encrypted_upload_v2_capabilities(&capability));
 
     let mut abort = valid_transfer(16, 0x24);
@@ -72,6 +72,21 @@ fn reserved_bytes_and_unknown_critical_bits_are_rejected() {
     let mut abort = valid_transfer(16, 0x24);
     abort[2] = 1;
     assert_noncanonical(decode_encrypted_upload_v2_transfer(&abort));
+}
+
+#[test]
+fn captured_firmware_capabilities_accept_upload_context_and_session_recovery() {
+    let packet = [
+        1, 2, 24, 0, 127, 3, 0, 0, 0, 4, 0, 4, 228, 1, 44, 0, 1, 0, 0, 0, 44, 0, 0, 0,
+    ];
+    let capabilities = decode_encrypted_upload_v2_capabilities(&packet).unwrap();
+    assert_eq!(capabilities.flags, 0x37f);
+    assert_eq!(capabilities.maximum_signed_blob_bytes, 1024);
+    assert_eq!(capabilities.maximum_manifest_bytes, 1024);
+    assert_eq!(capabilities.maximum_data_payload_bytes, 484);
+    assert_eq!(capabilities.maximum_window_packets, 44);
+    assert_eq!(capabilities.durable_checkpoint_interval_blocks, 1);
+    assert_eq!(capabilities.maximum_missing_sequences, 44);
 }
 
 #[test]

@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test'
 const SERIAL = 'GDPPSBZJN6'
 const OTHER_SERIAL = 'OTHERDEVICE1'
 const UUID = {
-  serial: '00002a25-0000-1000-8000-00805f9b34fb',
+  serial: 'b07a0008-0001-1000-8000-00805f9b34fb',
   transferControl: 'b07a0004-0004-1000-8000-00805f9b34fb',
   recordingList: 'b07a0004-0002-1000-8000-00805f9b34fb',
   recordingTransfer: 'b07a0004-0003-1000-8000-00805f9b34fb',
@@ -291,7 +291,7 @@ async function installBrowserFakes(
       }
 
       async readValue(): Promise<DataView> {
-        if (this.uuid === canonical('2a25')) {
+        if (this.uuid === uuids.serial) {
           return view(new TextEncoder().encode(serialNumber))
         }
         throw missing()
@@ -363,7 +363,14 @@ async function installBrowserFakes(
         this.uuid = canonical(uuid)
       }
       async getCharacteristic(uuid: string): Promise<FakeCharacteristic> {
-        return characteristic(uuid)
+        const canonicalUuid = BluetoothUUID.getCharacteristic(uuid)
+        if (canonicalUuid === canonical('2a25')) {
+          throw new DOMException('blocklisted UUID', 'SecurityError')
+        }
+        if (canonicalUuid === uuids.serial && this.uuid !== canonical('b07a0008-0000-1000-8000-00805f9b34fb')) {
+          throw missing()
+        }
+        return characteristic(canonicalUuid)
       }
     }
     class FakeGattServer {
@@ -379,7 +386,7 @@ async function installBrowserFakes(
         return []
       }
       async getPrimaryService(uuid: string): Promise<FakeService> {
-        return new FakeService(uuid)
+        return new FakeService(BluetoothUUID.getService(uuid))
       }
     }
     class FakeDevice extends FakeTarget {

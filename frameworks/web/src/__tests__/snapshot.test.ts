@@ -87,6 +87,26 @@ test('snapshot returns exact identity and shared-core decoded status and capabil
   assert.ok(snapshot.capturedAt instanceof Date)
 })
 
+test('snapshot decodes the physical firmware upload-context and recovery capabilities', async () => {
+  const { manager, transport } = await connectedManager()
+  transport.setRead(
+    BOTA_STORAGE_SERVICE,
+    STORAGE_TRANSFER_CAPABILITIES_V2_CHARACTERISTIC,
+    Uint8Array.from([
+      1, 2, 24, 0, 127, 3, 0, 0, 0, 4, 0, 4, 228, 1, 44, 0, 1, 0, 0, 0, 44, 0, 0, 0,
+    ]),
+  )
+  try {
+    const snapshot = await manager.readSnapshot()
+    assert.equal(snapshot.identity.serialNumber, 'GDPPSBZJN6')
+    assert.equal(snapshot.capabilities.encryptedUploadV2?.flags, 0x37f)
+    assert.equal(snapshot.capabilities.encryptedUploadV2?.maximumDataPayloadBytes, 484)
+    assert.equal(snapshot.capabilities.encryptedUploadV2?.maximumWindowPackets, 44)
+  } finally {
+    await manager.disconnect()
+  }
+})
+
 test('every snapshot performs a fresh encrypted v2 capability read', async () => {
   const { manager, transport } = await connectedManager()
 

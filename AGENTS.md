@@ -283,6 +283,16 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   `reconnect` remain serial-strict. This addition is not in published beta.1.
   The packed Vite/Chromium consumer checks selected-device SN discovery with
   an empty serial input and enforces the picker user-gesture requirement.
+  Normalize core 16/32-bit UUID strings to canonical lowercase 128-bit UUIDs
+  at both native GATT lookup calls, not only cache keys. The browser fixture
+  must use Chromium's `BluetoothUUID` validation so it cannot hide invalid aliases.
+  Web Bluetooth blocks standard `180A/2A25`: real Web serial reads must use the
+  read-only B07A0008 identity alias from the manifest. Keep the Rust exact-SN
+  workflow and native transports unchanged; missing firmware support fails
+  closed. Packed browser fakes must reject `2A25`, not just invalid UUID syntax.
+  Capability decoding must recognize the existing firmware upload-context and
+  recovery bits (8/9, observed batch flags `0x37f`) while rejecting unknown bits.
+  Recognition is not workflow authorization or physical upload acceptance.
   A missing Web Bluetooth implementation must fail as
   `unsupported_browser` before opening the picker, snapshots must re-verify the
   serial, and OTA reboot recovery may enumerate only the previously verified

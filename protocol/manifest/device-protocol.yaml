@@ -73,6 +73,13 @@ services:
       - { name: CHAR_DEVICE_LOG_CONTROL, uuid: B07A0007-0001-1000-8000-00805F9B34FB }
       - { name: CHAR_DEVICE_LOG_DATA, uuid: B07A0007-0002-1000-8000-00805F9B34FB }
 
+  # Web Bluetooth blocks the standard 2A25 unique identifier. This read-only
+  # alias uses the same manufacturing serial; native clients keep 180A/2A25.
+  - name: SERVICE_BOTA_IDENTITY
+    uuid: B07A0008-0000-1000-8000-00805F9B34FB
+    characteristics:
+      - { name: CHAR_BOTA_SERIAL_NUMBER, uuid: B07A0008-0001-1000-8000-00805F9B34FB }
+
 constantGroups:
   device_types:
     DEVICE_TYPE_PIN: 1
@@ -335,6 +342,8 @@ dwordConstantGroups:
     ENCRYPTED_UPLOAD_V2_CAP_AUTHENTICATED_RECEIPT: 32
     ENCRYPTED_UPLOAD_V2_CAP_BATCH: 64
     ENCRYPTED_UPLOAD_V2_CAP_STREAMING: 128
+    ENCRYPTED_UPLOAD_V2_CAP_UPLOAD_CONTEXT: 256
+    ENCRYPTED_UPLOAD_V2_CAP_EXPIRED_SESSION_RECOVERY: 512
 
 byteStrings:
   ENCRYPTED_UPLOAD_V2_STORAGE_MAGIC: 424f5441454e4332
