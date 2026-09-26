@@ -3432,6 +3432,63 @@ data class BotaEventMessage (
     return "BotaEventMessage(subscriptionId=$subscriptionId, payload=$payload)"
   }
 }
+
+/** Generated class from Pigeon that represents data sent in messages. */
+data class BotaClientContextMessage (
+  val schemaVersion: Long,
+  val sessionId: String,
+  val sequence: Long,
+  val platform: String,
+  val sdkPackage: String,
+  val sdkVersion: String
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): BotaClientContextMessage {
+      val schemaVersion = pigeonVar_list[0] as Long
+      val sessionId = pigeonVar_list[1] as String
+      val sequence = pigeonVar_list[2] as Long
+      val platform = pigeonVar_list[3] as String
+      val sdkPackage = pigeonVar_list[4] as String
+      val sdkVersion = pigeonVar_list[5] as String
+      return BotaClientContextMessage(schemaVersion, sessionId, sequence, platform, sdkPackage, sdkVersion)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      schemaVersion,
+      sessionId,
+      sequence,
+      platform,
+      sdkPackage,
+      sdkVersion,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other == null || other.javaClass != javaClass) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    val other = other as BotaClientContextMessage
+    return BotaApiPigeonUtils.deepEquals(this.schemaVersion, other.schemaVersion) && BotaApiPigeonUtils.deepEquals(this.sessionId, other.sessionId) && BotaApiPigeonUtils.deepEquals(this.sequence, other.sequence) && BotaApiPigeonUtils.deepEquals(this.platform, other.platform) && BotaApiPigeonUtils.deepEquals(this.sdkPackage, other.sdkPackage) && BotaApiPigeonUtils.deepEquals(this.sdkVersion, other.sdkVersion)
+  }
+
+  override fun hashCode(): Int {
+    var result = javaClass.hashCode()
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.schemaVersion)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.sessionId)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.sequence)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.platform)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.sdkPackage)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.sdkVersion)
+    return result
+  }
+  override fun toString(): String {
+    return "BotaClientContextMessage(schemaVersion=$schemaVersion, sessionId=$sessionId, sequence=$sequence, platform=$platform, sdkPackage=$sdkPackage, sdkVersion=$sdkVersion)"
+  }
+}
 private open class BotaApiPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
@@ -3805,6 +3862,11 @@ private open class BotaApiPigeonCodec : StandardMessageCodec() {
           BotaEventMessage.fromList(it)
         }
       }
+      203.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          BotaClientContextMessage.fromList(it)
+        }
+      }
       else -> super.readValueOfType(type, buffer)
     }
   }
@@ -4106,6 +4168,10 @@ private open class BotaApiPigeonCodec : StandardMessageCodec() {
         stream.write(202)
         writeValue(stream, value.toList())
       }
+      is BotaClientContextMessage -> {
+        stream.write(203)
+        writeValue(stream, value.toList())
+      }
       else -> super.writeValue(stream, value)
     }
   }
@@ -4120,6 +4186,7 @@ interface BotaHostApi {
   suspend fun reconnect(operationId: String, serialNumber: String, hint: BotaReconnectHintMessage): BotaConnectedDeviceMessage
   suspend fun disconnect(operationId: String)
   suspend fun readDeviceStatus(operationId: String): BotaDeviceStatusMessage
+  suspend fun nextClientPresence(operationId: String, deviceId: String): BotaClientContextMessage?
   suspend fun cancelDeviceOperation(operationId: String)
   suspend fun startRecording(operationId: String, device: BotaDeviceReferenceMessage, grantBlob: String)
   suspend fun stopRecording(operationId: String, device: BotaDeviceReferenceMessage, grantBlob: String)
@@ -4268,6 +4335,26 @@ interface BotaHostApi {
             CoroutineScope(Dispatchers.Main).launch {
               val wrapped: List<Any?> = try {
                 listOf(api.readDeviceStatus(operationIdArg))
+              } catch (exception: Throwable) {
+                BotaApiPigeonUtils.wrapError(exception)
+              }
+              reply.reply(wrapped)
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.bota_flutter_sdk.BotaHostApi.nextClientPresence$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val operationIdArg = args[0] as String
+            val deviceIdArg = args[1] as String
+            CoroutineScope(Dispatchers.Main).launch {
+              val wrapped: List<Any?> = try {
+                listOf(api.nextClientPresence(operationIdArg, deviceIdArg))
               } catch (exception: Throwable) {
                 BotaApiPigeonUtils.wrapError(exception)
               }

@@ -693,6 +693,7 @@ private class FakeAndroidClient(
     private val suspendReadStatus: Boolean = false,
     failDeviceCancellation: Boolean = false,
 ) : BotaAndroidClient {
+    override suspend fun nextClientPresence(deviceId: String): dev.bota.sdk.SDKClientContext? = null
     val invocations = mutableListOf<String>()
     val configureStarted = CompletableDeferred<Unit>()
     val resumeConfigure = CompletableDeferred<Unit>()

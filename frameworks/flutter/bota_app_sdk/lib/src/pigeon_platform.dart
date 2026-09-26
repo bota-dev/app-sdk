@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 
 import 'bridge_mapper.dart';
 import 'client.dart';
+import 'client_presence.dart';
+import 'sdk_identity.dart';
 import 'errors.dart';
 import 'generated/bota_api.g.dart';
 import 'models/device.dart';
@@ -269,6 +271,30 @@ final class PigeonBotaPlatform implements BotaPlatform, BotaFlutterApi {
     (String operationId) async =>
         BridgeMapper.deviceStatus(await _hostApi.readDeviceStatus(operationId)),
   );
+
+  @override
+  Future<SdkClientContext?> nextClientPresence(String deviceId) async {
+    if (_destroying || _destroyed) return null;
+    try {
+      final report = await _runOperation<BotaClientContextMessage?>(
+        BotaOperation.readStatus,
+        (String operationId) =>
+            _hostApi.nextClientPresence(operationId, deviceId),
+      );
+      if (_destroying || _destroyed || report == null) return null;
+      return SdkClientContext(
+        schemaVersion: report.schemaVersion,
+        sessionId: report.sessionId,
+        sequence: report.sequence,
+        platform: report.platform,
+        sdkPackage: sdkPackage,
+        sdkVersion: sdkVersion,
+      );
+    } catch (_) {
+      if (_destroying || _destroyed) return null;
+      rethrow;
+    }
+  }
 
   @override
   Stream<BotaDeviceStatus> get status => _stream<BotaDeviceStatus>(

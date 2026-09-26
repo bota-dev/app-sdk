@@ -51,6 +51,53 @@
               }
             ]
           },
+          "NativeClientContext": {
+            "type": "ObjectTypeAnnotation",
+            "properties": [
+              {
+                "name": "schemaVersion",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "sessionId",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "sequence",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "NumberTypeAnnotation"
+                }
+              },
+              {
+                "name": "platform",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "sdkPackage",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
+                "name": "sdkVersion",
+                "optional": false,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              }
+            ]
+          },
           "NativeConfiguration": {
             "type": "ObjectTypeAnnotation",
             "properties": [
@@ -1952,6 +1999,32 @@
           ],
           "methods": [
             {
+              "name": "nextClientPresence",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "NullableTypeAnnotation",
+                    "typeAnnotation": {
+                      "type": "TypeAliasTypeAnnotation",
+                      "name": "NativeClientContext"
+                    }
+                  }
+                },
+                "params": [
+                  {
+                    "name": "deviceId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
               "name": "configure",
               "optional": false,
               "typeAnnotation": {
@@ -3555,11 +3628,11 @@
     "android": [
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaDeviceSDKSpec.java",
-        "sha256": "82e288251f50d1c53d3640e979585242ef07eb838872f5db48c37e4cb3c839cd"
+        "sha256": "9110948d172e53c757c09605117435ff6d5031e29e49fbb32afe545ec302742d"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "d8f56a124885f1c415f263c729e2f6c436133745a7ad4ade3edf8360b2596f54"
+        "sha256": "ae7a5fc1f29bed648fe0f7e9804e682431740182b54912eae74eb63d89b2e439"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -3571,23 +3644,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "4b354a2d62aa5113c5eb78c395bb706ded19e5663d91a692e6e0c3f5cb7c4412"
+        "sha256": "d083f18752d4d144c81ffd7a70d34630df0c3883c667a81277bc9325e69bb0c6"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "1ed6a1cdf0005a89698fc1efb606feaa7b0f3a7db32ec044d03fe18a58eeafdb"
+        "sha256": "d7e0660e56aff70bf36c28b83d36b646d39ae2a7892630e9f6809703e77b0d65"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "b82ad40be5f970788d4ad43b4152c48ec389bb91d56cd7f50ae23741e4ead9c2"
+        "sha256": "3150fd9181eefe9f77460ae167a5c8fbd3ff19e1e4655dd30f21b93a28c18d97"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "4b354a2d62aa5113c5eb78c395bb706ded19e5663d91a692e6e0c3f5cb7c4412"
+        "sha256": "d083f18752d4d144c81ffd7a70d34630df0c3883c667a81277bc9325e69bb0c6"
       }
     ]
   },
-  "contractDigest": "57628942752dff688ffb4de11e2fe453ce44d9174c9be50d6fed1613af879aee"
+  "contractDigest": "79d3b4909eea89ef22e97b8d8504a5a1dab199848b607127054744017bf0fa02"
 }

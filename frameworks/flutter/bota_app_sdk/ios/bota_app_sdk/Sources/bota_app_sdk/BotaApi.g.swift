@@ -3409,6 +3409,66 @@ struct BotaEventMessage: Hashable, CustomStringConvertible {
   }
 }
 
+/// Generated class from Pigeon that represents data sent in messages.
+struct BotaClientContextMessage: Hashable, CustomStringConvertible {
+  var schemaVersion: Int64
+  var sessionId: String
+  var sequence: Int64
+  var platform: String
+  var sdkPackage: String
+  var sdkVersion: String
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> BotaClientContextMessage? {
+    let schemaVersion = pigeonVar_list[0] as! Int64
+    let sessionId = pigeonVar_list[1] as! String
+    let sequence = pigeonVar_list[2] as! Int64
+    let platform = pigeonVar_list[3] as! String
+    let sdkPackage = pigeonVar_list[4] as! String
+    let sdkVersion = pigeonVar_list[5] as! String
+
+    return BotaClientContextMessage(
+      schemaVersion: schemaVersion,
+      sessionId: sessionId,
+      sequence: sequence,
+      platform: platform,
+      sdkPackage: sdkPackage,
+      sdkVersion: sdkVersion
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      schemaVersion,
+      sessionId,
+      sequence,
+      platform,
+      sdkPackage,
+      sdkVersion,
+    ]
+  }
+  static func == (lhs: BotaClientContextMessage, rhs: BotaClientContextMessage) -> Bool {
+    if Swift.type(of: lhs) != Swift.type(of: rhs) {
+      return false
+    }
+    return BotaApiPigeonInternal.deepEquals(lhs.schemaVersion, rhs.schemaVersion) && BotaApiPigeonInternal.deepEquals(lhs.sessionId, rhs.sessionId) && BotaApiPigeonInternal.deepEquals(lhs.sequence, rhs.sequence) && BotaApiPigeonInternal.deepEquals(lhs.platform, rhs.platform) && BotaApiPigeonInternal.deepEquals(lhs.sdkPackage, rhs.sdkPackage) && BotaApiPigeonInternal.deepEquals(lhs.sdkVersion, rhs.sdkVersion)
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine("BotaClientContextMessage")
+    BotaApiPigeonInternal.deepHash(value: schemaVersion, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: sessionId, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: sequence, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: platform, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: sdkPackage, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: sdkVersion, hasher: &hasher)
+  }
+
+  public var description: String {
+    return "BotaClientContextMessage(schemaVersion: \(String(describing: schemaVersion)), sessionId: \(String(describing: sessionId)), sequence: \(String(describing: sequence)), platform: \(String(describing: platform)), sdkPackage: \(String(describing: sdkPackage)), sdkVersion: \(String(describing: sdkVersion)))"
+  }
+}
+
 private class BotaApiPigeonCodecReader: FlutterStandardReader {
   override func readValue(ofType type: UInt8) -> Any? {
     switch type {
@@ -3568,6 +3628,8 @@ private class BotaApiPigeonCodecReader: FlutterStandardReader {
       return BotaSubscriptionCompleteEventMessage.fromList(self.readValue() as! [Any?])
     case 202:
       return BotaEventMessage.fromList(self.readValue() as! [Any?])
+    case 203:
+      return BotaClientContextMessage.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
     }
@@ -3798,6 +3860,9 @@ private class BotaApiPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? BotaEventMessage {
       super.writeByte(202)
       super.writeValue(value.toList())
+    } else if let value = value as? BotaClientContextMessage {
+      super.writeByte(203)
+      super.writeValue(value.toList())
     } else {
       super.writeValue(value)
     }
@@ -3827,6 +3892,7 @@ protocol BotaHostApi {
   func reconnect(operationId: String, serialNumber: String, hint: BotaReconnectHintMessage) async throws -> BotaConnectedDeviceMessage
   func disconnect(operationId: String) async throws
   func readDeviceStatus(operationId: String) async throws -> BotaDeviceStatusMessage
+  func nextClientPresence(operationId: String, deviceId: String) async throws -> BotaClientContextMessage?
   func cancelDeviceOperation(operationId: String) async throws
   func startRecording(operationId: String, device: BotaDeviceReferenceMessage, grantBlob: String) async throws
   func stopRecording(operationId: String, device: BotaDeviceReferenceMessage, grantBlob: String) async throws
@@ -3967,6 +4033,24 @@ class BotaHostApiSetup {
       }
     } else {
       readDeviceStatusChannel.setMessageHandler(nil)
+    }
+    let nextClientPresenceChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bota_flutter_sdk.BotaHostApi.nextClientPresence\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      nextClientPresenceChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let operationIdArg = args[0] as! String
+        let deviceIdArg = args[1] as! String
+        Task { @MainActor in
+          do {
+            let result = try await api.nextClientPresence(operationId: operationIdArg, deviceId: deviceIdArg)
+            reply(wrapResult(result))
+          } catch {
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      nextClientPresenceChannel.setMessageHandler(nil)
     }
     let cancelDeviceOperationChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.bota_flutter_sdk.BotaHostApi.cancelDeviceOperation\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {

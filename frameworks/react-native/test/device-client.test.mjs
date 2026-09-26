@@ -4,6 +4,40 @@ import { test } from 'node:test';
 
 const require = createRequire(import.meta.url);
 const { createBotaDeviceSDK } = require('../lib/commonjs/client.js');
+const sdkPackage = require('../package.json');
+
+test('presence delegates native identity and sequence without additional device effects', async () => {
+  const calls = [];
+  let report = { schemaVersion: 1, sessionId: 'f5dd6f48-1f35-4f67-aac1-7d90888da169', sequence: 3,
+    platform: 'ios', sdkPackage: 'BotaAppSDK', sdkVersion: 'native-version' };
+  const client = createBotaDeviceSDK({ async nextClientPresence(deviceId) {
+    calls.push(deviceId);
+    return report;
+  } });
+  assert.deepEqual(await client.clientPresence.nextReport('device-1'), {
+    ...report, sdkPackage: sdkPackage.name, sdkVersion: sdkPackage.version,
+  });
+  report = null;
+  assert.equal(await client.clientPresence.nextReport('device-1'), null);
+  assert.deepEqual(calls, ['device-1', 'device-1']);
+  await assert.rejects(createBotaDeviceSDK(null).clientPresence.nextReport('device-1'),
+    { code: 'native_module_unavailable' });
+});
+
+test('destroy rejects late presence results without creating a JS session', async () => {
+  let finish;
+  let calls = 0;
+  const client = createBotaDeviceSDK({
+    async nextClientPresence() { calls++; return new Promise(resolve => { finish = resolve; }); },
+    async destroy() {},
+  });
+  const pending = client.clientPresence.nextReport('device-1');
+  await client.destroy();
+  finish({ schemaVersion: 1, sessionId: 'old', sequence: 1, platform: 'ios' });
+  assert.equal(await pending, null);
+  assert.equal(await client.clientPresence.nextReport('device-1'), null);
+  assert.equal(calls, 1);
+});
 const { subscribeToCompatibilityDisconnections } = require(
   '../lib/commonjs/compatibility/runtime.js'
 );

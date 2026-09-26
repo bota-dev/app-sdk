@@ -7,7 +7,17 @@ The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
 do not install both packages in the same application. Historical 1.x releases
 remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.2`.
 Version `2.0.0-beta.1` remains the verified published release until the protected
-CI release completes. Flutter runtime APIs are unchanged in this candidate.
+CI release completes. The client-presence API below is unreleased source.
+
+### Client presence
+
+`client.clientPresence.nextReport(deviceId)` returns `SdkClientContext?` for
+the native verified connection, using Flutter package/version labels without
+changing native session identity or sequence. It returns null after destroy,
+does not send a heartbeat, and does not perform a GATT read. The host explicitly
+relays it with fresh device status and the current binding scope; see the root
+README. No app name or persistent client identifier is collected. This API
+supports the same iOS/Android targets as the facade, not Flutter Web or desktop.
 
 The explicit Pigeon `dart_package_name` remains `bota_flutter_sdk`. This is
 an internal message-channel identity, not the pub.dev package name; preserving

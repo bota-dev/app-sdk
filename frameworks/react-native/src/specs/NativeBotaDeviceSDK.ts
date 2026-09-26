@@ -353,7 +353,17 @@ export type NativeDeviceWiFiScanResult = {
   currentSsid?: string;
 };
 
+export type NativeClientContext = {
+  schemaVersion: number;
+  sessionId: string;
+  sequence: number;
+  platform: string;
+  sdkPackage: string;
+  sdkVersion: string;
+};
+
 export interface Spec extends TurboModule {
+  nextClientPresence: (deviceId: string) => Promise<NativeClientContext | null>;
   readonly onDeviceDiscovered: EventEmitter<NativeDiscoveredDevice>;
   readonly onDeviceDisconnected: EventEmitter<NativeDeviceDisconnection>;
   readonly onDeviceStatusUpdated: EventEmitter<NativeDeviceStatus>;

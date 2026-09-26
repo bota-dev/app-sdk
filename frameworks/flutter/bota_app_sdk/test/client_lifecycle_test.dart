@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:bota_app_sdk/src/sdk_identity.dart';
 
 import 'package:bota_app_sdk/bota_app_sdk.dart';
 import 'package:bota_app_sdk/src/generated/bota_api.g.dart';
@@ -11,6 +12,35 @@ import 'support/in_memory_bota_host_api.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test(
+    'presence preserves native session and sequence and is null after destroy',
+    () async {
+      final host = InMemoryBotaHostApi();
+      final client = BotaDeviceClient.forTesting(
+        PigeonBotaPlatform(hostApi: host),
+      );
+      host.clientContext = BotaClientContextMessage(
+        schemaVersion: 1,
+        sessionId: 'f5dd6f48-1f35-4f67-aac1-7d90888da169',
+        sequence: 4,
+        platform: 'android',
+        sdkPackage: 'native',
+        sdkVersion: 'native',
+      );
+      final report = await client.clientPresence.nextReport('device-1');
+      expect(report?.sessionId, host.clientContext?.sessionId);
+      expect(report?.sequence, 4);
+      expect(report?.sdkPackage, sdkPackage);
+      expect(report?.sdkVersion, sdkVersion);
+      expect(host.methodNames, ['nextClientPresence']);
+      expect(host.calls.single.value, 'device-1');
+      await client.destroy();
+      final callCount = host.calls.length;
+      expect(await client.clientPresence.nextReport('device-1'), isNull);
+      expect(host.calls.length, callCount);
+    },
+  );
 
   test('request IDs are unique lowercase 128-bit hexadecimal values', () {
     final Set<String> ids = List<String>.generate(

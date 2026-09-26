@@ -7,6 +7,15 @@ into the native Apple and Android SDKs.
 
 ## Requirements
 
+Unreleased source adds `BotaDeviceSDK.clientPresence.nextReport(deviceId)`.
+It returns `SdkClientContext | null` from the native verified connection,
+preserving native session/sequence while identifying this React Native package
+and its generated version. It makes no HTTP call or device command. Destroy
+discards late metadata results. The host explicitly relays a report alongside
+fresh status; see the root README. The frozen compatibility `BotaClient` and
+compatibility `DeviceManager` APIs are unchanged. Rebuild native binaries when
+adopting this source API; published-package availability is a separate gate.
+
 - React Native `0.86.3` or newer with the New Architecture enabled
 - iOS `15.1` or newer
 - Android API `26` or newer

@@ -90,6 +90,7 @@ internal interface BotaAndroidClient : NativeLeaseClient {
     suspend fun reconnect(serialNumber: String, hint: DeviceReconnectHint): ConnectedDevice
     suspend fun disconnect()
     suspend fun readDeviceStatus(): DeviceStatus
+    suspend fun nextClientPresence(deviceId: String): dev.bota.sdk.SDKClientContext?
     suspend fun cancelDeviceOperation()
     suspend fun startRecording(device: ConnectedDevice, grantBlob: String)
     suspend fun stopRecording(device: ConnectedDevice, grantBlob: String)
@@ -188,6 +189,7 @@ internal object BotaAndroidNativeClient : BotaAndroidClient {
         client.devices.reconnect(serialNumber, hint)
     override suspend fun disconnect() = client.devices.disconnect()
     override suspend fun readDeviceStatus() = client.devices.readStatus()
+    override suspend fun nextClientPresence(deviceId: String) = client.clientPresence.nextReport(deviceId)
     override suspend fun cancelDeviceOperation() = client.devices.cancelCurrentOperation()
     override suspend fun startRecording(device: ConnectedDevice, grantBlob: String) =
         validateRecordingControl(client.controls.requestStartRecording(device, grantBlob))
@@ -427,6 +429,14 @@ internal class BotaAndroidAdapter(
     override suspend fun readDeviceStatus(operationId: String): BotaDeviceStatusMessage =
         perform(operationId, NativeOperationCategory.DEVICE) {
             BotaAndroidMapper.deviceStatus(client.readDeviceStatus())
+        }
+
+    override suspend fun nextClientPresence(operationId: String, deviceId: String): BotaClientContextMessage? =
+        perform(operationId, NativeOperationCategory.DEVICE) {
+            client.nextClientPresence(deviceId)?.let { report ->
+                BotaClientContextMessage(report.schemaVersion.toLong(), report.sessionId, report.sequence,
+                    report.platform, report.sdkPackage, report.sdkVersion)
+            }
         }
 
     override suspend fun cancelDeviceOperation(operationId: String) = cancel(

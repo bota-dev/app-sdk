@@ -12,6 +12,16 @@ final class HostCall {
 }
 
 final class InMemoryBotaHostApi extends BotaHostApi {
+  BotaClientContextMessage? clientContext;
+  @override
+  Future<BotaClientContextMessage?> nextClientPresence(
+    String operationId,
+    String deviceId,
+  ) async {
+    _record('nextClientPresence', operationId, deviceId);
+    return clientContext;
+  }
+
   final List<HostCall> calls = <HostCall>[];
   final Map<String, BotaSubscriptionRequestMessage> subscriptions =
       <String, BotaSubscriptionRequestMessage>{};

@@ -1306,6 +1306,7 @@ private actor OperationAcquisitionBarrier {
 }
 
 private actor AdapterTestClient: BotaAppleClientProtocol {
+  func nextClientPresence(deviceID: String) async throws -> SDKClientContext? { nil }
   private(set) var invocations: [String] = []
   private(set) var destroyCount = 0
   private(set) var deviceCancellationCount = 0

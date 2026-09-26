@@ -974,6 +974,18 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
   }];
 }
 
+- (void)nextClientPresence:(NSString *)deviceId resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject
+{
+  [[BotaDeviceSDKAppleBridge shared] nextClientPresenceWithDeviceID:deviceId
+      completion:^(NSDictionary *_Nullable report, NSError *_Nullable error) {
+        if (error != nil) {
+          reject(@"client_presence_failed", error.localizedDescription, error);
+        } else {
+          resolve(report);
+        }
+      }];
+}
+
 - (void)readStatus:(RCTPromiseResolveBlock)resolve
              reject:(RCTPromiseRejectBlock)reject
 {

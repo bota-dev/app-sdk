@@ -18,6 +18,7 @@ void main() {
       'reconnect',
       'disconnect',
       'readDeviceStatus',
+      'nextClientPresence',
       'cancelDeviceOperation',
       'startRecording',
       'stopRecording',

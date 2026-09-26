@@ -457,6 +457,21 @@ internal class BotaDeviceSDKModule(
         launchValue(promise) { devices.readStatus().toWritableMap() }
     }
 
+    override fun nextClientPresence(deviceId: String, promise: Promise) {
+        launchValue(promise) {
+            devices.nextClientPresence(deviceId)?.let { report ->
+                Arguments.createMap().apply {
+                    putInt("schemaVersion", report.schemaVersion)
+                    putString("sessionId", report.sessionId)
+                    putDouble("sequence", report.sequence.toDouble())
+                    putString("platform", report.platform)
+                    putString("sdkPackage", report.sdkPackage)
+                    putString("sdkVersion", report.sdkVersion)
+                }
+            }
+        }
+    }
+
     override fun startStatusUpdates(promise: Promise) {
         launch(promise) {
             devices.startStatusUpdates(

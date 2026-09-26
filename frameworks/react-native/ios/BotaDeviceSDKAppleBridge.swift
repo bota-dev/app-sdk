@@ -1367,6 +1367,21 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
+    @objc(nextClientPresenceWithDeviceID:completion:)
+    public func nextClientPresence(deviceID: String, completion: @escaping @Sendable (NSDictionary?, NSError?) -> Void) {
+        Task {
+            do {
+                guard let report = try await devices.nextClientPresence(deviceID: deviceID) else {
+                    completion(nil, nil)
+                    return
+                }
+                completion(["schemaVersion": report.schemaVersion, "sessionId": report.sessionID,
+                            "sequence": report.sequence, "platform": report.platform,
+                            "sdkPackage": report.sdkPackage, "sdkVersion": report.sdkVersion], nil)
+            } catch { completion(nil, error as NSError) }
+        }
+    }
+
     @objc(readStatusWithCompletion:)
     public func readStatus(
         completion: @escaping @Sendable ([String: Any]?, NSError?) -> Void

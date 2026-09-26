@@ -14,14 +14,17 @@ protocol BotaDeviceSDKAppleDeviceClient: Sendable {
     ) async throws -> ConnectedDevice
     func disconnect() async throws
     func readStatus() async throws -> DeviceStatus
+    func nextClientPresence(deviceID: String) async throws -> SDKClientContext?
     func statusUpdates() async throws -> AsyncThrowingStream<DeviceStatus, Error>
 }
 
 struct BotaDeviceSDKSharedAppleDeviceClient: BotaDeviceSDKAppleDeviceClient {
     private let devices: DeviceManager
+    private let presence: ClientPresence
 
     init(client: BotaDeviceClient = .shared) {
         devices = client.devices
+        presence = client.clientPresence
     }
 
     func startScan(
@@ -55,6 +58,10 @@ struct BotaDeviceSDKSharedAppleDeviceClient: BotaDeviceSDKAppleDeviceClient {
 
     func readStatus() async throws -> DeviceStatus {
         try await devices.readStatus()
+    }
+
+    func nextClientPresence(deviceID: String) async throws -> SDKClientContext? {
+        try await presence.nextReport(deviceID: deviceID)
     }
 
     func statusUpdates() async throws -> AsyncThrowingStream<DeviceStatus, Error> {
@@ -140,6 +147,10 @@ actor BotaDeviceSDKAppleDevices {
 
     func readStatus() async throws -> DeviceStatus {
         try await client.readStatus()
+    }
+
+    func nextClientPresence(deviceID: String) async throws -> SDKClientContext? {
+        try await client.nextClientPresence(deviceID: deviceID)
     }
 
     func startStatusUpdates(

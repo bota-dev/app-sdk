@@ -135,6 +135,7 @@ class BotaDeviceSDKAndroidDevicesTest {
         private val scanFailure: Throwable? = null,
         private val status: DeviceStatus = testDeviceStatus(),
     ) : BotaDeviceSDKAndroidDeviceClient {
+        override suspend fun nextClientPresence(deviceId: String): dev.bota.sdk.SDKClientContext? = null
         val scanOptions = mutableListOf<Pair<ULong, Boolean>>()
         val selectedIds = mutableListOf<String>()
         val reconnectSerials = mutableListOf<String>()
