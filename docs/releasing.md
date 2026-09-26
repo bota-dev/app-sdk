@@ -263,6 +263,13 @@ to the immutable package from the previous release. This mode is not used by
 the protected release workflow; tagged releases always use normal mode and its
 exact root-package checksum check.
 
+The matching `tools/apple/test-pod-archive.sh --evidence-only` lints a temporary
+podspec generated from that candidate archive's verified checksum. It never
+changes the committed podspec. Normal mode, including every tagged release,
+still rejects an archive that differs from the committed checksum. Regression
+tests cover stale release checksums, isolated candidate specs, and corrupt
+archives; CI must not compare new source against the preceding release archive.
+
 ## Local Release Gate
 
 Use Node.js 22 or newer and the Rust toolchain pinned by the repository:
