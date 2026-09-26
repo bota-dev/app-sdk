@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 internal interface CoreWorkflowRunner : AutoCloseable {
@@ -62,6 +64,7 @@ internal class CoreEngineRuntime(
     private val effectJobs = mutableMapOf<CoreCancellationId, MutableSet<Job>>()
     private val exactSettlements = mutableMapOf<CoreCancellationId, CompletableDeferred<CoreNotification>>()
     private val completedTerminals = mutableMapOf<CoreCancellationId, CompletableDeferred<CoreNotification>>()
+    private val cancellationMutex = Mutex()
     private var active: ActiveWorkflow? = null
     private var isDraining = false
     private var drainRequested = false
@@ -122,11 +125,21 @@ internal class CoreEngineRuntime(
     private suspend fun cancelInternal(
         cancellationId: CoreCancellationId,
         consumeExactSettlement: Boolean = true,
+    ): Boolean = cancellationMutex.withLock {
+        performCancellation(cancellationId, consumeExactSettlement)
+    }
+
+    private suspend fun performCancellation(
+        cancellationId: CoreCancellationId,
+        consumeExactSettlement: Boolean,
     ): Boolean {
         val confirmationAttempted = effectHandler.confirmationAttemptedOrClaimCancellation(cancellationId)
         val snapshot = withContext(dispatcher) {
-            active?.takeIf { it.cancellationId == cancellationId } to
-                (exactSettlements[cancellationId] ?: completedTerminals[cancellationId])
+            Triple(
+                active?.takeIf { it.cancellationId == cancellationId },
+                exactSettlements[cancellationId] ?: completedTerminals[cancellationId],
+                exactSettlements.containsKey(cancellationId),
+            )
         }
         if (confirmationAttempted) {
             val terminal = snapshot.first?.terminal ?: snapshot.second ?: throw BotaSDKError.Core(
@@ -141,11 +154,14 @@ internal class CoreEngineRuntime(
         }
         val owner = snapshot.first
             ?: return snapshot.second?.let {
-                awaitExactSettlement(cancellationId, it, consumeExactSettlement)
+                // Collector teardown and explicit stop can cancel the same ordinary workflow.
+                if (!snapshot.third && it.await().kind == CoreNotificationKind.Cancelled) false
+                else awaitExactSettlement(cancellationId, it, consumeExactSettlement)
             } ?: false
         var primary: Throwable? = null
         var coreFailure: Throwable? = null
         var cancellationDeferred = false
+        val runningJobs = withContext(dispatcher) { effectJobs[cancellationId].orEmpty().toSet() }
         try {
             withContext(dispatcher) {
                 core.cancel(cancellationId.high, cancellationId.low)
@@ -169,7 +185,8 @@ internal class CoreEngineRuntime(
         }
         val jobs = withContext(dispatcher) {
             effectJobs.remove(cancellationId).orEmpty().toList().also { owned ->
-                owned.forEach(Job::cancel)
+                // STOP/unsubscribe emitted by core.cancel must settle, not be cancelled.
+                owned.filter { it in runningJobs }.forEach(Job::cancel)
             }
         }
         jobs.joinAll()

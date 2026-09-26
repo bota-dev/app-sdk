@@ -24,6 +24,64 @@ import org.junit.Test
 
 class BluetoothGattHostTest {
     @Test
+    fun coreStandardUuidReadsExpandToTheBluetoothBaseUuid() = runTest {
+        val platform = FakeBluetoothPlatform()
+        val host = host(platform)
+        host.execute(effect(CoreEffectKind.BluetoothConnect, peripheralId = "device")).toList()
+
+        for ((service, characteristic) in listOf(
+            "180A" to "2A25",
+            "0000180a" to "00002a25",
+            BotaBluetoothUUIDs.DeviceInformationService.toString() to BotaBluetoothUUIDs.SerialNumber.toString(),
+        )) {
+            host.execute(effect(
+                CoreEffectKind.BluetoothRead,
+                serviceUuid = service,
+                characteristicUuid = characteristic,
+            )).toList()
+        }
+
+        assertEquals(
+            List(3) { BotaBluetoothUUIDs.DeviceInformationService to BotaBluetoothUUIDs.SerialNumber },
+            platform.readUuids,
+        )
+    }
+
+    @Test
+    fun subscriptionsPreserveTheCoreCharacteristicIdentityInCallbacks() = runTest {
+        val platform = FakeBluetoothPlatform()
+        val host = host(platform)
+        host.execute(effect(CoreEffectKind.BluetoothConnect, peripheralId = "device")).toList()
+        val characteristic = "B07A0007-0002-1000-8000-00805F9B34FB"
+
+        val events = host.execute(effect(
+            CoreEffectKind.BluetoothSubscribe,
+            serviceUuid = "B07A0007-0000-1000-8000-00805F9B34FB",
+            characteristicUuid = characteristic,
+        )).toList()
+
+        assertEquals(listOf(characteristic, characteristic), events.map { it.fields.text(32) })
+    }
+
+    @Test
+    fun malformedShortUuidsFailBeforeNativeRead() = runTest {
+        val platform = FakeBluetoothPlatform()
+        val host = host(platform)
+        host.execute(effect(CoreEffectKind.BluetoothConnect, peripheralId = "device")).toList()
+
+        for (uuid in listOf("180G", "0000180Z", "", "2A2")) {
+            assertTrue(runCatching {
+                host.execute(effect(
+                    CoreEffectKind.BluetoothRead,
+                    serviceUuid = uuid,
+                    characteristicUuid = "2A25",
+                )).toList()
+            }.isFailure)
+        }
+        assertTrue(platform.readUuids.isEmpty())
+    }
+
+    @Test
     fun notificationOverflowTerminatesTheStreamInsteadOfDroppingSilently() = runTest {
         val buffer = AndroidNotificationBuffer(capacity = 1)
         buffer.offer(byteArrayOf(1))
@@ -231,6 +289,7 @@ private class FakeBluetoothPlatform(
     val calls = mutableListOf<String>()
     val connected = mutableListOf<String>()
     val disconnected = mutableListOf<String>()
+    val readUuids = mutableListOf<Pair<UUID, UUID>>()
     val writeGate = mutableMapOf<String, CompletableDeferred<Unit>>()
     var nextStatus = 0
     var staleGeneration = false
@@ -265,6 +324,7 @@ private class FakeBluetoothPlatform(
     ): GattResult<ByteArray> {
         if (suspendReads) CompletableDeferred<Unit>().await()
         calls += "read:$peripheralId"
+        readUuids += serviceUuid to characteristicUuid
         return result(generation, byteArrayOf(3))
     }
 
@@ -335,9 +395,13 @@ private fun effect(
     operation: Int = 4,
     peripheralId: String? = null,
     allowDuplicates: Boolean = false,
+    serviceUuid: String? = null,
+    characteristicUuid: String? = null,
 ): CoreEffect {
     val fields = buildList {
         peripheralId?.let { add(NativeField(4, NativePacket.FIELD_TYPE_UTF8, data = it.encodeToByteArray())) }
+        serviceUuid?.let { add(NativeField(31, NativePacket.FIELD_TYPE_UTF8, data = it.encodeToByteArray())) }
+        characteristicUuid?.let { add(NativeField(32, NativePacket.FIELD_TYPE_UTF8, data = it.encodeToByteArray())) }
         if (kind == CoreEffectKind.BluetoothStartScan) {
             add(NativeField(2, NativePacket.FIELD_TYPE_BOOL, unsigned = if (allowDuplicates) 1 else 0))
         }
