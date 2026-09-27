@@ -4,7 +4,8 @@
 
 `2.0.0-beta.4` prepares Web Bluetooth actions, passive client presence, and the
 reviewed connection/recovery guards on top of the beta.3 integration. See
-[Web integration evidence](testing/web-actions-integration.md). It is not yet
+[Web integration evidence](testing/web-actions-integration.md) and
+[beta.4 preflight](../release/evidence/2.0.0-beta.4-preflight.md). It is not yet
 published or physically accepted. All five facades remain synchronized; exact
 main CI, generated candidate inventory, and protected publication are required.
 The existing `v2.0.0-beta.3` tag and its release remain untouched.

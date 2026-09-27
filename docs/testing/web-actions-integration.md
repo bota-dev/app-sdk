@@ -35,3 +35,7 @@ them.
 
 The historical beta.2 manifest is preserved from main. New release artifact
 hashes must be generated for a new version, never copied into an occupied tag.
+
+The next synchronized candidate is `2.0.0-beta.4`; its fresh versioned checks
+and remaining gates are recorded in the
+[preflight](../../release/evidence/2.0.0-beta.4-preflight.md).
