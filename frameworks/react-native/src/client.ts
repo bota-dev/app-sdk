@@ -1,4 +1,5 @@
 import type {
+  NativeClientContext,
   NativeCapabilities,
   NativeConnectedDevice,
   NativeConfiguration,
@@ -29,6 +30,12 @@ import type {
   NativeDeviceWiFiScanResult,
   Spec,
 } from './specs/NativeBotaDeviceSDK';
+import { SDK_PACKAGE, SDK_VERSION } from './sdkIdentity';
+
+export type SdkClientContext = NativeClientContext;
+export type BotaClientPresence = {
+  nextReport(deviceId: string): Promise<SdkClientContext | null>;
+};
 import type {
   ConnectedDevice,
   ConnectionType,
@@ -433,6 +440,7 @@ export class BotaNativeModuleError extends Error {
 }
 
 export type BotaDeviceSDKClient = {
+  readonly clientPresence: BotaClientPresence;
   readonly controls: BotaDeviceSDKControlClient;
   readonly devices: BotaDeviceSDKDeviceClient;
   readonly factoryReset: BotaDeviceSDKFactoryResetClient;
@@ -817,6 +825,8 @@ const parseUploadQueue = (serialized: string): UploadTask[] => {
 };
 
 export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKClient => {
+  let presenceStopped = false;
+  let presenceGeneration = 0;
   const requireNativeModule = (): Spec => {
     if (!nativeModule) throw new BotaNativeModuleError();
     return nativeModule;
@@ -1513,6 +1523,15 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
   };
 
   const client: BotaDeviceSDKClient = {
+    clientPresence: {
+      async nextReport(deviceId) {
+        if (presenceStopped) return null;
+        const generation = presenceGeneration;
+        const report = await requireNativeModule().nextClientPresence(deviceId);
+        if (presenceStopped || generation !== presenceGeneration) return null;
+        return report === null ? null : { ...report, sdkPackage: SDK_PACKAGE, sdkVersion: SDK_VERSION };
+      },
+    },
     controls,
     devices,
     factoryReset,
@@ -1524,6 +1543,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     wifi,
 
     async configure(configuration = {}) {
+      const generation = presenceGeneration;
       const nativeConfiguration: NativeConfiguration = {
         logLevel: configuration.logLevel ?? 'warn',
         ...(configuration.applicationSupportDirectory
@@ -1534,9 +1554,12 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
           : {}),
       };
       await requireNativeModule().configure(nativeConfiguration);
+      if (generation === presenceGeneration) presenceStopped = false;
     },
 
     async destroy() {
+      presenceStopped = true;
+      presenceGeneration++;
       await requireNativeModule().destroy();
     },
 

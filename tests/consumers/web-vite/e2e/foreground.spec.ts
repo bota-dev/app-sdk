@@ -1,7 +1,34 @@
 import { expect, test, type Page } from '@playwright/test'
+import { readFileSync } from 'node:fs'
+
+const installedPackage = JSON.parse(readFileSync(new URL('../node_modules/@bota.dev/web-app-sdk/package.json', import.meta.url), 'utf8'))
 
 const SERIAL = 'GDPPSBZJN6'
 const OTHER_SERIAL = 'OTHERDEVICE1'
+
+test('packed SDK reports only its owned connection with exact artifact identity', async ({ page }) => {
+  await installBrowserFakes(page)
+  await page.goto('/')
+  await expect.poll(() => state(page, 'ready')).toBe(true)
+  const report = () => page.evaluate(() => (window as any).__botaConsumerTest.nextPresence())
+  expect(await report()).toBeNull()
+  await page.locator('#serial').fill(OTHER_SERIAL)
+  await page.locator('#connect').click()
+  await expect.poll(() => state(page, 'error')).toBe('identity_mismatch')
+  expect(await report()).toBeNull()
+  await page.locator('#serial').fill(SERIAL)
+  await page.locator('#connect').click()
+  await expect.poll(() => state(page, 'connectedSerial')).toBe(SERIAL)
+  const first = await report()
+  expect(first).toMatchObject({
+    schema_version: 1, sequence: 1, platform: 'web',
+    sdk_package: installedPackage.name, sdk_version: installedPackage.version,
+  })
+  expect(await report()).toMatchObject({ session_id: first.session_id, sequence: 2 })
+  await page.locator('#disconnect').click()
+  await expect.poll(() => state(page, 'connection')).toBe('disconnected')
+  expect(await report()).toBeNull()
+})
 const UUID = {
   serial: 'b07a0008-0001-1000-8000-00805f9b34fb',
   transferControl: 'b07a0004-0004-1000-8000-00805f9b34fb',

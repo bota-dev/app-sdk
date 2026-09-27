@@ -53,6 +53,9 @@ export const TRANSFER_STATUS_V2_CHARACTERISTIC =
   'b07a0004-000a-1000-8000-00805f9b34fb'
 export const RECORDING_LIST_V2_CHARACTERISTIC =
   'b07a0004-000b-1000-8000-00805f9b34fb'
+// Released upload-context characteristic, owned by protocol/manifest.
+export const UPLOAD_CONTEXT_V2_CHARACTERISTIC =
+  'b07a0004-000c-1000-8000-00805f9b34fb'
 export const BOTA_AUTH_SERVICE =
   `b07a0005${BLUETOOTH_BASE_UUID_SUFFIX}`
 export const DEVICE_PUBLIC_KEY_CHARACTERISTIC =

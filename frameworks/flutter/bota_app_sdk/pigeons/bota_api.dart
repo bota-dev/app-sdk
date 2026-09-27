@@ -758,6 +758,23 @@ class BotaEventMessage {
   BotaEventPayloadMessage payload;
 }
 
+class BotaClientContextMessage {
+  BotaClientContextMessage({
+    required this.schemaVersion,
+    required this.sessionId,
+    required this.sequence,
+    required this.platform,
+    required this.sdkPackage,
+    required this.sdkVersion,
+  });
+  int schemaVersion;
+  String sessionId;
+  int sequence;
+  String platform;
+  String sdkPackage;
+  String sdkVersion;
+}
+
 @HostApi()
 abstract class BotaHostApi {
   @async
@@ -785,6 +802,12 @@ abstract class BotaHostApi {
 
   @async
   BotaDeviceStatusMessage readDeviceStatus(String operationId);
+
+  @async
+  BotaClientContextMessage? nextClientPresence(
+    String operationId,
+    String deviceId,
+  );
 
   @async
   void cancelDeviceOperation(String operationId);

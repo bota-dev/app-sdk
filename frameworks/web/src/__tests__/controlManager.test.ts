@@ -8,6 +8,8 @@ import type { CoreBridge } from '../core.ts'
 import { DeviceManager } from '../deviceManager.ts'
 import { BotaSDKError } from '../errors.ts'
 import {
+  AUTH_NONCE_CHARACTERISTIC,
+  BOTA_AUTH_SERVICE,
   BOTA_CONTROL_SERVICE,
   BOTA_WIFI_CONFIG_SERVICE,
   DEVICE_COMMAND_CHARACTERISTIC,
@@ -51,7 +53,7 @@ class FakeRecordingControlProvider implements RecordingControlProvider {
   })
 
   async prepare(context: ProviderContext): Promise<{ grant: Uint8Array }> {
-    const { signal: _signal, ...snapshot } = context
+    const { signal: _signal, nonce: _nonce, ...snapshot } = context as ProviderContext & { nonce?: Uint8Array }
     this.calls.push(snapshot)
     this.signals.push(context.signal)
     const prepared = await this.prepareHandler(context)
@@ -130,6 +132,7 @@ async function createHarness(options: {
   const events: string[] = []
   const core = await createWasmCore(await wasmBytes)
   const transport = new FakeBrowserBluetoothTransport()
+  transport.setRead(BOTA_AUTH_SERVICE, AUTH_NONCE_CHARACTERISTIC, new Uint8Array(16).fill(1))
   transport.eventLog = events
   const runtime = new BrowserWorkflowRuntime(core, transport)
   const devices = new DeviceManager(core, transport, { runtime })
@@ -165,6 +168,37 @@ async function createHarness(options: {
     wifi,
   }
 }
+
+test('recording authorization receives a fresh nonce on every attempt and scrubs it afterwards', async () => {
+  const provider = new FakeRecordingControlProvider()
+  const copied: Array<Uint8Array | undefined> = []
+  const owned: Array<Uint8Array | undefined> = []
+  provider.prepareHandler = async context => {
+    const nonce = (context as ProviderContext & { nonce?: Uint8Array }).nonce
+    copied.push(nonce?.slice())
+    owned.push(nonce)
+    throw new BotaSDKError('authorization_expired', 'recording_control')
+  }
+  const harness = await createHarness({ provider })
+  for (const byte of [17, 34]) {
+    harness.transport.setRead(BOTA_AUTH_SERVICE, AUTH_NONCE_CHARACTERISTIC, new Uint8Array(16).fill(byte))
+    await assert.rejects(harness.controls.startRecording({ authorityId: 'current-device' }))
+  }
+  assert.deepEqual(copied, [new Uint8Array(16).fill(17), new Uint8Array(16).fill(34)])
+  for (const value of owned) assertZeroed(value)
+  assert.deepEqual(harness.transport.writes, [])
+})
+
+test('malformed authorization nonce fails before provider or device writes', async () => {
+  const harness = await createHarness()
+  harness.transport.setRead(BOTA_AUTH_SERVICE, AUTH_NONCE_CHARACTERISTIC, new Uint8Array(15))
+  harness.provider.prepareHandler = async () => {
+    throw new Error('provider must not be called')
+  }
+  await assert.rejects(harness.controls.stopRecording({ authorityId: 'current-device' }))
+  assert.equal(harness.provider.calls.length, 0)
+  assert.deepEqual(harness.transport.writes, [])
+})
 
 test('start passes exact authority context and uses grant, subscribe, Rust command sequencing', async () => {
   const harness = await createHarness()

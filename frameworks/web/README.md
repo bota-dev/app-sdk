@@ -13,11 +13,11 @@ dependency before adding its replacement. Storage namespaces do not change.
 
 ## Install
 
-This source prepares synchronized `2.0.0-beta.3`. After publication, pin the
+This source prepares synchronized `2.0.0-beta.4`. After publication, pin the
 exact version:
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.3
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.4
 ```
 
 Use a secure context in a desktop Chromium browser with Web Bluetooth. The
@@ -34,6 +34,36 @@ this endpoint cannot connect through Web and fails closed. Native SDKs keep
 their standard serial read. These source fixes require matching firmware and
 Web package releases before installed consumers get them. After upgrading,
 select the device in the picker again to grant access to the new service.
+
+## Local client metadata (source preview)
+
+`client.clientPresence.nextReport(device.id)` returns a local diagnostic report
+for the currently verified SDK device handle, or `null` when disconnected. It
+does not read Bluetooth, call a backend, or start a timer. The report contains
+`schema_version`, random per-connection `session_id`, increasing `sequence`,
+`platform`, and release-generated `sdk_package` / `sdk_version`. Reconnect
+rotates the session; disconnect and destroy invalidate it. A stale disconnect
+callback cannot clear a newer connection's report.
+
+```ts
+const device = await client.devices.connect({ expectedSerialNumber })
+const context = await client.clientPresence.nextReport(device.id)
+// Local-only by default. No HTTP is performed by this getter.
+```
+
+An integrating host may attach this report to its existing authenticated
+heartbeat relay after obtaining fresh device readings and verifying the same
+device/project/binding still owns the connection. The host adds the captured
+binding generation and, optionally, a developer-supplied app identifier. Reuse
+the same report for an immediate retry; never queue/replay stale observations.
+Stop reporting on hidden pages, logout, disconnect, or scope change. App
+identifier, SDK version and serial matching are not attestation or permission
+to deliver commands. Do not include phone names, persistent installation IDs,
+URLs, full user agents, location, or credentials. Metadata is self-reported
+operational information, not proof of continuous physical connectivity.
+
+This additive API is source-only until the next verified package publication;
+it is not present in the published beta.1 package.
 
 ## Create a client and provide backend boundaries
 
@@ -157,6 +187,9 @@ const provisioning: ProvisioningProvider = {
   },
 }
 
+// Each attempt reads a fresh 16-byte device nonce before invoking prepare.
+// The host forwards it as nonce_d to its authorized recording-grant endpoint.
+// Missing/malformed nonce fails closed. Do not retain callback bytes or grants.
 const recordingControl: RecordingControlProvider = {
   async prepare(context) {
     const response = await postHost<{ grantBase64: string }>(
@@ -166,6 +199,7 @@ const recordingControl: RecordingControlProvider = {
         serialNumber: context.serialNumber,
         action: context.action,
         authorityId: context.authorityId,
+        nonceHex: Array.from(context.nonce, byte => byte.toString(16).padStart(2, '0')).join(''),
       },
       context.signal,
     )
@@ -188,6 +222,18 @@ const firmwareDownload: FirmwareDownloadProvider = {
 }
 
 const recordingUpload: RecordingUploadProvider = {
+  async prepareUploadContext(context) {
+    const response = await postHost<{ contextId: string; challengeBase64: string }>(
+      '/sdk/recordings/v2/context', { serialNumber: context.serialNumber, nonceBase64: encodeBytes(context.nonce) }, context.signal)
+    return {
+      challenge: decodeBytes(response.challengeBase64),
+      async exchangeProof(proof, signal) {
+        const result = await postHost<{ resultBase64: string }>(
+          '/sdk/recordings/v2/context/proof', { contextId: response.contextId, proofBase64: encodeBytes(proof) }, signal)
+        return decodeBytes(result.resultBase64)
+      },
+    }
+  },
   async prepareLegacyUpload(context) {
     const response = await postHost<{
       uploadId: string
@@ -226,6 +272,8 @@ const recordingUpload: RecordingUploadProvider = {
     }>('/sdk/recordings/v2/prepare', {
       operationId: context.operationId,
       serialNumber: context.serialNumber,
+      nonceBase64: encodeBytes(context.nonce),
+      previousSession: context.previousSession,
       recording: {
         uuid: context.recording.uuid,
         generation: context.recording.generation,
@@ -336,6 +384,35 @@ waiting, observes late settlement, and ignores late results. The SDK sends
 operation-scoped upload and firmware requests
 with redirects disabled; providers must return the exact final HTTPS target
 rather than a redirecting URL.
+
+The source context callback relays the existing capability-bit-8 upload-only
+exchange before listing/authorization and before receipt delivery. Rust owns
+its codecs; the host returns opaque signed challenge/result bytes, not trusted
+time or key claims. Both recording control and v2 preparation receive a fresh
+16-byte device nonce. Treat these buffers as temporary and propagate cancellation.
+
+On resume, `previousSession` carries the persisted recording/session/owner even
+before a byte checkpoint exists. An explicitly recovered expired or nonce-changed session may
+return `replacesSessionId`; the default storage atomically replaces identity and
+resets offsets before transfer. Custom storage must implement
+`replaceEncryptedUploadV2Operation` to support this path. Fresh backend status
+may set `stagingAccepted`/`manifestAccepted` to avoid re-uploading accepted
+artifacts, but publication and exact receipt/device acknowledgement are still
+required. Never infer these flags from local HTTP PUT success.
+
+Replacement validates the signed document's structural owner, recording,
+ciphertext, policy and replacement flag through the shared Rust decoder before
+changing the journal or truncating retained bytes. This is not cryptographic
+verification; the device remains the signature authority. One exclusive owner
+covers fresh nonce/context reads, provider preparation and an atomic handoff to
+the transfer workflow. Disconnect aborts that preparation; a late provider cannot
+write on a new connection, even for the same serial.
+
+Hosts must reconcile lost session-creation responses through their authenticated
+backend contract and return the latest matching owner. Portal has adopted its
+scoped reconciliation and nonce-change recovery extension. Published-package
+and physical-device gates remain separate. Historical P10 relay must fail closed in a host that
+does not implement its dedicated relay endpoint; never send it to plaintext S3.
 
 Create one client for the signed-in tenant and keep it for the page lifetime:
 

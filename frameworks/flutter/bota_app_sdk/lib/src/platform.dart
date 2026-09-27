@@ -1,4 +1,5 @@
 import 'client.dart';
+import 'client_presence.dart';
 import 'models/device.dart';
 import 'models/ota.dart';
 import 'models/recording.dart';
@@ -12,6 +13,7 @@ abstract interface class BotaPlatform {
 
   Future<void> configure(BotaConfiguration configuration);
   Future<void> destroy();
+  Future<SdkClientContext?> nextClientPresence(String deviceId);
 
   Stream<BotaDiscoveredDevice> scan({
     Duration timeout = const Duration(seconds: 10),

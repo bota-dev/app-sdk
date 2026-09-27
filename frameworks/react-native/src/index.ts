@@ -7,6 +7,8 @@ export {
   createBotaDeviceSDK,
 } from './client';
 export type {
+  SdkClientContext,
+  BotaClientPresence,
   BotaAsyncEventSubscription,
   BotaDeviceSDKCapabilities,
   BotaDeviceSDKClient,

@@ -104,6 +104,10 @@ export interface BrowserSdkStorage {
     journal: RecordingJournal,
   ): Promise<void>
   deleteEncryptedUploadV2Operation(operationId: string): Promise<void>
+  replaceEncryptedUploadV2Operation?(
+    operationId: string, checkpoint: unknown, journal: RecordingJournal,
+    previous: { uploadSessionId: string; ownerRevision: number },
+  ): Promise<void>
   loadRecordingJournal(operationId: string): Promise<RecordingJournal | null>
   saveRecordingJournal(journal: RecordingJournal): Promise<void>
   listRecordingJournals(): Promise<RecordingJournal[]>

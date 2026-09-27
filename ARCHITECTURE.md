@@ -1024,6 +1024,33 @@ resolve a grant or resend destructive opcode `0x06`.
 
 ## Web facade
 
+Web v2 preparation holds the shared runtime's exclusive owner from fresh
+identity/context/nonce reads through the provider and durable journal writes.
+A one-shot synchronous handoff transfers that ownership to the Rust workflow;
+disconnect/destroy abort the provider and competing controls are rejected.
+Successor journal replacement checks structural authorization identity using
+the existing shared Rust decoder before dropping old checkpoints or bytes.
+The host owns backend reconciliation and the device owns signature validation.
+Apple presence lookup remains inside connection cancellation/ownership checks:
+a delayed identity read cannot restore a detached connection.
+
+Source-preview `client.clientPresence.nextReport(deviceId)` is passive metadata
+owned by the existing verified connection. It performs no BLE or HTTP work;
+connection completion creates a random session, reconnect rotates it, and
+disconnect/destroy invalidate it. Disconnect listener ownership fences late
+callbacks from a replaced connection. Reports expose only platform and public
+facade package/version plus session/sequence; the host owns any authorized
+heartbeat egress and binding scope. The shared lifecycle fixtures live under
+`protocol/client-presence/`. The source native getters use actor/lock-confined
+session state and check local adapter connection identity before issuing a
+report, failing closed on disconnect or a replaced transport. React Native
+Codegen and Flutter Pigeon relay native metadata, substituting only generated
+facade package/version labels; they do not mint a second session. Native and
+framework build evidence is tracked separately from Web and physical tests.
+`cargo xtask client-identity generate` derives all facade
+identity constants from `sdk-version.toml` and the existing public package
+matrix; `npm run check` rejects drift. No BLE wire protocol is added.
+
 `frameworks/web` is a publishable ESM facade over the private
 `bindings/device-sdk-wasm` bridge. Browser code owns Web Bluetooth lifecycle;
 the WASM core owns exact connection sequencing and protocol decoding.
@@ -1153,6 +1180,10 @@ local artifact; the browser stage validates the original inventory, source
 revision, tarball hash, and installed regular-file hashes without parsing the
 archive again before the production ESM/WASM Chromium cases run. CI then
 preserves the tarball and inventory unchanged for protected beta publication.
+The Linux test browser enables only Blink `WebBluetooth` so the fake GATT
+boundary uses Chromium's native UUID validator, with a preflight that rejects
+un-normalized string aliases. This is test configuration, not a browser
+permission bypass or a supported-platform expansion.
 The supervised Chromium/device matrix in
 `docs/testing/web-physical-device.md` is a separate release gate. Automated
 Chromium cases use deterministic fake Bluetooth and cannot satisfy it. For

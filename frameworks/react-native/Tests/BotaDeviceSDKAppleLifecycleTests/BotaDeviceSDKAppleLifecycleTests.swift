@@ -420,6 +420,7 @@ private actor StatusCapture {
 }
 
 private actor TestAppleDeviceClient: BotaDeviceSDKAppleDeviceClient {
+    func nextClientPresence(deviceID: String) async throws -> SDKClientContext? { nil }
     struct ScanOptions: Equatable, Sendable {
         let timeout: UInt64
         let allowDuplicates: Bool

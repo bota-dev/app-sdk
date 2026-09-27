@@ -1,4 +1,5 @@
 export 'src/client.dart' show BotaConfiguration, BotaDeviceClient;
+export 'src/client_presence.dart' show SdkClientContext, BotaClientPresence;
 export 'src/errors.dart' show BotaErrorCode, BotaOperation, BotaSdkException;
 export 'src/managers.dart'
     show

@@ -1,4 +1,5 @@
 import 'managers.dart';
+import 'client_presence.dart';
 import 'models/device.dart';
 import 'models/security.dart';
 import 'pigeon_platform.dart';
@@ -43,6 +44,7 @@ final class BotaDeviceClient {
   Set<BotaCapability> get capabilities =>
       Set<BotaCapability>.unmodifiable(_platform.capabilities);
   BotaDeviceManager get devices => _managers.devices;
+  late final BotaClientPresence clientPresence = BotaClientPresence(_platform);
   BotaControlManager get controls => _managers.controls;
   BotaProvisioningManager get provisioning => _managers.provisioning;
   BotaFactoryResetManager get factoryReset => _managers.factoryReset;

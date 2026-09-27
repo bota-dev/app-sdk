@@ -175,6 +175,7 @@ test('picker cancellation maps to the stable public error', async () => {
       return true
     },
   )
+  assert.equal(await manager.clientPresence.nextReport('browser-peripheral-1'), null)
 })
 
 test('known-device connect rejects non-string serials before the picker', async (t) => {
@@ -798,4 +799,48 @@ test('explicit disconnect is idempotent', async () => {
     transport.calls.filter((call) => call === 'disconnect:browser-peripheral-1').length,
     1,
   )
+})
+
+test('client exposes metadata only for the verified connection and performs no extra BLE reads', async () => {
+  const transport = new FakeBrowserBluetoothTransport()
+  const wasm = await readFile(new URL('../generated/bota_device_sdk_core_bg.wasm', import.meta.url))
+  const client = await BotaDeviceClient.create({ transport, coreLoader: () => createWasmCore(wasm) })
+  assert.equal(await client.clientPresence.nextReport('browser-peripheral-1'), null)
+  const device = await client.devices.connect({ expectedSerialNumber: 'GDPPSBZJN6' })
+  const calls = [...transport.calls]
+  const first = await client.clientPresence.nextReport(device.id)
+  const second = await client.clientPresence.nextReport(device.id)
+  assert.ok(first)
+  assert.equal(first.sequence, 1)
+  assert.equal(second?.session_id, first.session_id)
+  assert.equal(second?.sequence, 2)
+  assert.deepEqual(transport.calls, calls)
+  await client.devices.disconnect()
+  assert.equal(await client.clientPresence.nextReport(device.id), null)
+  await client.devices.connect({ expectedSerialNumber: 'GDPPSBZJN6' })
+  assert.notEqual((await client.clientPresence.nextReport(device.id))?.session_id, first.session_id)
+  const destroying = client.destroy()
+  assert.equal(await client.clientPresence.nextReport(device.id), null)
+  await destroying
+})
+
+test('a queued old disconnect callback cannot clear a replacement connection report', async () => {
+  const { manager, transport } = await createManager()
+  const callbacks: Array<() => void> = []
+  const subscribe = transport.onDisconnected.bind(transport)
+  transport.onDisconnected = (device, listener) => {
+    callbacks.push(listener)
+    return subscribe(device, listener)
+  }
+  const device = await manager.connect({ expectedSerialNumber: 'GDPPSBZJN6' })
+  const oldCallback = callbacks.at(-1)!
+  await manager.disconnect()
+  await manager.connect({ expectedSerialNumber: 'GDPPSBZJN6' })
+  const first = await manager.clientPresence.nextReport(device.id)
+  oldCallback()
+  const second = await manager.clientPresence.nextReport(device.id)
+  assert.ok(first)
+  assert.equal(second?.session_id, first.session_id)
+  assert.equal(second?.sequence, 2)
+  await manager.destroy()
 })

@@ -1,4 +1,8 @@
 import initWasm, {
+  encodeUploadContextBegin,
+  decodeUploadContextSnapshot,
+  validateUploadContextDocument,
+  decodeUploadAuthorizationIdentity,
   WebCoreBridge as GeneratedWebCoreBridge,
   WebIntegrityHasher as GeneratedWebIntegrityHasher,
   decodeConnectionSettings as decodeGeneratedConnectionSettings,
@@ -481,6 +485,38 @@ class WasmCoreAdapter implements CoreBridge {
   createIntegrityHasher(): CoreIntegrityHasher {
     return new GeneratedWebIntegrityHasher()
   }
+
+  encodeUploadContextBegin(attemptId: number): Uint8Array {
+    try { return bytes(encodeUploadContextBegin(attemptId)) }
+    catch (error) { throw normalizePrivateCoreError(error, 'encode') }
+  }
+
+  decodeUploadContextSnapshot(input: Uint8Array) {
+    try {
+      const value = record(decodeUploadContextSnapshot(input))
+      return { state: number(value.state), attemptId: number(value.attemptId), result: number(value.result), payload: bytes(value.payload) }
+    } catch (error) { throw normalizePrivateCoreError(error, 'decode') }
+  }
+
+  validateUploadContextDocument(kind: 3 | 4, value: Uint8Array): void {
+    try { validateUploadContextDocument(kind, value) }
+    catch (error) { throw normalizePrivateCoreError(error, 'decode') }
+  }
+
+  decodeUploadAuthorizationIdentity(input: Uint8Array) {
+    try {
+      const value = record(decodeUploadAuthorizationIdentity(input))
+      return {
+        profile: number(value.profile), storageFormat: number(value.storageFormat),
+        policy: number(value.policy), channels: number(value.channels), flags: number(value.flags),
+        ownerRevision: number(value.ownerRevision), recordingGeneration: number(value.recordingGeneration),
+        minimumCiphertextLength: bigint(value.minimumCiphertextLength),
+        maximumCiphertextLength: bigint(value.maximumCiphertextLength),
+        uploadSessionId: string(value.uploadSessionId), recordingUuid: string(value.recordingUuid),
+        ciphertextSha256: bytes(value.ciphertextSha256),
+      }
+    } catch (error) { throw normalizePrivateCoreError(error, 'decode') }
+  }
 }
 
 function rawReconnectHint(
@@ -507,9 +543,11 @@ function rawCapabilities(capabilities: EncryptedUploadV2Capabilities): UnknownRe
   }
 }
 
-function signedBlobKind(value: number): 'authorization' | 'receipt' {
+function signedBlobKind(value: number): import('./core.ts').CoreSignedBlobKind {
   if (value === 1) return 'authorization'
   if (value === 2) return 'receipt'
+  if (value === 3) return 'context_challenge'
+  if (value === 4) return 'context_result'
   throw internalBridgeError()
 }
 

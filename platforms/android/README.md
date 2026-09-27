@@ -24,6 +24,13 @@ the optional BLE hardware feature but never prompts the user itself.
 
 ## Client lifecycle
 
+Unreleased source adds `bota.clientPresence.nextReport(deviceId)` returning
+`SDKClientContext?`. It is local-only and requires a verified connection whose
+transport generation still matches. Disconnect, reconnect and destroy scope
+the random session and sequence. The host explicitly maps the metadata into
+its authenticated heartbeat; see the root README's client-presence contract.
+No application identifier is inferred and no command routing changes.
+
 `BotaDeviceClient` owns one configured Android runtime. Configuration retains
 the application context, is idempotent until `destroy()`, and may receive an
 application-owned `OkHttpClient` or storage directory. Applications remain

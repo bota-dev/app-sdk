@@ -74,12 +74,14 @@ public class DeviceManager internal constructor() {
     private var runtimeGeneration: Long = 0
     private var activeOperation: ActiveOperation? = null
     private var connectedDevice: ConnectedDevice? = null
+    private var presence = ConnectionClientPresence()
     private val connectionObservers = mutableMapOf<UUID, SendChannel<ConnectedDevice?>>()
     private val statusObservers = mutableMapOf<UUID, StatusObserver>()
 
     internal fun attach(runtime: DeviceRuntime) {
         synchronized(lock) {
             runtimeGeneration += 1
+            presence = ConnectionClientPresence()
             this.runtime = runtime
             callbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         }
@@ -99,6 +101,7 @@ public class DeviceManager internal constructor() {
             runtime = null
             activeOperation = null
             connectedDevice = null
+            presence.destroy()
             statusObservers.clear()
             connectionObservers.clear()
             callbackScope = null
@@ -221,6 +224,7 @@ public class DeviceManager internal constructor() {
     public suspend fun disconnect() {
         val configured = configuredRuntime()
         val device = synchronized(lock) { connectedDevice } ?: return
+        synchronized(lock) { presence.disconnected(presence.sessionId) }
         configured.authorize(BotaOperation.Connect)
         stopAllStatusObservers()
         configured.disconnect(device.id)
@@ -307,6 +311,7 @@ public class DeviceManager internal constructor() {
         val lease = configuredLease()
         lease.runtime.authorize(operation)
         val active = beginOperation(operation, command.cancellationId, lease)
+        synchronized(lock) { presence.disconnected(presence.sessionId) }
         var established: ConnectedDevice? = null
         try {
             source?.let { disconnectDifferentDevice(it.id) }
@@ -364,6 +369,9 @@ public class DeviceManager internal constructor() {
                 false
             } else {
                 connectedDevice = connected
+                active.lease.runtime.connectionIdentity(connected.id)?.let {
+                    presence.connected(connected.id, transportId = it)
+                }
                 true
             }
         }
@@ -384,6 +392,19 @@ public class DeviceManager internal constructor() {
         retryable = false,
         "BotaDeviceClient.configure() must be called first",
     )
+
+    internal fun stopClientPresence() = synchronized(lock) { presence.destroy() }
+
+    internal fun nextClientReport(deviceId: String): SDKClientContext? = synchronized(lock) {
+        val configured = runtime ?: return@synchronized null
+        if (connectedDevice?.id != deviceId) return@synchronized null
+        val transport = configured.connectionIdentity(deviceId)
+        if (transport == null || transport != presence.transportId) {
+            presence.disconnected(presence.sessionId)
+            return@synchronized null
+        }
+        presence.nextReport(deviceId)
+    }
 
     private fun configuredLease(): RuntimeLease = synchronized(lock) {
         runtime?.let { RuntimeLease(it, runtimeGeneration) }

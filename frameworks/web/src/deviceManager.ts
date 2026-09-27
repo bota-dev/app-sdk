@@ -1,4 +1,5 @@
 import type { CoreBridge, CoreEffectEnvelope } from './core.ts'
+import { ConnectionClientPresence, type ClientPresence } from './clientPresence.ts'
 import { detectBrowserCapabilities } from './capabilities.ts'
 import { BotaSDKError, normalizeCoreError, type BotaOperation } from './errors.ts'
 import {
@@ -53,6 +54,11 @@ type DirectStepResult<T> =
   | { kind: 'failed'; error: unknown }
 
 export class DeviceManager {
+  private readonly presenceOwner = new ConnectionClientPresence()
+  readonly clientPresence: ClientPresence = {
+    nextReport: (deviceId) => this.presenceOwner.nextReport(deviceId),
+  }
+  private clearPresence: (() => void) | null = null
   private readonly core: CoreBridge
   private readonly transport: BrowserBluetoothTransport
   private readonly runtime: BrowserWorkflowRuntime
@@ -62,6 +68,7 @@ export class DeviceManager {
   private activeDevice: BrowserDeviceHandle | null = null
   private verifiedDevice: ConnectedDevice | null = null
   private removeDisconnectListener: (() => void) | null = null
+  private disconnectListenerOwner: object | null = null
   private operationActive = false
   private connectionStartup: ConnectionStartup | null = null
   private destroyed = false
@@ -381,6 +388,7 @@ export class DeviceManager {
   private destroyAfterInternal(priorCleanup: Promise<unknown>): Promise<void> {
     if (this.destroyPromise) return this.destroyPromise
     this.destroyed = true
+    this.presenceOwner.destroy()
     const connectionSettlement = this.connectionStartup?.settled
       ?? Promise.resolve()
     this.destroyPromise = (async () => {
@@ -462,14 +470,17 @@ export class DeviceManager {
       name: device.name,
       serialNumber: established.serialNumber,
     }
+    this.clearPresence = this.presenceOwner.connected(device.id)
     return this.verifiedDevice
   }
 
   private installActiveDevice(device: BrowserDeviceHandle): void {
     this.removeDisconnectListener?.()
+    const owner = {}
+    this.disconnectListenerOwner = owner
     this.activeDevice = device
     this.removeDisconnectListener = this.transport.onDisconnected(device, () => {
-      if (this.activeDevice?.id !== device.id) return
+      if (this.disconnectListenerOwner !== owner || this.activeDevice?.id !== device.id) return
       this.runtime.markDeviceDisconnected(device.id)
       this.clearConnection()
     })
@@ -497,9 +508,12 @@ export class DeviceManager {
   }
 
   private clearConnection(): void {
+    this.clearPresence?.()
+    this.clearPresence = null
     const deviceId = this.activeDevice?.id
     this.removeDisconnectListener?.()
     this.removeDisconnectListener = null
+    this.disconnectListenerOwner = null
     this.activeDevice = null
     this.verifiedDevice = null
     if (deviceId) this.runtime.unregisterDevice(deviceId)

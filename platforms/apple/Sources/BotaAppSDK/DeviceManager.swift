@@ -73,6 +73,7 @@ struct DeviceRuntime: Sendable {
     let connectionMtu: @Sendable (String) async throws -> Int
     let operations: DeviceOperationCoordinator
     let disconnect: @Sendable (String) async throws -> Void
+    let connectionIdentity: @Sendable (String) async -> String?
     let readStatus: @Sendable (String) async throws -> DeviceStatus
     let statusUpdates: @Sendable (String) async throws -> AsyncThrowingStream<DeviceStatus, Error>
     let stopStatusUpdates: @Sendable (String) async throws -> Void
@@ -138,6 +139,7 @@ struct DeviceRuntime: Sendable {
         connectionMtu: @escaping @Sendable (String) async throws -> Int = { _ in 23 },
         operations: DeviceOperationCoordinator = DeviceOperationCoordinator(),
         disconnect: @escaping @Sendable (String) async throws -> Void,
+        connectionIdentity: @escaping @Sendable (String) async -> String? = { _ in nil },
         readStatus: @escaping @Sendable (String) async throws -> DeviceStatus = { _ in
             throw NativeHostError.missingResource("device status")
         },
@@ -270,6 +272,7 @@ struct DeviceRuntime: Sendable {
         self.connectionMtu = connectionMtu
         self.operations = operations
         self.disconnect = disconnect
+        self.connectionIdentity = connectionIdentity
         self.readStatus = readStatus
         self.statusUpdates = statusUpdates
         self.stopStatusUpdates = stopStatusUpdates
@@ -340,6 +343,8 @@ public actor DeviceManager {
     }
 
     private var runtime: DeviceRuntime?
+    private var presence = ConnectionClientPresence()
+    private var presenceGeneration = UUID()
     private var activeOperation: ActiveOperation?
     private var connectedDevice: ConnectedDevice?
     private var connectionObservers: [UUID: AsyncStream<ConnectedDevice?>.Continuation] = [:]
@@ -349,9 +354,29 @@ public actor DeviceManager {
 
     func attach(_ runtime: DeviceRuntime) {
         self.runtime = runtime
+        presenceGeneration = UUID()
+        presence = ConnectionClientPresence()
+    }
+
+    func stopClientPresence() {
+        presenceGeneration = UUID()
+        presence.destroy()
+    }
+
+    func nextClientReport(deviceID: String) async -> SDKClientContext? {
+        guard let runtime, connectedDevice?.id == deviceID, let session = presence.sessionID else { return nil }
+        let generation = presenceGeneration
+        let transport = await runtime.connectionIdentity(deviceID)
+        guard generation == presenceGeneration, session == presence.sessionID else { return nil }
+        guard let transport, transport == presence.transportID else {
+            presence.disconnected(sessionID: session)
+            return nil
+        }
+        return presence.nextReport(deviceID: deviceID)
     }
 
     func detach() async {
+        stopClientPresence()
         if let activeOperation {
             activeOperation.task?.cancel()
             try? await runtime?.engine.cancel(activeOperation.cancellationID)
@@ -474,6 +499,8 @@ public actor DeviceManager {
 
     public func disconnect() async throws {
         guard let connectedDevice else { return }
+        let presenceSession = presence.sessionID
+        presence.disconnected(sessionID: presenceSession)
         let runtime = try configuredRuntime()
         await stopAllStatusObservers()
         try await runtime.disconnect(connectedDevice.id)
@@ -549,11 +576,14 @@ public actor DeviceManager {
     }
 
     private func runConnection(_ command: CoreCommand, source: DiscoveredDevice?) async throws -> ConnectedDevice {
+        let generation = presenceGeneration
         let runtime = try await beginOperation(
             cancellationID: command.cancellationID,
             operation: command.kind == UInt32(BOTA_DEVICE_SDK_V1_COMMAND_RECONNECT) ? .reconnect : .connect
         )
+        presence.disconnected(sessionID: presence.sessionID)
         var established: ConnectedDevice?
+        var transportIdentity: String?
         do {
             let notifications = await runtime.engine.run(command, capabilities: runtime.capabilities)
             for try await notification in notifications {
@@ -576,8 +606,10 @@ public actor DeviceManager {
                 device.firmwareVersion = String(decoding: firmware, as: UTF8.self)
                     .replacingOccurrences(of: "\0", with: "")
                 device.mtu = try await runtime.connectionMtu(device.id)
+                transportIdentity = await runtime.connectionIdentity(device.id)
                 try Task.checkCancellation()
-                guard activeOperation?.cancellationID == command.cancellationID else {
+                guard generation == presenceGeneration,
+                      activeOperation?.cancellationID == command.cancellationID else {
                     throw CancellationError()
                 }
                 established = device
@@ -595,6 +627,9 @@ public actor DeviceManager {
                 retryable: true,
                 detail: "connection completed without verified identity"
             )
+        }
+        if generation == presenceGeneration, let transportIdentity {
+            presence.connected(deviceID: established.id, transportID: transportIdentity)
         }
         connectedDevice = established
         await runtime.connection.set(established)

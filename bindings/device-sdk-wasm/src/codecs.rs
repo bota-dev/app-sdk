@@ -314,6 +314,8 @@ pub struct WebEncryptedUploadV2SignedBlobResult {
 pub enum WebSignedBlobKind {
     Authorization,
     Receipt,
+    ContextChallenge,
+    ContextResult,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -1055,6 +1057,10 @@ const fn signed_blob_kind(kind: WebSignedBlobKind) -> u8 {
     match kind {
         WebSignedBlobKind::Authorization => wire::ENCRYPTED_UPLOAD_V2_BLOB_KIND_AUTHORIZATION,
         WebSignedBlobKind::Receipt => wire::ENCRYPTED_UPLOAD_V2_BLOB_KIND_RECEIPT,
+        WebSignedBlobKind::ContextChallenge => {
+            wire::ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_CHALLENGE
+        }
+        WebSignedBlobKind::ContextResult => wire::ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_RESULT,
     }
 }
 
@@ -1075,6 +1081,77 @@ mod wasm {
     #[wasm_bindgen(js_name = encodeRecordingListCommand)]
     pub fn encode_recording_list_command_wasm() -> Result<Vec<u8>, JsValue> {
         super::encode_recording_list_command().map_err(error_to_js)
+    }
+
+    #[wasm_bindgen(js_name = encodeUploadContextBegin)]
+    pub fn encode_upload_context_begin_wasm(attempt_id: u32) -> Result<Vec<u8>, JsValue> {
+        bota_device_sdk_core::protocol::encode_upload_context_begin(attempt_id).map_err(error_to_js)
+    }
+
+    #[wasm_bindgen(js_name = decodeUploadContextSnapshot)]
+    pub fn decode_upload_context_snapshot_wasm(bytes: &[u8]) -> Result<JsValue, JsValue> {
+        let value = bota_device_sdk_core::protocol::decode_upload_context_snapshot(bytes)
+            .map_err(error_to_js)?;
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Snapshot {
+            state: u8,
+            attempt_id: u32,
+            result: u16,
+            payload: Vec<u8>,
+        }
+        to_js(&Snapshot {
+            state: value.state,
+            attempt_id: value.attempt_id,
+            result: value.result,
+            payload: value.payload.to_vec(),
+        })
+    }
+
+    #[wasm_bindgen(js_name = validateUploadContextDocument)]
+    pub fn validate_upload_context_document_wasm(kind: u8, bytes: &[u8]) -> Result<(), JsValue> {
+        bota_device_sdk_core::protocol::decode_upload_context_document(kind, bytes)
+            .map(|_| ())
+            .map_err(error_to_js)
+    }
+
+    #[wasm_bindgen(js_name = decodeUploadAuthorizationIdentity)]
+    pub fn decode_upload_authorization_identity_wasm(bytes: &[u8]) -> Result<JsValue, JsValue> {
+        let value =
+            bota_device_sdk_core::protocol::decode_encrypted_upload_v2_authorization_identity(
+                bytes,
+            )
+            .map_err(error_to_js)?;
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Identity {
+            profile: u8,
+            storage_format: u8,
+            policy: u8,
+            channels: u8,
+            flags: u16,
+            owner_revision: u32,
+            recording_generation: u32,
+            minimum_ciphertext_length: u64,
+            maximum_ciphertext_length: u64,
+            upload_session_id: String,
+            recording_uuid: String,
+            ciphertext_sha256: Vec<u8>,
+        }
+        to_js(&Identity {
+            profile: value.profile,
+            storage_format: value.storage_format,
+            policy: value.policy,
+            channels: value.channels,
+            flags: value.flags,
+            owner_revision: value.owner_revision,
+            recording_generation: value.recording_generation,
+            minimum_ciphertext_length: value.minimum_ciphertext_length,
+            maximum_ciphertext_length: value.maximum_ciphertext_length,
+            upload_session_id: uuid_text(value.upload_session_uuid),
+            recording_uuid: uuid_text(value.recording_uuid),
+            ciphertext_sha256: value.ciphertext_sha256.to_vec(),
+        })
     }
 
     #[wasm_bindgen(js_name = encodeRecordingConfirm)]

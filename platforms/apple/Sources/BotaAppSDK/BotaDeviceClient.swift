@@ -2,6 +2,7 @@ public final class BotaDeviceClient: @unchecked Sendable {
     public static let shared = BotaDeviceClient()
 
     public let devices: DeviceManager
+    public let clientPresence: ClientPresence
     public let controls: DeviceControlManager
     public let wifi: WiFiManager
     public let provisioning: ProvisioningManager
@@ -13,6 +14,7 @@ public final class BotaDeviceClient: @unchecked Sendable {
 
     public init() {
         devices = DeviceManager()
+        clientPresence = ClientPresence(devices: devices)
         controls = DeviceControlManager()
         wifi = WiFiManager()
         provisioning = ProvisioningManager()
@@ -37,6 +39,7 @@ public final class BotaDeviceClient: @unchecked Sendable {
     }
 
     public func destroy() async {
+        await devices.stopClientPresence()
         await lifecycle.destroy(
             devices: devices,
             controls: controls,

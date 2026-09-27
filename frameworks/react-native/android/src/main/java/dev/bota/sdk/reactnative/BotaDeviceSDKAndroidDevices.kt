@@ -28,6 +28,7 @@ internal interface BotaDeviceSDKAndroidDeviceClient {
     suspend fun disconnect()
 
     suspend fun readStatus(): DeviceStatus
+    suspend fun nextClientPresence(deviceId: String): dev.bota.sdk.SDKClientContext?
 
     suspend fun statusUpdates(): Flow<DeviceStatus>
 }
@@ -56,6 +57,8 @@ internal class BotaDeviceSDKSharedAndroidDeviceClient(
     }
 
     override suspend fun readStatus(): DeviceStatus = client.devices.readStatus()
+    override suspend fun nextClientPresence(deviceId: String): dev.bota.sdk.SDKClientContext? =
+        client.clientPresence.nextReport(deviceId)
 
     override suspend fun statusUpdates(): Flow<DeviceStatus> = client.devices.statusUpdates()
 }
@@ -64,6 +67,7 @@ internal class BotaDeviceSDKAndroidDevices(
     private val client: BotaDeviceSDKAndroidDeviceClient,
     private val scope: CoroutineScope,
 ) {
+    suspend fun nextClientPresence(deviceId: String): dev.bota.sdk.SDKClientContext? = client.nextClientPresence(deviceId)
     private val operations = Mutex()
     private val scanLock = Any()
     private val statusLock = Any()

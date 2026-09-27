@@ -36,6 +36,7 @@ protocol BotaAppleClientProtocol: NativeLeaseClientProtocol {
   func reconnect(serialNumber: String, hint: DeviceReconnectHint) async throws -> ConnectedDevice
   func disconnect() async throws
   func readDeviceStatus() async throws -> DeviceStatus
+  func nextClientPresence(deviceID: String) async throws -> SDKClientContext?
   func cancelDeviceOperation() async throws
   func startRecording(_ device: ConnectedDevice, grantBlob: String) async throws
   func stopRecording(_ device: ConnectedDevice, grantBlob: String) async throws
@@ -149,6 +150,9 @@ final class BotaAppleNativeClient: BotaAppleClientProtocol, @unchecked Sendable 
 
   func disconnect() async throws { try await client.devices.disconnect() }
   func readDeviceStatus() async throws -> DeviceStatus { try await client.devices.readStatus() }
+  func nextClientPresence(deviceID: String) async throws -> SDKClientContext? {
+    try await client.clientPresence.nextReport(deviceID: deviceID)
+  }
   func cancelDeviceOperation() async throws { try await client.devices.cancelCurrentOperation() }
 
   func startRecording(_ device: ConnectedDevice, grantBlob: String) async throws {
@@ -538,6 +542,15 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
   func readDeviceStatus(operationId: String) async throws -> BotaDeviceStatusMessage {
     try await perform(operationId, category: .device) {
       try BotaAppleMapper.deviceStatus(try await self.client.readDeviceStatus())
+    }
+  }
+
+  func nextClientPresence(operationId: String, deviceId: String) async throws -> BotaClientContextMessage? {
+    try await perform(operationId, category: .device) {
+      guard let report = try await self.client.nextClientPresence(deviceID: deviceId) else { return nil }
+      return BotaClientContextMessage(schemaVersion: Int64(report.schemaVersion),
+        sessionId: report.sessionID, sequence: report.sequence, platform: report.platform,
+        sdkPackage: report.sdkPackage, sdkVersion: report.sdkVersion)
     }
   }
 

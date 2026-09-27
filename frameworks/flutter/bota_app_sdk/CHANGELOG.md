@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-beta.4 (unreleased)
+
+- Add passive client-presence metadata with the synchronized SDK identity.
+- Pin Apple and Android to synchronized `2.0.0-beta.4`, including cancellation
+  protection during Apple connection-identity lookup.
+- Flutter encrypted-upload-v2 runtime support remains unavailable.
+
 ## 2.0.0-beta.3
 
 - Pin Apple and Android to synchronized `2.0.0-beta.3`, including native

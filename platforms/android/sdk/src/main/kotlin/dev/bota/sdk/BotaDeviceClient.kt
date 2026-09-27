@@ -7,6 +7,7 @@ import kotlinx.coroutines.sync.withLock
 
 public class BotaDeviceClient internal constructor() {
     public val devices: DeviceManager = DeviceManager()
+    public val clientPresence: ClientPresence = ClientPresence(devices)
     public val controls: DeviceControlManager = DeviceControlManager()
     public val wifi: WiFiManager = WiFiManager()
     public val provisioning: ProvisioningManager = ProvisioningManager()
@@ -35,6 +36,7 @@ public class BotaDeviceClient internal constructor() {
     }
 
     public suspend fun destroy() {
+        devices.stopClientPresence()
         lifecycle.withLock {
             val configured = runtime ?: return
             try {

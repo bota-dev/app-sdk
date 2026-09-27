@@ -80,6 +80,7 @@ internal class DeviceRuntime(
     val decodeStatus: (ByteArray) -> DeviceStatus,
     private val closeResources: () -> Unit,
     val connection: DeviceConnectionRegistry = DeviceConnectionRegistry(),
+    val connectionIdentity: (String) -> String? = { null },
     val connectionMtu: (String) -> Int = { 23 },
     val operations: DeviceOperationCoordinator = DeviceOperationCoordinator(),
     val directRead: suspend (String, UUID, UUID) -> ByteArray = { _, _, _ ->
@@ -361,6 +362,9 @@ internal class DeviceRuntime(
                         )
                         driver.disconnect(peripheralId)
                         resetEncryptedUploadOwnership(disconnect)
+                    },
+                    connectionIdentity = { peripheralId ->
+                        runCatching { driver.connectionGeneration(peripheralId).toString() }.getOrNull()
                     },
                     readStatus = { peripheralId ->
                         driver.read(peripheralId, BotaBluetoothUUIDs.ControlService, BotaBluetoothUUIDs.DeviceStatus)

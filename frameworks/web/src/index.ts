@@ -1,5 +1,6 @@
 export { BotaDeviceClient } from './client.ts'
 export type { BotaDeviceClientOptions } from './client.ts'
+export type { ClientPresence, SdkClientContext } from './clientPresence.ts'
 export type { ControlManager } from './controlManager.ts'
 export type { DeviceManager } from './deviceManager.ts'
 export type { LogManager } from './logManager.ts'

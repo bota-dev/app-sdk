@@ -7,6 +7,15 @@ into the native Apple and Android SDKs.
 
 ## Requirements
 
+Unreleased source adds `BotaDeviceSDK.clientPresence.nextReport(deviceId)`.
+It returns `SdkClientContext | null` from the native verified connection,
+preserving native session/sequence while identifying this React Native package
+and its generated version. It makes no HTTP call or device command. Destroy
+discards late metadata results. The host explicitly relays a report alongside
+fresh status; see the root README. The frozen compatibility `BotaClient` and
+compatibility `DeviceManager` APIs are unchanged. Rebuild native binaries when
+adopting this source API; published-package availability is a separate gate.
+
 - React Native `0.86.3` or newer with the New Architecture enabled
 - iOS `15.1` or newer
 - Android API `26` or newer
@@ -14,13 +23,13 @@ into the native Apple and Android SDKs.
 
 ## Install
 
-This source prepares synchronized `2.0.0-beta.3`; use the exact pin below after
+This source prepares synchronized `2.0.0-beta.4`; use the exact pin below after
 publication. Version `2.0.0-beta.1` remains the previous published release.
 Remove `@bota.dev/react-native-sdk` before adding the replacement; do not
 co-install both. Production maintenance 0.0.x consumers need not migrate.
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.3
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.4
 npx pod-install
 ```
 

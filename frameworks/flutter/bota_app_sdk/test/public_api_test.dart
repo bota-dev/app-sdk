@@ -168,6 +168,8 @@ const _connectedDevice = BotaConnectedDevice(
 );
 
 const _documentedBarrelExports = <String>{
+  'SdkClientContext',
+  'BotaClientPresence',
   'BotaApplicationCallbacks',
   'BotaAudioCodec',
   'BotaBluetoothFallback',
@@ -245,6 +247,8 @@ const _documentedBarrelExports = <String>{
 };
 
 final class _FakePlatform implements BotaPlatform {
+  @override
+  Future<SdkClientContext?> nextClientPresence(String deviceId) async => null;
   final List<String> calls = [];
 
   @override

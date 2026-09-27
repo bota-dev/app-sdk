@@ -42,6 +42,8 @@ export interface RecordingControlProvider {
     serialNumber: string
     action: 'start' | 'stop'
     authorityId: string
+    /** Fresh device session nonce. Copy for asynchronous use; scrubbed at settlement. */
+    nonce: Uint8Array
     signal: AbortSignal
   }): Promise<{ grant: Uint8Array }>
 }
@@ -99,6 +101,7 @@ export interface EncryptedUploadV2CheckpointSummary {
 export interface EncryptedUploadV2ProviderContext {
   operationId: string
   serialNumber: string
+  nonce: Uint8Array
   recording: EncryptedUploadV2Recording
   capability: {
     rawValue: Uint8Array
@@ -106,6 +109,8 @@ export interface EncryptedUploadV2ProviderContext {
     decoded: EncryptedUploadV2Capabilities
   }
   checkpoint: EncryptedUploadV2CheckpointSummary | null
+  /** Durable server identity, including failures before the first byte checkpoint. */
+  previousSession?: { recordingId: string; uploadSessionId: string; ownerRevision: number }
   signal: AbortSignal
 }
 
@@ -118,6 +123,11 @@ export interface EncryptedUploadV2Evidence {
 }
 
 export interface EncryptedUploadV2Material {
+  /** Explicit backend recovery of this expired predecessor; never a silent retry. */
+  replacesSessionId?: string
+  /** Fresh scoped backend reconciliation; never inferred from a local PUT. */
+  stagingAccepted?: boolean
+  manifestAccepted?: boolean
   materialId: string
   recordingId: string
   uploadSessionId: string
@@ -145,6 +155,10 @@ export interface EncryptedUploadV2Material {
 }
 
 export interface RecordingUploadProvider {
+  authorizeLegacyTransfer?(context: { serialNumber: string; recording: DeviceRecording; signal: AbortSignal }): Promise<void>
+  prepareUploadContext?(context: {
+    serialNumber: string; nonce: Uint8Array; signal: AbortSignal
+  }): Promise<import('./uploadContext.ts').UploadContextExchange>
   prepareLegacyUpload(context: LegacyUploadContext): Promise<{
     uploadId: string
     request: UploadRequestTemplate
