@@ -159,6 +159,7 @@ const bridge: CoreBridge = {
   encodeUploadContextBegin: () => { throw new Error('unused codec in workflow test') },
   decodeUploadContextSnapshot: () => { throw new Error('unused codec in workflow test') },
   validateUploadContextDocument: () => { throw new Error('unused codec in workflow test') },
+  decodeUploadAuthorizationIdentity: () => { throw new Error('unused codec in workflow test') },
   startExactConnection: () => [],
   startSelectedConnection: () => [],
   startReconnect: () => [],

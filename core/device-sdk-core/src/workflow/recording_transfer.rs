@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, VecDeque};
 
 use crate::{
     engine::{
@@ -34,6 +34,8 @@ enum Phase {
 
 const SHA256_GRACE_TIMER_ID: u64 = 0x5245_435f_5348_4132;
 const SHA256_GRACE_DELAY_MS: u64 = 200;
+const MAX_PENDING_PACKETS: usize = 256;
+const MAX_PENDING_BYTES: usize = 128 * 1024;
 
 pub(crate) struct RecordingTransferWorkflow {
     device: DeviceSerialNumber,
@@ -60,6 +62,8 @@ pub(crate) struct RecordingTransferWorkflow {
     sha_grace_timer_scheduled: bool,
     sha_grace_elapsed: bool,
     terminal_error: Option<DeviceSdkError>,
+    pending_packets: VecDeque<Vec<u8>>,
+    pending_bytes: usize,
 }
 
 impl RecordingTransferWorkflow {
@@ -96,6 +100,8 @@ impl RecordingTransferWorkflow {
             sha_grace_timer_scheduled: false,
             sha_grace_elapsed: false,
             terminal_error: None,
+            pending_packets: VecDeque::new(),
+            pending_bytes: 0,
         }
     }
 
@@ -104,6 +110,37 @@ impl RecordingTransferWorkflow {
             && checkpoint.operation == Operation::TransferRecording
             && checkpoint.device == self.device
             && checkpoint.recording == Some(self.recording)
+    }
+
+    fn drain_packets(
+        &mut self,
+        context: &mut WorkflowContext<'_>,
+    ) -> Result<Vec<EffectRequest>, DeviceSdkError> {
+        let mut effects = Vec::new();
+        while matches!(
+            self.phase,
+            Phase::Transferring | Phase::Finalizing | Phase::WaitingForSha
+        ) {
+            let Some(value) = self.pending_packets.pop_front() else {
+                break;
+            };
+            self.pending_bytes -= value.len();
+            effects.extend(
+                self.dispatch(
+                    HostEvent {
+                        request_id: self
+                            .subscription_request_id
+                            .expect("queued packet owns subscription"),
+                        kind: HostEventKind::Ble(BleEvent::Notification {
+                            characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                            value,
+                        }),
+                    },
+                    context,
+                )?,
+            );
+        }
+        Ok(effects)
     }
 
     fn truncate_sink(
@@ -224,7 +261,7 @@ impl RecordingTransferWorkflow {
     ) -> EffectRequest {
         let request = context.request(Effect::Ble(BleEffect::Write {
             service_uuid: SERVICE_BOTA_STORAGE.into(),
-            characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+            characteristic_uuid: CHAR_TRANSFER_CONTROL.into(),
             payload: encode_ack(ack_type, sequence)
                 .expect("fixed acknowledgement always fits the wire format"),
             with_response: true,
@@ -369,6 +406,26 @@ impl WorkflowReducer for RecordingTransferWorkflow {
 
         let request_id = event.request_id;
         match (self.phase, event.kind) {
+            // Notifications may precede the START write callback or arrive while
+            // the native sink is forcing earlier bytes to disk.
+            (
+                Phase::Starting | Phase::Appending,
+                HostEventKind::Ble(BleEvent::Notification {
+                    characteristic_uuid,
+                    value,
+                }),
+            ) if Some(request_id) == self.subscription_request_id
+                && characteristic_uuid == CHAR_RECORDING_TRANSFER =>
+            {
+                if self.pending_packets.len() >= MAX_PENDING_PACKETS
+                    || value.len() > MAX_PENDING_BYTES.saturating_sub(self.pending_bytes)
+                {
+                    return Ok(self.fail_integrity(context));
+                }
+                self.pending_bytes += value.len();
+                self.pending_packets.push_back(value);
+                Ok(Vec::new())
+            }
             (Phase::LoadingCheckpoint, HostEventKind::CheckpointLoaded { checkpoint })
                 if Some(request_id) == self.load_request_id =>
             {
@@ -402,7 +459,7 @@ impl WorkflowReducer for RecordingTransferWorkflow {
             {
                 self.write_request_id = None;
                 self.phase = Phase::Transferring;
-                Ok(Vec::new())
+                self.drain_packets(context)
             }
             (
                 Phase::Transferring,
@@ -563,13 +620,15 @@ impl WorkflowReducer for RecordingTransferWorkflow {
                 }
                 self.pending_payload_units = 0;
                 self.phase = Phase::Transferring;
-                Ok(vec![
+                let mut effects = vec![
                     self.save_checkpoint(context),
                     context.request(Effect::Progress(ProgressEffect {
                         completed_units: self.completed_units,
                         total_units: self.total_units,
                     })),
-                ])
+                ];
+                effects.extend(self.drain_packets(context)?);
+                Ok(effects)
             }
             (Phase::Finalizing, HostEventKind::RecordingSinkFinalized { durable_units })
                 if Some(request_id) == self.sink_request_id =>

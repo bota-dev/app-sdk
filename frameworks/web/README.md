@@ -13,11 +13,11 @@ dependency before adding its replacement. Storage namespaces do not change.
 
 ## Install
 
-This source prepares synchronized `2.0.0-beta.2`. After publication, pin the
+This source prepares synchronized `2.0.0-beta.3`. After publication, pin the
 exact version:
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.2
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.3
 ```
 
 Use a secure context in a desktop Chromium browser with Web Bluetooth. The
@@ -392,7 +392,7 @@ time or key claims. Both recording control and v2 preparation receive a fresh
 16-byte device nonce. Treat these buffers as temporary and propagate cancellation.
 
 On resume, `previousSession` carries the persisted recording/session/owner even
-before a byte checkpoint exists. An explicitly recovered expired session may
+before a byte checkpoint exists. An explicitly recovered expired or nonce-changed session may
 return `replacesSessionId`; the default storage atomically replaces identity and
 resets offsets before transfer. Custom storage must implement
 `replaceEncryptedUploadV2Operation` to support this path. Fresh backend status
@@ -400,10 +400,18 @@ may set `stagingAccepted`/`manifestAccepted` to avoid re-uploading accepted
 artifacts, but publication and exact receipt/device acknowledgement are still
 required. Never infer these flags from local HTTP PUT success.
 
-Portal integration release gates remain open: lost session-creation responses
-and reconnect before device authorization admission need an explicit backend
-reconciliation contract. These source additions do not claim published-package
-or physical-device parity. Historical P10 relay must fail closed in a host that
+Replacement validates the signed document's structural owner, recording,
+ciphertext, policy and replacement flag through the shared Rust decoder before
+changing the journal or truncating retained bytes. This is not cryptographic
+verification; the device remains the signature authority. One exclusive owner
+covers fresh nonce/context reads, provider preparation and an atomic handoff to
+the transfer workflow. Disconnect aborts that preparation; a late provider cannot
+write on a new connection, even for the same serial.
+
+Hosts must reconcile lost session-creation responses through their authenticated
+backend contract and return the latest matching owner. Portal has adopted its
+scoped reconciliation and nonce-change recovery extension. Published-package
+and physical-device gates remain separate. Historical P10 relay must fail closed in a host that
 does not implement its dedicated relay endpoint; never send it to plaintext S3.
 
 Create one client for the signed-in tenant and keep it for the page lifetime:
@@ -446,7 +454,7 @@ hardware acceptance. Unknown capability bits still fail closed.
 
 ### Discover identity before registration
 
-`connectSelected()` requires `2.0.0-beta.2` or later; it is not included in
+`connectSelected()` requires `2.0.0-beta.3` or later; it is not included in
 `2.0.0-beta.1`. It opens the browser picker and returns the selected device only
 after the shared Rust workflow reads and validates its physical serial number.
 Call it directly from a user gesture, with the client initialized beforehand:

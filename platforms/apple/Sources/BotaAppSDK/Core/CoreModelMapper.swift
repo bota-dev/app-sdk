@@ -8,6 +8,74 @@ final class CoreModelMapper: @unchecked Sendable {
         self.client = try client ?? CoreAbiClient()
     }
 
+    func decodeDiagnosticEvents(_ data: Data) throws -> DeviceDiagnosticsBatch? {
+        try Self.diagnosticBatch(from: decode(0x0525, data).values)
+    }
+
+    func createDiagnosticCommand(_ acceptedEventId: String?) throws -> Data {
+        var fields: [CoreField] = [.unsigned(id: 97, value: acceptedEventId == nil ? 0x10 : 0x11)]
+        if let acceptedEventId { fields.append(.text(id: 173, value: acceptedEventId)) }
+        return try encode(0x0526, fields: fields)
+    }
+
+    // These are typed C ABI fields, not BLE payload bytes. Each event starts at field 173.
+    static func diagnosticBatch(from values: [CoreField]) throws -> DeviceDiagnosticsBatch? {
+        if values.isEmpty { return nil }
+        let fields = PacketFields(values)
+        let starts = values.indices.filter { index in
+            if case .text(id: 173, value: _) = values[index] { return true }
+            return false
+        }
+        guard starts.count == (try fields.requiredInt(172)) else {
+            throw invalid("diagnostic event count mismatch")
+        }
+        let events = try starts.indices.map { index in
+            let end = index + 1 < starts.count ? starts[index + 1] : values.endIndex
+            let event = PacketFields(Array(values[starts[index]..<end]))
+            let report = try event.requiredBool(181) ? diagnosticReport(event) : nil
+            return DeviceDiagnosticEvent(
+                eventId: try event.requiredText(173), eventType: try event.requiredText(174),
+                reasonCode: try event.requiredText(175), uptimeMs: try event.requiredUInt32(176),
+                signature: try event.requiredText(177), firmwareBuildId: try event.requiredText(178),
+                subsystem: try event.requiredText(179), stateBeforeEvent: try event.requiredText(180),
+                report: report
+            )
+        }
+        return DeviceDiagnosticsBatch(schemaVersion: try fields.requiredInt(171), events: events)
+    }
+
+    private static func diagnosticReport(_ fields: PacketFields) throws -> DeviceDiagnosticReport {
+        let trace = fields.texts(192)
+        let codes = fields.texts(197)
+        let deltas = fields.signeds(196)
+        let arguments = fields.signeds(198)
+        let count = try fields.requiredInt(195)
+        guard trace.count == (try fields.requiredInt(191)),
+              codes.count == count, deltas.count == count, arguments.count == count else {
+            throw invalid("diagnostic report count mismatch")
+        }
+        let breadcrumbs = try codes.indices.map { index in
+            guard let delta = Int32(exactly: deltas[index]), let argument = Int32(exactly: arguments[index]) else {
+                throw invalid("diagnostic breadcrumb exceeds Int32")
+            }
+            return DeviceDiagnosticBreadcrumb(deltaMs: delta, code: codes[index], arg0: argument)
+        }
+        let heap = try fields.optionalUInt32(193)
+        let stack = try fields.optionalUInt32(194)
+        return DeviceDiagnosticReport(
+            fault: DeviceDiagnosticFault(
+                cpuId: try fields.requiredInt(182), cpuEmu: try fields.requiredText(183),
+                coreEmu: try fields.requiredText(184), hsbEmu: try fields.requiredText(185),
+                audioEmu: try fields.requiredText(186), wirelessEmu: try fields.requiredText(187)
+            ),
+            execution: DeviceDiagnosticExecution(
+                task: fields.text(188), reti: fields.text(189), rets: fields.text(190), pcTrace: trace
+            ),
+            runtime: heap == nil && stack == nil ? nil : .init(heapFreeBytes: heap, taskStackRemainingBytes: stack),
+            breadcrumbs: breadcrumbs.isEmpty ? nil : breadcrumbs
+        )
+    }
+
     func parseDeviceStatus(_ data: Data) throws -> DeviceStatus {
         let fields = try decode(UInt32(BOTA_DEVICE_SDK_V1_PROTOCOL_DECODE_DEVICE_STATUS), data)
         let timestamp = try fields.requiredUInt32(UInt32(BOTA_DEVICE_SDK_V1_FIELD_TIMESTAMP))
@@ -812,6 +880,100 @@ final class CoreModelMapper: @unchecked Sendable {
         }
     }
 
+    func createEncryptedUploadV2ContextBegin(attemptID: UInt32) throws -> Data {
+        try encode(0x0528, fields: [.unsigned(id: 199, value: UInt64(attemptID))])
+    }
+
+    func decodeEncryptedUploadV2ContextSnapshot(_ data: Data) throws -> EncryptedUploadV2ContextSnapshot {
+        let fields = try decode(0x0529, data)
+        return .init(attemptID: try fields.requiredUInt32(199), state: try fields.requiredUInt8(200),
+                     result: try fields.requiredUInt16(24), payload: try fields.requiredBytes(33))
+    }
+
+    func validateEncryptedUploadV2ContextDocument(kind: UInt8, data: Data) throws {
+        _ = try client.protocolDecode(Self.protocolPacket(kind: 0x052a, fields: [
+            .unsigned(id: 151, value: UInt64(kind)), .bytes(id: 30, value: data),
+        ]))
+    }
+
+    func createEncryptedUploadV2List(transportSessionID: UInt64) throws -> Data {
+        try encode(0x0524, fields: [
+            .unsigned(id: 127, value: 0x25), .unsigned(id: 128, value: transportSessionID),
+        ])
+    }
+
+    func validateEncryptedUploadV2Admission(_ capability: Data) throws {
+        _ = try client.protocolDecode(Self.protocolPacket(kind: 0x052c, fields: [
+            .bytes(id: 30, value: capability), .bool(id: 204, value: false),
+        ]))
+    }
+
+    func decodeEncryptedUploadV2Catalog(_ data: Data, transportSessionID: UInt64) throws -> [EncryptedUploadV2Recording]? {
+        let packet = try client.protocolDecode(Self.protocolPacket(kind: 0x0527, fields: [
+            .unsigned(id: 128, value: transportSessionID), .bytes(id: 30, value: data),
+        ]))
+        guard !packet.fields.isEmpty else { return nil }
+        let fields = PacketFields(packet.fields)
+        let count = try fields.requiredInt(85)
+        let uuids = fields.texts(13)
+        let generations = fields.unsigneds(129)
+        let formats = fields.unsigneds(147)
+        let starts = fields.unsigneds(68)
+        let durations = fields.unsigneds(149)
+        let plaintext = fields.unsigneds(131)
+        let ciphertext = fields.unsigneds(130)
+        let hashes = fields.bytes(144)
+        guard [uuids.count, generations.count, formats.count, starts.count, durations.count,
+               plaintext.count, ciphertext.count, hashes.count].allSatisfy({ $0 == count }) else {
+            throw Self.invalid("v2 catalog fields have inconsistent counts")
+        }
+        return try (0..<count).map { index in
+            let start = starts[index].multipliedReportingOverflow(by: 1000)
+            let duration = durations[index].multipliedReportingOverflow(by: 1000)
+            guard !start.overflow, !duration.overflow else { throw Self.invalid("v2 catalog time overflow") }
+            return EncryptedUploadV2Recording(
+                uuid: uuids[index], generation: try Self.uint32(generations[index], "recording generation"),
+                ciphertextLength: ciphertext[index], ciphertextSHA256: hashes[index],
+                startedAtMs: start.partialValue, durationMs: duration.partialValue, plaintextLength: plaintext[index],
+                storageFormat: try Self.uint8(formats[index], "storage format")
+            )
+        }
+    }
+
+    func validateEncryptedUploadV2Selection(
+        material: EncryptedUploadV2Material, recording: EncryptedUploadV2Recording,
+        capability: EncryptedUploadV2CapabilitySnapshot, checkpoint: EncryptedUploadV2Checkpoint?
+    ) throws {
+        let auth = try decode(0x052b, material.authorization)
+        let flags = try auth.requiredUInt16(69)
+        let replacement = flags & 8 != 0
+        _ = try client.protocolDecode(Self.protocolPacket(kind: 0x052c, fields: [
+            .bytes(id: 30, value: capability.rawValue), .bool(id: 204, value: replacement),
+        ]))
+        let policy: UInt8 = switch material.policy { case .legacyAllowed: 0; case .v2Preferred: 1; case .v2Required: 2 }
+        guard material.ownerRevision > 0, material.ownerRevision <= Int32.max,
+              try auth.requiredUInt32(165) == material.ownerRevision,
+              try auth.requiredUInt8(154) == 3, recording.storageFormat == 3,
+              try auth.requiredUInt8(147) == recording.storageFormat,
+              try auth.requiredUInt8(167) == policy,
+              try auth.requiredUInt8(201) & 1 != 0, flags & ~0xf == 0, flags & 1 != 0,
+              try auth.requiredBytes(132) == Self.bytes(of: material.uploadSessionID),
+              try auth.requiredText(13).lowercased() == recording.uuid.lowercased(),
+              try auth.requiredUInt32(129) == recording.generation,
+              try auth.requiredUInt64(202) == recording.ciphertextLength,
+              try auth.requiredUInt64(203) == recording.ciphertextLength,
+              try auth.requiredBytes(144) == recording.ciphertextSHA256
+        else { throw Self.invalid("v2 authorization does not match selected recording and material") }
+        if let checkpoint,
+           checkpoint.uploadSessionID != material.uploadSessionID || checkpoint.ownerRevision != material.ownerRevision {
+            guard replacement, material.ownerRevision > checkpoint.ownerRevision,
+                  material.uploadSessionID != checkpoint.uploadSessionID,
+                  checkpoint.ciphertextLength == recording.ciphertextLength,
+                  checkpoint.ciphertextSHA256 == recording.ciphertextSHA256
+            else { throw Self.invalid("v2 replacement does not match retained checkpoint identity") }
+        }
+    }
+
     private func decode(_ kind: UInt32, _ data: Data) throws -> PacketFields {
         do {
             let packet = try client.protocolDecode(Self.protocolPacket(kind: kind, fields: [
@@ -1073,6 +1235,13 @@ private struct PacketFields {
     func unsigneds(_ id: UInt32) -> [UInt64] {
         values.compactMap { field in
             guard case let .unsigned(fieldID, value) = field, fieldID == id else { return nil }
+            return value
+        }
+    }
+
+    func signeds(_ id: UInt32) -> [Int64] {
+        values.compactMap { field in
+            guard case let .signed(fieldID, value) = field, fieldID == id else { return nil }
             return value
         }
     }

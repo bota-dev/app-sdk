@@ -1,6 +1,8 @@
 package dev.bota.sdk.internal.bluetooth
 
 import dev.bota.sdk.internal.core.CoreModelMapper
+import dev.bota.sdk.internal.core.CoreField
+import dev.bota.sdk.internal.core.toNativePacket
 import dev.bota.sdk.internal.core.EncryptedUploadV2StartRequest
 import dev.bota.sdk.internal.core.EncryptedUploadV2DataValue
 import dev.bota.sdk.internal.core.EncryptedUploadV2ManifestChunkValue
@@ -35,6 +37,187 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EncryptedUploadV2TransferControlTest {
+    @Test
+    fun reconciliationRetainsOneSubscriptionAndUsesRustStartOrResumeEncoding() = runBlocking {
+        for (offset in listOf(0uL, 1uL)) {
+            val driver = ControlDriver()
+            val core = TransferControlCore(listOf(openingReply(0x46, offset), openingReply(if (offset == 0uL) 0x40 else 0x45, offset)))
+            val mapper = CoreModelMapper(core)
+            val control = testControl(driver, mapper)
+            try {
+                val rejected = control.open("device", request(), oldCheckpoint()) as EncryptedUploadV2OpenResult.ResumeRejected
+                assertEquals(0, driver.unsubscribeCount)
+                rejected.assertActive()
+                rejected.retry(reconciledCheckpoint(offset))
+                assertEquals(1, driver.subscribeCount)
+                assertEquals(0, driver.unsubscribeCount)
+                assertEquals(2, driver.writeCount)
+                assertEquals(listOf(0x22L, if (offset == 0uL) 0x20L else 0x22L), core.encoded.map { it.unsignedField(127) })
+                assertEquals(listOf(9L, 9L), core.encoded.map { it.unsignedField(128) })
+                assertEquals(offset.toLong(), core.encoded.last().unsignedField(39))
+                assertEquals(if (offset == 0uL) 0L else 1L, core.encoded.last().unsignedField(133))
+                val repeated = runCatching { rejected.retry(reconciledCheckpoint(offset)) }.exceptionOrNull()
+                assertEquals(11u, (repeated as EncryptedUploadV2HostException).errorCode)
+                assertEquals(2, driver.writeCount)
+            } finally {
+                control.release(9u)
+                control.close()
+                mapper.close()
+            }
+        }
+    }
+
+    @Test
+    fun repeatedDeviceRejectionFailsAndAbortsExactlyOnce() = runBlocking {
+        val driver = ControlDriver()
+        val core = TransferControlCore(listOf(openingReply(0x46, 1u), openingReply(0x46, 0u)))
+        val mapper = CoreModelMapper(core)
+        val control = testControl(driver, mapper)
+        try {
+            val rejected = control.open("device", request(), oldCheckpoint()) as EncryptedUploadV2OpenResult.ResumeRejected
+            val error = runCatching { rejected.retry(reconciledCheckpoint(1u)) }.exceptionOrNull()
+            assertEquals(11u, (error as EncryptedUploadV2HostException).errorCode)
+            assertEquals(listOf(0x22L, 0x22L, 0x24L), core.encoded.map { it.unsignedField(127) })
+            assertEquals(1, driver.unsubscribeCount)
+        } finally {
+            control.close()
+            mapper.close()
+        }
+    }
+
+    @Test
+    fun rejectsForeignNewerEqualAndNonMismatchDeviceCheckpoints() = runBlocking {
+        for (reply in listOf(
+            openingReply(0x46, 1u, reason = 0x13),
+            openingReply(0x46, 1u, session = 10),
+            openingReply(0x46, 2u, revision = 3),
+            openingReply(0x46, 2u, revision = 2),
+            openingReply(0x46, 1u, revision = 0),
+        )) {
+            val driver = ControlDriver()
+            val core = TransferControlCore(listOf(reply))
+            val mapper = CoreModelMapper(core)
+            val control = testControl(driver, mapper)
+            try {
+                val error = runCatching { control.open("device", request(), oldCheckpoint()) }.exceptionOrNull()
+                assertEquals(11u, (error as EncryptedUploadV2HostException).errorCode)
+                assertEquals(listOf(0x22L, 0x24L), core.encoded.map { it.unsignedField(127) })
+                assertEquals(1, driver.unsubscribeCount)
+            } finally {
+                control.close()
+                mapper.close()
+            }
+        }
+    }
+
+    @Test
+    fun savedReconciliationCannotWriteOrReleaseANewerConnection() = runBlocking {
+        val driver = ControlDriver()
+        val core = TransferControlCore(listOf(openingReply(0x46, 1u), openingReply(0x40, 0u)))
+        val mapper = CoreModelMapper(core)
+        val control = testControl(driver, mapper)
+        try {
+            val rejected = control.open("device", request(), oldCheckpoint()) as EncryptedUploadV2OpenResult.ResumeRejected
+            control.resetAfterConfirmedDisconnect(ConfirmedBluetoothDisconnect("device", 1))
+            driver.connectionGeneration = 2
+            control.open("device", request(), null)
+            val error = runCatching { rejected.retry(reconciledCheckpoint(1u)) }.exceptionOrNull()
+            assertEquals(12u, (error as EncryptedUploadV2HostException).errorCode)
+            rejected.cancel()
+            assertEquals(2, driver.writeCount)
+            assertEquals(0, driver.unsubscribeCount)
+            control.confirm(9u, byteArrayOf(1)) {}
+            assertEquals(3, driver.writeCount)
+        } finally {
+            control.close()
+            mapper.close()
+        }
+    }
+
+    @Test
+    fun concurrentAbortJoinsOneCleanup() = runBlocking(Dispatchers.IO) {
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val driver = ControlDriver(unsubscribeEntered = entered, unsubscribeRelease = release)
+        val mapper = CoreModelMapper(TransferControlCore())
+        val control = testControl(driver, mapper)
+        try {
+            control.open("device", request(), null)
+            val first = async(Dispatchers.Default) { control.abort(9u) }
+            withTimeout(TestSettlementTimeoutMilliseconds) { entered.await() }
+            val second = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { control.abort(9u) }
+            release.complete(Unit)
+            withTimeout(TestSettlementTimeoutMilliseconds) { first.await(); second.await() }
+            assertEquals(2, driver.writeCount)
+            assertEquals(1, driver.unsubscribeCount)
+        } finally {
+            release.complete(Unit)
+            control.close()
+            mapper.close()
+        }
+    }
+
+    private fun oldCheckpoint() = EncryptedUploadV2CheckpointValue(2u, 2u, ByteArray(32), 9u)
+
+    private fun reconciledCheckpoint(offset: ULong) = EncryptedUploadV2CheckpointValue(
+        if (offset == 0uL) 0u else 1u, offset, EmptyDigest, if (offset == 0uL) null else 0u,
+    )
+
+    private fun openingReply(
+        type: Int,
+        offset: ULong,
+        revision: Long = if (offset == 0uL) 0 else 1,
+        reason: Long = 15,
+        session: Long = 9,
+    ) = listOf(
+        CoreField.Unsigned(61, 3u), CoreField.Unsigned(127, type.toULong()),
+        CoreField.Unsigned(128, session.toULong()), CoreField.Unsigned(133, revision.toULong()),
+        CoreField.Unsigned(39, offset), CoreField.Bytes(143, EmptyDigest), CoreField.Unsigned(155, reason.toULong()),
+        CoreField.Bytes(132, java.nio.ByteBuffer.allocate(16).putLong(Session.mostSignificantBits).putLong(Session.leastSignificantBits).array()),
+        CoreField.Text(13, Session.toString()), CoreField.Unsigned(129, 1u),
+        CoreField.Unsigned(134, 1u), CoreField.Unsigned(135, 1u), CoreField.Unsigned(130, 2u),
+        CoreField.Bytes(144, ByteArray(32)), CoreField.Unsigned(140, 1u),
+    ).toNativePacket(0x0525)
+
+    private fun NativePacket.unsignedField(id: Int): Long = unsignedValues[fieldIds.indexOf(id)]
+
+    @Test
+    fun staleConnectionCannotReceiveAbortOrUnsubscribe() = runBlocking {
+        val driver = ControlDriver()
+        val mapper = CoreModelMapper(TransferControlCore())
+        val control = testControl(driver, mapper)
+        try {
+            control.open("device", request(), null)
+            driver.connectionGeneration = 2
+            control.abort(9u)
+            assertEquals(1, driver.writeCount)
+            assertEquals(0, driver.unsubscribeCount)
+        } finally {
+            control.close()
+            mapper.close()
+        }
+    }
+
+    @Test
+    fun staleConnectionCannotReceiveActiveControlWrite() = runBlocking {
+        val driver = ControlDriver()
+        val mapper = CoreModelMapper(TransferControlCore())
+        val control = testControl(driver, mapper)
+        try {
+            control.open("device", request(), null)
+            driver.connectionGeneration = 2
+            val failure = runCatching {
+                control.writeActiveFrame(9u, byteArrayOf(1), EncryptedUploadV2TransferContinuation.Window)
+            }.exceptionOrNull()
+            assertTrue(failure is EncryptedUploadV2HostException)
+            assertEquals(12u, (failure as EncryptedUploadV2HostException).errorCode)
+            assertEquals(1, driver.writeCount)
+        } finally {
+            control.close()
+            mapper.close()
+        }
+    }
+
     @Test
     fun collectorIsAttachedBeforeStartWriteSoImmediateReplyIsNotLost() = runBlocking {
         val driver = ControlDriver()
@@ -186,7 +369,7 @@ class EncryptedUploadV2TransferControlTest {
         val driver = ControlDriver(failUnsubscribe = true)
         val mapper = CoreModelMapper(TransferControlCore())
         val control = testControl(driver, mapper)
-        control.open("device", request(), null)
+        val opened = control.open("device", request(), null)
 
         val failure = runCatching { control.confirm(9u, byteArrayOf(1)) {} }.exceptionOrNull()
             as EncryptedUploadV2ConfirmationException
@@ -195,6 +378,9 @@ class EncryptedUploadV2TransferControlTest {
         assertTrue(failure.writeSucceeded)
         assertEquals(19u, failure.errorCode)
         assertEquals(19u, (replacement as EncryptedUploadV2HostException).errorCode)
+        val lateCancellation = runCatching { opened.cancel() }.exceptionOrNull()
+        assertEquals(19u, (lateCancellation as EncryptedUploadV2HostException).errorCode)
+        assertEquals(2, driver.writeCount)
         control.resetAfterConfirmedDisconnect(ConfirmedBluetoothDisconnect("device", 1))
         driver.failUnsubscribe = false
         assertTrue(control.open("device", request(), null) is EncryptedUploadV2OpenResult.Opened)
@@ -372,7 +558,7 @@ private class ControlDriver(
     private val activeWriteEntered: CompletableDeferred<Unit>? = null,
     private val activeWriteRelease: CompletableDeferred<Unit>? = null,
     private val failActiveWrite: Boolean = false,
-    private val connectionGeneration: Long = 1,
+    var connectionGeneration: Long = 1,
     private val unsubscribeEntered: CompletableDeferred<Unit>? = null,
     private val unsubscribeRelease: CompletableDeferred<Unit>? = null,
 ) : BluetoothDriver {
@@ -383,6 +569,7 @@ private class ControlDriver(
     var writeCount = 0
     var unsubscribeCount = 0
     var unsubscribeCompletedCount = 0
+    var subscribeCount = 0
 
     override suspend fun write(
         peripheralId: String,
@@ -415,21 +602,24 @@ private class ControlDriver(
         peripheralId: String,
         serviceUuid: UUID,
         characteristicUuid: UUID,
-    ): Flow<BluetoothNotification> = if (immediateSubscribeReply) flow {
-        emit(BluetoothNotification(1, byteArrayOf(0x40)))
-        awaitCancellation()
-    } else if (overflow) flow {
-        try {
+    ): Flow<BluetoothNotification> {
+        subscribeCount++
+        return if (immediateSubscribeReply) flow {
             emit(BluetoothNotification(1, byteArrayOf(0x40)))
-            repeat(2_000) { emit(BluetoothNotification(1, ByteArray(512))) }
-        } finally {
-            overflowAttempted.complete(Unit)
+            awaitCancellation()
+        } else if (overflow) flow {
+            try {
+                emit(BluetoothNotification(1, byteArrayOf(0x40)))
+                repeat(2_000) { emit(BluetoothNotification(1, ByteArray(512))) }
+            } finally {
+                overflowAttempted.complete(Unit)
+            }
+            awaitCancellation()
+        } else {
+            val attached = CompletableDeferred<Unit>()
+            startReplyPending.set(attached)
+            replies.onSubscription { attached.complete(Unit) }
         }
-        awaitCancellation()
-    } else {
-        val attached = CompletableDeferred<Unit>()
-        startReplyPending.set(attached)
-        replies.onSubscription { attached.complete(Unit) }
     }
 
     override suspend fun unsubscribe(peripheralId: String, serviceUuid: UUID, characteristicUuid: UUID) {
@@ -457,8 +647,13 @@ private class ControlDriver(
     override fun close() = Unit
 }
 
-private class TransferControlCore : NativeCore {
-    override fun encode(packet: NativePacket) = packetWithBytes(30, byteArrayOf(1))
+private class TransferControlCore(controlReplies: List<NativePacket> = emptyList()) : NativeCore {
+    private val controlReplies = controlReplies.iterator()
+    val encoded = mutableListOf<NativePacket>()
+    override fun encode(packet: NativePacket): NativePacket {
+        encoded += packet
+        return packetWithBytes(30, byteArrayOf(1))
+    }
 
     override fun decode(packet: NativePacket): NativePacket {
         val value = packet.dataValues.firstOrNull() as? ByteArray
@@ -466,7 +661,7 @@ private class TransferControlCore : NativeCore {
             value?.size == 512 -> dataPacket()
             value?.firstOrNull()?.toInt() == 0x41 -> dataPacket()
             value?.firstOrNull()?.toInt() == 0x42 -> windowEndPacket()
-            else -> controlPacket()
+            else -> if (controlReplies.hasNext()) controlReplies.next() else controlPacket()
         }
     }
 

@@ -11,6 +11,7 @@ import type {
   NativeEncryptedUploadV2Checkpoint,
   NativeEncryptedUploadV2Progress,
   NativeEncryptedUploadV2Recording,
+  NativePendingRecording,
   NativeFactoryResetCompletion,
   NativeFactoryResetGrantRequest,
   NativeFirmwareUpdateProgress,
@@ -44,6 +45,9 @@ import type {
   DeviceStatus,
   DeviceType,
   DeviceLogEvent,
+  DeviceDiagnosticEventType,
+  DeviceDiagnosticReasonCode,
+  DeviceDiagnosticsBatch,
   DiscoveredDevice,
   PairingState,
   ReconnectOptions,
@@ -202,11 +206,24 @@ export type BotaRecordingTransferProgress = {
 
 export type BotaEncryptedUploadV2Recording = NativeEncryptedUploadV2Recording;
 
+export type BotaEncryptedUploadV2PendingRecording = Omit<BotaEncryptedUploadV2Recording, 'durationMs'> & {
+  storageFormat: 3;
+  startedAt: Date;
+  durationMs: number;
+  plaintextLength: string;
+};
+
+export type BotaEncryptedUploadV2SyncOptions = {
+  signal?: AbortSignal;
+  operationId?: string;
+};
+
 export type BotaEncryptedUploadV2Capability = NativeEncryptedUploadV2Capability;
 
 export type BotaEncryptedUploadV2Checkpoint = NativeEncryptedUploadV2Checkpoint;
 
 export type BotaEncryptedUploadV2ProviderContext = {
+  operationId: string;
   recording: BotaEncryptedUploadV2Recording;
   capability: BotaEncryptedUploadV2Capability;
   checkpoint?: BotaEncryptedUploadV2Checkpoint;
@@ -294,6 +311,8 @@ export type BotaDeviceSDKOTAClient = {
 };
 
 export type BotaDeviceSDKLogClient = {
+  readDiagnosticEvents(device: ConnectedDevice): Promise<DeviceDiagnosticsBatch>;
+  acknowledgeDiagnosticEvents(device: ConnectedDevice, acceptedEventIds: string[]): Promise<void>;
   subscribe(
     device: ConnectedDevice,
     onLine: (line: DeviceLogEvent) => void
@@ -317,6 +336,7 @@ export type BotaDeviceSDKWiFiClient = {
 
 export type BotaDeviceSDKRecordingClient = {
   listRecordings(device: ConnectedDevice): Promise<DeviceRecording[]>;
+  listPendingRecordings(device: ConnectedDevice): Promise<Array<DeviceRecording | BotaEncryptedUploadV2PendingRecording>>;
   syncRecording(
     device: ConnectedDevice,
     recording: DeviceRecording,
@@ -326,12 +346,14 @@ export type BotaDeviceSDKRecordingClient = {
     localPath: string;
     e2eEncrypted: boolean;
     contentSha256?: string;
+    fileSizeBytes: number;
   }>;
   syncEncryptedRecordingV2(
     device: ConnectedDevice,
     recording: BotaEncryptedUploadV2Recording,
     provider: BotaEncryptedUploadV2ProfileProvider,
-    onProgress?: (progress: BotaEncryptedUploadV2Progress) => void
+    onProgress?: (progress: BotaEncryptedUploadV2Progress) => void,
+    options?: BotaEncryptedUploadV2SyncOptions
   ): Promise<void>;
   confirmRecording(
     device: ConnectedDevice,
@@ -342,6 +364,7 @@ export type BotaDeviceSDKRecordingClient = {
     onProgress?: (progress: BotaRecordingTransferProgress) => void
   ): Promise<void>;
   cancelRecordingUpload(taskId: string): Promise<void>;
+  releaseRecordingFile(taskId: string, localPath: string): Promise<void>;
   loadUploadQueue(): Promise<UploadTask[]>;
   saveUploadQueue(tasks: UploadTask[]): Promise<void>;
   destroyCompatibilityOperations(): Promise<void>;
@@ -433,6 +456,13 @@ export type BotaDeviceSDKClient = {
   getState(): Promise<BotaDeviceSDKState>;
 };
 
+const formatAdvertisedMac = (value: string | undefined): string | null => {
+  if (!value || !/^(?:[0-9a-f]{12}|(?:[0-9a-f]{2}:){5}[0-9a-f]{2})$/i.test(value)) {
+    return null;
+  }
+  return value.replace(/:/g, '').toUpperCase().match(/.{2}/g)!.join(':');
+};
+
 const mapDiscoveredDevice = (
   device: NativeDiscoveredDevice
 ): DiscoveredDevice => ({
@@ -440,7 +470,7 @@ const mapDiscoveredDevice = (
   name: device.name ?? '',
   deviceType: (device.deviceType ?? 'bota_pin') as DeviceType,
   firmwareVersion: device.firmwareVersion ?? '',
-  macAddress: device.macAddress ?? null,
+  macAddress: formatAdvertisedMac(device.macAddress),
   pairingState: (device.pairingState ?? 'unpaired') as PairingState,
   rssi: device.rssi,
   discoveredAt: new Date(device.discoveredAtMs),
@@ -491,6 +521,48 @@ const createOpaqueId = (): string =>
     const nibble = value === 'x' ? random : (random & 0x3) | 0x8;
     return nibble.toString(16);
   });
+
+const catalogInteger = (value: string | undefined, maximum = BigInt(Number.MAX_SAFE_INTEGER)): number => {
+  if (typeof value !== 'string' || !/^(0|[1-9][0-9]{0,19})$/.test(value) || BigInt(value) > maximum) {
+    throw new Error('invalid native recording catalog metadata');
+  }
+  return Number(value);
+};
+
+const mapPendingRecording = (value: NativePendingRecording): DeviceRecording | BotaEncryptedUploadV2PendingRecording => {
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  if (value.profile === 'legacy' && value.legacy && !value.encrypted) {
+    const recording = value.legacy;
+    if (typeof recording.uuid !== 'string' || !uuidPattern.test(recording.uuid) ||
+        !Number.isSafeInteger(recording.startedAtMs) || recording.startedAtMs < 0 || recording.startedAtMs > 8640000000000000 ||
+        !Number.isSafeInteger(recording.durationMs) || recording.durationMs < 0 ||
+        !Number.isSafeInteger(recording.fileSize) || recording.fileSize < 0 ||
+        typeof recording.codec !== 'string' || typeof recording.isEncrypted !== 'boolean') {
+      throw new Error('invalid native recording catalog metadata');
+    }
+    return mapRecording(recording);
+  }
+  if (value.profile !== 'encrypted_upload_v2' || !value.encrypted || value.legacy) {
+    throw new Error('invalid native recording catalog profile');
+  }
+  const recording = value.encrypted;
+  const plaintextLength = recording.plaintextLength;
+  if (typeof recording.uuid !== 'string' || !uuidPattern.test(recording.uuid) ||
+      recording.storageFormat !== 3 || typeof plaintextLength !== 'string' ||
+      !/^(0|[1-9][0-9]{0,19})$/.test(plaintextLength) || BigInt(plaintextLength) > 0xffffffffffffffffn ||
+      typeof recording.ciphertextLength !== 'string' || !/^[1-9][0-9]{0,19}$/.test(recording.ciphertextLength) || BigInt(recording.ciphertextLength) > 0xffffffffffffffffn ||
+      typeof recording.ciphertextSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(recording.ciphertextSha256) ||
+      !Number.isInteger(recording.generation) || recording.generation < 0 || recording.generation > 0xffffffff) {
+    throw new Error('invalid native recording catalog identity');
+  }
+  return {
+    uuid: recording.uuid, generation: recording.generation,
+    ciphertextLength: recording.ciphertextLength, ciphertextSha256: recording.ciphertextSha256,
+    storageFormat: 3, plaintextLength, startedAtMs: recording.startedAtMs,
+    startedAt: new Date(catalogInteger(recording.startedAtMs, 8640000000000000n)),
+    durationMs: catalogInteger(recording.durationMs),
+  };
+};
 
 const bytesToHex = (value: Uint8Array): string =>
   Array.from(value, (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -718,6 +790,7 @@ const toNativeRecordingUploadRequest = (
   recordingId: task.recordingId,
   deviceId: task.deviceId,
   localPath: task.localPath,
+  ...(task.fileSizeBytes === undefined ? {} : { fileSizeBytes: task.fileSizeBytes }),
   uploadUrl: task.uploadUrl,
   ...(task.uploadToken ? { uploadToken: task.uploadToken } : {}),
   ...(task.completeUrl ? { completeUrl: task.completeUrl } : {}),
@@ -732,9 +805,13 @@ const toNativeRecordingUploadRequest = (
 });
 
 const parseUploadQueue = (serialized: string): UploadTask[] => {
-  const value: unknown = JSON.parse(serialized || '[]');
-  if (!Array.isArray(value)) return [];
+  const value: unknown = JSON.parse(serialized);
+  if (!Array.isArray(value)) throw new Error('Invalid upload recovery journal');
   return value.map((task) => {
+    if (!task || typeof task !== 'object' || Array.isArray(task) ||
+        typeof task.createdAt !== 'string' || typeof task.updatedAt !== 'string') {
+      throw new Error('Invalid upload recovery journal');
+    }
     const candidate = task as UploadTask & {
       createdAt: string | Date;
       updatedAt: string | Date;
@@ -1066,6 +1143,11 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
       return values.map(mapRecording);
     },
 
+    async listPendingRecordings(device) {
+      const values = await requireNativeModule().listPendingRecordings(toNativeConnectedDevice(device));
+      return values.map(mapPendingRecording);
+    },
+
     async syncRecording(device, recording, onProgress, sinkId) {
       const module = requireNativeModule();
       const subscription = module.onRecordingTransferProgress((progress) => {
@@ -1082,21 +1164,48 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
       }
     },
 
-    async syncEncryptedRecordingV2(device, recording, provider, onProgress) {
+    async syncEncryptedRecordingV2(device, recording, provider, onProgress, options = {}) {
+      if (options.signal?.aborted) throw new Error('encrypted upload v2 cancelled');
       const module = requireNativeModule();
-      const operationId = createOpaqueId();
-      const profileSubscription = module.onEncryptedUploadV2ProfileRequested(
+      const operationId = options.operationId ?? createOpaqueId();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(operationId)) {
+        throw new Error('invalid encrypted upload v2 operation ID');
+      }
+      let active = true;
+      let nativeStarted = false;
+      let cancellation: Promise<void> | undefined;
+      let cancellationFailed = false;
+      const cancel = () => {
+        if (nativeStarted && !cancellation) {
+          try {
+            cancellation = module.cancelEncryptedRecordingV2(operationId).catch(() => { cancellationFailed = true; });
+          } catch {
+            cancellationFailed = true;
+          }
+        }
+      };
+      let profileSubscription: BotaEventSubscription | undefined;
+      let progressSubscription: BotaEventSubscription | undefined;
+      try {
+        options.signal?.addEventListener('abort', cancel, { once: true });
+        profileSubscription = module.onEncryptedUploadV2ProfileRequested(
         (request) => {
-          if (request.operationId !== operationId) return;
+          if (!active || options.signal?.aborted || request.operationId !== operationId) return;
           void (async () => {
+            let decision: BotaEncryptedUploadV2ProfileDecision | undefined;
             try {
-              const decision = await provider({
+              decision = await provider({
+                operationId,
                 recording: request.recording,
                 capability: request.capability,
                 ...(request.checkpoint === undefined
                   ? {}
                   : { checkpoint: request.checkpoint }),
               });
+              if (!active || options.signal?.aborted) {
+                await module.releaseEncryptedUploadV2Material(decision.materialRegistrationId);
+                return;
+              }
               if (decision.profile !== 'encrypted_upload_v2') {
                 throw new Error('encrypted upload v2 requires an explicit v2 profile');
               }
@@ -1105,29 +1214,40 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
                 decision
               );
             } catch (error) {
-              await module.rejectEncryptedUploadV2Profile(
-                request.requestId,
-                'application_material_rejected'
-              );
+              if (decision) await module.releaseEncryptedUploadV2Material(decision.materialRegistrationId).catch(() => {});
+              if (active && !options.signal?.aborted) {
+                await module.rejectEncryptedUploadV2Profile(request.requestId, 'application_material_rejected');
+              }
             }
           })().catch(() => {});
         }
       );
-      const progressSubscription = module.onEncryptedUploadV2Progress(
+      progressSubscription = module.onEncryptedUploadV2Progress(
         (progress) => {
-          if (progress.operationId !== operationId) return;
+          if (!active || options.signal?.aborted || progress.operationId !== operationId) return;
           onProgress?.(mapEncryptedUploadV2Progress(progress));
         }
       );
-      try {
+        if (options.signal?.aborted) throw new Error('encrypted upload v2 cancelled');
+        nativeStarted = true;
         await module.syncEncryptedRecordingV2(
           toNativeConnectedDevice(device),
           recording,
           operationId
         );
       } finally {
-        profileSubscription.remove();
-        progressSubscription.remove();
+        active = false;
+        let cleanupFailed = false;
+        for (const remove of [
+          () => options.signal?.removeEventListener('abort', cancel),
+          () => profileSubscription?.remove(),
+          () => progressSubscription?.remove(),
+        ]) {
+          try { remove(); } catch { cleanupFailed = true; }
+        }
+        await cancellation;
+        if (cancellationFailed) throw new Error('encrypted upload v2 cancellation failed');
+        if (cleanupFailed) throw new Error('encrypted upload v2 listener cleanup failed');
       }
     },
 
@@ -1156,6 +1276,10 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
 
     async cancelRecordingUpload(taskId) {
       await requireNativeModule().cancelRecordingUpload(taskId);
+    },
+
+    async releaseRecordingFile(taskId, localPath) {
+      await requireNativeModule().releaseRecordingFile(taskId, localPath);
     },
 
     async loadUploadQueue() {
@@ -1288,6 +1412,30 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
   };
 
   const logs: BotaDeviceSDKLogClient = {
+    async readDiagnosticEvents(device) {
+      const batch = await requireNativeModule().readDiagnosticEvents(toNativeConnectedDevice(device));
+      if (batch.schema_version !== 1) throw new Error('Unsupported diagnostic batch schema');
+      return {
+        schema_version: 1,
+        events: batch.events.map(({ report, ...event }) => ({
+          ...event,
+          event_type: event.event_type as DeviceDiagnosticEventType,
+          reason_code: event.reason_code as DeviceDiagnosticReasonCode,
+          ...(report ? { report: {
+            fault: report.fault,
+            execution: { ...report.execution, pc_trace: [...report.execution.pc_trace] },
+            ...(report.runtime ? { runtime: report.runtime } : {}),
+            ...(report.breadcrumbs ? { breadcrumbs: [...report.breadcrumbs] } : {}),
+          } } : {}),
+        })),
+      };
+    },
+    async acknowledgeDiagnosticEvents(device, acceptedEventIds) {
+      if (acceptedEventIds.some((id) => !/^[0-9a-f]{16}$/.test(id))) {
+        throw new Error('Diagnostic event_id must be 16 lowercase hex characters');
+      }
+      await requireNativeModule().acknowledgeDiagnosticEvents(toNativeConnectedDevice(device), [...acceptedEventIds]);
+    },
     async subscribe(device, onLine) {
       const module = requireNativeModule();
       const eventSubscription = module.onDeviceLog((line) => {

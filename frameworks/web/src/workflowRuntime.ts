@@ -169,6 +169,8 @@ interface DirectOwner {
 
 type MutationOwner = WorkflowOwner | DirectOwner
 
+export type PreparedWorkflowRunner = (...args: Parameters<BrowserWorkflowRuntime['run']>) => Promise<WorkflowResult>
+
 export class BrowserWorkflowRuntime {
   private readonly core: CoreBridge
   private readonly transport: BrowserBluetoothTransport
@@ -380,7 +382,7 @@ export class BrowserWorkflowRuntime {
 
   async runExclusive<T>(
     operation: BotaOperation,
-    body: (signal: AbortSignal) => Promise<T>,
+    body: (signal: AbortSignal, handoff: PreparedWorkflowRunner) => Promise<T>,
   ): Promise<T> {
     if (this.destroyed) throw new BotaSDKError('cancelled', operation)
     if (
@@ -406,7 +408,15 @@ export class BrowserWorkflowRuntime {
     this.activeOwner = owner
 
     try {
-      const value = await body(abortController.signal)
+      const value = await body(abortController.signal, (...args) => {
+        if (this.activeOwner !== owner || abortController.signal.aborted || this.destroyed) {
+          return Promise.reject(owner.terminalError ?? new BotaSDKError('cancelled', operation))
+        }
+        // No await between releasing preparation and claiming the core workflow.
+        // A retained callback cannot transfer a later operation's ownership.
+        this.activeOwner = null
+        return this.run(...args)
+      })
       if (owner.terminalError) throw owner.terminalError
       if (abortController.signal.aborted || this.destroyed) {
         throw new BotaSDKError('cancelled', operation)

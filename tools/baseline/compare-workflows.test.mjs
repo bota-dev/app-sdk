@@ -79,7 +79,7 @@ test('encrypted upload v2 requires evidence from every shipping runtime', () => 
   assert.deepEqual(validateWorkflowSuite(suite, schema), []);
 });
 
-test('collects only cross-SDK maintenance runtime test files', () => {
+test('collects referenced maintenance runtime test files from every suite', () => {
   const legacy = validSuite();
   const encrypted = validSuite();
   encrypted.workflow = 'encrypted-upload-v2';
@@ -91,7 +91,7 @@ test('collects only cross-SDK maintenance runtime test files', () => {
 
   assert.deepEqual(
     collectMaintenanceRuntimeTestFiles([legacy, encrypted]),
-    ['__tests__/v2-a.test.ts', '__tests__/v2-b.test.ts']
+    ['__tests__/v2-a.test.ts', '__tests__/v2-b.test.ts', 'src/managers/__tests__/DeviceManager.test.ts']
   );
 });
 
@@ -119,7 +119,8 @@ test('workflow baseline metadata is distinct from the frozen public API baseline
 test('CI executes the pinned maintenance workflow baseline', () => {
   const workflow = readFileSync('.github/workflows/ci.yml', 'utf8');
   assert.match(workflow, /repository:\s*bota-dev\/react-native-sdk/);
-  assert.match(workflow, /ref:\s*e11fde5be40027ec6cf1985fc0eadb00ece23e65/);
+  const selected = JSON.parse(readFileSync('protocol/compatibility/firmware-compatibility.json', 'utf8'));
+  assert.match(workflow, new RegExp(`ref:\\s*${selected.reactNativeWorkflowBaseline.revision}`));
   assert.match(
     workflow,
     /npm run test:workflows -- --sdk-path \.ci\/react-native-workflow-baseline/
@@ -130,7 +131,8 @@ test('CI executes the pinned maintenance workflow baseline', () => {
 test('release verification executes the pinned maintenance workflow baseline', () => {
   const workflow = readFileSync('.github/workflows/release.yml', 'utf8');
   assert.match(workflow, /repository:\s*bota-dev\/react-native-sdk/);
-  assert.match(workflow, /ref:\s*e11fde5be40027ec6cf1985fc0eadb00ece23e65/);
+  const selected = JSON.parse(readFileSync('protocol/compatibility/firmware-compatibility.json', 'utf8'));
+  assert.match(workflow, new RegExp(`ref:\\s*${selected.reactNativeWorkflowBaseline.revision}`));
   assert.match(
     workflow,
     /npm run test:workflows -- --sdk-path \.ci\/react-native-workflow-baseline/

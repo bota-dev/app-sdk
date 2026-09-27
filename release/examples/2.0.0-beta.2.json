@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "sdkFamily": "bota-app-sdk",
   "sdkVersion": "2.0.0-beta.2",
-  "sourceRevision": "5b37bf20174d4f3d74f76727d8b47f2acf2f98f8",
+  "sourceRevision": "cf4ea86ed45922990b38698d3f3771e234ae1b9a",
   "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.17",
@@ -73,9 +73,9 @@
       "name": "bota_app_sdk-2.0.0-beta.2.tar.gz",
       "ecosystem": "pub",
       "version": "2.0.0-beta.2",
-      "checksumSha256": "77f44b77d2d10c96f7651eb311fda0ef3eb4cf5f5664071d3a663d801b328810",
-      "sourceRevision": "5b37bf20174d4f3d74f76727d8b47f2acf2f98f8",
-      "normalizedArchiveSha256": "942e17ed1e3f64936e813b7abb2046af3890755ffeb032e1492d6aa0a859fc97",
+      "checksumSha256": "5f9df3e698b2a8b27c069f063421abec945f445b2009fc99af2404f43fc6ab26",
+      "sourceRevision": "cf4ea86ed45922990b38698d3f3771e234ae1b9a",
+      "normalizedArchiveSha256": "a921a000f4c5b1877d031d0268fd631671c9c30ea37059cb39f36a0eab6412af",
       "generator": {
         "name": "pigeon",
         "version": "28.0.0"
@@ -98,8 +98,8 @@
         },
         {
           "path": "README.md",
-          "byteLength": 12259,
-          "sha256": "846b7fd04687fb248b0a8691b14e8b04c8101e74f0440961e92b20901d271cba"
+          "byteLength": 11692,
+          "sha256": "06eaaa216e59a282d3b0a93b31d41bdd6100d6c8d2e8f79305954b769c98b364"
         },
         {
           "path": "analysis_options.yaml",
@@ -128,8 +128,8 @@
         },
         {
           "path": "android/src/main/kotlin/dev/bota/sdk/flutter/BotaAndroidAdapter.kt",
-          "byteLength": 53643,
-          "sha256": "0305f37047f82bcf50e8f9086fd67dacc608b68f2be2058701c810db4a943f2c"
+          "byteLength": 53004,
+          "sha256": "7c0469cd3789bdb3245a336dbe57f8fb6b579aaca063b330e00607c54b95042a"
         },
         {
           "path": "android/src/main/kotlin/dev/bota/sdk/flutter/BotaAndroidMapper.kt",
@@ -138,8 +138,8 @@
         },
         {
           "path": "android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt",
-          "byteLength": 179792,
-          "sha256": "c966b98372e83e8722c3bbbefc07e33ab3080a22a92c40b96817097dccb4cc34"
+          "byteLength": 176255,
+          "sha256": "a161a1df4c0b47e4bc7027870011f9cfd9ac0c314a175e10a6e480dc4fa19486"
         },
         {
           "path": "android/src/main/kotlin/dev/bota/sdk/flutter/BotaFlutterSdkPlugin.kt",
@@ -153,8 +153,8 @@
         },
         {
           "path": "android/src/test/kotlin/dev/bota/sdk/flutter/BotaAndroidAdapterTest.kt",
-          "byteLength": 41589,
-          "sha256": "51b6a841894df3f5c6380f35e0f8db2d38afd9cab4e4a2e0a419f2ee172ee1f3"
+          "byteLength": 41488,
+          "sha256": "25068fae5ee7a5bb9da780474f9f157a7e8b3f9e325aa61131fff5928ab015df"
         },
         {
           "path": "android/src/test/kotlin/dev/bota/sdk/flutter/NativeLeaseCoordinatorTest.kt",
@@ -183,8 +183,8 @@
         },
         {
           "path": "ios/Tests/BotaAppleAdapterTests.swift",
-          "byteLength": 67153,
-          "sha256": "8abfbfd1c28ff48c73b7d1a264e7365e78eced81993aeedb9ea6a005d4615592"
+          "byteLength": 67067,
+          "sha256": "94d06c06fde1e74b4be006bbccc3bcc4f2824a88385585cb19654db45a5efcfe"
         },
         {
           "path": "ios/Tests/NativeLeaseCoordinatorTests.swift",
@@ -203,13 +203,13 @@
         },
         {
           "path": "ios/bota_app_sdk/Sources/bota_app_sdk/BotaApi.g.swift",
-          "byteLength": 182790,
-          "sha256": "b8cfac7ccd7de72af5888b22d42b8abdb21b1bc555ff7f1df7b1f540e688b5f0"
+          "byteLength": 179132,
+          "sha256": "894eaa5992d958bf05975ae19386f1e011353fa90a5c1dd40d6b26661d90c0c3"
         },
         {
           "path": "ios/bota_app_sdk/Sources/bota_app_sdk/BotaAppleAdapter.swift",
-          "byteLength": 59643,
-          "sha256": "a47db38c652a52de4e0ca8c6b8f9f6519771cb12a37d93d466f0a845222fd0ff"
+          "byteLength": 58889,
+          "sha256": "327880aac10e57492bf889180e4b7dbc938942a6c5a63d7b108b7dbd27497e05"
         },
         {
           "path": "ios/bota_app_sdk/Sources/bota_app_sdk/BotaAppleMapper.swift",
@@ -228,8 +228,8 @@
         },
         {
           "path": "lib/bota_app_sdk.dart",
-          "byteLength": 2797,
-          "sha256": "4364eb9c8a5ca47583ef8652c78aec65ddd080991f8cb49864ca4494ab466776"
+          "byteLength": 2720,
+          "sha256": "e0958683da3e207b6cfadab82a2049429f6310a3789187fb7de89e08bd098cc1"
         },
         {
           "path": "lib/src/bridge_mapper.dart",
@@ -238,13 +238,8 @@
         },
         {
           "path": "lib/src/client.dart",
-          "byteLength": 2059,
-          "sha256": "7fce5f1224c48ce9c58cbbfab35d3302cbc55e72caa601847d4ca88d55d55ec1"
-        },
-        {
-          "path": "lib/src/client_presence.dart",
-          "byteLength": 781,
-          "sha256": "d1c7ba9d675ffae9ca195dd939478d153767ec71517ee8db88cfdc96c2620234"
+          "byteLength": 1948,
+          "sha256": "523db9f7b1afe774ebdb728add191df029c57dbf46ddcac51625ed0fc9fe2f78"
         },
         {
           "path": "lib/src/errors.dart",
@@ -253,8 +248,8 @@
         },
         {
           "path": "lib/src/generated/bota_api.g.dart",
-          "byteLength": 152951,
-          "sha256": "7032ab5e20ae59a26f72a06c58284cef5cdf2fb6a9ce3b3457f7b7b3c2ae2cdb"
+          "byteLength": 150040,
+          "sha256": "2721aae2e0d731ea9c41df08c7e6c0779fbb539d0e5d3284fd8c0d98c63efc2a"
         },
         {
           "path": "lib/src/managers.dart",
@@ -293,23 +288,18 @@
         },
         {
           "path": "lib/src/pigeon_platform.dart",
-          "byteLength": 35692,
-          "sha256": "b74f5711efde93ad8dbdf5fa49c85f6aa8157df42ae4f3a92f0c699dc5f281dd"
+          "byteLength": 34865,
+          "sha256": "b1bafc636953de8343e5b7053e292fe4a59dd575cb7bcef8a5257c4bc2c98679"
         },
         {
           "path": "lib/src/platform.dart",
-          "byteLength": 3695,
-          "sha256": "dce9bbadabd388817c408c5c903b6b5b1dcb4e19aaed7ce3248dfc3baac84334"
+          "byteLength": 3599,
+          "sha256": "91cb955b074e0a7406d61314c3af0ffac6890fa980668c7ca458c508ca148aaf"
         },
         {
           "path": "lib/src/request_ids.dart",
           "byteLength": 537,
           "sha256": "2054c0ef31d6be187ae09f8dc33b291074372e5e9a3d1e6993c164d1762c79ec"
-        },
-        {
-          "path": "lib/src/sdk_identity.dart",
-          "byteLength": 137,
-          "sha256": "8e903d6d98a7e31d7845dbee1a7fa357106a6c8073992c9e8e59777fc0e88f15"
         },
         {
           "path": "pigeon_options.yaml",
@@ -318,8 +308,8 @@
         },
         {
           "path": "pigeons/bota_api.dart",
-          "byteLength": 21910,
-          "sha256": "3eaccbf515ea926d39c8b0d3e46f1fb7c3163869d5e768b9dc4c2420026cbd65"
+          "byteLength": 21435,
+          "sha256": "d918d540c5172a609d1f37b3512d214504dbf8482871e22b9b6ed10f75fc57a8"
         },
         {
           "path": "pubspec.yaml",
@@ -328,8 +318,8 @@
         },
         {
           "path": "test/bridge_contract_test.dart",
-          "byteLength": 14122,
-          "sha256": "6e8075cbe4559189e0293648d6646fd7a3d52a90ca5a3d26b52b6378a1822710"
+          "byteLength": 14094,
+          "sha256": "ac9aee44fe1a8a380b5a4a4014755cee26c6236784d66dafe845a2d37d40cd00"
         },
         {
           "path": "test/callback_broker_test.dart",
@@ -338,8 +328,8 @@
         },
         {
           "path": "test/client_lifecycle_test.dart",
-          "byteLength": 18873,
-          "sha256": "023ff0b20a28369d26f8655eab4a5ede9e40d66159b97d231c3c434af5217b1c"
+          "byteLength": 17741,
+          "sha256": "9e61416353934fdd154aa42e74e272bbe44c6209b7b429c4db22ab9a10e9a425"
         },
         {
           "path": "test/example_device_console_test.dart",
@@ -358,8 +348,8 @@
         },
         {
           "path": "test/public_api_test.dart",
-          "byteLength": 13107,
-          "sha256": "e0d9b77fc706db1950943dfc29291404bd90ef07bea2aa06e6fcbca6791bc76c"
+          "byteLength": 12970,
+          "sha256": "ebdeaf4defaea26e60e3d9683e992656eec89a72933b5b87c3e8ea6e5e1152c9"
         },
         {
           "path": "test/stream_lifecycle_test.dart",
@@ -368,8 +358,8 @@
         },
         {
           "path": "test/support/in_memory_bota_host_api.dart",
-          "byteLength": 12860,
-          "sha256": "7eab906386174c23cc918c55ffe674da924798236259480fc55feff28f8bbacd"
+          "byteLength": 12603,
+          "sha256": "ae65c6355f69cf4c695d71e1db689935070964c3fdb1a2cb719714960b857432"
         },
         {
           "path": "test/workflow_conformance_test.dart",

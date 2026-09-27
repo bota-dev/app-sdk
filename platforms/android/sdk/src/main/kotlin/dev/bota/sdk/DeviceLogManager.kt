@@ -1,6 +1,6 @@
 package dev.bota.sdk
 
-import dev.bota.sdk.internal.StreamingOperationState
+import dev.bota.sdk.internal.DeviceRuntime
 import dev.bota.sdk.internal.cancelled
 import dev.bota.sdk.internal.core.CoreCommand
 import dev.bota.sdk.internal.core.CoreNotificationKind
@@ -9,35 +9,56 @@ import dev.bota.sdk.internal.requiredBoolean
 import dev.bota.sdk.internal.requiredText
 import dev.bota.sdk.internal.workflowError
 import dev.bota.sdk.model.ConnectedDevice
+import dev.bota.sdk.model.DeviceDiagnosticsBatch
 import dev.bota.sdk.model.DeviceLogLine
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
-public class DeviceLogManager internal constructor() {
-    private val state = StreamingOperationState("device log")
+public class DeviceLogManager internal constructor(
+    private val diagnosticTimeoutMilliseconds: Long = 30_000,
+) {
+    private data class Active(val id: UUID, val runtime: DeviceRuntime, val job: Job, var cleanupFailure: Throwable? = null)
+    private class CleanupFailure(val underlying: Throwable) : RuntimeException(underlying)
+    private val lock = Any()
+    private var runtime: DeviceRuntime? = null
+    private var active: Active? = null
 
-    internal fun attach(runtime: dev.bota.sdk.internal.DeviceRuntime) = state.attach(runtime)
-    internal suspend fun detach() = state.detach()
+    internal fun attach(runtime: DeviceRuntime) {
+        synchronized(lock) {
+            if (this.runtime != null && this.runtime !== runtime) active?.job?.cancel()
+            this.runtime = runtime
+        }
+    }
 
-    public fun streamLogs(device: ConnectedDevice): Flow<DeviceLogLine> = callbackFlow {
-        val runtime = state.configuredRuntime()
-        runtime.connection.require(device)
+    internal suspend fun detach() {
+        val operation = synchronized(lock) { runtime = null; active }
+        operation?.job?.cancelAndJoin()
+        synchronized(lock) { if (active === operation) active = null }
+    }
+
+    public fun streamLogs(device: ConnectedDevice): Flow<DeviceLogLine> = flow {
         val command = CoreCommand.readDeviceLogs(device.serialNumber)
-        state.begin(runtime, command.cancellationId, BotaOperation.ReadDeviceLogs)
-        val managerScope = state.callbackScope()
-        val task = launch(start = CoroutineStart.LAZY) {
-            var failure: Throwable? = null
-            var wasCancelled = false
+        owned(device, command.cancellationId) { configured ->
             try {
-                runtime.engine.run(command, runtime.capabilities).collect { notification ->
+                configured.engine.run(command, configured.capabilities).collect { notification ->
                     when (notification.kind) {
-                        CoreNotificationKind.DeviceLog -> send(
+                        CoreNotificationKind.DeviceLog -> emit(
                             DeviceLogLine(
                                 notification.requiredText(46, BotaOperation.ReadDeviceLogs),
                                 notification.requiredBoolean(51, BotaOperation.ReadDeviceLogs),
@@ -48,34 +69,118 @@ public class DeviceLogManager internal constructor() {
                         else -> Unit
                     }
                 }
+                currentCoroutineContext().ensureActive()
             } catch (error: CancellationException) {
-                wasCancelled = true
+                try { withContext(NonCancellable) { configured.engine.cancel(command.cancellationId) } }
+                catch (cleanup: Throwable) { throw CleanupFailure(cleanup) }
                 throw error
-            } catch (error: Throwable) {
-                failure = error.facadePublicError(BotaOperation.ReadDeviceLogs)
-            } finally {
-                withContext(NonCancellable) {
-                    val cleanupFailure = runCatching {
-                        if (wasCancelled) state.cancel(command.cancellationId, cancelTask = false)
-                        else state.finish(command.cancellationId)
-                    }.exceptionOrNull()?.facadePublicError(BotaOperation.ReadDeviceLogs)
-                    val primary = failure
-                    if (primary == null) failure = cleanupFailure else cleanupFailure?.let(primary::addSuppressed)
-                    failure?.let(::close) ?: close()
-                }
             }
-        }
-        if (!state.setTask(command.cancellationId, task)) {
-            task.cancel()
-            close(cancelled(BotaOperation.ReadDeviceLogs))
-        } else {
-            task.start()
-        }
-        awaitClose {
-            task.cancel()
-            managerScope.launch { state.cancel(command.cancellationId, cancelTask = false) }
         }
     }
 
-    public suspend fun stop(): Unit = state.cancelCurrentOperation()
+    public suspend fun readDiagnosticEvents(device: ConnectedDevice): DeviceDiagnosticsBatch = owned(device) { configured ->
+        try {
+            withTimeout(diagnosticTimeoutMilliseconds) { readDiagnostics(device, configured) }
+        } catch (_: TimeoutCancellationException) {
+            throw failure(BotaErrorCode.Timeout, "device diagnostics timed out")
+        }
+    }
+
+    public suspend fun acknowledgeDiagnosticEvents(device: ConnectedDevice, acceptedEventIds: List<String>): Unit =
+        owned(device) { configured ->
+            val generation = configured.connection.generation(device)
+            // Rust validates every ID before the first device mutation.
+            val commands = acceptedEventIds.map { configured.createDiagnosticCommand(it) }
+            for (command in commands) {
+                currentCoroutineContext().ensureActive()
+                configured.connection.require(device, generation)
+                configured.directWrite(device.id, Service, Control, command)
+                configured.connection.require(device, generation)
+            }
+        }
+
+    public suspend fun stop() {
+        val operation = synchronized(lock) { active }
+        operation?.job?.cancelAndJoin()
+        synchronized(lock) { operation?.cleanupFailure }?.let { throw it.facadePublicError(BotaOperation.ReadDeviceLogs) }
+    }
+
+    private suspend fun readDiagnostics(device: ConnectedDevice, configured: DeviceRuntime): DeviceDiagnosticsBatch {
+        val generation = configured.connection.generation(device)
+        configured.decodeDiagnosticEvents(byteArrayOf())
+        try {
+            val command = configured.createDiagnosticCommand(null)
+            try {
+                val source = configured.directSubscribe(device.id, Service, Data)
+                currentCoroutineContext().ensureActive()
+                configured.connection.require(device, generation)
+                val batch = coroutineScope {
+                    // Register the collector before LIST, including for an unbuffered native flow.
+                    val result = async(start = CoroutineStart.UNDISPATCHED) {
+                        source.mapNotNull {
+                            configured.connection.require(device, generation)
+                            configured.decodeDiagnosticEvents(it)
+                        }.firstOrNull() ?: throw failure(
+                            BotaErrorCode.UnexpectedEvent, "device diagnostics ended without a complete batch",
+                        )
+                    }
+                    configured.directWrite(device.id, Service, Control, command)
+                    result.await()
+                }
+                configured.connection.require(device, generation)
+                return batch
+            } finally {
+                if (configured.connection.ownsGeneration(generation)) {
+                    try { withContext(NonCancellable) { configured.directUnsubscribe(device.id, Service, Data) } }
+                    catch (error: Throwable) { throw CleanupFailure(error) }
+                }
+            }
+        } finally {
+            configured.decodeDiagnosticEvents(byteArrayOf())
+        }
+    }
+
+    private suspend fun <T> owned(
+        device: ConnectedDevice,
+        id: UUID = UUID.randomUUID(),
+        body: suspend (DeviceRuntime) -> T,
+    ): T = coroutineScope {
+        val job = currentCoroutineContext().job
+        val operation = synchronized(lock) {
+            val configured = runtime ?: throw failure(BotaErrorCode.FeatureUnavailable, "configure must be called first")
+            if (active != null) throw failure(BotaErrorCode.OperationInProgress, "device logs or diagnostics are already active")
+            configured.operations.begin(id, BotaOperation.ReadDeviceLogs)
+            Active(id, configured, job).also { active = it }
+        }
+        try {
+            currentCoroutineContext().ensureActive()
+            operation.runtime.authorize(BotaOperation.ReadDeviceLogs)
+            operation.runtime.connection.require(device)
+            body(operation.runtime)
+        } catch (error: CleanupFailure) {
+            synchronized(lock) { operation.cleanupFailure = error.underlying }
+            throw error.underlying.facadePublicError(BotaOperation.ReadDeviceLogs)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            throw error.facadePublicError(BotaOperation.ReadDeviceLogs)
+        } finally {
+            synchronized(lock) {
+                if (operation.cleanupFailure == null) {
+                    operation.runtime.operations.end(id)
+                    if (active === operation) active = null
+                }
+            }
+        }
+    }
+
+    private companion object {
+        val Service: UUID = UUID.fromString("b07a0007-0000-1000-8000-00805f9b34fb")
+        val Control: UUID = UUID.fromString("b07a0007-0001-1000-8000-00805f9b34fb")
+        val Data: UUID = UUID.fromString("b07a0007-0002-1000-8000-00805f9b34fb")
+
+        fun failure(code: BotaErrorCode, detail: String) = BotaSDKError.Core(
+            code, BotaOperation.ReadDeviceLogs, retryable = false, protocolStatus = null, detail = detail,
+        )
+    }
 }

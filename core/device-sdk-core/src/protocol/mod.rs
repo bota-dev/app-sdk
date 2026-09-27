@@ -1,6 +1,9 @@
 mod cursor;
+mod diagnostics;
 mod encode;
 mod encrypted_upload_v2;
+mod encrypted_upload_v2_catalog;
+mod encrypted_upload_v2_context;
 mod logs;
 mod ota;
 mod provisioning;
@@ -9,10 +12,12 @@ mod recordings;
 mod settings;
 mod status;
 mod transfer;
-mod upload_context;
 
+pub use diagnostics::*;
 pub use encode::*;
 pub use encrypted_upload_v2::*;
+pub use encrypted_upload_v2_catalog::*;
+pub use encrypted_upload_v2_context::*;
 pub use logs::*;
 pub use ota::*;
 pub use provisioning::*;
@@ -21,4 +26,3 @@ pub use recordings::*;
 pub use settings::*;
 pub use status::*;
 pub use transfer::*;
-pub use upload_context::*;

@@ -24,9 +24,37 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 
 ## Current Authority
 
-- Current source prepares synchronized `2.0.0-beta.2` for Web selected-device
-  serial discovery. Publication remains gated by exact main CI and the protected
-  release workflow; the published version below is unchanged until verified.
+- Web actions/client presence integration is source-only; see
+  `docs/testing/web-actions-integration.md`. Keep one exclusive owner across
+  nonce/provider preparation and workflow handoff. Validate successor document
+  identity through Rust before resetting retained progress; device signature
+  verification remains authoritative. Apple connection identity lookup must
+  remain inside cancellation and detach cleanup boundaries.
+
+- Unpublished Demo migration adds mixed legacy/v2 catalog discovery, native
+  upload-context relay, exact-operation cancellation, scoped native nonce
+  access and structural signed-owner replacement checks. See
+  `docs/parity/v2-demo-*.md`. Applications own backend HTTP; no opaque upload
+  material or recording bytes cross RN. Historical checkpoints without
+  ciphertext identity permit same-owner resume only. Matching native artifacts
+  and a new application binary are required; no published beta or physical
+  acceptance is implied and v2 compatibility flags remain disabled.
+
+- Unpublished maintenance parity work targets reference commit
+  `318974f925a573cf04b0d624978bee04784af09b`, separately from the immutable
+  0.0.65 public API baseline. See [maintenance parity](docs/parity/README.md)
+  for diagnostics, native-file upload recovery, lost-WINDOW_ACK reconciliation,
+  verification, and explicit byte-store/connection-ownership limits. This does
+  not change beta.1, enable v2 runtime metadata, or establish hardware/app
+  acceptance.
+
+- Current source prepares synchronized `2.0.0-beta.3` for maintenance parity,
+  native v2 integration, reconnect and transfer corrections, plus Web selected
+  serial discovery. One Android BLE encrypted upload/cloud playback passed with
+  a local Demo native identity fix; this is not other-platform or recovery
+  acceptance and does not enable v2 metadata. See the beta.3 preflight.
+  Beta.2 is occupied and partially published; never reuse its tag. Publication
+  remains gated by exact main CI and the protected release workflow.
 
 - Current synchronized published beta is `2.0.0-beta.1`: Apple `BotaAppSDK`, Android
   `dev.bota:bota-app-sdk`, RN `@bota.dev/react-native-app-sdk`, Web
@@ -244,8 +272,9 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   fresh capability, recording, checkpoint, session, progress, and stable-error
   metadata. Applications register the complete v2 material once in the Apple
   or Android `BotaDeviceSDKEncryptedUploadV2Materials` registry and return only
-  its opaque registration ID through JavaScript. Keep `BotaClient`, legacy
-   managers and events frozen, and never add an implicit legacy fallback.
+  its opaque registration ID through JavaScript. Preserve `BotaClient`, legacy
+  manager and event compatibility; track newer maintenance additions separately,
+  and never add an implicit legacy fallback.
 - React Native compatibility requires the frozen public API surface digest in
   addition to protocol fixtures and workflow traces. Internal legacy modules
   outside `src/index.ts` are not part of that public contract.

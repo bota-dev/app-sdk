@@ -2,6 +2,7 @@ import initWasm, {
   encodeUploadContextBegin,
   decodeUploadContextSnapshot,
   validateUploadContextDocument,
+  decodeUploadAuthorizationIdentity,
   WebCoreBridge as GeneratedWebCoreBridge,
   WebIntegrityHasher as GeneratedWebIntegrityHasher,
   decodeConnectionSettings as decodeGeneratedConnectionSettings,
@@ -500,6 +501,21 @@ class WasmCoreAdapter implements CoreBridge {
   validateUploadContextDocument(kind: 3 | 4, value: Uint8Array): void {
     try { validateUploadContextDocument(kind, value) }
     catch (error) { throw normalizePrivateCoreError(error, 'decode') }
+  }
+
+  decodeUploadAuthorizationIdentity(input: Uint8Array) {
+    try {
+      const value = record(decodeUploadAuthorizationIdentity(input))
+      return {
+        profile: number(value.profile), storageFormat: number(value.storageFormat),
+        policy: number(value.policy), channels: number(value.channels), flags: number(value.flags),
+        ownerRevision: number(value.ownerRevision), recordingGeneration: number(value.recordingGeneration),
+        minimumCiphertextLength: bigint(value.minimumCiphertextLength),
+        maximumCiphertextLength: bigint(value.maximumCiphertextLength),
+        uploadSessionId: string(value.uploadSessionId), recordingUuid: string(value.recordingUuid),
+        ciphertextSha256: bytes(value.ciphertextSha256),
+      }
+    } catch (error) { throw normalizePrivateCoreError(error, 'decode') }
   }
 }
 

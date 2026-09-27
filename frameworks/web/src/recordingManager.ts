@@ -61,6 +61,7 @@ import {
 import {
   BrowserWorkflowRuntime,
   createBrowserPersistenceHost,
+  type PreparedWorkflowRunner,
   type WorkflowEffectHost,
 } from './workflowRuntime.ts'
 
@@ -215,11 +216,12 @@ export class RecordingManager {
       return await this.runManagedOperation(
         operationId,
         options.signal,
-        async (signal) => await this.startEncryptedUploadV2(
-          operationId,
-          recording,
+        async (signal) => await this.withVerifiedConnection(
+          'transfer_recording',
+          (connection, ownedSignal, runWorkflow) => this.startEncryptedUploadV2(
+            operationId, recording, ownedSignal, options.onProgress, connection, runWorkflow,
+          ),
           signal,
-          options.onProgress,
         ),
       )
     }
@@ -306,10 +308,12 @@ export class RecordingManager {
             if (journal.phase === 'confirmed') {
               return await this.finishConfirmedJournal(journal)
             }
-            return await this.resumeEncryptedUploadV2(
-              journal,
+            return await this.withVerifiedConnection(
+              'transfer_recording',
+              (connection, ownedSignal, runWorkflow) => this.resumeEncryptedUploadV2(
+                journal, ownedSignal, options.onProgress, connection, runWorkflow,
+              ),
               signal,
-              options.onProgress,
             )
           }
           if (journal.profile !== 'legacy') {
@@ -405,7 +409,13 @@ export class RecordingManager {
           if (journal.phase !== 'cloud_completed') {
             throw new BotaSDKError('resume_rejected', 'upload')
           }
-          await this.resumeEncryptedUploadV2(journal, signal)
+          await this.withVerifiedConnection(
+            'transfer_recording',
+            (connection, ownedSignal, runWorkflow) => this.resumeEncryptedUploadV2(
+              journal, ownedSignal, undefined, connection, runWorkflow,
+            ),
+            signal,
+          )
           return
         }
         if (journal.profile !== 'legacy') {
@@ -454,14 +464,16 @@ export class RecordingManager {
     operationId: string,
     recording: DeviceRecording,
     signal: AbortSignal,
-    onProgress?: (progress: RecordingSyncProgress) => void,
+    onProgress: ((progress: RecordingSyncProgress) => void) | undefined,
+    connection: ConnectedRecordingDevice,
+    runWorkflow: PreparedWorkflowRunner,
   ): Promise<RecordingSyncResult> {
     const storage = this.requireStorage()
     const provider = this.requireUploadProvider()
     if (await storage.loadRecordingJournal(operationId)) {
       throw new BotaSDKError('resume_rejected', 'transfer_recording')
     }
-    const capability = await this.readFreshV2Capability(signal)
+    const capability = await this.readFreshV2Capability(connection, signal)
     const metadata = requireEncryptedUploadV2Metadata(recording)
     this.core.validateEncryptedUploadV2Profile(
       capability.decoded,
@@ -558,6 +570,7 @@ export class RecordingManager {
         material,
         signal,
         onProgress,
+        runWorkflow,
       )
     } catch (error) {
       if (materialOwnedHere) {
@@ -576,7 +589,9 @@ export class RecordingManager {
   private async resumeEncryptedUploadV2(
     journal: RecordingJournal,
     signal: AbortSignal,
-    onProgress?: (progress: RecordingSyncProgress) => void,
+    onProgress: ((progress: RecordingSyncProgress) => void) | undefined,
+    connection: ConnectedRecordingDevice,
+    runWorkflow: PreparedWorkflowRunner,
   ): Promise<RecordingSyncResult> {
     const storage = this.requireStorage()
     const rawState = await storage.loadEncryptedUploadV2Checkpoint(
@@ -585,7 +600,7 @@ export class RecordingManager {
     if (!rawState) throw new BotaSDKError('resume_rejected', 'transfer_recording')
     let state = parsePersistedEncryptedUploadV2State(rawState)
     validateEncryptedUploadV2JournalState(journal, state)
-    const capability = await this.readFreshV2Capability(signal)
+    const capability = await this.readFreshV2Capability(connection, signal)
     if (
       capability.connection.serialNumber !== state.serialNumber
       || hex(capability.sha256) !== state.capabilitySha256Hex
@@ -631,6 +646,18 @@ export class RecordingManager {
       throwIfAborted(signal, 'transfer_recording')
       if (material.replacesSessionId !== undefined) {
         validateEncryptedUploadV2Material(material, capability.decoded)
+        const identity = this.core.decodeUploadAuthorizationIdentity(material.authorization)
+        const policy = { legacy_allowed: 0, v2_preferred: 1, v2_required: 2 }[material.policy]
+        if (identity.profile !== 3 || identity.storageFormat !== state.recording.storageFormat ||
+          identity.policy !== policy || !(identity.channels & 1) || (identity.flags & ~0xf) !== 0 ||
+          (identity.flags & 9) !== 9 || identity.uploadSessionId !== material.uploadSessionId ||
+          identity.ownerRevision !== material.ownerRevision || identity.recordingUuid !== state.recording.uuid ||
+          identity.recordingGeneration !== state.recording.generation ||
+          identity.minimumCiphertextLength !== state.recording.ciphertextLength ||
+          identity.maximumCiphertextLength !== state.recording.ciphertextLength ||
+          hex(identity.ciphertextSha256) !== hex(state.recording.ciphertextSha256)) {
+          throw new BotaSDKError('resume_rejected', 'transfer_recording')
+        }
         if (!storage.replaceEncryptedUploadV2Operation || material.replacesSessionId !== state.uploadSessionId ||
           material.uploadSessionId === state.uploadSessionId || material.ownerRevision <= state.ownerRevision ||
           material.recordingId !== state.recordingId || material.materialId !== state.materialId ||
@@ -656,6 +683,7 @@ export class RecordingManager {
         material,
         signal,
         onProgress,
+        runWorkflow,
       )
     } catch (error) {
       if (materialOwnedHere) {
@@ -672,7 +700,8 @@ export class RecordingManager {
     capabilities: import('./models.ts').EncryptedUploadV2Capabilities,
     material: EncryptedUploadV2Material,
     signal: AbortSignal,
-    onProgress?: (progress: RecordingSyncProgress) => void,
+    onProgress: ((progress: RecordingSyncProgress) => void) | undefined,
+    runWorkflow: PreparedWorkflowRunner,
   ): Promise<RecordingSyncResult> {
     const storage = this.requireStorage()
     let host: EncryptedUploadV2Host | null = null
@@ -742,7 +771,7 @@ export class RecordingManager {
         },
       })
       const cancellationId = randomCancellationId()
-      await this.runtime.run(
+      await runWorkflow(
         state.operationId,
         cancellationId,
         () => this.core.startEncryptedUploadV2({
@@ -861,39 +890,33 @@ export class RecordingManager {
     } finally { await writer.cancel() }
   }
 
-  private async readFreshV2Capability(signal: AbortSignal): Promise<{
+  private async readFreshV2Capability(connection: ConnectedRecordingDevice, runtimeSignal: AbortSignal): Promise<{
     connection: ConnectedRecordingDevice
     raw: Uint8Array
     sha256: Uint8Array
     decoded: import('./models.ts').EncryptedUploadV2Capabilities
     nonce: Uint8Array
   }> {
-    return await this.withVerifiedConnection(
+    const raw = await awaitWithSignal(
+      this.transport.read(
+        connection.device,
+        BOTA_STORAGE_SERVICE,
+        ENCRYPTED_UPLOAD_V2_CAPABILITY_CHARACTERISTIC,
+      ),
+      runtimeSignal,
       'transfer_recording',
-      async (connection, runtimeSignal) => {
-        const raw = await awaitWithSignal(
-          this.transport.read(
-            connection.device,
-            BOTA_STORAGE_SERVICE,
-            ENCRYPTED_UPLOAD_V2_CAPABILITY_CHARACTERISTIC,
-          ),
-          runtimeSignal,
-          'transfer_recording',
-        )
-        const decoded = this.core.decodeEncryptedUploadV2Capabilities(raw)
-        await this.refreshUploadContext(connection, decoded, runtimeSignal)
-        const nonce = await awaitWithSignal(this.transport.read(connection.device, BOTA_AUTH_SERVICE, AUTH_NONCE_CHARACTERISTIC), runtimeSignal, 'transfer_recording')
-        if (nonce.length !== 16) { nonce.fill(0); throw new BotaSDKError('protocol_error', 'transfer_recording') }
-        return {
-          connection,
-          raw: raw.slice(),
-          sha256: hashBytes(this.core, raw),
-          decoded,
-          nonce,
-        }
-      },
-      signal,
     )
+    const decoded = this.core.decodeEncryptedUploadV2Capabilities(raw)
+    await this.refreshUploadContext(connection, decoded, runtimeSignal)
+    const nonce = await awaitWithSignal(this.transport.read(connection.device, BOTA_AUTH_SERVICE, AUTH_NONCE_CHARACTERISTIC), runtimeSignal, 'transfer_recording')
+    if (nonce.length !== 16) { nonce.fill(0); throw new BotaSDKError('protocol_error', 'transfer_recording') }
+    return {
+      connection,
+      raw: raw.slice(),
+      sha256: hashBytes(this.core, raw),
+      decoded,
+      nonce,
+    }
   }
 
   private async readOptionalV2Capability(
@@ -1303,12 +1326,13 @@ export class RecordingManager {
     body: (
       connection: ConnectedRecordingDevice,
       signal: AbortSignal,
+      runWorkflow: PreparedWorkflowRunner,
     ) => Promise<T>,
     externalSignal?: AbortSignal,
   ): Promise<T> {
     const connection = this.requireConnectedDevice()
     try {
-      return await this.runtime.runExclusive(operation, async (signal) => {
+      return await this.runtime.runExclusive(operation, async (signal, runWorkflow) => {
         const combinedSignal = combineSignals(externalSignal, signal)
         throwIfAborted(combinedSignal, operation)
         const current = this.requireConnectedDevice()
@@ -1327,7 +1351,7 @@ export class RecordingManager {
         if (decodeSerial(value, operation) !== current.serialNumber) {
           throw new BotaSDKError('identity_mismatch', operation)
         }
-        return await body(current, combinedSignal)
+        return await body(current, combinedSignal, runWorkflow)
       })
     } catch (error) {
       const normalized = recordingError(error, operation)

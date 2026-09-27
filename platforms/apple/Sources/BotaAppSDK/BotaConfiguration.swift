@@ -25,6 +25,7 @@ public struct BotaConfiguration: @unchecked Sendable {
                 decode: { try mapper.decodeEncryptedUploadV2Capabilities($0) }
             )
             let connection = DeviceConnectionRegistry()
+            let encryptedUploadV2Catalog = EncryptedUploadV2Catalog(bluetooth: bluetooth, mapper: mapper)
             let persistence = FilePersistenceHost(
                 rootDirectory: root.appendingPathComponent("State", isDirectory: true)
             )
@@ -74,7 +75,41 @@ public struct BotaConfiguration: @unchecked Sendable {
                             frame: frame
                         )
                     },
-                    nextWriteID: { encryptedUploadV2WriteIDs.next() }
+                    nextWriteID: { encryptedUploadV2WriteIDs.next() },
+                    refreshUploadContext: { provider, validateOwner in
+                        guard let device = await connection.current else { throw facadeCancelled(operation: .transferRecording) }
+                        let generation = try await connection.generation(for: device)
+                        let context = EncryptedUploadV2ContextHost(
+                            begin: { attemptID in
+                                try await validateOwner()
+                                try await connection.require(device, generation: generation)
+                                try Task.checkCancellation()
+                                try await bluetooth.write(peripheralID: device.id,
+                                    serviceUUID: BotaBluetoothUUIDs.storageService, characteristicUUID: BotaBluetoothUUIDs.uploadContextV2,
+                                    data: mapper.createEncryptedUploadV2ContextBegin(attemptID: attemptID))
+                                try await connection.require(device, generation: generation)
+                            },
+                            read: {
+                                try await validateOwner()
+                                try await connection.require(device, generation: generation)
+                                try Task.checkCancellation()
+                                let data = try await bluetooth.read(peripheralID: device.id,
+                                    serviceUUID: BotaBluetoothUUIDs.storageService, characteristicUUID: BotaBluetoothUUIDs.uploadContextV2)
+                                try await connection.require(device, generation: generation)
+                                return try mapper.decodeEncryptedUploadV2ContextSnapshot(data)
+                            },
+                            sendDocument: { kind, bytes in
+                                try await validateOwner()
+                                try await connection.require(device, generation: generation)
+                                try Task.checkCancellation()
+                                try await encryptedUploadV2SignedBlobWriter.send(peripheralID: device.id,
+                                    kind: kind, writeID: encryptedUploadV2WriteIDs.next(), document: bytes, maximumDocumentBytes: 408)
+                                try await connection.require(device, generation: generation)
+                            },
+                            validateDocument: { try mapper.validateEncryptedUploadV2ContextDocument(kind: $0, data: $1) }
+                        )
+                        try await context.refresh(provider: provider)
+                    }
                 )
             )
             let recordingSink = FileRecordingSinkHost(
@@ -94,7 +129,12 @@ public struct BotaConfiguration: @unchecked Sendable {
             return DeviceRuntime(
                 engine: CoreEngineActor(abi: try CoreAbiClient(), host: executor),
                 capabilities: .all,
+                authorize: { _ in try Self.validateBluetoothAuthorization() },
                 connection: connection,
+                connectionMtu: { peripheralID in
+                    // Without-response payload size excludes the three-byte ATT header.
+                    try await bluetooth.maximumWriteValueLength(peripheralID: peripheralID, withResponse: false) + 3
+                },
                 disconnect: { peripheralID in
                     try await bluetooth.disconnect(peripheralID: peripheralID)
                 },
@@ -163,8 +203,18 @@ public struct BotaConfiguration: @unchecked Sendable {
                         characteristicUUID: characteristicUUID
                     )
                 },
+                decodeDiagnosticEvents: { try mapper.decodeDiagnosticEvents($0) },
+                createDiagnosticCommand: { try mapper.createDiagnosticCommand($0) },
                 readEncryptedUploadV2Capabilities: { peripheralID in
                     try await encryptedUploadV2Capabilities.readFresh(peripheralID: peripheralID)
+                },
+                listEncryptedUploadV2Recordings: { peripheralID in
+                    let capability = try await encryptedUploadV2Capabilities.readFresh(peripheralID: peripheralID)
+                    try mapper.validateEncryptedUploadV2Admission(capability.rawValue)
+                    return try await encryptedUploadV2Catalog.list(peripheralID: peripheralID)
+                },
+                validateEncryptedUploadV2Selection: {
+                    try mapper.validateEncryptedUploadV2Selection(material: $0, recording: $1, capability: $2, checkpoint: $3)
                 },
                 encryptedUploadV2Checkpoint: { serialNumber, recordingUUID, recordingGeneration in
                     try await encryptedUploadV2Transfer.checkpoint(
@@ -177,7 +227,11 @@ public struct BotaConfiguration: @unchecked Sendable {
                     try await bluetooth.maximumWriteValueLength(peripheralID: peripheralID)
                 },
                 registerEncryptedUploadV2Material: { id, material in
-                    try await encryptedUploadV2Material.register(id: id, provider: material.provider)
+                    guard let device = await connection.current else { throw facadeCancelled(operation: .transferRecording) }
+                    let generation = try await connection.generation(for: device)
+                    var provider = material.provider
+                    provider.validateConnection = { try await connection.require(device, generation: generation) }
+                    try await encryptedUploadV2Material.register(id: id, provider: provider)
                 },
                 terminateEncryptedUploadV2Material: { id, outcome in
                     try? await encryptedUploadV2Material.terminate(id: id, outcome: outcome)

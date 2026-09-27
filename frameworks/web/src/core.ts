@@ -664,6 +664,12 @@ export interface CoreBridge {
   encodeUploadContextBegin(attemptId: number): Uint8Array
   decodeUploadContextSnapshot(value: Uint8Array): { state: number; attemptId: number; result: number; payload: Uint8Array }
   validateUploadContextDocument(kind: 3 | 4, value: Uint8Array): void
+  decodeUploadAuthorizationIdentity(value: Uint8Array): {
+    profile: number; storageFormat: number; policy: number; channels: number; flags: number
+    ownerRevision: number; recordingGeneration: number
+    minimumCiphertextLength: bigint; maximumCiphertextLength: bigint
+    uploadSessionId: string; recordingUuid: string; ciphertextSha256: Uint8Array
+  }
   startExactConnection(input: CoreConnectionInput): CoreEffectEnvelope[]
   startSelectedConnection(input: Omit<CoreConnectionInput, 'expectedSerialNumber'>): CoreEffectEnvelope[]
   startReconnect(input: CoreReconnectInput): CoreEffectEnvelope[]

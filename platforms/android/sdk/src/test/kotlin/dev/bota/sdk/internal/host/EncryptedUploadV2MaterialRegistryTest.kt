@@ -17,6 +17,17 @@ import org.junit.Test
 
 internal class EncryptedUploadV2MaterialRegistryTest {
     @Test
+    fun alreadyStagedMaterialSkipsRequestAndRejectsLateDecision() = runTest {
+        val registry = EncryptedUploadV2MaterialRegistry()
+        registry.register("material-1", material(shouldUpload = { false }))
+        val prepared = registry.preparedMaterial("material-1")
+        assertFalse(registry.shouldUploadCiphertext("material-1", prepared.lease, evidence(ByteArray(580))))
+        registry.terminate("material-1", EncryptedUploadV2TerminalOutcome.Completed)
+        assertFailsSuspend<EncryptedUploadV2MaterialRegistryException> {
+            registry.shouldUploadCiphertext("material-1", prepared.lease, evidence(ByteArray(580)))
+        }
+    }
+    @Test
     fun applicationMaterialStaysNativeAndCompletionIsReceiptGated() = runTest {
         val calls = mutableListOf<String>()
         val authorization = ByteArray(408) { 0x11 }
@@ -91,6 +102,7 @@ internal class EncryptedUploadV2MaterialRegistryTest {
         receipt: ByteArray = ByteArray(336) { 2 },
         calls: MutableList<String> = mutableListOf(),
         cancel: suspend () -> Unit = { calls += "cancel" },
+        shouldUpload: suspend (EncryptedUploadV2TransferEvidence) -> Boolean = { true },
     ) = EncryptedUploadV2Material(
         materialId = "material-1",
         recordingId = "recording-1",
@@ -111,6 +123,7 @@ internal class EncryptedUploadV2MaterialRegistryTest {
             receipt
         },
         cancel = cancel,
+        shouldUploadCiphertext = shouldUpload,
     )
 
     private fun evidence(manifest: ByteArray) = EncryptedUploadV2TransferEvidence(

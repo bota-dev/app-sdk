@@ -79,6 +79,40 @@ internal class EncryptedUploadV2MaterialRegistry {
         return request
     }
 
+    suspend fun shouldUploadCiphertext(
+        id: String,
+        lease: EncryptedUploadV2MaterialLease,
+        evidence: EncryptedUploadV2TransferEvidence,
+    ): Boolean {
+        validateEvidence(evidence)
+        val entry = requiredEntry(id, lease)
+        val result = entry.material.shouldUploadCiphertext(evidence)
+        requireCurrent(id, entry.registrationId)
+        return result
+    }
+
+    suspend fun refreshUploadContext(
+        id: String,
+        lease: EncryptedUploadV2MaterialLease,
+        exchange: suspend (dev.bota.sdk.EncryptedUploadV2ContextProvider) -> Unit,
+    ) {
+        val entry = requiredEntry(id, lease)
+        val provider = entry.material.uploadContext
+            ?: throw EncryptedUploadV2MaterialRegistryException("upload context provider is missing")
+        exchange { nonce ->
+            requireCurrent(id, entry.registrationId)
+            val result = provider(nonce)
+            requireCurrent(id, entry.registrationId)
+            dev.bota.sdk.EncryptedUploadV2ContextExchange(result.challenge) { proof ->
+                requireCurrent(id, entry.registrationId)
+                val response = result.exchangeProof(proof)
+                requireCurrent(id, entry.registrationId)
+                response
+            }
+        }
+        requireCurrent(id, entry.registrationId)
+    }
+
     suspend fun submitManifest(
         id: String,
         lease: EncryptedUploadV2MaterialLease,

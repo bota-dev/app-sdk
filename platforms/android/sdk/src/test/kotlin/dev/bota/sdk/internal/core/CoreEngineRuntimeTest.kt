@@ -199,6 +199,60 @@ class CoreEngineRuntimeTest {
     }
 
     @Test
+    fun cancellationWaitsForCleanupEffectsBeforeReturning() = runTest {
+        val core = CleanupCore()
+        val cleanupRelease = CompletableDeferred<Unit>()
+        val cleanupFinished = CompletableDeferred<Boolean>()
+        val runtime = CoreEngineRuntime(core, object : CoreEffectHandler {
+            override fun execute(effect: CoreEffect) = flow {
+                var completed = false
+                try {
+                    cleanupRelease.await()
+                    completed = true
+                    emit(CoreHostEvent.fromEffect(effect, HostEventKind.BleWriteCompleted))
+                } finally {
+                    cleanupFinished.complete(completed)
+                }
+            }
+
+            override suspend fun cancel(cancellationId: CoreCancellationId) {
+                // Resumption queues behind this cancellation on the core dispatcher.
+                cleanupRelease.complete(Unit)
+            }
+        })
+        val command = CoreCommand.readDeviceLogs("TEST123456")
+        val collecting = launch { runtime.run(command, CoreCapabilities.Bluetooth).collect() }
+        core.started.await()
+        try {
+            collecting.cancelAndJoin()
+            val completed = withContext(Dispatchers.Default) {
+                withTimeout(AsyncSettlementTimeoutMilliseconds) { cleanupFinished.await() }
+            }
+            assertTrue("STOP must finish instead of being cancelled with the old subscription", completed)
+        } finally {
+            runtime.close()
+        }
+    }
+
+    @Test
+    fun cancellingAnAlreadyCancelledLogWorkflowIsIdempotent() = runTest {
+        val core = RestartableCore()
+        val runtime = CoreEngineRuntime(core) { flowOf() }
+        val command = CoreCommand.readDeviceLogs("TEST123456")
+        val collecting = async { runtime.run(command, CoreCapabilities.Bluetooth).toList() }
+        core.started.await()
+
+        try {
+            runtime.cancel(command.cancellationId)
+            assertEquals(CoreNotificationKind.Cancelled, collecting.await().last().kind)
+            runtime.cancel(command.cancellationId)
+            assertFalse(runtime.cancelAndReportExactSettlement(command.cancellationId))
+        } finally {
+            runtime.close()
+        }
+    }
+
+    @Test
     fun cancellationDuringConfirmationWaitsForTheExactHostCompletion() = runTest {
         val core = DeferredConfirmationCore()
         val confirmationEntered = CompletableDeferred<Unit>()
@@ -326,6 +380,33 @@ class CoreEngineRuntimeTest {
         assertFalse(core.cancelEntered.isCompleted)
         runtime.close()
     }
+}
+
+private class CleanupCore : NativeCore {
+    private val outputs = ArrayDeque<NativePacket>()
+    private lateinit var command: NativePacket
+    val started = CompletableDeferred<Unit>()
+
+    override fun start(command: NativePacket, capabilityBits: ULong) {
+        this.command = command
+        outputs += NativePacket(kind = 0x0401)
+        started.complete(Unit)
+    }
+    override fun poll(): NativePacket? = outputs.removeFirstOrNull()
+    override fun dispatch(event: NativePacket) = Unit
+    override fun cancel(cancellationHigh: ULong, cancellationLow: ULong) {
+        outputs += NativePacket(
+            kind = CoreEffectKind.BluetoothWrite.wireValue,
+            operation = 11,
+            requestIdBits = 1,
+            cancellationHighBits = command.cancellationHighBits,
+            cancellationLowBits = command.cancellationLowBits,
+        )
+        outputs += NativePacket(kind = 0x040b)
+    }
+    override fun decode(packet: NativePacket): NativePacket = error("unused")
+    override fun encode(packet: NativePacket): NativePacket = error("unused")
+    override fun close() = Unit
 }
 
 private class DeferredConfirmationCore(

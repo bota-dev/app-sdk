@@ -1,6 +1,8 @@
 #!/usr/bin/env ruby
 
 require_relative "../scripts/bota_device_sdk_spm_workaround"
+require "tmpdir"
+require "xcodeproj"
 
 BuildConfiguration = Struct.new(:name)
 
@@ -53,11 +55,12 @@ class FakeProject
 end
 
 class FakeInstaller
-  attr_reader :aggregate_targets, :pods_project
+  attr_reader :aggregate_targets, :pods_project, :pod_targets
 
-  def initialize(targets:, aggregate_targets:)
+  def initialize(targets:, aggregate_targets:, pod_targets: [])
     @pods_project = FakeProject.new(targets)
     @aggregate_targets = aggregate_targets
+    @pod_targets = pod_targets
   end
 end
 
@@ -151,3 +154,35 @@ assert(
 assert(dynamic_debug.saved_paths.empty?, "dynamic linkage must not rewrite aggregate configs")
 
 puts "BotaDeviceSDK SPM module-map workaround passed"
+
+Dir.mktmpdir("bota-pod-modulemap") do |root|
+  dependency = Struct.new(:user_build_configurations, :path, :build_settings) do
+    def xcconfig_path(_name)
+      path
+    end
+  end.new({ "Debug" => :debug }, Pathname.new(File.join(root, "Upload.debug.xcconfig")))
+  nested = "${PODS_CONFIGURATION_BUILD_DIR}/BotaDeviceSDK/BotaDeviceSDK.modulemap"
+  Xcodeproj::Config.new(
+    "OTHER_SWIFT_FLAGS" => "$(inherited) -Xcc -fmodule-map-file=#{nested}",
+    "OTHER_CFLAGS" => "$(inherited) -fmodule-map-file=#{nested}",
+    "OTHER_LDFLAGS" => "-ObjC"
+  ).save_as(dependency.path)
+  cached = Xcodeproj::Config.new(dependency.path)
+  dependency.build_settings = { "Debug" => Struct.new(:xcconfig).new(cached) }
+  installer = FakeInstaller.new(targets: [bota_target], aggregate_targets: [], pod_targets: [dependency])
+  BotaDeviceSDKSPMWorkaround.apply(installer)
+  # Expo appends macro flags by re-saving CocoaPods' cached config after SPM.
+  cached.save_as(dependency.path)
+  config = Xcodeproj::Config.new(dependency.path)
+  %w[OTHER_SWIFT_FLAGS OTHER_CFLAGS].each do |key|
+    assert(config.attributes.fetch(key).include?(expected_modulemap),
+           "dependent pod #{key} must reference the flattened module map")
+    assert(!config.attributes.fetch(key).include?(nested), "nested module-map path must be removed")
+  end
+  assert(File.read(dependency.path).include?("OTHER_LDFLAGS = -ObjC"), "dependent pod linker flags must remain unchanged")
+  before = File.read(dependency.path)
+  BotaDeviceSDKSPMWorkaround.apply(installer)
+  assert(File.read(dependency.path) == before, "dependent pod rewrite must be idempotent")
+end
+
+puts "BotaDeviceSDK dependent-pod module-map workaround passed"

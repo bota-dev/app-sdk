@@ -241,16 +241,7 @@ pub fn decode_encrypted_upload_v2_capabilities(
         "capability value length",
     )?;
     let flags = cursor.u32_le(protocol::ENCRYPTED_UPLOAD_V2_CAPABILITY_FLAGS_OFFSET)?;
-    let known_flags = protocol::ENCRYPTED_UPLOAD_V2_CAP_TRANSFER_FRAMING
-        | protocol::ENCRYPTED_UPLOAD_V2_CAP_STORAGE
-        | protocol::ENCRYPTED_UPLOAD_V2_CAP_FULL_RECORDING_IDENTITY
-        | protocol::ENCRYPTED_UPLOAD_V2_CAP_DURABLE_RESUME
-        | protocol::ENCRYPTED_UPLOAD_V2_CAP_AUTHENTICATED_MANIFEST
-        | protocol::ENCRYPTED_UPLOAD_V2_CAP_AUTHENTICATED_RECEIPT
-        | protocol::ENCRYPTED_UPLOAD_V2_CAP_BATCH
-        | protocol::ENCRYPTED_UPLOAD_V2_CAP_STREAMING
-        | protocol::ENCRYPTED_UPLOAD_V2_CAP_UPLOAD_CONTEXT
-        | protocol::ENCRYPTED_UPLOAD_V2_CAP_EXPIRED_SESSION_RECOVERY;
+    let known_flags = protocol::ENCRYPTED_UPLOAD_V2_CAP_KNOWN_MASK;
     require_known_bits(flags, known_flags, "capability flags")?;
     require_zero(
         cursor.slice(
@@ -1846,17 +1837,17 @@ fn decode_blob_prefix(cursor: &Cursor<'_>) -> Result<(u8, u32), DeviceSdkError> 
 
 fn signed_document_length(kind: u8, operation: Operation) -> Result<usize, DeviceSdkError> {
     match kind {
-        protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_CHALLENGE => {
-            Ok(usize::from(protocol::UPLOAD_CONTEXT_CHALLENGE_LENGTH))
-        }
-        protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_RESULT => {
-            Ok(usize::from(protocol::UPLOAD_CONTEXT_RESULT_LENGTH))
-        }
         protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_AUTHORIZATION => {
             Ok(protocol::UPLOAD_AUTHORIZATION_V2_FIXED_LENGTH)
         }
         protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_RECEIPT => {
             Ok(protocol::COMPLETION_RECEIPT_V2_FIXED_LENGTH)
+        }
+        protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_CHALLENGE => {
+            Ok(protocol::UPLOAD_CONTEXT_CHALLENGE_FIXED_LENGTH)
+        }
+        protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_RESULT => {
+            Ok(protocol::UPLOAD_CONTEXT_RESULT_FIXED_LENGTH)
         }
         _ if operation == Operation::Decode => Err(unknown_decode(kind, "signed blob kind")),
         _ => Err(invalid_encode("unknown signed blob kind")),

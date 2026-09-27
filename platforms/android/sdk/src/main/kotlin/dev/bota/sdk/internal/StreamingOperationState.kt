@@ -132,6 +132,10 @@ internal class StreamingOperationState(private val label: String) {
         } ?: false
     }
 
+    fun isActive(id: UUID, configured: DeviceRuntime): Boolean = synchronized(lock) {
+        active?.let { it.id == id && it.runtime === configured } == true
+    }
+
     suspend fun finish(id: UUID) {
         val operation = remove(id) ?: return
         runCleanupActions(operation.cleanup, { operation.runtime.operations.end(id) })

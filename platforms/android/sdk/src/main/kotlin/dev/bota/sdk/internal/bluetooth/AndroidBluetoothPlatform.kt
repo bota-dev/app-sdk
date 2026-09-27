@@ -640,7 +640,7 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
     private fun characteristic(key: CharacteristicKey): Pair<BluetoothGatt, BluetoothGattCharacteristic> {
         val gatt = requireGatt(key.peripheralId, key.generation)
         val characteristic = gatt.getService(key.serviceUuid)?.getCharacteristic(key.characteristicUuid)
-            ?: throw BluetoothTransportException(404, "GATT characteristic was not discovered")
+            ?: throw BluetoothCharacteristicNotFoundException()
         return gatt to characteristic
     }
 

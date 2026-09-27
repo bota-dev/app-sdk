@@ -3,6 +3,7 @@ package dev.bota.sdk.reactnative
 import dev.bota.sdk.BotaDeviceClient
 import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.model.DeviceLogLine
+import dev.bota.sdk.model.DeviceDiagnosticsBatch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -15,6 +16,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 internal interface BotaDeviceSDKAndroidLogClient {
+    suspend fun readDiagnosticEvents(device: ConnectedDevice): DeviceDiagnosticsBatch
+    suspend fun acknowledgeDiagnosticEvents(device: ConnectedDevice, acceptedEventIds: List<String>)
     fun streamLogs(device: ConnectedDevice): Flow<DeviceLogLine>
 
     suspend fun stop()
@@ -29,12 +32,25 @@ internal class BotaDeviceSDKSharedAndroidLogClient(
     override suspend fun stop() {
         client.logs.stop()
     }
+
+    override suspend fun readDiagnosticEvents(device: ConnectedDevice): DeviceDiagnosticsBatch =
+        client.logs.readDiagnosticEvents(device)
+
+    override suspend fun acknowledgeDiagnosticEvents(device: ConnectedDevice, acceptedEventIds: List<String>) {
+        client.logs.acknowledgeDiagnosticEvents(device, acceptedEventIds)
+    }
 }
 
 internal class BotaDeviceSDKAndroidLogs(
     private val client: BotaDeviceSDKAndroidLogClient,
     private val scope: CoroutineScope,
 ) {
+    suspend fun readDiagnosticEvents(device: ConnectedDevice): DeviceDiagnosticsBatch =
+        client.readDiagnosticEvents(device)
+
+    suspend fun acknowledgeDiagnosticEvents(device: ConnectedDevice, acceptedEventIds: List<String>) {
+        client.acknowledgeDiagnosticEvents(device, acceptedEventIds)
+    }
     private val operations = Mutex()
     private val streamLock = Any()
     private var activeStream: Job? = null

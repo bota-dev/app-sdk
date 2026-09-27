@@ -30,10 +30,10 @@ fn context_shapes_and_blob_lengths_fail_closed() {
         document[..8].copy_from_slice(magic);
         document[8] = 1;
         document[10..12].copy_from_slice(&(length as u16).to_le_bytes());
-        assert!(validate_upload_context_document(kind, &document).is_ok());
-        assert!(validate_upload_context_document(kind, &document[..length - 1]).is_err());
+        assert!(decode_upload_context_document(kind, &document).is_ok());
+        assert!(decode_upload_context_document(kind, &document[..length - 1]).is_err());
         document[0] = 0;
-        assert!(validate_upload_context_document(kind, &document).is_err());
+        assert!(decode_upload_context_document(kind, &document).is_err());
         let frame = EncryptedUploadV2SignedBlob::Begin {
             kind,
             write_id: 17,
@@ -46,5 +46,5 @@ fn context_shapes_and_blob_lengths_fail_closed() {
             frame
         );
     }
-    assert!(validate_upload_context_document(5, &[]).is_err());
+    assert!(decode_upload_context_document(5, &[]).is_err());
 }

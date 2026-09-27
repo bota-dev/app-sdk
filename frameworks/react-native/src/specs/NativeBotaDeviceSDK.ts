@@ -156,6 +156,16 @@ export type NativeEncryptedUploadV2Recording = {
   generation: number;
   ciphertextLength: string;
   ciphertextSha256: string;
+  startedAtMs?: string;
+  durationMs?: string;
+  plaintextLength?: string;
+  storageFormat?: number;
+};
+
+export type NativePendingRecording = {
+  profile: string;
+  legacy?: NativeDeviceRecording;
+  encrypted?: NativeEncryptedUploadV2Recording;
 };
 
 export type NativeEncryptedUploadV2Capability = {
@@ -223,6 +233,7 @@ export type NativeRecordingTransferResult = {
   localPath: string;
   e2eEncrypted: boolean;
   contentSha256?: string;
+  fileSizeBytes: number;
 };
 
 export type NativeRecordingUploadProgress = {
@@ -236,6 +247,7 @@ export type NativeRecordingUploadRequest = {
   recordingId: string;
   deviceId: string;
   localPath: string;
+  fileSizeBytes?: number;
   uploadUrl: string;
   uploadToken?: string;
   completeUrl?: string;
@@ -328,6 +340,44 @@ export type NativeDeviceLogLine = {
   message: string;
   isBacklog: boolean;
 };
+
+export type NativeDiagnosticFault = {
+  cpu_id: number;
+  cpu_emu: string;
+  core_emu: string;
+  hsb_emu: string;
+  audio_emu: string;
+  wireless_emu: string;
+};
+export type NativeDiagnosticExecution = {
+  task?: string;
+  reti?: string;
+  rets?: string;
+  pc_trace: ReadonlyArray<string>;
+};
+export type NativeDiagnosticRuntime = {
+  heap_free_bytes?: number;
+  task_stack_remaining_bytes?: number;
+};
+export type NativeDiagnosticBreadcrumb = { delta_ms: number; code: string; arg0: number };
+export type NativeDiagnosticReport = {
+  fault: NativeDiagnosticFault;
+  execution: NativeDiagnosticExecution;
+  runtime?: NativeDiagnosticRuntime;
+  breadcrumbs?: ReadonlyArray<NativeDiagnosticBreadcrumb>;
+};
+export type NativeDiagnosticEvent = {
+  event_id: string;
+  event_type: string;
+  reason_code: string;
+  uptime_ms: number;
+  signature: string;
+  firmware_build_id: string;
+  subsystem: string;
+  state_before_event: string;
+  report?: NativeDiagnosticReport;
+};
+export type NativeDiagnosticsBatch = { schema_version: number; events: ReadonlyArray<NativeDiagnosticEvent> };
 
 export type NativeWiFiConfigResult = {
   success: boolean;
@@ -490,6 +540,8 @@ export interface Spec extends TurboModule {
   startWiFiStatusUpdates: (device: NativeConnectedDevice) => Promise<void>;
   startDeviceLogs: (device: NativeConnectedDevice) => Promise<void>;
   stopDeviceLogs: () => Promise<void>;
+  readDiagnosticEvents: (device: NativeConnectedDevice) => Promise<NativeDiagnosticsBatch>;
+  acknowledgeDiagnosticEvents: (device: NativeConnectedDevice, acceptedEventIds: ReadonlyArray<string>) => Promise<void>;
   stopStatusUpdates: () => Promise<void>;
   stopWiFiStatusUpdates: () => Promise<void>;
   stopScan: () => Promise<void>;
@@ -503,6 +555,9 @@ export interface Spec extends TurboModule {
     recording: NativeEncryptedUploadV2Recording,
     operationId: string
   ) => Promise<void>;
+  listPendingRecordings: (device: NativeConnectedDevice) => Promise<ReadonlyArray<NativePendingRecording>>;
+  cancelEncryptedRecordingV2: (operationId: string) => Promise<void>;
+  releaseEncryptedUploadV2Material: (materialRegistrationId: string) => Promise<void>;
   resolveEncryptedUploadV2Profile: (
     requestId: string,
     decision: NativeEncryptedUploadV2ProfileDecision
@@ -517,6 +572,7 @@ export interface Spec extends TurboModule {
   ) => Promise<void>;
   uploadRecordingFile: (request: NativeRecordingUploadRequest) => Promise<void>;
   cancelRecordingUpload: (taskId: string) => Promise<void>;
+  releaseRecordingFile: (taskId: string, localPath: string) => Promise<void>;
   loadCompatibilityUploadQueue: () => Promise<string>;
   saveCompatibilityUploadQueue: (serializedTasks: string) => Promise<void>;
   stopAllRecordingOperations: () => Promise<void>;

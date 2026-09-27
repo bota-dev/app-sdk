@@ -9,6 +9,7 @@ import {
 } from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 import ts from 'typescript';
 
@@ -310,6 +311,203 @@ function diagnosticHost() {
 
 export function surfaceDigest(surface) {
   return createHash('sha256').update(JSON.stringify(surface)).digest('hex');
+}
+
+function normalizeLiteralUnionOrder(value) {
+  if (Array.isArray(value)) return value.map(normalizeLiteralUnionOrder);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, child]) =>
+      [key, normalizeLiteralUnionOrder(child)]));
+  }
+  return typeof value === 'string' && /^"[^"]+"(?: \| "[^"]+")+$/.test(value)
+    ? value.split(' | ').sort().join(' | ')
+    : value;
+}
+
+export function validateCompatibleReactNativeSurface({ frozen, surface, additions }) {
+  const expected = structuredClone(frozen);
+  const errors = [];
+  const byName = new Map(expected.exports.map((entry) => [entry.name, entry]));
+  for (const [name, members] of Object.entries(additions.members)) {
+    const entry = byName.get(name);
+    if (!entry) {
+      errors.push(`${name}: addition has no frozen export`);
+      continue;
+    }
+    for (const member of members) {
+      if (entry.members.some((old) => old.name === member.name)) {
+        errors.push(`${name}.${member.name}: cannot overwrite a frozen member`);
+      } else if (!member.optional && !member.declarationKinds.includes('MethodDeclaration')) {
+        errors.push(`${name}.${member.name}: addition must be an optional property or method`);
+      } else {
+        entry.members.push(member);
+      }
+    }
+    entry.members.sort((a, b) => a.name.localeCompare(b.name));
+  }
+  for (const [name, signatures] of Object.entries(additions.constructSignatures)) {
+    const entry = byName.get(name);
+    if (!entry) errors.push(`${name}: overload has no frozen export`);
+    else entry.constructSignatures.push(...signatures);
+  }
+  for (const entry of additions.exports) {
+    if (byName.has(entry.name)) errors.push(`${entry.name}: cannot replace a frozen export`);
+    else {
+      expected.exports.push(entry);
+      byName.set(entry.name, entry);
+    }
+  }
+  const actual = new Map(surface.exports.map((entry) => [entry.name, entry]));
+  for (const entry of expected.exports) {
+    const found = actual.get(entry.name);
+    const normalize = (value) => value && normalizeLiteralUnionOrder({
+      ...value,
+      constructSignatures: [...value.constructSignatures].sort(),
+      members: [...value.members].sort((a, b) => a.name.localeCompare(b.name)),
+    });
+    if (!isDeepStrictEqual(normalize(entry), normalize(found))) {
+      errors.push(`${entry.name}: public surface differs from frozen contract plus enumerated maintenance additions`);
+    }
+  }
+  return errors;
+}
+
+export function validateMaintenanceSelection({ contract, compatibility, expectedRevision }) {
+  const errors = [];
+  for (const [key, label] of [
+    ['reactNativeMaintenanceBaseline', 'maintenance'],
+    ['reactNativeWorkflowBaseline', 'workflow'],
+  ]) {
+    const selected = compatibility[key];
+    if (!selected || selected.version !== contract.packageVersion ||
+        selected.revision !== contract.sourceRevision || !/^[a-f0-9]{40}$/.test(selected.revision)) {
+      errors.push(`${label} selection does not match the pinned maintenance contract`);
+    }
+  }
+  if (expectedRevision !== undefined && expectedRevision !== contract.sourceRevision) {
+    errors.push('explicit audit revision does not match the pinned maintenance contract; review source selection');
+  }
+  return errors;
+}
+
+export function validateMaintenanceSource({ contract, source, toolchain }) {
+  const errors = [];
+  for (const field of ['package', 'packageVersion', 'sourceRevision', 'surfaceDigest']) {
+    if (contract[field] !== source[field]) errors.push(`maintenance source ${field} differs`);
+  }
+  if (!isDeepStrictEqual(contract.toolchain, toolchain)) {
+    errors.push('maintenance source toolchain or dependency lock differs');
+  }
+  return errors;
+}
+
+const MAINTENANCE_EXPORTS = [
+  'DeviceDiagnosticEvent', 'DeviceDiagnosticEventType', 'DeviceDiagnosticReasonCode',
+  'DeviceDiagnosticsBatch', 'DeviceDiagnosticsDecoder', 'diagnosticEventIdCommand',
+  'RecordingDataStore', 'RecordingManagerOptions', 'UPLOAD_RECOVERY_VERSION',
+  'UploadRecoveryContext', 'UploadRecoveryProvider',
+];
+const MAINTENANCE_MEMBERS = {
+  BotaConfig: ['recordingDataStore', 'uploadRecoveryProvider'],
+  DeviceManager: ['acknowledgeDiagnosticEvents', 'readDiagnosticEvents'],
+  UploadInfo: ['alreadyUploaded', 'complete', 'dispose', 'recoveryScope', 'signal'],
+  UploadTask: ['complete', 'fileSizeBytes', 'nextAttemptAt', 'recordingUuid', 'recoveryScope', 'relayUpload'],
+};
+const NATIVE_OWNED_EXPORTS = [
+  'EncryptedUploadProfileSelectionError', 'EncryptedUploadProfileSelectionErrorCode',
+  'EncryptedUploadV2CapabilitySnapshot', 'EncryptedUploadV2Checkpoint',
+  'EncryptedUploadV2CiphertextSink', 'EncryptedUploadV2ContextProvider',
+  'EncryptedUploadV2File', 'EncryptedUploadV2FileSink', 'EncryptedUploadV2Material',
+  'EncryptedUploadV2Provider', 'EncryptedUploadV2ProviderContext', 'EncryptedUploadV2Recording',
+  'EncryptedUploadV2RuntimeError', 'EncryptedUploadV2RuntimeErrorCode',
+  'EncryptedUploadV2SyncOptions', 'EncryptedUploadV2TransferEvidence',
+  'PersistedEncryptedUploadV2Checkpoint', 'UploadSecurityPolicy',
+];
+
+function maintenanceToolchain(sdkPath) {
+  return {
+    nodeMajor: Number(process.versions.node.split('.')[0]),
+    typescript: ts.version,
+    sourceLockDigest: createHash('sha256')
+      .update(readFileSync(resolve(sdkPath, 'package-lock.json'))).digest('hex'),
+  };
+}
+
+export function buildMaintenanceApiContract(options) {
+  if (!/^[a-f0-9]{40}$/.test(options.expectedCommit ?? '')) {
+    throw new Error('maintenance capture requires a full immutable --expected-commit');
+  }
+  const source = buildReactNativeApiContract({ ...options, allowDirty: false });
+  const toolchain = maintenanceToolchain(options.sdkPath);
+  if (toolchain.nodeMajor !== 22 || toolchain.typescript !== '6.0.3') {
+    throw new Error('maintenance capture requires Node 22 and locked TypeScript 6.0.3');
+  }
+  const frozen = validateReactNativeApiContract(JSON.parse(readFileSync(options.frozenContract, 'utf8')));
+  const byName = new Map(source.surface.exports.map((entry) => [entry.name, entry]));
+  const requireExport = (name) => {
+    if (!byName.has(name)) throw new Error(`missing maintenance export ${name}`);
+    return byName.get(name);
+  };
+  const classified = new Set([
+    ...frozen.surface.exports.map((entry) => entry.name),
+    ...MAINTENANCE_EXPORTS, ...NATIVE_OWNED_EXPORTS,
+  ]);
+  for (const entry of source.surface.exports) {
+    if (!classified.has(entry.name)) throw new Error(`unclassified maintenance export ${entry.name}`);
+  }
+  return {
+    schemaVersion: 1,
+    package: source.package,
+    packageVersion: source.packageVersion,
+    sourceRevision: source.sourceRevision,
+    surfaceDigest: source.surfaceDigest,
+    sourceExportCount: source.surface.exports.length,
+    frozenSurfaceDigest: frozen.surfaceDigest,
+    toolchain,
+    runtimeTestFiles: [
+      '__tests__/encryptedUploadV2ProtocolHandler.test.ts',
+      '__tests__/uploadRecovery.test.ts',
+      'src/ble/__tests__/deviceDiagnostics.test.ts',
+    ],
+    additions: {
+      exports: MAINTENANCE_EXPORTS.map(requireExport).sort((a, b) => a.name.localeCompare(b.name)),
+      members: Object.fromEntries(Object.entries(MAINTENANCE_MEMBERS).map(([name, members]) => [
+        name, members.map((memberName) => {
+          const member = requireExport(name).members.find((entry) => entry.name === memberName);
+          if (!member) throw new Error(`missing maintenance member ${name}.${memberName}`);
+          return member;
+        }),
+      ])),
+      // Preserve the frozen no-argument signature with an explicit overload.
+      constructSignatures: { RecordingManager: ['(options: RecordingManagerOptions) => RecordingManager'] },
+    },
+    excludedExports: NATIVE_OWNED_EXPORTS.map((name) => ({
+      name: requireExport(name).name,
+      reason: 'Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim.',
+    })),
+    sourceDifferencesFromFrozen: apiDifference(frozen.surface, source.surface),
+    limitations: [
+      'RecordingDataStore is a source-compatible type only; target configuration rejects JavaScript byte storage.',
+      'ProvisioningResult reset_pending/resetFinalized and v2 RecordingManager methods are outside this additions contract.',
+      'Maintenance inherited Error declaration differences do not relax the frozen target Error surface.',
+      'Additional target-native exports are outside this parity contract; old exported members remain exact.',
+      '33 deterministic workflow scenarios are not exhaustive runtime or physical-device parity.',
+    ],
+  };
+}
+
+export function verifyMaintenanceApiContract({ sdkPath, contract, compatibility, frozenContract, expectedRevision }) {
+  const expected = typeof contract === 'string'
+    ? JSON.parse(readFileSync(contract, 'utf8')) : contract;
+  const errors = validateMaintenanceSelection({ contract: expected, compatibility, expectedRevision });
+  if (errors.length) throw new Error(errors.join('\n'));
+  const actual = buildMaintenanceApiContract({ sdkPath, frozenContract,
+    expectedCommit: expected.sourceRevision, expectedVersion: expected.packageVersion });
+  errors.push(...validateMaintenanceSource({ contract: expected, source: actual, toolchain: actual.toolchain }));
+  if (!isDeepStrictEqual(actual, expected)) errors.push('maintenance additions or source inventory differs; review and recapture');
+  if (errors.length) throw new Error(errors.join('\n'));
+  return { sourceRevision: actual.sourceRevision, sourceExportCount: actual.sourceExportCount,
+    maintenanceExports: actual.additions.exports.length, frozenSurfaceDigest: actual.frozenSurfaceDigest };
 }
 
 function commandOutput(command, args, cwd) {
@@ -666,6 +864,9 @@ function parseArguments(argv) {
       case '--baseline-metadata':
         options.baselineMetadata = args[++index];
         break;
+      case '--frozen-contract':
+        options.frozenContract = args[++index];
+        break;
       case '--allow-dirty':
         options.allowDirty = true;
         break;
@@ -685,6 +886,21 @@ function requireOptions(options, names) {
 function runCli(argv) {
   const options = parseArguments(argv);
   switch (options.command) {
+    case 'capture-maintenance': {
+      requireOptions(options, ['sdkPath', 'expectedCommit', 'expectedVersion', 'output', 'frozenContract']);
+      const contract = buildMaintenanceApiContract(options);
+      writeFileSync(resolve(options.output), `${JSON.stringify(contract, null, 2)}\n`);
+      console.log(`captured maintenance ${contract.sourceRevision}: ${contract.additions.exports.length} scoped additions / ${contract.sourceExportCount} source exports`);
+      return;
+    }
+    case 'verify-maintenance': {
+      requireOptions(options, ['sdkPath', 'contract', 'baselineMetadata', 'frozenContract']);
+      console.log(JSON.stringify(verifyMaintenanceApiContract({ ...options,
+        expectedRevision: options.expectedCommit,
+        compatibility: JSON.parse(readFileSync(options.baselineMetadata, 'utf8')),
+      }), null, 2));
+      return;
+    }
     case 'capture': {
       requireOptions(options, [
         'sdkPath',
@@ -728,7 +944,7 @@ function runCli(argv) {
     }
     default:
       throw new Error(
-        'usage: react-native-api-contract <capture|verify|validate> [options]'
+        'usage: react-native-api-contract <capture|verify|validate|capture-maintenance|verify-maintenance> [options]'
       );
   }
 }
