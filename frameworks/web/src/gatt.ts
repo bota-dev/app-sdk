@@ -75,6 +75,11 @@ export const DEVICE_LOG_CONTROL_CHARACTERISTIC =
   'b07a0007-0001-1000-8000-00805f9b34fb'
 export const DEVICE_LOG_DATA_CHARACTERISTIC =
   'b07a0007-0002-1000-8000-00805f9b34fb'
+// Read-only identity alias from protocol/manifest/device-protocol.yaml.
+export const BOTA_IDENTITY_SERVICE =
+  `b07a0008${BLUETOOTH_BASE_UUID_SUFFIX}`
+export const BOTA_SERIAL_NUMBER_CHARACTERISTIC =
+  'b07a0008-0001-1000-8000-00805f9b34fb'
 
 export const FOREGROUND_GATT_SERVICES = Object.freeze([
   DEVICE_INFORMATION_SERVICE,
@@ -84,6 +89,7 @@ export const FOREGROUND_GATT_SERVICES = Object.freeze([
   BOTA_AUTH_SERVICE,
   BOTA_WIFI_CONFIG_SERVICE,
   BOTA_DIAGNOSTICS_SERVICE,
+  BOTA_IDENTITY_SERVICE,
 ] as const)
 
 export function canonicalGattUuid(uuid: string): string {

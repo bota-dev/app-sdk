@@ -109,7 +109,7 @@ test('picker requests every service used by foreground managers', async () => {
       optionalServices: [...FOREGROUND_GATT_SERVICES],
     })
     assert.equal(FOREGROUND_GATT_SERVICES.includes(DEVICE_INFORMATION_SERVICE), true)
-    assert.equal(FOREGROUND_GATT_SERVICES.length, 7)
+    assert.ok(fixture.requestedOptions?.optionalServices?.includes('b07a0008-0000-1000-8000-00805f9b34fb'))
   } finally {
     restore()
   }
@@ -185,6 +185,68 @@ test('read and both write modes use the connected characteristic', async () => {
     assert.ok(fixture.characteristic.writeReferences.every((reference) =>
       reference.every((byte) => byte === 0)
     ))
+  } finally {
+    await transport.disconnect(handle)
+    restore()
+  }
+})
+
+for (const discoverFirst of [false, true]) {
+  for (const [serviceUuid, characteristicUuid] of [
+    ['180A', '2A25'],
+    ['0000180A', '00002A25'],
+    ['0000180a-0000-1000-8000-00805f9b34fb', '00002a25-0000-1000-8000-00805f9b34fb'],
+  ] as const) {
+    test(`serial reads use the custom identity endpoint for ${characteristicUuid} (discovered=${discoverFirst})`, async () => {
+      const fixture = createBluetoothFixture()
+      const characteristic = new FakeCharacteristic('b07a0008-0001-1000-8000-00805f9b34fb')
+      characteristic.readBytes = new TextEncoder().encode('TEST123456')
+      fixture.device.replaceServer(new FakeServer(
+        new FakeService('b07a0008-0000-1000-8000-00805f9b34fb', characteristic),
+      ))
+      const restore = installNavigator({ bluetooth: fixture.bluetooth })
+      const transport = new WebBluetoothTransport()
+      const handle = await transport.requestDevice()
+
+      try {
+        await transport.connect(handle)
+        if (discoverFirst) await transport.discoverServices(handle)
+        const value = await transport.read(handle, serviceUuid, characteristicUuid)
+        assert.equal(new TextDecoder().decode(value), 'TEST123456')
+        assert.equal(characteristic.readCalls, 1)
+      } finally {
+        await transport.disconnect(handle)
+        restore()
+      }
+    })
+  }
+}
+
+test('old firmware without the identity alias fails rather than fabricating a serial', async () => {
+  const fixture = createBluetoothFixture()
+  const restore = installNavigator({ bluetooth: fixture.bluetooth })
+  const transport = new WebBluetoothTransport()
+  const handle = await transport.requestDevice()
+  try {
+    await transport.connect(handle)
+    await assert.rejects(transport.read(handle, '180A', '2A25'), { code: 'characteristic_not_found' })
+  } finally {
+    await transport.disconnect(handle)
+    restore()
+  }
+})
+
+test('non-serial standard reads still use their canonical standard UUIDs', async () => {
+  const fixture = createBluetoothFixture()
+  const characteristic = new FakeCharacteristic('00002a24-0000-1000-8000-00805f9b34fb')
+  characteristic.readBytes = new TextEncoder().encode('Bota Note')
+  fixture.device.replaceServer(new FakeServer(new FakeService(DEVICE_INFORMATION_SERVICE, characteristic)))
+  const restore = installNavigator({ bluetooth: fixture.bluetooth })
+  const transport = new WebBluetoothTransport()
+  const handle = await transport.requestDevice()
+  try {
+    await transport.connect(handle)
+    assert.equal(new TextDecoder().decode(await transport.read(handle, '180A', '2A24')), 'Bota Note')
   } finally {
     await transport.disconnect(handle)
     restore()
@@ -776,6 +838,9 @@ class FakeService {
   async getCharacteristic(
     uuid: BluetoothCharacteristicUUID,
   ): Promise<BluetoothRemoteGATTCharacteristic> {
+    if (String(uuid).toLowerCase() === '00002a25-0000-1000-8000-00805f9b34fb') {
+      throw new DOMException('blocklisted UUID', 'SecurityError')
+    }
     if (String(uuid).toLowerCase() !== this.characteristic.uuid.toLowerCase()) {
       throw new DOMException('missing characteristic', 'NotFoundError')
     }

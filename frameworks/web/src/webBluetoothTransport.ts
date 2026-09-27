@@ -1,6 +1,10 @@
 import {
+  BOTA_IDENTITY_SERVICE,
+  BOTA_SERIAL_NUMBER_CHARACTERISTIC,
   canonicalGattUuid,
+  DEVICE_INFORMATION_SERVICE,
   FOREGROUND_GATT_SERVICES,
+  SERIAL_NUMBER_CHARACTERISTIC,
 } from './gatt.ts'
 import {
   BrowserTransportError,
@@ -120,10 +124,15 @@ export class WebBluetoothTransport implements BrowserBluetoothTransport {
     characteristicUuid: string,
   ): Promise<Uint8Array> {
     try {
+      // Chrome blocks 180A/2A25. Keep the core's identity workflow unchanged,
+      // but read the firmware's exact serial through its read-only Bota alias.
+      // Missing support fails closed; never substitute names or browser IDs.
+      const serialRead = canonicalGattUuid(serviceUuid) === DEVICE_INFORMATION_SERVICE
+        && canonicalGattUuid(characteristicUuid) === SERIAL_NUMBER_CHARACTERISTIC
       const characteristic = await this.characteristic(
         device,
-        serviceUuid,
-        characteristicUuid,
+        serialRead ? BOTA_IDENTITY_SERVICE : serviceUuid,
+        serialRead ? BOTA_SERIAL_NUMBER_CHARACTERISTIC : characteristicUuid,
       )
       return cloneDataView(await characteristic.readValue())
     } catch (error) {
@@ -249,18 +258,19 @@ export class WebBluetoothTransport implements BrowserBluetoothTransport {
   ): Promise<BluetoothRemoteGATTCharacteristic> {
     const cache = this.connection(device)
     const serviceKey = canonicalGattUuid(serviceUuid)
-    const characteristicKey = `${serviceKey}:${canonicalGattUuid(characteristicUuid)}`
+    const nativeCharacteristicUuid = canonicalGattUuid(characteristicUuid)
+    const characteristicKey = `${serviceKey}:${nativeCharacteristicUuid}`
     const cached = cache.characteristics.get(characteristicKey)
     if (cached) return cached
 
     let service = cache.services.get(serviceKey)
     if (!service) {
-      service = await cache.server.getPrimaryService(serviceUuid)
+      service = await cache.server.getPrimaryService(serviceKey)
       this.assertCurrent(device.id, cache)
       cache.services.set(serviceKey, service)
     }
 
-    const characteristic = await service.getCharacteristic(characteristicUuid)
+    const characteristic = await service.getCharacteristic(nativeCharacteristicUuid)
     this.assertCurrent(device.id, cache)
     cache.characteristics.set(characteristicKey, characteristic)
     return characteristic
