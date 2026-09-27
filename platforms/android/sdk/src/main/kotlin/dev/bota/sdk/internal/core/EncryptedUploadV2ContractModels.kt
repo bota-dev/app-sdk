@@ -3,6 +3,28 @@ package dev.bota.sdk.internal.core
 import java.util.UUID
 import java.nio.ByteBuffer
 
+internal data class EncryptedUploadV2ContextSnapshot(
+    val attemptId: UInt,
+    val state: UByte,
+    val result: UShort,
+    val payload: ByteArray,
+)
+
+internal data class EncryptedUploadV2AuthorizationIdentity(
+    val profile: UByte,
+    val storageFormat: UByte,
+    val policy: UByte,
+    val channels: UByte,
+    val flags: UInt,
+    val ownerRevision: UInt,
+    val recordingGeneration: UInt,
+    val minimumCiphertextLength: ULong,
+    val maximumCiphertextLength: ULong,
+    val uploadSessionId: UUID,
+    val recordingUuid: String,
+    val ciphertextSha256: ByteArray,
+)
+
 internal data class EncryptedUploadV2ContractValue(
     val kind: UByte,
     val messageType: UByte? = null,

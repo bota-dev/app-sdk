@@ -69,7 +69,7 @@ internal class BluetoothGattHost(
                 emit(
                     CoreHostEventPayload(
                         HostEventKind.BleSubscribed,
-                        listOf(CoreField.Text(32, characteristic.characteristic.toString())),
+                        listOf(CoreField.Text(32, characteristic.coreCharacteristicUuid)),
                     ),
                 )
                 notifications.collect { notification ->
@@ -77,7 +77,7 @@ internal class BluetoothGattHost(
                         CoreHostEventPayload(
                             HostEventKind.BleNotification,
                             listOf(
-                                CoreField.Text(32, characteristic.characteristic.toString()),
+                                CoreField.Text(32, characteristic.coreCharacteristicUuid),
                                 CoreField.Bytes(30, notification.value),
                             ),
                         ),
@@ -171,10 +171,18 @@ internal class BluetoothGattHost(
         requiredPeripheral(effect),
         uuid(effect.packet.texts(31).firstOrNull(), "service"),
         uuid(effect.packet.texts(32).firstOrNull(), "characteristic"),
+        effect.packet.texts(32).first(),
     )
 
     private fun uuid(value: String?, label: String): UUID = try {
-        UUID.fromString(value ?: invalid("Bluetooth $label UUID is missing"))
+        val text = value ?: invalid("Bluetooth $label UUID is missing")
+        // Android requires expanded UUIDs; the core also emits Bluetooth short UUIDs.
+        val expanded = if (text.matches(Regex("[0-9a-fA-F]{4}|[0-9a-fA-F]{8}"))) {
+            "${text.padStart(8, '0')}-0000-1000-8000-00805f9b34fb"
+        } else {
+            text
+        }
+        UUID.fromString(expanded)
     } catch (_: IllegalArgumentException) {
         invalid("Bluetooth $label UUID is invalid")
     }
@@ -198,6 +206,7 @@ internal class BluetoothGattHost(
         val peripheralId: String,
         val service: UUID,
         val characteristic: UUID,
+        val coreCharacteristicUuid: String,
     )
 }
 

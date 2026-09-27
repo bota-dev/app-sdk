@@ -2,6 +2,8 @@ import BotaAppSDK
 import Foundation
 
 protocol BotaDeviceSDKAppleLogClient: Sendable {
+    func readDiagnosticEvents(_ device: ConnectedDevice) async throws -> DeviceDiagnosticsBatch
+    func acknowledgeDiagnosticEvents(_ device: ConnectedDevice, acceptedEventIds: [String]) async throws
     func streamLogs(
         _ device: ConnectedDevice
     ) async throws -> AsyncThrowingStream<DeviceLogLine, Error>
@@ -24,6 +26,14 @@ struct BotaDeviceSDKSharedAppleLogClient: BotaDeviceSDKAppleLogClient {
     func stop() async throws {
         try await logs.stop()
     }
+
+    func readDiagnosticEvents(_ device: ConnectedDevice) async throws -> DeviceDiagnosticsBatch {
+        try await logs.readDiagnosticEvents(device)
+    }
+
+    func acknowledgeDiagnosticEvents(_ device: ConnectedDevice, acceptedEventIds: [String]) async throws {
+        try await logs.acknowledgeDiagnosticEvents(device, acceptedEventIds: acceptedEventIds)
+    }
 }
 
 actor BotaDeviceSDKAppleLogs {
@@ -37,6 +47,14 @@ actor BotaDeviceSDKAppleLogs {
 
     init(client: any BotaDeviceSDKAppleLogClient = BotaDeviceSDKSharedAppleLogClient()) {
         self.client = client
+    }
+
+    func readDiagnosticEvents(_ device: ConnectedDevice) async throws -> DeviceDiagnosticsBatch {
+        try await client.readDiagnosticEvents(device)
+    }
+
+    func acknowledgeDiagnosticEvents(_ device: ConnectedDevice, acceptedEventIds: [String]) async throws {
+        try await client.acknowledgeDiagnosticEvents(device, acceptedEventIds: acceptedEventIds)
     }
 
     func start(

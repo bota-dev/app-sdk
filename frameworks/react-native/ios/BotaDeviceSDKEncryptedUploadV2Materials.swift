@@ -15,6 +15,25 @@ public enum BotaDeviceSDKEncryptedUploadV2Materials {
         storage.remove(registrationID)
     }
 
+    public static func readAuthNonce(_ operationID: String) async throws -> Data {
+        let entry = try storage.context(operationID)
+        let nonce = try await entry.value.readAuthNonce()
+        guard try storage.context(operationID).lease == entry.lease else {
+            throw CancellationError()
+        }
+        return nonce
+    }
+
+    public static func release(_ registrationID: String) async {
+        if let material = storage.remove(registrationID) { await material.cancelPreparation() }
+    }
+
+    static func registerContext(_ operationID: String, context: EncryptedUploadV2ProviderContext) throws {
+        try storage.registerContext(operationID, value: context)
+    }
+
+    static func removeContext(_ operationID: String) { storage.removeContext(operationID) }
+
     static func consume(
         _ registrationID: String,
         recording: EncryptedUploadV2Recording,
@@ -33,6 +52,10 @@ public enum BotaDeviceSDKEncryptedUploadV2Materials {
 }
 
 private final class BotaDeviceSDKEncryptedUploadV2MaterialStorage: @unchecked Sendable {
+    struct Context: Sendable {
+        let lease: UUID
+        let value: EncryptedUploadV2ProviderContext
+    }
     private enum RegistrationError: LocalizedError {
         case invalidSelection
         case unknownRegistration
@@ -49,6 +72,23 @@ private final class BotaDeviceSDKEncryptedUploadV2MaterialStorage: @unchecked Se
 
     private let lock = NSLock()
     private var materials: [String: EncryptedUploadV2Material] = [:]
+    private var contexts: [String: Context] = [:]
+
+    func registerContext(_ operationID: String, value: EncryptedUploadV2ProviderContext) throws {
+        try lock.withLock {
+            guard contexts[operationID] == nil else { throw RegistrationError.invalidSelection }
+            contexts[operationID] = Context(lease: UUID(), value: value)
+        }
+    }
+
+    func context(_ operationID: String) throws -> Context {
+        try lock.withLock {
+            guard let context = contexts[operationID] else { throw RegistrationError.unknownRegistration }
+            return context
+        }
+    }
+
+    func removeContext(_ operationID: String) { _ = lock.withLock { contexts.removeValue(forKey: operationID) } }
 
     func register(_ material: EncryptedUploadV2Material) -> String {
         let registrationID = UUID().uuidString.lowercased()

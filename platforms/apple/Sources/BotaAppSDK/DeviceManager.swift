@@ -68,7 +68,9 @@ extension CoreEngineActor: CoreWorkflowRunning {}
 struct DeviceRuntime: Sendable {
     let engine: any CoreWorkflowRunning
     let capabilities: CoreCapabilities
+    let authorize: @Sendable (BotaOperation) throws -> Void
     let connection: DeviceConnectionRegistry
+    let connectionMtu: @Sendable (String) async throws -> Int
     let operations: DeviceOperationCoordinator
     let disconnect: @Sendable (String) async throws -> Void
     let readStatus: @Sendable (String) async throws -> DeviceStatus
@@ -78,7 +80,11 @@ struct DeviceRuntime: Sendable {
     let directWrite: @Sendable (String, String, String, Data) async throws -> Void
     let directSubscribe: @Sendable (String, String, String) async throws -> AsyncThrowingStream<Data, Error>
     let directUnsubscribe: @Sendable (String, String, String) async throws -> Void
+    let decodeDiagnosticEvents: @Sendable (Data) throws -> DeviceDiagnosticsBatch?
+    let createDiagnosticCommand: @Sendable (String?) throws -> Data
     let readEncryptedUploadV2Capabilities: @Sendable (String) async throws -> EncryptedUploadV2CapabilitySnapshot
+    let listEncryptedUploadV2Recordings: @Sendable (String) async throws -> [EncryptedUploadV2Recording]
+    let validateEncryptedUploadV2Selection: @Sendable (EncryptedUploadV2Material, EncryptedUploadV2Recording, EncryptedUploadV2CapabilitySnapshot, EncryptedUploadV2Checkpoint?) throws -> Void
     let encryptedUploadV2Checkpoint: @Sendable (String, String, UInt32) async throws -> EncryptedUploadV2Checkpoint?
     let encryptedUploadV2MaximumWriteLength: @Sendable (String) async throws -> Int
     let registerEncryptedUploadV2Material: @Sendable (String, EncryptedUploadV2Material) async throws -> Void
@@ -127,7 +133,9 @@ struct DeviceRuntime: Sendable {
     init(
         engine: any CoreWorkflowRunning,
         capabilities: CoreCapabilities,
+        authorize: @escaping @Sendable (BotaOperation) throws -> Void = { _ in },
         connection: DeviceConnectionRegistry = DeviceConnectionRegistry(),
+        connectionMtu: @escaping @Sendable (String) async throws -> Int = { _ in 23 },
         operations: DeviceOperationCoordinator = DeviceOperationCoordinator(),
         disconnect: @escaping @Sendable (String) async throws -> Void,
         readStatus: @escaping @Sendable (String) async throws -> DeviceStatus = { _ in
@@ -147,9 +155,21 @@ struct DeviceRuntime: Sendable {
             throw NativeHostError.missingResource("direct device subscription")
         },
         directUnsubscribe: @escaping @Sendable (String, String, String) async throws -> Void = { _, _, _ in },
+        decodeDiagnosticEvents: @escaping @Sendable (Data) throws -> DeviceDiagnosticsBatch? = { _ in
+            throw NativeHostError.missingResource("diagnostics decoder")
+        },
+        createDiagnosticCommand: @escaping @Sendable (String?) throws -> Data = { _ in
+            throw NativeHostError.missingResource("diagnostics command encoder")
+        },
         readEncryptedUploadV2Capabilities: @escaping @Sendable
             (String) async throws -> EncryptedUploadV2CapabilitySnapshot = { _ in
             throw NativeHostError.missingResource("encrypted upload v2 capabilities")
+        },
+        listEncryptedUploadV2Recordings: @escaping @Sendable (String) async throws -> [EncryptedUploadV2Recording] = { _ in
+            throw NativeHostError.missingResource("encrypted upload v2 catalog")
+        },
+        validateEncryptedUploadV2Selection: @escaping @Sendable (EncryptedUploadV2Material, EncryptedUploadV2Recording, EncryptedUploadV2CapabilitySnapshot, EncryptedUploadV2Checkpoint?) throws -> Void = {
+            try CoreModelMapper().validateEncryptedUploadV2Selection(material: $0, recording: $1, capability: $2, checkpoint: $3)
         },
         encryptedUploadV2Checkpoint: @escaping @Sendable
             (String, String, UInt32) async throws -> EncryptedUploadV2Checkpoint? = { _, _, _ in nil },
@@ -245,7 +265,9 @@ struct DeviceRuntime: Sendable {
     ) {
         self.engine = engine
         self.capabilities = capabilities
+        self.authorize = authorize
         self.connection = connection
+        self.connectionMtu = connectionMtu
         self.operations = operations
         self.disconnect = disconnect
         self.readStatus = readStatus
@@ -255,7 +277,11 @@ struct DeviceRuntime: Sendable {
         self.directWrite = directWrite
         self.directSubscribe = directSubscribe
         self.directUnsubscribe = directUnsubscribe
+        self.decodeDiagnosticEvents = decodeDiagnosticEvents
+        self.createDiagnosticCommand = createDiagnosticCommand
         self.readEncryptedUploadV2Capabilities = readEncryptedUploadV2Capabilities
+        self.listEncryptedUploadV2Recordings = listEncryptedUploadV2Recordings
+        self.validateEncryptedUploadV2Selection = validateEncryptedUploadV2Selection
         self.encryptedUploadV2Checkpoint = encryptedUploadV2Checkpoint
         self.encryptedUploadV2MaximumWriteLength = encryptedUploadV2MaximumWriteLength
         self.registerEncryptedUploadV2Material = registerEncryptedUploadV2Material
@@ -543,7 +569,21 @@ public actor DeviceManager {
                     break
                 }
             }
+            if var device = established {
+                let firmware = try await runtime.directRead(
+                    device.id, BotaBluetoothUUIDs.deviceInformationService, BotaBluetoothUUIDs.firmwareRevision
+                )
+                device.firmwareVersion = String(decoding: firmware, as: UTF8.self)
+                    .replacingOccurrences(of: "\0", with: "")
+                device.mtu = try await runtime.connectionMtu(device.id)
+                try Task.checkCancellation()
+                guard activeOperation?.cancellationID == command.cancellationID else {
+                    throw CancellationError()
+                }
+                established = device
+            }
         } catch {
+            if let established { try? await runtime.disconnect(established.id) }
             await finishOperation(command.cancellationID)
             throw Self.publicError(error)
         }

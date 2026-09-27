@@ -1,5 +1,13 @@
 package dev.bota.sdk.internal.core
 
+import dev.bota.sdk.model.DeviceDiagnosticsBatch
+import dev.bota.sdk.model.DeviceDiagnosticEvent
+import dev.bota.sdk.model.DeviceDiagnosticReport
+import dev.bota.sdk.model.DeviceDiagnosticFault
+import dev.bota.sdk.model.DeviceDiagnosticExecution
+import dev.bota.sdk.model.DeviceDiagnosticRuntime
+import dev.bota.sdk.model.DeviceDiagnosticBreadcrumb
+
 import dev.bota.sdk.BotaErrorCode
 import dev.bota.sdk.BotaOperation
 import dev.bota.sdk.BotaSDKError
@@ -44,6 +52,81 @@ import java.util.UUID
 internal class CoreModelMapper(
     private val core: NativeCore = NativeCoreBridge(),
 ) : AutoCloseable {
+    fun consumeEncryptedUploadV2Catalog(sessionId: ULong, data: ByteArray): List<dev.bota.sdk.EncryptedUploadV2Recording>? = nativeCall {
+        val packet = core.decode(packet(0x0527, listOf(Field.unsigned(128, sessionId), Field.bytes(30, data))))
+        if (packet.fieldIds.isEmpty()) return@nativeCall null
+        val fields = PacketFields(packet)
+        if (fields.requiredULong(128) != sessionId) throw invalid("catalog session mismatch")
+        val count = fields.requiredInt(85)
+        val ids = fields.texts(13)
+        val generations = fields.unsigneds(129)
+        val storage = fields.unsigneds(147)
+        val completion = fields.unsigneds(146)
+        val started = fields.unsigneds(68)
+        val duration = fields.unsigneds(149)
+        val plaintext = fields.unsigneds(131)
+        val ciphertext = fields.unsigneds(130)
+        val hashes = packet.byteArrays(144)
+        if (listOf(ids.size, generations.size, storage.size, completion.size, started.size, duration.size,
+                plaintext.size, ciphertext.size, hashes.size).any { it != count }) {
+            throw invalid("catalog fields have inconsistent counts")
+        }
+        List(count) { index ->
+            if (started[index] > ULong.MAX_VALUE / 1_000u || duration[index] > ULong.MAX_VALUE / 1_000u) {
+                throw invalid("catalog time exceeds milliseconds range")
+            }
+            dev.bota.sdk.EncryptedUploadV2Recording(
+                ids[index], generations[index].toUIntExact("generation"), ciphertext[index], hashes[index],
+                started[index] * 1_000u, duration[index] * 1_000u, plaintext[index],
+                storage[index].toUByteExact("storage format"),
+            )
+        }
+    }
+
+    fun createEncryptedUploadV2List(sessionId: ULong): ByteArray = encode(0x0524, listOf(
+        Field.unsigned(127, 0x25u), Field.unsigned(128, sessionId),
+    ))
+
+    fun createEncryptedUploadV2ContextBegin(attemptId: UInt): ByteArray =
+        encode(0x0528, listOf(Field.unsigned(199, attemptId.toULong())))
+
+    fun decodeEncryptedUploadV2ContextSnapshot(data: ByteArray): EncryptedUploadV2ContextSnapshot {
+        val fields = decode(0x0529, data)
+        return EncryptedUploadV2ContextSnapshot(
+            fields.requiredUInt(199), fields.requiredUByte(200), fields.requiredUShort(24), fields.requiredBytes(33),
+        )
+    }
+
+    fun validateEncryptedUploadV2ContextDocument(kind: UByte, data: ByteArray): Unit = nativeCall {
+        core.decode(packet(0x052a, listOf(Field.unsigned(151, kind.toULong()), Field.bytes(30, data))))
+        Unit
+    }
+
+    fun validateEncryptedUploadV2Admission(data: ByteArray, replacement: Boolean = false): Unit = nativeCall {
+        core.decode(packet(0x052c, listOf(Field.bytes(30, data), Field.boolean(204, replacement))))
+        Unit
+    }
+
+    fun decodeEncryptedUploadV2Authorization(data: ByteArray): EncryptedUploadV2AuthorizationIdentity {
+        val fields = decode(0x052b, data)
+        return EncryptedUploadV2AuthorizationIdentity(
+            fields.requiredUByte(154), fields.requiredUByte(147), fields.requiredUByte(167),
+            fields.requiredUByte(201), fields.requiredUInt(69), fields.requiredUInt(165), fields.requiredUInt(129),
+            fields.requiredULong(202), fields.requiredULong(203), uuid(fields.requiredBytes(132)),
+            fields.requiredText(13), fields.requiredBytes(144),
+        )
+    }
+
+    fun decodeDiagnosticEvents(data: ByteArray): DeviceDiagnosticsBatch? = nativeCall {
+        mapDiagnosticFields(core.decode(packet(0x0525, listOf(Field.bytes(Protocol.Field.Value, data)))))
+    }
+
+    fun createDiagnosticCommand(acceptedEventId: String?): ByteArray {
+        val fields = mutableListOf(Field.unsigned(Protocol.Field.Command, if (acceptedEventId == null) 0x10u else 0x11u))
+        acceptedEventId?.let { fields += Field.text(173, it) }
+        return encode(0x0526, fields)
+    }
+
     fun parseDeviceStatus(data: ByteArray): DeviceStatus {
         val fields = decode(Protocol.Kind.DecodeDeviceStatus, data)
         val timestamp = fields.requiredUInt(Protocol.Field.Timestamp)
@@ -864,6 +947,9 @@ private data class Field(
 
 private class PacketFields(private val packet: NativePacket) {
     fun unsigneds(id: Int): List<ULong> = packet.unsigneds(id)
+    fun signeds(id: Int): List<Long> = packet.fieldIds.indices.filter {
+        packet.fieldIds[it] == id && packet.fieldTypes[it] == NativePacket.FIELD_TYPE_SIGNED
+    }.map { packet.signedValues[it] }
     fun booleans(id: Int): List<Boolean> = packet.booleans(id)
     fun texts(id: Int): List<String> = packet.texts(id)
     fun text(id: Int): String? = texts(id).firstOrNull()
@@ -891,6 +977,65 @@ private class PacketFields(private val packet: NativePacket) {
         if (it !in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong()) throw invalid("field $id exceeds Int")
         it.toInt()
     } ?: throw invalid("missing signed field $id")
+}
+
+// Map typed C ABI event groups, never the BLE payload or an opaque JSON document.
+internal fun mapDiagnosticFields(packet: NativePacket): DeviceDiagnosticsBatch? {
+    if (packet.fieldIds.isEmpty()) return null
+    val fields = PacketFields(packet)
+    val starts = packet.fieldIds.indices.filter { packet.fieldIds[it] == 173 }
+    if (starts.size != fields.requiredInt(172)) throw invalid("diagnostic event count mismatch")
+    val events = starts.indices.map { index ->
+        val start = starts[index]
+        val end = starts.getOrNull(index + 1) ?: packet.fieldIds.size
+        val event = PacketFields(NativePacket(
+            kind = packet.kind,
+            fieldIds = packet.fieldIds.copyOfRange(start, end),
+            fieldTypes = packet.fieldTypes.copyOfRange(start, end),
+            unsignedValues = packet.unsignedValues.copyOfRange(start, end),
+            signedValues = packet.signedValues.copyOfRange(start, end),
+            dataValues = packet.dataValues.copyOfRange(start, end),
+        ))
+        DeviceDiagnosticEvent(
+            eventId = event.requiredText(173), eventType = event.requiredText(174),
+            reasonCode = event.requiredText(175), uptimeMs = event.requiredUInt(176),
+            signature = event.requiredText(177), firmwareBuildId = event.requiredText(178),
+            subsystem = event.requiredText(179), stateBeforeEvent = event.requiredText(180),
+            report = if (event.requiredBoolean(181)) diagnosticReport(event) else null,
+        )
+    }
+    return DeviceDiagnosticsBatch(fields.requiredInt(171), events)
+}
+
+private fun diagnosticReport(fields: PacketFields): DeviceDiagnosticReport {
+    val trace = fields.texts(192)
+    val codes = fields.texts(197)
+    val deltas = fields.signeds(196)
+    val arguments = fields.signeds(198)
+    val count = fields.requiredInt(195)
+    if (trace.size != fields.requiredInt(191) || listOf(codes.size, deltas.size, arguments.size).any { it != count }) {
+        throw invalid("diagnostic report count mismatch")
+    }
+    val breadcrumbs = codes.indices.map { index ->
+        val delta = deltas[index]
+        val argument = arguments[index]
+        if (delta !in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong() ||
+            argument !in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong()) {
+            throw invalid("diagnostic breadcrumb exceeds Int32")
+        }
+        DeviceDiagnosticBreadcrumb(delta.toInt(), codes[index], argument.toInt())
+    }
+    val heap = fields.optionalUInt(193)
+    val stack = fields.optionalUInt(194)
+    return DeviceDiagnosticReport(
+        fault = DeviceDiagnosticFault(
+            fields.requiredInt(182), fields.requiredText(183), fields.requiredText(184),
+            fields.requiredText(185), fields.requiredText(186), fields.requiredText(187),
+        ),
+        execution = DeviceDiagnosticExecution(fields.text(188), fields.text(189), fields.text(190), trace),
+        runtime = if (heap == null && stack == null) null else DeviceDiagnosticRuntime(heap, stack),
+        breadcrumbs = breadcrumbs.takeIf { it.isNotEmpty() },
+    )
 }
 
 private fun uuidBytes(value: UUID): ByteArray = ByteBuffer.allocate(16)

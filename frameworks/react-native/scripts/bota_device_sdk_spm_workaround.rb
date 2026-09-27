@@ -25,29 +25,40 @@ module BotaDeviceSDKSPMWorkaround
     end
 
     rewrite_aggregate_modulemap_references(installer)
-  end
-
-  def self.rewrite_aggregate_modulemap_references(installer)
-    nested = "${PODS_CONFIGURATION_BUILD_DIR}/#{POD_NAME}/#{POD_NAME}.modulemap"
-    flattened = "${PODS_CONFIGURATION_BUILD_DIR}/#{POD_NAME}.modulemap"
-
-    installer.aggregate_targets.each do |aggregate_target|
-      aggregate_target.xcconfigs.each do |configuration_name, config_file|
-        changed = false
-        %w[OTHER_CFLAGS OTHER_SWIFT_FLAGS].each do |key|
-          value = config_file.attributes[key]
-          next unless value
-
-          updated = value.gsub(nested, flattened)
-          next if updated == value
-
-          config_file.attributes[key] = updated
-          changed = true
-        end
-        config_file.save_as(aggregate_target.xcconfig_path(configuration_name)) if changed
+    installer.pod_targets.each do |pod_target|
+      pod_target.build_settings.each do |configuration_name, build_settings|
+        path = pod_target.xcconfig_path(configuration_name)
+        # Expo can re-save this cached config after the SPM post-install hook.
+        rewrite_modulemap_config(build_settings.xcconfig, path)
       end
     end
   end
 
+  def self.rewrite_aggregate_modulemap_references(installer)
+    installer.aggregate_targets.each do |aggregate_target|
+      aggregate_target.xcconfigs.each do |configuration_name, config_file|
+        rewrite_modulemap_config(config_file, aggregate_target.xcconfig_path(configuration_name))
+      end
+    end
+  end
+
+  def self.rewrite_modulemap_config(config_file, path)
+    nested = "${PODS_CONFIGURATION_BUILD_DIR}/#{POD_NAME}/#{POD_NAME}.modulemap"
+    flattened = "${PODS_CONFIGURATION_BUILD_DIR}/#{POD_NAME}.modulemap"
+    changed = false
+    %w[OTHER_CFLAGS OTHER_SWIFT_FLAGS].each do |key|
+      value = config_file.attributes[key]
+      next unless value
+
+      updated = value.gsub(nested, flattened)
+      next if updated == value
+
+      config_file.attributes[key] = updated
+      changed = true
+    end
+    config_file.save_as(path) if changed
+  end
+
   private_class_method :rewrite_aggregate_modulemap_references
+  private_class_method :rewrite_modulemap_config
 end

@@ -267,3 +267,23 @@ to its intended final state, and the evidence references the exact release
 candidate. Until then, Web physical acceptance remains open. The one-time
 The beta.7 and beta.8 publication exceptions above do not turn a `NOT RUN` row into
 `PASS` or authorize a later release with unresolved failures.
+
+## PR #16 integration review (2026-09-27)
+
+Reconciled the browser identity fix with the current main branch. Keep main's
+manifest-owned capability masks and strict unknown-bit rejection; regenerate
+Rust constants from the merged manifest rather than restoring the older mask.
+Main's corrected unknown-bit vectors and native fixture copies remain intact.
+
+The packed Chromium fixture uses the browser's native `BluetoothUUID` validator.
+Linux needs the narrowly scoped `WebBluetooth` Blink feature enabled to expose
+that validator, even with simulated GATT. A regression checks canonical service
+expansion and rejection of an invalid short string; no fake UUID validator is
+substituted and production transport validation is unchanged.
+
+Design review: exact serial matching, fail-closed missing identity service and
+native canonical UUID arguments are covered by Web host/browser tests; the
+captured capability packet is covered by the shared Rust codec test. Native
+Apple/Android CI and exact-revision checks remain merge gates. This integration
+does not add recording/upload actions, publish an SDK, upgrade a Portal consumer,
+or establish new physical-device acceptance.

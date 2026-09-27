@@ -1,6 +1,7 @@
 package dev.bota.sdk
 
 import dev.bota.sdk.internal.DeviceRuntime
+import dev.bota.sdk.internal.bluetooth.BotaBluetoothUUIDs
 import dev.bota.sdk.internal.core.CoreCapabilities
 import dev.bota.sdk.internal.core.CoreCommand
 import dev.bota.sdk.internal.core.CoreNotification
@@ -323,10 +324,27 @@ public class DeviceManager internal constructor() {
                     else -> Unit
                 }
             }
+            established?.let { device ->
+                val firmware = lease.runtime.directRead(
+                    device.id,
+                    BotaBluetoothUUIDs.DeviceInformationService,
+                    BotaBluetoothUUIDs.FirmwareRevision,
+                ).toString(Charsets.UTF_8).replace("\u0000", "")
+                established = device.copy(
+                    firmwareVersion = firmware,
+                    mtu = lease.runtime.connectionMtu(device.id),
+                )
+            }
         } catch (error: CancellationException) {
-            withContext(NonCancellable) { cancelIfActive(command.cancellationId) }
+            withContext(NonCancellable) {
+                established?.let { runCatching { lease.runtime.disconnect(it.id) } }
+                cancelIfActive(command.cancellationId)
+            }
             throw error
         } catch (error: Throwable) {
+            withContext(NonCancellable) {
+                established?.let { runCatching { lease.runtime.disconnect(it.id) } }
+            }
             finishOperation(command.cancellationId)
             throw error.toPublicError()
         }
@@ -340,7 +358,9 @@ public class DeviceManager internal constructor() {
             )
         }
         val accepted = synchronized(lock) {
-            if (runtime !== active.lease.runtime || runtimeGeneration != active.lease.generation) {
+            if (runtime !== active.lease.runtime || runtimeGeneration != active.lease.generation ||
+                activeOperation?.cancellationId != command.cancellationId
+            ) {
                 false
             } else {
                 connectedDevice = connected

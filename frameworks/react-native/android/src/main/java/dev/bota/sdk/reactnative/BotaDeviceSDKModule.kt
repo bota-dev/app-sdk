@@ -4,6 +4,7 @@ import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReadableMap
+import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.module.annotations.ReactModule
 import dev.bota.sdk.DeviceReconnectHint
 import dev.bota.sdk.DeviceApiEnvironment
@@ -42,7 +43,10 @@ internal class BotaDeviceSDKModule(
             } else {
                 null
             }
-        launch(promise) { lifecycle.configure(storageDirectory) }
+        launch(promise) {
+            lifecycle.configure(storageDirectory)
+            recordingUploads.configure(storageDirectory)
+        }
     }
 
     override fun destroy(promise: Promise) {
@@ -223,6 +227,37 @@ internal class BotaDeviceSDKModule(
         }
     }
 
+    override fun listPendingRecordings(device: ReadableMap, promise: Promise) {
+        launchValue(promise) {
+            Arguments.createArray().apply {
+                recordings.listPendingRecordings(device.toConnectedDevice()).forEach { recording ->
+                    pushMap(Arguments.createMap().apply {
+                        when (recording) {
+                            is dev.bota.sdk.PendingRecording.Legacy -> {
+                                putString("profile", "legacy")
+                                putMap("legacy", recording.recording.toWritableMap())
+                            }
+                            is dev.bota.sdk.PendingRecording.EncryptedV2 -> {
+                                putString("profile", "encrypted_upload_v2")
+                                putMap("encrypted", recording.recording.toBridgeValue().toWritableMap())
+                            }
+                        }
+                    })
+                }
+            }
+        }
+    }
+
+    override fun cancelEncryptedRecordingV2(operationId: String, promise: Promise) {
+        launchEncryptedUploadV2(promise) { recordings.cancelEncryptedRecordingV2(operationId) }
+    }
+
+    override fun releaseEncryptedUploadV2Material(materialRegistrationId: String, promise: Promise) {
+        launchEncryptedUploadV2(promise) {
+            BotaDeviceSDKEncryptedUploadV2Materials.release(materialRegistrationId)
+        }
+    }
+
     override fun syncRecording(
         device: ReadableMap,
         recording: ReadableMap,
@@ -264,7 +299,7 @@ internal class BotaDeviceSDKModule(
         decision: ReadableMap,
         promise: Promise,
     ) {
-        launch(promise) {
+        launchEncryptedUploadV2(promise) {
             recordings.resolveEncryptedUploadV2Profile(
                 requestId,
                 decision.getString("profile")
@@ -285,7 +320,7 @@ internal class BotaDeviceSDKModule(
         errorCode: String,
         promise: Promise,
     ) {
-        launch(promise) { recordings.rejectEncryptedUploadV2Profile(requestId, errorCode) }
+        launchEncryptedUploadV2(promise) { recordings.rejectEncryptedUploadV2Profile(requestId, errorCode) }
     }
 
     override fun startStreaming(
@@ -385,6 +420,10 @@ internal class BotaDeviceSDKModule(
         launch(promise) { recordingUploads.cancel(taskId) }
     }
 
+    override fun releaseRecordingFile(taskId: String, localPath: String, promise: Promise) {
+        launch(promise) { recordingUploads.release(taskId, localPath) }
+    }
+
     override fun loadCompatibilityUploadQueue(promise: Promise) {
         launchValue(promise) { recordingUploads.loadQueue() }
     }
@@ -451,6 +490,17 @@ internal class BotaDeviceSDKModule(
 
     override fun stopDeviceLogs(promise: Promise) {
         launch(promise) { logs.stop() }
+    }
+
+    override fun readDiagnosticEvents(device: ReadableMap, promise: Promise) {
+        launchValue(promise) { logs.readDiagnosticEvents(device.toConnectedDevice()).toWritableMap() }
+    }
+
+    override fun acknowledgeDiagnosticEvents(device: ReadableMap, acceptedEventIds: ReadableArray, promise: Promise) {
+        launch(promise) {
+            val ids = (0 until acceptedEventIds.size()).map { acceptedEventIds.getString(it) ?: error("diagnostic event ID is required") }
+            logs.acknowledgeDiagnosticEvents(device.toConnectedDevice(), ids)
+        }
     }
 
     override fun readStatus(promise: Promise) {
@@ -712,7 +762,22 @@ private fun ReadableMap.toEncryptedUploadV2Recording(): EncryptedUploadV2Recordi
         getDouble("generation").toUnsignedInt(),
         length,
         digest,
+        optionalCatalogInteger("startedAtMs"),
+        optionalCatalogInteger("durationMs"),
+        optionalCatalogInteger("plaintextLength"),
+        if (hasKey("storageFormat") && !isNull("storageFormat")) {
+            getDouble("storageFormat").toUnsignedInt().also { require(it <= 255u) }.toUByte()
+        } else 3u,
     )
+}
+
+private fun ReadableMap.optionalCatalogInteger(key: String): ULong {
+    if (!hasKey(key) || isNull(key)) return 0u
+    val value = getString(key) ?: error("encrypted upload v2 catalog integer is required")
+    require(value.matches(Regex("0|[1-9][0-9]*"))) {
+        "encrypted upload v2 catalog integer is invalid"
+    }
+    return value.toULongOrNull() ?: error("encrypted upload v2 catalog integer exceeds its bound")
 }
 
 private fun String.sha256Bytes(): ByteArray {

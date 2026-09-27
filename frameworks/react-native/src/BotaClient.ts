@@ -5,6 +5,7 @@ import { getCompatibilityClient } from './compatibility/runtime';
 import { DeviceManager } from './managers/DeviceManager';
 import { OTAManager } from './managers/OTAManager';
 import { RecordingManager } from './managers/RecordingManager';
+import { rejectRecordingDataStore } from './managers/uploadRecoveryMetadata';
 import type {
   BluetoothState,
   BotaClientEvents,
@@ -17,12 +18,16 @@ import { logger, type LogHandler } from './utils/logger';
 
 const log = logger.tag('BotaClient');
 
-const normalizeConfig = (config: BotaConfig): Required<BotaConfig> => ({
+type NormalizedConfig = Required<Omit<BotaConfig, 'uploadRecoveryProvider' | 'recordingDataStore'>> &
+  Pick<BotaConfig, 'uploadRecoveryProvider'>;
+
+const normalizeConfig = (config: BotaConfig): NormalizedConfig => ({
   environment: config.environment ?? 'production',
   backgroundSyncEnabled: config.backgroundSyncEnabled ?? true,
   wifiOnlyUpload: config.wifiOnlyUpload ?? false,
   logLevel: config.logLevel ?? 'warn',
   debug: config.debug ?? false,
+  ...(config.uploadRecoveryProvider ? { uploadRecoveryProvider: config.uploadRecoveryProvider } : {}),
 });
 
 class BotaClientImpl extends EventEmitter<BotaClientEvents> {
@@ -74,6 +79,11 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
   }
 
   configure(config: BotaConfig = {}): Promise<void> {
+    try {
+      rejectRecordingDataStore(config.recordingDataStore);
+    } catch (error) {
+      return Promise.reject(error);
+    }
     if (this._configurePromise && !this._destroyPromise) {
       return this._configurePromise;
     }
@@ -141,7 +151,7 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
     return queued;
   }
 
-  private async performConfigure(config: Required<BotaConfig>): Promise<void> {
+  private async performConfigure(config: NormalizedConfig): Promise<void> {
     if (this._state !== 'uninitialized' || this._nativeOwned) {
       log.warn('SDK already configured, reconfiguring');
       await this.releaseOwnerGraph();
@@ -170,7 +180,7 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
 
       deviceManager = new DeviceManager();
       await deviceManager.initialize();
-      recordingManager = new RecordingManager();
+      recordingManager = new RecordingManager({ uploadRecoveryProvider: config.uploadRecoveryProvider });
       await recordingManager.initialize();
       otaManager = new OTAManager(deviceManager);
 

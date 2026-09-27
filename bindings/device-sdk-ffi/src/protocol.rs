@@ -2,6 +2,7 @@ use crate::{
     ABI_VERSION, BotaDeviceSdkPacketV1, BotaDeviceSdkPacketViewV1, command::PacketFields, field_id,
     packet_kind,
 };
+mod v2_demo;
 use bota_device_sdk_core::{
     error::{DeviceSdkError, ErrorCode, Operation},
     generated::protocol as wire,
@@ -10,13 +11,14 @@ use bota_device_sdk_core::{
         HeartbeatConnections, IdleTimeout, PowerManagement, RecordingUuid,
     },
     protocol::{
-        AckType, CommonHeaderV2, ConfirmV2, DeviceCommand, DeviceLogDecoder,
-        EncryptedUploadV2SignedBlob, EncryptedUploadV2Transfer, FirmwareStatus,
-        RecordingControlCommand, ResumeV2, StartV2, TransferCommand, TransferPacket,
-        WiFiScanUpdate, WindowAckV2, decode_encrypted_upload_v2_capabilities,
-        decode_encrypted_upload_v2_signed_blob, decode_encrypted_upload_v2_status,
-        decode_encrypted_upload_v2_transfer, encode_ack, encode_bounded_payload,
-        encode_connection_settings, encode_device_command, encode_encrypted_upload_v2_signed_blob,
+        AckType, CommonHeaderV2, ConfirmV2, DeviceCommand, DeviceDiagnosticsBatch,
+        DeviceDiagnosticsDecoder, DeviceLogDecoder, DiagnosticCommand, EncryptedUploadV2SignedBlob,
+        EncryptedUploadV2Transfer, FirmwareStatus, RecordingControlCommand, ResumeV2, StartV2,
+        TransferCommand, TransferPacket, WiFiScanUpdate, WindowAckV2,
+        decode_encrypted_upload_v2_capabilities, decode_encrypted_upload_v2_signed_blob,
+        decode_encrypted_upload_v2_status, decode_encrypted_upload_v2_transfer, encode_ack,
+        encode_bounded_payload, encode_connection_settings, encode_device_command,
+        encode_diagnostic_command, encode_encrypted_upload_v2_signed_blob,
         encode_encrypted_upload_v2_transfer, encode_firmware_data, encode_firmware_upload_start,
         encode_firmware_upload_verify, encode_firmware_window_ack, encode_ota_status,
         encode_provisioning_chunks, encode_recording_control_command, encode_time_sync,
@@ -28,12 +30,127 @@ use bota_device_sdk_core::{
         parse_wifi_status_info,
     },
 };
+pub(crate) use v2_demo::decode_catalog;
+
+pub(crate) unsafe fn decode_diagnostics(
+    packet: &BotaDeviceSdkPacketViewV1,
+    decoder: &mut DeviceDiagnosticsDecoder,
+) -> Result<BotaDeviceSdkPacketV1, DeviceSdkError> {
+    let result = (|| {
+        validate_packet(packet)?;
+        let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
+        fields.validate_allowed(&[field_id::VALUE])?;
+        // Check the borrowed slice length before required_bytes allocates a copy.
+        if packet.field_count == 1
+            && unsafe { (*packet.fields).data.len } > wire::DIAGNOSTIC_MAX_PACKET_BYTES as u64
+        {
+            return Err(invalid("diagnostic packet exceeds 20 bytes"));
+        }
+        let value = fields.required_bytes(field_id::VALUE)?;
+        let output = BotaDeviceSdkPacketV1::new(packet.kind);
+        Ok(match decoder.push(&value)? {
+            Some(batch) => diagnostic_batch(output, batch),
+            None => output,
+        })
+    })();
+    if result.is_err() {
+        decoder.reset();
+    }
+    result
+}
+
+fn diagnostic_batch(
+    mut output: BotaDeviceSdkPacketV1,
+    batch: DeviceDiagnosticsBatch,
+) -> BotaDeviceSdkPacketV1 {
+    output = output
+        .with_u64(
+            field_id::DIAGNOSTIC_SCHEMA_VERSION,
+            u64::from(batch.schema_version),
+        )
+        .with_u64(field_id::DIAGNOSTIC_EVENT_COUNT, batch.events.len() as u64);
+    for event in batch.events {
+        output = output
+            .with_text(field_id::DIAGNOSTIC_EVENT_ID, event.event_id)
+            .with_text(field_id::DIAGNOSTIC_EVENT_TYPE, event.event_type)
+            .with_text(field_id::DIAGNOSTIC_REASON_CODE, event.reason_code)
+            .with_u64(field_id::DIAGNOSTIC_UPTIME_MS, u64::from(event.uptime_ms))
+            .with_text(field_id::DIAGNOSTIC_SIGNATURE, event.signature)
+            .with_text(
+                field_id::DIAGNOSTIC_FIRMWARE_BUILD_ID,
+                event.firmware_build_id,
+            )
+            .with_text(field_id::DIAGNOSTIC_SUBSYSTEM, event.subsystem)
+            .with_text(
+                field_id::DIAGNOSTIC_STATE_BEFORE_EVENT,
+                event.state_before_event,
+            )
+            .with_bool(field_id::DIAGNOSTIC_HAS_REPORT, event.report.is_some());
+        let Some(report) = event.report else {
+            continue;
+        };
+        output = output
+            .with_u64(field_id::DIAGNOSTIC_CPU_ID, u64::from(report.fault.cpu_id))
+            .with_text(field_id::DIAGNOSTIC_CPU_EMU, report.fault.cpu_emu)
+            .with_text(field_id::DIAGNOSTIC_CORE_EMU, report.fault.core_emu)
+            .with_text(field_id::DIAGNOSTIC_HSB_EMU, report.fault.hsb_emu)
+            .with_text(field_id::DIAGNOSTIC_AUDIO_EMU, report.fault.audio_emu)
+            .with_text(field_id::DIAGNOSTIC_WIRELESS_EMU, report.fault.wireless_emu);
+        output = optional_text(output, field_id::DIAGNOSTIC_TASK, report.execution.task);
+        output = optional_text(output, field_id::DIAGNOSTIC_RETI, report.execution.reti);
+        output = optional_text(output, field_id::DIAGNOSTIC_RETS, report.execution.rets);
+        output = output.with_u64(
+            field_id::DIAGNOSTIC_PC_TRACE_COUNT,
+            report.execution.pc_trace.len() as u64,
+        );
+        for pc in report.execution.pc_trace {
+            output = output.with_text(field_id::DIAGNOSTIC_PC_TRACE, pc);
+        }
+        if let Some(runtime) = report.runtime {
+            if let Some(value) = runtime.heap_free_bytes {
+                output = output.with_u64(field_id::DIAGNOSTIC_HEAP_FREE_BYTES, u64::from(value));
+            }
+            if let Some(value) = runtime.task_stack_remaining_bytes {
+                output = output.with_u64(
+                    field_id::DIAGNOSTIC_TASK_STACK_REMAINING_BYTES,
+                    u64::from(value),
+                );
+            }
+        }
+        output = output.with_u64(
+            field_id::DIAGNOSTIC_BREADCRUMB_COUNT,
+            report.breadcrumbs.len() as u64,
+        );
+        for breadcrumb in report.breadcrumbs {
+            output = output
+                .with_i64(
+                    field_id::DIAGNOSTIC_DELTA_MS,
+                    i64::from(breadcrumb.delta_ms),
+                )
+                .with_text(field_id::DIAGNOSTIC_BREADCRUMB_CODE, breadcrumb.code)
+                .with_i64(
+                    field_id::DIAGNOSTIC_BREADCRUMB_ARG0,
+                    i64::from(breadcrumb.arg0),
+                );
+        }
+    }
+    output
+}
 
 pub(crate) unsafe fn decode(
     packet: &BotaDeviceSdkPacketViewV1,
     log_decoder: &mut DeviceLogDecoder,
 ) -> Result<BotaDeviceSdkPacketV1, DeviceSdkError> {
     validate_packet(packet)?;
+    if matches!(
+        packet.kind,
+        packet_kind::PROTOCOL_DECODE_UPLOAD_CONTEXT_SNAPSHOT
+            | packet_kind::PROTOCOL_DECODE_UPLOAD_CONTEXT_DOCUMENT
+            | packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_AUTHORIZATION_IDENTITY
+            | packet_kind::PROTOCOL_VALIDATE_ENCRYPTED_UPLOAD_V2_ADMISSION
+    ) {
+        return unsafe { v2_demo::decode(packet) };
+    }
     let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
     fields.validate_allowed(&[field_id::VALUE])?;
     let value = fields.required_bytes(field_id::VALUE)?;
@@ -42,34 +159,7 @@ pub(crate) unsafe fn decode(
     match packet.kind {
         packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_CAPABILITY => {
             let value = decode_encrypted_upload_v2_capabilities(&value)?;
-            Ok(output
-                .with_u64(field_id::PROTOCOL_VARIANT, 1)
-                .with_u64(field_id::PROFILE_VERSION, 2)
-                .with_u64(field_id::CAPABILITY_FLAGS, u64::from(value.flags))
-                .with_u64(
-                    field_id::MAX_SIGNED_BLOB_BYTES,
-                    u64::from(value.maximum_signed_blob_bytes),
-                )
-                .with_u64(
-                    field_id::MAX_MANIFEST_BYTES,
-                    u64::from(value.maximum_manifest_bytes),
-                )
-                .with_u64(
-                    field_id::DATA_PAYLOAD_BYTES,
-                    u64::from(value.maximum_data_payload_bytes),
-                )
-                .with_u64(
-                    field_id::WINDOW_PACKETS,
-                    u64::from(value.maximum_window_packets),
-                )
-                .with_u64(
-                    field_id::CHECKPOINT_INTERVAL,
-                    u64::from(value.durable_checkpoint_interval_blocks),
-                )
-                .with_u64(
-                    field_id::MAX_MISSING_SEQUENCES,
-                    u64::from(value.maximum_missing_sequences),
-                ))
+            Ok(v2_demo::capability_fields(output, value))
         }
         packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB => {
             decode_encrypted_upload_v2_signed_blob_packet(output, &value)
@@ -356,6 +446,27 @@ pub(crate) unsafe fn encode(
     validate_packet(packet)?;
     let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
     let bytes = match packet.kind {
+        packet_kind::PROTOCOL_ENCODE_UPLOAD_CONTEXT_BEGIN => {
+            fields.validate_allowed(&[field_id::CONTEXT_ATTEMPT_ID])?;
+            bota_device_sdk_core::protocol::encode_upload_context_begin(to_u32(
+                &fields,
+                field_id::CONTEXT_ATTEMPT_ID,
+            )?)?
+        }
+        packet_kind::PROTOCOL_ENCODE_DIAGNOSTIC_COMMAND => {
+            match fields.required_u64(field_id::COMMAND)? {
+                command if command == u64::from(wire::DEVICE_DIAGNOSTICS_CMD_LIST) => {
+                    fields.validate_allowed(&[field_id::COMMAND])?;
+                    encode_diagnostic_command(DiagnosticCommand::List)?
+                }
+                command if command == u64::from(wire::DEVICE_DIAGNOSTICS_CMD_ACK) => {
+                    fields.validate_allowed(&[field_id::COMMAND, field_id::DIAGNOSTIC_EVENT_ID])?;
+                    let event_id = fields.required_text(field_id::DIAGNOSTIC_EVENT_ID)?;
+                    encode_diagnostic_command(DiagnosticCommand::Acknowledge(&event_id))?
+                }
+                _ => return Err(invalid("unknown diagnostic command")),
+            }
+        }
         packet_kind::PROTOCOL_ENCODE_ACK => {
             fields.validate_allowed(&[field_id::ACK_TYPE, field_id::SEQUENCE])?;
             encode_ack(
@@ -801,28 +912,7 @@ fn decode_encrypted_upload_v2_transfer_packet(
             encrypted_v2_common(output, common).with_u64(field_id::REQUEST_FLAGS, 0)
         }
         EncryptedUploadV2Transfer::RecordingEntry(value) => {
-            encrypted_v2_common(output, value.common)
-                .with_text(field_id::RECORDING_UUID, uuid_text(&value.recording_uuid))
-                .with_u64(
-                    field_id::RECORDING_GENERATION,
-                    u64::from(value.recording_generation),
-                )
-                .with_u64(field_id::STORAGE_FORMAT, u64::from(value.storage_format))
-                .with_u64(
-                    field_id::COMPLETION_STATE,
-                    u64::from(value.completion_state),
-                )
-                .with_u64(field_id::TIMESTAMP, value.started_at)
-                .with_u64(
-                    field_id::DURATION_SECONDS,
-                    u64::from(value.duration_seconds),
-                )
-                .with_u64(field_id::PLAINTEXT_LENGTH, value.plaintext_length)
-                .with_u64(field_id::CIPHERTEXT_LENGTH, value.ciphertext_length)
-                .with_bytes(
-                    field_id::CIPHERTEXT_SHA256,
-                    value.ciphertext_sha256.to_vec(),
-                )
+            v2_demo::recording_fields(encrypted_v2_common(output, value.common), value)
         }
         EncryptedUploadV2Transfer::RecordingListEnd {
             common,

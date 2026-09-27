@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-beta.3
+
+- Pin Apple and Android to synchronized `2.0.0-beta.3`, including native
+  reconnect, recording-transfer and maintenance-parity fixes.
+- Flutter encrypted-upload-v2 runtime support remains unavailable; the native
+  and React Native integration does not change Flutter capability claims.
+
 ## 2.0.0-beta.2
 
 - Pin Apple and Android dependencies to synchronized `2.0.0-beta.2` alongside

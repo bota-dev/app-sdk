@@ -48,6 +48,9 @@ struct EncryptedUploadV2MaterialProvider:
     typealias CancellationHandler = @Sendable () async throws -> Void
 
     let authorization: Data
+    let uploadContext: EncryptedUploadV2ContextProvider?
+    let shouldUploadCiphertext: EncryptedUploadV2Material.CiphertextUploadDecision
+    var validateConnection: @Sendable () async throws -> Void = {}
     private let stagingRequestProvider: StagingRequestProvider
     private let manifestSubmitter: ManifestSubmitter
     private let finalizer: Finalizer
@@ -60,7 +63,9 @@ struct EncryptedUploadV2MaterialProvider:
         submitManifest: @escaping @Sendable (EncryptedUploadV2ManifestSubmission) async throws -> Void,
         finalize: @escaping @Sendable (EncryptedUploadV2TransferEvidence) async throws -> Void,
         completionReceipt: @escaping @Sendable (EncryptedUploadV2TransferEvidence) async throws -> Data,
-        cancel: @escaping @Sendable () async throws -> Void
+        cancel: @escaping @Sendable () async throws -> Void,
+        uploadContext: EncryptedUploadV2ContextProvider? = nil,
+        shouldUploadCiphertext: @escaping EncryptedUploadV2Material.CiphertextUploadDecision = { _ in true }
     ) {
         self.authorization = authorization
         stagingRequestProvider = stagingRequest
@@ -68,6 +73,8 @@ struct EncryptedUploadV2MaterialProvider:
         finalizer = finalize
         receiptProvider = completionReceipt
         cancellationHandler = cancel
+        self.uploadContext = uploadContext
+        self.shouldUploadCiphertext = shouldUploadCiphertext
     }
 
     var description: String { "EncryptedUploadV2MaterialProvider(<redacted>)" }
@@ -182,6 +189,33 @@ actor EncryptedUploadV2MaterialRegistry {
         return request
     }
 
+    func shouldUploadCiphertext(
+        id: String, lease: EncryptedUploadV2MaterialLease, evidence: EncryptedUploadV2TransferEvidence
+    ) async throws -> Bool {
+        try Self.validate(evidence)
+        let entry = try requiredEntry(id, lease: lease)
+        let result = try await entry.provider.shouldUploadCiphertext(evidence)
+        try requireCurrent(id: id, registrationID: entry.registrationID)
+        return result
+    }
+
+    func contextProvider(id: String, lease: EncryptedUploadV2MaterialLease) throws -> EncryptedUploadV2ContextProvider {
+        guard let provider = try requiredEntry(id, lease: lease).provider.uploadContext else {
+            throw EncryptedUploadV2MaterialRegistryError.missingMaterial
+        }
+        return { nonce in
+            try await self.validate(id: id, lease: lease)
+            let exchange = try await provider(nonce)
+            try await self.validate(id: id, lease: lease)
+            return .init(challenge: exchange.challenge, exchangeProof: { proof in
+                try await self.validate(id: id, lease: lease)
+                let result = try await exchange.exchangeProof(proof)
+                try await self.validate(id: id, lease: lease)
+                return result
+            })
+        }
+    }
+
     func submitManifest(
         id: String,
         lease: EncryptedUploadV2MaterialLease,
@@ -239,8 +273,10 @@ actor EncryptedUploadV2MaterialRegistry {
         }
     }
 
-    func validate(id: String, lease: EncryptedUploadV2MaterialLease) throws {
-        _ = try requiredEntry(id, lease: lease)
+    func validate(id: String, lease: EncryptedUploadV2MaterialLease) async throws {
+        let entry = try requiredEntry(id, lease: lease)
+        try await entry.provider.validateConnection()
+        try requireCurrent(id: id, registrationID: entry.registrationID)
     }
 
     func completeIfCurrent(id: String, lease: EncryptedUploadV2MaterialLease) {

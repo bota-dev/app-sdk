@@ -19,6 +19,15 @@ private normative design before merge.
 
 ## Boundaries
 
+The beta.3 candidate native App integration adds a typed mixed recording catalog
+and upload-context codecs in Rust. Apple and Android own GATT context exchange,
+native files, checkpoint identity, exact-operation cancellation and opaque
+material lifetime. React Native carries catalog/progress metadata and opaque
+registration IDs only; the application-native adapter owns authenticated
+backend HTTP and its exact-scope recovery journal. This does not change the
+firmware/release/hardware gates or enable v2 compatibility metadata. See
+`docs/parity/v2-demo-*.md` for local verification and retained limitations.
+
 - Rust owns wire parsing, serialization, cryptographic envelopes, deterministic
   workflow state, retries, checkpoints, and stable errors.
 - Swift/CoreBluetooth, Kotlin/BluetoothGatt, C#/WinRT GATT, and TypeScript/Web
@@ -99,9 +108,19 @@ acceptance gates.
 
 The public TypeScript surface remains frozen against `0.0.65` at that revision.
 Executable workflow evidence is a separate authority: maintenance SDK `0.0.67`
-at revision `e11fde5be40027ec6cf1985fc0eadb00ece23e65`. CI and tagged-release
+at revision `318974f925a573cf04b0d624978bee04784af09b`. CI and tagged-release
 verification run its referenced v2 tests without changing the public-surface
 contract.
+
+The newer maintenance additions have a separate explicit contract, rather than
+weakening the frozen surface check. Unpublished source now includes typed
+diagnostics read/acknowledgement on Apple, Android and RN, native-file RN upload
+recovery with fresh exact-scope credentials, and Apple/Android lost-WINDOW_ACK
+resume reconciliation. These changes do not imply complete cross-platform or
+hardware parity. JavaScript `RecordingDataStore` byte callbacks are unsupported
+by the native-file architecture and fail explicitly during configuration.
+The feature-specific notes under `docs/parity/` describe the boundaries and
+tests; published beta.1 and encrypted-v2 capability metadata remain unchanged.
 
 Its public TypeScript entrypoint is frozen separately in
 `protocol/baseline/react-native-public-api-0.0.65.json`. The semantic contract
@@ -459,6 +478,13 @@ blocked work, and manual selection preempts background reconnect ownership.
 Scan identity uses peripheral IDs plus advertised manufacturer data; names are
 display metadata only. The host checks location permission through API 30 and
 scan/connect permissions on API 31+ before an effect reaches the platform.
+Apple and Android finish serial-verified connections with a fresh standard
+Device Information firmware revision read (`180A/2A26`). They do not reuse a
+scan-time firmware string after reconnect/OTA. The connected-device MTU is the
+negotiated Android MTU; Apple reports the usable without-response write payload
+plus the three-byte ATT header, not the potentially larger long-write limit.
+These reads remain inside connection ownership, and failure tears down the
+incomplete link before the manager permits a retry.
 Android non-secret checkpoints, reconnect identity, and exact factory-reset
 receipts use AtomicFile journals under application no-backup storage. Secret
 values are AES-GCM ciphertext bound to opaque keys, with the non-exportable key
@@ -669,7 +695,10 @@ orders truncate, append, checkpoint, final integrity verification, final ACK,
 and device delete without persisting file paths or payload bytes. Firmware
 restarts a resumed transfer at sequence zero, so the reducer skips sequence
 numbers already represented by the durable checkpoint before appending new
-data.
+data. Notifications arriving during START completion or durable append wait in
+a bounded FIFO (256 packets, 128 KiB); overflow fails without confirming device
+deletion. Final ACK, NACK and Abort use the writable `TRANSFER_CONTROL` (0404),
+not the notify-only `RECORDING_TRANSFER` (0403).
 
 Upload handoff does not carry presigned URLs or credentials. The application
 supplies opaque upload-session and destination IDs, while the reducer reads
@@ -1023,7 +1052,7 @@ construction remains client-owned, and applications use `client.devices`,
 `client.ota`, and `client.logs`.
 
 Picker connection has two explicit paths. `connect({ expectedSerialNumber })`
-requires an exact match to a known application device record. The beta.2 candidate
+requires an exact match to a known application device record. The beta.3 candidate
 `connectSelected()` addition (not in published `2.0.0-beta.1`) opens the same
 picker and uses Rust's existing `ConnectSelected` workflow to learn a fresh
 Device Information serial before the application registers or binds the device.

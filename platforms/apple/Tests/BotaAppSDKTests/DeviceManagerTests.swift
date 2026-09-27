@@ -6,6 +6,46 @@ import XCTest
 @testable import BotaAppSDK
 
 final class DeviceManagerTests: XCTestCase {
+    func testReconnectRefreshesFirmwareAndMtu() async throws {
+        let manager = DeviceManager()
+        await manager.attach(runtime(runner: FakeWorkflowRunner(responses: connectionResponse)))
+        let connected = try await manager.reconnect(serialNumber: "SERIAL-1")
+        XCTAssertEqual(connected.firmwareVersion, "1.0.17")
+        XCTAssertEqual(connected.mtu, 185)
+        await manager.detach()
+    }
+
+    func testMetadataFailureDisconnectsAndReleasesConnectionOperation() async throws {
+        let manager = DeviceManager()
+        let disconnects = DisconnectRecorder()
+        await manager.attach(runtime(
+            runner: FakeWorkflowRunner(responses: connectionResponse),
+            disconnect: { await disconnects.record($0) },
+            firmwareRead: { _ in throw CentralDriverError.bluetoothUnavailable }
+        ))
+        for _ in 0..<2 {
+            do {
+                _ = try await manager.connect(device: DiscoveredDevice(id: "first", rssi: -30))
+                XCTFail("metadata failure must not publish a connected device")
+            } catch {}
+        }
+        let values = await disconnects.values
+        XCTAssertEqual(values, ["first", "first"])
+        await manager.detach()
+    }
+
+    func testConnectionReadsFreshFirmwareFromDeviceInformation() async throws {
+        let manager = DeviceManager()
+        await manager.attach(runtime(runner: FakeWorkflowRunner(responses: connectionResponse)))
+        let connected = try await manager.connect(
+            serialNumber: "SERIAL-1",
+            device: DiscoveredDevice(id: "first", firmwareVersion: "stale", rssi: -30)
+        )
+        XCTAssertEqual(connected.firmwareVersion, "1.0.17")
+        XCTAssertEqual(connected.mtu, 185)
+        await manager.detach()
+    }
+
     func testDeniedBluetoothAuthorizationHasAStablePublicError() throws {
         XCTAssertThrowsError(try BotaConfiguration.validateBluetoothAuthorization(.denied)) { error in
             guard let error = error as? BotaSDKError else {
@@ -207,11 +247,13 @@ final class DeviceManagerTests: XCTestCase {
     private func runtime(
         runner: FakeWorkflowRunner,
         disconnect: @escaping @Sendable (String) async throws -> Void = { _ in },
-        status: DeviceStatus? = nil
+        status: DeviceStatus? = nil,
+        firmwareRead: @escaping @Sendable (String) async throws -> Data = { _ in Data("1.0.17\0".utf8) }
     ) -> DeviceRuntime {
         DeviceRuntime(
             engine: runner,
             capabilities: [.bluetooth, .timer, .persistence, .networkTransfer],
+            connectionMtu: { _ in 185 },
             disconnect: disconnect,
             readStatus: { _ in
                 guard let status else { throw CentralDriverError.bluetoothUnavailable }
@@ -223,7 +265,12 @@ final class DeviceManagerTests: XCTestCase {
                     continuation.finish()
                 }
             },
-            stopStatusUpdates: { _ in }
+            stopStatusUpdates: { _ in },
+            directRead: { id, service, characteristic in
+                XCTAssertEqual(service, "180A")
+                XCTAssertEqual(characteristic, "2A26")
+                return try await firmwareRead(id)
+            }
         )
     }
 
@@ -299,10 +346,12 @@ private actor RuntimeFactoryRecorder {
         storedRuntime = DeviceRuntime(
             engine: runtime.engine,
             capabilities: runtime.capabilities,
+            connectionMtu: runtime.connectionMtu,
             disconnect: { _ in },
             readStatus: runtime.readStatus,
             statusUpdates: runtime.statusUpdates,
-            stopStatusUpdates: runtime.stopStatusUpdates
+            stopStatusUpdates: runtime.stopStatusUpdates,
+            directRead: runtime.directRead
         )
     }
 
@@ -311,10 +360,12 @@ private actor RuntimeFactoryRecorder {
         return DeviceRuntime(
             engine: storedRuntime.engine,
             capabilities: storedRuntime.capabilities,
+            connectionMtu: storedRuntime.connectionMtu,
             disconnect: { id in await self.recordDisconnect(id) },
             readStatus: storedRuntime.readStatus,
             statusUpdates: storedRuntime.statusUpdates,
-            stopStatusUpdates: storedRuntime.stopStatusUpdates
+            stopStatusUpdates: storedRuntime.stopStatusUpdates,
+            directRead: storedRuntime.directRead
         )
     }
 

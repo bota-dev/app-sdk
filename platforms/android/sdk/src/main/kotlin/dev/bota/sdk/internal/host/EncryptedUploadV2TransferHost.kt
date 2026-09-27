@@ -38,6 +38,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
@@ -60,6 +61,9 @@ internal class EncryptedUploadV2TransferHostServices(
     val nextWriteId: () -> UInt,
     val encodeAcknowledgement: (dev.bota.sdk.internal.bluetooth.EncryptedUploadV2WindowAcknowledgement) -> ByteArray,
     val encodeConfirm: (ULong, UUID, String, UInt, UInt, ByteArray) -> ByteArray,
+    val refreshUploadContext: suspend (dev.bota.sdk.EncryptedUploadV2ContextProvider) -> Unit = {
+        error("upload context exchange unavailable")
+    },
 )
 
 internal class EncryptedUploadV2TransferHost(
@@ -143,6 +147,7 @@ internal class EncryptedUploadV2TransferHost(
             value.uploadSessionId, value.ownerRevision, value.revision, value.nextCiphertextOffset,
             value.prefixSha256, value.highestContiguousSequence, value.transportSessionId,
             value.sinkId, value.windowPackets, value.dataPayloadBytes,
+            value.ciphertextLength, value.ciphertextSha256, value.checkpointIntervalBlocks,
         )
     }
 
@@ -296,9 +301,13 @@ internal class EncryptedUploadV2TransferHost(
     private fun truncateSink(effect: CoreEffect) = flow {
         val sinkId = requiredText(effect, 14)
         requireValue(runCatching { UUID.fromString(sinkId) }.isSuccess, "sink ID is invalid")
-        val offset = requiredULong(effect, 39)
+        var offset = requiredULong(effect, 39)
         loadedCheckpoint?.let {
-            requireValue(it.sinkId == sinkId && it.nextCiphertextOffset == offset, "sink truncation is stale")
+            requireValue(
+                it.sinkId == sinkId && (it.replayBoundary?.offset ?: it.nextCiphertextOffset) == offset,
+                "sink truncation is stale",
+            )
+            offset = it.nextCiphertextOffset
         } ?: requireValue(offset == 0uL, "nonzero truncation requires a checkpoint")
         val file = sinkFile(sinkId)
         if (Files.exists(file)) {
@@ -315,6 +324,7 @@ internal class EncryptedUploadV2TransferHost(
         requireValue(activeContext == null && materialLease == null, "another encrypted upload v2 session is active", 8u)
         val materialId = requiredText(effect, 12)
         val prepared = services.materialRegistry.preparedMaterial(materialId)
+        services.materialRegistry.refreshUploadContext(materialId, prepared.lease, services.refreshUploadContext)
         services.sendSignedDocument(1u, nonzeroWriteId(), prepared.authorization, 408u)
         preparedMaterialId = materialId
         preparedAuthorizationSha256 = prepared.authorizationSha256
@@ -343,11 +353,7 @@ internal class EncryptedUploadV2TransferHost(
         val checkpoint = persisted?.nativeCheckpoint ?: EncryptedUploadV2CheckpointValue(
             0u, 0u, MessageDigest.getInstance("SHA-256").digest(byteArrayOf()), null,
         )
-        val transferReceiver = EncryptedUploadV2TransferReceiver(
-            rootDirectory, context.sinkId, context.transportSessionId, context.ciphertextLength,
-            context.ciphertextSha256, context.dataPayloadBytes, context.windowPackets,
-            context.maximumMissingSequences, checkpoint,
-        )
+        var transferReceiver = createReceiver(context, checkpoint)
         transferReceiver.prepare()
         val request = EncryptedUploadV2StartRequest(
             context.transportSessionId, context.uploadSessionId, context.recordingUuid,
@@ -356,10 +362,66 @@ internal class EncryptedUploadV2TransferHost(
             checkpoint.nextCiphertextOffset, checkpoint.prefixSha256, context.windowPackets,
             context.dataPayloadBytes,
         )
-        val opening = scope.async(start = CoroutineStart.LAZY) {
-            services.openTransfer(request, persisted?.nativeCheckpoint)
+        val callerContext = currentCoroutineContext()
+        var startGeneration = 0L
+        var cancelOpening: suspend () -> Unit = {}
+        suspend fun ensureOpening() {
+            callerContext.ensureActive()
+            currentCoroutineContext().ensureActive()
+            synchronized(stateLock) {
+                requireValue(
+                    generation == startGeneration && openingSessionId == context.transportSessionId && !cancellationStarted,
+                    "encrypted transfer opening was cancelled", 16u,
+                )
+            }
         }
-        val startGeneration = synchronized(stateLock) {
+        val opening = scope.async(start = CoroutineStart.LAZY) {
+            try {
+                ensureOpening()
+                val result = services.openTransfer(request, persisted?.nativeCheckpoint?.takeIf { it.nextCiphertextOffset > 0uL })
+                cancelOpening = result.cancel
+                when (result) {
+                    is EncryptedUploadV2OpenResult.Opened -> result
+                    is EncryptedUploadV2OpenResult.ResumeRejected -> {
+                        ensureOpening()
+                        result.assertActive()
+                        val original = persisted ?: fail(11u, "START cannot reconcile a rejected checkpoint")
+                        val reconciled = transferReceiver.reconciliationCheckpoint(result.value)
+                        val recovered = original.copy(
+                            revision = reconciled.revision,
+                            nextCiphertextOffset = reconciled.nextCiphertextOffset,
+                            prefixSha256 = reconciled.prefixSha256,
+                            highestContiguousSequence = reconciled.highestContiguousSequence,
+                            replayBoundary = original.replayBoundary ?: EncryptedUploadV2ReplayBoundary(
+                                original.revision, original.nextCiphertextOffset,
+                            ),
+                        )
+                        ensureOpening()
+                        // Keep Rust's opaque checkpoint as the forward-progress boundary.
+                        // The native durable prefix must move back before any bytes are removed.
+                        services.checkpointStore.save(recovered)
+                        ensureOpening()
+                        result.assertActive()
+                        transferReceiver = createReceiver(context, reconciled)
+                        transferReceiver.prepare()
+                        ensureOpening()
+                        result.assertActive()
+                        synchronized(stateLock) {
+                            requireValue(generation == startGeneration && !cancellationStarted, "transfer was cancelled", 16u)
+                            loadedCheckpoint = recovered
+                        }
+                        result.retry(reconciled)
+                    }
+                }
+            } catch (error: Throwable) {
+                withContext(NonCancellable) {
+                    runCatching { cancelOpening() }
+                        .exceptionOrNull()?.let { if (it !== error) error.addSuppressed(it) }
+                }
+                throw error
+            }
+        }
+        startGeneration = synchronized(stateLock) {
             generation += 1
             openingSessionId = context.transportSessionId
             openingJob = opening
@@ -369,47 +431,37 @@ internal class EncryptedUploadV2TransferHost(
         val opened = try {
             opening.await()
         } catch (error: CancellationException) {
+            withContext(NonCancellable) {
+                opening.cancelAndJoin()
+                runCatching { cancelOpening() }.exceptionOrNull()?.let { if (it !== error) error.addSuppressed(it) }
+            }
             if (currentCoroutineContext().isActive && synchronized(stateLock) { generation != startGeneration }) {
                 fail(16u, "encrypted transfer opening was cancelled")
             }
             throw error
         }
-        when (opened) {
-            EncryptedUploadV2OpenResult.ResumeRejected -> {
-                val stillOwned = synchronized(stateLock) {
-                    (generation == startGeneration && openingSessionId == context.transportSessionId).also { owned ->
-                        if (owned) {
-                            openingSessionId = null
-                            openingJob = null
-                        }
-                    }
+        val events = Channel<CoreHostEventPayload>(capacity = 4)
+        val installed = synchronized(stateLock) {
+            val owned = generation == startGeneration && openingSessionId == context.transportSessionId && !cancellationStarted
+            if (owned) {
+                openingSessionId = null
+                openingJob = null
+                activeContext = context
+                receiver = transferReceiver
+                startEvents = events
+                boundaryTarget = events
+                pumpJob = scope.launch {
+                    pump(startGeneration, context, events, opened.notifications, transferReceiver)
                 }
-                if (!stillOwned) fail(16u, "encrypted transfer opening was cancelled")
-                emit(CoreHostEventPayload(HostEventKind.EncryptedUploadV2ResumeRejected))
-                return@flow
             }
-            is EncryptedUploadV2OpenResult.Opened -> {
-                val events = Channel<CoreHostEventPayload>(capacity = 4)
-                val installed = synchronized(stateLock) {
-                    val owned = generation == startGeneration && openingSessionId == context.transportSessionId
-                    if (owned) {
-                        openingSessionId = null
-                        openingJob = null
-                        activeContext = context
-                        receiver = transferReceiver
-                        startEvents = events
-                        boundaryTarget = events
-                        pumpJob = scope.launch {
-                            pump(startGeneration, context, events, opened.notifications, transferReceiver)
-                        }
-                    }
-                    owned
-                }
-                if (!installed) fail(16u, "encrypted transfer opening was cancelled")
-                emit(CoreHostEventPayload(HostEventKind.EncryptedUploadV2TransferStarted))
-                for (event in events) emit(event)
-            }
+            owned
         }
+        if (!installed) {
+            withContext(NonCancellable) { opened.cancel() }
+            fail(16u, "encrypted transfer opening was cancelled")
+        }
+        emit(CoreHostEventPayload(HostEventKind.EncryptedUploadV2TransferStarted))
+        for (event in events) emit(event)
     }
 
     private fun repairWindow(effect: CoreEffect) = flow {
@@ -439,6 +491,8 @@ internal class EncryptedUploadV2TransferHost(
             context.uploadSessionId, context.ownerRevision, context.transportSessionId,
             context.sinkId, context.windowPackets, context.dataPayloadBytes, checkpoint.revision,
             checkpoint.nextCiphertextOffset, checkpoint.prefixSha256, checkpoint.highestContiguousSequence,
+            ciphertextLength = context.ciphertextLength, ciphertextSha256 = context.ciphertextSha256,
+            checkpointIntervalBlocks = context.checkpointInterval,
         )
         services.checkpointStore.save(persisted)
         receiver?.checkpointDidPersist(checkpoint)
@@ -472,8 +526,28 @@ internal class EncryptedUploadV2TransferHost(
 
     private fun stageArtifacts(effect: CoreEffect) = flow {
         val state = completionState(effect, requireSink = true)
-        val request = services.materialRegistry.stagingRequest(state.context.materialId, state.lease, state.completed.evidence)
-        services.uploadCiphertext(request, state.completed.file)
+        val shouldUpload = services.materialRegistry.shouldUploadCiphertext(state.context.materialId, state.lease, state.completed.evidence)
+        withContext(Dispatchers.IO) {
+            val digest = MessageDigest.getInstance("SHA-256")
+            var length = 0uL
+            Files.newInputStream(state.completed.file).use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    currentCoroutineContext().ensureActive()
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    length += count.toULong()
+                    digest.update(buffer, 0, count)
+                }
+            }
+            requireValue(length == state.completed.evidence.ciphertextLength &&
+                MessageDigest.isEqual(digest.digest(), state.completed.evidence.ciphertextSha256),
+                "staged ciphertext identity changed", 18u)
+        }
+        if (shouldUpload) {
+            val request = services.materialRegistry.stagingRequest(state.context.materialId, state.lease, state.completed.evidence)
+            services.uploadCiphertext(request, state.completed.file)
+        }
         services.materialRegistry.submitManifest(
             state.context.materialId, state.lease, state.completed.manifest, state.completed.evidence,
         )
@@ -504,6 +578,7 @@ internal class EncryptedUploadV2TransferHost(
         requireValue(!synchronized(stateLock) { cancellationStarted }, "transfer cancellation already started", 16u)
         requireValue(requiredText(effect, 12) == context.materialId, "CONFIRM material is stale")
         requireValue(MessageDigest.isEqual(requiredBytes(effect, 162), receipt.receiptSha256), "CONFIRM receipt is stale")
+        services.materialRegistry.refreshUploadContext(context.materialId, lease, services.refreshUploadContext)
         services.checkpointStore.delete(context.uploadSessionId)
         if (Files.deleteIfExists(completed.file)) syncDirectory(completed.file.parent)
         services.sendSignedDocument(2u, nonzeroWriteId(), receipt.receipt, 336u)
@@ -587,6 +662,7 @@ internal class EncryptedUploadV2TransferHost(
                 when (val event = transferReceiver.receive(payload)) {
                     null -> Unit
                     is EncryptedUploadV2TransferReceiverEvent.WindowStaged -> {
+                        if (replayWindow(ownerGeneration, ownerContext, transferReceiver, event.value)) return@collect
                         val gate = CompletableDeferred<Unit>()
                         val target = synchronized(stateLock) {
                             if (!ownsPump(ownerGeneration, ownerContext)) return@collect
@@ -634,6 +710,50 @@ internal class EncryptedUploadV2TransferHost(
                 if (target !== ownerStartEvents) target?.close(error)
             }
         }
+    }
+
+    private fun createReceiver(context: Context, checkpoint: EncryptedUploadV2CheckpointValue) =
+        EncryptedUploadV2TransferReceiver(
+            rootDirectory, context.sinkId, context.transportSessionId, context.ciphertextLength,
+            context.ciphertextSha256, context.dataPayloadBytes, context.windowPackets,
+            context.maximumMissingSequences, checkpoint,
+        )
+
+    private suspend fun replayWindow(
+        ownerGeneration: Long,
+        context: Context,
+        transferReceiver: EncryptedUploadV2TransferReceiver,
+        window: dev.bota.sdk.internal.bluetooth.EncryptedUploadV2WindowStageValue,
+    ): Boolean {
+        val original = synchronized(stateLock) {
+            if (!ownsPump(ownerGeneration, context)) fail(16u, "transfer was cancelled")
+            loadedCheckpoint?.takeIf { it.replayBoundary != null }
+        } ?: return false
+        val boundary = original.replayBoundary!!
+        val checkpoint = window.checkpoint
+        if (checkpoint.revision > boundary.revision && checkpoint.nextCiphertextOffset >= boundary.offset) return false
+        // Rewindowing can cross either coordinate first; the receiver verifies native progress.
+        val acknowledgement = if (window.missingSequences.isEmpty()) {
+            val persisted = original.copy(
+                revision = checkpoint.revision, nextCiphertextOffset = checkpoint.nextCiphertextOffset,
+                prefixSha256 = checkpoint.prefixSha256, highestContiguousSequence = checkpoint.highestContiguousSequence,
+            )
+            services.checkpointStore.save(persisted)
+            currentCoroutineContext().ensureActive()
+            synchronized(stateLock) {
+                if (!ownsPump(ownerGeneration, context)) fail(16u, "transfer was cancelled")
+                loadedCheckpoint = persisted
+            }
+            transferReceiver.checkpointDidPersist(checkpoint)
+            transferReceiver.windowAcknowledgement(checkpoint)
+        } else transferReceiver.repairAcknowledgement(window.missingSequences)
+        services.sendControl(
+            context.transportSessionId, encode(acknowledgement),
+            if (window.missingSequences.isNotEmpty()) EncryptedUploadV2TransferContinuation.Repair(window.missingSequences.toSet())
+            else if (checkpoint.nextCiphertextOffset == context.ciphertextLength) EncryptedUploadV2TransferContinuation.Manifest
+            else EncryptedUploadV2TransferContinuation.Window,
+        )
+        return true
     }
 
     private suspend fun abortState(outcome: EncryptedUploadV2TerminalOutcome) {

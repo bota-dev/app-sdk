@@ -1,0 +1,737 @@
+{
+  "schemaVersion": 1,
+  "package": "@bota.dev/react-native-sdk",
+  "packageVersion": "0.0.67",
+  "sourceRevision": "318974f925a573cf04b0d624978bee04784af09b",
+  "surfaceDigest": "70206e8349a1f83697f8b510684eebdf88a9cd145d86aba5b60e31a874923299",
+  "sourceExportCount": 109,
+  "frozenSurfaceDigest": "a020668e31dd204c2c3ab7232df8d5b0853e3027b9e37d1f7aab07f134bbd576",
+  "toolchain": {
+    "nodeMajor": 22,
+    "typescript": "6.0.3",
+    "sourceLockDigest": "c5107aee3a0398978afc6303302bf993989a941f9ee399d0fa0020383b046eb2"
+  },
+  "runtimeTestFiles": [
+    "__tests__/encryptedUploadV2ProtocolHandler.test.ts",
+    "__tests__/uploadRecovery.test.ts",
+    "src/ble/__tests__/deviceDiagnostics.test.ts"
+  ],
+  "additions": {
+    "exports": [
+      {
+        "name": "DeviceDiagnosticEvent",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "event_id",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "event_type",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "DeviceDiagnosticEventType"
+          },
+          {
+            "name": "firmware_build_id",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "reason_code",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "DeviceDiagnosticReasonCode"
+          },
+          {
+            "name": "report",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "{ fault: { cpu_id: number; cpu_emu: string; core_emu: string; hsb_emu: string; audio_emu: string; wireless_emu: string; }; execution: { task?: string; reti?: string; rets?: string; pc_trace: string[]; }; runtime?: { heap_free_bytes?: number; task_stack_remaining_bytes?: number; }; breadcrumbs?: Array<{ delta_ms: number; code: string; arg0: number; }>; } | undefined"
+          },
+          {
+            "name": "signature",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "state_before_event",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "subsystem",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "uptime_ms",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          }
+        ],
+        "staticMembers": [],
+        "declaredType": "DeviceDiagnosticEvent"
+      },
+      {
+        "name": "DeviceDiagnosticEventType",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "staticMembers": [],
+        "declaredType": "\"reset\" | \"watchdog\" | \"hard_fault\" | \"storage\" | \"power\" | \"radio\" | \"security\""
+      },
+      {
+        "name": "DeviceDiagnosticReasonCode",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "staticMembers": [],
+        "declaredType": "\"watchdog_timeout\" | \"cpu_illegal_instruction\" | \"cpu_misaligned_access\" | \"cpu_stack_overflow\" | \"cpu_usage_fault\" | \"memory_protection_fault\" | \"invalid_register_read\" | \"invalid_register_write\" | \"audio_subsystem_fault\" | \"wireless_subsystem_fault\" | \"flash_mmu_fault\" | \"low_voltage_reset\" | \"unknown_cpu_exception\""
+      },
+      {
+        "name": "DeviceDiagnosticsBatch",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "events",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "DeviceDiagnosticEvent[]"
+          },
+          {
+            "name": "schema_version",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "1"
+          }
+        ],
+        "staticMembers": [],
+        "declaredType": "DeviceDiagnosticsBatch"
+      },
+      {
+        "name": "DeviceDiagnosticsDecoder",
+        "runtime": true,
+        "declarationKinds": [
+          "ClassDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [
+          "() => DeviceDiagnosticsDecoder"
+        ],
+        "members": [
+          {
+            "name": "push",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "(packet: Buffer) => DeviceDiagnosticsBatch | null"
+          },
+          {
+            "name": "reset",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodDeclaration"
+            ],
+            "type": "() => void"
+          }
+        ],
+        "staticMembers": [],
+        "valueType": "typeof DeviceDiagnosticsDecoder",
+        "declaredType": "DeviceDiagnosticsDecoder"
+      },
+      {
+        "name": "diagnosticEventIdCommand",
+        "runtime": true,
+        "declarationKinds": [
+          "FunctionDeclaration"
+        ],
+        "callSignatures": [
+          "(eventId: string) => Buffer"
+        ],
+        "constructSignatures": [],
+        "members": [],
+        "staticMembers": [],
+        "valueType": "(eventId: string) => Buffer"
+      },
+      {
+        "name": "RecordingDataStore",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "deleteRecordingData",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodSignature"
+            ],
+            "type": "(localPath: string) => Promise<void>"
+          },
+          {
+            "name": "loadRecordingData",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodSignature"
+            ],
+            "type": "(localPath: string) => Promise<Uint8Array>"
+          },
+          {
+            "name": "saveRecordingData",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodSignature"
+            ],
+            "type": "(input: { deviceId: string; recordingUuid: string; data: Uint8Array; }) => Promise<string>"
+          }
+        ],
+        "staticMembers": [],
+        "declaredType": "RecordingDataStore"
+      },
+      {
+        "name": "RecordingManagerOptions",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "recordingDataStore",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "RecordingDataStore | undefined"
+          },
+          {
+            "name": "uploadRecoveryProvider",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "UploadRecoveryProvider | undefined"
+          }
+        ],
+        "staticMembers": [],
+        "declaredType": "RecordingManagerOptions"
+      },
+      {
+        "name": "UPLOAD_RECOVERY_VERSION",
+        "runtime": true,
+        "declarationKinds": [
+          "VariableDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [],
+        "staticMembers": [],
+        "valueType": "1"
+      },
+      {
+        "name": "UploadRecoveryContext",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "contentSha256",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "contentType",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "deviceId",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "fileSizeBytes",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number | undefined"
+          },
+          {
+            "name": "recordingId",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "recordingUuid",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "recoveryScope",
+            "optional": true,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string | undefined"
+          },
+          {
+            "name": "relayUpload",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "boolean"
+          },
+          {
+            "name": "signal",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "AbortSignal"
+          },
+          {
+            "name": "taskId",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          }
+        ],
+        "staticMembers": [],
+        "declaredType": "UploadRecoveryContext"
+      },
+      {
+        "name": "UploadRecoveryProvider",
+        "runtime": false,
+        "declarationKinds": [
+          "TypeAliasDeclaration"
+        ],
+        "callSignatures": [
+          "(context: UploadRecoveryContext) => Promise<UploadInfo | null>"
+        ],
+        "constructSignatures": [],
+        "members": [],
+        "staticMembers": [],
+        "declaredType": "(context: UploadRecoveryContext) => Promise<UploadInfo | null>"
+      }
+    ],
+    "members": {
+      "BotaConfig": [
+        {
+          "name": "recordingDataStore",
+          "optional": true,
+          "readonly": false,
+          "declarationKinds": [
+            "PropertySignature"
+          ],
+          "type": "RecordingDataStore | undefined"
+        },
+        {
+          "name": "uploadRecoveryProvider",
+          "optional": true,
+          "readonly": false,
+          "declarationKinds": [
+            "PropertySignature"
+          ],
+          "type": "UploadRecoveryProvider | undefined"
+        }
+      ],
+      "DeviceManager": [
+        {
+          "name": "acknowledgeDiagnosticEvents",
+          "optional": false,
+          "readonly": false,
+          "declarationKinds": [
+            "MethodDeclaration"
+          ],
+          "type": "(device: ConnectedDevice, acceptedEventIds: string[]) => Promise<void>"
+        },
+        {
+          "name": "readDiagnosticEvents",
+          "optional": false,
+          "readonly": false,
+          "declarationKinds": [
+            "MethodDeclaration"
+          ],
+          "type": "(device: ConnectedDevice) => Promise<DeviceDiagnosticsBatch>"
+        }
+      ],
+      "UploadInfo": [
+        {
+          "name": "alreadyUploaded",
+          "optional": true,
+          "readonly": false,
+          "declarationKinds": [
+            "PropertySignature"
+          ],
+          "type": "boolean | undefined"
+        },
+        {
+          "name": "complete",
+          "optional": true,
+          "readonly": false,
+          "declarationKinds": [
+            "PropertySignature"
+          ],
+          "type": "((context: { fileSizeBytes: number; contentSha256?: string; signal: AbortSignal; }) => Promise<void>) | undefined"
+        },
+        {
+          "name": "dispose",
+          "optional": true,
+          "readonly": false,
+          "declarationKinds": [
+            "PropertySignature"
+          ],
+          "type": "(() => void) | undefined"
+        },
+        {
+          "name": "recoveryScope",
+          "optional": true,
+          "readonly": false,
+          "declarationKinds": [
+            "PropertySignature"
+          ],
+          "type": "string | undefined"
+        },
+        {
+          "name": "signal",
+          "optional": true,
+          "readonly": false,
+          "declarationKinds": [
+            "PropertySignature"
+          ],
+          "type": "AbortSignal | undefined"
+        }
+      ],
+      "UploadTask": [
+        {
+          "name": "complete",
+          "optional": true,
+          "readonly": false,
+          "declarationKinds": [
+            "PropertySignature"
+          ],
+          "type": "((context: { fileSizeBytes: number; contentSha256?: string; signal: AbortSignal; }) => Promise<void>) | undefined"
+        },
+        {
+          "name": "fileSizeBytes",
+          "optional": true,
+          "readonly": false,
+          "declarationKinds": [
+            "PropertySignature"
+          ],
+          "type": "number | undefined"
+        },
+        {
+          "name": "nextAttemptAt",
+          "optional": true,
+          "readonly": false,
+          "declarationKinds": [
+            "PropertySignature"
+          ],
+          "type": "number | undefined"
+        },
+        {
+          "name": "recordingUuid",
+          "optional": true,
+          "readonly": false,
+          "declarationKinds": [
+            "PropertySignature"
+          ],
+          "type": "string | undefined"
+        },
+        {
+          "name": "recoveryScope",
+          "optional": true,
+          "readonly": false,
+          "declarationKinds": [
+            "PropertySignature"
+          ],
+          "type": "string | undefined"
+        },
+        {
+          "name": "relayUpload",
+          "optional": true,
+          "readonly": false,
+          "declarationKinds": [
+            "PropertySignature"
+          ],
+          "type": "boolean | undefined"
+        }
+      ]
+    },
+    "constructSignatures": {
+      "RecordingManager": [
+        "(options: RecordingManagerOptions) => RecordingManager"
+      ]
+    }
+  },
+  "excludedExports": [
+    {
+      "name": "EncryptedUploadProfileSelectionError",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadProfileSelectionErrorCode",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadV2CapabilitySnapshot",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadV2Checkpoint",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadV2CiphertextSink",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadV2ContextProvider",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadV2File",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadV2FileSink",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadV2Material",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadV2Provider",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadV2ProviderContext",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadV2Recording",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadV2RuntimeError",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadV2RuntimeErrorCode",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadV2SyncOptions",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "EncryptedUploadV2TransferEvidence",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "PersistedEncryptedUploadV2Checkpoint",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    },
+    {
+      "name": "UploadSecurityPolicy",
+      "reason": "Native-owned v2 material boundary; no identical JavaScript API or byte ownership claim."
+    }
+  ],
+  "sourceDifferencesFromFrozen": {
+    "added": [
+      "DeviceDiagnosticEvent",
+      "DeviceDiagnosticEventType",
+      "DeviceDiagnosticReasonCode",
+      "DeviceDiagnosticsBatch",
+      "DeviceDiagnosticsDecoder",
+      "EncryptedUploadProfileSelectionError",
+      "EncryptedUploadProfileSelectionErrorCode",
+      "EncryptedUploadV2CapabilitySnapshot",
+      "EncryptedUploadV2Checkpoint",
+      "EncryptedUploadV2CiphertextSink",
+      "EncryptedUploadV2ContextProvider",
+      "EncryptedUploadV2File",
+      "EncryptedUploadV2FileSink",
+      "EncryptedUploadV2Material",
+      "EncryptedUploadV2Provider",
+      "EncryptedUploadV2ProviderContext",
+      "EncryptedUploadV2Recording",
+      "EncryptedUploadV2RuntimeError",
+      "EncryptedUploadV2RuntimeErrorCode",
+      "EncryptedUploadV2SyncOptions",
+      "EncryptedUploadV2TransferEvidence",
+      "PersistedEncryptedUploadV2Checkpoint",
+      "RecordingDataStore",
+      "RecordingManagerOptions",
+      "UPLOAD_RECOVERY_VERSION",
+      "UploadRecoveryContext",
+      "UploadRecoveryProvider",
+      "UploadSecurityPolicy",
+      "diagnosticEventIdCommand"
+    ],
+    "removed": [],
+    "changed": [
+      "RecordingManager"
+    ],
+    "addedMembers": [
+      "BluetoothError.captureStackTrace",
+      "BluetoothError.prepareStackTrace",
+      "BluetoothError.stackTraceLimit",
+      "BotaConfig.recordingDataStore",
+      "BotaConfig.uploadRecoveryProvider",
+      "BotaError.captureStackTrace",
+      "BotaError.prepareStackTrace",
+      "BotaError.stackTraceLimit",
+      "DeviceError.captureStackTrace",
+      "DeviceError.prepareStackTrace",
+      "DeviceError.stackTraceLimit",
+      "DeviceManager.acknowledgeDiagnosticEvents",
+      "DeviceManager.readDiagnosticEvents",
+      "ProvisioningError.captureStackTrace",
+      "ProvisioningError.prepareStackTrace",
+      "ProvisioningError.resetPending",
+      "ProvisioningError.stackTraceLimit",
+      "ProvisioningResult.resetFinalized",
+      "RecordingManager.getEncryptedUploadV2Capabilities",
+      "RecordingManager.listEncryptedUploadV2Recordings",
+      "RecordingManager.listPendingRecordings",
+      "RecordingManager.syncAllEncryptedRecordingsV2",
+      "RecordingManager.syncEncryptedRecordingV2",
+      "SdkError.captureStackTrace",
+      "SdkError.prepareStackTrace",
+      "SdkError.stackTraceLimit",
+      "TransferError.captureStackTrace",
+      "TransferError.prepareStackTrace",
+      "TransferError.stackTraceLimit",
+      "UploadError.captureStackTrace",
+      "UploadError.prepareStackTrace",
+      "UploadError.stackTraceLimit",
+      "UploadInfo.alreadyUploaded",
+      "UploadInfo.complete",
+      "UploadInfo.dispose",
+      "UploadInfo.recoveryScope",
+      "UploadInfo.signal",
+      "UploadTask.complete",
+      "UploadTask.fileSizeBytes",
+      "UploadTask.nextAttemptAt",
+      "UploadTask.recordingUuid",
+      "UploadTask.recoveryScope",
+      "UploadTask.relayUpload"
+    ],
+    "removedMembers": [],
+    "changedMembers": [
+      "ProvisioningResult.error"
+    ]
+  },
+  "limitations": [
+    "RecordingDataStore is a source-compatible type only; target configuration rejects JavaScript byte storage.",
+    "ProvisioningResult reset_pending/resetFinalized and v2 RecordingManager methods are outside this additions contract.",
+    "Maintenance inherited Error declaration differences do not relax the frozen target Error surface.",
+    "Additional target-native exports are outside this parity contract; old exported members remain exact.",
+    "33 deterministic workflow scenarios are not exhaustive runtime or physical-device parity."
+  ]
+}

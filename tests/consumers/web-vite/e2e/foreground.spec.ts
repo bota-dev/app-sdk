@@ -16,6 +16,18 @@ interface FakeOptions {
   durableStorage?: boolean
 }
 
+test('consumer fixture uses the native Bluetooth UUID validator', async ({ page }) => {
+  await installBrowserFakes(page)
+  await page.goto('/')
+  expect(await page.evaluate(() => typeof BluetoothUUID)).toBe('function')
+  expect(await page.evaluate(() => BluetoothUUID.getService(0x180a)))
+    .toBe('0000180a-0000-1000-8000-00805f9b34fb')
+  expect(await page.evaluate(() => {
+    try { BluetoothUUID.getCharacteristic('2a25'); return 'accepted' }
+    catch (error) { return (error as Error).name }
+  })).toBe('TypeError')
+})
+
 test('picker connection requires a real click and the exact serial', async ({ page }) => {
   await installBrowserFakes(page)
   await page.goto('/')

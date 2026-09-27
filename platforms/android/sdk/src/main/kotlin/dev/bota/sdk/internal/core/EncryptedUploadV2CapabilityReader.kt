@@ -10,6 +10,12 @@ internal class EncryptedUploadV2CapabilityReader(
     private val read: suspend (String, UUID, UUID) -> ByteArray,
     private val decode: (ByteArray) -> EncryptedUploadV2CapabilitiesValue,
 ) {
+    suspend fun readIfPresent(peripheralId: String): EncryptedUploadV2CapabilitySnapshot? = try {
+        readFresh(peripheralId)
+    } catch (_: dev.bota.sdk.internal.bluetooth.BluetoothCharacteristicNotFoundException) {
+        null
+    }
+
     suspend fun readFresh(peripheralId: String): EncryptedUploadV2CapabilitySnapshot {
         val raw = read(
             peripheralId,

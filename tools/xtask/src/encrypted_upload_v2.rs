@@ -1434,7 +1434,7 @@ fn add_ble_cases(
         ),
         (
             "ble-capability-unknown-flag",
-            mutate(&capability, 5, 1),
+            mutate(&capability, 5, 4),
             "noncanonical_encoding",
         ),
         (

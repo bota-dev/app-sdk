@@ -4,6 +4,7 @@ import dev.bota.sdk.EncryptedUploadV2TransferEvidence
 import dev.bota.sdk.internal.core.EncryptedUploadV2DataValue
 import dev.bota.sdk.internal.core.EncryptedUploadV2EofValue
 import dev.bota.sdk.internal.core.EncryptedUploadV2ManifestChunkValue
+import dev.bota.sdk.internal.core.EncryptedUploadV2ResumeRejection
 import dev.bota.sdk.internal.core.EncryptedUploadV2TransferPayload
 import dev.bota.sdk.internal.core.EncryptedUploadV2WindowEndValue
 import dev.bota.sdk.internal.host.EncryptedUploadV2HostException
@@ -112,11 +113,28 @@ internal class EncryptedUploadV2TransferReceiver(
         }
         FileChannel.open(file, StandardOpenOption.READ, StandardOpenOption.WRITE).use { channel ->
             requireValid(channel.size().toULong() >= checkpoint.nextCiphertextOffset, "resume sink is truncated")
+            requireValid(secureEqual(sha256Prefix(checkpoint.nextCiphertextOffset), checkpoint.prefixSha256), "resume prefix mismatch")
             channel.truncate(checkpoint.nextCiphertextOffset.toLong())
             channel.force(true)
         }
-        requireValid(secureEqual(sha256Prefix(checkpoint.nextCiphertextOffset), checkpoint.prefixSha256), "resume prefix mismatch")
         prepared = true
+    }
+
+    @Synchronized
+    fun reconciliationCheckpoint(value: EncryptedUploadV2ResumeRejection): EncryptedUploadV2CheckpointValue {
+        requireValid(
+            prepared && !terminal && packets.isEmpty() && pendingWindow == null &&
+                value.transportSessionId == transportSessionId && value.reason == 0x000f.toUShort() &&
+                value.checkpointRevision < checkpoint.revision &&
+                value.nextCiphertextOffset < checkpoint.nextCiphertextOffset &&
+                ((value.nextCiphertextOffset == 0uL) == (value.checkpointRevision == 0u)) &&
+                secureEqual(sha256Prefix(value.nextCiphertextOffset), value.prefixSha256),
+            "rejected checkpoint is not a verified older prefix",
+        )
+        return EncryptedUploadV2CheckpointValue(
+            value.checkpointRevision, value.nextCiphertextOffset, value.prefixSha256.copyOf(),
+            if (value.nextCiphertextOffset == 0uL) null else 0u,
+        )
     }
 
     @Synchronized
