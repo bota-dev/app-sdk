@@ -48,11 +48,14 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
   not change beta.1, enable v2 runtime metadata, or establish hardware/app
   acceptance.
 
-- Current source prepares synchronized `2.0.0-beta.3` for maintenance parity,
+- Current source prepares synchronized `2.0.0-beta.4` for Web actions/client
+  presence plus maintenance parity,
   native v2 integration, reconnect and transfer corrections, plus Web selected
   serial discovery. One Android BLE encrypted upload/cloud playback passed with
   a local Demo native identity fix; this is not other-platform or recovery
-  acceptance and does not enable v2 metadata. See the beta.3 preflight.
+  acceptance and does not enable v2 metadata. See the beta.3 preflight for the
+  inherited native evidence and `docs/testing/web-actions-integration.md` for
+  the additional source verification. The occupied beta.3 tag remains immutable.
   Beta.2 is occupied and partially published; never reuse its tag. Publication
   remains gated by exact main CI and the protected release workflow.
 
