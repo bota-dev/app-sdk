@@ -56,9 +56,15 @@ export async function publishExactNpmArtifact({
       if (attempt + 1 < maxAttempts) await sleep(10_000);
     }
     if (!visible) throw new Error('published npm version is not visible after bounded retries');
-    const after = await tags(name);
-    if (after.latest !== before.latest) throw new Error('npm latest tag unexpectedly changed');
-    if (after.beta !== version) throw new Error('npm beta tag does not match release');
+    // The version endpoint can propagate before the package-level dist-tags.
+    let tagsReady = false;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const after = await tags(name);
+      if (after.latest !== before.latest) throw new Error('npm latest tag unexpectedly changed');
+      if (after.beta === version) { tagsReady = true; break; }
+      if (attempt + 1 < maxAttempts) await sleep(10_000);
+    }
+    if (!tagsReady) throw new Error('npm beta tag does not match release after bounded retries');
   } catch (error) {
     publicationError = error;
   }

@@ -55,6 +55,33 @@ the exact tarball identity/hash is checked, `beta` is explicit, `latest` must
 not move, and the old package's dist-tags must remain unchanged when publishing
 a renamed package. Registry authentication and transport failures stop the run.
 
+Registry acceptance is not consumer readiness. npm verifies the exact version
+first, then polls package-level `beta` independently (up to 30 checks, ten
+seconds apart). Every tag check still rejects a changed `latest`; checksum and
+historical-tag protections remain mandatory. The wait never republishes bytes.
+
+Before a clean public CocoaPods install, `tools/release/wait-cocoapods.mjs`
+requires both the exact version in the CDN's sharded version index and the
+matching public podspec. A successful Trunk publication or direct spec URL alone
+is insufficient. It checks up to 61 times, thirty seconds apart, with bounded
+HTTP requests. Only absent index entries/specs are treated as propagation lag;
+authentication, server, network, malformed-spec and identity failures stop the
+gate. The consumer still uses the normal CDN and `pod install --repo-update`,
+with no local spec override. Exhaustion requires retrying verification later,
+not republishing. These tooling changes apply to subsequent source revisions;
+immutable beta.3 continues to use its tagged scripts.
+
+Readiness review: `publish-npm.test.mjs` covers delayed tags on both fresh
+publication and occupied-version recovery, bounded exhaustion, and immediate
+`latest` drift rejection. `wait-cocoapods.test.mjs` covers independently delayed
+index/spec visibility, exact identity, bounded exhaustion, hard failures, and
+consumer ordering. These checks match the existing no-republish/no-override
+release requirements. They do not establish publication or public consumer
+build success; the protected workflow must still supply that evidence. The
+Rust `release_readiness` structural gate also checks the bounded npm tag guard;
+run `cargo test -p xtask --test release_readiness` alongside the Node tests when
+changing the release scripts.
+
 The renamed `2.0.0-beta.0` candidate passed main CI at
 `dd672a5865ba460ca3e97420e97461eb096dfb4f`. Its immutable tag is pushed and
 all five packages are public and verified: Android Central, Apple
