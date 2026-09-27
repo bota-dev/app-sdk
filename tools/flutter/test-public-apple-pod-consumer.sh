@@ -74,6 +74,7 @@ target 'PublicPodConsumer' do
 end
 EOF
 
+node "$ROOT/tools/release/wait-cocoapods.mjs" "$VERSION"
 (
   cd "$temporary"
   "${pod_command[@]}" install --repo-update

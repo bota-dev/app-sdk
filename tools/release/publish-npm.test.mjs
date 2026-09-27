@@ -113,3 +113,41 @@ test('RN publication requires the legacy latest tag to remain on maintenance', a
     }
   }
 });
+
+function delayedTags({ existing = false, staleReads = 2, latestDrift = false } = {}) {
+  const f = fixture({ existing });
+  const fetchImpl = f.options.fetchImpl;
+  let reads = 0;
+  let sleeps = 0;
+  f.options.sleep = async () => { sleeps++; };
+  f.options.fetchImpl = async (url) => {
+    if (decodeURIComponent(new URL(url).pathname.slice(1)) === packageName) {
+      reads++;
+      return Response.json({ 'dist-tags': {
+        latest: latestDrift && reads > 1 ? '3.0.0' : '2.0.0-beta.0',
+        beta: reads <= staleReads + 1 ? '2.0.0-beta.1' : version,
+      } });
+    }
+    return fetchImpl(url);
+  };
+  return { ...f, sleeps: () => sleeps };
+}
+
+test('waits for independently delayed beta tags without republishing', async () => {
+  for (const existing of [false, true]) {
+    const f = delayedTags({ existing });
+    await publishExactNpmArtifact(f.options);
+    assert.equal(f.count(), existing ? 0 : 1);
+    assert.equal(f.sleeps(), 2);
+  }
+});
+
+test('stale beta tags exhaust a bounded wait and latest drift fails immediately', async () => {
+  const stale = delayedTags({ staleReads: 10 });
+  await assert.rejects(publishExactNpmArtifact(stale.options), /beta tag.*bounded retries/);
+  assert.equal(stale.count(), 1);
+  assert.equal(stale.sleeps(), 2);
+  const drift = delayedTags({ latestDrift: true });
+  await assert.rejects(publishExactNpmArtifact(drift.options), /latest tag unexpectedly changed/);
+  assert.equal(drift.sleeps(), 0);
+});
