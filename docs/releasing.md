@@ -77,7 +77,10 @@ publication and occupied-version recovery, bounded exhaustion, and immediate
 index/spec visibility, exact identity, bounded exhaustion, hard failures, and
 consumer ordering. These checks match the existing no-republish/no-override
 release requirements. They do not establish publication or public consumer
-build success; the protected workflow must still supply that evidence.
+build success; the protected workflow must still supply that evidence. The
+Rust `release_readiness` structural gate also checks the bounded npm tag guard;
+run `cargo test -p xtask --test release_readiness` alongside the Node tests when
+changing the release scripts.
 
 The renamed `2.0.0-beta.0` candidate passed main CI at
 `dd672a5865ba460ca3e97420e97461eb096dfb4f`. Its immutable tag is pushed and

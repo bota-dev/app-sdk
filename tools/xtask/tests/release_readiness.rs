@@ -1012,7 +1012,9 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     assert!(contents.contains("../debug/xtask release verify-tag \"$RELEASE_TAG\""));
     let npm_publisher = fs::read_to_string(root().join("tools/release/publish-npm.mjs")).unwrap();
     assert!(npm_publisher.contains("after.latest !== before.latest"));
-    assert!(npm_publisher.contains("after.beta !== version"));
+    assert!(npm_publisher.contains("after.beta === version"));
+    assert!(npm_publisher.contains("if (!tagsReady) throw new Error"));
+    assert!(npm_publisher.contains("npm beta tag does not match release after bounded retries"));
     assert!(npm_publisher.contains("historicalBefore"));
     assert!(contents.contains("gh release edit \"$RELEASE_TAG\" --draft=false --prerelease"));
     assert!(!contents.contains("central-dev.bota-bota-android-sdk-1.1.0"));
