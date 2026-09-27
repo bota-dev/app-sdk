@@ -207,6 +207,12 @@ class EncryptedUploadV2TransferHostTest {
             fixture.host.execute(effect(CoreEffectKind.EncryptedUploadV2SaveCheckpoint, CoreField.Bytes(28, byteArrayOf(100)))).toList()
             fixture.host.execute(effect(CoreEffectKind.EncryptedUploadV2AcknowledgeWindow, CoreField.Bytes(28, byteArrayOf(100)))).toList()
             assertEquals(HostEventKind.EncryptedUploadV2TransferCompleted, events.receive().kind)
+            // Receiving completion does not settle the producer before host.close() cancels it.
+            val terminal = withContext(Dispatchers.Default) {
+                withTimeout(AsyncSettlementTimeoutMilliseconds) { events.receiveCatching() }
+            }
+            assertTrue(terminal.isClosed)
+            assertEquals(null, terminal.exceptionOrNull())
             val saved = fixture.store.load(UploadSession)!!
             assertEquals(3u, saved.revision)
             assertEquals(null, saved.replayBoundary)
@@ -237,6 +243,12 @@ class EncryptedUploadV2TransferHostTest {
                 fixture.host.execute(effect(CoreEffectKind.EncryptedUploadV2SaveCheckpoint, CoreField.Bytes(28, byteArrayOf(100)))).toList()
                 fixture.host.execute(effect(CoreEffectKind.EncryptedUploadV2AcknowledgeWindow, CoreField.Bytes(28, byteArrayOf(100)))).toList()
                 assertEquals(HostEventKind.EncryptedUploadV2TransferCompleted, events.receive().kind)
+                // Receiving completion does not settle the producer before host.close() cancels it.
+                val terminal = withContext(Dispatchers.Default) {
+                    withTimeout(AsyncSettlementTimeoutMilliseconds) { events.receiveCatching() }
+                }
+                assertTrue(terminal.isClosed)
+                assertEquals(null, terminal.exceptionOrNull())
                 val completed = fixture.store.load(UploadSession)!!
                 assertEquals(length.toULong(), completed.nextCiphertextOffset)
                 assertEquals(firstRevision + 1u, completed.revision)

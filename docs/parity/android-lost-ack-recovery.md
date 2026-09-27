@@ -125,6 +125,48 @@ publication was superseded after the rewindowing regression fix.
 The coordinating task received the final repository path and checksum for its
 RN integration refresh. This is local publication only, not a public release.
 
+## Success-Stream Settlement Regression (2026-09-27)
+
+The immutable `v2.0.0-beta.4` release run failed in
+`rewindowedReplayCanCrossEitherRustProgressBoundaryFirst`, while main CI for the
+same source revision `4b972255d2d9d3005278799451741e025afed168` passed. The release
+log retains the exception type and test entry line, but not its message or XML
+report, so attribution of that particular CI failure remains unconfirmed.
+
+A local controlled schedule reproduced a teardown race in the unchanged source:
+the pump sends `TransferCompleted` before closing the START event channel. The
+test receives the event and closes its host, which can close the channel with
+code 16 (`encrypted transfer was cancelled`) before the producer terminates.
+The same race affects
+`firstForwardWindowReturnsToRustCheckpointSaveAndAcknowledgement`.
+
+Both success tests now await the producer channel's normal closure and assert
+that its close cause is null before host teardown. The existing five-second
+watchdog runs on a real dispatcher. Checkpoint, replay-boundary, and final-event
+assertions remain, and production code and cancellation behavior are unchanged.
+
+Verification used JDK 17 and the Gradle-resolved debug test runtime classpath:
+
+- The unchanged targeted Gradle test and 1,000 ordinary JUnit repetitions passed.
+- An external JDI harness paused only the pump thread for 250 ms at the normal
+  START-channel close, immediately after completion delivery. This changes the
+  schedule without modifying production or test source. Before the fix, all ten
+  method invocations (five per method) failed with the cancellation exception.
+- The identical controlled schedule passed all twenty method invocations after
+  the fix, including both rewindowing cases; thirty pump pauses were observed.
+- An additional 1,000 ordinary repetitions of each fixed test passed
+  (**2,000 method invocations**, zero failures).
+- Unfiltered `:sdk:testDebugUnitTest :sdk:testReleaseUnitTest` passed all
+  **235 debug + 235 release tests**, with zero failures, errors, or skips.
+
+Review against the recovery contract and CI settlement policy: replay progress,
+durable checkpoints, and EOF assertions are retained (`matched`); orderly test
+producer settlement is verified by the controlled schedule (`matched`); the
+original CI exception message and hardware/release acceptance remain
+`unverified`. Local per-attempt XML and the external harness are preserved under
+`target/replay-settlement-evidence/` and `target/ReplaySettlement*.java`; they are
+diagnostic artifacts, not packaged SDK sources.
+
 ## Remaining Gates
 
 No physical BLE, device power-loss, Android process-kill instrumentation,
