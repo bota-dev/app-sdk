@@ -314,6 +314,8 @@ pub struct WebEncryptedUploadV2SignedBlobResult {
 pub enum WebSignedBlobKind {
     Authorization,
     Receipt,
+    ContextChallenge,
+    ContextResult,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
@@ -1055,6 +1057,10 @@ const fn signed_blob_kind(kind: WebSignedBlobKind) -> u8 {
     match kind {
         WebSignedBlobKind::Authorization => wire::ENCRYPTED_UPLOAD_V2_BLOB_KIND_AUTHORIZATION,
         WebSignedBlobKind::Receipt => wire::ENCRYPTED_UPLOAD_V2_BLOB_KIND_RECEIPT,
+        WebSignedBlobKind::ContextChallenge => {
+            wire::ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_CHALLENGE
+        }
+        WebSignedBlobKind::ContextResult => wire::ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_RESULT,
     }
 }
 
@@ -1075,6 +1081,37 @@ mod wasm {
     #[wasm_bindgen(js_name = encodeRecordingListCommand)]
     pub fn encode_recording_list_command_wasm() -> Result<Vec<u8>, JsValue> {
         super::encode_recording_list_command().map_err(error_to_js)
+    }
+
+    #[wasm_bindgen(js_name = encodeUploadContextBegin)]
+    pub fn encode_upload_context_begin_wasm(attempt_id: u32) -> Result<Vec<u8>, JsValue> {
+        bota_device_sdk_core::protocol::encode_upload_context_begin(attempt_id).map_err(error_to_js)
+    }
+
+    #[wasm_bindgen(js_name = decodeUploadContextSnapshot)]
+    pub fn decode_upload_context_snapshot_wasm(bytes: &[u8]) -> Result<JsValue, JsValue> {
+        let value = bota_device_sdk_core::protocol::decode_upload_context_snapshot(bytes)
+            .map_err(error_to_js)?;
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Snapshot {
+            state: u8,
+            attempt_id: u32,
+            result: u16,
+            payload: Vec<u8>,
+        }
+        to_js(&Snapshot {
+            state: value.state,
+            attempt_id: value.attempt_id,
+            result: value.result,
+            payload: value.payload,
+        })
+    }
+
+    #[wasm_bindgen(js_name = validateUploadContextDocument)]
+    pub fn validate_upload_context_document_wasm(kind: u8, bytes: &[u8]) -> Result<(), JsValue> {
+        bota_device_sdk_core::protocol::validate_upload_context_document(kind, bytes)
+            .map_err(error_to_js)
     }
 
     #[wasm_bindgen(js_name = encodeRecordingConfirm)]

@@ -233,6 +233,14 @@ export class FakeRecordingStorage implements BrowserSdkStorage {
     this.recordingJournals.delete(operationId)
   }
 
+  async replaceEncryptedUploadV2Operation(operationId: string, checkpoint: unknown, journal: RecordingJournal,
+    previous: { uploadSessionId: string; ownerRevision: number }): Promise<void> {
+    const old = this.encryptedUploadV2Checkpoints.get(operationId) as typeof previous | undefined
+    if (old?.uploadSessionId !== previous.uploadSessionId || old.ownerRevision !== previous.ownerRevision) throw new BrowserStorageError('resume_rejected')
+    this.encryptedUploadV2Checkpoints.set(operationId, checkpoint)
+    this.recordingJournals.set(operationId, { ...journal })
+  }
+
   async loadRecordingJournal(operationId: string): Promise<RecordingJournal | null> {
     const journal = this.recordingJournals.get(operationId)
     return journal ? { ...journal } : null

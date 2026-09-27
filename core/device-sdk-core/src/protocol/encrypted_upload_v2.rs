@@ -1846,6 +1846,12 @@ fn decode_blob_prefix(cursor: &Cursor<'_>) -> Result<(u8, u32), DeviceSdkError> 
 
 fn signed_document_length(kind: u8, operation: Operation) -> Result<usize, DeviceSdkError> {
     match kind {
+        protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_CHALLENGE => {
+            Ok(usize::from(protocol::UPLOAD_CONTEXT_CHALLENGE_LENGTH))
+        }
+        protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_RESULT => {
+            Ok(usize::from(protocol::UPLOAD_CONTEXT_RESULT_LENGTH))
+        }
         protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_AUTHORIZATION => {
             Ok(protocol::UPLOAD_AUTHORIZATION_V2_FIXED_LENGTH)
         }

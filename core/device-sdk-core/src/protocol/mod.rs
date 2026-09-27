@@ -9,6 +9,7 @@ mod recordings;
 mod settings;
 mod status;
 mod transfer;
+mod upload_context;
 
 pub use encode::*;
 pub use encrypted_upload_v2::*;
@@ -20,3 +21,4 @@ pub use recordings::*;
 pub use settings::*;
 pub use status::*;
 pub use transfer::*;
+pub use upload_context::*;

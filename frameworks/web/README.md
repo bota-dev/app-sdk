@@ -222,6 +222,18 @@ const firmwareDownload: FirmwareDownloadProvider = {
 }
 
 const recordingUpload: RecordingUploadProvider = {
+  async prepareUploadContext(context) {
+    const response = await postHost<{ contextId: string; challengeBase64: string }>(
+      '/sdk/recordings/v2/context', { serialNumber: context.serialNumber, nonceBase64: encodeBytes(context.nonce) }, context.signal)
+    return {
+      challenge: decodeBytes(response.challengeBase64),
+      async exchangeProof(proof, signal) {
+        const result = await postHost<{ resultBase64: string }>(
+          '/sdk/recordings/v2/context/proof', { contextId: response.contextId, proofBase64: encodeBytes(proof) }, signal)
+        return decodeBytes(result.resultBase64)
+      },
+    }
+  },
   async prepareLegacyUpload(context) {
     const response = await postHost<{
       uploadId: string
@@ -260,6 +272,8 @@ const recordingUpload: RecordingUploadProvider = {
     }>('/sdk/recordings/v2/prepare', {
       operationId: context.operationId,
       serialNumber: context.serialNumber,
+      nonceBase64: encodeBytes(context.nonce),
+      previousSession: context.previousSession,
       recording: {
         uuid: context.recording.uuid,
         generation: context.recording.generation,
@@ -370,6 +384,27 @@ waiting, observes late settlement, and ignores late results. The SDK sends
 operation-scoped upload and firmware requests
 with redirects disabled; providers must return the exact final HTTPS target
 rather than a redirecting URL.
+
+The source context callback relays the existing capability-bit-8 upload-only
+exchange before listing/authorization and before receipt delivery. Rust owns
+its codecs; the host returns opaque signed challenge/result bytes, not trusted
+time or key claims. Both recording control and v2 preparation receive a fresh
+16-byte device nonce. Treat these buffers as temporary and propagate cancellation.
+
+On resume, `previousSession` carries the persisted recording/session/owner even
+before a byte checkpoint exists. An explicitly recovered expired session may
+return `replacesSessionId`; the default storage atomically replaces identity and
+resets offsets before transfer. Custom storage must implement
+`replaceEncryptedUploadV2Operation` to support this path. Fresh backend status
+may set `stagingAccepted`/`manifestAccepted` to avoid re-uploading accepted
+artifacts, but publication and exact receipt/device acknowledgement are still
+required. Never infer these flags from local HTTP PUT success.
+
+Portal integration release gates remain open: lost session-creation responses
+and reconnect before device authorization admission need an explicit backend
+reconciliation contract. These source additions do not claim published-package
+or physical-device parity. Historical P10 relay must fail closed in a host that
+does not implement its dedicated relay endpoint; never send it to plaintext S3.
 
 Create one client for the signed-in tenant and keep it for the page lifetime:
 

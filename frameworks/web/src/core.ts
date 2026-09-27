@@ -625,29 +625,30 @@ export interface CoreEncryptedUploadV2Status {
   transportProfile: number
 }
 
+export type CoreSignedBlobKind = 'authorization' | 'receipt' | 'context_challenge' | 'context_result'
 export type CoreEncryptedUploadV2SignedBlobFrame =
   | {
       kind: 'begin'
-      blobKind: 'authorization' | 'receipt'
+      blobKind: CoreSignedBlobKind
       writeId: number
       totalLength: number
       sha256: Uint8Array
     }
   | {
       kind: 'data'
-      blobKind: 'authorization' | 'receipt'
+      blobKind: CoreSignedBlobKind
       writeId: number
       offset: number
       data: Uint8Array
     }
   | {
       kind: 'commit' | 'abort'
-      blobKind: 'authorization' | 'receipt'
+      blobKind: CoreSignedBlobKind
       writeId: number
     }
 
 export interface CoreEncryptedUploadV2SignedBlobResult {
-  blobKind: 'authorization' | 'receipt'
+  blobKind: CoreSignedBlobKind
   writeId: number
   result: number
 }
@@ -660,6 +661,9 @@ export interface CoreIntegrityHasher {
 }
 
 export interface CoreBridge {
+  encodeUploadContextBegin(attemptId: number): Uint8Array
+  decodeUploadContextSnapshot(value: Uint8Array): { state: number; attemptId: number; result: number; payload: Uint8Array }
+  validateUploadContextDocument(kind: 3 | 4, value: Uint8Array): void
   startExactConnection(input: CoreConnectionInput): CoreEffectEnvelope[]
   startSelectedConnection(input: Omit<CoreConnectionInput, 'expectedSerialNumber'>): CoreEffectEnvelope[]
   startReconnect(input: CoreReconnectInput): CoreEffectEnvelope[]

@@ -37,7 +37,7 @@ import type {
   WorkflowEffectHost,
 } from './workflowRuntime.ts'
 
-type SignedBlobKind = 'authorization' | 'receipt'
+type SignedBlobKind = import('./core.ts').CoreSignedBlobKind
 type DataFrame = Extract<CoreEncryptedUploadV2TransferFrame, { kind: 'data' }>
 type WindowEndFrame = Extract<
   CoreEncryptedUploadV2TransferFrame,
@@ -1109,6 +1109,7 @@ export interface PersistedEncryptedUploadV2State {
 }
 
 export interface EncryptedUploadV2HostCallbacks {
+  refreshUploadContext?(signal: AbortSignal): Promise<void>
   transferCompleted(evidence: CoreEncryptedUploadV2Evidence): Promise<void>
   uploading(): Promise<void>
   cloudCompleted(receiptSha256: Uint8Array): Promise<void>
@@ -1468,23 +1469,27 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
       throwIfCancelled(this.cancelledValue, signal)
       await this.callbacks.uploading()
       throwIfCancelled(this.cancelledValue, signal)
-      const request = await awaitProviderCall(
-        this.material.stagingRequest(providerEvidence(evidence), signal),
-        signal,
-        'upload',
-      )
-      validateUploadRequest(request)
-      await this.uploadCiphertext(request, signal)
-      throwIfCancelled(this.cancelledValue, signal)
-      await awaitProviderCall(
-        this.material.submitManifest(
-          this.requireCompletedManifest().slice(),
-          providerEvidence(evidence),
+      if (!this.material.stagingAccepted) {
+        const request = await awaitProviderCall(
+          this.material.stagingRequest(providerEvidence(evidence), signal),
           signal,
-        ),
-        signal,
-        'upload',
-      )
+          'upload',
+        )
+        validateUploadRequest(request)
+        await this.uploadCiphertext(request, signal)
+      }
+      throwIfCancelled(this.cancelledValue, signal)
+      if (!this.material.manifestAccepted) {
+        await awaitProviderCall(
+          this.material.submitManifest(
+            this.requireCompletedManifest().slice(),
+            providerEvidence(evidence),
+            signal,
+          ),
+          signal,
+          'upload',
+        )
+      }
     }
     return {
       requestId,
@@ -1564,6 +1569,8 @@ export class EncryptedUploadV2Host implements WorkflowEffectHost {
       || !equalBytes(receiptSha256, this.acceptedReceiptSha256)
     ) throw integrityFailure()
     const receipt = this.acceptedReceipt
+    await this.callbacks.refreshUploadContext?.(this.uploadAbort.signal)
+    throwIfCancelled(this.cancelledValue, this.uploadAbort.signal)
     await this.signedWriter.send(
       'receipt',
       nextSignedBlobWriteId(),

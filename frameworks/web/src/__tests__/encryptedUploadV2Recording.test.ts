@@ -5,6 +5,8 @@ import test from 'node:test'
 import type { CoreBridge } from '../core.ts'
 import { DeviceManager } from '../deviceManager.ts'
 import {
+  BOTA_AUTH_SERVICE,
+  AUTH_NONCE_CHARACTERISTIC,
   BOTA_STORAGE_SERVICE,
   ENCRYPTED_UPLOAD_V2_CAPABILITY_CHARACTERISTIC,
   RECORDING_LIST_CHARACTERISTIC,
@@ -55,6 +57,18 @@ const EMPTY_SHA256 = bytes(
 const wasmBytes = readFile(
   new URL('../generated/bota_device_sdk_core_bg.wasm', import.meta.url),
 )
+
+test('v2 authorization receives a fresh device nonce before any transfer', async () => {
+  const harness = await createHarness()
+  let observed: Uint8Array | undefined
+  harness.provider.prepareEncryptedUploadV2 = async context => {
+    observed = context.nonce?.slice()
+    throw new BotaSDKError('authorization_expired', 'upload')
+  }
+  await assert.rejects(harness.manager.sync(recording(), { profile: 'encrypted_upload_v2' }))
+  assert.deepEqual(observed, new Uint8Array(16).fill(17))
+  assert.deepEqual(harness.transport.writes, [])
+})
 
 test('v2 list reads a fresh capability and returns exact generation and ciphertext evidence', async () => {
   const harness = await createHarness()
@@ -669,7 +683,7 @@ test('late receipt after cancellation cannot persist cloud completion or send CO
   assert.equal(harness.provider.prepared.length, 0)
 })
 
-test('cloud-completed recovery reacquires exact material and rejects a changed receipt digest', async () => {
+for (const serverAccepted of [false, true]) test(`publication recovery (server accepted=${serverAccepted}) reconciles before confirmation without restaging`, async () => {
   const harness = await createHarness()
   const operationId = 'v2-cloud-recovery'
   const authorization = bytes(
@@ -736,11 +750,11 @@ test('cloud-completed recovery reacquires exact material and rejects a changed r
     serialNumber: SERIAL,
     recordingUuid: RECORDING_UUID,
     profile: 'encrypted_upload_v2',
-    phase: 'cloud_completed',
+    phase: serverAccepted ? 'uploading' : 'cloud_completed',
     sinkId,
     uploadId: state.materialId,
-    cloudCompletionId: state.recordingId,
-    confirmationDigestHex: hexString(sha256(harness.core, expectedReceipt)),
+    cloudCompletionId: serverAccepted ? null : state.recordingId,
+    confirmationDigestHex: serverAccepted ? null : hexString(sha256(harness.core, expectedReceipt)),
     devicePlaintextSha256Hex: null,
     updatedAtEpochMs: 1_700_000_000_000,
   })
@@ -751,9 +765,12 @@ test('cloud-completed recovery reacquires exact material and rejects a changed r
   let cancelCalls = 0
   harness.provider.encryptedUploadV2Material = {
     ...inertMaterial(authorization, () => { cancelCalls += 1 }),
+    stagingAccepted: serverAccepted,
+    manifestAccepted: serverAccepted,
+    stagingRequest: async () => { throw new Error('Published data must not be staged again') },
     submitManifest: async () => { submitManifestCalls += 1 },
     finalize: async () => { finalizeCalls += 1 },
-    completionReceipt: async () => changedReceipt,
+    completionReceipt: async () => serverAccepted ? expectedReceipt : changedReceipt,
   }
   installRecoveryDeviceFlow(
     harness,
@@ -762,11 +779,13 @@ test('cloud-completed recovery reacquires exact material and rejects a changed r
     manifestSha256,
   )
 
-  await assert.rejects(
-    withWatchdog(harness.manager.confirm(operationId)),
-    (error: unknown) =>
-      error instanceof BotaSDKError && error.code === 'integrity_failed',
-  )
+  if (serverAccepted) {
+    const result = await withWatchdog(harness.manager.resume(operationId))
+    assert.equal(result.cloudCompletionId, state.recordingId)
+  } else {
+    await assert.rejects(withWatchdog(harness.manager.confirm(operationId)), (error: unknown) =>
+      error instanceof BotaSDKError && error.code === 'integrity_failed')
+  }
 
   assert.equal(harness.provider.encryptedUploadV2Prepared.length, 1)
   assert.deepEqual(
@@ -784,10 +803,10 @@ test('cloud-completed recovery reacquires exact material and rejects a changed r
     },
   )
   assert.equal(submitManifestCalls, 0)
-  assert.equal(finalizeCalls, 0)
-  assert.equal(cancelCalls, 1)
-  assert.equal(hasWriteType(harness.transport, 0x23), false)
-  assert.ok(changedReceipt.every((value) => value === 0))
+  assert.equal(finalizeCalls, serverAccepted ? 1 : 0)
+  assert.equal(cancelCalls, serverAccepted ? 0 : 1)
+  assert.equal(hasWriteType(harness.transport, 0x23), serverAccepted)
+  assert.ok((serverAccepted ? expectedReceipt : changedReceipt).every((value) => value === 0))
   assert.deepEqual(
     writeForType(harness.transport, 0x22),
     harness.core.encodeEncryptedUploadV2Transfer({
@@ -814,7 +833,7 @@ test('cloud-completed recovery reacquires exact material and rejects a changed r
   )
   assert.equal(
     (await harness.storage.loadRecordingJournal(operationId))?.phase,
-    'cloud_completed',
+    serverAccepted ? undefined : 'cloud_completed',
   )
 })
 
@@ -967,6 +986,29 @@ test('inactive v2 cancellation removes the complete unconfirmed operation', asyn
     null,
   )
   assert.equal(blob.snapshot().byteLength, 0)
+})
+
+test('expired-session replacement persists a zero-offset restart before touching retained ciphertext', async () => {
+  const harness = await createHarness()
+  const operationId = 'v2-expired-replacement'
+  const state = persistedTransferState(harness, operationId, null)
+  await harness.storage.saveEncryptedUploadV2Checkpoint(operationId, state)
+  await harness.storage.saveRecordingJournal(transferringV2Journal(operationId, state))
+  const blob = await harness.storage.openBlob(state.sinkId)
+  blob.seed(Uint8Array.of(1, 2, 3))
+  blob.truncate = async () => { throw new Error('crash before truncate') }
+  const nextId = '20111213-1415-4617-8819-1a1b1c1d1e1f'
+  harness.provider.prepareEncryptedUploadV2 = async context => {
+    assert.deepEqual(context.previousSession, { recordingId: state.recordingId, uploadSessionId: state.uploadSessionId, ownerRevision: state.ownerRevision })
+    return { ...inertMaterial(bytes((await vector('authorization-development')).inputHex), () => undefined),
+      uploadSessionId: nextId, ownerRevision: state.ownerRevision + 1, replacesSessionId: state.uploadSessionId }
+  }
+  await assert.rejects(harness.manager.resume(operationId))
+  const saved = parsePersistedEncryptedUploadV2State(await harness.storage.loadEncryptedUploadV2Checkpoint(operationId))
+  assert.equal(saved.uploadSessionId, nextId)
+  assert.equal(saved.coreCheckpoint, null)
+  assert.equal((await harness.storage.loadRecordingJournal(operationId))?.phase, 'prepared')
+  assert.equal(hasWriteType(harness.transport, 0x23), false)
 })
 
 test('ResumeRejected persists checkpoint removal before a crashing sink truncate', async () => {
@@ -1183,6 +1225,7 @@ async function createHarness(): Promise<Harness> {
   const events: string[] = []
   const core = await createWasmCore(await wasmBytes)
   const transport = new FakeBrowserBluetoothTransport()
+  transport.setRead(BOTA_AUTH_SERVICE, AUTH_NONCE_CHARACTERISTIC, new Uint8Array(16).fill(17))
   transport.eventLog = events
   transport.setRead(
     BOTA_STORAGE_SERVICE,

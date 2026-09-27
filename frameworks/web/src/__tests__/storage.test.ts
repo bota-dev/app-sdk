@@ -1370,6 +1370,23 @@ test('encrypted upload v2 operation metadata and journal commit and delete atomi
   assert.equal(await storage.loadRecordingJournal(invalidOperationId), null)
 })
 
+test('expired-session replacement is atomic and rejects stale owners or completed journals', async () => {
+  const fixture = await storageFixture()
+  const storage = await fixture.open('v2-replacement')
+  const operationId = 'v2-replace-1'
+  const before = { schemaVersion: 1, operationId, uploadSessionId: 'old', ownerRevision: 1, recordingId: 'rec', materialId: 'mat', coreCheckpoint: null }
+  const journal: RecordingJournal = { ...recordingJournal(operationId), profile: 'encrypted_upload_v2' }
+  await storage.saveEncryptedUploadV2Operation(operationId, before, journal)
+  const next = { ...before, uploadSessionId: 'new', ownerRevision: 2 }
+  await assert.rejects(storage.replaceEncryptedUploadV2Operation!(operationId, next, journal, { uploadSessionId: 'old', ownerRevision: 2 }))
+  assert.deepEqual(await storage.loadEncryptedUploadV2Checkpoint(operationId), before)
+  await storage.replaceEncryptedUploadV2Operation!(operationId, next, journal, { uploadSessionId: 'old', ownerRevision: 1 })
+  assert.deepEqual(await storage.loadEncryptedUploadV2Checkpoint(operationId), next)
+  assert.deepEqual(await storage.loadRecordingJournal(operationId), journal)
+  await assert.rejects(storage.replaceEncryptedUploadV2Operation!(operationId, { ...next, uploadSessionId: 'third', ownerRevision: 3 }, journal, { uploadSessionId: 'old', ownerRevision: 1 }))
+  assert.deepEqual(await storage.loadEncryptedUploadV2Checkpoint(operationId), next)
+})
+
 async function allIndexedDbKeys(indexedDB: IDBFactory): Promise<string[]> {
   const database = await openOnlyDatabase(indexedDB)
 

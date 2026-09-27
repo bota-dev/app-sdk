@@ -11,6 +11,9 @@ import {
   type BotaOperation,
 } from './errors.ts'
 import {
+  BOTA_AUTH_SERVICE,
+  AUTH_NONCE_CHARACTERISTIC,
+  UPLOAD_CONTEXT_V2_CHARACTERISTIC,
   BOTA_STORAGE_SERVICE,
   DEVICE_INFORMATION_SERVICE,
   ENCRYPTED_UPLOAD_V2_CAPABILITY_CHARACTERISTIC,
@@ -20,6 +23,7 @@ import {
 } from './gatt.ts'
 import {
   EncryptedUploadV2Host,
+  EncryptedUploadV2SignedBlobWriter,
   EncryptedUploadV2TransferControl,
   parsePersistedEncryptedUploadV2State,
   type PersistedEncryptedUploadV2State,
@@ -40,6 +44,7 @@ import type {
   UploadRequestTemplate,
 } from './providers.ts'
 import { awaitProviderCall } from './providerCancellation.ts'
+import { exchangeUploadContext } from './uploadContext.ts'
 import {
   BrowserStorageError,
   type BrowserBlobHandle,
@@ -130,12 +135,14 @@ export class RecordingManager {
     this.ensureAvailable('transfer_recording')
     return await this.withVerifiedConnection(
       'transfer_recording',
-      async ({ device }, signal) => {
+      async (connection, signal) => {
+        const { device } = connection
         const capability = await this.readOptionalV2Capability(device, signal)
         if (
           capability
           && this.core.supportsEncryptedUploadV2Batch(capability)
         ) {
+          await this.refreshUploadContext(connection, capability, signal)
           const control = new EncryptedUploadV2TransferControl(
             this.core,
             this.transport,
@@ -236,6 +243,8 @@ export class RecordingManager {
         }
         const connection = await this.verifyConnection(signal)
         throwIfAborted(signal, 'transfer_recording')
+        await awaitProviderCall(Promise.resolve(this.requireUploadProvider().authorizeLegacyTransfer?.({ serialNumber: connection.serialNumber, recording, signal })), signal, 'transfer_recording')
+        throwIfAborted(signal, 'transfer_recording')
         const prepared: RecordingJournal = {
           schemaVersion: 1,
           operationId,
@@ -326,6 +335,8 @@ export class RecordingManager {
             throw new BotaSDKError('resume_rejected', 'transfer_recording')
           }
           validateRecording(recording)
+          await awaitProviderCall(Promise.resolve(this.requireUploadProvider().authorizeLegacyTransfer?.({ serialNumber: connected.serialNumber, recording, signal })), signal, 'transfer_recording')
+          throwIfAborted(signal, 'transfer_recording')
 
           switch (journal.phase) {
             case 'prepared':
@@ -478,6 +489,7 @@ export class RecordingManager {
     const providerContext: EncryptedUploadV2ProviderContext = {
       operationId,
       serialNumber: capability.connection.serialNumber,
+      nonce: capability.nonce,
       recording: {
         uuid: recording.uuid,
         generation: metadata.generation,
@@ -571,7 +583,7 @@ export class RecordingManager {
       journal.operationId,
     )
     if (!rawState) throw new BotaSDKError('resume_rejected', 'transfer_recording')
-    const state = parsePersistedEncryptedUploadV2State(rawState)
+    let state = parsePersistedEncryptedUploadV2State(rawState)
     validateEncryptedUploadV2JournalState(journal, state)
     const capability = await this.readFreshV2Capability(signal)
     if (
@@ -598,6 +610,7 @@ export class RecordingManager {
       {
         operationId: state.operationId,
         serialNumber: state.serialNumber,
+        nonce: capability.nonce,
         recording: {
           ...state.recording,
           ciphertextSha256: state.recording.ciphertextSha256.slice(),
@@ -608,6 +621,7 @@ export class RecordingManager {
           decoded: { ...capability.decoded },
         },
         checkpoint: encryptedUploadV2CheckpointSummary(state),
+        previousSession: { recordingId: state.recordingId, uploadSessionId: state.uploadSessionId, ownerRevision: state.ownerRevision },
         signal,
       },
       signal,
@@ -615,6 +629,24 @@ export class RecordingManager {
     let materialOwnedHere = true
     try {
       throwIfAborted(signal, 'transfer_recording')
+      if (material.replacesSessionId !== undefined) {
+        validateEncryptedUploadV2Material(material, capability.decoded)
+        if (!storage.replaceEncryptedUploadV2Operation || material.replacesSessionId !== state.uploadSessionId ||
+          material.uploadSessionId === state.uploadSessionId || material.ownerRevision <= state.ownerRevision ||
+          material.recordingId !== state.recordingId || material.materialId !== state.materialId ||
+          journal.phase === 'cloud_completed' || journal.phase === 'confirmed') throw new BotaSDKError('resume_rejected', 'transfer_recording')
+        const previous = { uploadSessionId: state.uploadSessionId, ownerRevision: state.ownerRevision }
+        const replacement = { ...state, uploadSessionId: material.uploadSessionId, ownerRevision: material.ownerRevision,
+          policy: material.policy, transportSessionId: randomTransportSessionId(), coreCheckpoint: null,
+          highestContiguousSequence: null, evidence: null }
+        const restarted: RecordingJournal = { ...journal, phase: 'prepared', uploadId: null,
+          cloudCompletionId: null, confirmationDigestHex: null, updatedAtEpochMs: this.now() }
+        // Atomic identity/journal replacement precedes any sink truncation or
+        // new BLE START, so a crash cannot resume old offsets under a new key.
+        await storage.replaceEncryptedUploadV2Operation(journal.operationId, replacement, restarted, previous)
+        state = replacement
+        journal = restarted
+      }
       validateEncryptedUploadV2Material(material, capability.decoded, state)
       materialOwnedHere = false
       return await this.runEncryptedUploadV2(
@@ -682,6 +714,7 @@ export class RecordingManager {
           this.runtime.poisonBleOwnership(connection.device.id)
         },
         callbacks: {
+          refreshUploadContext: active => this.refreshUploadContext(connection, capabilities, active),
           transferCompleted: async (evidence) => {
             await savePhase('staged')
             onProgress?.({
@@ -800,7 +833,32 @@ export class RecordingManager {
         )
       }
       throw uploadError(error, signal)
+    } finally {
+      context.nonce.fill(0)
     }
+  }
+
+  private async refreshUploadContext(
+    connection: ConnectedRecordingDevice,
+    capability: import('./models.ts').EncryptedUploadV2Capabilities,
+    signal: AbortSignal,
+  ): Promise<void> {
+    if (!(capability.flags & 0x100)) return
+    const provider = this.uploadProvider?.prepareUploadContext
+    if (!provider) throw new BotaSDKError('unsupported_capability', 'transfer_recording')
+    const device = connection.device
+    const uncertain = () => this.runtime.poisonBleOwnership(device.id)
+    const writer = new EncryptedUploadV2SignedBlobWriter(this.core, this.transport, device, uncertain)
+    const attemptId = crypto.getRandomValues(new Uint32Array(1))[0] || 1
+    try {
+      await exchangeUploadContext(this.core, {
+        begin: bytes => this.transport.write(device, BOTA_STORAGE_SERVICE, UPLOAD_CONTEXT_V2_CHARACTERISTIC, bytes, true),
+        read: () => this.transport.read(device, BOTA_STORAGE_SERVICE, UPLOAD_CONTEXT_V2_CHARACTERISTIC),
+        sendDocument: (kind, bytes, active) => writer.send(kind === 3 ? 'context_challenge' : 'context_result', attemptId,
+          bytes, capability.maximumSignedBlobBytes, active),
+        uncertain,
+      }, (nonce, active) => provider.call(this.uploadProvider, { serialNumber: connection.serialNumber, nonce, signal: active }), attemptId, signal)
+    } finally { await writer.cancel() }
   }
 
   private async readFreshV2Capability(signal: AbortSignal): Promise<{
@@ -808,6 +866,7 @@ export class RecordingManager {
     raw: Uint8Array
     sha256: Uint8Array
     decoded: import('./models.ts').EncryptedUploadV2Capabilities
+    nonce: Uint8Array
   }> {
     return await this.withVerifiedConnection(
       'transfer_recording',
@@ -822,11 +881,15 @@ export class RecordingManager {
           'transfer_recording',
         )
         const decoded = this.core.decodeEncryptedUploadV2Capabilities(raw)
+        await this.refreshUploadContext(connection, decoded, runtimeSignal)
+        const nonce = await awaitWithSignal(this.transport.read(connection.device, BOTA_AUTH_SERVICE, AUTH_NONCE_CHARACTERISTIC), runtimeSignal, 'transfer_recording')
+        if (nonce.length !== 16) { nonce.fill(0); throw new BotaSDKError('protocol_error', 'transfer_recording') }
         return {
           connection,
           raw: raw.slice(),
           sha256: hashBytes(this.core, raw),
           decoded,
+          nonce,
         }
       },
       signal,

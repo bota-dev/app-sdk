@@ -176,6 +176,20 @@ export class IndexedDbWorkflowStore {
     checkpoint: unknown,
     journal: RecordingJournal,
   ): Promise<void> {
+    return this.writeEncryptedUploadV2Operation(operationId, checkpoint, journal)
+  }
+
+  async replaceEncryptedUploadV2Operation(
+    operationId: string, checkpoint: unknown, journal: RecordingJournal,
+    previous: { uploadSessionId: string; ownerRevision: number },
+  ): Promise<void> {
+    return this.writeEncryptedUploadV2Operation(operationId, checkpoint, journal, previous)
+  }
+
+  private async writeEncryptedUploadV2Operation(
+    operationId: string, checkpoint: unknown, journal: RecordingJournal,
+    previous?: { uploadSessionId: string; ownerRevision: number },
+  ): Promise<void> {
     const id = validIdentifier(operationId)
     const sanitizedJournal = recordingJournal(journal)
     if (
@@ -205,7 +219,17 @@ export class IndexedDbWorkflowStore {
           requestResult(checkpointStore.get(key)),
           requestResult(journalStore.get(key)),
         ])
-        if (existingCheckpoint !== undefined || existingJournal !== undefined) {
+        if (previous) {
+          const old = versionedRecord(versionedRecord(existingCheckpoint).checkpoint)
+          const next = versionedRecord(checkpoint)
+          const oldJournal = recordingJournal(existingJournal)
+          if (old.uploadSessionId !== previous.uploadSessionId || old.ownerRevision !== previous.ownerRevision ||
+            next.uploadSessionId === old.uploadSessionId || typeof next.ownerRevision !== 'number' || next.ownerRevision <= previous.ownerRevision ||
+            oldJournal.phase === 'cloud_completed' || oldJournal.phase === 'confirmed' ||
+            oldJournal.serialNumber !== journal.serialNumber || oldJournal.recordingUuid !== journal.recordingUuid ||
+            oldJournal.sinkId !== journal.sinkId || oldJournal.profile !== 'encrypted_upload_v2' ||
+            next.recordingId !== old.recordingId || next.materialId !== old.materialId || next.coreCheckpoint !== null) throw resumeRejected()
+        } else if (existingCheckpoint !== undefined || existingJournal !== undefined) {
           throw resumeRejected()
         }
         checkpointStore.put(checkpointRecord, key)
