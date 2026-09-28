@@ -384,11 +384,23 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
-  publish:
-    name: Publish ${{ github.ref_name }}
+  approve-release:
+    name: Approve SDK release
     if: github.event_name == 'push'
     needs: [verify, apple, android, react-native, web]
     runs-on: ubuntu-latest
+    environment: release-approval
+    permissions: {}
+    steps:
+      - name: Authorize the complete synchronized release
+        run: echo 'Release approved; downstream publishers retain their artifact and consumer gates.'
+
+  publish:
+    name: Publish ${{ github.ref_name }}
+    if: github.event_name == 'push'
+    needs: approve-release
+    runs-on: ubuntu-latest
+    # Secrets and OIDC identity only; human review belongs to release-approval.
     environment: release
     outputs:
       android-central-published: ${{ steps.central-readiness.outputs.published }}
@@ -726,9 +738,20 @@ jobs:
     uses: ./.github/workflows/publish-apple-pod.yml
     secrets: inherit
 
+  approve-recovery:
+    name: Approve SDK recovery
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: release-approval
+    permissions: {}
+    steps:
+      - name: Authorize recovery of preserved release artifacts
+        run: echo 'Recovery approved; immutable tag and artifact checks still apply.'
+
   recover-central:
     name: Recover Central deployment
     if: github.event_name == 'workflow_dispatch'
+    needs: approve-recovery
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -1150,7 +1173,6 @@ jobs:
       ${{ always() && github.event_name == 'push' && needs.flutter.result == 'success' }}
     needs: flutter
     runs-on: ubuntu-latest
-    environment: release
     permissions:
       contents: read
     steps:

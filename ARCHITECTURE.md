@@ -985,9 +985,10 @@ and publishes the archive, SHA-256 and SwiftPM checksums, SPDX
 2.3 SBOM, repository license, and schema-validated artifact manifest. After
 publication, a fresh macOS package resolves the release through the public Git
 URL and imports only `BotaAppSDK`, using bounded compiler parallelism on the
-hosted runner. The protected release environment is the manual approval
-boundary for hardware acceptance; automated CI does not claim physical-device
-results.
+hosted runner. The `release-approval` environment is the single manual approval
+boundary for the complete release and hardware acceptance. Downstream jobs
+retain the `release` environment for secrets and registry OIDC without another
+reviewer gate; automated CI does not claim physical-device results.
 
 The opt-in physical target requires `BOTA_PHYSICAL_TESTS=1`, an exact serial,
 and an explicit device model. It returns `XCTSkip` before client configuration

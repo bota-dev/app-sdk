@@ -789,7 +789,7 @@ fn flutter_release_is_ordered_after_public_native_dependencies_and_verified_befo
             .unwrap()
             .contains("needs.flutter.result == 'success'")
     );
-    assert_eq!(bootstrap["environment"].as_str(), Some("release"));
+    assert!(bootstrap["environment"].is_null());
     let bootstrap_source = serde_yaml_ng::to_string(bootstrap).unwrap();
     assert!(!bootstrap_source.contains("flutter pub publish"));
     assert!(!bootstrap_source.contains("v1.2.0-beta.0"));
@@ -913,7 +913,7 @@ fn future_flutter_publication_uses_the_official_oidc_workflow_without_secrets() 
 
     assert!(contents.contains("v[0-9]+.[0-9]+.[0-9]+-*"));
     assert!(contents.contains("tag-pattern on pub.dev: v{{version}}"));
-    assert_eq!(gate["environment"].as_str(), Some("release"));
+    assert!(gate["environment"].is_null());
     assert_eq!(gate["permissions"]["actions"].as_str(), Some("read"));
     assert!(contents.contains("actions/workflows/release.yml/runs?head_sha="));
     assert!(contents.contains("flutter-release-$GITHUB_REF_NAME"));

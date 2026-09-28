@@ -10,9 +10,8 @@ on:
 jobs:
   gate:
     if: github.ref_name != 'v1.2.0-beta.0'
-    name: Verify protected Flutter candidate
+    name: Verify approved Flutter candidate
     runs-on: ubuntu-latest
-    environment: release
     outputs:
       needs-publish: ${{ steps.public-version.outputs.needs-publish }}
     permissions:
@@ -42,12 +41,18 @@ jobs:
           for attempt in {1..120}; do
             RUN_ID="$(gh api \
               "repos/$GITHUB_REPOSITORY/actions/workflows/release.yml/runs?head_sha=$SOURCE_REVISION&event=push&per_page=1" \
-              --jq '.workflow_runs[0].id // empty')"
+              | jq -r --arg tag "$GITHUB_REF_NAME" \
+                  '.workflow_runs[] | select(.head_branch == $tag) | .id' \
+              | head -n 1)"
             if [[ -n "$RUN_ID" ]]; then
-              ARTIFACT_ID="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" \
-                | jq -r --arg name "flutter-release-$GITHUB_REF_NAME" \
-                  '.artifacts[] | select(.name == $name and .expired == false) | .id' \
-                | head -n 1)"
+              # A matching artifact alone must not authorize the separate OIDC workflow.
+              if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?filter=latest&per_page=100" \
+                | jq -e 'any(.jobs[]; .name == "Approve SDK release" and .conclusion == "success")' >/dev/null; then
+                ARTIFACT_ID="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" \
+                  | jq -r --arg name "flutter-release-$GITHUB_REF_NAME" \
+                    '.artifacts[] | select(.name == $name and .expired == false) | .id' \
+                  | head -n 1)"
+              fi
             fi
             [[ -z "$ARTIFACT_ID" ]] || break
             sleep 30
@@ -100,6 +105,7 @@ jobs:
       id-token: write
       contents: read
     uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    # Keep the pub.dev OIDC identity; this environment has no additional reviewers.
     with:
       environment: release
       working-directory: frameworks/flutter/bota_app_sdk

@@ -675,8 +675,8 @@ source-digest, and public-TypeScript-API comparators. Release evidence is
 recorded in `release/evidence/`.
 
 Release maintainers must follow [docs/releasing.md](docs/releasing.md). Release
-tags must not be pushed until the protected `release` environment and its human
-approval are configured.
+tags must not be pushed until the `release-approval` human gate and the `release`
+publishing environment are configured as described in `docs/releasing.md`.
 
 ## Naming
 

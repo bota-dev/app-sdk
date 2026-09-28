@@ -13,6 +13,7 @@ jobs:
   publish:
     name: Publish and verify Apple SDK
     runs-on: macos-15
+    # The caller depends on the approved publish job; retain the environment secret.
     environment: release
     permissions:
       actions: read
