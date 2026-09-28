@@ -5,9 +5,12 @@
 `2.0.0-beta.4` prepares Web Bluetooth actions, passive client presence, and the
 reviewed connection/recovery guards on top of the beta.3 integration. See
 [Web integration evidence](testing/web-actions-integration.md) and
-[beta.4 preflight](../release/evidence/2.0.0-beta.4-preflight.md). It is not yet
-published or physically accepted. All five facades remain synchronized; exact
-main CI, generated candidate inventory, and protected publication are required.
+[beta.4 preflight](../release/evidence/2.0.0-beta.4-preflight.md). Its immutable
+tag is partially published: SwiftPM, Maven and both npm packages are public;
+CocoaPods failed on Trunk's upstream GitHub commit API timeout, holding Flutter.
+It is not a synchronized release or cross-platform physical acceptance. See
+[beta.4 recovery](#immutable-beta4-recovery-after-the-approval-cutover). Exact
+main CI, generated candidate inventory, and protected publication remain required.
 The existing `v2.0.0-beta.3` tag and its release remain untouched.
 
 ### Previous candidate
@@ -268,7 +271,68 @@ job: do not rerun their publishing jobs after the settings cutover. Use current
 publication requires an explicit reviewed recovery path. Restoring reviewers
 on `release` is the rollback if the replacement approval gate is unavailable.
 
-Design review for this change:
+### Immutable beta.4 recovery after the approval cutover
+
+`recover-beta4.yml` is a finite exception for the stranded `v2.0.0-beta.4`
+release, not a general historical-run selector. Dispatch it from current
+`main` only after that exact revision's CI and License Gate pass. Its read-only
+preflight precedes one `release-approval` review. The controller receives only
+`actions: write` and `contents: read`; it receives no registry credentials and
+does not publish packages itself. Do not rerun the historical publishers directly.
+
+The reviewed identities are fixed in `tools/release/recover-beta4.mjs`:
+
+- Annotated tag object: `db26c88d45582238d94e66e64365bbd04a518b7b`.
+- Source revision: `4b972255d2d9d3005278799451741e025afed168`.
+- Candidate inventory SHA-256: `87f00905121df029cdbc534e33e2701c0755e0a19873d09f05e48d9146416540`.
+- Original release: [36343414157](https://github.com/bota-dev/app-sdk/actions/runs/36343414157).
+- Original Flutter OIDC publisher: [36343414333](https://github.com/bota-dev/app-sdk/actions/runs/36343414333).
+
+Recovery verifies the tag/annotation, inventory bytes, the four preserved native
+and npm artifact IDs/digests/source/expiration, original tag-push run identities,
+and all successful package/public-native-consumer prerequisites. It refuses an
+already active historical run. After approval it repeats preflight, verifies
+the approval in this exact controller run/revision, and resumes only a failed
+CocoaPods or Flutter stage and its dependents. Successful native/npm publication
+jobs are never selected. The original tagged checks, secrets environment and
+pub.dev tag-push OIDC identity remain in force.
+
+The controller waits for the original CocoaPods/public-native checks and Flutter
+candidate build to succeed. It independently checks every Flutter ZIP file
+against the annotation-bound candidate inventory before resuming the separate
+OIDC workflow. Both original workflows must finish successfully, including
+public archive verification and final evidence attachment. A failed final
+verification/attachment stage from an earlier attempt can be resumed with a new
+approved dispatch; a new failure during recovery stops without automatic retries.
+
+Each polling phase is bounded to 120 minutes; the controller job has a 240-minute
+limit. Its concurrency group differs from the original release group so it does
+not prevent the jobs it awaits from starting. Cancelling or timing out the
+controller does **not** cancel already resumed original jobs: inspect both run
+links and let them finish or explicitly cancel them before another dispatch.
+Never move the tag, rebuild native inputs, change environment rules, or upload
+an alternative package to work around a failed check.
+
+Post-implementation review against the single-approval policy and synchronized
+release acceptance criteria:
+
+| Requirement | Evidence | Conformance / remaining verification |
+| --- | --- | --- |
+| Current protected approval before historical publication | Main-only dispatch; one secret-free `release-approval` job; controller rechecks exact run/revision approval | Source and regression checks pass; hosted approval/execution pending |
+| Immutable source and approved bytes | Pinned tag object/source/inventory; preserved artifact IDs/digests; exact Flutter file comparison | Negative tests and live read-only preflight pass; future Flutter artifact verification pending |
+| Retain all native/public-consumer and publication gates | Required successful original jobs; original tagged downstream jobs and OIDC workflow; both final conclusions required | Ordering tests pass; CocoaPods service recovery and public Flutter verification pending |
+| Fail closed without repeat publication | No arbitrary run inputs; failed-job-only API; no native/npm reruns; bounded polling; new failure stops | Failure, timeout, identity, approval and artifact regression tests pass |
+| Hardware/app rollout remains separate | No device operation, version/tag rewrite, Portal deployment or acceptance assertion | Matched; physical/browser acceptance remains unverified |
+
+Local verification: 14 recovery tests and six existing approval/completion tests
+pass; actionlint 1.7.12 passes. A read-only preflight against the live historical
+runs, artifacts and then-current main quality gates passed on 2026-09-28. This
+does not authorize publication from the local shell or prove hosted recovery.
+Exact pushed-revision CI and License Gate remain mandatory before main activation.
+
+### Single-approval implementation review
+
+Design review for the original single-approval change:
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |

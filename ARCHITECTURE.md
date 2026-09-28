@@ -989,6 +989,11 @@ hosted runner. The `release-approval` environment is the single manual approval
 boundary for the complete release and hardware acceptance. Downstream jobs
 retain the `release` environment for secrets and registry OIDC without another
 reviewer gate; automated CI does not claim physical-device results.
+The main-only `recover-beta4.yml` controller is the explicit approval-gated
+exception for beta.4's two pre-cutover tag-push runs. It pins their identities and
+artifacts, resumes only failed CocoaPods/Flutter stages, and requires the original
+public-consumer and synchronized-completion checks. See the recovery procedure
+and remaining verification in [docs/releasing.md](docs/releasing.md).
 
 The opt-in physical target requires `BOTA_PHYSICAL_TESTS=1`, an exact serial,
 and an explicit device model. It returns `XCTSkip` before client configuration

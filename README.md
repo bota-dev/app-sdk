@@ -677,6 +677,9 @@ recorded in `release/evidence/`.
 Release maintainers must follow [docs/releasing.md](docs/releasing.md). Release
 tags must not be pushed until the `release-approval` human gate and the `release`
 publishing environment are configured as described in `docs/releasing.md`.
+Beta.4 is partially published; its CocoaPods timeout and held Flutter publication
+must use the [protected recovery procedure](docs/releasing.md#immutable-beta4-recovery-after-the-approval-cutover).
+The existing tag and successful public packages remain immutable.
 
 ## Naming
 

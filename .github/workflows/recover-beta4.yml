@@ -1,0 +1,60 @@
+name: Recover immutable beta.4 publication
+
+on:
+  workflow_dispatch:
+
+# Do not use the historical release's group: it must run while this controller waits.
+concurrency:
+  group: app-sdk-beta4-recovery-controller
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    if: github.repository == 'bota-dev/app-sdk' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Verify immutable runs, artifacts and exact main CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/release/recover-beta4.mjs preflight
+
+  approve:
+    name: Approve beta.4 recovery
+    needs: preflight
+    runs-on: ubuntu-latest
+    environment: release-approval
+    permissions: {}
+    steps:
+      - run: echo 'Approved recovery of beta.4 CocoaPods and Flutter publication through the two original tag-push runs.'
+
+  recover:
+    needs: approve
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Resume exact failed stages and verify synchronized completion
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/release/recover-beta4.mjs recover

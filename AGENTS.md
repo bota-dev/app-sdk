@@ -64,6 +64,12 @@ five-second settlement watchdog. See
   the additional source verification. The occupied beta.3 tag remains immutable.
   Beta.2 is occupied and partially published; never reuse its tag. Publication
   remains gated by exact main CI and the protected release workflow.
+  Beta.4's immutable tag is partially published (SwiftPM, Maven and both npm
+  packages); CocoaPods' upstream GitHub commit API timeout holds Flutter.
+  After the single-approval cutover, only the main-only `recover-beta4.yml`
+  controller may resume its two pinned historical runs, following its own
+  `release-approval` gate. See `docs/releasing.md`; never directly rerun the old
+  publishers or report synchronized publication before both workflows pass.
 
 - Current synchronized published beta is `2.0.0-beta.1`: Apple `BotaAppSDK`, Android
   `dev.bota:bota-app-sdk`, RN `@bota.dev/react-native-app-sdk`, Web
