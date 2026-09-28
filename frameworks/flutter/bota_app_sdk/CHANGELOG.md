@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-beta.5 (unreleased)
+
+- Pin Apple and Android to synchronized `2.0.0-beta.5`.
+- Publish the verified CI candidate through the shared release workflow,
+  preserving its dependency lock and evidence across publication retries.
+- Runtime APIs and Flutter encrypted-upload-v2 availability are unchanged.
+
 ## 2.0.0-beta.4 (unreleased)
 
 - Add passive client-presence metadata with the synchronized SDK identity.

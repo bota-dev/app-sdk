@@ -22,10 +22,11 @@ The maintenance React Native SDK and deployed host applications are separate
 adoption steps. This source API is not evidence of a published package or
 physical-device acceptance.
 
-Current source prepares synchronized `2.0.0-beta.4`, adding Web actions and
+Current source prepares synchronized `2.0.0-beta.5`, carrying Web actions and
 client presence to maintenance parity,
 native encrypted-upload-v2 integration, reconnect and recording-transfer fixes,
-and Web selected-device serial discovery. The
+and Web selected-device serial discovery. Beta.5 uses verified CI artifact
+promotion to avoid the dependency drift that blocked beta.4. The
 installation examples remain pinned to verified public `2.0.0-beta.1` until
 the protected CI release completes. See [release status](docs/releasing.md).
 

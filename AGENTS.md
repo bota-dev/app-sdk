@@ -54,7 +54,7 @@ five-second settlement watchdog. See
   not change beta.1, enable v2 runtime metadata, or establish hardware/app
   acceptance.
 
-- Current source prepares synchronized `2.0.0-beta.4` for Web actions/client
+- Current source prepares synchronized `2.0.0-beta.5` for Web actions/client
   presence plus maintenance parity,
   native v2 integration, reconnect and transfer corrections, plus Web selected
   serial discovery. One Android BLE encrypted upload/cloud playback passed with
@@ -67,7 +67,11 @@ five-second settlement watchdog. See
   Beta.4's immutable tag is partially published (SwiftPM, Maven and both npm
   packages) and CocoaPods is now public/CDN-ready. The retried Flutter examples
   passed, but attempt 7 failed the rebuilt evidence inventory comparison;
-  controller `36479125467` stopped and pub.dev remains pending.
+  controller `36479125467` stopped and pub.dev remains pending. The retry
+  resolved `built_collection 5.1.2` instead of the original CI lock
+  `5.1.1`, changing evidence despite an identical package archive. The owner
+  approved beta.5 through CI-artifact promotion; do not resume beta.4 as part
+  of this new release. See `release/evidence/2.0.0-beta.5-preflight.md`.
   After the single-approval cutover, only the main-only `recover-beta4.yml`
   controller may resume its two pinned historical runs, following its own
   `release-approval` gate. See `docs/releasing.md`; never directly rerun the old

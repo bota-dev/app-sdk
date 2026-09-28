@@ -13,11 +13,11 @@ dependency before adding its replacement. Storage namespaces do not change.
 
 ## Install
 
-This source prepares synchronized `2.0.0-beta.4`. After publication, pin the
+This source prepares synchronized `2.0.0-beta.5`. After publication, pin the
 exact version:
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.4
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.5
 ```
 
 Use a secure context in a desktop Chromium browser with Web Bluetooth. The

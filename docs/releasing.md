@@ -2,6 +2,16 @@
 
 ## Current Candidate
 
+`2.0.0-beta.5` is the owner-approved next synchronized candidate. It retains
+beta.4's SDK behavior and uses the single release workflow to promote exact
+main-CI artifacts, including Flutter's preserved lock and evidence. See
+[beta.5 preflight](../release/evidence/2.0.0-beta.5-preflight.md). Publication
+requires final main CI and License Gate, verified Apple checksums, the annotated
+candidate run/inventory, and the protected approval. No beta.5 publication or
+additional physical acceptance is established by metadata preparation.
+
+### Previous candidate: beta.4
+
 `2.0.0-beta.4` prepares Web Bluetooth actions, passive client presence, and the
 reviewed connection/recovery guards on top of the beta.3 integration. See
 [Web integration evidence](testing/web-actions-integration.md) and
@@ -10,14 +20,16 @@ tag is partially published: SwiftPM, CocoaPods, Maven and both npm packages
 are public. CocoaPods CDN readiness and the retried Flutter Android/iOS builds
 passed. Run `36343414157` attempt 7 then failed its rebuilt Flutter evidence
 comparison with the annotation-bound inventory; protected controller
-`36479125467` stopped. Flutter publication remains pending; do not retry that
+`36479125467` stopped. The retry resolved `built_collection 5.1.2` instead
+of the original lock's `5.1.1`; the package archive itself is unchanged.
+Flutter publication remains pending; do not retry that
 immutable build blindly or substitute a newer main commit's candidate.
 It is not a synchronized release or cross-platform physical acceptance. See
 [beta.4 recovery](#immutable-beta4-recovery-after-the-approval-cutover). Exact
 main CI, generated candidate inventory, and protected publication remain required.
 The existing `v2.0.0-beta.3` tag and its release remain untouched.
 
-### Previous candidate
+### Previous candidate: beta.3
 
 `2.0.0-beta.3` prepares the maintenance-parity and native encrypted-upload-v2
 integration, Android reconnect/catalog fixes, and legacy transfer burst/final
@@ -438,9 +450,8 @@ from the committed root package. Never hand-edit the release URL or checksum.
 
 PR and main CI use `tools/apple/package-release.sh --evidence-only` to generate
 and validate unpublished evidence for the current commit without comparing it
-to the immutable package from the previous release. This mode is not used by
-the protected release workflow; tagged releases always use normal mode and its
-exact root-package checksum check.
+to the immutable package from the previous release. The protected release workflow promotes that preserved candidate and verifies
+its checksums against the committed root manifests; it does not rebuild it.
 
 The matching `tools/apple/test-pod-archive.sh --evidence-only` lints a temporary
 podspec generated from that candidate archive's verified checksum. It never
@@ -841,7 +852,7 @@ cargo-deny action with `check licenses`.
 
 | Requirement | Evidence | Status / remaining verification |
 |---|---|---|
-| Exact green main source and immutable candidate | Pinned run annotation, CI/License identity checks, ZIP digests, full five-platform file comparison | Matched in negative/positive local tests; hosted CI pending |
+| Exact green main source and immutable candidate | Pinned run annotation, CI/License identity checks, ZIP digests, full five-platform file comparison | Matched in local tests and full main CI `36488752213` at `875a4cd` |
 | No duplicate package/native build during publication | Promoted archives; preserved-input Maven signer; Flutter extraction | Matched in source and signer tests; ephemeral-key hosted signing/normalization passed |
 | One approval, original tag OIDC and public consumer gates | Explicit release dependencies, protected environments, public native/archive checks | Matched in workflow checks/actionlint; next legitimate tagged publication unverified |
 | Retry without replacing accepted versions | Existing Central/npm/CocoaPods checks plus Flutter occupied-file verification | Local retry/corruption tests pass; next tagged end-to-end retry unverified |
