@@ -305,6 +305,14 @@ public archive verification and final evidence attachment. A failed final
 verification/attachment stage from an earlier attempt can be resumed with a new
 approved dispatch; a new failure during recovery stops without automatic retries.
 
+GitHub repopulates carried prerequisite jobs asynchronously after accepting a
+rerun. Polling reads jobs from the exact attempt returned by run metadata and
+waits when an active attempt temporarily omits a prerequisite or has no result
+for it yet. This pending state never authorizes Flutter artifact consumption or
+another publisher. Completed attempts still require the complete job set;
+actual failed/cancelled/skipped prerequisites and unknown/duplicate jobs fail
+immediately. Preflight, artifact consumption and rerun selection remain strict.
+
 Each polling phase is bounded to 120 minutes; the controller job has a 240-minute
 limit. Its concurrency group differs from the original release group so it does
 not prevent the jobs it awaits from starting. Cancelling or timing out the
@@ -318,17 +326,27 @@ release acceptance criteria:
 
 | Requirement | Evidence | Conformance / remaining verification |
 | --- | --- | --- |
-| Current protected approval before historical publication | Main-only dispatch; one secret-free `release-approval` job; controller rechecks exact run/revision approval | Source and regression checks pass; hosted approval/execution pending |
+| Current protected approval before historical publication | Main-only dispatch; one secret-free `release-approval` job; controller rechecks exact run/revision approval | Hosted preflight and owner approval passed in run `36473229435`; approved CocoaPods attempt started; synchronized completion pending |
 | Immutable source and approved bytes | Pinned tag object/source/inventory; preserved artifact IDs/digests; exact Flutter file comparison | Negative tests and live read-only preflight pass; future Flutter artifact verification pending |
 | Retain all native/public-consumer and publication gates | Required successful original jobs; original tagged downstream jobs and OIDC workflow; both final conclusions required | Ordering tests pass; CocoaPods service recovery and public Flutter verification pending |
-| Fail closed without repeat publication | No arbitrary run inputs; failed-job-only API; no native/npm reruns; bounded polling; new failure stops | Failure, timeout, identity, approval and artifact regression tests pass |
+| Fail closed without repeat publication | No arbitrary run inputs; failed-job-only API; no native/npm reruns; bounded polling; new failure stops | Failure, timeout, identity, approval, artifact and partial-attempt regression tests pass; corrected hosted polling remains unverified |
 | Hardware/app rollout remains separate | No device operation, version/tag rewrite, Portal deployment or acceptance assertion | Matched; physical/browser acceptance remains unverified |
 
-Local verification: 14 recovery tests and six existing approval/completion tests
+Local verification: 19 recovery tests and six existing approval/completion tests
 pass; actionlint 1.7.12 passes. A read-only preflight against the live historical
 runs, artifacts and then-current main quality gates passed on 2026-09-28. This
 does not authorize publication from the local shell or prove hosted recovery.
 Exact pushed-revision CI and License Gate remain mandatory before main activation.
+
+Runtime follow-up (2026-09-28): controller job `109103185437` correctly resumed
+CocoaPods, then failed one second later with `native/public prerequisite failed`
+while GitHub populated attempt 6. The original CocoaPods job continued; the
+controller failure did not establish a native gate failure. Four regression
+tests reproduced the polling/read issues before the correction; all 25 focused
+tests now pass. The fix pins attempt reads and treats incomplete active
+prerequisites as pending within the existing bound, without weakening completed
+gates or adding a publishing retry. Exact-revision CI and hosted recovery are
+still required for this correction.
 
 ### Single-approval implementation review
 

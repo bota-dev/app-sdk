@@ -45,6 +45,37 @@ test('failed native gates, unknown jobs and ambiguous job names fail closed', ()
   }
 });
 
+test('polling waits for carried prerequisite jobs to appear without accepting them as passed', () => {
+  for (const status of ['queued', 'in_progress']) {
+    const pending = run();
+    pending.status = status;
+    pending.jobs = pending.jobs.filter(job => !JOBS.prerequisites.includes(job.name) && job.name !== JOBS.central);
+    assert.equal(validateRun(pending, 'release', { allowPending: true }), false);
+    assert.throws(() => validateRun(pending, 'release'), /prerequisite/);
+    pending.jobs = run().jobs;
+    pending.jobs[0] = { ...pending.jobs[0], status: 'queued', conclusion: null };
+    assert.equal(validateRun(pending, 'release', { allowPending: true }), false);
+    pending.jobs[0] = run().jobs[0];
+    assert.equal(validateRun(pending, 'release', { allowPending: true }), true);
+  }
+});
+
+test('polling still rejects completed missing gates, actual failures and unexpected jobs', () => {
+  const completed = run();
+  completed.jobs.shift();
+  assert.throws(() => validateRun(completed, 'release', { allowPending: true }), /jobs/);
+  for (const conclusion of ['failure', 'cancelled', 'timed_out', 'skipped']) {
+    const failed = run();
+    failed.status = 'in_progress';
+    failed.jobs[0].conclusion = conclusion;
+    assert.throws(() => validateRun(failed, 'release', { allowPending: true }), /prerequisite/);
+  }
+  const unexpected = run();
+  unexpected.status = 'queued';
+  unexpected.jobs.push({ name: 'Unexpected publisher', status: 'queued', conclusion: null });
+  assert.throws(() => validateRun(unexpected, 'release', { allowPending: true }), /jobs/);
+});
+
 test('preserved native artifact IDs, digests, source and expiration are mandatory', () => {
   const artifacts = BETA4.artifacts.map(a => ({ ...a, expired: false,
     workflow_run: { id: BETA4.release, head_sha: BETA4.source } }));
@@ -144,6 +175,35 @@ test('a new failure stops without automatic retries; accepted reruns have bounde
   }
 });
 
+test('controller waits through partial API snapshots before checking the Flutter artifact', async () => {
+  const { io, state, events } = scenario();
+  const originalRead = io.read;
+  let partialReads = 0;
+  io.read = async (kind, options) => {
+    const snapshot = await originalRead(kind);
+    if (kind === 'release' && snapshot.run_attempt > 5 && partialReads++ < 2) {
+      // Downstream success in a partial response must not authorize OIDC.
+      snapshot.prerequisitesReady = false;
+      assert.equal(options?.allowPending, true);
+    }
+    return snapshot;
+  };
+  io.sleep = async () => { events.push('wait'); };
+  await recover(io, { polls: 4 });
+  assert.ok(events.indexOf('wait') < events.indexOf('candidate'));
+  assert.equal(events.filter(e => e === 'wait').length, 2);
+  assert.equal(state.release.conclusion, 'success');
+});
+
+test('unsettled prerequisite snapshots exhaust the existing polling bound without another rerun', async () => {
+  const { io, events } = scenario();
+  const originalRead = io.read;
+  io.read = async kind => ({ ...await originalRead(kind), prerequisitesReady: false });
+  await assert.rejects(recover(io, { polls: 2 }), /timed out/);
+  assert.equal(events.filter(e => e === JOBS.release[0]).length, 1);
+  assert.ok(!events.includes('candidate'));
+});
+
 test('already complete release is verified without another publication', async () => {
   const { io, state, events } = scenario();
   for (const r of Object.values(state)) {
@@ -185,6 +245,17 @@ test('mutating adapter refuses a substituted job ID and native publication job',
   const io = createIO(api, {});
   await assert.rejects(io.rerun('release', { ...historical.jobs.find(j => j.name === JOBS.release[0]), id: 999 }), /changed/);
   await assert.rejects(io.rerun('release', historical.jobs[0]), /changed/);
+});
+
+test('API job reads are pinned to the metadata attempt, avoiding mixed rerun snapshots', async () => {
+  const historical = run();
+  const api = async path => {
+    if (path === `actions/runs/${BETA4.release}`) return historical;
+    assert.equal(path, `actions/runs/${BETA4.release}/attempts/5/jobs?per_page=100`);
+    return { jobs: historical.jobs, total_count: historical.jobs.length };
+  };
+  const result = await createIO(api, {}).read('release');
+  assert.equal(result.prerequisitesReady, true);
 });
 
 test('workflow has one main-only secret-free gate before actions write permission', async () => {

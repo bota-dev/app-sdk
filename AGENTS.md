@@ -70,6 +70,9 @@ five-second settlement watchdog. See
   controller may resume its two pinned historical runs, following its own
   `release-approval` gate. See `docs/releasing.md`; never directly rerun the old
   publishers or report synchronized publication before both workflows pass.
+  GitHub may temporarily omit carried prerequisite jobs after accepting a rerun.
+  Poll the pinned attempt and wait for those results; never treat missing gates
+  as passed or weaken the strict preflight/completed-run checks.
 
 - Current synchronized published beta is `2.0.0-beta.1`: Apple `BotaAppSDK`, Android
   `dev.bota:bota-app-sdk`, RN `@bota.dev/react-native-app-sdk`, Web

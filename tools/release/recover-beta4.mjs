@@ -33,7 +33,7 @@ const normalizedName = name => name.startsWith('publish / ') ? 'publish' : name;
 const jobNamed = (run, name) => run.jobs.find(job => normalizedName(job.name) === name);
 const succeeded = (run, name) => jobNamed(run, name)?.conclusion === 'success';
 
-export function validateRun(run, kind) {
+export function validateRun(run, kind, { allowPending = false } = {}) {
   const path = `.github/workflows/${kind === 'release' ? 'release' : 'publish-flutter'}.yml`;
   assert.ok(run.id === BETA4[kind] && run.path === path && run.event === 'push'
     && run.head_branch === BETA4.tag && run.head_sha === BETA4.source
@@ -43,10 +43,23 @@ export function validateRun(run, kind) {
   const names = run.jobs.map(job => normalizedName(job.name));
   assert.ok(new Set(names).size === names.length && names.every(name => expected.includes(name))
     && (run.status !== 'completed' || expected.every(name => names.includes(name))), 'unexpected or missing jobs');
+  let prerequisitesReady = true;
   if (kind === 'release') {
-    assert.ok(JOBS.prerequisites.every(name => succeeded(run, name)), 'native/public prerequisite failed');
-    assert.equal(jobNamed(run, JOBS.central)?.conclusion, 'skipped', 'Central recovery must remain skipped');
+    const canWait = allowPending && ['queued', 'in_progress', 'waiting', 'pending', 'requested'].includes(run.status);
+    for (const name of [...JOBS.prerequisites, JOBS.central]) {
+      const job = jobNamed(run, name);
+      // GitHub repopulates carried successful/skipped jobs asynchronously when
+      // a rerun starts. Absence is pending only while polling an active attempt.
+      if (canWait && (!job || job.conclusion == null)) {
+        prerequisitesReady = false;
+        continue;
+      }
+      const expected = name === JOBS.central ? 'skipped' : 'success';
+      assert.ok(job?.status === 'completed' && job.conclusion === expected,
+        `native/public prerequisite failed: ${name}`);
+    }
   }
+  return prerequisitesReady;
 }
 
 export function validateArtifacts(artifacts) {
@@ -89,8 +102,8 @@ export async function recover(io, { polls = 240 } = {}) {
   await io.approve();
   const waitFor = async (kind, ready, attempt) => {
     for (let count = 0; count < polls; count++) {
-      const run = await io.read(kind);
-      if (run.run_attempt >= attempt) {
+      const run = await io.read(kind, { allowPending: true });
+      if (run.run_attempt >= attempt && run.prerequisitesReady !== false) {
         if (ready(run)) return run;
         assert.notEqual(run.status, 'completed', `${kind} recovery failed; inspect original run`);
       }
@@ -149,14 +162,13 @@ export function createIO(api, context, download = fetch) {
   let inventory;
   const readRun = async id => {
     const run = await api(`actions/runs/${id}`);
-    const result = await api(`actions/runs/${id}/jobs?filter=latest&per_page=100`);
+    const result = await api(`actions/runs/${id}/attempts/${run.run_attempt}/jobs?per_page=100`);
     assert.ok(result.total_count <= 100, 'unexpected jobs pagination');
     return { ...run, jobs: result.jobs };
   };
-  const read = async kind => {
+  const read = async (kind, options) => {
     const run = await readRun(BETA4[kind]);
-    validateRun(run, kind);
-    return run;
+    return { ...run, prerequisitesReady: validateRun(run, kind, options) };
   };
   const artifacts = async () => {
     const result = await api(`actions/runs/${BETA4.release}/artifacts?per_page=100`);
