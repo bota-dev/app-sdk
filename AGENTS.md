@@ -189,8 +189,9 @@ five-second settlement watchdog. See
   Codegen must not carry ciphertext, manifests, authorizations, or receipts.
 - Keep the frozen public API authority in `reactNativeBaseline` at maintenance
   SDK `0.0.65`. Executable workflow evidence uses the separate
-  `reactNativeWorkflowBaseline` pinned to maintenance SDK `0.0.67`; CI and tag
-  verification must check out that exact revision and run its referenced tests.
+  `reactNativeWorkflowBaseline` pinned to maintenance SDK `0.0.67`; CI must
+  check out that exact revision and run its referenced tests. Tag promotion
+  requires that exact successful main CI run.
   Keep that checkout under the ignored `.ci/` scratch directory, never Cargo's
   `target/`, because the Rust cache action recursively cleans `target/` on a
   cache mismatch.

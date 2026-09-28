@@ -833,16 +833,15 @@ tag, verified all 49 preserved payload files. Six unchanged broader Maven tests
 hit Windows path-separator assumptions; Linux hosted checks remain required.
 The maintenance-baseline checkout assertion applies to CI, where the selected
 reference tests execute; release promotion requires that exact CI conclusion.
-Hosted Linux tooling and release-helper tests passed after that assertion was
-updated; the Rust formatter's required layout was applied to the new test.
-The license assertion checks the pinned cargo-deny action and its `check licenses`
-command. Hosted Rust passed 32 of the 33 release-readiness tests before exposing
-that stale shell-command assertion; the corrected complete suite remains pending.
+Hosted Linux tooling, release-helper tests and ephemeral-key signing passed on
+the feature revisions. The final exact-revision CI and License Gate remain
+required before merging. The license assertion verifies the existing pinned
+cargo-deny action with `check licenses`.
 
 | Requirement | Evidence | Status / remaining verification |
 |---|---|---|
 | Exact green main source and immutable candidate | Pinned run annotation, CI/License identity checks, ZIP digests, full five-platform file comparison | Matched in negative/positive local tests; hosted CI pending |
-| No duplicate package/native build during publication | Promoted archives; preserved-input Maven signer; Flutter extraction | Matched in source and signer tests; ephemeral-key hosted signing/normalization pending |
+| No duplicate package/native build during publication | Promoted archives; preserved-input Maven signer; Flutter extraction | Matched in source and signer tests; ephemeral-key hosted signing/normalization passed |
 | One approval, original tag OIDC and public consumer gates | Explicit release dependencies, protected environments, public native/archive checks | Matched in workflow checks/actionlint; next legitimate tagged publication unverified |
 | Retry without replacing accepted versions | Existing Central/npm/CocoaPods checks plus Flutter occupied-file verification | Local retry/corruption tests pass; next tagged end-to-end retry unverified |
 | Hardware/app acceptance remains separate | Existing physical matrix and rollout gates retained | Unverified; this change supplies no device evidence |
