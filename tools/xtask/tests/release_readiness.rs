@@ -377,7 +377,8 @@ fn release_workflow_publishes_and_smokes_the_public_apple_package() {
     let ci_contents = fs::read_to_string(root().join(".github/workflows/ci.yml")).unwrap();
     let ci: serde_yaml_ng::Value = serde_yaml_ng::from_str(&ci_contents).unwrap();
     let licenses = fs::read_to_string(root().join(".github/workflows/license-gate.yml")).unwrap();
-    assert!(licenses.contains("cargo deny check"));
+    assert!(licenses.contains("uses: EmbarkStudios/cargo-deny-action@"));
+    assert!(licenses.contains("command: check licenses"));
     assert!(contents.contains("tools/release/promote-ci.mjs"));
     assert!(contents.contains("runs-on: macos-15"));
     assert!(ci_contents.contains("tools/apple/test-package.sh"));
