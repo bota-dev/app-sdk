@@ -6,8 +6,12 @@
 reviewed connection/recovery guards on top of the beta.3 integration. See
 [Web integration evidence](testing/web-actions-integration.md) and
 [beta.4 preflight](../release/evidence/2.0.0-beta.4-preflight.md). Its immutable
-tag is partially published: SwiftPM, Maven and both npm packages are public;
-CocoaPods failed on Trunk's upstream GitHub commit API timeout, holding Flutter.
+tag is partially published: SwiftPM, CocoaPods, Maven and both npm packages
+are public. CocoaPods CDN readiness and the retried Flutter Android/iOS builds
+passed. Run `36343414157` attempt 7 then failed its rebuilt Flutter evidence
+comparison with the annotation-bound inventory; protected controller
+`36479125467` stopped. Flutter publication remains pending; do not retry that
+immutable build blindly or substitute a newer main commit's candidate.
 It is not a synchronized release or cross-platform physical acceptance. See
 [beta.4 recovery](#immutable-beta4-recovery-after-the-approval-cutover). Exact
 main CI, generated candidate inventory, and protected publication remain required.
@@ -243,11 +247,11 @@ Configure two GitHub environments for `bota-dev/app-sdk`:
 ### Single-approval migration
 
 The release owner requested one approval for the entire synchronized release
-on 2026-09-28. `approve-release` waits for all five package gates, then pauses
+on 2026-09-28. `approve-release` waits for verified promotion of all five CI payloads, then pauses
 at `release-approval`. Publication, CocoaPods, native public consumers and the
-Flutter candidate retain their existing ordering. The separate Flutter OIDC
-workflow requires a successful `Approve SDK release` job in the matching
-tag/SHA run before accepting its candidate. Read-only candidate/public archive
+Flutter candidate retain their existing ordering. Future tags use one workflow
+dependency graph for Flutter publication; historical tags retain their separate
+publisher and matching-run approval check. Read-only candidate/public archive
 verification does not access an environment. Manual Central recovery uses a
 separate `approve-recovery` job, so a recovery dispatch still needs one review.
 
@@ -702,9 +706,9 @@ Flutter automated publishing was saved and read back on 2026-09-24 for
 `bota_app_sdk`: repository `bota-dev/app-sdk`, tag pattern `v{{version}}`,
 push events only, and required environment `release`. Manual publishing remains
 enabled; workflow-dispatch and GCP publishing remain disabled. Package ownership
-is unchanged. `.github/workflows/publish-flutter.yml` passes `environment: release`
-to the reusable Dart publish workflow so the actual OIDC upload, not only its
-upstream candidate gate, carries that environment identity. The single-approval
+is unchanged. The `publish-flutter` job in `release.yml` uses `environment: release`
+and the official Dart setup action so the actual OIDC upload carries that
+environment identity. Historical tags use the separate reusable publisher. The single-approval
 migration above moves human review to `release-approval` while preserving this
 OIDC identity and the branch/tag restrictions. Do not publish
 a dummy version or replay the immutable bootstrap tag to test this configuration.
@@ -741,86 +745,105 @@ never attempt to upload that version again. Record both the registry-created
 tags and their explicit owner approval instead of treating the failed initial
 check as synchronized release success.
 
-After the release commit is on `main`, wait for its `CI` workflow to complete.
-The `Release candidate inventory` job downloads the Apple, Android, React
-Native, Web, and, when `candidate-ready=true`, Flutter artifacts built on the
-same runner classes as the tag workflow and uploads
-`release-candidate-<commit>`. An inventory without Flutter is transitional
-verification evidence for occupied beta.0 and must not be tagged. Use a
-five-platform artifact's
-`release-candidate-files.json.sha256` value in the annotated tag; do not derive
-the tag hash from locally built payloads. The Android Javadoc archive omits
-Dokka's nondeterministic aggregate `deprecated.html` page so repeated clean CI
-builders produce the same inventory.
+After the release commit is on `main`, require successful `CI` and `License
+Gate` push runs for that exact revision. CI builds and tests all five payloads,
+including the fresh Flutter Android/iOS applications and ephemeral-key Android
+publication graph. The `Release candidate inventory` job preserves the complete
+file inventory and reports its run ID. An inventory without Flutter is not a
+synchronized release candidate.
+
+Future tags containing the promotion workflow bind both the original successful
+main CI run and its inventory digest. Do not select a newer run during a retry:
+even a green run for a different source revision is not interchangeable.
 
 ```bash
 VERSION=$(sed -n 's/^version = "\([^"]*\)"$/\1/p' sdk-version.toml)
 SOURCE_REVISION=$(git rev-parse HEAD)
+CI_RUN_ID=123456789 # Replace with the successful main CI run for SOURCE_REVISION.
 CANDIDATE_INVENTORY_SHA256=$(awk '{print $1}' \
   /path/to/release-candidate-files.json.sha256)
 git tag -a "v$VERSION" \
   -m "Bota App SDK $VERSION" \
   -m "Source-Revision: $SOURCE_REVISION" \
+  -m "Candidate-Run-ID: $CI_RUN_ID" \
   -m "Candidate-Inventory-SHA256: $CANDIDATE_INVENTORY_SHA256"
 cargo xtask release verify-tag "v$VERSION"
 git push origin "v$VERSION"
 ```
 
-Before tagging, verify the downloaded JSON records `SOURCE_REVISION` and the
-CI workflow succeeded for that exact commit. Local package commands remain
-useful preflight checks, but their output is not release identity.
-The CI React Native candidate job installs both root repository tooling and the
-package workspace because compatibility tests import the root API-contract
-parser.
+`tools/release/promote-ci.mjs` validates the annotated tag, original CI run's
+repository/workflow/main-push identity and successful conclusion, and successful
+exact-main License Gate. It downloads each artifact by ID, rejects expired or
+ambiguous artifacts, verifies the transport SHA-256 itself, and checks every
+file against the tag-bound inventory before writing any payload. Missing,
+extra, unsafe, or changed files fail closed. `ci-promotion.json` records the
+source, tag object, original run, artifact IDs and digests and is preserved on
+the GitHub release. Promotion rechecks the tag after downloading. There is no rebuild
+or latest-run fallback. Preserve the CI artifacts until release completion;
+if they expire, restore separately verified archived evidence through an
+explicit recovery procedure or prepare a new version, never move the tag.
 
-The tag workflow:
+The single tag-triggered release workflow then:
 
-The `verify` and `apple` jobs use independent clean checkouts. Each job must
-install its own Node.js dependencies before running repository tooling.
+1. Verifies synchronized metadata, main ancestry and the promoted payloads.
+   It rechecks the root SwiftPM and CocoaPods checksums against the preserved
+   Apple archives because normal CI's evidence mode does not check those roots.
+2. Requires one `release-approval` decision. Downstream `release` environments
+   retain secrets and registry OIDC identity without another reviewer gate.
+3. Uses `tools/android/sign-preserved.mjs` to sign the five verified Maven
+   inputs with the existing protected key. It verifies the signatures, retains
+   the 30-file Central normalization/public checks, and archives the signed
+   bundle before publication. Retries restore that exact signed bundle.
+4. Publishes or verifies the preserved native and npm artifacts. npm advances
+   only `beta`, checks exact occupied bytes, and preserves `latest`.
+5. Publishes or verifies CocoaPods, waits for CDN readiness, and runs the public
+   SwiftPM, CocoaPods and API 26/35 Maven consumer gates. Registry acceptance
+   alone does not establish customer install readiness.
+6. Verifies the already preserved Flutter payload against the tag inventory;
+   it does not rebuild the package, native libraries or local Flutter examples.
+7. Publishes Flutter in the same dependency graph. On every attempt,
+   `tools/flutter/prepare-publication.mjs` first verifies the candidate and any
+   occupied pub.dev archive. Only HTTP 404 authorizes upload; authentication,
+   transport and checksum failures stop. An identical occupied version skips
+   upload. The official pinned `dart-lang/setup-dart` action supplies OIDC in
+   the tag-push `release` environment. The verified archive is extracted outside
+   the checkout, uses the preserved lock with `--enforce-lockfile`, and is
+   published with the repository's checksum-pinned Flutter SDK. No long-lived
+   token or separate polling workflow is used.
+8. Downloads the public Flutter archive and checks every normalized file hash
+   before attaching evidence and completing the synchronized prerelease. The
+   final progress summary distinguishes candidate integrity, publication,
+   public consumers and completion. CI does not claim hardware acceptance.
 
-1. Verifies synchronized metadata and that the tagged commit belongs to
-   `origin/main`.
-2. Runs the Rust, tooling, ABI, license, Apple package, and local-consumer gates.
-3. Packages Android once, runs API 26 and API 35 consumers against that exact
-   AAR, and uploads the unsigned Maven publication inputs.
-4. Rebuilds the deterministic XCFramework and CocoaPods source archive,
-   rejects checked-in checksum drift, and lints the exact extracted pod archive
-   for iOS and macOS before publication.
-5. Waits for approval in the protected `release` environment.
-   Public Maven verification requires all 30 expected file URLs and hashes.
-   It also checks the HTML directory listing for missing or extra entries when
-   Central serves one, but does not require that optional index to exist.
-6. Publishes the exact React Native and Web npm tarballs to dist-tag `beta`
-   through OIDC trusted publishing, verifies both registry `dist.shasum`
-   values, and proves npm `latest` did not move. The Web first-publication path
-   accepts an absent pre-release `latest` tag. A rerun verifies an existing
-   version instead of attempting to replace it.
-7. Creates a GitHub prerelease and uploads every public Apple release file plus
-   the React Native and Web tarballs. The Android payload remains an immutable
-   workflow artifact downloaded inside the protected job; its flat filenames
-   intentionally are not mixed with Apple's colliding `LICENSE` and manifest
-   assets.
-8. Publishes or verifies the exact `BotaAppSDK` CocoaPod through a protected
-   reusable workflow, then creates unrelated no-override SwiftPM and CocoaPods
-   consumers. The SwiftPM smoke compiles an executable importing only
-   `BotaAppSDK`. It deliberately
-   does not launch a Bluetooth-capable process on the headless runner. It uses
-   one non-batched Swift compiler job to keep memory bounded.
-9. Rebuilds the exact Flutter candidate only after the public Apple and Android
-   consumers pass and compares it to the Flutter subset of the CI inventory
-   named in the annotated tag.
-10. Refuses the occupied `1.2.0-beta.0` identity. For selected
-    `1.2.0-beta.12`, its explicitly authorized first-publish
-    procedure must consume the ordered candidate artifact; later beta tags use
-    Dart's official reusable OIDC publisher.
-11. Downloads the public pub.dev archive, compares its complete normalized
-    inventory and file hashes, preserves public evidence, and only then attaches
-    Flutter artifacts as the completed synchronized prerelease evidence.
+Use GitHub's failed-job retry for a transient failure in this new graph. It
+retains successful upstream checks and the original tag source. A failed
+publication job may have already written to a registry: its occupied-version
+checks and preserved Central bundle determine what remains. Re-running candidate
+promotion may replace this run's transport artifacts only after validating the
+same original CI bytes; it cannot replace published package bytes. Historical
+tags, including beta.4's separate publisher, retain their original workflow
+and require their documented recovery path.
 
-Main CI must not resolve the candidate version through the public root package:
-its binary URL is created by this workflow. React Native lifecycle tests use
-`platforms/apple` and its locally built XCFramework; step 7 is the authoritative
-post-publication remote-resolution gate.
+Design review of the promotion change (future releases only):
+
+Local verification: 88 focused promotion, signing, Flutter, recovery, npm and
+workflow tests pass, as do actionlint and shell syntax checks. A read-only replay
+against CI run `36477004338`, using synthetic tag metadata without creating a
+tag, verified all 49 preserved payload files. Six unchanged broader Maven tests
+hit Windows path-separator assumptions; Linux hosted checks remain required.
+
+| Requirement | Evidence | Status / remaining verification |
+|---|---|---|
+| Exact green main source and immutable candidate | Pinned run annotation, CI/License identity checks, ZIP digests, full five-platform file comparison | Matched in negative/positive local tests; hosted CI pending |
+| No duplicate package/native build during publication | Promoted archives; preserved-input Maven signer; Flutter extraction | Matched in source and signer tests; ephemeral-key hosted signing/normalization pending |
+| One approval, original tag OIDC and public consumer gates | Explicit release dependencies, protected environments, public native/archive checks | Matched in workflow checks/actionlint; next legitimate tagged publication unverified |
+| Retry without replacing accepted versions | Existing Central/npm/CocoaPods checks plus Flutter occupied-file verification | Local retry/corruption tests pass; next tagged end-to-end retry unverified |
+| Hardware/app acceptance remains separate | Existing physical matrix and rollout gates retained | Unverified; this change supplies no device evidence |
+
+Main CI uses local native dependencies because the new version's public URLs
+do not exist until publication. Public install checks remain after native
+publication. The old separate `publish-flutter.yml` is removed from current
+source; immutable tags still contain their historical version.
 
 The protected workflow stages the signed raw Maven repository with in-memory
 PGP material, normalizes it to the exact 30-file Portal tree, and persists the

@@ -374,15 +374,19 @@ fn release_workflow_publishes_and_smokes_the_public_apple_package() {
     assert!(contents.contains("fetch-depth: 0"));
     assert!(contents.contains("git merge-base --is-ancestor"));
     assert!(contents.contains("release verify-tag"));
-    assert!(contents.contains("cargo deny check"));
+    let ci_contents = fs::read_to_string(root().join(".github/workflows/ci.yml")).unwrap();
+    let ci: serde_yaml_ng::Value = serde_yaml_ng::from_str(&ci_contents).unwrap();
+    let licenses = fs::read_to_string(root().join(".github/workflows/license-gate.yml")).unwrap();
+    assert!(licenses.contains("cargo deny check"));
+    assert!(contents.contains("tools/release/promote-ci.mjs"));
     assert!(contents.contains("runs-on: macos-15"));
-    assert!(contents.contains("tools/apple/test-package.sh"));
-    assert!(contents.contains("tools/apple/test-consumer.sh"));
-    assert!(contents.contains("generic/platform=iOS'"));
-    assert!(contents.contains("generic/platform=iOS Simulator'"));
-    assert!(contents.contains("-scheme BotaAppSDK"));
+    assert!(ci_contents.contains("tools/apple/test-package.sh"));
+    assert!(ci_contents.contains("tools/apple/test-consumer.sh"));
+    assert!(ci_contents.contains("generic/platform=iOS'"));
+    assert!(ci_contents.contains("generic/platform=iOS Simulator'"));
+    assert!(ci_contents.contains("-scheme BotaAppSDK"));
     assert!(!contents.contains("-scheme BotaDeviceSDK"));
-    assert!(contents.contains("tools/apple/package-release.sh"));
+    assert!(ci_contents.contains("tools/apple/package-release.sh"));
     assert!(contents.contains("tools/apple/test-remote-consumer.sh"));
     assert!(contents.contains("actions/upload-artifact@"));
     assert!(contents.contains("actions/download-artifact@"));
@@ -390,20 +394,16 @@ fn release_workflow_publishes_and_smokes_the_public_apple_package() {
     assert!(!contents.contains("secrets.CRATES_IO_TOKEN"));
     assert!(!contents.contains("cargo publish"));
 
-    let apple_steps = workflow["jobs"]["apple"]["steps"].as_sequence().unwrap();
-    let apple_commands = apple_steps
-        .iter()
-        .filter_map(|step| step["run"].as_str())
-        .collect::<Vec<_>>();
-    let install = apple_commands
-        .iter()
-        .position(|command| *command == "npm ci")
-        .unwrap();
-    let release_tests = apple_commands
-        .iter()
-        .position(|command| *command == "npm run test:release")
-        .unwrap();
-    assert!(install < release_tests);
+    assert_eq!(
+        workflow["jobs"]["verify"]["permissions"]["actions"].as_str(),
+        Some("read")
+    );
+    assert!(!ci["jobs"]["apple"]["steps"]
+        .as_sequence()
+        .unwrap()
+        .is_empty());
+    assert!(contents.contains("--output Package.swift --check"));
+    assert!(contents.contains("--output platforms/apple/BotaAppSDK.podspec --check"));
 
     let smoke = fs::read_to_string(root().join("tools/apple/test-remote-consumer.sh")).unwrap();
     assert!(smoke.contains("swift build"));
@@ -419,7 +419,9 @@ fn release_workflow_packs_publishes_and_verifies_the_react_native_package() {
     let contents = fs::read_to_string(path).unwrap();
     let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
 
-    let react_native = &workflow["jobs"]["react-native"];
+    let ci_contents = fs::read_to_string(root().join(".github/workflows/ci.yml")).unwrap();
+    let ci: serde_yaml_ng::Value = serde_yaml_ng::from_str(&ci_contents).unwrap();
+    let react_native = &ci["jobs"]["react-native"];
     assert_eq!(react_native["runs-on"].as_str(), Some("ubuntu-latest"));
     let react_native_commands = react_native["steps"]
         .as_sequence()
@@ -438,7 +440,7 @@ fn release_workflow_packs_publishes_and_verifies_the_react_native_package() {
             .any(|command| command == &"npm run verify")
     );
     assert!(contents.contains("NPM_CLI_VERSION: \"12.0.2\""));
-    assert!(contents.contains(
+    assert!(ci_contents.contains(
         "npx --yes \"npm@$NPM_CLI_VERSION\" pack --pack-destination ../../target/react-native-release"
     ));
     assert!(contents.contains("name: react-native-release-${{ github.ref_name }}"));
@@ -446,7 +448,7 @@ fn release_workflow_packs_publishes_and_verifies_the_react_native_package() {
 
     let publish = &workflow["jobs"]["publish"];
     assert_eq!(publish["permissions"]["id-token"].as_str(), Some("write"));
-    assert!(contents.contains("needs: [verify, apple, android, react-native, web]"));
+    assert!(contents.contains("needs: verify"));
     assert!(contents.contains("registry-url: https://registry.npmjs.org"));
     assert!(contents.contains("target/react-native-release"));
     assert!(contents.contains(
@@ -519,7 +521,7 @@ fn workflows_build_and_preserve_the_exact_web_candidate() {
         fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
     let release: serde_yaml_ng::Value = serde_yaml_ng::from_str(&release_contents).unwrap();
     assert_eq!(
-        release["jobs"]["web"]["runs-on"].as_str(),
+        release["jobs"]["verify"]["runs-on"].as_str(),
         Some("ubuntu-latest")
     );
     assert!(release_contents.contains("name: web-release-${{ github.ref_name }}"));
@@ -773,7 +775,7 @@ fn flutter_release_is_ordered_after_public_native_dependencies_and_verified_befo
         );
     }
     assert!(contents.contains("tools/android/test-consumer.sh --public --compile-only"));
-    assert!(contents.contains("tools/flutter/package-release.sh --check"));
+    assert!(!contents.contains("tools/flutter/package-release.sh"));
     assert!(contents.contains("name: flutter-release-${{ github.ref_name }}"));
 
     let ci = fs::read_to_string(root().join(".github/workflows/ci.yml")).unwrap();
@@ -781,13 +783,13 @@ fn flutter_release_is_ordered_after_public_native_dependencies_and_verified_befo
     assert!(ci.contains("tools/flutter/test-public-apple-pod-consumer.sh 1.2.0-beta.11"));
 
     let bootstrap = &workflow["jobs"]["verify-flutter-publication"];
-    assert_eq!(bootstrap["needs"].as_str(), Some("flutter"));
+    assert_eq!(bootstrap["needs"].as_str(), Some("publish-flutter"));
     assert!(bootstrap["if"].as_str().unwrap().contains("always()"));
     assert!(
         bootstrap["if"]
             .as_str()
             .unwrap()
-            .contains("needs.flutter.result == 'success'")
+            .contains("needs.publish-flutter.result == 'success'")
     );
     assert!(bootstrap["environment"].is_null());
     let bootstrap_source = serde_yaml_ng::to_string(bootstrap).unwrap();
@@ -830,9 +832,8 @@ fn tag_and_recovery_workflows_bind_native_and_flutter_outputs_to_the_ci_candidat
 
     assert_eq!(publish["permissions"]["actions"].as_str(), Some("read"));
     let publish_source = serde_yaml_ng::to_string(publish).unwrap();
-    assert!(publish_source.contains("actions/workflows/ci.yml/runs?head_sha="));
-    assert!(publish_source.contains("gh run download \"$CI_RUN_ID\""));
-    assert!(publish_source.contains("release-candidate-$SOURCE_REVISION"));
+    assert!(publish_source.contains("gh run download \"$GITHUB_RUN_ID\""));
+    assert!(publish_source.contains("release-inputs-$GITHUB_REF_NAME"));
     assert!(publish_source.contains("release-candidate-files.json.sha256"));
     assert!(publish_source.contains("startswith(\"flutter-release/\") | not"));
     assert!(publish_source.contains("Candidate-Inventory-SHA256: $INVENTORY_SHA256"));
@@ -904,37 +905,21 @@ fn apple_pod_bootstrap_is_protected_exact_and_publicly_verified() {
 }
 
 #[test]
-fn future_flutter_publication_uses_the_official_oidc_workflow_without_secrets() {
-    let contents =
-        fs::read_to_string(root().join(".github/workflows/publish-flutter.yml")).unwrap();
+fn future_flutter_publication_uses_official_oidc_and_preserved_inputs_without_secrets() {
+    let contents = fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
     let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
-    let gate = &workflow["jobs"]["gate"];
-    let publish = &workflow["jobs"]["publish"];
-
-    assert!(contents.contains("v[0-9]+.[0-9]+.[0-9]+-*"));
-    assert!(contents.contains("tag-pattern on pub.dev: v{{version}}"));
-    assert!(gate["environment"].is_null());
-    assert_eq!(gate["permissions"]["actions"].as_str(), Some("read"));
-    assert!(contents.contains("actions/workflows/release.yml/runs?head_sha="));
-    assert!(contents.contains("flutter-release-$GITHUB_REF_NAME"));
-    assert!(contents.contains("verify-publication.mjs verify-candidate"));
-    assert!(contents.contains("verify-publication.mjs verify-public"));
-    assert_eq!(publish["needs"].as_str(), Some("gate"));
-    assert_eq!(
-        publish["if"].as_str(),
-        Some("needs.gate.outputs.needs-publish == 'true'")
-    );
+    let publish = &workflow["jobs"]["publish-flutter"];
+    assert_eq!(publish["needs"].as_str(), Some("flutter"));
+    assert_eq!(publish["environment"].as_str(), Some("release"));
     assert_eq!(publish["permissions"]["id-token"].as_str(), Some("write"));
-    assert_eq!(
-        publish["uses"].as_str(),
-        Some("dart-lang/setup-dart/.github/workflows/publish.yml@v1")
-    );
-    assert_eq!(
-        publish["with"]["working-directory"].as_str(),
-        Some("frameworks/flutter/bota_app_sdk")
-    );
-    assert!(!contents.contains("secrets:"));
-    assert!(!contents.contains("PUB_TOKEN"));
+    let steps = serde_yaml_ng::to_string(&publish["steps"]).unwrap();
+    assert!(steps.contains("dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d"));
+    assert!(steps.contains("prepare-publication.mjs"));
+    assert!(steps.contains("pub get --enforce-lockfile"));
+    assert!(steps.contains("pub publish --force"));
+    assert!(!steps.contains("secrets."));
+    assert!(!steps.contains("PUB_TOKEN"));
+    assert!(!root().join(".github/workflows/publish-flutter.yml").exists());
 }
 
 #[test]
@@ -959,39 +944,16 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     let contents = fs::read_to_string(path).unwrap();
     let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
 
-    let android = &workflow["jobs"]["android"];
-    assert_eq!(android["runs-on"].as_str(), Some("ubuntu-latest"));
-    let android_steps = android["steps"].as_sequence().unwrap();
-    let android_commands = android_steps
-        .iter()
-        .filter_map(|step| step["run"].as_str())
-        .collect::<Vec<_>>();
-    let build_command = android_commands
-        .iter()
-        .find(|command| command.contains("tools/android/test-publication-graphs.sh"))
-        .unwrap();
-    let gradle_invocations = build_command
-        .split("platforms/android/gradlew -p platforms/android")
-        .skip(1)
-        .collect::<Vec<_>>();
-    assert_eq!(gradle_invocations.len(), 2);
-    assert!(gradle_invocations[0].contains(":sdk:assembleDebugAndroidTest"));
-    assert!(!gradle_invocations[0].contains(":sdk:testDebugUnitTest"));
-    assert!(gradle_invocations[1].starts_with(" :sdk:testDebugUnitTest"));
-    assert!(
-        android_commands
-            .iter()
-            .any(|command| command.contains("tools/android/test-publication-graphs.sh"))
+    assert_eq!(
+        workflow["jobs"]["publish"]["environment"].as_str(),
+        Some("release")
     );
-    assert!(
-        android_commands
-            .iter()
-            .any(|command| command.contains("tools/android/package-release.sh --check"))
-    );
-    assert!(
-        android_commands.iter().any(|command| command
-            .contains("cargo xtask release validate target/android-release/release-manifest.json"))
-    );
+    let ci = fs::read_to_string(root().join(".github/workflows/ci.yml")).unwrap();
+    assert!(ci.contains("tools/android/test-publication-graphs.sh"));
+    assert!(ci.contains("tools/android/package-release.sh --check"));
+    assert!(ci.contains("platforms/android/gradlew -p platforms/android :sdk:testDebugUnitTest"));
+    assert!(!contents.contains("tools/android/package-release.sh"));
+    assert!(contents.contains("tools/android/sign-preserved.mjs"));
     assert!(contents.contains("name: android-release-${{ github.ref_name }}"));
     assert!(contents.contains("path: target/android-release/"));
     assert!(contents.contains("workflow_dispatch:"));
@@ -1021,7 +983,6 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     assert!(!contents.contains("--version 1.1.0"));
     assert!(!contents.contains("refs/tags/v1.1.0"));
     assert!(!contents.contains("PACKAGE_SPEC=\"@bota.dev/react-native-sdk@1.1.0\""));
-    assert!(contents.contains("stageSignedCentralRawRepository"));
     assert!(contents.contains("central-portal.mjs prepare"));
     assert!(contents.contains("central-portal.mjs upload-or-resume"));
     assert!(contents.contains("central-portal.mjs recover-and-resume"));
@@ -1034,7 +995,7 @@ fn release_workflow_publishes_android_through_a_recoverable_central_deployment()
     assert!(contents.contains("central-portal-state.json"));
     assert!(contents.contains("central-bundle-files.json"));
     assert!(contents.contains("central-bundle.zip"));
-    assert!(contents.contains("needs: [verify, apple, android, react-native, web]"));
+    assert!(contents.contains("needs: verify"));
     assert!(contents.contains("matrix:\n        api: [26, 35]"));
     assert!(contents.contains("tools/android/test-public-consumer.sh --api ${{ matrix.api }}"));
     assert!(!contents.contains("echo \"published=false\""));

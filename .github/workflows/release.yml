@@ -40,354 +40,121 @@ concurrency:
 
 jobs:
   verify:
-    name: Verify ${{ github.ref_name }}
+    name: Verify tag and promote CI artifacts
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
     steps:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-
-      - name: Check out maintenance React Native workflow baseline
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: bota-dev/react-native-sdk
-          ref: 318974f925a573cf04b0d624978bee04784af09b
-          path: .ci/react-native-workflow-baseline
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            .ci/react-native-workflow-baseline/package-lock.json
 
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
-        with:
-          toolchain: 1.98.0
-          components: rustfmt, clippy
-
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-
-      - name: Install Node.js dependencies
-        run: npm ci
-
-      - name: Install maintenance React Native workflow dependencies
-        working-directory: .ci/react-native-workflow-baseline
-        run: npm ci
-
-      - name: Resolve beta release channel
-        run: |
-          node tools/release/resolve-release-channel.mjs \
-            --ref "$GITHUB_REF" \
-            --mode new
-
-      - name: Verify synchronized release metadata
-        run: cargo xtask release verify-tag "$GITHUB_REF_NAME"
-
-      - name: Require tagged commit on main
-        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-
-      - name: Test repository tooling
-        run: npm run test:tooling
-
-      - name: Verify cross-SDK workflow evidence
-        run: npm run test:workflows -- --sdk-path .ci/react-native-workflow-baseline
-
-      - name: Check generated protocol constants
-        run: cargo xtask protocol generate --check
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-      - name: Lint workspace
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
-
-      - name: Test workspace
-        run: cargo test --workspace
-
-      - name: Test shipping native C ABI
-        run: tools/ffi-smoke/run-native-c-smoke.sh
-
-      - name: Install cargo-deny
-        run: cargo install cargo-deny --version 0.20.2 --locked
-
-      - name: Check Cargo advisories and licenses
-        run: cargo deny check
-
-  apple:
-    name: Package Apple SDK
-    if: github.event_name == 'push'
-    runs-on: macos-15
-    steps:
-      - name: Check out tagged source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .nvmrc
-
-      - name: Install Node.js dependencies
-        run: npm ci
-
-      - name: Set up Rust
+      - name: Set up Rust for release metadata validation
         uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
           toolchain: 1.98.0
 
-      - name: Verify synchronized release metadata
-        run: cargo xtask release verify-tag "$GITHUB_REF_NAME"
+      - name: Install repository tooling
+        run: npm ci
 
-      - name: Require tagged commit on main
-        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-
-      - name: Run shipping Swift caller
-        run: tools/ffi-smoke/run-native-swift-smoke.sh
-
-      - name: Test Apple package and XCFramework
-        run: tools/apple/test-package.sh -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
-
-      - name: Test local external Apple consumer
-        run: tools/apple/test-consumer.sh
-
-      - name: Compile generic iOS device target
-        working-directory: platforms/apple
+      - name: Verify synchronized release metadata and main ancestry
         run: |
-          xcodebuild \
-            -scheme BotaAppSDK \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath ../../target/release-apple-ios-device \
-            CODE_SIGNING_ALLOWED=NO \
-            SWIFT_STRICT_CONCURRENCY=complete \
-            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
-            build
+          node tools/release/resolve-release-channel.mjs --ref "$GITHUB_REF" --mode new
+          cargo xtask release verify-tag "$GITHUB_REF_NAME"
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
-      - name: Compile generic iOS simulator target
-        working-directory: platforms/apple
+      - name: Promote the annotation-bound successful main CI candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/release/promote-ci.mjs
+
+      - name: Verify promoted native metadata and public Apple checksums
         run: |
-          xcodebuild \
-            -scheme BotaAppSDK \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath ../../target/release-apple-ios-simulator \
-            CODE_SIGNING_ALLOWED=NO \
-            SWIFT_STRICT_CONCURRENCY=complete \
-            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
-            build
+          VERSION="${GITHUB_REF_NAME#v}"
+          node tools/release/generate-public-swift-package.mjs \
+            --sdk-version "$VERSION" \
+            --artifact-checksum "$(cat target/apple-release/BotaDeviceSDKCore.xcframework.swiftpm-checksum)" \
+            --output Package.swift --check
+          node tools/release/generate-public-podspec.mjs \
+            --sdk-version "$VERSION" \
+            --artifact-checksum "$(awk '{print $1}' target/apple-release/BotaAppSDK.cocoapods.zip.sha256)" \
+            --output platforms/apple/BotaAppSDK.podspec --check
+          cargo xtask release validate target/apple-release/release-manifest.json
+          cargo xtask release validate target/android-release/release-manifest.json
+          node tools/android/normalize-central-repository.mjs verify-maven \
+            --repository target/android-release --coordinate dev.bota:bota-app-sdk --version "$VERSION"
 
-      - name: Test release tooling
-        run: npm run test:release
-
-      - name: Package checksummed Apple release
-        run: tools/apple/package-release.sh
-
-      - name: Lint exact CocoaPods archive
-        run: |
-          gem install --no-document cocoapods -v 1.16.2
-          tools/apple/test-pod-archive.sh
-
-      - name: Upload Apple release payload
+      - name: Preserve promoted apple payload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: apple-release-${{ github.ref_name }}
           path: target/apple-release/
           if-no-files-found: error
           compression-level: 0
+          overwrite: true
 
-  android:
-    name: Package and verify Android SDK
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out tagged source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: gradle
-
-      - name: Set up Rust Android targets
-        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
-        with:
-          toolchain: 1.98.0
-          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
-
-      - name: Cache Rust Android build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-
-      - name: Install pinned Android build tools and emulator images
-        run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          test -x "$SDKMANAGER"
-          "$SDKMANAGER" \
-            "platforms;android-36" \
-            "build-tools;35.0.0" \
-            "ndk;28.2.13676358" \
-            "cmake;3.22.1" \
-            "emulator" \
-            "platform-tools" \
-            "system-images;android-26;google_apis;x86" \
-            "system-images;android-35;google_apis;x86_64"
-
-      - name: Install repository tooling
-        run: npm ci
-
-      - name: Enable Android emulator acceleration
-        run: |
-          if [[ -e /dev/kvm ]]; then
-            sudo chmod 666 /dev/kvm
-          fi
-
-      - name: Verify synchronized release metadata
-        run: cargo xtask release verify-tag "$GITHUB_REF_NAME"
-
-      - name: Require tagged commit on main
-        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-
-      - name: Build and verify deterministic Android release inputs
-        timeout-minutes: 15
-        run: |
-          tools/android/test-publication-graphs.sh
-          tools/android/package-release.sh --check
-          tools/android/verify-publication.sh target/android-release
-          cargo xtask release validate target/android-release/release-manifest.json
-          tools/android/install-release-repository.sh target/android-release target/android-m2
-          platforms/android/gradlew -p platforms/android \
-            :sdk:lintRelease \
-            :sdk:assembleDebug \
-            :sdk:assembleDebugAndroidTest
-          platforms/android/gradlew -p platforms/android :sdk:testDebugUnitTest
-          tools/android/test-legacy-consumer.sh --mode source --compile-only \
-            --repository target/android-m2
-          tools/android/test-legacy-consumer.sh --mode binary --compile-only \
-            --repository target/android-m2
-          tools/android/test-consumer.sh --compile-only \
-            --repository target/android-m2
-
-      - name: Test API 26 release consumers
-        run: tools/android/test-emulator-lane.sh --api 26
-
-      - name: Test API 35 release consumers
-        run: tools/android/test-emulator-lane.sh --api 35
-
-      - name: Upload unsigned Android publication inputs
+      - name: Preserve promoted android payload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: android-release-${{ github.ref_name }}
           path: target/android-release/
           if-no-files-found: error
           compression-level: 0
+          overwrite: true
 
-  react-native:
-    name: Package and verify React Native SDK
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out tagged source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '24'
-          package-manager-cache: false
-
-      - name: Install repository tooling
-        run: npm ci
-
-      - name: Install React Native package dependencies
-        working-directory: frameworks/react-native
-        run: npm ci
-
-      - name: Verify React Native package
-        working-directory: frameworks/react-native
-        run: npm run verify
-
-      - name: Pack immutable npm artifact
-        working-directory: frameworks/react-native
-        run: |
-          mkdir -p ../../target/react-native-release
-          npx --yes "npm@$NPM_CLI_VERSION" pack --pack-destination ../../target/react-native-release
-
-      - name: Upload React Native release payload
+      - name: Preserve promoted react-native payload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: react-native-release-${{ github.ref_name }}
           path: target/react-native-release/
           if-no-files-found: error
           compression-level: 0
+          overwrite: true
 
-  web:
-    name: Package and verify Web SDK
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/target/playwright-browsers
-    steps:
-      - name: Check out tagged source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '24'
-          package-manager-cache: false
-
-      - name: Set up Rust WebAssembly target
-        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
-        with:
-          toolchain: 1.98.0
-          targets: wasm32-unknown-unknown
-
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          cache-on-failure: true
-
-      - name: Install pinned wasm-bindgen CLI
-        run: cargo install wasm-bindgen-cli --version 0.2.128 --locked
-
-      - name: Install Web gate dependencies and pinned Chromium browser
-        run: |
-          npx --yes "npm@$NPM_CLI_VERSION" ci
-          npx --yes "npm@$NPM_CLI_VERSION" ci --prefix tests/consumers/web-vite
-          tests/consumers/web-vite/node_modules/.bin/playwright install --with-deps chromium
-
-      - name: Verify and pack exact Web SDK artifact
-        run: |
-          npm run web:verify
-          test "$(jq -r .sourceRevision target/web-release/web-package-files.json)" = "$GITHUB_SHA"
-
-      - name: Upload Web release payload
+      - name: Preserve promoted web payload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: web-release-${{ github.ref_name }}
           path: target/web-release/
           if-no-files-found: error
           compression-level: 0
+          overwrite: true
+
+      - name: Preserve promoted flutter payload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flutter-release-${{ github.ref_name }}
+          path: target/flutter-release/
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
+
+      - name: Preserve promotion provenance and candidate inventory
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-inputs-${{ github.ref_name }}
+          path: |
+            target/release-candidate-files.json
+            target/release-candidate-files.json.sha256
+            target/ci-promotion.json
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
 
   approve-release:
     name: Approve SDK release
     if: github.event_name == 'push'
-    needs: [verify, apple, android, react-native, web]
+    needs: verify
     runs-on: ubuntu-latest
     environment: release-approval
     permissions: {}
@@ -420,29 +187,6 @@ jobs:
           node-version: '24'
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: gradle
-
-      - name: Set up Rust Android targets
-        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
-        with:
-          toolchain: 1.98.0
-          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
-
-      - name: Install pinned Android build tools
-        run: |
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          test -x "$SDKMANAGER"
-          "$SDKMANAGER" \
-            "platforms;android-36" \
-            "build-tools;35.0.0" \
-            "ndk;28.2.13676358" \
-            "cmake;3.22.1"
 
       - name: Install repository tooling
         run: npm ci
@@ -503,13 +247,9 @@ jobs:
           SOURCE_REVISION="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
           test "$SOURCE_REVISION" = "$(git rev-parse HEAD)"
           test "$(git cat-file -t "$GITHUB_REF_NAME")" = tag
-          CI_RUN_ID="$(gh api \
-            "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_REVISION&status=success&per_page=1" \
-            --jq '.workflow_runs[0].id // empty')"
-          test -n "$CI_RUN_ID"
           mkdir -p target/ci-candidate
-          gh run download "$CI_RUN_ID" \
-            --name "release-candidate-$SOURCE_REVISION" \
+          gh run download "$GITHUB_RUN_ID" \
+            --name "release-inputs-$GITHUB_REF_NAME" \
             --dir target/ci-candidate
           INVENTORY_SHA256="$(awk '{print $1}' \
             target/ci-candidate/release-candidate-files.json.sha256)"
@@ -531,6 +271,7 @@ jobs:
           test "$CURRENT_NATIVE" = "$EXPECTED_NATIVE"
           cp target/ci-candidate/release-candidate-files.json \
             target/release-candidate-files.json
+          cp target/ci-candidate/ci-promotion.json target/ci-promotion.json
           TAG_MESSAGE="$(git for-each-ref --format='%(contents)' "refs/tags/$GITHUB_REF_NAME")"
           grep -Fx "Source-Revision: $SOURCE_REVISION" <<<"$TAG_MESSAGE"
           grep -Fx "Candidate-Inventory-SHA256: $INVENTORY_SHA256" <<<"$TAG_MESSAGE"
@@ -591,10 +332,7 @@ jobs:
         run: |
           test -n "$ORG_GRADLE_PROJECT_signingInMemoryKey"
           test -n "$ORG_GRADLE_PROJECT_signingInMemoryKeyPassword"
-          platforms/android/gradlew -p platforms/android \
-            -PbotaProtectedSigning=true \
-            :sdk:stageSignedCentralRawRepository \
-            --no-daemon --no-parallel --no-configuration-cache
+          node tools/android/sign-preserved.mjs
 
       - name: Build and verify exact Central bundle
         if: steps.central-archive.outputs.preserved != 'true'
@@ -639,6 +377,7 @@ jobs:
           for path in \
             target/android-release/central-bundle.zip \
             target/android-release/central-bundle-files.json \
+            target/ci-promotion.json \
             target/release-candidate-files.json
           do
             name="$(basename "$path")"
@@ -715,6 +454,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          overwrite: true
           name: central-deployment-${{ github.ref_name }}
           path: target/central-portal-state.json
           if-no-files-found: warn
@@ -1071,7 +811,7 @@ jobs:
         run: tools/android/test-public-consumer.sh --api ${{ matrix.api }}
 
   flutter:
-    name: Build Flutter release candidate
+    name: Verify public dependencies for promoted Flutter
     if: >-
       ${{ always() && github.event_name == 'push' &&
           needs.publish.result == 'success' &&
@@ -1102,12 +842,6 @@ jobs:
           distribution: temurin
           java-version: "17"
           cache: gradle
-
-      - name: Set up Rust native targets
-        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
-        with:
-          toolchain: 1.98.0
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin,x86_64-apple-darwin,aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
 
       - name: Install pinned Android tooling
         run: |
@@ -1141,9 +875,14 @@ jobs:
           tools/flutter/test-public-apple-pod-consumer.sh "$VERSION"
           tools/android/test-consumer.sh --public --compile-only
 
-      - name: Build and verify exact Flutter candidate
+      - name: Download promoted Flutter candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: flutter-release-${{ github.ref_name }}
+          path: target/flutter-release/
+
+      - name: Verify preserved Flutter candidate against the tagged inventory
         run: |
-          tools/flutter/package-release.sh --check
           VERSION="${GITHUB_REF_NAME#v}"
           FLUTTER_PACKAGE="$(node tools/release/package-identities.mjs flutter "$VERSION")"
           node tools/flutter/verify-publication.mjs verify-candidate \
@@ -1159,19 +898,62 @@ jobs:
           CURRENT_FLUTTER="$(jq -S -c . target/current-flutter-candidate-files.json)"
           test "$CURRENT_FLUTTER" = "$EXPECTED_FLUTTER"
 
-      - name: Upload Flutter release candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+  publish-flutter:
+    name: Publish or verify preserved Flutter package
+    if: ${{ always() && github.event_name == 'push' && needs.flutter.result == 'success' }}
+    needs: flutter
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install repository tooling
+        run: npm ci
+
+      - name: Download preserved Flutter candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: flutter-release-${{ github.ref_name }}
           path: target/flutter-release/
-          if-no-files-found: error
-          compression-level: 0
+
+      - name: Verify an occupied version or authorize first upload
+        id: public-version
+        run: node tools/flutter/prepare-publication.mjs
+
+      # Keep pub.dev's tag-push and release-environment OIDC identity. Using the
+      # official setup action here lets retries check occupied bytes first.
+      - name: Configure official pub.dev OIDC authentication
+        if: steps.public-version.outputs.needs-publish == 'true'
+        uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1
+
+      - name: Publish the preserved candidate files with pinned Flutter
+        if: steps.public-version.outputs.needs-publish == 'true'
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PUBLISH_ROOT="$(mktemp -d "$RUNNER_TEMP/flutter-publish.XXXXXX")"
+          trap 'rm -rf "$PUBLISH_ROOT"' EXIT
+          tar -xzf "target/flutter-release/bota_app_sdk-$VERSION.tar.gz" --directory "$PUBLISH_ROOT"
+          cp target/flutter-release/pubspec.lock "$PUBLISH_ROOT/pubspec.lock"
+          cd "$PUBLISH_ROOT"
+          "$GITHUB_WORKSPACE/tools/flutter/run-flutter.sh" pub get --enforce-lockfile
+          "$GITHUB_WORKSPACE/tools/flutter/run-flutter.sh" pub publish --force
 
   verify-flutter-publication:
     name: Verify Flutter publication
     if: >-
-      ${{ always() && github.event_name == 'push' && needs.flutter.result == 'success' }}
-    needs: flutter
+      ${{ always() && github.event_name == 'push' && needs.publish-flutter.result == 'success' }}
+    needs: publish-flutter
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1220,6 +1002,7 @@ jobs:
       - name: Upload public Flutter verification
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          overwrite: true
           name: flutter-publication-${{ github.ref_name }}
           path: |
             target/flutter-release/public-*.tar.gz
@@ -1261,3 +1044,29 @@ jobs:
             target/flutter-publication/* \
             --clobber
           gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+
+  release-status:
+    name: Release progress
+    if: ${{ always() && github.event_name == 'push' }}
+    needs: [verify, publish, publish-apple-pod, smoke-public-package, smoke-public-android, flutter, publish-flutter, verify-flutter-publication, complete-release]
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Report built, published and verified stages
+        env:
+          RELEASE_JOBS: ${{ toJSON(needs) }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const jobs = JSON.parse(process.env.RELEASE_JOBS);
+          const stages = {
+            verify: 'CI candidate integrity', publish: 'Native and npm publication',
+            'publish-apple-pod': 'CocoaPods publication', 'smoke-public-package': 'Public SwiftPM consumer',
+            'smoke-public-android': 'Public Android consumers', flutter: 'Public Flutter native dependencies',
+            'publish-flutter': 'Flutter publication', 'verify-flutter-publication': 'Public Flutter archive',
+            'complete-release': 'Synchronized release completion',
+          };
+          const rows = Object.entries(stages).map(([id, name]) => `| ${name} | ${jobs[id].result} |`);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            `| Stage | Job result |\n|---|---|\n${rows.join('\n')}\n\nA failed publication job may have completed a registry write. Retry verifies occupied bytes before uploading.\n`);
+          NODE

@@ -989,6 +989,15 @@ hosted runner. The `release-approval` environment is the single manual approval
 boundary for the complete release and hardware acceptance. Downstream jobs
 retain the `release` environment for secrets and registry OIDC without another
 reviewer gate; automated CI does not claim physical-device results.
+Future release tags bind the successful main CI run ID and candidate inventory.
+`promote-ci.mjs` restores the five verified payloads by artifact ID and digest;
+tag publication does not repeat their source builds. The protected Maven signer
+signs those preserved files. Public native consumers still gate Flutter, whose
+publication now shares the release dependency graph and verifies any occupied
+pub.dev version before uploading. The final public Flutter archive comparison
+gates completion. Original CI artifacts must remain available; there is no
+automatic rebuild or different-revision fallback. See [release promotion](docs/releasing.md).
+
 The main-only `recover-beta4.yml` controller is the explicit approval-gated
 exception for beta.4's two pre-cutover tag-push runs. It pins their identities and
 artifacts, resumes only failed CocoaPods/Flutter stages, and requires the original

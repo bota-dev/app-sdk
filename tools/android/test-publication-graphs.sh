@@ -121,4 +121,37 @@ node -e 'const value = require(process.argv[1]); process.stdout.write(value.file
 cmp "$RELEASE_DIRECTORY/zip-files.txt" "$RELEASE_DIRECTORY/inventory-files.txt"
 rm "$RELEASE_DIRECTORY/zip-files.txt" "$RELEASE_DIRECTORY/inventory-files.txt"
 
-printf 'Android publication graphs verified for %s\n' "$SDK_VERSION"
+# Exercise the production promotion signer with the same ephemeral key. Its
+# inputs come from the already built local publication; signing must not build.
+rm -rf "$RAW_REPOSITORY"
+for name in \
+    "bota-app-sdk-$SDK_VERSION.aar" \
+    "bota-app-sdk-$SDK_VERSION.pom" \
+    "bota-app-sdk-$SDK_VERSION.module" \
+    "bota-app-sdk-$SDK_VERSION-sources.jar" \
+    "bota-app-sdk-$SDK_VERSION-javadoc.jar"
+do
+    cp "$LOCAL_REPOSITORY/dev/bota/bota-app-sdk/$SDK_VERSION/$name" "$RELEASE_DIRECTORY/$name"
+    shasum -a 256 "$RELEASE_DIRECTORY/$name" | awk '{print $1}' > "$RELEASE_DIRECTORY/$name.sha256"
+done
+(
+    cd "$ROOT"
+    ORG_GRADLE_PROJECT_signingInMemoryKey="$SIGNING_KEY" \
+    ORG_GRADLE_PROJECT_signingInMemoryKeyPassword="$PASSPHRASE" \
+        node tools/android/sign-preserved.mjs
+)
+for name in \
+    "bota-app-sdk-$SDK_VERSION.aar" \
+    "bota-app-sdk-$SDK_VERSION.pom" \
+    "bota-app-sdk-$SDK_VERSION.module" \
+    "bota-app-sdk-$SDK_VERSION-sources.jar" \
+    "bota-app-sdk-$SDK_VERSION-javadoc.jar"
+do
+    cmp "$VERSION_DIRECTORY/$name" "$RELEASE_DIRECTORY/$name"
+    "$GPG" --homedir "$GNUPGHOME" --batch --verify "$VERSION_DIRECTORY/$name.asc" "$VERSION_DIRECTORY/$name" >/dev/null 2>&1
+done
+node "$ROOT/tools/android/normalize-central-repository.mjs" \
+    --raw-repository "$RAW_REPOSITORY" --portal-repository "$PORTAL_REPOSITORY" \
+    --coordinate dev.bota:bota-app-sdk --version "$SDK_VERSION"
+
+printf 'Android publication graphs and preserved-input signing verified for %s\n' "$SDK_VERSION"

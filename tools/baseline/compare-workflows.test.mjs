@@ -128,23 +128,21 @@ test('CI executes the pinned maintenance workflow baseline', () => {
   assert.doesNotMatch(workflow, /target\/react-native-workflow-baseline/);
 });
 
-test('release verification executes the pinned maintenance workflow baseline', () => {
+test('release promotion requires the exact successful CI which executes maintenance parity', () => {
   const workflow = readFileSync('.github/workflows/release.yml', 'utf8');
-  assert.match(workflow, /repository:\s*bota-dev\/react-native-sdk/);
-  const selected = JSON.parse(readFileSync('protocol/compatibility/firmware-compatibility.json', 'utf8'));
-  assert.match(workflow, new RegExp(`ref:\\s*${selected.reactNativeWorkflowBaseline.revision}`));
-  assert.match(
-    workflow,
-    /npm run test:workflows -- --sdk-path \.ci\/react-native-workflow-baseline/
-  );
-  assert.doesNotMatch(workflow, /target\/react-native-workflow-baseline/);
+  const promotion = readFileSync('tools/release/promote-ci.mjs', 'utf8');
+  assert.match(workflow, /node tools\/release\/promote-ci.mjs/);
+  assert.match(promotion, /validRun\(ci, source, 'ci'\)/);
 });
 
 test('CI generates unpublished Apple evidence without relaxing the release checksum gate', () => {
   const ci = readFileSync('.github/workflows/ci.yml', 'utf8');
   const release = readFileSync('.github/workflows/release.yml', 'utf8');
   assert.match(ci, /tools\/apple\/package-release\.sh --evidence-only/);
-  assert.match(release, /run:\s*tools\/apple\/package-release\.sh\s*$/m);
+  assert.match(release, /generate-public-swift-package\.mjs/);
+  assert.match(release, /generate-public-podspec\.mjs/);
+  assert.match(release, /--output Package\.swift --check/);
+  assert.match(release, /--output platforms\/apple\/BotaAppSDK\.podspec --check/);
   assert.doesNotMatch(release, /package-release\.sh --evidence-only/);
 });
 

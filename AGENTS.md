@@ -65,7 +65,9 @@ five-second settlement watchdog. See
   Beta.2 is occupied and partially published; never reuse its tag. Publication
   remains gated by exact main CI and the protected release workflow.
   Beta.4's immutable tag is partially published (SwiftPM, Maven and both npm
-  packages); CocoaPods' upstream GitHub commit API timeout holds Flutter.
+  packages) and CocoaPods is now public/CDN-ready. The retried Flutter examples
+  passed, but attempt 7 failed the rebuilt evidence inventory comparison;
+  controller `36479125467` stopped and pub.dev remains pending.
   After the single-approval cutover, only the main-only `recover-beta4.yml`
   controller may resume its two pinned historical runs, following its own
   `release-approval` gate. See `docs/releasing.md`; never directly rerun the old
@@ -906,12 +908,22 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
   ordered settings migration; do not remove the existing review rule before
   the replacement gate is configured and merged. CI never manufactures
   physical-device evidence.
-- Flutter's pub.dev GitHub publisher requires `bota-dev/app-sdk`, `v{{version}}`
-  push events, and environment `release`. Pass `environment: release` to the
-  reusable upload workflow itself to bind the upload's OIDC identity. Its
-  candidate gate must verify the successful approval job in the same tag/SHA
-  release run. Saved settings are not successful-upload
-  evidence; verify automation on the next legitimate version.
+- Future tagged releases promote all five payloads from the exact successful
+  main CI run named by `Candidate-Run-ID`, together with the existing
+  `Candidate-Inventory-SHA256`. `tools/release/promote-ci.mjs` validates the
+  CI/License identities, unexpired artifact IDs/digests, and every inventory file.
+  Never use a different revision, silently rebuild, or choose the latest run.
+  Preserve the original CI artifacts through completion. Signing uses
+  `tools/android/sign-preserved.mjs`, not a native rebuild; the ephemeral-key
+  production signer/normalizer test runs in CI's Android lane.
+- Flutter pub.dev publication is a job in `release.yml` after the public native
+  consumers. Every retry runs `tools/flutter/prepare-publication.mjs`; only a
+  registry 404 permits upload, and an occupied version must match exactly.
+  Keep the official pinned Dart OIDC setup action, tag-push event, `release`
+  environment and checksum-pinned Flutter wrapper. Extract the preserved archive
+  outside the Git checkout and enforce its dependency lock. Final public archive
+  verification still gates completion. Historical tags retain their separate
+  publisher; a newer main workflow does not repair beta.4 automatically.
 - Never push a release tag until `cargo xtask release verify-tag vVERSION`,
   package verification, and all quality gates pass.
 

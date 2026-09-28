@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import test from 'node:test';
+import { publicationNeeded } from './prepare-publication.mjs';
 
 import {
   buildReleaseManifest,
@@ -88,6 +89,31 @@ function candidateInventory(inspection) {
     files: inspection.files,
   };
 }
+
+test('publication retry verifies an accepted version without another upload', async () => {
+  const bytes = archive(validEntries());
+  const inventory = candidateInventory(await inspectFlutterArchive(bytes));
+  assert.equal(await publicationNeeded({ archive: bytes, inventory,
+    fetchImpl: async () => new Response(bytes) }), false);
+  assert.equal(await publicationNeeded({ archive: bytes, inventory,
+    fetchImpl: async () => new Response(null, { status: 404 }) }), true);
+});
+
+test('publication refuses occupied drift and registry errors', async () => {
+  const bytes = archive(validEntries());
+  const inventory = candidateInventory(await inspectFlutterArchive(bytes));
+  for (const status of [401, 403, 429, 500]) {
+    await assert.rejects(publicationNeeded({ archive: bytes, inventory,
+      fetchImpl: async () => new Response(null, { status }) }), /pub.dev lookup/);
+  }
+  const changed = validEntries(); changed[1].body = 'changed license';
+  await assert.rejects(publicationNeeded({ archive: bytes, inventory,
+    fetchImpl: async () => new Response(archive(changed)) }), /checksum|byte length/);
+  let reads = 0;
+  await assert.rejects(publicationNeeded({ archive: Buffer.from('broken'), inventory,
+    fetchImpl: async () => { reads++; return new Response(bytes); } }));
+  assert.equal(reads, 0, 'candidate integrity is checked before registry access');
+});
 
 test('major-two Flutter archives use the renamed identity and reject local Apple overrides', async () => {
   const entries = validEntries().map((entry) => ({

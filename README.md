@@ -29,6 +29,12 @@ and Web selected-device serial discovery. The
 installation examples remain pinned to verified public `2.0.0-beta.1` until
 the protected CI release completes. See [release status](docs/releasing.md).
 
+Future releases reuse verified artifacts from one exact successful main CI run.
+The tag records that run and its inventory checksum; one approval starts the
+publication graph, followed by public installation checks. Retry verifies already
+published packages before uploading. See [the release procedure](docs/releasing.md)
+for artifact retention and historical recovery requirements.
+
 One Android encrypted batch upload over BLE and subsequent cloud playback has
 been verified with a local Demo integration. Other physical platform and recovery
 scenarios remain unverified; this does not enable v2 compatibility metadata or

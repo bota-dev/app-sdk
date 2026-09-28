@@ -262,6 +262,10 @@ jobs:
             sudo chmod 666 /dev/kvm
           fi
 
+      - name: Test protected Android publication graphs with an ephemeral key
+        timeout-minutes: 20
+        run: tools/android/test-publication-graphs.sh
+
       - name: Build one immutable Android release payload
         run: |
           tools/android/package-release.sh --check
@@ -571,6 +575,7 @@ jobs:
             > target/release-candidate-files.json.sha256
           {
             echo '### Annotated tag candidate inventory'
+            echo "Candidate-Run-ID: $GITHUB_RUN_ID"
             echo '```text'
             cat target/release-candidate-files.json.sha256
             echo '```'

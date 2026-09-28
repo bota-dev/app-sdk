@@ -21,11 +21,16 @@ test('Flutter completion preserves the previously published native manifest', ()
   assert.ok(rename < completion.indexOf('gh release upload'));
 });
 
-test('Flutter OIDC upload retains its registered environment identity', async () => {
-  const flutterWorkflow = await readWorkflow('.github/workflows/publish-flutter.yml');
-  const publisher = flutterWorkflow.slice(flutterWorkflow.indexOf('\n  publish:'));
-  assert.match(publisher, /uses: dart-lang\/setup-dart\/\.github\/workflows\/publish\.yml@v1/);
-  assert.match(publisher, /with:\n\s+environment: release\n/);
+test('Flutter OIDC upload retains its registered identity and checks occupied versions on every retry', () => {
+  const publisher = job(workflow, 'publish-flutter');
+  assert.match(publisher, /needs: flutter\n/);
+  assert.match(publisher, /uses: dart-lang\/setup-dart@[0-9a-f]{40}/);
+  assert.match(publisher, /environment: release\n/);
+  assert.match(publisher, /prepare-publication.mjs/);
+  assert.ok(publisher.indexOf('prepare-publication.mjs') < publisher.indexOf('uses: dart-lang'));
+  assert.match(publisher, /if: steps.public-version.outputs.needs-publish == 'true'/);
+  assert.match(publisher, /pub get --enforce-lockfile/);
+  assert.match(publisher, /tar -xzf.*--directory "\$PUBLISH_ROOT"/);
 });
 
 function job(source, name) {
@@ -39,7 +44,7 @@ function job(source, name) {
 test('tag publishing has one approval after all package gates', () => {
   const approval = job(workflow, 'approve-release');
   assert.match(approval, /if: github.event_name == 'push'/);
-  assert.match(approval, /needs: \[verify, apple, android, react-native, web\]/);
+  assert.match(approval, /needs: verify\n/);
   assert.match(approval, /environment: release-approval\n/);
   assert.match(job(workflow, 'publish'), /needs: approve-release\n/);
   assert.match(job(workflow, 'publish'), /environment: release\n/);
@@ -54,15 +59,14 @@ test('manual recovery has its own single approval', () => {
   assert.match(job(workflow, 'recover-central'), /environment: release\n/);
 });
 
-test('Flutter continues only from the approved tag run and read-only jobs do not gate again', async () => {
-  const flutter = await readWorkflow('.github/workflows/publish-flutter.yml');
-  const gate = job(flutter, 'gate');
-  assert.doesNotMatch(gate, /environment:/);
+test('Flutter continues through the approved dependency graph without cross-workflow polling', () => {
+  const flutter = job(workflow, 'flutter');
+  assert.doesNotMatch(flutter, /environment:/);
   assert.doesNotMatch(job(workflow, 'verify-flutter-publication'), /environment:/);
-  assert.match(gate, /\.head_branch == \$tag/);
-  assert.match(gate, /jobs\?filter=latest&per_page=100/);
-  assert.match(gate, /\.name == "Approve SDK release" and \.conclusion == "success"/);
-  assert.ok(gate.indexOf('Approve SDK release') < gate.indexOf('/artifacts"'));
+  assert.match(flutter, /needs: \[publish, publish-apple-pod, smoke-public-package, smoke-public-android\]/);
+  assert.match(job(workflow, 'verify-flutter-publication'), /needs: publish-flutter/);
   assert.equal((workflow.match(/environment: release-approval\n/g) ?? []).length, 2);
-  assert.doesNotMatch(flutter, /environment: release-approval/);
+  assert.doesNotMatch(flutter, /package-release.sh|actions\/workflows/);
+  assert.match(job(workflow, 'verify'), /promote-ci.mjs/);
+  assert.doesNotMatch(workflow, /tools\/(apple|android|flutter)\/package-release.sh|npm.*pack --pack-destination/);
 });
