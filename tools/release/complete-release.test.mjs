@@ -24,6 +24,7 @@ test('Flutter completion preserves the previously published native manifest', ()
 test('Flutter OIDC upload retains its registered identity and checks occupied versions on every retry', () => {
   const publisher = job(workflow, 'publish-flutter');
   assert.match(publisher, /needs: flutter\n/);
+  assert.match(publisher, /if: \$\{\{ !cancelled\(\) && github.event_name == 'push' && needs.flutter.result == 'success' \}\}/);
   assert.match(publisher, /uses: dart-lang\/setup-dart@[0-9a-f]{40}/);
   assert.match(publisher, /environment: release\n/);
   assert.match(publisher, /prepare-publication.mjs/);

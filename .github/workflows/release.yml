@@ -900,7 +900,7 @@ jobs:
 
   publish-flutter:
     name: Publish or verify preserved Flutter package
-    if: ${{ always() && github.event_name == 'push' && needs.flutter.result == 'success' }}
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.flutter.result == 'success' }}
     needs: flutter
     runs-on: ubuntu-latest
     timeout-minutes: 20

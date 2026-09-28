@@ -801,7 +801,8 @@ The single tag-triggered release workflow then:
    alone does not establish customer install readiness.
 6. Verifies the already preserved Flutter payload against the tag inventory;
    it does not rebuild the package, native libraries or local Flutter examples.
-7. Publishes Flutter in the same dependency graph. On every attempt,
+7. Publishes Flutter in the same dependency graph, respecting workflow
+   cancellation through `!cancelled()`. On every attempt,
    `tools/flutter/prepare-publication.mjs` first verifies the candidate and any
    occupied pub.dev archive. Only HTTP 404 authorizes upload; authentication,
    transport and checksum failures stop. An identical occupied version skips
