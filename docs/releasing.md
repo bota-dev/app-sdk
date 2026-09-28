@@ -275,7 +275,8 @@ Design review for this change:
 | Preserve external hardware acceptance boundary | Release owner reviews the complete release once; no hardware status changed | Matched; no physical acceptance claimed |
 
 Local Windows verification: six release-completion/approval tests and actionlint
-1.7.12 on all three changed workflows pass. The
+1.7.12 on all four changed workflows pass. CI's tooling job now runs
+`npm run test:release`, including the approval regressions. The
 broader release suite reports 85 passed / 21 failed with Windows path, CRLF
 and shell-execution failures; Linux/macOS CI remains required before merge.
 `release-approval` was created with the existing reviewer and matching ref
