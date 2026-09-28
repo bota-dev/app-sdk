@@ -450,7 +450,8 @@ from the committed root package. Never hand-edit the release URL or checksum.
 
 PR and main CI use `tools/apple/package-release.sh --evidence-only` to generate
 and validate unpublished evidence for the current commit without comparing it
-to the immutable package from the previous release. The protected release workflow promotes that preserved candidate and verifies
+to the immutable package from the previous release. The protected release
+workflow promotes that preserved candidate and verifies
 its checksums against the committed root manifests; it does not rebuild it.
 
 The matching `tools/apple/test-pod-archive.sh --evidence-only` lints a temporary
