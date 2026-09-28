@@ -253,9 +253,12 @@ Activate in this order:
 1. Create `release-approval` with the existing release reviewer and the same
    `main` branch / `v*.*.*` tag restrictions; keep it secret-free.
 2. Pass exact-revision CI and License Gate, then merge the workflow change.
-3. Stop starting legacy publication/recovery runs and remove required reviewers
-   from `release`; retain its five secrets, branch/tag restrictions and OIDC
-   registration. Do not push another release tag during this cutover.
+3. Stop starting legacy publication/recovery runs. Finish or cancel every
+   active legacy `release.yml` and `publish-flutter.yml` run, including old
+   waiting jobs, before removing required reviewers from `release`; otherwise
+   the settings change could unblock an old run without its first approval.
+   Retain all five secrets, branch/tag restrictions and OIDC registration.
+   Do not push another release tag during this cutover.
 4. Verify both environment configurations. The next legitimate release must
    pause once at `Approve SDK release` and continue downstream without reviews.
 
