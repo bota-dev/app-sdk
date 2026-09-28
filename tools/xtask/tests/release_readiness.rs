@@ -398,10 +398,8 @@ fn release_workflow_publishes_and_smokes_the_public_apple_package() {
         workflow["jobs"]["verify"]["permissions"]["actions"].as_str(),
         Some("read")
     );
-    assert!(!ci["jobs"]["apple"]["steps"]
-        .as_sequence()
-        .unwrap()
-        .is_empty());
+    let apple_steps = ci["jobs"]["apple"]["steps"].as_sequence().unwrap();
+    assert!(!apple_steps.is_empty());
     assert!(contents.contains("--output Package.swift --check"));
     assert!(contents.contains("--output platforms/apple/BotaAppSDK.podspec --check"));
 

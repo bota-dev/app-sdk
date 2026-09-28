@@ -42,7 +42,9 @@ test('maintenance additions have a separate current pin and explicit native-owne
   assert.deepEqual(validateWorkflowBaseline(suites, compatibility), []);
 });
 
-for (const name of ['ci', 'release']) {
+// Release now promotes the exact successful CI run; the source baseline is
+// executed here rather than checked out and executed a second time after tagging.
+for (const name of ['ci']) {
   test(`${name} checkout is bound to selected workflow metadata, not an obsolete literal`, () => {
     const workflow = readFileSync(`.github/workflows/${name}.yml`, 'utf8');
     const selected = readJson('protocol/compatibility/firmware-compatibility.json')

@@ -831,6 +831,8 @@ workflow tests pass, as do actionlint and shell syntax checks. A read-only repla
 against CI run `36477004338`, using synthetic tag metadata without creating a
 tag, verified all 49 preserved payload files. Six unchanged broader Maven tests
 hit Windows path-separator assumptions; Linux hosted checks remain required.
+The maintenance-baseline checkout assertion applies to CI, where the selected
+reference tests execute; release promotion requires that exact CI conclusion.
 
 | Requirement | Evidence | Status / remaining verification |
 |---|---|---|
