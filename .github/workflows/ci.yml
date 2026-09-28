@@ -65,6 +65,9 @@ jobs:
       - name: Test repository tooling
         run: npm run test:tooling
 
+      - name: Test release approval and publication tooling
+        run: npm run test:release
+
       - name: Verify cross-SDK workflow evidence
         run: npm run test:workflows -- --sdk-path .ci/react-native-workflow-baseline
 

@@ -226,16 +226,66 @@ fallback.
 
 ## Repository Setup
 
-Create a GitHub environment named `release` for `bota-dev/app-sdk`:
+Configure two GitHub environments for `bota-dev/app-sdk`:
 
-1. Require a reviewer before deployment.
-2. Restrict deployment branches and tags to protected release tags.
-3. Add only `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
+1. `release-approval`: require the release owner's review, allow release tags
+   (`v*.*.*`) and `main` for manual recovery, and store no secrets.
+2. `release`: retain the same tag/main restrictions and registry OIDC identity,
+   with no required reviewers or wait timer. Store only
+   `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
    `SIGNING_IN_MEMORY_KEY`, `SIGNING_IN_MEMORY_KEY_PASSWORD`, and
    `COCOAPODS_TRUNK_TOKEN` as environment secrets. Do not add a crates.io or
    pub.dev token; Flutter's later automated publications use OIDC.
 
-The environment approval is the human boundary for release authorization and
+### Single-approval migration
+
+The release owner requested one approval for the entire synchronized release
+on 2026-09-28. `approve-release` waits for all five package gates, then pauses
+at `release-approval`. Publication, CocoaPods, native public consumers and the
+Flutter candidate retain their existing ordering. The separate Flutter OIDC
+workflow requires a successful `Approve SDK release` job in the matching
+tag/SHA run before accepting its candidate. Read-only candidate/public archive
+verification does not access an environment. Manual Central recovery uses a
+separate `approve-recovery` job, so a recovery dispatch still needs one review.
+
+Activate in this order:
+
+1. Create `release-approval` with the existing release reviewer and the same
+   `main` branch / `v*.*.*` tag restrictions; keep it secret-free.
+2. Pass exact-revision CI and License Gate, then merge the workflow change.
+3. Stop starting legacy publication/recovery runs. Finish or cancel every
+   active legacy `release.yml` and `publish-flutter.yml` run, including old
+   waiting jobs, before removing required reviewers from `release`; otherwise
+   the settings change could unblock an old run without its first approval.
+   Retain all five secrets, branch/tag restrictions and OIDC registration.
+   Do not push another release tag during this cutover.
+4. Verify both environment configurations. The next legitimate release must
+   pause once at `Approve SDK release` and continue downstream without reviews.
+
+Tagged workflow source is immutable. Old tags do not contain the new approval
+job: do not rerun their publishing jobs after the settings cutover. Use current
+`main`'s gated recovery for supported recovery operations; any other historical
+publication requires an explicit reviewed recovery path. Restoring reviewers
+on `release` is the rollback if the replacement approval gate is unavailable.
+
+Design review for this change:
+
+| Requirement | Evidence | Status |
+| --- | --- | --- |
+| One human decision before external publication | Approval-only job after package gates; publish depends on approval; recovery has its own gate | Matched in source and workflow regression tests; live activation/next release unverified |
+| Preserve secrets and trusted publisher identity | Native/npm, CocoaPods and Dart upload retain `release`; no secret copied or output | Matched in source; next publication unverified |
+| Preserve ordered exact artifacts and public consumers | Existing dependencies and inventory/hash checks retained; Flutter additionally checks matching run approval | Matched in source; hosted CI required |
+| Preserve external hardware acceptance boundary | Release owner reviews the complete release once; no hardware status changed | Matched; no physical acceptance claimed |
+
+Local Windows verification: six release-completion/approval tests and actionlint
+1.7.12 on all four changed workflows pass. CI's tooling job now runs
+`npm run test:release`, including the approval regressions. The
+broader release suite reports 85 passed / 21 failed with Windows path, CRLF
+and shell-execution failures; Linux/macOS CI remains required before merge.
+`release-approval` was created with the existing reviewer and matching ref
+restrictions. The old `release` reviewer remains until the ordered cutover.
+
+The `release-approval` approval is the human boundary for release authorization and
 external hardware acceptance. Automated tests never claim a physical-device
 result. Keep supervised device evidence separate and follow
 [`docs/testing/apple-physical-device.md`](testing/apple-physical-device.md) when
@@ -246,7 +296,7 @@ For the Web facade, follow
 supported desktop Chromium browser. The reviewer must confirm every required
 row against one exact Bota device and the exact candidate source revision.
 `npm run web:verify` uses deterministic fake Bluetooth and is not a substitute.
-Ordinarily, do not approve the protected release environment while a required
+Ordinarily, do not approve `release-approval` while a required
 Web row is `NOT RUN` or failed. For `1.2.0-beta.7` and its CocoaPods repairs
 `1.2.0-beta.8`, `1.2.0-beta.9`, `1.2.0-beta.10`, `1.2.0-beta.11`, and `1.2.0-beta.12`, the release owner explicitly requested a public beta rollout
 before supervised production-device testing. This authorizes publication for
@@ -561,10 +611,10 @@ On 2026-09-24, the release owner approved this one-time bootstrap for
    read it back. Resume the same tagged workflow, which verifies occupied npm
    versions rather than replacing them. Preserve Central's signed inputs.
 4. After public native consumers pass, publish Flutter from the exact ordered
-   release candidate using the owner's pub.dev login. Approve its separate
-   workflow only after public archive verification so the occupied-version
-   path skips a second upload. Future pub.dev automation uses the separately
-   configured GitHub publisher below.
+   release candidate using the owner's pub.dev login. The automatic workflow
+   verifies the occupied version and skips a second upload. This historical
+   bootstrap procedure does not add a second approval to the current flow.
+   Future pub.dev automation uses the configured GitHub publisher below.
 
 Flutter automated publishing was saved and read back on 2026-09-24 for
 `bota_app_sdk`: repository `bota-dev/app-sdk`, tag pattern `v{{version}}`,
@@ -572,8 +622,9 @@ push events only, and required environment `release`. Manual publishing remains
 enabled; workflow-dispatch and GCP publishing remain disabled. Package ownership
 is unchanged. `.github/workflows/publish-flutter.yml` passes `environment: release`
 to the reusable Dart publish workflow so the actual OIDC upload, not only its
-upstream candidate gate, requires the protected environment. The existing
-environment reviewer and branch/tag restrictions are unchanged. Do not publish
+upstream candidate gate, carries that environment identity. The single-approval
+migration above moves human review to `release-approval` while preserving this
+OIDC identity and the branch/tag restrictions. Do not publish
 a dummy version or replay the immutable bootstrap tag to test this configuration.
 
 For a manual Flutter bootstrap, extract the verified ordered archive outside

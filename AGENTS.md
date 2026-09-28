@@ -890,12 +890,18 @@ Co-Authored-By: OpenAI Codex <noreply@openai.com>
   `bota-device-sdk-core`, `bota-device-sdk-ffi`, `BotaDeviceSDKC`, and
   `bota_device_sdk_v1_*` remain internal implementation names; the Rust crates
   are not published to crates.io by this workflow.
-- The protected `release` environment is the human approval gate for external
-  hardware acceptance. CI never manufactures physical-device evidence.
+- `release-approval` is the single human approval environment for a tagged
+  synchronized release (or a separately dispatched recovery). The `release`
+  environment retains publishing secrets, tag/main restrictions, and registry
+  OIDC identity without another reviewer gate. See `docs/releasing.md` for the
+  ordered settings migration; do not remove the existing review rule before
+  the replacement gate is configured and merged. CI never manufactures
+  physical-device evidence.
 - Flutter's pub.dev GitHub publisher requires `bota-dev/app-sdk`, `v{{version}}`
   push events, and environment `release`. Pass `environment: release` to the
-  reusable upload workflow itself; protecting only its upstream gate does not
-  bind the upload's OIDC identity. Saved settings are not successful-upload
+  reusable upload workflow itself to bind the upload's OIDC identity. Its
+  candidate gate must verify the successful approval job in the same tag/SHA
+  release run. Saved settings are not successful-upload
   evidence; verify automation on the next legitimate version.
 - Never push a release tag until `cargo xtask release verify-tag vVERSION`,
   package verification, and all quality gates pass.
