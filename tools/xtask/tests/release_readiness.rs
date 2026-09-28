@@ -917,7 +917,11 @@ fn future_flutter_publication_uses_official_oidc_and_preserved_inputs_without_se
     assert!(steps.contains("pub publish --force"));
     assert!(!steps.contains("secrets."));
     assert!(!steps.contains("PUB_TOKEN"));
-    assert!(!root().join(".github/workflows/publish-flutter.yml").exists());
+    assert!(
+        !root()
+            .join(".github/workflows/publish-flutter.yml")
+            .exists()
+    );
 }
 
 #[test]

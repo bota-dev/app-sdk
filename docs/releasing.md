@@ -833,6 +833,8 @@ tag, verified all 49 preserved payload files. Six unchanged broader Maven tests
 hit Windows path-separator assumptions; Linux hosted checks remain required.
 The maintenance-baseline checkout assertion applies to CI, where the selected
 reference tests execute; release promotion requires that exact CI conclusion.
+Hosted Linux tooling and release-helper tests passed after that assertion was
+updated; the Rust formatter's required layout was applied to the new test.
 
 | Requirement | Evidence | Status / remaining verification |
 |---|---|---|
