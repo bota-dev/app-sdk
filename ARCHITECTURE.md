@@ -1,14 +1,15 @@
 # Architecture
 
-The 2.x source uses explicit App SDK distribution names. Apple SwiftPM and
-CocoaPods, Android Maven, both npm artifacts, and Flutter pub.dev are public at
-`2.0.0-beta.1`. Physical acceptance and application rollout remain separate,
-pending gates. See the
-[migration guide](docs/migrations/app-sdk-package-names.md). Historical release
-records below retain their original names and versions.
+The 2.x source uses explicit App SDK distribution names. The historical beta.1
+release first verified the complete renamed family: Apple SwiftPM/CocoaPods,
+Android Maven, React Native/Web npm and Flutter pub.dev. The selected current
+release is 2.0.0-beta.7; its [release evidence](release/evidence/2.0.0-beta.7-preflight.md)
+tracks publication separately from application rollout and physical acceptance.
+See the [migration guide](docs/migrations/app-sdk-package-names.md). Historical
+checkpoints below retain their original names and versions.
 
-The published beta.6 native and npm packages add standalone-compatible presence and shared scoped
-upload recovery. Hosts own authentication and backend completion; native SDK
+The published beta.6 native and npm packages add standalone-compatible presence
+and shared scoped upload recovery. Hosts own authentication and backend completion; native SDK
 files retain recording bytes. It promotes verified main CI artifacts without
 rebuilding published payloads. See the
 [beta.6 release evidence](release/evidence/2.0.0-beta.6-preflight.md) for publication

@@ -35,6 +35,15 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Current Authority
 
+- Selected release source for synchronized 2.0.0-beta.7 is e3fd104. Its
+  [release evidence](release/evidence/2.0.0-beta.7-preflight.md) distinguishes
+  exact source/main CI from protected publication and public consumers.
+  Beta.6 native and npm packages are public. Demo 1.0.10 and Bota One 1.0.7
+  use that runtime; Android/iOS preview and production builds and store
+  submissions passed. Beta.7 repairs Flutter publication, with no runtime
+  fix requiring those apps to rebuild. Physical iPhone acceptance remains
+  deferred; the standalone package is not deprecated by this rollout.
+
 - Beta.6 adds exact standalone presence compatibility through maintenance source
   `a894a8437d2a09df5841e609ac46170a84d998c7`, fresh scoped observation and shared
   legacy upload recovery. See `docs/parity/maintenance-baseline.md`. Native modern
@@ -42,23 +51,23 @@ before the cancellation check starts. This is test ordering, not a runtime chang
   snake_case. The frozen 0.0.65 contract remains unchanged.
 
 
-- Web actions/client presence integration is source-only; see
+- Web actions/client presence implementation and physical limits are in
   `docs/testing/web-actions-integration.md`. Keep one exclusive owner across
   nonce/provider preparation and workflow handoff. Validate successor document
   identity through Rust before resetting retained progress; device signature
   verification remains authoritative. Apple connection identity lookup must
   remain inside cancellation and detach cleanup boundaries.
 
-- Unpublished Demo migration adds mixed legacy/v2 catalog discovery, native
+- Native Demo integration includes mixed legacy/v2 catalog discovery, native
   upload-context relay, exact-operation cancellation, scoped native nonce
   access and structural signed-owner replacement checks. See
   `docs/parity/v2-demo-*.md`. Applications own backend HTTP; no opaque upload
   material or recording bytes cross RN. Historical checkpoints without
   ciphertext identity permit same-owner resume only. Matching native artifacts
-  and a new application binary are required; no published beta or physical
-  acceptance is implied and v2 compatibility flags remain disabled.
+  and a matching application binary are required. Publication and hardware
+  acceptance have separate evidence; v2 compatibility flags remain disabled.
 
-- Unpublished maintenance parity work targets reference commit
+- The earlier maintenance parity checkpoint targeted reference commit
   `318974f925a573cf04b0d624978bee04784af09b`, separately from the immutable
   0.0.65 public API baseline. See [maintenance parity](docs/parity/README.md)
   for diagnostics, native-file upload recovery, lost-WINDOW_ACK reconciliation,
@@ -92,12 +101,12 @@ before the cancellation check starts. This is test ordering, not a runtime chang
   Poll the pinned attempt and wait for those results; never treat missing gates
   as passed or weaken the strict preflight/completed-run checks.
 
-- Current synchronized published beta is `2.0.0-beta.1`: Apple `BotaAppSDK`, Android
+- Historical synchronized beta.1 publication used Apple `BotaAppSDK`, Android
   `dev.bota:bota-app-sdk`, RN `@bota.dev/react-native-app-sdk`, Web
   `@bota.dev/web-app-sdk`, Flutter `bota_app_sdk`. Apple SwiftPM/CocoaPods,
   Android Maven, both npm artifacts, and Flutter pub.dev are public and verified.
   Both protected release workflows passed, including actual new-name npm and
-  pub.dev OIDC uploads. New npm `beta` is beta.1; `latest` stays beta.0 and all
+  pub.dev OIDC uploads. At that checkpoint npm `beta` was beta.1; `latest` stayed beta.0 and all
   old packages/tags remain unchanged. See
   `release/evidence/2.0.0-beta.1-publication.md`.
   Public native consumers and fresh Flutter Android/iOS release builds passed.
