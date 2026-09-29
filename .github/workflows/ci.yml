@@ -77,6 +77,9 @@ jobs:
       - name: Validate release manifest
         run: cargo xtask release validate release/examples/2.0.0-beta.8.json
 
+      - name: Verify synchronized release version
+        run: cargo xtask release verify-tag "v$(node -p 'require("./package.json").version')"
+
       - name: Check generated protocol constants
         run: cargo xtask protocol generate --check
 

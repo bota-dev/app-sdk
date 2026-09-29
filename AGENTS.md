@@ -13,6 +13,12 @@ settle its producer; assert a closed channel with no failure under the existing
 five-second settlement watchdog. See
 `docs/parity/android-lost-ack-recovery.md` for the controlled teardown regression.
 
+Apple `FakeCoreHost` discovery tests defer their timer until the collector sees
+`deviceDiscovered`. Scan and timer streams run concurrently; eagerly firing the
+fake timer can legitimately complete discovery before a valid scan result after
+a rejected stale event. Preserve stale-event assertions and the five-second
+settlement watchdog; do not change production scheduling to satisfy the fixture.
+
 CONFIRM cancellation tests must start the competing coroutine undispatched while
 the fake write holds the mutex. Checking `isCompleted` after an ordinary async
 launch does not prove entry; releasing the write can otherwise remove the session

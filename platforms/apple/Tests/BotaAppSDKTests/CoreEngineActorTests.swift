@@ -31,18 +31,14 @@ final class CoreEngineActorTests: XCTestCase {
     }
 
     func testRunsOneWorkflowWithOrderedNotificationsAndMonotonicRequests() async throws {
-        let host = FakeCoreHost(handler: FakeCoreHost.discoveryHandler())
+        let host = FakeCoreHost(handler: FakeCoreHost.discoveryHandler(), deferTimers: true)
         let engine = CoreEngineActor(abi: try CoreAbiClient(), host: host)
 
         let stream = await engine.run(
             .discoverDevices(timeoutMilliseconds: 10, allowDuplicates: false),
             capabilities: [.bluetooth, .timer]
         )
-        var notifications: [CoreNotificationKind] = []
-        for try await notification in stream {
-            notifications.append(notification.kind)
-        }
-
+        let notifications = try await collectDiscovery(stream, host: host)
         XCTAssertEqual(notifications, [.started, .deviceDiscovered, .completed])
         let effects = await host.effects
         XCTAssertEqual(effects.map(\.kind), [
@@ -156,19 +152,37 @@ final class CoreEngineActorTests: XCTestCase {
     }
 
     func testRejectsAStaleHostEventWithoutLosingTheOwner() async throws {
-        let host = FakeCoreHost(handler: FakeCoreHost.discoveryHandler(staleFirst: true))
+        let host = FakeCoreHost(handler: FakeCoreHost.discoveryHandler(staleFirst: true), deferTimers: true)
         let engine = CoreEngineActor(abi: try CoreAbiClient(), host: host)
 
         let stream = await engine.run(
             .discoverDevices(timeoutMilliseconds: 10, allowDuplicates: false),
             capabilities: [.bluetooth, .timer]
         )
-        var notifications: [CoreNotificationKind] = []
-        for try await notification in stream {
-            notifications.append(notification.kind)
-        }
-
+        let notifications = try await collectDiscovery(stream, host: host)
         XCTAssertEqual(notifications, [.started, .deviceDiscovered, .completed])
+    }
+
+    private func collectDiscovery(
+        _ stream: AsyncThrowingStream<CoreNotification, Error>,
+        host: FakeCoreHost
+    ) async throws -> [CoreNotificationKind] {
+        let settled = expectation(description: "discovery settled after its scan result")
+        let collector = Task {
+            defer { settled.fulfill() }
+            var notifications: [CoreNotificationKind] = []
+            for try await notification in stream {
+                notifications.append(notification.kind)
+                if notification.kind == .deviceDiscovered {
+                    await host.fireTimer()
+                }
+            }
+            return notifications
+        }
+        await fulfillment(of: [settled], timeout: 5)
+        collector.cancel()
+        await host.fireTimer()
+        return try await collector.value
     }
 
     func testOpenScanStreamDoesNotBlockTimerAndStopEffects() async throws {
