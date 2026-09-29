@@ -1,5 +1,10 @@
 # AGENTS.md
 
+## Post-Implementation Design Review
+
+- Before reporting completion, use `bota-skills:compound-engineering` (1.2.5+) to compare results with the current authoritative design and acceptance criteria. See the [shared review workflow](../claude-code-plugins/plugins/bota-skills/skills/compound-engineering/SKILL.md).
+- If the skill/source is unavailable, perform the review directly: record each relevant requirement, evidence, conformance status, and remaining verification; update affected docs and report deviations or unavailable checks without claiming full conformance.
+
 ## CI policy
 
 - Never add CI-skip markers or bypass required checks. Local verification supplements CI; it never replaces it.
