@@ -23,6 +23,38 @@ import org.junit.Test
 
 class BotaDeviceSDKAndroidDevicesTest {
     @Test
+    fun transportLossIsForwardedWithoutAStatusSubscription() = runTest {
+        val verified = ConnectedDevice(
+            id = "selected", serialNumber = "EVFXXW67KP", deviceType = DeviceType.BotaPin,
+            firmwareVersion = "1.0.19", isProvisioned = false,
+            connectionState = ConnectionState.Connected, mtu = 247,
+        )
+        val stopped = CompletableDeferred<Unit>()
+        val client = FakeDeviceClient(
+            DiscoveredDevice("selected", rssi = -30), verified,
+            connections = flow {
+                try {
+                    emit(null)
+                    emit(verified)
+                    emit(null)
+                    emit(null)
+                    awaitCancellation()
+                } finally {
+                    stopped.complete(Unit)
+                }
+            },
+        )
+        val devices = BotaDeviceSDKAndroidDevices(client, backgroundScope)
+        var losses = 0
+        devices.startConnectionUpdates { losses += 1 }
+        assertEquals(1, losses)
+        assertEquals(0, client.statusReadCount)
+        devices.stopAll()
+        stopped.await()
+        assertEquals(1, losses)
+    }
+
+    @Test
     fun unknownPairingStateUsesTheFrozenUnpairedFallback() {
         assertEquals("unpaired", PairingState.Unknown(0xFFu).toBridgeValue())
     }
@@ -134,7 +166,9 @@ class BotaDeviceSDKAndroidDevicesTest {
         private val connected: ConnectedDevice,
         private val scanFailure: Throwable? = null,
         private val status: DeviceStatus = testDeviceStatus(),
+        private val connections: Flow<ConnectedDevice?> = kotlinx.coroutines.flow.emptyFlow(),
     ) : BotaDeviceSDKAndroidDeviceClient {
+        override fun connectionUpdates(): Flow<ConnectedDevice?> = connections
         override suspend fun nextClientPresence(deviceId: String): dev.bota.sdk.SDKClientContext? = null
         val scanOptions = mutableListOf<Pair<ULong, Boolean>>()
         val selectedIds = mutableListOf<String>()

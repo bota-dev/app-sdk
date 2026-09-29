@@ -2,6 +2,7 @@ package dev.bota.sdk
 
 import dev.bota.sdk.internal.DeviceRuntime
 import dev.bota.sdk.internal.bluetooth.BotaBluetoothUUIDs
+import dev.bota.sdk.internal.bluetooth.ConfirmedBluetoothDisconnect
 import dev.bota.sdk.internal.core.CoreCapabilities
 import dev.bota.sdk.internal.core.CoreCommand
 import dev.bota.sdk.internal.core.CoreNotification
@@ -74,16 +75,45 @@ public class DeviceManager internal constructor() {
     private var runtimeGeneration: Long = 0
     private var activeOperation: ActiveOperation? = null
     private var connectedDevice: ConnectedDevice? = null
+    private var connectedTransportIdentity: String? = null
     private var presence = ConnectionClientPresence()
     private val connectionObservers = mutableMapOf<UUID, SendChannel<ConnectedDevice?>>()
     private val statusObservers = mutableMapOf<UUID, StatusObserver>()
 
     internal fun attach(runtime: DeviceRuntime) {
-        synchronized(lock) {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val lease = synchronized(lock) {
             runtimeGeneration += 1
             presence = ConnectionClientPresence()
             this.runtime = runtime
-            callbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            callbackScope = scope
+            RuntimeLease(runtime, runtimeGeneration)
+        }
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            runtime.confirmedDisconnects.collect { handleTransportLoss(lease, it) }
+        }
+    }
+
+    private fun handleTransportLoss(lease: RuntimeLease, event: ConfirmedBluetoothDisconnect) {
+        val status = synchronized(lock) {
+            if (runtime !== lease.runtime || runtimeGeneration != lease.generation ||
+                connectedDevice?.id != event.peripheralId ||
+                connectedTransportIdentity != event.generation.toString()
+            ) return
+            connectedDevice = null
+            connectedTransportIdentity = null
+            presence.disconnected(presence.sessionId)
+            lease.runtime.connection.clear()
+            val removed = statusObservers.values.toList()
+            statusObservers.clear()
+            publishConnection()
+            removed
+        }
+        // The transport is already gone. Do not unsubscribe by peripheral ID:
+        // a replacement GATT session may now own that same identifier.
+        status.forEach {
+            it.task.cancel()
+            it.channel.close()
         }
     }
 
@@ -101,6 +131,7 @@ public class DeviceManager internal constructor() {
             runtime = null
             activeOperation = null
             connectedDevice = null
+            connectedTransportIdentity = null
             presence.destroy()
             statusObservers.clear()
             connectionObservers.clear()
@@ -249,11 +280,10 @@ public class DeviceManager internal constructor() {
         configuredRuntime()
         return callbackFlow {
             val id = UUID.randomUUID()
-            val initial = synchronized(lock) {
+            synchronized(lock) {
                 connectionObservers[id] = channel
-                connectedDevice
+                channel.trySend(connectedDevice)
             }
-            send(initial)
             awaitClose { synchronized(lock) { connectionObservers.remove(id) } }
         }
     }
@@ -313,6 +343,7 @@ public class DeviceManager internal constructor() {
         val active = beginOperation(operation, command.cancellationId, lease)
         synchronized(lock) { presence.disconnected(presence.sessionId) }
         var established: ConnectedDevice? = null
+        var transportIdentity: String? = null
         try {
             source?.let { disconnectDifferentDevice(it.id) }
             lease.runtime.engine.run(command, lease.runtime.capabilities).collect { notification ->
@@ -323,6 +354,7 @@ public class DeviceManager internal constructor() {
                             throw identityMismatch(expectedSerial, operation)
                         }
                         established = candidate
+                        transportIdentity = lease.runtime.connectionIdentity(candidate.id)
                     }
                     CoreNotificationKind.Failed -> throw notification.workflowError()
                     CoreNotificationKind.Cancelled -> throw cancelled(operation)
@@ -364,14 +396,19 @@ public class DeviceManager internal constructor() {
         }
         val accepted = synchronized(lock) {
             if (runtime !== active.lease.runtime || runtimeGeneration != active.lease.generation ||
-                activeOperation?.cancellationId != command.cancellationId
+                activeOperation?.cancellationId != command.cancellationId ||
+                (transportIdentity != null &&
+                    active.lease.runtime.connectionIdentity(connected.id) != transportIdentity)
             ) {
                 false
             } else {
                 connectedDevice = connected
-                active.lease.runtime.connectionIdentity(connected.id)?.let {
+                connectedTransportIdentity = transportIdentity
+                transportIdentity?.let {
                     presence.connected(connected.id, transportId = it)
                 }
+                active.lease.runtime.connection.set(connected)
+                publishConnection()
                 true
             }
         }
@@ -380,8 +417,6 @@ public class DeviceManager internal constructor() {
             finishOperation(command.cancellationId)
             throw cancelled(operation)
         }
-        active.lease.runtime.connection.set(connected)
-        publishConnection()
         finishOperation(command.cancellationId)
         return connected
     }
@@ -477,8 +512,9 @@ public class DeviceManager internal constructor() {
     )
 
     private fun publishConnection() {
-        val (device, observers) = synchronized(lock) { connectedDevice to connectionObservers.values.toList() }
-        observers.forEach { it.trySend(device) }
+        synchronized(lock) {
+            connectionObservers.values.forEach { it.trySend(connectedDevice) }
+        }
     }
 
     private suspend fun stopStatusObserver(id: UUID, cancelTask: Boolean, closeChannel: Boolean) {

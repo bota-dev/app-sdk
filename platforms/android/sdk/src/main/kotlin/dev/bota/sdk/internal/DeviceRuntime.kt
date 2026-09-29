@@ -82,6 +82,7 @@ internal class DeviceRuntime(
     val connection: DeviceConnectionRegistry = DeviceConnectionRegistry(),
     val connectionIdentity: (String) -> String? = { null },
     val connectionMtu: (String) -> Int = { 23 },
+    val confirmedDisconnects: Flow<ConfirmedBluetoothDisconnect> = kotlinx.coroutines.flow.emptyFlow(),
     val operations: DeviceOperationCoordinator = DeviceOperationCoordinator(),
     val directRead: suspend (String, UUID, UUID) -> ByteArray = { _, _, _ ->
         error("direct read unavailable")
@@ -320,9 +321,13 @@ internal class DeviceRuntime(
                         },
                     )
                 val disconnectResetScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+                val disconnectEvents = kotlinx.coroutines.flow.MutableSharedFlow<ConfirmedBluetoothDisconnect>()
                 closeActions += { disconnectResetScope.cancel() }
                 disconnectResetScope.launch {
-                    driver.confirmedDisconnects().collect { resetEncryptedUploadOwnership(it) }
+                    driver.confirmedDisconnects().collect {
+                        disconnectEvents.emit(it)
+                        resetEncryptedUploadOwnership(it)
+                    }
                 }
                 val encryptedCapabilityReader = EncryptedUploadV2CapabilityReader(
                     driver::read,
@@ -366,6 +371,7 @@ internal class DeviceRuntime(
                     connectionIdentity = { peripheralId ->
                         runCatching { driver.connectionGeneration(peripheralId).toString() }.getOrNull()
                     },
+                    confirmedDisconnects = disconnectEvents,
                     readStatus = { peripheralId ->
                         driver.read(peripheralId, BotaBluetoothUUIDs.ControlService, BotaBluetoothUUIDs.DeviceStatus)
                     },

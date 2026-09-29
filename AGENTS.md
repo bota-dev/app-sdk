@@ -35,6 +35,11 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Current Authority
 
+- Unpublished Android disconnect propagation connects confirmed GATT generations
+  to native connection observers and RN without a status subscription. Preserve
+  runtime/generation fencing and do not unsubscribe a replacement during loss
+  cleanup. See [validation](docs/parity/android-disconnection-events.md).
+
 - Standalone React Native maintenance ended September 29, 2026 under the
   owner-authorized [retirement decision](docs/migrations/react-native-sdk-sunset.md).
   This supersedes the old stable-before-deprecation plan for that package only;

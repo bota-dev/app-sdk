@@ -37,6 +37,12 @@ private normative design before merge.
 
 ## Boundaries
 
+Unpublished Android source propagates confirmed transport loss through native
+connection updates and the RN event independently of status subscriptions.
+Runtime/GATT generation fences state invalidation; this does not report adapter
+power state or add automatic reconnect. See the
+[review](docs/parity/android-disconnection-events.md).
+
 The beta.3 candidate native App integration adds a typed mixed recording catalog
 and upload-context codecs in Rust. Apple and Android own GATT context exchange,
 native files, checkpoint identity, exact-operation cancellation and opaque

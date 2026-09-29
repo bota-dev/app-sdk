@@ -1,5 +1,6 @@
 package dev.bota.sdk
 
+import dev.bota.sdk.internal.bluetooth.ConfirmedBluetoothDisconnect
 import dev.bota.sdk.internal.DeviceRuntime
 import dev.bota.sdk.internal.core.CoreCapabilities
 import dev.bota.sdk.internal.core.CoreCommand
@@ -39,6 +40,110 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DeviceManagerTest {
+    @Test
+    fun confirmedTransportLossPublishesNullAndInvalidatesFacadeState() = kotlinx.coroutines.runBlocking {
+        withTimeout(5_000) {
+            val events = Channel<ConfirmedBluetoothDisconnect>(Channel.UNLIMITED)
+            val handled = CompletableDeferred<Unit>()
+            val fixture = RuntimeFixture(
+                runner = FakeWorkflowRunner(connectionResponses()),
+                connectionIdentity = { "1" },
+                confirmedDisconnects = flow {
+                    for (event in events) {
+                        emit(event)
+                        handled.complete(Unit)
+                    }
+                },
+            )
+            val manager = DeviceManager()
+            manager.attach(fixture.runtime)
+            val states = Channel<ConnectedDevice?>(Channel.UNLIMITED)
+            val observer = launch { manager.connectionUpdates().collect { states.send(it) } }
+            try {
+                assertEquals(null, states.receive())
+                manager.connect("SERIAL-1", DiscoveredDevice("peripheral-1", rssi = -30))
+                assertEquals("SERIAL-1", states.receive()?.serialNumber)
+                events.send(ConfirmedBluetoothDisconnect("peripheral-1", 1))
+                handled.await()
+                assertEquals(null, states.receive())
+                assertEquals(null, fixture.runtime.connection.current())
+                assertEquals(null, manager.nextClientReport("peripheral-1"))
+                assertTrue(runCatching { manager.readStatus() }.exceptionOrNull() is BotaSDKError.Core)
+                assertTrue(fixture.disconnects.isEmpty())
+            } finally {
+                observer.cancelAndJoin()
+                manager.detach()
+            }
+        }
+    }
+
+    @Test
+    fun staleTransportLossCannotClearAReplacementConnection() = kotlinx.coroutines.runBlocking {
+        withTimeout(5_000) {
+            val events = Channel<Pair<ConfirmedBluetoothDisconnect, CompletableDeferred<Unit>>>(Channel.UNLIMITED)
+            var transport = "1"
+            val fixture = RuntimeFixture(
+                runner = FakeWorkflowRunner(connectionResponses()),
+                connectionIdentity = { transport },
+                confirmedDisconnects = flow {
+                    for ((event, handled) in events) {
+                        emit(event)
+                        handled.complete(Unit)
+                    }
+                },
+            )
+            val manager = DeviceManager()
+            manager.attach(fixture.runtime)
+            try {
+                val device = DiscoveredDevice("peripheral-1", rssi = -30)
+                manager.connect("SERIAL-1", device)
+                transport = "2"
+                manager.connect("SERIAL-1", device)
+                val staleHandled = CompletableDeferred<Unit>()
+                events.send(ConfirmedBluetoothDisconnect(device.id, 1) to staleHandled)
+                staleHandled.await()
+                assertEquals("SERIAL-1", fixture.runtime.connection.current()?.serialNumber)
+                assertTrue(manager.nextClientReport(device.id) != null)
+                val currentHandled = CompletableDeferred<Unit>()
+                events.send(ConfirmedBluetoothDisconnect(device.id, 2) to currentHandled)
+                currentHandled.await()
+                assertEquals(null, fixture.runtime.connection.current())
+            } finally {
+                manager.detach()
+            }
+        }
+    }
+
+    @Test
+    fun lossDuringMetadataReadDoesNotPublishADeadConnection() = kotlinx.coroutines.runBlocking {
+        withTimeout(5_000) {
+            val reading = CompletableDeferred<Unit>()
+            val finishRead = CompletableDeferred<Unit>()
+            var transport: String? = "1"
+            val fixture = RuntimeFixture(
+                runner = FakeWorkflowRunner(connectionResponses()),
+                connectionIdentity = { transport },
+                firmwareRead = {
+                    reading.complete(Unit)
+                    finishRead.await()
+                    "1.0.19".toByteArray()
+                },
+            )
+            val manager = DeviceManager()
+            manager.attach(fixture.runtime)
+            try {
+                val result = async { runCatching { manager.connect("SERIAL-1", DiscoveredDevice("peripheral-1", rssi = -30)) } }
+                reading.await()
+                transport = null
+                finishRead.complete(Unit)
+                assertTrue(result.await().isFailure)
+                assertEquals(null, fixture.runtime.connection.current())
+            } finally {
+                manager.detach()
+            }
+        }
+    }
+
     @Test
     fun identityMismatchInvalidatesEarlierPresenceForTheSameHandle() = runTest {
         val manager = DeviceManager()
@@ -542,6 +647,7 @@ internal class RuntimeFixture(
     decodeStatus: (ByteArray) -> DeviceStatus = { error("decoder unavailable") },
     connectionIdentity: (String) -> String? = { "connection" },
     firmwareRead: suspend (String) -> ByteArray = { "1.0.17\u0000".toByteArray() },
+    confirmedDisconnects: Flow<ConfirmedBluetoothDisconnect> = kotlinx.coroutines.flow.emptyFlow(),
 ) {
     var closeCount = 0
     val disconnects = mutableListOf<String>()
@@ -551,6 +657,7 @@ internal class RuntimeFixture(
         capabilities = capabilities,
         authorize = authorize,
         connectionIdentity = connectionIdentity,
+        confirmedDisconnects = confirmedDisconnects,
         disconnect = { disconnects += it },
         readStatus = readStatus,
         statusUpdates = statusUpdates,

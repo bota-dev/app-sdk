@@ -31,6 +31,7 @@ internal interface BotaDeviceSDKAndroidDeviceClient {
     suspend fun nextClientPresence(deviceId: String): dev.bota.sdk.SDKClientContext?
 
     suspend fun statusUpdates(): Flow<DeviceStatus>
+    fun connectionUpdates(): Flow<ConnectedDevice?>
 }
 
 internal class BotaDeviceSDKSharedAndroidDeviceClient(
@@ -61,6 +62,7 @@ internal class BotaDeviceSDKSharedAndroidDeviceClient(
         client.clientPresence.nextReport(deviceId)
 
     override suspend fun statusUpdates(): Flow<DeviceStatus> = client.devices.statusUpdates()
+    override fun connectionUpdates(): Flow<ConnectedDevice?> = client.devices.connectionUpdates()
 }
 
 internal class BotaDeviceSDKAndroidDevices(
@@ -73,6 +75,20 @@ internal class BotaDeviceSDKAndroidDevices(
     private val statusLock = Any()
     private var activeScan: Job? = null
     private var activeStatusUpdates: Job? = null
+    private var activeConnectionUpdates: Job? = null
+
+    suspend fun startConnectionUpdates(onDisconnected: () -> Unit) = operations.withLock {
+        activeConnectionUpdates?.cancelAndJoin()
+        val stream = client.connectionUpdates()
+        activeConnectionUpdates = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            var connected = false
+            stream.collect { device ->
+                val lost = connected && device == null
+                connected = device != null
+                if (lost) onDisconnected()
+            }
+        }
+    }
 
     suspend fun startScan(
         timeoutMilliseconds: ULong,
@@ -155,6 +171,8 @@ internal class BotaDeviceSDKAndroidDevices(
     }
 
     suspend fun stopAll() = operations.withLock {
+        activeConnectionUpdates?.cancelAndJoin()
+        activeConnectionUpdates = null
         stopScanOwned()
         stopStatusUpdatesOwned()
     }

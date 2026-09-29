@@ -46,6 +46,9 @@ internal class BotaDeviceSDKModule(
         launch(promise) {
             lifecycle.configure(storageDirectory)
             recordingUploads.configure(storageDirectory)
+            devices.startConnectionUpdates {
+                emitOnDeviceDisconnected(Arguments.createMap())
+            }
         }
     }
 
