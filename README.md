@@ -248,7 +248,7 @@ their upload succeeds. Upload
 handoff exposes only ownership outcomes, OTA keeps request and firmware bytes
 in native hosts, and logs expose only complete core-sanitized lines. The AAR
 also carries a one-major deprecated
-`com.bota.sdk` adapter frozen from Android revision `0f06d2aÃ¢â‚¬Â¦`; JVM descriptor,
+`com.bota.sdk` adapter frozen from Android revision `0f06d2a…`; JVM descriptor,
 source, already-compiled bytecode, API 26, and API 35 consumer gates pass. New
 applications resolve only `dev.bota:bota-android-sdk` and must not package the
 old AAR beside it. See [Android SDK migration](docs/migration/android.md).

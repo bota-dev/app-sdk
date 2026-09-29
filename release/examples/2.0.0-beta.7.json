@@ -16,7 +16,7 @@
       "name": "BotaDeviceSDKCore.xcframework.zip",
       "ecosystem": "swiftpm",
       "version": "2.0.0-beta.7",
-      "checksumSha256": "d71a3a4233bb847fc5f950a3e8865ac61eaaf8f908ad421a9625b5e36109b164",
+      "checksumSha256": "6aa888b2dc6759bd466b55ff9a6221cc4b4caa8f9574843d24d7e649191fa263",
       "capabilities": [
         "connection_settings",
         "device_logs",

@@ -1,6 +1,6 @@
 # App SDK Package Names
 
-Current target: `2.0.0-beta.7`. Exact source CI and License Gate passed;
+Current target: `2.0.0-beta.7`. Exact source CI and License Gate are required;
 the [release evidence](../../release/evidence/2.0.0-beta.7-preflight.md) links
 publication and clean public-consumer results. Confirm synchronized completion
 there before installing the versions below. Package availability, application

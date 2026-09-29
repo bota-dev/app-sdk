@@ -7,12 +7,18 @@ pending gates. See the
 [migration guide](docs/migrations/app-sdk-package-names.md). Historical release
 records below retain their original names and versions.
 
-The beta.6 candidate adds standalone-compatible presence and shared scoped
+The published beta.6 native and npm packages add standalone-compatible presence and shared scoped
 upload recovery. Hosts own authentication and backend completion; native SDK
 files retain recording bytes. It promotes verified main CI artifacts without
 rebuilding published payloads. See the
-[beta.6 release evidence](release/evidence/2.0.0-beta.7-preflight.md) for publication
+[beta.6 release evidence](release/evidence/2.0.0-beta.6-preflight.md) for publication
 status and the separate hardware/application acceptance limits.
+
+The synchronized beta.7 successor repairs Flutter publication staging. CI and
+tagged publication use the same extracted-archive helper with the preserved
+library lock; excluded example locks are not required. It changes release
+tooling and SDK identity, without changing beta.6 runtime behavior. See the
+[beta.7 repair record](release/evidence/2.0.0-beta.7-preflight.md).
 
 ## Purpose
 
@@ -195,8 +201,8 @@ exhaustive twelve-effect host port with typed failure and staged-notification
 routing, and an in-memory application-material registry keyed by opaque ID.
 The shared Rust engine keeps cancellation ordinary when the CONFIRM effect is
 only queued or doing local cleanup. Apple and Android atomically claim native
-cancellation before the canonical write, orâ€”once that write is actually
-attemptedâ€”settle exact completion or stable cleanup-uncertainty code 19 without
+cancellation before the canonical write, or—once that write is actually
+attempted—settle exact completion or stable cleanup-uncertainty code 19 without
 a later rollback. When cancellation races Apple engine startup return, exact
 Completed or code 19 preserves terminal material, while an ordinary cancel
 failure after a pre-CONFIRM claim removes the material as cancelled. Android
@@ -552,7 +558,7 @@ every registered resource close, preserving cleanup failures without leaking
 the Bluetooth thread or native engine.
 
 The one-major Android migration adapter preserves the public `com.bota.sdk`
-JVM descriptors from pinned revision `0f06d2aâ€¦` while delegating supported
+JVM descriptors from pinned revision `0f06d2a…` while delegating supported
 behavior to this facade. Kotlin API dumps, source recompilation, and
 already-compiled bytecode run against the replacement AAR on API 26 and API 35.
 The checked-in binary fixture contains only that consumer bytecode and binds
@@ -766,7 +772,7 @@ not platform-visible reducer models. All current BLE, timer, persistence,
 host-material, recording-sink, firmware-blob, secure-storage, and network
 callbacks return through `bota_device_sdk_v1_engine_dispatch`; the additive v2
 surface carries only identifiers, bounds, opaque registration IDs, checkpoint
-metadata, and digestsâ€”not ciphertext or cryptographic documents. Operation,
+metadata, and digests—not ciphertext or cryptographic documents. Operation,
 request, and cancellation ownership are checked before the reducer advances.
 The ABI's typed protocol decode/encode entry points delegate status,
 recording-list, recording-state/result, recording-control opcodes, transfer, OTA, provisioning,

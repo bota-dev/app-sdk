@@ -914,8 +914,10 @@ fn future_flutter_publication_uses_official_oidc_and_preserved_inputs_without_se
     let steps = serde_yaml_ng::to_string(&publish["steps"]).unwrap();
     assert!(steps.contains("dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d"));
     assert!(steps.contains("prepare-publication.mjs"));
-    assert!(steps.contains("pub get --enforce-lockfile"));
-    assert!(steps.contains("pub publish --force"));
+    assert!(steps.contains("tools/flutter/publish-preserved.sh --publish"));
+    let staging = fs::read_to_string(root().join("tools/flutter/publish-preserved.sh")).unwrap();
+    assert!(staging.contains("pub get --enforce-lockfile --no-example"));
+    assert!(staging.contains("pub publish --force"));
     assert!(!steps.contains("secrets."));
     assert!(!steps.contains("PUB_TOKEN"));
     assert!(
