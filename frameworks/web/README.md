@@ -13,8 +13,8 @@ dependency before adding its replacement. Storage namespaces do not change.
 
 ## Install
 
-This source prepares synchronized `2.0.0-beta.7`. After publication, pin the
-exact version:
+This source prepares synchronized `2.0.0-beta.8`. Until its publication is
+verified, pin the published beta.7 release:
 
 ```bash
 npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.7

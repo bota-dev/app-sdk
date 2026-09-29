@@ -3,5 +3,5 @@ package dev.bota.sdk
 
 internal object SdkIdentity {
     const val PACKAGE = "dev.bota:bota-app-sdk"
-    const val VERSION = "2.0.0-beta.7"
+    const val VERSION = "2.0.0-beta.8"
 }

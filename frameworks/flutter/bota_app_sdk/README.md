@@ -5,9 +5,11 @@
 The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
 `dev.bota:bota-app-sdk` on Android. Replace the old dependency and Dart imports;
 do not install both packages in the same application. Historical 1.x releases
-remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.7`.
-Version `2.0.0-beta.1` remains the verified published release until the protected
-CI release completes. The client-presence API below is unreleased source.
+remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.8`.
+Published `2.0.0-beta.7` remains the installation baseline until beta.8 completes
+protected publication and public-consumer verification. Beta.8 forwards Android
+connection loss through the existing connection stream; see the
+[preflight](../../../release/evidence/2.0.0-beta.8-preflight.md).
 
 ### Client presence
 

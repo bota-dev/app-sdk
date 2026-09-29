@@ -5,6 +5,11 @@ September 29, 2026. New React Native integrations use
 `@bota.dev/react-native-app-sdk`. See the [retirement and migration notice](docs/migrations/react-native-sdk-sunset.md);
 existing old releases remain available and the successor is still beta.
 
+Source candidate: **2.0.0-beta.8**, with Android connection-loss notification
+and stale-state cleanup. [Preflight and verification](release/evidence/2.0.0-beta.8-preflight.md).
+Installation commands below retain published beta.7 until beta.8 completes
+protected publication and public-consumer verification.
+
 ## Client presence (beta.6)
 
 Web, Apple, Android, React Native and Flutter expose passive

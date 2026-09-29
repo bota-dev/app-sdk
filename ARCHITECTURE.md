@@ -25,6 +25,12 @@ library lock; excluded example locks are not required. It changes release
 tooling and SDK identity, without changing beta.6 runtime behavior. See the
 [beta.7 repair record](release/evidence/2.0.0-beta.7-preflight.md).
 
+The next synchronized candidate, `2.0.0-beta.8`, carries Android confirmed
+connection-loss propagation and RN forwarding without a status subscription.
+Beta.7 remains the published installation baseline during preparation. The
+[beta.8 preflight](release/evidence/2.0.0-beta.8-preflight.md) separates source,
+physical recovery evidence, candidate checksums and public acceptance.
+
 ## Purpose
 
 `app-sdk` is the source monorepo for the Bota App SDK family. It consolidates

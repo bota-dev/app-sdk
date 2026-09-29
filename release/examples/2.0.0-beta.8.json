@@ -1,0 +1,385 @@
+{
+  "manifestVersion": 2,
+  "sdkFamily": "bota-app-sdk",
+  "sdkVersion": "2.0.0-beta.8",
+  "sourceRevision": "39650cf3c8bbaa32b0cdfe4fab8c0fbc518f55a7",
+  "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
+  "firmwareCompatibility": {
+    "minimum": "1.0.17",
+    "maximum": "1.0.17",
+    "baselineRevision": "8b175a89374c9833bdaa67fe73ada6672618e5f7"
+  },
+  "artifacts": [
+    {
+      "platform": "apple",
+      "packageIdentifier": "BotaAppSDK",
+      "name": "BotaDeviceSDKCore.xcframework.zip",
+      "ecosystem": "swiftpm",
+      "version": "2.0.0-beta.8",
+      "checksumSha256": "6aa888b2dc6759bd466b55ff9a6221cc4b4caa8f9574843d24d7e649191fa263",
+      "capabilities": [
+        "connection_settings",
+        "device_logs",
+        "device_status",
+        "firmware_ota_transfer",
+        "recording_list",
+        "recording_transfer_and_control",
+        "workflow_connection",
+        "workflow_device_logs",
+        "workflow_encrypted_upload_v2",
+        "workflow_factory_reset",
+        "workflow_firmware_update",
+        "workflow_provisioning",
+        "workflow_recording_transfer",
+        "workflow_upload_handoff"
+      ]
+    },
+    {
+      "platform": "android",
+      "packageIdentifier": "dev.bota:bota-app-sdk",
+      "name": "bota-app-sdk-2.0.0-beta.8.aar",
+      "ecosystem": "maven",
+      "version": "2.0.0-beta.8",
+      "checksumSha256": "ad4c4c574321673dec9d028c71ba7e7c7d067eb3864e1e829566ddb560847eed",
+      "capabilities": [
+        "android_device_sdk"
+      ]
+    },
+    {
+      "platform": "react-native",
+      "ecosystem": "npm",
+      "capabilities": [
+        "react_native_compatibility"
+      ],
+      "version": "2.0.0-beta.8",
+      "packageIdentifier": "@bota.dev/react-native-app-sdk",
+      "name": "bota.dev-react-native-app-sdk-2.0.0-beta.8.tgz",
+      "checksumSha256": "5987b6f533dc11326953ac8473c36b03b9fac02468bb7fccf72cd63cc4139004"
+    },
+    {
+      "platform": "web",
+      "ecosystem": "npm",
+      "capabilities": [
+        "web_bluetooth_read_only"
+      ],
+      "version": "2.0.0-beta.8",
+      "packageIdentifier": "@bota.dev/web-app-sdk",
+      "name": "bota.dev-web-app-sdk-2.0.0-beta.8.tgz",
+      "checksumSha256": "8400d9732b6d3dbc023f0885d0c27dade6bf945fe1c4d063a73fd70e98418e92"
+    },
+    {
+      "platform": "flutter",
+      "packageIdentifier": "bota_app_sdk",
+      "name": "bota_app_sdk-2.0.0-beta.8.tar.gz",
+      "ecosystem": "pub",
+      "version": "2.0.0-beta.8",
+      "checksumSha256": "a7df799d60602a07b5b20fb110b9aae7241336bb4ad3db8039a28c4ffece599f",
+      "sourceRevision": "39650cf3c8bbaa32b0cdfe4fab8c0fbc518f55a7",
+      "normalizedArchiveSha256": "73fc3b98b2ab3be48b136282b6bde0145d97681f8aac4243afca3c4520b29277",
+      "generator": {
+        "name": "pigeon",
+        "version": "28.0.0"
+      },
+      "packageInventory": [
+        {
+          "path": "AGENTS.md",
+          "byteLength": 5858,
+          "sha256": "056370f8f01428715a1ee4691d66c548491e4b22cee7498d23d602e828f1485e"
+        },
+        {
+          "path": "CHANGELOG.md",
+          "byteLength": 4979,
+          "sha256": "9369507ee5ecd67b9c127e7665f159c8debb8688dcc2cf03f1508a5c3c5f262f"
+        },
+        {
+          "path": "LICENSE",
+          "byteLength": 1061,
+          "sha256": "e2b6b4713e4848d115ea00965c34849a9f3eabde11e1ca9c027ad6cde3aff4a4"
+        },
+        {
+          "path": "README.md",
+          "byteLength": 12259,
+          "sha256": "b0ec4bc94b27a888d5ae1b4afbdb91fd293ed89a7774dbdb1e10b82b4c0ab0c2"
+        },
+        {
+          "path": "analysis_options.yaml",
+          "byteLength": 110,
+          "sha256": "80ffbbb0b4283a975e1c4bd16edfb7c11a30229e15fd10f86ed6bdb9581e114f"
+        },
+        {
+          "path": "android/build.gradle.kts",
+          "byteLength": 2419,
+          "sha256": "dbdb52a351003f4565cda5883929830f64a1617a6f88c94accaa77efbb197ad0"
+        },
+        {
+          "path": "android/sdk-version.toml",
+          "byteLength": 25,
+          "sha256": "939865a47ce2307cb977b4a546dff8c1e9c875fcb75d05196d84ae2d29858a1b"
+        },
+        {
+          "path": "android/settings.gradle.kts",
+          "byteLength": 647,
+          "sha256": "7fdedfc18899fe97afd9ffd340c5ce9fb3f500f0f29fd94604ab95f340373ef9"
+        },
+        {
+          "path": "android/src/main/AndroidManifest.xml",
+          "byteLength": 72,
+          "sha256": "343d5be1ac17cdd45d1a2f2ddc616c509290e655869125a9422a96d88aa66066"
+        },
+        {
+          "path": "android/src/main/kotlin/dev/bota/sdk/flutter/BotaAndroidAdapter.kt",
+          "byteLength": 53643,
+          "sha256": "0305f37047f82bcf50e8f9086fd67dacc608b68f2be2058701c810db4a943f2c"
+        },
+        {
+          "path": "android/src/main/kotlin/dev/bota/sdk/flutter/BotaAndroidMapper.kt",
+          "byteLength": 26381,
+          "sha256": "809ae3285db3b1e8fe614d7e0715bb94b018577b85e56f1d7245666b0729ad1e"
+        },
+        {
+          "path": "android/src/main/kotlin/dev/bota/sdk/flutter/BotaApi.g.kt",
+          "byteLength": 179792,
+          "sha256": "c966b98372e83e8722c3bbbefc07e33ab3080a22a92c40b96817097dccb4cc34"
+        },
+        {
+          "path": "android/src/main/kotlin/dev/bota/sdk/flutter/BotaFlutterSdkPlugin.kt",
+          "byteLength": 1391,
+          "sha256": "593f2ce57badcedc0e1f9bb40b033bb9df991ee3a0a17e05ea10b9e2cd229d6e"
+        },
+        {
+          "path": "android/src/main/kotlin/dev/bota/sdk/flutter/NativeLeaseCoordinator.kt",
+          "byteLength": 13532,
+          "sha256": "889181f4205911a6a90889d015c0c92a59d8a8d10386d1cf5286492127f97c27"
+        },
+        {
+          "path": "android/src/test/kotlin/dev/bota/sdk/flutter/BotaAndroidAdapterTest.kt",
+          "byteLength": 41589,
+          "sha256": "51b6a841894df3f5c6380f35e0f8db2d38afd9cab4e4a2e0a419f2ee172ee1f3"
+        },
+        {
+          "path": "android/src/test/kotlin/dev/bota/sdk/flutter/NativeLeaseCoordinatorTest.kt",
+          "byteLength": 7393,
+          "sha256": "dd1ca321cfc2410590c379e9e14e5efb75413efa1e4a33765d0470b99f853505"
+        },
+        {
+          "path": "example/android/app/src/main/AndroidManifest.xml",
+          "byteLength": 2060,
+          "sha256": "9996715937a64aae5a1afd9358660004427a7b4b00a73869b1360dd074c15b76"
+        },
+        {
+          "path": "example/ios/Runner/Info.plist",
+          "byteLength": 1878,
+          "sha256": "40ab620da1e0239330229095cb431b1e658be5612cac85278f5a203315456bdf"
+        },
+        {
+          "path": "example/lib/main.dart",
+          "byteLength": 27070,
+          "sha256": "b772907c82dc06bcc32fae78346bc234c9d556f9eb71434bb3ce395a1132dedd"
+        },
+        {
+          "path": "example/pubspec.yaml",
+          "byteLength": 351,
+          "sha256": "33e33ac012545d86050f5e7e19b6231da70e8e46cfae4fa3ec499a9ceafc1b57"
+        },
+        {
+          "path": "ios/Tests/BotaAppleAdapterTests.swift",
+          "byteLength": 67153,
+          "sha256": "8abfbfd1c28ff48c73b7d1a264e7365e78eced81993aeedb9ea6a005d4615592"
+        },
+        {
+          "path": "ios/Tests/NativeLeaseCoordinatorTests.swift",
+          "byteLength": 9856,
+          "sha256": "7fb91eede6676cd976dedaa03d9f9425dcb2df5af8222965b1d7934a616f387d"
+        },
+        {
+          "path": "ios/bota_app_sdk.podspec",
+          "byteLength": 844,
+          "sha256": "3fe92b486c4eca44bea19ff2925f904e53eab7ad6202ce2e05b0ae12d87c082b"
+        },
+        {
+          "path": "ios/bota_app_sdk/Package.swift",
+          "byteLength": 752,
+          "sha256": "9b1b20d63e7233e01e043af3b9e18a0da9e4a02cdeff75b9537c9e4312a10b51"
+        },
+        {
+          "path": "ios/bota_app_sdk/Sources/bota_app_sdk/BotaApi.g.swift",
+          "byteLength": 182790,
+          "sha256": "b8cfac7ccd7de72af5888b22d42b8abdb21b1bc555ff7f1df7b1f540e688b5f0"
+        },
+        {
+          "path": "ios/bota_app_sdk/Sources/bota_app_sdk/BotaAppleAdapter.swift",
+          "byteLength": 59643,
+          "sha256": "a47db38c652a52de4e0ca8c6b8f9f6519771cb12a37d93d466f0a845222fd0ff"
+        },
+        {
+          "path": "ios/bota_app_sdk/Sources/bota_app_sdk/BotaAppleMapper.swift",
+          "byteLength": 24129,
+          "sha256": "b26535ac12b6170b58f6cfb0bf1ef3aa2d2e62d718c2fad7708ba81dbb1c2b5d"
+        },
+        {
+          "path": "ios/bota_app_sdk/Sources/bota_app_sdk/BotaFlutterSdkPlugin.swift",
+          "byteLength": 1390,
+          "sha256": "3c7be279b1a75285a835e880f91783bdaaf04252fec7ef3694c3606bf2c354b6"
+        },
+        {
+          "path": "ios/bota_app_sdk/Sources/bota_app_sdk/NativeLeaseCoordinator.swift",
+          "byteLength": 12501,
+          "sha256": "dc8e9bd57ca41b649fdb298aac5299df292e3e800f79e6c35d55b2677ceaa3c0"
+        },
+        {
+          "path": "lib/bota_app_sdk.dart",
+          "byteLength": 2797,
+          "sha256": "4364eb9c8a5ca47583ef8652c78aec65ddd080991f8cb49864ca4494ab466776"
+        },
+        {
+          "path": "lib/src/bridge_mapper.dart",
+          "byteLength": 23175,
+          "sha256": "f7073d00bea136985185df9cca822f9f701491c395f4dc41ab9c446b935ca507"
+        },
+        {
+          "path": "lib/src/client.dart",
+          "byteLength": 2059,
+          "sha256": "7fce5f1224c48ce9c58cbbfab35d3302cbc55e72caa601847d4ca88d55d55ec1"
+        },
+        {
+          "path": "lib/src/client_presence.dart",
+          "byteLength": 781,
+          "sha256": "d1c7ba9d675ffae9ca195dd939478d153767ec71517ee8db88cfdc96c2620234"
+        },
+        {
+          "path": "lib/src/errors.dart",
+          "byteLength": 4522,
+          "sha256": "5963bc18c9fc3a7cd21e7353232dde5bf5f4b821e5550e58cc94616311d7cc93"
+        },
+        {
+          "path": "lib/src/generated/bota_api.g.dart",
+          "byteLength": 152951,
+          "sha256": "7032ab5e20ae59a26f72a06c58284cef5cdf2fb6a9ce3b3457f7b7b3c2ae2cdb"
+        },
+        {
+          "path": "lib/src/managers.dart",
+          "byteLength": 10906,
+          "sha256": "470062cff271ef31a6e91307af6485a398f0304ee4b33ab462e74ac67776c7b5"
+        },
+        {
+          "path": "lib/src/models/device.dart",
+          "byteLength": 13149,
+          "sha256": "06cf88adcc293cf2c209d1ea95090551b684511dfc215b55fca70cf4087b8b11"
+        },
+        {
+          "path": "lib/src/models/ota.dart",
+          "byteLength": 2140,
+          "sha256": "9d21b7a2adce2ca459f0f0cc4d541f44107c27f8eb3483cc44d12a71c7828f63"
+        },
+        {
+          "path": "lib/src/models/recording.dart",
+          "byteLength": 6541,
+          "sha256": "1be0a0382cdcf99c5034e63d31dcd1136b846eedf7e1e67bf316dc46975b22fa"
+        },
+        {
+          "path": "lib/src/models/security.dart",
+          "byteLength": 9467,
+          "sha256": "7cfd05f8071b65ee11e0c5b7a995e6d31f3baf6d7a393783bc2568798520a984"
+        },
+        {
+          "path": "lib/src/models/settings.dart",
+          "byteLength": 4241,
+          "sha256": "7b71761dd989ecf265a56667b1ff5773b36827a9750b69e2fc42c0e9c8be5233"
+        },
+        {
+          "path": "lib/src/models/wifi.dart",
+          "byteLength": 3747,
+          "sha256": "32c72fa7a74e721cc13ce77ee1ae7d602e276408de5dbc3b859174e9c92e36ea"
+        },
+        {
+          "path": "lib/src/pigeon_platform.dart",
+          "byteLength": 35692,
+          "sha256": "b74f5711efde93ad8dbdf5fa49c85f6aa8157df42ae4f3a92f0c699dc5f281dd"
+        },
+        {
+          "path": "lib/src/platform.dart",
+          "byteLength": 3695,
+          "sha256": "dce9bbadabd388817c408c5c903b6b5b1dcb4e19aaed7ce3248dfc3baac84334"
+        },
+        {
+          "path": "lib/src/request_ids.dart",
+          "byteLength": 537,
+          "sha256": "2054c0ef31d6be187ae09f8dc33b291074372e5e9a3d1e6993c164d1762c79ec"
+        },
+        {
+          "path": "lib/src/sdk_identity.dart",
+          "byteLength": 137,
+          "sha256": "ac9bf59438e8237b33289ed0643c18c5f40db63b71ca6446b343807c2fbca0f8"
+        },
+        {
+          "path": "pigeon_options.yaml",
+          "byteLength": 326,
+          "sha256": "7d95c712941f63eebecd2157598df8844a0e236f5f5b0a870b25e6947bc7f4f4"
+        },
+        {
+          "path": "pigeons/bota_api.dart",
+          "byteLength": 21910,
+          "sha256": "3eaccbf515ea926d39c8b0d3e46f1fb7c3163869d5e768b9dc4c2420026cbd65"
+        },
+        {
+          "path": "pubspec.yaml",
+          "byteLength": 645,
+          "sha256": "57985f3b7e6ef21bdfe533e7922e5e408e5b13fecbffefdad32861c1de3b5241"
+        },
+        {
+          "path": "test/bridge_contract_test.dart",
+          "byteLength": 14122,
+          "sha256": "6e8075cbe4559189e0293648d6646fd7a3d52a90ca5a3d26b52b6378a1822710"
+        },
+        {
+          "path": "test/callback_broker_test.dart",
+          "byteLength": 15442,
+          "sha256": "b1d37525a4c24a2f0a12391acb5e6c5fad68de90a32fc7d743ddef5526c752b4"
+        },
+        {
+          "path": "test/client_lifecycle_test.dart",
+          "byteLength": 18873,
+          "sha256": "023ff0b20a28369d26f8655eab4a5ede9e40d66159b97d231c3c434af5217b1c"
+        },
+        {
+          "path": "test/example_device_console_test.dart",
+          "byteLength": 9589,
+          "sha256": "71ba79254fbd627a0cd487f3d12962eb43b00b7d23648ffe15b4ae9f175d3a26"
+        },
+        {
+          "path": "test/models_test.dart",
+          "byteLength": 6859,
+          "sha256": "b34aef832a48141df450c05b5626c179e19b4f6bd46bd04eb8d21a8c379aa993"
+        },
+        {
+          "path": "test/package_contract_test.dart",
+          "byteLength": 229,
+          "sha256": "98b292fd9b34d13f65b49f3b73cf9b1d99b2ae767a7ce1a5e9e83d502d3e2245"
+        },
+        {
+          "path": "test/public_api_test.dart",
+          "byteLength": 13107,
+          "sha256": "e0d9b77fc706db1950943dfc29291404bd90ef07bea2aa06e6fcbca6791bc76c"
+        },
+        {
+          "path": "test/stream_lifecycle_test.dart",
+          "byteLength": 14015,
+          "sha256": "8d00e0bf94bacf5828db0e6b587637c94a2606c74e0f285d10d070682f464193"
+        },
+        {
+          "path": "test/support/in_memory_bota_host_api.dart",
+          "byteLength": 12860,
+          "sha256": "7eab906386174c23cc918c55ffe674da924798236259480fc55feff28f8bbacd"
+        },
+        {
+          "path": "test/workflow_conformance_test.dart",
+          "byteLength": 20985,
+          "sha256": "7f1cbc21347b2d824f6e312149f0473d8066d50a451eba44c3ee931931cf3e73"
+        }
+      ],
+      "capabilities": [
+        "flutter_sdk"
+      ]
+    }
+  ]
+}

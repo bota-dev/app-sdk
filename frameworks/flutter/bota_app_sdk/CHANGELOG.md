@@ -1,3 +1,9 @@
+## 2.0.0-beta.8 (candidate)
+
+- Forward confirmed Android Bluetooth loss through the native connection stream.
+- Clear stale verified connection and presence state; preserve newer transport generations.
+- Keep explicit reconnect behavior and existing public APIs.
+
 ## 2.0.0-beta.7
 
 - Keep package publication pinned to the preserved library lock without requiring an unpublished example lock.
