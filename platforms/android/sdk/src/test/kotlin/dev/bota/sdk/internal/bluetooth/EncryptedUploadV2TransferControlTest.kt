@@ -16,6 +16,7 @@ import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -342,7 +343,9 @@ class EncryptedUploadV2TransferControlTest {
         val confirming = async(Dispatchers.Default) { control.confirm(9u, byteArrayOf(1)) {} }
         withContext(Dispatchers.Default) { withTimeout(TestSettlementTimeoutMilliseconds) { entered.await() } }
 
-        val during = async(Dispatchers.Default) {
+        // Queue the cancellation check on CONFIRM's held mutex before allowing
+        // the write to finish; dispatching later can observe an already-removed session.
+        val during = async(Dispatchers.Default, start = CoroutineStart.UNDISPATCHED) {
             control.confirmationAttemptedOrClaimCancellation(9u)
         }
         try {

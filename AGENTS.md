@@ -13,6 +13,11 @@ settle its producer; assert a closed channel with no failure under the existing
 five-second settlement watchdog. See
 `docs/parity/android-lost-ack-recovery.md` for the controlled teardown regression.
 
+CONFIRM cancellation tests must start the competing coroutine undispatched while
+the fake write holds the mutex. Checking `isCompleted` after an ordinary async
+launch does not prove entry; releasing the write can otherwise remove the session
+before the cancellation check starts. This is test ordering, not a runtime change.
+
 ## Repository Purpose
 
 - `app-sdk` is the source monorepo for the **Bota App SDK** family.
