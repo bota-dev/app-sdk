@@ -30,8 +30,7 @@ test('Flutter OIDC upload retains its registered identity and checks occupied ve
   assert.match(publisher, /prepare-publication.mjs/);
   assert.ok(publisher.indexOf('prepare-publication.mjs') < publisher.indexOf('uses: dart-lang'));
   assert.match(publisher, /if: steps.public-version.outputs.needs-publish == 'true'/);
-  assert.match(publisher, /pub get --enforce-lockfile/);
-  assert.match(publisher, /tar -xzf.*--directory "\$PUBLISH_ROOT"/);
+  assert.match(publisher, /tools\/flutter\/publish-preserved.sh --publish/);
 });
 
 function job(source, name) {
@@ -70,4 +69,16 @@ test('Flutter continues through the approved dependency graph without cross-work
   assert.doesNotMatch(flutter, /package-release.sh|actions\/workflows/);
   assert.match(job(workflow, 'verify'), /promote-ci.mjs/);
   assert.doesNotMatch(workflow, /tools\/(apple|android|flutter)\/package-release.sh|npm.*pack --pack-destination/);
+});
+
+test('CI dry-runs the same extracted and locked Flutter package used for publication', async () => {
+  const ci = await readWorkflow('.github/workflows/ci.yml');
+  const staging = await readWorkflow('tools/flutter/publish-preserved.sh');
+  assert.match(ci, /tools\/flutter\/publish-preserved.sh --dry-run/);
+  assert.ok(ci.indexOf('publish-preserved.sh --dry-run') < ci.indexOf('name: Upload Flutter candidate'));
+  assert.match(staging, /verify-candidate/);
+  assert.match(staging, /tar -xzf.*--directory "\$PUBLISH_ROOT"/);
+  assert.match(staging, /pub get --enforce-lockfile --no-example/);
+  assert.match(staging, /pub publish --dry-run/);
+  assert.match(staging, /pub publish --force/);
 });

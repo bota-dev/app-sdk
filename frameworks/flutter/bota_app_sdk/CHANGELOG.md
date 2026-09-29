@@ -1,3 +1,9 @@
+## 2.0.0-beta.7
+
+- Keep package publication pinned to the preserved library lock without requiring an unpublished example lock.
+- Verify the extracted candidate publication path in CI before tagging.
+- Runtime behavior is unchanged from beta.6.
+
 # Changelog
 
 ## 2.0.0-beta.6

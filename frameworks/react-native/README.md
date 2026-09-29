@@ -23,13 +23,13 @@ adopting this source API; published-package availability is a separate gate.
 
 ## Install
 
-This source prepares synchronized `2.0.0-beta.6`; use the exact pin below after
+This source prepares synchronized `2.0.0-beta.7`; use the exact pin below after
 publication. Version `2.0.0-beta.1` remains the previous published release.
 Remove `@bota.dev/react-native-sdk` before adding the replacement; do not
 co-install both. Production maintenance 0.0.x consumers need not migrate.
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.6
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.7
 npx pod-install
 ```
 

@@ -1,3 +1,14 @@
+# Current publication repair: 2.0.0-beta.7
+
+Beta.6 published Apple, Android and both npm packages; their public consumers
+passed. [Release 36510538351](https://github.com/bota-dev/app-sdk/actions/runs/36510538351)
+failed before Flutter upload because locked dependency resolution entered the
+example, whose lockfile is deliberately excluded from the archive. Do not retry
+that deterministic failure or move its tag. Beta.7 synchronizes the family with
+pub get --enforce-lockfile --no-example and a shared extracted-archive CI dry-run
+and publisher. Runtime behavior is unchanged; beta.6 mobile binaries remain valid.
+See [beta.7 preflight](../release/evidence/2.0.0-beta.7-preflight.md).
+
 # Releasing The Bota App SDK
 
 ## Current Candidate

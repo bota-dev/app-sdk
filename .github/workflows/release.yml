@@ -939,15 +939,7 @@ jobs:
 
       - name: Publish the preserved candidate files with pinned Flutter
         if: steps.public-version.outputs.needs-publish == 'true'
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          PUBLISH_ROOT="$(mktemp -d "$RUNNER_TEMP/flutter-publish.XXXXXX")"
-          trap 'rm -rf "$PUBLISH_ROOT"' EXIT
-          tar -xzf "target/flutter-release/bota_app_sdk-$VERSION.tar.gz" --directory "$PUBLISH_ROOT"
-          cp target/flutter-release/pubspec.lock "$PUBLISH_ROOT/pubspec.lock"
-          cd "$PUBLISH_ROOT"
-          "$GITHUB_WORKSPACE/tools/flutter/run-flutter.sh" pub get --enforce-lockfile
-          "$GITHUB_WORKSPACE/tools/flutter/run-flutter.sh" pub publish --force
+        run: tools/flutter/publish-preserved.sh --publish
 
   verify-flutter-publication:
     name: Verify Flutter publication

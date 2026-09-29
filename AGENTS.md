@@ -66,7 +66,7 @@ before the cancellation check starts. This is test ordering, not a runtime chang
   not change beta.1, enable v2 runtime metadata, or establish hardware/app
   acceptance.
 
-- Current source prepares synchronized `2.0.0-beta.6` for Web actions/client
+- Current source prepares synchronized `2.0.0-beta.7` for Web actions/client
   presence plus maintenance parity,
   native v2 integration, reconnect and transfer corrections, plus Web selected
   serial discovery. One Android BLE encrypted upload/cloud playback passed with

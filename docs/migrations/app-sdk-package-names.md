@@ -1,7 +1,7 @@
 # App SDK Package Names
 
-Current target: `2.0.0-beta.6`. Exact source CI and License Gate passed;
-the [release evidence](../../release/evidence/2.0.0-beta.6-preflight.md) links
+Current target: `2.0.0-beta.7`. Exact source CI and License Gate passed;
+the [release evidence](../../release/evidence/2.0.0-beta.7-preflight.md) links
 publication and clean public-consumer results. Confirm synchronized completion
 there before installing the versions below. Package availability, application
 rollout and physical acceptance remain separate claims.
@@ -30,15 +30,15 @@ compatibility forwarding package.
 
 ### Apple
 
-Keep the repository URL, pin `2.0.0-beta.6`, select product `BotaAppSDK`, and
+Keep the repository URL, pin `2.0.0-beta.7`, select product `BotaAppSDK`, and
 replace `import BotaAppleSDK` with `import BotaAppSDK`:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.6")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.7")
 .product(name: "BotaAppSDK", package: "app-sdk")
 ```
 
-For CocoaPods, use `pod 'BotaAppSDK', '2.0.0-beta.6'` instead of the old pod.
+For CocoaPods, use `pod 'BotaAppSDK', '2.0.0-beta.7'` instead of the old pod.
 The existing `BotaAppleSDKVersion` metadata type remains available from the
 new module. Runtime types and core binary names do not change.
 
@@ -54,7 +54,7 @@ Kotlin/Java namespaces, including the legacy adapter namespace, do not change.
 
 ```sh
 npm uninstall @bota.dev/react-native-sdk
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.6
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.7
 npx pod-install
 ```
 
@@ -74,7 +74,7 @@ supply scoped backend completion through `createUploadRecoveryProvider`.
 
 ```sh
 npm uninstall @bota.dev/web-sdk
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.6
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.7
 ```
 
 ```ts
@@ -85,7 +85,7 @@ Tenant-scoped persistence, permissions, and browser requirements do not change.
 
 ### Flutter
 
-Remove `bota_flutter_sdk`, add `bota_app_sdk: 2.0.0-beta.6`, then import:
+Remove `bota_flutter_sdk`, add `bota_app_sdk: 2.0.0-beta.7`, then import:
 
 ```dart
 import 'package:bota_app_sdk/bota_app_sdk.dart';

@@ -63,7 +63,7 @@ source package. Those overrides must retain the public package identity
 ## Release Candidate
 
 `tools/flutter/package-release.sh --check` is the complete local publication
-gate for selected synchronized `2.0.0-beta.6`; it must fail closed for occupied
+gate for selected synchronized `2.0.0-beta.7`; it must fail closed for occupied
 `1.2.0-beta.0`. It verifies
 synchronized metadata, Pigeon drift, formatting, analysis,
 all Dart tests, hosted dependency licenses, `flutter pub publish --dry-run`,
@@ -111,3 +111,8 @@ unsupported. The fake host may translate each fixture's decided terminal
 outcome into typed bridge values; it must not copy a workflow reducer into
 Dart. Encrypted Upload v2 staging and receipt-confirmed deletion are not
 exposed by this beta and must not be routed through legacy batch transfer.
+
+CI dry-runs tools/flutter/publish-preserved.sh against the extracted candidate
+using the preserved root lock and pub get --enforce-lockfile --no-example.
+The release uses the same helper with --publish; excluded example lockfiles
+must not be required during locked library resolution.

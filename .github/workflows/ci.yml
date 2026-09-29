@@ -75,7 +75,7 @@ jobs:
         run: node tools/baseline/react-native-api-contract.mjs validate --contract protocol/baseline/react-native-public-api-0.0.65.json --baseline-metadata protocol/baseline/react-native-sdk-0.0.65.json
 
       - name: Validate release manifest
-        run: cargo xtask release validate release/examples/2.0.0-beta.6.json
+        run: cargo xtask release validate release/examples/2.0.0-beta.7.json
 
       - name: Check generated protocol constants
         run: cargo xtask protocol generate --check
@@ -500,6 +500,10 @@ jobs:
           node tools/flutter/verify-publication.mjs verify-candidate \
             --archive "target/flutter-release/bota_app_sdk-$VERSION.tar.gz" \
             --inventory target/flutter-release/package-inventory.json
+
+      - name: Dry-run publication from the preserved Flutter archive
+        if: steps.package.outputs.candidate-ready == 'true'
+        run: tools/flutter/publish-preserved.sh --dry-run
 
       - name: Upload Flutter candidate
         if: steps.package.outputs.candidate-ready == 'true'
