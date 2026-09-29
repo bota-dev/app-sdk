@@ -1,5 +1,10 @@
 # Bota App SDK
 
+The standalone `@bota.dev/react-native-sdk` maintenance line was retired on
+September 29, 2026. New React Native integrations use
+`@bota.dev/react-native-app-sdk`. See the [retirement and migration notice](docs/migrations/react-native-sdk-sunset.md);
+existing old releases remain available and the successor is still beta.
+
 ## Client presence (beta.6)
 
 Web, Apple, Android, React Native and Flutter expose passive
@@ -28,8 +33,8 @@ and npm artifacts are public; Flutter publication failed before upload.
 The synchronized 2.0.0-beta.7 successor fixes publication staging without runtime
 changes. Its [release record](release/evidence/2.0.0-beta.7-preflight.md) tracks
 exact CI and public-consumer gates, which must pass before adopting the whole
-family. Installation examples select that candidate; stable promotion and
-standalone sunset remain separate.
+family. Installation examples select that release; stable promotion remains
+separate from the subsequent standalone retirement linked above.
 
 Future releases reuse verified artifacts from one exact successful main CI run.
 The tag records that run and its inventory checksum; one approval starts the

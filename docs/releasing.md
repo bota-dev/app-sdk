@@ -20,6 +20,10 @@ The existing single approval and exact CI-artifact promotion procedure applies.
 New native consumer binaries are required. No standalone package deprecation is
 part of this publication; that follows consumer rollout.
 
+The subsequent [September 29 standalone retirement](migrations/react-native-sdk-sunset.md)
+is a separate owner-authorized policy decision. It preserves occupied releases
+and does not promote the App SDK beta to stable.
+
 ### Previous candidate: beta.5
 
 `2.0.0-beta.5` is the owner-approved next synchronized candidate. It retains

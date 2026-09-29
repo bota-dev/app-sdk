@@ -1,6 +1,6 @@
 # App SDK Package Names
 
-Current target: `2.0.0-beta.7`. Exact source CI and License Gate are required;
+Current release: `2.0.0-beta.7`. Exact source CI and License Gate passed;
 the [release evidence](../../release/evidence/2.0.0-beta.7-preflight.md) links
 publication and clean public-consumer results. Confirm synchronized completion
 there before installing the versions below. Package availability, application
@@ -18,7 +18,9 @@ rollout and physical acceptance remain separate claims.
 | Flutter pub.dev and Dart library | `bota_flutter_sdk` | `bota_app_sdk` |
 
 Existing releases, tags, checksums, and old npm dist-tags remain unchanged.
-Production RN stays on `@bota.dev/react-native-sdk@0.0.x`. Applications must update their exact dependency pins and rebuild native binaries. Windows and a dedicated Electron facade
+The standalone React Native package is retired under the
+[September 29 sunset decision](react-native-sdk-sunset.md). Applications must
+update their exact dependency pins and rebuild native binaries. Windows and a dedicated Electron facade
 are outside this release.
 
 ## Replace, Do Not Co-install
@@ -45,7 +47,7 @@ new module. Runtime types and core binary names do not change.
 ### Android
 
 ```kotlin
-implementation("dev.bota:bota-app-sdk:2.0.0-beta.1")
+implementation("dev.bota:bota-app-sdk:2.0.0-beta.7")
 ```
 
 Kotlin/Java namespaces, including the legacy adapter namespace, do not change.

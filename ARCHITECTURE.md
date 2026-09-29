@@ -1,5 +1,9 @@
 # Architecture
 
+Standalone React Native maintenance ended September 29, 2026. The
+[retirement decision](docs/migrations/react-native-sdk-sunset.md) records the
+owner-approved beta-stage cutover, retained history and remaining acceptance limits.
+
 The 2.x source uses explicit App SDK distribution names. The historical beta.1
 release first verified the complete renamed family: Apple SwiftPM/CocoaPods,
 Android Maven, React Native/Web npm and Flutter pub.dev. The selected current

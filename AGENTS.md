@@ -35,6 +35,12 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Current Authority
 
+- Standalone React Native maintenance ended September 29, 2026 under the
+  owner-authorized [retirement decision](docs/migrations/react-native-sdk-sunset.md).
+  This supersedes the old stable-before-deprecation plan for that package only;
+  preserve published bytes/dist-tags and retain the beta/physical acceptance limits.
+  Earlier release checkpoints below describe their original scope.
+
 - Selected release source for synchronized 2.0.0-beta.7 is e3fd104. Its
   [release evidence](release/evidence/2.0.0-beta.7-preflight.md) distinguishes
   exact source/main CI from protected publication and public consumers.
