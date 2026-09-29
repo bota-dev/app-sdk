@@ -7,7 +7,7 @@ export {
   createBotaDeviceSDK,
 } from './client';
 export type {
-  SdkClientContext,
+  BotaClientPresenceContext,
   BotaClientPresence,
   BotaAsyncEventSubscription,
   BotaDeviceSDKCapabilities,
@@ -55,6 +55,10 @@ export const BotaDeviceSDK = createBotaDeviceSDK(NativeBotaDeviceSDK);
 setDefaultCompatibilityClient(BotaDeviceSDK);
 
 export { BotaClient } from './BotaClient';
+export type { ClientPresence, SdkClientContext } from './clientPresence';
+export { readClientPresenceObservation } from './clientPresence';
+export { createUploadRecoveryProvider } from './uploadRecovery';
+export type { UploadRecoveryBackend } from './uploadRecovery';
 
 export type {
   BleFactoryResetResult,

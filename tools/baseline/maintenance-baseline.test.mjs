@@ -29,10 +29,10 @@ test('maintenance additions have a separate current pin and explicit native-owne
   const contract = readJson(contractPath);
   const compatibility = readJson('protocol/compatibility/firmware-compatibility.json');
   assert.deepEqual(validateMaintenanceSelection({ contract, compatibility,
-    expectedRevision: '318974f925a573cf04b0d624978bee04784af09b' }), []);
+    expectedRevision: 'a894a8437d2a09df5841e609ac46170a84d998c7' }), []);
   assert.equal(compatibility.reactNativeMaintenanceBaseline.contract, contractPath);
-  assert.equal(contract.sourceExportCount, 109);
-  assert.equal(contract.additions.exports.length, 11);
+  assert.equal(contract.sourceExportCount, 111);
+  assert.equal(contract.additions.exports.length, 13);
   assert.equal(contract.excludedExports.length, 18);
   assert.equal(compatibility.encryptedUploadV2.status, 'contract_only');
   assert.equal(compatibility.encryptedUploadV2.runtimeWorkflow, false);

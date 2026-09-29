@@ -32,9 +32,9 @@ import type {
 } from './specs/NativeBotaDeviceSDK';
 import { SDK_PACKAGE, SDK_VERSION } from './sdkIdentity';
 
-export type SdkClientContext = NativeClientContext;
+export type BotaClientPresenceContext = NativeClientContext;
 export type BotaClientPresence = {
-  nextReport(deviceId: string): Promise<SdkClientContext | null>;
+  nextReport(deviceId: string): Promise<BotaClientPresenceContext | null>;
 };
 import type {
   ConnectedDevice,

@@ -2,6 +2,15 @@
 
 ## Current Candidate
 
+`2.0.0-beta.6` is the requested mobile parity release: standalone-compatible
+presence, fresh-session observation, scoped upload recovery helpers and the
+latest maintenance baseline. See [beta.6 preflight](../release/evidence/2.0.0-beta.6-preflight.md).
+The existing single approval and exact CI-artifact promotion procedure applies.
+New native consumer binaries are required. No standalone package deprecation is
+part of this publication; that follows consumer rollout.
+
+### Previous candidate: beta.5
+
 `2.0.0-beta.5` is the owner-approved next synchronized candidate. It retains
 beta.4's SDK behavior and uses the single release workflow to promote exact
 main-CI artifacts, including Flutter's preserved lock and evidence. See

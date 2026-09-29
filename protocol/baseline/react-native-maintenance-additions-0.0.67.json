@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "package": "@bota.dev/react-native-sdk",
   "packageVersion": "0.0.67",
-  "sourceRevision": "318974f925a573cf04b0d624978bee04784af09b",
-  "surfaceDigest": "70206e8349a1f83697f8b510684eebdf88a9cd145d86aba5b60e31a874923299",
-  "sourceExportCount": 109,
+  "sourceRevision": "a894a8437d2a09df5841e609ac46170a84d998c7",
+  "surfaceDigest": "7e8454dfbdf07213d5bcb9f53d5d1609faebf67700d4d8e8a7e6fc7ee729a215",
+  "sourceExportCount": 111,
   "frozenSurfaceDigest": "a020668e31dd204c2c3ab7232df8d5b0853e3027b9e37d1f7aab07f134bbd576",
   "toolchain": {
     "nodeMajor": 22,
@@ -12,12 +12,35 @@
     "sourceLockDigest": "c5107aee3a0398978afc6303302bf993989a941f9ee399d0fa0020383b046eb2"
   },
   "runtimeTestFiles": [
+    "__tests__/clientPresence.test.ts",
     "__tests__/encryptedUploadV2ProtocolHandler.test.ts",
     "__tests__/uploadRecovery.test.ts",
     "src/ble/__tests__/deviceDiagnostics.test.ts"
   ],
   "additions": {
     "exports": [
+      {
+        "name": "ClientPresence",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "nextReport",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "MethodSignature"
+            ],
+            "type": "(deviceId: string) => Promise<SdkClientContext | null>"
+          }
+        ],
+        "staticMembers": [],
+        "declaredType": "ClientPresence"
+      },
       {
         "name": "DeviceDiagnosticEvent",
         "runtime": false,
@@ -287,6 +310,73 @@
         "declaredType": "RecordingManagerOptions"
       },
       {
+        "name": "SdkClientContext",
+        "runtime": false,
+        "declarationKinds": [
+          "InterfaceDeclaration"
+        ],
+        "callSignatures": [],
+        "constructSignatures": [],
+        "members": [
+          {
+            "name": "platform",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "\"ios\" | \"android\""
+          },
+          {
+            "name": "schema_version",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "1"
+          },
+          {
+            "name": "sdk_package",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "sdk_version",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          },
+          {
+            "name": "sequence",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "number"
+          },
+          {
+            "name": "session_id",
+            "optional": false,
+            "readonly": false,
+            "declarationKinds": [
+              "PropertySignature"
+            ],
+            "type": "string"
+          }
+        ],
+        "staticMembers": [],
+        "declaredType": "SdkClientContext"
+      },
+      {
         "name": "UPLOAD_RECOVERY_VERSION",
         "runtime": true,
         "declarationKinds": [
@@ -417,6 +507,17 @@
       }
     ],
     "members": {
+      "BotaClient": [
+        {
+          "name": "clientPresence",
+          "optional": false,
+          "readonly": true,
+          "declarationKinds": [
+            "PropertyDeclaration"
+          ],
+          "type": "ClientPresence"
+        }
+      ],
       "BotaConfig": [
         {
           "name": "recordingDataStore",
@@ -455,6 +556,15 @@
             "MethodDeclaration"
           ],
           "type": "(device: ConnectedDevice) => Promise<DeviceDiagnosticsBatch>"
+        },
+        {
+          "name": "clientPresence",
+          "optional": false,
+          "readonly": true,
+          "declarationKinds": [
+            "PropertyDeclaration"
+          ],
+          "type": "ClientPresence"
         }
       ],
       "UploadInfo": [
@@ -643,6 +753,7 @@
   ],
   "sourceDifferencesFromFrozen": {
     "added": [
+      "ClientPresence",
       "DeviceDiagnosticEvent",
       "DeviceDiagnosticEventType",
       "DeviceDiagnosticReasonCode",
@@ -667,6 +778,7 @@
       "PersistedEncryptedUploadV2Checkpoint",
       "RecordingDataStore",
       "RecordingManagerOptions",
+      "SdkClientContext",
       "UPLOAD_RECOVERY_VERSION",
       "UploadRecoveryContext",
       "UploadRecoveryProvider",
@@ -681,6 +793,7 @@
       "BluetoothError.captureStackTrace",
       "BluetoothError.prepareStackTrace",
       "BluetoothError.stackTraceLimit",
+      "BotaClient.clientPresence",
       "BotaConfig.recordingDataStore",
       "BotaConfig.uploadRecoveryProvider",
       "BotaError.captureStackTrace",
@@ -690,6 +803,7 @@
       "DeviceError.prepareStackTrace",
       "DeviceError.stackTraceLimit",
       "DeviceManager.acknowledgeDiagnosticEvents",
+      "DeviceManager.clientPresence",
       "DeviceManager.readDiagnosticEvents",
       "ProvisioningError.captureStackTrace",
       "ProvisioningError.prepareStackTrace",

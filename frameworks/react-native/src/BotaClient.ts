@@ -1,4 +1,5 @@
 import EventEmitter from 'eventemitter3';
+import type { ClientPresence } from './clientPresence';
 
 import type { BotaDeviceSDKClient } from './client';
 import { getCompatibilityClient } from './compatibility/runtime';
@@ -31,6 +32,9 @@ const normalizeConfig = (config: BotaConfig): NormalizedConfig => ({
 });
 
 class BotaClientImpl extends EventEmitter<BotaClientEvents> {
+  readonly clientPresence: ClientPresence = {
+    nextReport: async (deviceId) => this._deviceManager?.clientPresence.nextReport(deviceId) ?? null,
+  };
   private _config: BotaConfig | null = null;
   private _state: SdkState = 'uninitialized';
   private _bluetoothState: BluetoothState = 'unknown';

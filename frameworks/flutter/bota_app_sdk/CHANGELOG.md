@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.0-beta.6
+
+- Synchronized release with React Native presence compatibility and scoped upload recovery helpers.
+
 ## 2.0.0-beta.5 (unreleased)
 
 - Pin Apple and Android to synchronized `2.0.0-beta.5`.

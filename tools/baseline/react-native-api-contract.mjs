@@ -337,7 +337,9 @@ export function validateCompatibleReactNativeSurface({ frozen, surface, addition
     for (const member of members) {
       if (entry.members.some((old) => old.name === member.name)) {
         errors.push(`${name}.${member.name}: cannot overwrite a frozen member`);
-      } else if (!member.optional && !member.declarationKinds.includes('MethodDeclaration')) {
+      } else if (!member.optional && !member.declarationKinds.includes('MethodDeclaration') &&
+        !(['BotaClient', 'DeviceManager'].includes(name) && member.name === 'clientPresence' &&
+          member.readonly && member.type === 'ClientPresence')) {
         errors.push(`${name}.${member.name}: addition must be an optional property or method`);
       } else {
         entry.members.push(member);
@@ -402,14 +404,16 @@ export function validateMaintenanceSource({ contract, source, toolchain }) {
 }
 
 const MAINTENANCE_EXPORTS = [
+  'ClientPresence', 'SdkClientContext',
   'DeviceDiagnosticEvent', 'DeviceDiagnosticEventType', 'DeviceDiagnosticReasonCode',
   'DeviceDiagnosticsBatch', 'DeviceDiagnosticsDecoder', 'diagnosticEventIdCommand',
   'RecordingDataStore', 'RecordingManagerOptions', 'UPLOAD_RECOVERY_VERSION',
   'UploadRecoveryContext', 'UploadRecoveryProvider',
 ];
 const MAINTENANCE_MEMBERS = {
+  BotaClient: ['clientPresence'],
   BotaConfig: ['recordingDataStore', 'uploadRecoveryProvider'],
-  DeviceManager: ['acknowledgeDiagnosticEvents', 'readDiagnosticEvents'],
+  DeviceManager: ['acknowledgeDiagnosticEvents', 'readDiagnosticEvents', 'clientPresence'],
   UploadInfo: ['alreadyUploaded', 'complete', 'dispose', 'recoveryScope', 'signal'],
   UploadTask: ['complete', 'fileSizeBytes', 'nextAttemptAt', 'recordingUuid', 'recoveryScope', 'relayUpload'],
 };
@@ -465,6 +469,7 @@ export function buildMaintenanceApiContract(options) {
     frozenSurfaceDigest: frozen.surfaceDigest,
     toolchain,
     runtimeTestFiles: [
+      '__tests__/clientPresence.test.ts',
       '__tests__/encryptedUploadV2ProtocolHandler.test.ts',
       '__tests__/uploadRecovery.test.ts',
       'src/ble/__tests__/deviceDiagnostics.test.ts',

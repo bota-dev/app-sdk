@@ -10,13 +10,14 @@ Old members, inherited APIs, signatures, optionality, and readonly modifiers
 must remain exact. Only literal union ordering is normalized.
 
 The separate maintenance source is `@bota.dev/react-native-sdk` `0.0.67` at
-`318974f925a573cf04b0d624978bee04784af09b`. The additions contract is
+`a894a8437d2a09df5841e609ac46170a84d998c7`. The additions contract is
 `protocol/baseline/react-native-maintenance-additions-0.0.67.json`.
-It records all 109 source exports by semantic digest, but requires only the
+It records all 111 source exports by semantic digest, but requires only the
 explicit scope below to be identical in the target React Native facade.
 
 | Scope | Exact additive surface |
 | --- | --- |
+| Presence | `ClientPresence`, `SdkClientContext`; readonly `BotaClient.clientPresence` and `DeviceManager.clientPresence` |
 | Diagnostics | `DeviceDiagnosticEvent`, `DeviceDiagnosticEventType`, `DeviceDiagnosticReasonCode`, `DeviceDiagnosticsBatch`, `DeviceDiagnosticsDecoder`, `diagnosticEventIdCommand` |
 | Device manager | `readDiagnosticEvents`, `acknowledgeDiagnosticEvents` |
 | Recovery types | `RecordingDataStore`, `RecordingManagerOptions`, `UploadRecoveryContext`, `UploadRecoveryProvider`, `UPLOAD_RECOVERY_VERSION` |
@@ -25,10 +26,10 @@ explicit scope below to be identical in the target React Native facade.
 | Upload task | Optional `complete`, `fileSizeBytes`, `nextAttemptAt`, `recordingUuid`, `recoveryScope`, `relayUpload` |
 | Construction | Preserve `constructor()` and add `constructor(options: RecordingManagerOptions)` |
 
-That is 11 new exports, 15 new members, and one explicit constructor overload.
+That is 13 new exports, 17 new members, and one explicit constructor overload.
 The gate rejects unlisted members on frozen exports, missing new exports,
 signature changes, and allowlist entries that overwrite frozen members or add
-required data properties. Additional target-native exports are not maintenance
+required data properties except the two explicitly enumerated readonly presence facades. Additional target-native exports are not maintenance
 parity claims and are outside this comparison.
 
 ## Deliberate Boundaries
@@ -54,7 +55,7 @@ parity claims and are outside this comparison.
 
 `reactNativeBaseline` remains frozen at `0.0.65`.
 `reactNativeWorkflowBaseline` and `reactNativeMaintenanceBaseline` both select
-the exact `318974f` commit. All eight workflow suites retain 33 scenarios;
+the exact `a894a84` commit. All eight workflow suites retain 33 scenarios;
 their commands and traces are unchanged. One obsolete source-test title was
 replaced by `resumes the same accepted checkpoint across negotiated payload
 changes`, which still asserts revision 7 and offset 100 rather than a reset.
@@ -90,12 +91,12 @@ checkout at `BOTA_REACT_NATIVE_SDK_PATH`:
 npm run test:tooling
 node tools/baseline/react-native-api-contract.mjs verify-maintenance \
   --sdk-path "$BOTA_REACT_NATIVE_SDK_PATH" \
-  --expected-commit 318974f925a573cf04b0d624978bee04784af09b \
+  --expected-commit a894a8437d2a09df5841e609ac46170a84d998c7 \
   --contract protocol/baseline/react-native-maintenance-additions-0.0.67.json \
   --baseline-metadata protocol/compatibility/firmware-compatibility.json \
   --frozen-contract protocol/baseline/react-native-public-api-0.0.65.json
 npm run test:workflows -- --sdk-path "$BOTA_REACT_NATIVE_SDK_PATH" \
-  --expected-commit 318974f925a573cf04b0d624978bee04784af09b
+  --expected-commit a894a8437d2a09df5841e609ac46170a84d998c7
 npm test --prefix frameworks/react-native
 ```
 
@@ -120,3 +121,20 @@ Regression tests were observed failing before implementation for missing
 additions checks, stale/mismatched source selection, source/lock/compiler drift,
 and incomplete maintenance test-file execution. The old constructor and missing
 public recovery exports also produced real target compatibility failures.
+
+## September 28 mobile adoption
+
+The maintenance source now includes passive presence and the recovered-upload ACK fix.
+`BotaClient.clientPresence` uses the exact standalone snake_case contract, backed by
+native connection sessions. The existing camelCase `BotaDeviceSDK.clientPresence`
+runtime is unchanged; its type is now named `BotaClientPresenceContext`.
+`SdkClientContext` names the standalone-compatible report.
+
+`readClientPresenceObservation` brackets a fresh host-supplied BLE read with
+connection-session checks and the host scope fence. `createUploadRecoveryProvider`
+validates original recording identity/evidence, parks foreign scopes, refreshes
+credentials and requires a completion callback even after an uploaded-state response.
+Hosts retain HTTP/auth ownership and SDK native files retain byte ownership.
+
+Local focused host tests and exact frozen/maintenance surface checks passed.
+Cross-platform CI, publication and consumer deployment remain separate release gates.

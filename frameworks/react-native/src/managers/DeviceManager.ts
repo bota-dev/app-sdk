@@ -1,4 +1,5 @@
 import EventEmitter from 'eventemitter3';
+import type { ClientPresence } from '../clientPresence';
 
 import type {
   BotaAsyncEventSubscription,
@@ -55,6 +56,17 @@ type CacheListener = (
 ) => void;
 
 export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
+  readonly clientPresence: ClientPresence = {
+    nextReport: async (deviceId) => {
+      if (this.destroyed) return null;
+      const report = await this.client.clientPresence.nextReport(deviceId);
+      if (this.destroyed || !report || (report.platform !== 'ios' && report.platform !== 'android')) return null;
+      return {
+        schema_version: 1, session_id: report.sessionId, sequence: report.sequence,
+        platform: report.platform, sdk_package: report.sdkPackage, sdk_version: report.sdkVersion,
+      };
+    },
+  };
   private readonly client: BotaDeviceSDKClient;
   private readonly discoveredDevices = new Map<string, DiscoveredDevice>();
   private readonly connectedDevices = new Map<string, ConnectedDevice>();

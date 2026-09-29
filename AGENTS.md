@@ -30,6 +30,13 @@ five-second settlement watchdog. See
 
 ## Current Authority
 
+- Beta.6 adds exact standalone presence compatibility through maintenance source
+  `a894a8437d2a09df5841e609ac46170a84d998c7`, fresh scoped observation and shared
+  legacy upload recovery. See `docs/parity/maintenance-baseline.md`. Native modern
+  presence uses `BotaClientPresenceContext`; compatibility `SdkClientContext` is
+  snake_case. The frozen 0.0.65 contract remains unchanged.
+
+
 - Web actions/client presence integration is source-only; see
   `docs/testing/web-actions-integration.md`. Keep one exclusive owner across
   nonce/provider preparation and workflow handoff. Validate successor document

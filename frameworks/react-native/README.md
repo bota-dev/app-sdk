@@ -8,7 +8,7 @@ into the native Apple and Android SDKs.
 ## Requirements
 
 Unreleased source adds `BotaDeviceSDK.clientPresence.nextReport(deviceId)`.
-It returns `SdkClientContext | null` from the native verified connection,
+It returns `BotaClientPresenceContext | null` from the native verified connection,
 preserving native session/sequence while identifying this React Native package
 and its generated version. It makes no HTTP call or device command. Destroy
 discards late metadata results. The host explicitly relays a report alongside
@@ -23,13 +23,13 @@ adopting this source API; published-package availability is a separate gate.
 
 ## Install
 
-This source prepares synchronized `2.0.0-beta.5`; use the exact pin below after
+This source prepares synchronized `2.0.0-beta.6`; use the exact pin below after
 publication. Version `2.0.0-beta.1` remains the previous published release.
 Remove `@bota.dev/react-native-sdk` before adding the replacement; do not
 co-install both. Production maintenance 0.0.x consumers need not migrate.
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.5
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.6
 npx pod-install
 ```
 
@@ -172,3 +172,25 @@ recording transfer, WiFi, OTA, and device-management guides.
 ## License
 
 MIT
+
+## Standalone migration additions (beta.6)
+
+`BotaClient.clientPresence.nextReport(deviceId)` and
+`BotaClient.devices.clientPresence.nextReport(deviceId)` return the standalone
+`SdkClientContext` shape (`schema_version`, `session_id`, `sequence`, `platform`,
+`sdk_package`, `sdk_version`) or null. This is passive diagnostic metadata.
+The existing modern facade still returns camelCase fields, now typed as
+`BotaClientPresenceContext`; callers that imported its former `SdkClientContext`
+type should rename that type import. No native wire fields changed.
+
+Use `readClientPresenceObservation` around a fresh status read and an exact host
+scope guard, then attach the report and the authorized `binding_generation` to
+the existing authenticated BLE heartbeat. Skip during competing work; do not
+add timers, replay offline reports, or treat metadata as device authority.
+
+Use `createUploadRecoveryProvider` with an authenticated, disposable
+`UploadRecoveryBackend` lease. The helper checks identity and evidence, obtains
+fresh credentials, and completes the original backend recording before native
+cleanup. Supply the initial `recoveryScope` and configure the provider before
+starting batch sync. Do not call backend completion only after the sync generator
+returns: device confirmation has already happened then.

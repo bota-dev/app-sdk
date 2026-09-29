@@ -32,7 +32,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: bota-dev/react-native-sdk
-          ref: 318974f925a573cf04b0d624978bee04784af09b
+          ref: a894a8437d2a09df5841e609ac46170a84d998c7
           path: .ci/react-native-workflow-baseline
 
       - name: Set up Node.js
@@ -75,7 +75,7 @@ jobs:
         run: node tools/baseline/react-native-api-contract.mjs validate --contract protocol/baseline/react-native-public-api-0.0.65.json --baseline-metadata protocol/baseline/react-native-sdk-0.0.65.json
 
       - name: Validate release manifest
-        run: cargo xtask release validate release/examples/2.0.0-beta.5.json
+        run: cargo xtask release validate release/examples/2.0.0-beta.6.json
 
       - name: Check generated protocol constants
         run: cargo xtask protocol generate --check

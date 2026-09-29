@@ -4,7 +4,7 @@
   "baseline": {
     "package": "@bota.dev/react-native-sdk",
     "version": "0.0.67",
-    "revision": "318974f925a573cf04b0d624978bee04784af09b"
+    "revision": "a894a8437d2a09df5841e609ac46170a84d998c7"
   },
   "scenarios": [
     {
