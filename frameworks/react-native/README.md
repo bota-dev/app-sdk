@@ -7,7 +7,7 @@ into the native Apple and Android SDKs.
 
 ## Requirements
 
-Unreleased source adds `BotaDeviceSDK.clientPresence.nextReport(deviceId)`.
+App SDK beta.6 and later expose `BotaDeviceSDK.clientPresence.nextReport(deviceId)`.
 It returns `BotaClientPresenceContext | null` from the native verified connection,
 preserving native session/sequence while identifying this React Native package
 and its generated version. It makes no HTTP call or device command. Destroy
@@ -23,10 +23,10 @@ adopting this source API; published-package availability is a separate gate.
 
 ## Install
 
-This source prepares synchronized `2.0.0-beta.7`; use the exact pin below after
-publication. Version `2.0.0-beta.1` remains the previous published release.
+The synchronized `2.0.0-beta.7` release is published; use the exact pin below.
 Remove `@bota.dev/react-native-sdk` before adding the replacement; do not
-co-install both. Production maintenance 0.0.x consumers need not migrate.
+co-install both. Standalone maintenance ended September 29, 2026; follow the
+[retirement and migration notice](../../docs/migrations/react-native-sdk-sunset.md).
 
 ```bash
 npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.7
