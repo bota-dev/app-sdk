@@ -41,6 +41,47 @@ import org.junit.Test
 
 class DeviceManagerTest {
     @Test
+    fun transportLossClosesStatusWithoutUnsubscribingAReplacement() = kotlinx.coroutines.runBlocking {
+        withTimeout(5_000) {
+            val events = Channel<ConfirmedBluetoothDisconnect>(Channel.UNLIMITED)
+            val subscribed = CompletableDeferred<Unit>()
+            val statusStopped = CompletableDeferred<Unit>()
+            val observerStopped = CompletableDeferred<Unit>()
+            val fixture = RuntimeFixture(
+                runner = FakeWorkflowRunner(connectionResponses()),
+                connectionIdentity = { "1" },
+                confirmedDisconnects = flow {
+                    try { for (event in events) emit(event) }
+                    finally { observerStopped.complete(Unit) }
+                },
+                statusUpdates = {
+                    flow {
+                        try {
+                            subscribed.complete(Unit)
+                            awaitCancellation()
+                        } finally { statusStopped.complete(Unit) }
+                    }
+                },
+            )
+            val manager = DeviceManager()
+            manager.attach(fixture.runtime)
+            try {
+                manager.connect("SERIAL-1", DiscoveredDevice("peripheral-1", rssi = -30))
+                val status = launch { manager.statusUpdates().collect() }
+                subscribed.await()
+                events.send(ConfirmedBluetoothDisconnect("peripheral-1", 1))
+                status.join()
+                statusStopped.await()
+                assertTrue(fixture.stoppedStatusUpdates.isEmpty())
+                assertEquals(null, fixture.runtime.connection.current())
+            } finally {
+                manager.detach()
+            }
+            observerStopped.await()
+        }
+    }
+
+    @Test
     fun confirmedTransportLossPublishesNullAndInvalidatesFacadeState() = kotlinx.coroutines.runBlocking {
         withTimeout(5_000) {
             val events = Channel<ConfirmedBluetoothDisconnect>(Channel.UNLIMITED)

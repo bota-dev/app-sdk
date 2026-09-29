@@ -38,7 +38,7 @@ native-transport ownership, and the observed beta.7 failure.
 | Invalidate verified state and presence | Exact-generation handler and registry/presence assertions | Implemented; execution pending |
 | Preserve replacement connections | Stale-generation regression and runtime lease check | Implemented; execution pending |
 | Reject loss during metadata reads | Transport identity recheck and controlled read regression | Implemented; execution pending |
-| Observer teardown | Native scope cancellation; RN stopAll cancels and joins | Implemented; execution pending |
+| Observer teardown | Status closure and detach-settlement regression; RN stopAll cancels and joins | Implemented; execution pending |
 | Public compatibility | Existing streams/events; no new public SDK symbols | Source review only |
 | Builds and physical recovery | Matching candidate still required | Unverified |
 
