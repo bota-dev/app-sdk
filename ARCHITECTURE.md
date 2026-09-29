@@ -7,10 +7,12 @@ pending gates. See the
 [migration guide](docs/migrations/app-sdk-package-names.md). Historical release
 records below retain their original names and versions.
 
-The current beta.5 candidate preserves beta.4 SDK behavior and uses the verified
-main CI artifacts for protected release promotion. Its publication and physical
-acceptance remain pending; see the
-[beta.5 preflight](release/evidence/2.0.0-beta.6-preflight.md).
+The beta.6 candidate adds standalone-compatible presence and shared scoped
+upload recovery. Hosts own authentication and backend completion; native SDK
+files retain recording bytes. It promotes verified main CI artifacts without
+rebuilding published payloads. See the
+[beta.6 release evidence](release/evidence/2.0.0-beta.6-preflight.md) for publication
+status and the separate hardware/application acceptance limits.
 
 ## Purpose
 

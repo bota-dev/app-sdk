@@ -1,6 +1,6 @@
 # Bota App SDK
 
-## Client presence (unreleased source)
+## Client presence (beta.6)
 
 Web, Apple, Android, React Native and Flutter expose passive
 `clientPresence.nextReport(deviceId)` metadata (Apple uses `deviceID:`).
@@ -22,13 +22,14 @@ The maintenance React Native SDK and deployed host applications are separate
 adoption steps. This source API is not evidence of a published package or
 physical-device acceptance.
 
-Current source prepares synchronized `2.0.0-beta.6`, carrying Web actions and
-client presence to maintenance parity,
-native encrypted-upload-v2 integration, reconnect and recording-transfer fixes,
-and Web selected-device serial discovery. Beta.5 uses verified CI artifact
-promotion to avoid the dependency drift that blocked beta.4. The
-installation examples remain pinned to verified public `2.0.0-beta.1` until
-the protected CI release completes. See [release status](docs/releasing.md).
+The `2.0.0-beta.6` release consolidates current maintenance-source presence
+and scoped upload recovery, alongside the native encrypted-v2, reconnect,
+recording-transfer and Web selected-device work. Exact source CI and License
+Gate passed; publication promotes those preserved artifacts without rebuilding.
+The [beta.6 release record](release/evidence/2.0.0-beta.6-preflight.md) links the
+authoritative publication and public-consumer workflow. Check that workflow's
+completion before adopting the synchronized family. The installation examples
+below select this exact beta; stable promotion and standalone sunset are separate.
 
 Future releases reuse verified artifacts from one exact successful main CI run.
 The tag records that run and its inventory checksum; one approval starts the
@@ -70,25 +71,26 @@ The synchronized App SDK is currently a beta. React Native consumers pin the
 exact prerelease:
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.1
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.6
 ```
 
 Apple and Android do not use npm dist-tags, so beta consumers pin the exact
 synchronized version shown in the installation sections below. New synchronized
 releases use `2.x.y-beta.n`; promotion to a stable channel is a separate release
-decision. The new-name npm `beta` tags point to `2.0.0-beta.1`; `latest` stays
+decision. The new-name npm `beta` tags point to `2.0.0-beta.6`; `latest` stays
 at `2.0.0-beta.0` under the owner-approved bootstrap exception. This is not
 stable promotion. Later betas must not advance `latest`. Historical npm tags
 are unchanged.
 
-Flutter `bota_app_sdk@2.0.0-beta.1` is published on pub.dev and its complete
-file inventory matches the approved candidate. Earlier 1.x candidates did not
-publish Flutter. Automatic PR/main CI runs verification and fresh consumer
-builds; publication remains a separate protected release action.
+Flutter publication uses the same beta.6 candidate inventory and release graph;
+its registry and public-file verification results are linked from the beta.6
+release record. Earlier 1.x candidates did not publish Flutter. Automatic
+PR/main CI runs verification and fresh consumer builds; publication remains a
+separate protected release action.
 
-## Current Status
+## Historical beta.1 checkpoint
 
-The published synchronized beta is `2.0.0-beta.1`. Its source composes
+The earlier synchronized `2.0.0-beta.1` release composes
 the foreground Web managers for picker and authorized reconnect, snapshots,
 recording workflows, provisioning and settings, WiFi, recording control, OTA,
 and device logs over one shared Rust/WASM runtime. Unit, packed-consumer, and
@@ -447,12 +449,12 @@ In Xcode, choose **File > Add Package Dependencies** and enter:
 https://github.com/bota-dev/app-sdk.git
 ```
 
-Select exact version `2.0.0-beta.1`, then add the
+Select exact version `2.0.0-beta.6`, then add the
 `BotaAppSDK` product to an iOS 15+ or macOS 13+ target. Swift packages can
 declare the dependency directly:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.1")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.6")
 ```
 
 Import and configure the client from application code:
@@ -474,7 +476,7 @@ provide the Bluetooth usage description shown to users.
 Pin the exact synchronized Maven Central beta:
 
 ```kotlin
-implementation("dev.bota:bota-app-sdk:2.0.0-beta.1")
+implementation("dev.bota:bota-app-sdk:2.0.0-beta.6")
 ```
 
 ## Flutter Beta Installation
@@ -484,7 +486,7 @@ build gates passed and `bota_app_sdk` is public on pub.dev. Pin the exact versio
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.1
+  bota_app_sdk: 2.0.0-beta.6
 ```
 
 See the
@@ -502,7 +504,7 @@ Historical packages remain available under their original names. Install the
 renamed package at its verified exact version:
 
 ```bash
-npm install @bota.dev/web-app-sdk@2.0.0-beta.1
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.6
 ```
 
 Web Bluetooth requires a secure context and a browser implementation that

@@ -1,10 +1,10 @@
 # App SDK Package Names
 
-Status: `2.0.0-beta.1` Apple SwiftPM/CocoaPods, Android Maven, React Native npm,
-Web npm, and Flutter pub.dev artifacts are public and verified. Clean public
-native consumers and fresh Flutter Android/iOS release builds passed. Hardware
-acceptance remains NOT RUN. See the
-[release runbook](../releasing.md) for the current publication checkpoint.
+Current target: `2.0.0-beta.6`. Exact source CI and License Gate passed;
+the [release evidence](../../release/evidence/2.0.0-beta.6-preflight.md) links
+publication and clean public-consumer results. Confirm synchronized completion
+there before installing the versions below. Package availability, application
+rollout and physical acceptance remain separate claims.
 
 **Bota App SDK** connects applications to physical Bota devices. The future
 **Bota API SDK** is a separate family for backend API clients.
@@ -18,8 +18,7 @@ acceptance remains NOT RUN. See the
 | Flutter pub.dev and Dart library | `bota_flutter_sdk` | `bota_app_sdk` |
 
 Existing releases, tags, checksums, and old npm dist-tags remain unchanged.
-Production RN stays on `@bota.dev/react-native-sdk@0.0.x`. Demo and Bota One
-are not upgraded by this migration. Windows and a dedicated Electron facade
+Production RN stays on `@bota.dev/react-native-sdk@0.0.x`. Applications must update their exact dependency pins and rebuild native binaries. Windows and a dedicated Electron facade
 are outside this release.
 
 ## Replace, Do Not Co-install
@@ -31,15 +30,15 @@ compatibility forwarding package.
 
 ### Apple
 
-Keep the repository URL, pin `2.0.0-beta.1`, select product `BotaAppSDK`, and
+Keep the repository URL, pin `2.0.0-beta.6`, select product `BotaAppSDK`, and
 replace `import BotaAppleSDK` with `import BotaAppSDK`:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.1")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.6")
 .product(name: "BotaAppSDK", package: "app-sdk")
 ```
 
-For CocoaPods, use `pod 'BotaAppSDK', '2.0.0-beta.1'` instead of the old pod.
+For CocoaPods, use `pod 'BotaAppSDK', '2.0.0-beta.6'` instead of the old pod.
 The existing `BotaAppleSDKVersion` metadata type remains available from the
 new module. Runtime types and core binary names do not change.
 
@@ -55,7 +54,7 @@ Kotlin/Java namespaces, including the legacy adapter namespace, do not change.
 
 ```sh
 npm uninstall @bota.dev/react-native-sdk
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.1
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.6
 npx pod-install
 ```
 
@@ -64,13 +63,18 @@ import { BotaClient, BotaDeviceSDK } from '@bota.dev/react-native-app-sdk';
 ```
 
 The `BotaDeviceSDK` native module, `BotaDeviceSDKSpec` Codegen identity, RN
-and native OS floors remain unchanged.
+and native OS floors remain unchanged by the package rename. The current
+React Native facade requires React 19.2.3+, RN 0.86.3+, Android API 26+ and
+iOS 15.1+. Remove standalone BLE packages and use one native SDK owner.
+Compatibility presence uses snake_case `SdkClientContext`; modern camelCase
+presence uses `BotaClientPresenceContext`. Native files replace JS byte stores;
+supply scoped backend completion through `createUploadRecoveryProvider`.
 
 ### Web
 
 ```sh
 npm uninstall @bota.dev/web-sdk
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.1
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.6
 ```
 
 ```ts
@@ -81,7 +85,7 @@ Tenant-scoped persistence, permissions, and browser requirements do not change.
 
 ### Flutter
 
-Remove `bota_flutter_sdk`, add `bota_app_sdk: 2.0.0-beta.1`, then import:
+Remove `bota_flutter_sdk`, add `bota_app_sdk: 2.0.0-beta.6`, then import:
 
 ```dart
 import 'package:bota_app_sdk/bota_app_sdk.dart';
@@ -109,7 +113,7 @@ and recovery paths. Flutter source validation rejects missing or mixed old/new
 native facade dependencies. Recovery selects names from the verified release version and preserves
 signed Central bytes and deployment UUIDs.
 
-RN/Web `beta` now selects beta.1; `latest` stays at beta.0. Actual new-name
+RN/Web `beta` now selects beta.6; `latest` stays at beta.0. Actual new-name
 npm and pub.dev OIDC uploads passed in beta.1. Registry propagation can lag
 publication; resume verification of the same occupied version instead of
 re-uploading or moving its tag.
