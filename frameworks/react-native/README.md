@@ -23,7 +23,8 @@ adopting this source API; published-package availability is a separate gate.
 
 ## Install
 
-The synchronized `2.0.0-beta.7` release is published; use the exact pin below.
+Published beta.7 remains available. Install this beta.8 source candidate with
+the exact pin below only after its publication is verified.
 Source candidate beta.8 adds Android disconnection events without requiring a
 status subscription. Its [preflight](../../release/evidence/2.0.0-beta.8-preflight.md)
 tracks the separate publication and adoption gates.
@@ -32,7 +33,7 @@ co-install both. Standalone maintenance ended September 29, 2026; follow the
 [retirement and migration notice](../../docs/migrations/react-native-sdk-sunset.md).
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.7
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.8
 npx pod-install
 ```
 

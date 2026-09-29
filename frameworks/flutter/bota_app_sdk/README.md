@@ -7,7 +7,8 @@ The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
 do not install both packages in the same application. Historical 1.x releases
 remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.8`.
 Published `2.0.0-beta.7` remains the installation baseline until beta.8 completes
-protected publication and public-consumer verification. Beta.8 forwards Android
+protected publication and public-consumer verification. The install pin below
+targets beta.8 after those gates pass. Beta.8 forwards Android
 connection loss through the existing connection stream; see the
 [preflight](../../../release/evidence/2.0.0-beta.8-preflight.md).
 
@@ -44,7 +45,7 @@ Pin the exact prerelease version after its publication:
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.7
+  bota_app_sdk: 2.0.0-beta.8
 ```
 
 For source development, point at an exact checkout rather than a moving branch:
