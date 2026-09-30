@@ -1,11 +1,13 @@
 # Bota SDK for Android
 
-Unpublished connection-loss propagation and its verification limits are recorded
-in the [review](../../docs/parity/android-disconnection-events.md). Confirmed GATT
-loss now invalidates exact-generation facade state independently of status reads;
-it does not automatically reconnect or authorize BLE upload fallback.
+Published beta.8 connection-loss propagation and the unreleased adapter-off
+follow-up are recorded in the [review](../../docs/parity/android-disconnection-events.md).
+Confirmed GATT loss invalidates exact-generation facade state independently of
+status reads. The follow-up also closes sessions when Android shuts down its
+adapter without delivering a GATT callback, and releases cancelled connection
+attempts. Neither change automatically reconnects or authorizes BLE upload fallback.
 
-This directory is the unpublished Android facade for the Bota App SDK family.
+This directory contains the Android facade for the Bota App SDK family.
 It produces `dev.bota:bota-app-sdk` from the synchronized version in the
 repository root. The AAR packages the frozen Rust ABI and a thin internal JNI
 ownership adapter. The public facade and one-major `com.bota.sdk` compatibility

@@ -38,6 +38,10 @@ framework streams. Cancelled connection attempts also close their GATT clients;
 late disconnect completion preserves newer driver generations. This adds no
 public adapter-power API or reconnect policy. See the
 [follow-up acceptance record](docs/parity/android-disconnection-events.md#adapter-off-follow-up).
+Its candidate passed three radio-off/explicit-reconnect cycles each through RN
+and Flutter on one Android 16 phone/Bota Pin firmware 1.0.19 pair. One initial
+RN connection timed out and recovered on retry. Publication and wider hardware,
+background and out-of-range acceptance remain separate.
 
 ## Purpose
 

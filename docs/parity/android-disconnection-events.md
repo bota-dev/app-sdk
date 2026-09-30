@@ -4,7 +4,9 @@ Status: published in `2.0.0-beta.8`; see the
 [release review](../../release/evidence/2.0.0-beta.8-preflight.md).
 The source and CI history below precede publication. Published-example checks
 passed native Kotlin radio-off/reconnect and RN loss delivery, but RN reconnect
-failed and Flutter missed an adapter-off event. Full recovery remains partial.
+failed and Flutter missed an adapter-off event. Published recovery remains partial.
+The unreleased adapter-off follow-up below passed three RN and three Flutter
+radio-off/explicit-reconnect cycles on the recorded Android phone/device pair.
 The published beta.7 examples exposed this gap on Android 16 with Bota Pin
 firmware 1.0.19. This change reports transport loss without a status subscription.
 
@@ -145,8 +147,8 @@ regressions pass after the fix. The local full suite passed 246/248 tests; two
 encrypted-transfer tests failed with a directory `AccessDeniedException` and
 a settlement timeout on Windows. A control run restored both original
 production files and reproduced those same two failures, then restored the exact
-candidate. No test is disabled; full hosted CI remains required. Physical and
-publication acceptance remain pending.
+candidate. No test is disabled. The subsequent hosted and bounded physical
+results are recorded below; publication acceptance remains pending.
 Local release lint cannot complete on Windows because its native prerequisite
 executes the repository's Bash Rust build script. The hosted native/lint gates
 remain required; no prerequisite is skipped to claim a local lint pass.
@@ -157,3 +159,82 @@ Guava 33.6.0-jre parent POM and Bouncy Castle 1.85 BOM POM. Their SHA-256 entrie
 were added after checking the bytes against Maven Central's SHA-512 checksums.
 Existing entries and strict verification remain unchanged. The exact amended
 revision must pass the complete hosted checks before main integration.
+
+### Follow-up design review
+
+Reviewed against App SDK Architecture sections 5.2, 5.4, 6.2–6.4 and 8, and
+Connection Management section 2.1. The broader design's automatic reconnect
+policy remains outside this bounded loss-notification and explicit-reconnect fix.
+
+| Requirement | Implementation and verification evidence | Status |
+| --- | --- | --- |
+| Platform reports loss without a GATT callback | Adapter receiver invokes the same terminal cleanup as GATT disconnect; API 26/35 framework regressions pass locally | matched in simulated lifecycle tests |
+| Release native ownership and pending work | GATT closes before pending work and observers settle; pending connect/read/notification and cancellation regressions pass | matched in simulated lifecycle tests |
+| Preserve newer sessions and serialized ownership | Receiver and GATT cleanup run on one handler; stale OFF/callback/disconnect and delayed driver completion regressions pass | matched in automated tests |
+| Receiver/observer lifecycle | Close unregisters the receiver, settles pending connect and terminates streams; regression passes on API 26/35 | matched in automated tests |
+| Frameworks delegate to native transport | Public RN and Flutter bindings are unchanged; both candidate phone labs received native loss events without app-side recovery substitutes | matched for tested Android bindings |
+| RN/Flutter loss notification and explicit reconnect | Three radio-off/reconnect/status cycles per framework on the exact candidate and recorded phone/device pair | matched for this bounded physical check |
+| General connection reliability and wider lifecycle coverage | One initial RN timeout recovered on retry; no out-of-range/background, other-phone, iPhone or transfer-interruption checks in this follow-up | partial; remaining cases unverified |
+| Published package availability | Beta.8 remains immutable; follow-up needs a new synchronized version | not implemented by this source fix |
+
+### Exact candidate evidence
+
+Follow-up source `4d36de598de1dbd2e573fca85e06724ac17abf15` passed
+[CI 36743986531](https://github.com/bota-dev/app-sdk/actions/runs/36743986531) and
+[License Gate 36743990238](https://github.com/bota-dev/app-sdk/actions/runs/36743990238).
+All platform jobs and the final release-candidate inventory passed. Android
+included the complete unit suite, release lint, native/legacy/RN consumers and
+API 26/35 emulator lanes. The two local Windows transfer failures did not recur
+in hosted CI.
+
+Android artifact `11112626484` has verified ZIP SHA-256
+`1a62c1cece84d917bfcb2c15b64e5bfb777406aca4e79b2a102acbac51788694`.
+The manifest identifies that exact source and the AAR SHA-256 is
+`f8beeb1a97e1e378c616eb83d5c89a46bfc279b15a8d65a57b2409dd8190eaf3`.
+The beta.8 coordinate here is isolated candidate metadata; it does not replace
+the public beta.8 artifact.
+
+Both phone labs derive from examples revision
+`022edbbb214927a53e2cc4774f674abcb0da16bd`. Their public beta.8 RN/Dart bindings
+are unchanged. Gradle resolves `dev.bota` exclusively from the candidate
+repository; resolved-artifact checks verify the AAR hash above in both apps.
+Lab-only UI additions display the discovered transport identifier for target
+selection and the SDK-read firmware beside the verified serial. Separate lab
+application IDs avoid overwriting the installed public examples. There are no
+app-side recovery, GATT or polling substitutes.
+
+The Flutter debug APK SHA-256 is
+`bb0cc56059c34e590ee88e9a0b0600c4df6c7294d7aa09d02c2df5ff29fc1332`.
+The self-contained RN release-mode test APK SHA-256 is
+`ac130501732c4ec3cce03385f53c70cd9dcbb1afd2fc4a3a9b846b1445354204`;
+it uses the example's debug signing and needs no Metro server. Both local
+Android builds passed. RN type/identity checks and Flutter analysis also passed.
+
+### Physical acceptance (2026-09-30)
+
+Samsung SM-A166U1 / Android 16 (API 36), with the same Bota Pin verified by the
+SDK's exact serial read and firmware `1.0.19`. The advertising name alone was
+not accepted as identity. Tests used only discovery, connection, identity/status
+reads and phone Bluetooth cycles; no wearable flash, provisioning, reset,
+recording, upload or deletion was performed.
+
+| App | Initial connection | Radio-off and explicit reconnect |
+| --- | --- | --- |
+| Flutter | First attempt verified serial/firmware and read status | 3/3 cycles automatically cleared connected state and disabled status reads; each first reconnect verified identity/firmware and read fresh status |
+| React Native | First attempt timed out after 10 seconds (`Some(-408)`); the log shows `cancelOpen`, `close` and `unregisterApp`. A retry in the same app session succeeded without another radio cycle | 3/3 cycles automatically removed connected/status actions; each first reconnect verified identity/firmware and read fresh status |
+
+Neither app was restarted or manually disconnected between the three cycles.
+After each restore, the test used the existing ten-second scan and connect UI.
+Scoped GATT logs show native `close()` on all six adapter shutdowns without a
+`connected=false` callback; the final explicit Disconnect did receive that
+callback. No GATT 133 occurred during these tests. This verifies the previously
+missed physical adapter-off path and bounded repeated explicit recovery. It
+does not prove that every connection attempt succeeds or that all causes of
+GATT 133 are fixed.
+
+The test apps were explicitly disconnected and stopped afterward. Phone
+Bluetooth was restored to ON, and no development-server forwarding remained.
+Published beta.8 examples still require a new immutable SDK release and package
+adoption before receiving this fix. Out-of-range/background recovery, other
+hardware/platforms, automatic reconnect and transfer interruption remain outside
+this acceptance claim.

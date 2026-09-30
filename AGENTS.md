@@ -62,7 +62,11 @@ before the cancellation check starts. This is test ordering, not a runtime chang
   from an old session; delayed disconnect completion must not erase a replacement
   driver's generation. Keep receiver registration paired with close and run the
   framework lifecycle regressions (Robolectric API 26/35) as well as driver tests.
-  These simulated tests do not establish physical RN/Flutter recovery.
+  Simulated tests and hosted CI pass. Candidate phone checks passed three
+  radio-off/explicit-reconnect cycles each for RN and Flutter on Samsung
+  SM-A166U1 / Android 16 / Bota Pin firmware 1.0.19. One initial RN timeout
+  recovered with a same-session retry. Keep that limit, exact artifact evidence
+  and pending public release separate from wider recovery acceptance.
 
 - Standalone React Native maintenance ended September 29, 2026 under the
   owner-authorized [retirement decision](docs/migrations/react-native-sdk-sunset.md).
