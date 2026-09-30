@@ -45,13 +45,13 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Current Authority
 
-- The next synchronized candidate is `2.0.0-beta.8`, carrying Android confirmed
-  disconnection propagation and RN event forwarding. See
-  [preflight](release/evidence/2.0.0-beta.8-preflight.md). Beta.7 remains the
-  current published release until the protected workflow and public consumers
-  pass. Do not overwrite its artifacts or advance npm `latest`.
+- The synchronized published beta is `2.0.0-beta.8`, carrying Android confirmed
+  disconnection propagation and RN event forwarding. Exact source is `8ad1328`;
+  [publication evidence](release/evidence/2.0.0-beta.8-preflight.md#publication-and-design-review)
+  records protected release and public consumers. Do not overwrite its artifacts
+  or advance npm `latest`. Application rollout and physical coverage stay separate.
 
-- Unpublished Android disconnect propagation connects confirmed GATT generations
+- Beta.8 Android disconnect propagation connects confirmed GATT generations
   to native connection observers and RN without a status subscription. Preserve
   runtime/generation fencing and do not unsubscribe a replacement during loss
   cleanup. See [validation](docs/parity/android-disconnection-events.md).

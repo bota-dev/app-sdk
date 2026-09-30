@@ -27,7 +27,7 @@ the existing `onDeviceDisconnected` event. Initial and repeated null values do
 not create extra notifications. The status-error path remains for compatibility.
 
 This does not add automatic reconnect attempts, report adapter power state,
-authorize upload fallback, change firmware, or publish a new package. Apps clear
+authorize upload fallback, change firmware, or alter provisioning. The fix is published in beta.8; apps clear
 selection on loss and explicitly reconnect after Bluetooth is restored.
 
 ## Source and automated design review
@@ -80,6 +80,8 @@ The physical acceptance procedure is: observe `connectionUpdates()` without
 subscribing to status, connect by verified exact serial, disable phone Bluetooth,
 observe null without calling Disconnect, restore Bluetooth, reconnect and read
 fresh status, then disconnect. Record the candidate digest, firmware, phone and
-result in PR #22. Radio-off evidence must not be generalized to out-of-range,
-background, other devices, or end-to-end RN/Flutter UI behavior. Public examples
-remain pinned to released beta.7 until a new SDK is published and adopted.
+result in the [beta.8 release review](../../release/evidence/2.0.0-beta.8-preflight.md).
+Radio-off evidence must not be generalized to out-of-range, background, other
+devices, or end-to-end RN/Flutter UI behavior. Published-example adoption and
+physical UI evidence are tracked in the
+[examples review](https://github.com/bota-dev/examples/blob/main/docs/independent-examples-review.md#beta8-adoption).

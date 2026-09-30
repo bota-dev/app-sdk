@@ -5,10 +5,10 @@ September 29, 2026. New React Native integrations use
 `@bota.dev/react-native-app-sdk`. See the [retirement and migration notice](docs/migrations/react-native-sdk-sunset.md);
 existing old releases remain available and the successor is still beta.
 
-Source candidate: **2.0.0-beta.8**, with Android connection-loss notification
-and stale-state cleanup. [Preflight and verification](release/evidence/2.0.0-beta.8-preflight.md).
-Installation commands below target this candidate after protected publication
-and public-consumer verification; use published beta.7 until those gates pass.
+Published synchronized beta: **2.0.0-beta.8**, with Android connection-loss
+notification and stale-state cleanup. The protected release verified public
+native consumers and the Flutter archive. [Publication and acceptance evidence](release/evidence/2.0.0-beta.8-preflight.md#publication-and-design-review).
+Rebuild native applications; restore Bluetooth and reconnect explicitly after loss.
 
 ## Client presence (beta.6)
 
@@ -38,7 +38,7 @@ and npm artifacts are public; Flutter publication failed before upload.
 The synchronized 2.0.0-beta.7 successor fixes publication staging without runtime
 changes. Its [release record](release/evidence/2.0.0-beta.7-preflight.md) tracks
 exact CI and public-consumer gates, which must pass before adopting the whole
-family. The next candidate installation pins are described above; stable promotion remains
+family. The current installation pins are described above; stable promotion remains
 separate from the subsequent standalone retirement linked above.
 
 Future releases reuse verified artifacts from one exact successful main CI run.
@@ -87,7 +87,7 @@ npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.8
 Apple and Android do not use npm dist-tags, so beta consumers pin the exact
 synchronized version shown in the installation sections below. New synchronized
 releases use `2.x.y-beta.n`; promotion to a stable channel is a separate release
-decision. The new-name npm `beta` tags point to `2.0.0-beta.7`; `latest` stays
+decision. The new-name npm `beta` tags point to `2.0.0-beta.8`; `latest` stays
 at `2.0.0-beta.0` under the owner-approved bootstrap exception. This is not
 stable promotion. Later betas must not advance `latest`. Historical npm tags
 are unchanged.

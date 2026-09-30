@@ -7,7 +7,7 @@ owner-approved beta-stage cutover, retained history and remaining acceptance lim
 The 2.x source uses explicit App SDK distribution names. The historical beta.1
 release first verified the complete renamed family: Apple SwiftPM/CocoaPods,
 Android Maven, React Native/Web npm and Flutter pub.dev. The selected current
-release is 2.0.0-beta.7; its [release evidence](release/evidence/2.0.0-beta.7-preflight.md)
+release is 2.0.0-beta.8; its [release evidence](release/evidence/2.0.0-beta.8-preflight.md#publication-and-design-review)
 tracks publication separately from application rollout and physical acceptance.
 See the [migration guide](docs/migrations/app-sdk-package-names.md). Historical
 checkpoints below retain their original names and versions.
@@ -25,9 +25,9 @@ library lock; excluded example locks are not required. It changes release
 tooling and SDK identity, without changing beta.6 runtime behavior. See the
 [beta.7 repair record](release/evidence/2.0.0-beta.7-preflight.md).
 
-The next synchronized candidate, `2.0.0-beta.8`, carries Android confirmed
-connection-loss propagation and RN forwarding without a status subscription.
-Beta.7 remains the published installation baseline during preparation. The
+Published `2.0.0-beta.8` carries Android confirmed connection-loss propagation
+and RN forwarding without a status subscription. Its protected publication and
+public native/Flutter consumers passed. The
 [beta.8 preflight](release/evidence/2.0.0-beta.8-preflight.md) separates source,
 physical recovery evidence, candidate checksums and public acceptance.
 
@@ -43,7 +43,7 @@ private normative design before merge.
 
 ## Boundaries
 
-Unpublished Android source propagates confirmed transport loss through native
+Beta.8 Android propagates confirmed transport loss through native
 connection updates and the RN event independently of status subscriptions.
 Runtime/GATT generation fences state invalidation; this does not report adapter
 power state or add automatic reconnect. See the

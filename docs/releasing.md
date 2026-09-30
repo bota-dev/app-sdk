@@ -1,8 +1,9 @@
-# Next candidate: 2.0.0-beta.8
+# Published synchronized beta: 2.0.0-beta.8
 
 The owner requested the next publication/adoption step after the Android
 Bluetooth-loss fix was pushed directly to main. Beta.8 carries that fix and
-synchronized package identity; beta.7 remains the current published release.
+synchronized package identity. Protected release `36652271187` completed
+publication and public-consumer verification for the preserved main-CI artifacts.
 See [beta.8 preflight](../release/evidence/2.0.0-beta.8-preflight.md).
 Prepare exact candidate checksums and require final main CI/License Gate before
 tagging. Keep the existing single human `release-approval` gate, immutable
@@ -11,7 +12,7 @@ direct-push workflow; feature-branch CI can validate the exact revision first.
 
 The following beta.7 and earlier sections retain their historical scope.
 
-# Current publication repair: 2.0.0-beta.7
+# Previous publication repair: 2.0.0-beta.7
 
 Beta.6 published Apple, Android and both npm packages; their public consumers
 passed. [Release 36510538351](https://github.com/bota-dev/app-sdk/actions/runs/36510538351)
