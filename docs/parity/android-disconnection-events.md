@@ -150,3 +150,10 @@ publication acceptance remain pending.
 Local release lint cannot complete on Windows because its native prerequisite
 executes the repository's Bash Rust build script. The hosted native/lint gates
 remain required; no prerequisite is skipped to claim a local lint pass.
+
+The first hosted follow-up run built the release AAR, then stopped at lint's
+test-classpath verification: clean Linux resolution also requested the
+Guava 33.6.0-jre parent POM and Bouncy Castle 1.85 BOM POM. Their SHA-256 entries
+were added after checking the bytes against Maven Central's SHA-512 checksums.
+Existing entries and strict verification remain unchanged. The exact amended
+revision must pass the complete hosted checks before main integration.
