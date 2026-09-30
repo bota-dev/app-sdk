@@ -1,5 +1,10 @@
 # Bota App SDK
 
+Source candidate **2.0.0-beta.9** adds Android adapter-off cleanup even when
+the system omits the GATT loss callback. Explicit reconnect remains required.
+Beta.8 is still the published installation baseline; see the
+[beta.9 preparation and acceptance review](release/evidence/2.0.0-beta.9-preflight.md).
+
 The standalone `@bota.dev/react-native-sdk` maintenance line was retired on
 September 29, 2026. New React Native integrations use
 `@bota.dev/react-native-app-sdk`. See the [retirement and migration notice](docs/migrations/react-native-sdk-sunset.md);

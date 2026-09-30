@@ -45,6 +45,12 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Current Authority
 
+- The next synchronized candidate is `2.0.0-beta.9`, adding Android adapter-off
+  cleanup when a GATT disconnect callback is absent. See the
+  [candidate review](release/evidence/2.0.0-beta.9-preflight.md). Beta.8 remains
+  the published baseline until protected publication and public consumers pass.
+  Regenerate the Flutter inventory after any packaged documentation change.
+
 - The synchronized published beta is `2.0.0-beta.8`, carrying Android confirmed
   disconnection propagation and RN event forwarding. Exact source is `8ad1328`;
   [publication evidence](release/evidence/2.0.0-beta.8-preflight.md#publication-and-design-review)

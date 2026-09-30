@@ -1,3 +1,12 @@
+# Next synchronized candidate: 2.0.0-beta.9
+
+Beta.9 packages the tested Android adapter-off recovery follow-up. The owner
+requested the next release and public-example adoption, with direct pushes and
+no PR. [Preparation and design review](../release/evidence/2.0.0-beta.9-preflight.md)
+separates candidate phone evidence, exact final CI, protected publication and
+public consumer acceptance. Preserve the single human `release-approval` gate,
+immutable artifacts and npm `latest`. Beta.8 remains published during preparation.
+
 # Published synchronized beta: 2.0.0-beta.8
 
 The owner requested the next publication/adoption step after the Android

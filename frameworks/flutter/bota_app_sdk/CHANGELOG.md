@@ -1,4 +1,11 @@
-## 2.0.0-beta.8 (candidate)
+## 2.0.0-beta.9 (candidate)
+
+- Retire Android connections and close GATT clients on adapter-off even when Android omits its disconnect callback.
+- Settle pending operations and cancelled connects; protect replacement sessions from delayed callbacks and cleanup.
+- Preserve explicit reconnect behavior and existing public APIs.
+- Pre-version RN and Flutter phone candidates passed three radio-off/reconnect cycles each; final published package acceptance remains separate.
+
+## 2.0.0-beta.8
 
 - Forward confirmed Android Bluetooth loss through the native connection stream.
 - Clear stale verified connection and presence state; preserve newer transport generations.

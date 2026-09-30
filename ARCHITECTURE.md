@@ -1,5 +1,10 @@
 # Architecture
 
+Source candidate **2.0.0-beta.9** adds Android adapter-off cleanup even when
+the system omits the GATT loss callback. Explicit reconnect remains required.
+Beta.8 is still the published installation baseline; see the
+[beta.9 preparation and acceptance review](release/evidence/2.0.0-beta.9-preflight.md).
+
 Standalone React Native maintenance ended September 29, 2026. The
 [retirement decision](docs/migrations/react-native-sdk-sunset.md) records the
 owner-approved beta-stage cutover, retained history and remaining acceptance limits.
