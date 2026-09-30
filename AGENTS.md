@@ -189,6 +189,13 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Invariants
 
+- Android explicit-disconnect cancellation must retire the captured GATT, not
+  only its waiter. Preserve one-shot exact-generation loss delivery after driver
+  `finally` removes active ownership; a new generation or close invalidates the
+  retired marker. Reuse the runtime loss collector for facade and encrypted
+  ownership cleanup. Run API 26/35 framework and controlled driver/facade ordering
+  regressions; see the [unreleased review](docs/parity/android-disconnection-events.md#explicit-disconnect-without-an-android-callback).
+
 - One synchronized SDK version comes from `sdk-version.toml`.
 - Rust owns protocol and deterministic workflow behavior.
 - Platform transports and lifecycle integration remain native.

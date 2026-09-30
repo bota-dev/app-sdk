@@ -2,11 +2,22 @@ package dev.bota.sdk.internal.bluetooth
 
 import dev.bota.sdk.BotaOperation
 import dev.bota.sdk.BotaSDKError
+import dev.bota.sdk.DeviceManager
+import dev.bota.sdk.FakeWorkflowRunner
+import dev.bota.sdk.RuntimeFixture
+import dev.bota.sdk.connectionResponses
+import dev.bota.sdk.model.DiscoveredDevice
+import dev.bota.sdk.model.ConnectedDevice
 import dev.bota.sdk.internal.core.CoreEffect
 import dev.bota.sdk.internal.core.CoreEffectKind
 import dev.bota.sdk.internal.jni.NativePacket
 import java.util.UUID
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.async
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +28,8 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -296,6 +309,166 @@ class BluetoothGattHostTest {
             observed.await(),
         )
     }
+
+    @Test
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun timedOutDisconnectStillReportsItsDelayedNativeClosureOnce() = runTest {
+        val platform = FakeBluetoothPlatform()
+        val driver = BluetoothGattDriver(platform, operationTimeoutMilliseconds = 100)
+        val events = Channel<ConfirmedBluetoothDisconnect>(Channel.UNLIMITED)
+        val observer = backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            driver.confirmedDisconnects().collect { events.send(it) }
+        }
+        driver.connect("device")
+        platform.disconnectGate = CompletableDeferred()
+        val result = runCatching { driver.disconnect("device") }
+        assertTrue(result.exceptionOrNull() is TimeoutCancellationException)
+        assertTrue(runCatching { driver.connectionGeneration("device") }.isFailure)
+
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 1))
+        assertEquals(ConfirmedBluetoothDisconnect("device", 1), withTimeout(5_000) { events.receive() })
+        assertTrue(driver.isCurrentDisconnectedGeneration(ConfirmedBluetoothDisconnect("device", 1)))
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 1))
+        runCurrent()
+        assertTrue(events.tryReceive().isFailure)
+        driver.connect("device")
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 1))
+        runCurrent()
+        assertEquals(2L, driver.connectionGeneration("device"))
+        assertEquals(514, driver.maximumWriteLength("device"))
+        assertTrue(events.tryReceive().isFailure)
+        observer.cancel()
+    }
+
+    @Test
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun replacementBeforeDelayedDisconnectClosureRejectsTheRetiredEvent() = runTest {
+        val platform = FakeBluetoothPlatform()
+        val driver = BluetoothGattDriver(platform, operationTimeoutMilliseconds = 100)
+        val events = Channel<ConfirmedBluetoothDisconnect>(Channel.UNLIMITED)
+        backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            driver.confirmedDisconnects().collect { events.send(it) }
+        }
+        driver.connect("device")
+        platform.disconnectGate = CompletableDeferred()
+        assertTrue(runCatching { driver.disconnect("device") }.exceptionOrNull() is TimeoutCancellationException)
+        driver.connect("device")
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 1))
+        runCurrent()
+        assertTrue(events.tryReceive().isFailure)
+        assertEquals(2L, driver.connectionGeneration("device"))
+        assertEquals(514, driver.maximumWriteLength("device"))
+    }
+
+    @Test
+    fun retiredClosureDoesNotCancelAReplacementWaitingForTheOperationQueue() = runTest {
+        val platform = FakeBluetoothPlatform()
+        val queue = GattOperationQueue()
+        val driver = BluetoothGattDriver(platform, queue, operationTimeoutMilliseconds = 100)
+        val events = Channel<ConfirmedBluetoothDisconnect>(Channel.UNLIMITED)
+        backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            driver.confirmedDisconnects().collect { events.send(it) }
+        }
+        driver.connect("device")
+        platform.disconnectGate = CompletableDeferred()
+        assertTrue(runCatching { driver.disconnect("device") }.exceptionOrNull() is TimeoutCancellationException)
+        val releaseQueue = CompletableDeferred<Unit>()
+        val queueEntered = CompletableDeferred<Unit>()
+        backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            queue.run("device") {
+                queueEntered.complete(Unit)
+                releaseQueue.await()
+            }
+        }
+        queueEntered.await()
+        val reconnecting = async(start = CoroutineStart.UNDISPATCHED) { driver.connect("device") }
+        assertTrue(runCatching { driver.connectionGeneration("device") }.isFailure)
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 1))
+        assertEquals(ConfirmedBluetoothDisconnect("device", 1), withTimeout(5_000) { events.receive() })
+        assertFalse(reconnecting.isCompleted)
+        releaseQueue.complete(Unit)
+        reconnecting.await()
+        assertEquals(2L, driver.connectionGeneration("device"))
+        assertEquals(514, driver.maximumWriteLength("device"))
+    }
+
+    @Test
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun closeRejectsTheRetiredSessionsDelayedClosure() = runTest {
+        val platform = FakeBluetoothPlatform()
+        val driver = BluetoothGattDriver(platform, operationTimeoutMilliseconds = 100)
+        val events = Channel<ConfirmedBluetoothDisconnect>(Channel.UNLIMITED)
+        backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            driver.confirmedDisconnects().collect { events.send(it) }
+        }
+        driver.connect("device")
+        platform.disconnectGate = CompletableDeferred()
+        assertTrue(runCatching { driver.disconnect("device") }.exceptionOrNull() is TimeoutCancellationException)
+        driver.close()
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 1))
+        runCurrent()
+        assertTrue(events.tryReceive().isFailure)
+    }
+
+    @Test
+    fun delayedNativeClosureClearsManagerAfterExplicitDisconnectTimesOut() = kotlinx.coroutines.runBlocking {
+        verifyDelayedManagerDisconnect(cancelCaller = false)
+    }
+
+    @Test
+    fun delayedNativeClosureClearsManagerAfterCallerCancelsDisconnect() = kotlinx.coroutines.runBlocking {
+        verifyDelayedManagerDisconnect(cancelCaller = true)
+    }
+
+    private suspend fun verifyDelayedManagerDisconnect(cancelCaller: Boolean) = kotlinx.coroutines.coroutineScope {
+        withTimeout(5_000) {
+            val platform = FakeBluetoothPlatform()
+            val driver = BluetoothGattDriver(platform, operationTimeoutMilliseconds = 100)
+            val handled = CompletableDeferred<Unit>()
+            val fixture = RuntimeFixture(
+                runner = FakeWorkflowRunner(connectionResponses()),
+                connectionIdentity = { runCatching { driver.connectionGeneration(it).toString() }.getOrNull() },
+                disconnectAction = driver::disconnect,
+                confirmedDisconnects = flow {
+                    driver.confirmedDisconnects().collect {
+                        emit(it)
+                        handled.complete(Unit)
+                    }
+                },
+            )
+            val manager = DeviceManager()
+            driver.connect("peripheral-1")
+            manager.attach(fixture.runtime)
+            val states = Channel<ConnectedDevice?>(Channel.UNLIMITED)
+            val observer = launch(start = CoroutineStart.UNDISPATCHED) {
+                manager.connectionUpdates().collect { states.send(it) }
+            }
+            try {
+                assertEquals(null, states.receive())
+                manager.connect("SERIAL-1", DiscoveredDevice("peripheral-1", rssi = -30))
+                assertEquals("SERIAL-1", states.receive()?.serialNumber)
+                platform.disconnectGate = CompletableDeferred()
+                val disconnecting = async(start = CoroutineStart.UNDISPATCHED) { manager.disconnect() }
+                platform.disconnectStarted.await()
+                if (cancelCaller) disconnecting.cancel(CancellationException("caller cancelled disconnect"))
+                val failure = runCatching { disconnecting.await() }.exceptionOrNull()
+                if (cancelCaller) {
+                    assertTrue(failure is CancellationException && failure !is TimeoutCancellationException)
+                } else {
+                    assertTrue(failure is TimeoutCancellationException)
+                }
+                platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("peripheral-1", 1))
+                handled.await()
+                assertEquals(null, states.receive())
+                assertEquals(null, fixture.runtime.connection.current())
+                assertEquals(null, manager.nextClientReport("peripheral-1"))
+                assertTrue(runCatching { manager.readStatus() }.exceptionOrNull() is BotaSDKError.Core)
+            } finally {
+                observer.cancel()
+                manager.detach()
+            }
+        }
+    }
 }
 
 private class FakeBluetoothPlatform(
@@ -308,6 +481,7 @@ private class FakeBluetoothPlatform(
     val connected = mutableListOf<String>()
     val disconnected = mutableListOf<String>()
     var disconnectGate: CompletableDeferred<Unit>? = null
+    val disconnectStarted = CompletableDeferred<Unit>()
     val readUuids = mutableListOf<Pair<UUID, UUID>>()
     val writeGate = mutableMapOf<String, CompletableDeferred<Unit>>()
     var nextStatus = 0
@@ -393,6 +567,7 @@ private class FakeBluetoothPlatform(
 
     override suspend fun disconnect(peripheralId: String, generation: Long): GattResult<Unit> {
         disconnected += peripheralId
+        disconnectStarted.complete(Unit)
         disconnectGate?.await()
         return result(generation, Unit)
     }

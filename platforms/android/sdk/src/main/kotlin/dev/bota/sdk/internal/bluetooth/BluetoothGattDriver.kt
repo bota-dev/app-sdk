@@ -50,6 +50,7 @@ internal class BluetoothGattDriver(
     private val generationLock = Any()
     private val generations = mutableMapOf<String, Long>()
     private val generationCounters = mutableMapOf<String, Long>()
+    private val retiredGenerations = mutableMapOf<String, Long>()
     private val negotiatedMtus = mutableMapOf<String, Int>()
 
     override suspend fun connectedAdvertisements(): List<BluetoothAdvertisement> = platform.connectedAdvertisements()
@@ -63,6 +64,7 @@ internal class BluetoothGattDriver(
             (generationCounters[peripheralId] ?: 0L).plus(1).also {
                 generationCounters[peripheralId] = it
                 generations[peripheralId] = it
+                retiredGenerations.remove(peripheralId)
             }
         }
         validate(peripheralId, generation, platform.connect(peripheralId, generation))
@@ -164,6 +166,8 @@ internal class BluetoothGattDriver(
                 if (generations[peripheralId] == generation) {
                     generations.remove(peripheralId)
                     negotiatedMtus.remove(peripheralId)
+                    // Native cancellation cleanup is posted to the GATT handler and can report loss later.
+                    retiredGenerations[peripheralId] = generation
                 }
             }
         }
@@ -178,16 +182,21 @@ internal class BluetoothGattDriver(
         }
 
     override fun confirmedDisconnects(): Flow<ConfirmedBluetoothDisconnect> = platform.confirmedDisconnects().transform { event ->
+        var cancelWork = false
         val accepted = synchronized(generationLock) {
-            (generations[event.peripheralId] == event.generation).also { current ->
-                if (current) {
-                    generations.remove(event.peripheralId)
-                    negotiatedMtus.remove(event.peripheralId)
-                }
+            if (generations[event.peripheralId] == event.generation) {
+                generations.remove(event.peripheralId)
+                negotiatedMtus.remove(event.peripheralId)
+                cancelWork = true
+                true
+            } else {
+                // Explicit disconnect already cancelled its work. Consume only its exact late closure;
+                // do not cancel by peripheral ID again because replacement work may now be queued.
+                retiredGenerations.remove(event.peripheralId, event.generation)
             }
         }
         if (accepted) {
-            queue.cancel(event.peripheralId)
+            if (cancelWork) queue.cancel(event.peripheralId)
             emit(event)
         }
     }
@@ -197,6 +206,7 @@ internal class BluetoothGattDriver(
         synchronized(generationLock) {
             generations.clear()
             negotiatedMtus.clear()
+            retiredGenerations.clear()
         }
         platform.close()
     }

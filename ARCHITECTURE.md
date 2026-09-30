@@ -50,6 +50,15 @@ RN connection timed out and recovered on retry. Those pre-version results remain
 separate from final public-package checks in the independent examples review.
 Wider hardware, background and out-of-range acceptance remain separate.
 
+The unreleased explicit-disconnect follow-up closes the exact GATT session on
+timeout/cancellation even if Android omits its callback. The driver retains a
+one-shot retired-generation marker until the native loss is consumed, a new
+generation replaces it, or the driver closes. This lets the existing runtime
+loss collector invalidate facade state and release encrypted-upload ownership
+even after the caller's wait ends. Late old loss cannot invalidate a replacement.
+See the [source review](docs/parity/android-disconnection-events.md#explicit-disconnect-without-an-android-callback);
+published beta.9 and the broader recovery acceptance remain unchanged.
+
 ## Purpose
 
 `app-sdk` is the source monorepo for the Bota App SDK family. It consolidates

@@ -2,6 +2,7 @@ package dev.bota.sdk.internal.bluetooth
 
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
@@ -158,6 +159,67 @@ class FrameworkAndroidBluetoothPlatformTest {
             assertTrue(shadowOf(gatt).isClosed)
         } finally {
             platform.close()
+        }
+    }
+
+    @Test
+    fun cancelledDisconnectClosesExactSessionAndSettlesWorkWithoutCallback() = runBlocking {
+        shadowOf(adapter).setState(BluetoothAdapter.STATE_ON)
+        val platform = FrameworkAndroidBluetoothPlatform(application)
+        val events = Channel<ConfirmedBluetoothDisconnect>(Channel.UNLIMITED)
+        val observer = launch(start = CoroutineStart.UNDISPATCHED) {
+            platform.confirmedDisconnects().collect { events.send(it) }
+        }
+        try {
+            val created = CompletableDeferred<BluetoothGatt>()
+            shadowOf(adapter.getRemoteDevice(address)).setGattConnectionInterceptor { created.complete(it) }
+            val connecting = async(start = CoroutineStart.UNDISPATCHED) { platform.connect(address, 1) }
+            val gatt = withTimeout(5_000) { created.await() }
+            assertTrue(gatt.connect())
+            assertEquals(0, withTimeout(5_000) { connecting.await() }.status)
+            val callback = shadowOf(gatt).gattCallback
+            val service = BluetoothGattService(BotaBluetoothUUIDs.DeviceInformationService, BluetoothGattService.SERVICE_TYPE_PRIMARY)
+            val characteristic = BluetoothGattCharacteristic(BotaBluetoothUUIDs.SerialNumber, BluetoothGattCharacteristic.PROPERTY_READ, BluetoothGattCharacteristic.PERMISSION_READ)
+            service.addCharacteristic(characteristic)
+            shadowOf(gatt).addDiscoverableService(service)
+            platform.discoverServices(address, 1)
+            shadowOf(gatt).allowCharacteristicNotification(characteristic)
+            platform.setNotification(address, 1, service.uuid, characteristic.uuid, true)
+            val notifications = platform.notifications(address, 1, service.uuid, characteristic.uuid)
+            val observing = async(start = CoroutineStart.UNDISPATCHED) { runCatching { notifications.collect {} } }
+            val reading = async(start = CoroutineStart.UNDISPATCHED) {
+                runCatching { platform.read(address, 1, service.uuid, characteristic.uuid) }
+            }
+            platform.connectedAdvertisements()
+            assertFalse(reading.isCompleted)
+            // Suppress only Android's callback, leaving the adapter enabled.
+            shadowOf(gatt).setGattCallback(object : BluetoothGattCallback() {})
+            val disconnecting = async(start = CoroutineStart.UNDISPATCHED) { platform.disconnect(address, 1) }
+            platform.connectedAdvertisements()
+            assertFalse(disconnecting.isCompleted)
+            disconnecting.cancel()
+            disconnecting.join()
+            platform.connectedAdvertisements()
+            assertTrue(disconnecting.isCancelled)
+            assertTrue(shadowOf(gatt).isClosed)
+            assertEquals(ConfirmedBluetoothDisconnect(address, 1), withTimeout(5_000) { events.receive() })
+            assertTrue(withTimeout(5_000) { reading.await() }.exceptionOrNull() is BluetoothTransportException)
+            assertTrue(withTimeout(5_000) { observing.await() }.exceptionOrNull() is BluetoothTransportException)
+
+            val replacementCreated = CompletableDeferred<BluetoothGatt>()
+            shadowOf(adapter.getRemoteDevice(address)).setGattConnectionInterceptor { replacementCreated.complete(it) }
+            val reconnecting = async(start = CoroutineStart.UNDISPATCHED) { platform.connect(address, 2) }
+            val replacement = withTimeout(5_000) { replacementCreated.await() }
+            assertTrue(replacement.connect())
+            assertEquals(0, withTimeout(5_000) { reconnecting.await() }.status)
+            callback.onConnectionStateChange(gatt, 0, BluetoothProfile.STATE_DISCONNECTED)
+            platform.connectedAdvertisements()
+            assertTrue(events.tryReceive().isFailure)
+            assertFalse(shadowOf(replacement).isClosed)
+            assertEquals(517, platform.requestMtu(address, 2, 517).value)
+        } finally {
+            platform.close()
+            observer.cancel()
         }
     }
 

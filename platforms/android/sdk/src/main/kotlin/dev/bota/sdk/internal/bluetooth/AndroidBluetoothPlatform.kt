@@ -476,7 +476,13 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
                 }
                 disconnects.remove(key)?.cancel()
                 disconnects[key] = continuation
-                continuation.invokeOnCancellation { handler.post { disconnects.remove(key) } }
+                continuation.invokeOnCancellation {
+                    handler.post {
+                        if (disconnects[key] === continuation) disconnects.remove(key)
+                        // Timeout/cancellation must release this client even if Android never calls back.
+                        if (gattGenerations[gatt] == generation) completeDisconnection(gatt, ImmediateFailure)
+                    }
+                }
                 gatt.disconnect()
             }
         }

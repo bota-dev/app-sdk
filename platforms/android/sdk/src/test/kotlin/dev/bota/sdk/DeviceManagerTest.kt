@@ -689,6 +689,7 @@ internal class RuntimeFixture(
     connectionIdentity: (String) -> String? = { "connection" },
     firmwareRead: suspend (String) -> ByteArray = { "1.0.17\u0000".toByteArray() },
     confirmedDisconnects: Flow<ConfirmedBluetoothDisconnect> = kotlinx.coroutines.flow.emptyFlow(),
+    disconnectAction: suspend (String) -> Unit = {},
 ) {
     var closeCount = 0
     val disconnects = mutableListOf<String>()
@@ -699,7 +700,7 @@ internal class RuntimeFixture(
         authorize = authorize,
         connectionIdentity = connectionIdentity,
         confirmedDisconnects = confirmedDisconnects,
-        disconnect = { disconnects += it },
+        disconnect = { disconnects += it; disconnectAction(it) },
         readStatus = readStatus,
         statusUpdates = statusUpdates,
         stopStatusUpdates = { stoppedStatusUpdates += it },

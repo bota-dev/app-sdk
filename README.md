@@ -17,6 +17,12 @@ records public-package builds and bounded phone recovery separately from SDK
 publication. Other hardware, background/out-of-range behavior and full recording
 workflows need their own acceptance.
 
+Unreleased Android source also retires an explicit disconnect when its wait
+times out or is cancelled without a system callback. Its exact-generation loss
+still reaches observers after driver cleanup. See the
+[source review](docs/parity/android-disconnection-events.md#explicit-disconnect-without-an-android-callback).
+Public beta.9 does not contain this follow-up; no reconnect reliability claim is added.
+
 ## Client presence (beta.6)
 
 Web, Apple, Android, React Native and Flutter expose passive

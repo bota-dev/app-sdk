@@ -249,3 +249,61 @@ The candidate sections above retain their original pre-version package scope.
 Final public-package example builds and phone observations are tracked in the
 [examples review](https://github.com/bota-dev/examples/blob/main/docs/independent-examples-review.md#beta9-adoption).
 This publication does not broaden the physical or automatic-reconnect claims.
+
+## Explicit disconnect without an Android callback
+
+Status: source follow-up to beta.9; not published. The published beta.9 artifacts
+remain immutable. This follow-up addresses explicit disconnect timeout/cancellation
+while the adapter stays on and Android does not deliver its disconnect callback.
+It is separate from adapter shutdown and from the example's observed GATT 8/133
+reconnect failures, whose failed clients already closed promptly.
+
+Previously, cancellation removed only the platform's waiting continuation. The
+driver's `finally` then removed generation ownership, leaving the native GATT
+open until replacement or SDK close. Merely closing that GATT on cancellation
+would still lose an event delivered after driver ownership was removed.
+
+Acceptance requires exact-client closure, settlement of pending work and
+notification streams, one accepted generation-tagged loss, and facade/registry/
+presence invalidation while preserving the caller's timeout or cancellation.
+Both event-before-finally and event-after-finally ordering must work. Old cleanup,
+duplicate events and late callbacks must preserve a newer same-peripheral session.
+The existing runtime loss collector owns encrypted-upload cleanup; timeout is
+not authority to delete files, reset the device or start a competing upload path.
+
+The design authority is App SDK Architecture sections 5.2, 5.4, 6.2-6.4 and 8,
+plus Connection Management section 2.1. Platform lifecycle tests use Robolectric
+API 26/35; driver and facade tests use controlled event ordering. These are
+simulated lifecycle checks, not physical-device or general reconnect acceptance.
+
+### Implementation and verification
+
+The platform's cancellation handler retires the captured GATT generation through
+the existing terminal cleanup path. The driver keeps one retired generation per
+peripheral until its delayed native loss is consumed, a replacement starts, or
+the driver closes. Consuming retired loss does not cancel the peripheral queue
+again: explicit disconnect already cancelled its old work, and a new connection
+may now be waiting there. No public API, package version, firmware behavior or
+automatic reconnect policy changed.
+
+The unchanged-production baseline ran 29 tests and reproduced four failures:
+native closure on API 26 and 35, delayed driver loss, and delayed facade cleanup.
+After the fix, all 61 tests across `FrameworkAndroidBluetoothPlatformTest` (10),
+`BluetoothGattHostTest` (22), `DeviceManagerTest` (25) and `DeviceRuntimeTest` (4)
+passed locally. Independent source/test review found no blocking issue. The
+existing full CI and License Gate remain required for the exact revision before
+main integration; they cover packaging and consumers beyond these local checks.
+
+| Requirement / authority | Implementation and evidence | Status |
+| --- | --- | --- |
+| Platform lifecycle, App SDK Architecture section 5.2 | Exact captured GATT closes with the callback withheld and adapter still on; pending read and notification streams fail; API 26/35 regressions pass | matched in simulated lifecycle tests |
+| Cancellation and failure remain observable | Driver/facade regressions preserve timeout and caller cancellation, then observe delayed native loss | matched in controlled tests |
+| Native/framework state, sections 6.2-6.4 and 8 | Actual driver loss flow clears facade connection updates, registry and client presence after failed disconnect; existing runtime collector retains encrypted-ownership reset | matched in driver/facade tests and runtime path review |
+| Serialization and replacement, section 5.4 | Late and duplicate loss cannot clear a replacement; queued reconnect survives retired loss; driver close clears retained markers | matched in controlled tests |
+| Connection Management section 2.1 | Explicit disconnect performs local cleanup only; no reconnect loop, firmware mutation or upload fallback added | matched by source review |
+| Publication and physical reliability | Beta.9 unchanged; no new physical-device test or claim about the earlier GATT 8/133 failures | unverified beyond the recorded simulated scope; new publication required for consumer adoption |
+
+Changed-symbol and timeout/cancellation searches covered the SDK docs, workspace
+internal/public docs and repository README/ARCHITECTURE/AGENTS/CLAUDE surfaces.
+No target design or released API contract changed. This record and the SDK's
+README, architecture and contributor guidance describe the unreleased behavior.
