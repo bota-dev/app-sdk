@@ -1,6 +1,7 @@
 package dev.bota.sdk.internal.bluetooth
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
@@ -14,6 +15,9 @@ import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
@@ -244,6 +248,28 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
     private var scanCallback: ScanCallback? = null
     private var closeScan: (() -> Unit)? = null
     private var gattCallback: BluetoothGattCallback? = null
+    private var closed = false
+    private val adapterReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (closed || intent.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+            val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+            if (state != BluetoothAdapter.STATE_TURNING_OFF && state != BluetoothAdapter.STATE_OFF) return
+            // A delayed OFF broadcast must not retire a session created after Bluetooth was restored.
+            if (manager.adapter?.isEnabled == true) return
+            stopScanOnHandler()
+            gatts.values.toList().forEach { completeDisconnection(it, BluetoothGatt.GATT_SUCCESS) }
+        }
+    }
+
+    init {
+        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+        // This is a protected system action sent by the privileged Bluetooth process.
+        if (Build.VERSION.SDK_INT >= 33) {
+            applicationContext.registerReceiver(adapterReceiver, filter, null, handler, Context.RECEIVER_EXPORTED)
+        } else {
+            applicationContext.registerReceiver(adapterReceiver, filter, null, handler)
+        }
+    }
 
     override val apiLevel: Int = Build.VERSION.SDK_INT
 
@@ -297,6 +323,8 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
         suspendCancellableCoroutine { continuation ->
             handler.post {
                 try {
+                    if (closed) throw BluetoothTransportException(499, "closed")
+                    if (manager.adapter?.isEnabled != true) throw BluetoothTransportException(503, "Bluetooth adapter is not on")
                     val device = devices[peripheralId] ?: manager.adapter.getRemoteDevice(peripheralId).also {
                         devices[peripheralId] = it
                     }
@@ -312,15 +340,16 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
                         handler,
                     )
                     gatts.put(peripheralId, gatt)?.let { oldGatt ->
-                        gattGenerations.remove(oldGatt)
                         oldGatt.disconnect()
-                        oldGatt.close()
+                        completeDisconnection(oldGatt, ImmediateFailure)
                     }
                     gattGenerations[gatt] = generation
                     continuation.invokeOnCancellation {
                         handler.post {
-                            connects.remove(key)
-                            gatt.disconnect()
+                            if (gattGenerations[gatt] == generation) {
+                                gatt.disconnect()
+                                completeDisconnection(gatt, ImmediateFailure)
+                            }
                         }
                     }
                 } catch (error: Throwable) {
@@ -441,7 +470,7 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
             handler.post {
                 val key = OperationKey(peripheralId, generation)
                 val gatt = gatts[peripheralId]
-                if (gatt == null) {
+                if (gatt == null || gattGenerations[gatt] != generation) {
                     continuation.resume(GattResult(generation, 0, Unit))
                     return@post
                 }
@@ -456,15 +485,17 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
 
     override fun close() {
         handler.post {
+            if (closed) return@post
+            closed = true
+            applicationContext.unregisterReceiver(adapterReceiver)
             stopScanOnHandler()
-            gatts.values.forEach {
+            confirmedDisconnects.close()
+            gatts.values.toList().forEach {
                 it.disconnect()
-                it.close()
+                completeDisconnection(it, 499)
             }
-            gatts.clear()
             notificationStreams.values.forEach { it.fail(BluetoothTransportException(499, "closed")) }
             notificationStreams.clear()
-            confirmedDisconnects.close()
             thread.quitSafely()
         }
     }
@@ -477,13 +508,7 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
                 if (newState == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
                     connects.remove(key)?.resume(GattResult(generation, status, Unit))
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                    connects.remove(key)?.resume(GattResult(generation, status.takeIf { it != 0 } ?: ImmediateFailure, Unit))
-                    disconnects.remove(key)?.resume(GattResult(generation, status, Unit))
-                    failNotifications(gatt.device.address, generation, status)
-                    confirmedDisconnects.offer(ConfirmedBluetoothDisconnect(gatt.device.address, generation))
-                    if (gatts[gatt.device.address] === gatt) gatts.remove(gatt.device.address)
-                    gattGenerations.remove(gatt)
-                    gatt.close()
+                    completeDisconnection(gatt, status)
                 }
             }
         }
@@ -575,10 +600,33 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
         return CharacteristicKey(gatt.device.address, generation, characteristic.service.uuid, characteristic.uuid)
     }
 
-    private fun failNotifications(peripheralId: String, generation: Long, status: Int) {
+    private fun completeDisconnection(gatt: BluetoothGatt, status: Int) {
+        val generation = gattGenerations.remove(gatt) ?: return
+        val peripheralId = gatt.device.address
+        if (gatts[peripheralId] === gatt) gatts.remove(peripheralId)
+        gatt.close()
+        val key = OperationKey(peripheralId, generation)
         val error = BluetoothTransportException(status, "device disconnected")
-        notificationStreams.filterKeys { it.peripheralId == peripheralId && it.generation == generation }
-            .values.forEach { it.fail(error) }
+        connects.remove(key)?.resume(GattResult(generation, status.takeIf { it != 0 } ?: ImmediateFailure, Unit))
+        disconnects.remove(key)?.resume(GattResult(generation, status, Unit))
+        mtus.remove(key)?.resumeWithException(error)
+        discoveries.remove(key)?.resumeWithException(error)
+        failPending(reads, peripheralId, generation, error)
+        failPending(writes, peripheralId, generation, error)
+        failPending(descriptors, peripheralId, generation, error)
+        notificationStreams.keys.filter { it.peripheralId == peripheralId && it.generation == generation }
+            .forEach { notificationStreams.remove(it)?.fail(error) }
+        confirmedDisconnects.offer(ConfirmedBluetoothDisconnect(peripheralId, generation))
+    }
+
+    private fun <T> failPending(
+        pending: MutableMap<CharacteristicKey, CancellableContinuation<GattResult<T>>>,
+        peripheralId: String,
+        generation: Long,
+        error: Throwable,
+    ) {
+        pending.keys.filter { it.peripheralId == peripheralId && it.generation == generation }
+            .forEach { pending.remove(it)?.resumeWithException(error) }
     }
 
     private suspend fun <T> pending(

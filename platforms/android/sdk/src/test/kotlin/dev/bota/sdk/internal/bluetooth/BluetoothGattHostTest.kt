@@ -259,6 +259,24 @@ class BluetoothGattHostTest {
     }
 
     @Test
+    fun delayedDisconnectCompletionDoesNotEraseAReplacementGeneration() = runTest {
+        val platform = FakeBluetoothPlatform()
+        val driver = BluetoothGattDriver(platform)
+        driver.connect("device")
+        val gate = CompletableDeferred<Unit>()
+        platform.disconnectGate = gate
+        val disconnecting = async(start = CoroutineStart.UNDISPATCHED) { driver.disconnect("device") }
+        val lost = async(start = CoroutineStart.UNDISPATCHED) { driver.confirmedDisconnects().first() }
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 1))
+        lost.await()
+        driver.connect("device")
+        gate.complete(Unit)
+        disconnecting.await()
+        assertEquals(2L, driver.connectionGeneration("device"))
+        assertEquals(514, driver.maximumWriteLength("device"))
+    }
+
+    @Test
     fun confirmedDisconnectIgnoresOldAndDuplicateGattGenerations() = runTest {
         val platform = FakeBluetoothPlatform()
         val driver = BluetoothGattDriver(platform)
@@ -289,6 +307,7 @@ private class FakeBluetoothPlatform(
     val calls = mutableListOf<String>()
     val connected = mutableListOf<String>()
     val disconnected = mutableListOf<String>()
+    var disconnectGate: CompletableDeferred<Unit>? = null
     val readUuids = mutableListOf<Pair<UUID, UUID>>()
     val writeGate = mutableMapOf<String, CompletableDeferred<Unit>>()
     var nextStatus = 0
@@ -374,6 +393,7 @@ private class FakeBluetoothPlatform(
 
     override suspend fun disconnect(peripheralId: String, generation: Long): GattResult<Unit> {
         disconnected += peripheralId
+        disconnectGate?.await()
         return result(generation, Unit)
     }
 

@@ -161,8 +161,10 @@ internal class BluetoothGattDriver(
             }
         } finally {
             synchronized(generationLock) {
-                generations.remove(peripheralId)
-                negotiatedMtus.remove(peripheralId)
+                if (generations[peripheralId] == generation) {
+                    generations.remove(peripheralId)
+                    negotiatedMtus.remove(peripheralId)
+                }
             }
         }
     }

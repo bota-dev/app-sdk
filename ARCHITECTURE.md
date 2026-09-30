@@ -31,6 +31,14 @@ public native/Flutter consumers passed. The
 [beta.8 preflight](release/evidence/2.0.0-beta.8-preflight.md) separates source,
 physical recovery evidence, candidate checksums and public acceptance.
 
+An unreleased Android follow-up handles adapter shutdown independently of GATT
+callbacks. It retires current sessions on the platform handler, closes native
+clients, fails pending work, and forwards loss through the existing native and
+framework streams. Cancelled connection attempts also close their GATT clients;
+late disconnect completion preserves newer driver generations. This adds no
+public adapter-power API or reconnect policy. See the
+[follow-up acceptance record](docs/parity/android-disconnection-events.md#adapter-off-follow-up).
+
 ## Purpose
 
 `app-sdk` is the source monorepo for the Bota App SDK family. It consolidates

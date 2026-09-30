@@ -110,3 +110,43 @@ new regression and phone evidence and a new public version; beta.8 is immutable.
 Examples must continue using public packages rather than implementing private
 GATT or polling substitutes. No automatic reconnect or upload-fallback authority
 is introduced by this finding.
+
+## Adapter-off follow-up
+
+Scope: Android platform lifecycle cleanup, with no new public API or automatic
+reconnect loop. The native receiver will observe the protected
+`BluetoothAdapter.ACTION_STATE_CHANGED` broadcast on the GATT handler and retire
+the current sessions on adapter shutdown. A stale OFF broadcast while the adapter
+is already ON must not clear a replacement session. Context receiver registration
+uses the API-appropriate exported flag for the privileged Bluetooth sender and is
+paired with teardown; see [Android broadcast guidance](https://developer.android.com/develop/background-work/background-tasks/broadcasts).
+
+Acceptance requires deterministic regressions for loss without a GATT callback,
+settling pending connection/read/notification work, cancelled-connect cleanup,
+duplicate and stale callbacks, receiver teardown, and a delayed old disconnect
+completing after reconnect. Framework tests run with Robolectric on API 26 and
+35; they are simulated Android lifecycle evidence, not physical acceptance.
+The connected-phone RN and Flutter radio-off/reconnect checks must then be
+repeated against the exact candidate AAR. Public beta.8 remains unchanged until
+a new immutable release passes its publication gates.
+
+The implementation uses one terminal cleanup path for GATT callbacks, adapter
+shutdown and cancelled connection attempts. It closes the native handle before
+settling pending work and publishing the exact-generation loss event. Closing the
+SDK unregisters its receiver and terminates pending work. Driver disconnect
+completion clears ownership only if its captured generation is still current.
+
+Baseline verification reproduced nine failures: four framework lifecycle cases
+on both API 26 and 35, plus delayed old-disconnect completion in the driver. The
+other 15 selected driver tests passed. Robolectric is test-only; its dependencies
+are locked and all 66 new artifact/metadata hashes were independently compared
+with Google/Maven Central checksums, without changing existing hashes. All nine
+regressions pass after the fix. The local full suite passed 246/248 tests; two
+encrypted-transfer tests failed with a directory `AccessDeniedException` and
+a settlement timeout on Windows. A control run restored both original
+production files and reproduced those same two failures, then restored the exact
+candidate. No test is disabled; full hosted CI remains required. Physical and
+publication acceptance remain pending.
+Local release lint cannot complete on Windows because its native prerequisite
+executes the repository's Bash Rust build script. The hosted native/lint gates
+remain required; no prerequisite is skipped to claim a local lint pass.

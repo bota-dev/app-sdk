@@ -56,6 +56,14 @@ before the cancellation check starts. This is test ordering, not a runtime chang
   runtime/generation fencing and do not unsubscribe a replacement during loss
   cleanup. See [validation](docs/parity/android-disconnection-events.md).
 
+- The unreleased adapter-off follow-up observes the protected Android adapter
+  broadcast on the GATT handler. Retire exact sessions, close their GATT clients
+  and settle pending work even without a disconnect callback. Ignore late loss
+  from an old session; delayed disconnect completion must not erase a replacement
+  driver's generation. Keep receiver registration paired with close and run the
+  framework lifecycle regressions (Robolectric API 26/35) as well as driver tests.
+  These simulated tests do not establish physical RN/Flutter recovery.
+
 - Standalone React Native maintenance ended September 29, 2026 under the
   owner-authorized [retirement decision](docs/migrations/react-native-sdk-sunset.md).
   This supersedes the old stable-before-deprecation plan for that package only;
