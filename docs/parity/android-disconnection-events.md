@@ -1,9 +1,10 @@
 # Android confirmed disconnection propagation
 
-Status: unpublished source change with passing automated validation at `9acff65`.
-Physical-device results and final-revision checks are maintained in
-[PR #22](https://github.com/bota-dev/app-sdk/pull/22); the CI evidence below does
-not establish hardware acceptance or publication.
+Status: published in `2.0.0-beta.8`; see the
+[release review](../../release/evidence/2.0.0-beta.8-preflight.md).
+The source and CI history below precede publication. Published-example checks
+passed native Kotlin radio-off/reconnect and RN loss delivery, but RN reconnect
+failed and Flutter missed an adapter-off event. Full recovery remains partial.
 The published beta.7 examples exposed this gap on Android 16 with Bota Pin
 firmware 1.0.19. This change reports transport loss without a status subscription.
 
@@ -85,3 +86,27 @@ Radio-off evidence must not be generalized to out-of-range, background, other
 devices, or end-to-end RN/Flutter UI behavior. Published-example adoption and
 physical UI evidence are tracked in the
 [examples review](https://github.com/bota-dev/examples/blob/main/docs/independent-examples-review.md#beta8-adoption).
+
+## Published-example limitation (2026-09-30 UTC)
+
+On Samsung SM-A166U1 / Android 16 with the same exact-serial Bota Pin on firmware
+1.0.19, public beta.8 Kotlin passed loss notification and explicit reconnect with
+fresh status. RN cleared selection/status on radio-off, but two reconnects failed
+with GATT 133. Flutter connected/read status after another phone Bluetooth cycle,
+then retained stale connected state after radio-off; subsequent reconnect failed.
+The examples review records exact source, CI artifacts and APK checksums.
+
+Flutter's radio-off log showed `onClientRegistered(100)` and GATT client cleanup
+without `onConnectionStateChange(DISCONNECTED)`. The framework platform currently
+emits confirmed loss from that callback and has no adapter-state receiver. Adapter
+shutdown without a GATT callback is therefore an uncovered native path, not proof
+that the Dart connection mapping drops null. This does not establish the cause
+of the separate reconnect failures.
+
+Follow-up acceptance must cover adapter shutdown without a GATT callback, exact
+generation invalidation, stale/duplicate callbacks, pending-operation cleanup,
+observer teardown, and fresh explicit reconnect through RN and Flutter. It needs
+new regression and phone evidence and a new public version; beta.8 is immutable.
+Examples must continue using public packages rather than implementing private
+GATT or polling substitutes. No automatic reconnect or upload-fallback authority
+is introduced by this finding.
