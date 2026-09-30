@@ -1,9 +1,10 @@
 # Architecture
 
-Source candidate **2.0.0-beta.9** adds Android adapter-off cleanup even when
-the system omits the GATT loss callback. Explicit reconnect remains required.
-Beta.8 is still the published installation baseline; see the
-[beta.9 preparation and acceptance review](release/evidence/2.0.0-beta.9-preflight.md).
+Published synchronized beta **2.0.0-beta.9** adds Android adapter-off cleanup
+even when the system omits the GATT loss callback. All five public packages and
+their release consumer checks passed. Explicit reconnect remains required.
+See the [publication and acceptance review](release/evidence/2.0.0-beta.9-preflight.md#publication)
+for immutable artifact evidence and the separate physical acceptance limits.
 
 Standalone React Native maintenance ended September 29, 2026. The
 [retirement decision](docs/migrations/react-native-sdk-sunset.md) records the
@@ -12,7 +13,7 @@ owner-approved beta-stage cutover, retained history and remaining acceptance lim
 The 2.x source uses explicit App SDK distribution names. The historical beta.1
 release first verified the complete renamed family: Apple SwiftPM/CocoaPods,
 Android Maven, React Native/Web npm and Flutter pub.dev. The selected current
-release is 2.0.0-beta.8; its [release evidence](release/evidence/2.0.0-beta.8-preflight.md#publication-and-design-review)
+release is 2.0.0-beta.9; its [release evidence](release/evidence/2.0.0-beta.9-preflight.md#publication)
 tracks publication separately from application rollout and physical acceptance.
 See the [migration guide](docs/migrations/app-sdk-package-names.md). Historical
 checkpoints below retain their original names and versions.
@@ -36,7 +37,7 @@ public native/Flutter consumers passed. The
 [beta.8 preflight](release/evidence/2.0.0-beta.8-preflight.md) separates source,
 physical recovery evidence, candidate checksums and public acceptance.
 
-An unreleased Android follow-up handles adapter shutdown independently of GATT
+Published beta.9 handles adapter shutdown independently of GATT
 callbacks. It retires current sessions on the platform handler, closes native
 clients, fails pending work, and forwards loss through the existing native and
 framework streams. Cancelled connection attempts also close their GATT clients;
@@ -45,8 +46,9 @@ public adapter-power API or reconnect policy. See the
 [follow-up acceptance record](docs/parity/android-disconnection-events.md#adapter-off-follow-up).
 Its candidate passed three radio-off/explicit-reconnect cycles each through RN
 and Flutter on one Android 16 phone/Bota Pin firmware 1.0.19 pair. One initial
-RN connection timed out and recovered on retry. Publication and wider hardware,
-background and out-of-range acceptance remain separate.
+RN connection timed out and recovered on retry. Those pre-version results remain
+separate from final public-package checks in the independent examples review.
+Wider hardware, background and out-of-range acceptance remain separate.
 
 ## Purpose
 

@@ -238,3 +238,14 @@ Published beta.8 examples still require a new immutable SDK release and package
 adoption before receiving this fix. Out-of-range/background recovery, other
 hardware/platforms, automatic reconnect and transfer interruption remain outside
 this acceptance claim.
+
+## Published beta.9 follow-up
+
+The adapter-off implementation is now published in synchronized `2.0.0-beta.9`
+from source `89cb6f14eb0ea6327c196ac2cbeb8215df3423bd`. Exact-main CI,
+protected publication, public native consumers and Flutter archive verification
+passed; see the [release evidence](../../release/evidence/2.0.0-beta.9-preflight.md#publication).
+The candidate sections above retain their original pre-version package scope.
+Final public-package example builds and phone observations are tracked in the
+[examples review](https://github.com/bota-dev/examples/blob/main/docs/independent-examples-review.md#beta9-adoption).
+This publication does not broaden the physical or automatic-reconnect claims.

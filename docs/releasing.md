@@ -1,13 +1,14 @@
-# Next synchronized candidate: 2.0.0-beta.9
+# Published synchronized beta: 2.0.0-beta.9
 
-Beta.9 packages the tested Android adapter-off recovery follow-up. The owner
-requested the next release and public-example adoption, with direct pushes and
-no PR. [Preparation and design review](../release/evidence/2.0.0-beta.9-preflight.md)
-separates candidate phone evidence, exact final CI, protected publication and
-public consumer acceptance. Preserve the single human `release-approval` gate,
-immutable artifacts and npm `latest`. Beta.8 remains published during preparation.
+Protected release [36761509388](https://github.com/bota-dev/app-sdk/actions/runs/36761509388)
+published all five platforms from exact-main CI artifacts and verified public
+native consumers plus the complete Flutter archive. The immutable tag binds
+source `89cb6f1`, main CI `36758872839` and its 49-file inventory. See
+[publication and design review](../release/evidence/2.0.0-beta.9-preflight.md#publication).
+Keep the single protected approval, immutable artifacts and npm `latest` at
+beta.0. Physical and application acceptance remain separate from publication.
 
-# Published synchronized beta: 2.0.0-beta.8
+# Previous synchronized beta: 2.0.0-beta.8
 
 The owner requested the next publication/adoption step after the Android
 Bluetooth-loss fix was pushed directly to main. Beta.8 carries that fix and

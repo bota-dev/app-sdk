@@ -45,24 +45,21 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Current Authority
 
-- The next synchronized candidate is `2.0.0-beta.9`, adding Android adapter-off
-  cleanup when a GATT disconnect callback is absent. See the
-  [candidate review](release/evidence/2.0.0-beta.9-preflight.md). Beta.8 remains
-  the published baseline until protected publication and public consumers pass.
+- The synchronized published beta is `2.0.0-beta.9`, including Android
+  adapter-off cleanup when GATT omits its disconnect callback. Exact release
+  source is `89cb6f14eb0ea6327c196ac2cbeb8215df3423bd`; protected publication,
+  all public native consumers and the Flutter archive passed. See the
+  [release evidence](release/evidence/2.0.0-beta.9-preflight.md#publication).
+  Do not overwrite published artifacts/tags or advance npm `latest`.
+  Keep public-package phone evidence separate from earlier candidate labs.
   Regenerate the Flutter inventory after any packaged documentation change.
-
-- The synchronized published beta is `2.0.0-beta.8`, carrying Android confirmed
-  disconnection propagation and RN event forwarding. Exact source is `8ad1328`;
-  [publication evidence](release/evidence/2.0.0-beta.8-preflight.md#publication-and-design-review)
-  records protected release and public consumers. Do not overwrite its artifacts
-  or advance npm `latest`. Application rollout and physical coverage stay separate.
 
 - Beta.8 Android disconnect propagation connects confirmed GATT generations
   to native connection observers and RN without a status subscription. Preserve
   runtime/generation fencing and do not unsubscribe a replacement during loss
   cleanup. See [validation](docs/parity/android-disconnection-events.md).
 
-- The unreleased adapter-off follow-up observes the protected Android adapter
+- The beta.9 adapter-off implementation observes the protected Android adapter
   broadcast on the GATT handler. Retire exact sessions, close their GATT clients
   and settle pending work even without a disconnect callback. Ignore late loss
   from an old session; delayed disconnect completion must not erase a replacement
@@ -72,7 +69,7 @@ before the cancellation check starts. This is test ordering, not a runtime chang
   radio-off/explicit-reconnect cycles each for RN and Flutter on Samsung
   SM-A166U1 / Android 16 / Bota Pin firmware 1.0.19. One initial RN timeout
   recovered with a same-session retry. Keep that limit, exact artifact evidence
-  and pending public release separate from wider recovery acceptance.
+  separate from final public-package checks and wider recovery acceptance.
 
 - Standalone React Native maintenance ended September 29, 2026 under the
   owner-authorized [retirement decision](docs/migrations/react-native-sdk-sunset.md).

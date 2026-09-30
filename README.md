@@ -1,19 +1,21 @@
 # Bota App SDK
 
-Source candidate **2.0.0-beta.9** adds Android adapter-off cleanup even when
-the system omits the GATT loss callback. Explicit reconnect remains required.
-Beta.8 is still the published installation baseline; see the
-[beta.9 preparation and acceptance review](release/evidence/2.0.0-beta.9-preflight.md).
+Published synchronized beta **2.0.0-beta.9** adds Android adapter-off cleanup
+even when the system omits the GATT loss callback. All five public packages and
+their release consumer checks passed. Explicit reconnect remains required.
+See the [publication and acceptance review](release/evidence/2.0.0-beta.9-preflight.md#publication)
+for immutable artifact evidence and the separate physical acceptance limits.
 
 The standalone `@bota.dev/react-native-sdk` maintenance line was retired on
 September 29, 2026. New React Native integrations use
 `@bota.dev/react-native-app-sdk`. See the [retirement and migration notice](docs/migrations/react-native-sdk-sunset.md);
 existing old releases remain available and the successor is still beta.
 
-Published synchronized beta: **2.0.0-beta.8**, with Android connection-loss
-notification and stale-state cleanup. The protected release verified public
-native consumers and the Flutter archive. [Publication and acceptance evidence](release/evidence/2.0.0-beta.8-preflight.md#publication-and-design-review).
-Rebuild native applications; restore Bluetooth and reconnect explicitly after loss.
+Rebuild native applications; restore Bluetooth, scan and reconnect explicitly
+after loss. The [independent examples review](https://github.com/bota-dev/examples/blob/main/docs/independent-examples-review.md#beta9-adoption)
+records public-package builds and bounded phone recovery separately from SDK
+publication. Other hardware, background/out-of-range behavior and full recording
+workflows need their own acceptance.
 
 ## Client presence (beta.6)
 
@@ -86,13 +88,13 @@ The synchronized App SDK is currently a beta. React Native consumers pin the
 exact prerelease:
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.8
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.9
 ```
 
 Apple and Android do not use npm dist-tags, so beta consumers pin the exact
 synchronized version shown in the installation sections below. New synchronized
 releases use `2.x.y-beta.n`; promotion to a stable channel is a separate release
-decision. The new-name npm `beta` tags point to `2.0.0-beta.8`; `latest` stays
+decision. The new-name npm `beta` tags point to `2.0.0-beta.9`; `latest` stays
 at `2.0.0-beta.0` under the owner-approved bootstrap exception. This is not
 stable promotion. Later betas must not advance `latest`. Historical npm tags
 are unchanged.
@@ -464,12 +466,12 @@ In Xcode, choose **File > Add Package Dependencies** and enter:
 https://github.com/bota-dev/app-sdk.git
 ```
 
-Select exact version `2.0.0-beta.8`, then add the
+Select exact version `2.0.0-beta.9`, then add the
 `BotaAppSDK` product to an iOS 15+ or macOS 13+ target. Swift packages can
 declare the dependency directly:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.8")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.9")
 ```
 
 Import and configure the client from application code:
@@ -491,7 +493,7 @@ provide the Bluetooth usage description shown to users.
 Pin the exact synchronized Maven Central beta:
 
 ```kotlin
-implementation("dev.bota:bota-app-sdk:2.0.0-beta.8")
+implementation("dev.bota:bota-app-sdk:2.0.0-beta.9")
 ```
 
 ## Flutter Beta Installation
@@ -501,7 +503,7 @@ build gates passed and `bota_app_sdk` is public on pub.dev. Pin the exact versio
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.8
+  bota_app_sdk: 2.0.0-beta.9
 ```
 
 See the
@@ -519,7 +521,7 @@ Historical packages remain available under their original names. Install the
 renamed package at its verified exact version:
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.8
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.9
 ```
 
 Web Bluetooth requires a secure context and a browser implementation that
