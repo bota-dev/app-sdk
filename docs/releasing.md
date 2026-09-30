@@ -498,6 +498,15 @@ still rejects an archive that differs from the committed checksum. Regression
 tests cover stale release checksums, isolated candidate specs, and corrupt
 archives; CI must not compare new source against the preceding release archive.
 
+Also regenerate the Flutter portion of `release/examples/VERSION.json` with
+`tools/flutter/package-release.sh --write-example` before the final candidate
+checks. It contains a checked archive/file inventory, including packaged docs;
+replacing version strings in a predecessor template is insufficient. Source
+revision is normalized during comparison, but archive hashes and every file's
+bytes must match. When preparing through the canonical Node archive/manifest
+tools on Windows, export Git source with `-c core.autocrlf=false` to retain the
+LF bytes used by hosted builders. Final CI must reproduce the inventory.
+
 ## Local Release Gate
 
 Use Node.js 22 or newer and the Rust toolchain pinned by the repository:
