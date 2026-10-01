@@ -45,6 +45,14 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Current Authority
 
+- The next synchronized candidate is `2.0.0-beta.10`, packaging exact-session
+  Android cleanup when explicit disconnect times out or is cancelled without
+  a native callback. See the [candidate review](release/evidence/2.0.0-beta.10-preflight.md).
+  Beta.9 remains published until protected publication and public consumers pass.
+  Preserve the separate GATT 8/133 reconnect limitation; this fix does not
+  establish its cause or resolution. Regenerate Flutter inventory after any
+  packaged documentation change.
+
 - The synchronized published beta is `2.0.0-beta.9`, including Android
   adapter-off cleanup when GATT omits its disconnect callback. Exact release
   source is `89cb6f14eb0ea6327c196ac2cbeb8215df3423bd`; protected publication,

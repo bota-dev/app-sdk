@@ -1,4 +1,10 @@
-## 2.0.0-beta.9 (candidate)
+## 2.0.0-beta.10 (candidate)
+
+- Retire the exact Android session when explicit disconnect times out or is cancelled without a native disconnect callback.
+- Close its native client and clear facade/registry/presence state without cancelling queued replacement work or applying duplicate/stale loss events.
+- Preserve public APIs and explicit reconnect behavior. The intermittent GATT 8/133 reconnect issue remains unverified; simulated regressions are not physical acceptance.
+
+## 2.0.0-beta.9
 
 - Retire Android connections and close GATT clients on adapter-off even when Android omits its disconnect callback.
 - Settle pending operations and cancelled connects; protect replacement sessions from delayed callbacks and cleanup.

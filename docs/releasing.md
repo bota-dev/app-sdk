@@ -1,3 +1,12 @@
+# Next synchronized candidate: 2.0.0-beta.10
+
+Beta.10 packages the verified Android explicit-disconnect cleanup fix at `2ef85809`.
+The owner requested the next step with direct pushes and no PR. The
+[preparation and design review](../release/evidence/2.0.0-beta.10-preflight.md)
+separates automated regressions, exact final CI, protected publication and public
+consumer acceptance. Preserve the single human `release-approval` gate, immutable
+artifacts and npm `latest`. Beta.9 remains published during preparation.
+
 # Published synchronized beta: 2.0.0-beta.9
 
 Protected release [36761509388](https://github.com/bota-dev/app-sdk/actions/runs/36761509388)

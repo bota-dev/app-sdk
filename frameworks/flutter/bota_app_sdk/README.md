@@ -5,13 +5,14 @@
 The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
 `dev.bota:bota-app-sdk` on Android. Replace the old dependency and Dart imports;
 do not install both packages in the same application. Historical 1.x releases
-remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.9`.
-Published `2.0.0-beta.8` remains the installation baseline until beta.9 completes
+remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.10`.
+Published `2.0.0-beta.9` remains the installation baseline until beta.10 completes
 protected publication and public-consumer verification. The install pin below
-targets beta.9 after those gates pass. Beta.9 retires stale Android connections
-on adapter-off even without a GATT disconnect callback. Restore Bluetooth and
-reconnect explicitly; automatic reconnect is not added. See the
-[preflight](../../../release/evidence/2.0.0-beta.9-preflight.md).
+targets beta.10 after those gates pass. Beta.10 retires the exact Android
+connection when explicit disconnect times out or is cancelled without a native
+callback, preserving replacement sessions. Reconnect explicitly. The separate
+GATT 8/133 reconnect issue remains unverified. See the
+[preflight](../../../release/evidence/2.0.0-beta.10-preflight.md).
 
 ### Client presence
 
@@ -46,7 +47,7 @@ Pin the exact prerelease version after its publication:
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.9
+  bota_app_sdk: 2.0.0-beta.10
 ```
 
 For source development, point at an exact checkout rather than a moving branch:

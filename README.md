@@ -1,5 +1,11 @@
 # Bota App SDK
 
+Source candidate **2.0.0-beta.10** retires the exact Android connection when
+explicit disconnect times out or is cancelled without a native callback.
+Beta.9 remains the published baseline; see the
+[beta.10 preparation and acceptance review](release/evidence/2.0.0-beta.10-preflight.md).
+The separate intermittent GATT 8/133 reconnect issue is not established as fixed.
+
 Published synchronized beta **2.0.0-beta.9** adds Android adapter-off cleanup
 even when the system omits the GATT loss callback. All five public packages and
 their release consumer checks passed. Explicit reconnect remains required.
