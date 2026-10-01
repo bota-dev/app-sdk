@@ -5,7 +5,7 @@ Status: published in `2.0.0-beta.8`; see the
 The source and CI history below precede publication. Published-example checks
 passed native Kotlin radio-off/reconnect and RN loss delivery, but RN reconnect
 failed and Flutter missed an adapter-off event. Published recovery remains partial.
-The unreleased adapter-off follow-up below passed three RN and three Flutter
+The adapter-off follow-up, later published in beta.9, passed three RN and three Flutter
 radio-off/explicit-reconnect cycles on the recorded Android phone/device pair.
 The published beta.7 examples exposed this gap on Android 16 with Bota Pin
 firmware 1.0.19. This change reports transport loss without a status subscription.
@@ -99,9 +99,9 @@ then retained stale connected state after radio-off; subsequent reconnect failed
 The examples review records exact source, CI artifacts and APK checksums.
 
 Flutter's radio-off log showed `onClientRegistered(100)` and GATT client cleanup
-without `onConnectionStateChange(DISCONNECTED)`. The framework platform currently
-emits confirmed loss from that callback and has no adapter-state receiver. Adapter
-shutdown without a GATT callback is therefore an uncovered native path, not proof
+without `onConnectionStateChange(DISCONNECTED)`. The beta.8 framework platform
+emitted confirmed loss from that callback and had no adapter-state receiver. Adapter
+shutdown without a GATT callback was therefore an uncovered native path, not proof
 that the Dart connection mapping drops null. This does not establish the cause
 of the separate reconnect failures.
 
@@ -252,7 +252,8 @@ This publication does not broaden the physical or automatic-reconnect claims.
 
 ## Explicit disconnect without an Android callback
 
-Status: source follow-up to beta.9; not published. The published beta.9 artifacts
+Status: selected for the [beta.10 candidate](../../release/evidence/2.0.0-beta.10-preflight.md);
+not published. The published beta.9 artifacts
 remain immutable. This follow-up addresses explicit disconnect timeout/cancellation
 while the adapter stays on and Android does not deliver its disconnect callback.
 It is separate from adapter shutdown and from the example's observed GATT 8/133
@@ -283,8 +284,9 @@ the existing terminal cleanup path. The driver keeps one retired generation per
 peripheral until its delayed native loss is consumed, a replacement starts, or
 the driver closes. Consuming retired loss does not cancel the peripheral queue
 again: explicit disconnect already cancelled its old work, and a new connection
-may now be waiting there. No public API, package version, firmware behavior or
-automatic reconnect policy changed.
+may now be waiting there. The original source fix changed no public API, package
+version, firmware behavior or automatic reconnect policy. The beta.10 candidate
+subsequently synchronizes package versions to release this fix.
 
 The unchanged-production baseline ran 29 tests and reproduced four failures:
 native closure on API 26 and 35, delayed driver loss, and delayed facade cleanup.
