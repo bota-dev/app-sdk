@@ -83,10 +83,17 @@ internal class EncryptedUploadV2MaterialRegistry {
         id: String,
         lease: EncryptedUploadV2MaterialLease,
         evidence: EncryptedUploadV2TransferEvidence,
+        manifest: ByteArray? = null,
     ): Boolean {
         validateEvidence(evidence)
         val entry = requiredEntry(id, lease)
-        val result = entry.material.shouldUploadCiphertext(evidence)
+        val reconcile = entry.material.reconcileStaging
+        val result = if (reconcile != null) {
+            if (manifest == null || manifest.size != ManifestBytes || !sha256(manifest).contentEquals(evidence.manifestSha256)) {
+                throw EncryptedUploadV2MaterialRegistryException("manifest evidence is invalid", 18u)
+            }
+            reconcile(manifest.copyOf(), evidence)
+        } else entry.material.shouldUploadCiphertext(evidence)
         requireCurrent(id, entry.registrationId)
         return result
     }

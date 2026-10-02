@@ -50,6 +50,7 @@ struct EncryptedUploadV2MaterialProvider:
     let authorization: Data
     let uploadContext: EncryptedUploadV2ContextProvider?
     let shouldUploadCiphertext: EncryptedUploadV2Material.CiphertextUploadDecision
+    let reconcileStaging: EncryptedUploadV2Material.StagingReconciler?
     var validateConnection: @Sendable () async throws -> Void = {}
     private let stagingRequestProvider: StagingRequestProvider
     private let manifestSubmitter: ManifestSubmitter
@@ -65,7 +66,8 @@ struct EncryptedUploadV2MaterialProvider:
         completionReceipt: @escaping @Sendable (EncryptedUploadV2TransferEvidence) async throws -> Data,
         cancel: @escaping @Sendable () async throws -> Void,
         uploadContext: EncryptedUploadV2ContextProvider? = nil,
-        shouldUploadCiphertext: @escaping EncryptedUploadV2Material.CiphertextUploadDecision = { _ in true }
+        shouldUploadCiphertext: @escaping EncryptedUploadV2Material.CiphertextUploadDecision = { _ in true },
+        reconcileStaging: EncryptedUploadV2Material.StagingReconciler? = nil
     ) {
         self.authorization = authorization
         stagingRequestProvider = stagingRequest
@@ -75,6 +77,7 @@ struct EncryptedUploadV2MaterialProvider:
         cancellationHandler = cancel
         self.uploadContext = uploadContext
         self.shouldUploadCiphertext = shouldUploadCiphertext
+        self.reconcileStaging = reconcileStaging
     }
 
     var description: String { "EncryptedUploadV2MaterialProvider(<redacted>)" }
@@ -190,11 +193,21 @@ actor EncryptedUploadV2MaterialRegistry {
     }
 
     func shouldUploadCiphertext(
-        id: String, lease: EncryptedUploadV2MaterialLease, evidence: EncryptedUploadV2TransferEvidence
+        id: String, lease: EncryptedUploadV2MaterialLease, evidence: EncryptedUploadV2TransferEvidence,
+        manifest: Data? = nil
     ) async throws -> Bool {
         try Self.validate(evidence)
         let entry = try requiredEntry(id, lease: lease)
-        let result = try await entry.provider.shouldUploadCiphertext(evidence)
+        let result: Bool
+        if let reconcile = entry.provider.reconcileStaging {
+            guard let manifest, manifest.count == Self.manifestByteCount,
+                  Self.sha256(manifest) == evidence.manifestSHA256 else {
+                throw EncryptedUploadV2MaterialRegistryError.invalidManifest
+            }
+            result = try await reconcile(manifest, evidence)
+        } else {
+            result = try await entry.provider.shouldUploadCiphertext(evidence)
+        }
         try requireCurrent(id: id, registrationID: entry.registrationID)
         return result
     }

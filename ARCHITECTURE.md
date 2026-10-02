@@ -1,5 +1,12 @@
 # Architecture
 
+The managed encrypted-v2 adapter in current source moves Demo's native HTTP and
+session journal into the RN App SDK. Hosts supply authenticated proxy routes,
+fresh app tokens and scope cancellation. Native code owns manifest reconciliation,
+polling and receipt delivery; device cleanup still follows signed receipt/CONFIRM.
+See the [integration and acceptance review](docs/parity/v2-managed-backend.md).
+This helper is not in published beta.10; device rollout gates remain unchanged.
+
 Published synchronized beta **2.0.0-beta.10** retires the exact Android connection
 when explicit disconnect times out or is cancelled without a native callback.
 All five public packages and their release consumer checks passed. See the

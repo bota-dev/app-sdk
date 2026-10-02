@@ -526,7 +526,6 @@ internal class EncryptedUploadV2TransferHost(
 
     private fun stageArtifacts(effect: CoreEffect) = flow {
         val state = completionState(effect, requireSink = true)
-        val shouldUpload = services.materialRegistry.shouldUploadCiphertext(state.context.materialId, state.lease, state.completed.evidence)
         withContext(Dispatchers.IO) {
             val digest = MessageDigest.getInstance("SHA-256")
             var length = 0uL
@@ -544,6 +543,7 @@ internal class EncryptedUploadV2TransferHost(
                 MessageDigest.isEqual(digest.digest(), state.completed.evidence.ciphertextSha256),
                 "staged ciphertext identity changed", 18u)
         }
+        val shouldUpload = services.materialRegistry.shouldUploadCiphertext(state.context.materialId, state.lease, state.completed.evidence, state.completed.manifest)
         if (shouldUpload) {
             val request = services.materialRegistry.stagingRequest(state.context.materialId, state.lease, state.completed.evidence)
             services.uploadCiphertext(request, state.completed.file)

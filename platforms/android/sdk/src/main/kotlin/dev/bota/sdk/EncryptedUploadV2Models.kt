@@ -100,6 +100,7 @@ public class EncryptedUploadV2Material(
     private val cancel: suspend () -> Unit = {},
     public val uploadContext: EncryptedUploadV2ContextProvider? = null,
     internal val shouldUploadCiphertext: suspend (EncryptedUploadV2TransferEvidence) -> Boolean = { true },
+    internal val reconcileStaging: (suspend (ByteArray, EncryptedUploadV2TransferEvidence) -> Boolean)? = null,
 ) {
     private val storedAuthorization: ByteArray = authorization.copyOf()
     internal val authorization: ByteArray get() = storedAuthorization.copyOf()

@@ -4108,6 +4108,161 @@
           ]
         },
         "moduleName": "BotaDeviceSDK"
+      },
+      "NativeBotaUploadV2Backend": {
+        "type": "NativeModule",
+        "aliasMap": {},
+        "enumMap": {},
+        "spec": {
+          "eventEmitters": [
+            {
+              "name": "onCredentialsRequested",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "EventEmitterTypeAnnotation",
+                "typeAnnotation": {
+                  "type": "ObjectTypeAnnotation",
+                  "properties": [
+                    {
+                      "name": "requestId",
+                      "optional": false,
+                      "typeAnnotation": {
+                        "type": "StringTypeAnnotation"
+                      }
+                    },
+                    {
+                      "name": "operationId",
+                      "optional": false,
+                      "typeAnnotation": {
+                        "type": "StringTypeAnnotation"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ],
+          "methods": [
+            {
+              "name": "prepare",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "StringTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "inputJSON",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "cancel",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "operationId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "complete",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "operationId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "resolveCredentials",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "token",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "rejectCredentials",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "moduleName": "BotaUploadV2Backend"
       }
     }
   },
@@ -4118,12 +4273,16 @@
         "sha256": "3f1acef6907956745c7db721b5ec768a7d099da4a8e85bc50ae960451c261e2d"
       },
       {
+        "path": "java/dev/bota/sdk/reactnative/NativeBotaUploadV2BackendSpec.java",
+        "sha256": "50844eb0e1ed98848de2819d2a88f00ccc4a550d4bcfdc5db21039a1eb17127f"
+      },
+      {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "544e060e90cf43640d48192c784a354c26c96ea47950a58967a70bbbfd010e38"
+        "sha256": "f1a82f3cf03616e6f08655204af85317087cd2b0f633c052f2939eb49448c6b8"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
-        "sha256": "e82597a93c10fd0b8cded44c655abc919235f347879dae756545616925ab2c00"
+        "sha256": "a4809b54c65c499c2ad727df1461d2044cfcb6de1eb3bbb05582e160426effce"
       },
       {
         "path": "jni/CMakeLists.txt",
@@ -4131,23 +4290,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "23446d334170a7dab1df1d655e942e052b857ba286a7d18e1729301182ed27f3"
+        "sha256": "6c5309bc7b6b6b4b2e62e5bed85a7fab8a9da8c43af9e3904692e50756de9e0f"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "26fe0dc191f982056702506a2159a7ee813241333434f0c90e7306b9a9c70a00"
+        "sha256": "8bee25e75f2e73f0b989b65e1c083fb851ba77ca3d4384aecaabb1bcb252fe7a"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "5a680da391ab9fabbe0422bf692be4023ea26575c86231657a17518d22ef3260"
+        "sha256": "6bef81e2a87bb83ddbc3021e69ddbd280dac23a5049af675b738925454b1c22c"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "23446d334170a7dab1df1d655e942e052b857ba286a7d18e1729301182ed27f3"
+        "sha256": "6c5309bc7b6b6b4b2e62e5bed85a7fab8a9da8c43af9e3904692e50756de9e0f"
       }
     ]
   },
-  "contractDigest": "058deff0ead08281d386027a52b699bca6b42bd9549d55c1e7a659eccefa8aab"
+  "contractDigest": "614887513e84517c5c29ba3a607f501b3e5dc35ec58a40dd0bc8d4b5c248f50b"
 }

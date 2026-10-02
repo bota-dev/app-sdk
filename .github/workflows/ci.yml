@@ -291,6 +291,9 @@ jobs:
       - name: Test React Native Android adapter consumer
         run: tools/react-native/test-android-adapter.sh --repository target/android-m2
 
+      - name: Test native encrypted upload backend recovery
+        run: node tools/react-native/test-upload-backend-android.mjs
+
       - name: Test API 26 legacy location and consumers
         run: tools/android/test-emulator-lane.sh --api 26
 
@@ -352,6 +355,9 @@ jobs:
       - name: Test Apple lifecycle coordinator
         working-directory: frameworks/react-native
         run: npm run test:apple:lifecycle
+
+      - name: Test native encrypted upload backend recovery
+        run: bash tools/react-native/test-upload-backend-apple.sh
 
       - name: Test React Native Apple SPM compatibility
         working-directory: frameworks/react-native

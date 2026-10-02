@@ -196,6 +196,7 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
     public typealias Finalizer = @Sendable (EncryptedUploadV2TransferEvidence) async throws -> Void
     public typealias ReceiptProvider = @Sendable (EncryptedUploadV2TransferEvidence) async throws -> Data
     public typealias CancellationHandler = @Sendable () async throws -> Void
+    public typealias StagingReconciler = @Sendable (Data, EncryptedUploadV2TransferEvidence) async throws -> Bool
     public typealias CiphertextUploadDecision = @Sendable (EncryptedUploadV2TransferEvidence) async throws -> Bool
 
     public let materialID: String
@@ -206,6 +207,7 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
     public let authorization: Data
     public let uploadContext: EncryptedUploadV2ContextProvider?
     public let shouldUploadCiphertext: CiphertextUploadDecision
+    public let reconcileStaging: StagingReconciler?
     let stagingRequest: StagingRequest
     let submitManifest: ManifestSubmitter
     let finalize: Finalizer
@@ -226,7 +228,8 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
         completionReceipt: @escaping ReceiptProvider,
         cancel: @escaping CancellationHandler = {},
         uploadContext: EncryptedUploadV2ContextProvider? = nil,
-        shouldUploadCiphertext: @escaping CiphertextUploadDecision = { _ in true }
+        shouldUploadCiphertext: @escaping CiphertextUploadDecision = { _ in true },
+        reconcileStaging: StagingReconciler? = nil
     ) {
         self.materialID = materialID
         self.recordingID = recordingID
@@ -241,6 +244,7 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
         cancellationHandler = cancel
         self.uploadContext = uploadContext
         self.shouldUploadCiphertext = shouldUploadCiphertext
+        self.reconcileStaging = reconcileStaging
     }
 
     var provider: EncryptedUploadV2MaterialProvider {
@@ -252,7 +256,8 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
             completionReceipt: completionReceipt,
             cancel: { try await cancellation.run(cancellationHandler) },
             uploadContext: uploadContext,
-            shouldUploadCiphertext: shouldUploadCiphertext
+            shouldUploadCiphertext: shouldUploadCiphertext,
+            reconcileStaging: reconcileStaging
         )
     }
 

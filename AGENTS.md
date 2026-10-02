@@ -1,5 +1,16 @@
 # AGENTS.md
 
+## Managed encrypted-v2 upload adapter
+
+Current source packages customer-proxy HTTP/session recovery in the React Native
+SDK's native iOS/Android adapters. `createEncryptedUploadV2Backend` takes fresh
+app auth, exact scope and cancellation; custom providers remain supported.
+Before another PUT, only the exact 409 `encrypted_upload_v2_staging_missing`
+permits upload. Keep opaque documents native and require signed receipt/CONFIRM
+before cleanup. See [integration and design review](docs/parity/v2-managed-backend.md).
+Publication, OS scheduling, initial unknown-create reconciliation and physical
+acceptance remain distinct gates.
+
 ## CI policy
 
 - Never add CI-skip markers or bypass required checks. Local verification supplements CI; it never replaces it.
@@ -203,7 +214,8 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 - One synchronized SDK version comes from `sdk-version.toml`.
 - Rust owns protocol and deterministic workflow behavior.
 - Platform transports and lifecycle integration remain native.
-- App SDK code does not call the Bota API directly.
+- App SDK code does not use Bota secret API keys. The opt-in native RN v2 adapter
+  calls the customer's authenticated proxy; hosts own authorization and scope.
 - Unsupported platform capabilities fail before device state changes.
 - One workflow owns the core engine at a time; hosts preserve request and
   cancellation IDs when returning callbacks.

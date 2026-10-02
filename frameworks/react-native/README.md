@@ -88,6 +88,13 @@ boundary; missing or malformed advertised values become `null`. The peripheral
 
 ## Encrypted upload v2
 
+Current source includes `createEncryptedUploadV2Backend` for iOS/Android. Supply
+your authenticated backend URL, fresh-token callback and scoped identity; the
+SDK owns native session journaling, manifest replay, verification polling and
+signed-receipt delivery. See the [managed integration](../../docs/parity/v2-managed-backend.md)
+for the example, backend routes, restart trigger and release limits. Beta.10
+does not contain this helper. The low-level provider below remains supported.
+
 The target encrypted-upload-v2 runtime is an additive `BotaDeviceSDK` API; it
 does not change the legacy `BotaClient` recording providers or events:
 

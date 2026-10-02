@@ -1,5 +1,8 @@
 import NativeBotaDeviceSDK from './specs/NativeBotaDeviceSDK';
 import { createBotaDeviceSDK } from './client';
+import NativeBotaUploadV2Backend from './specs/NativeBotaUploadV2Backend';
+import { createManagedEncryptedUploadV2Backend } from './encryptedUploadV2Backend';
+import type { EncryptedUploadV2BackendOptions } from './encryptedUploadV2Backend';
 import { setDefaultCompatibilityClient } from './compatibility/runtime';
 
 export {
@@ -52,6 +55,9 @@ export type {
 } from './client';
 
 export const BotaDeviceSDK = createBotaDeviceSDK(NativeBotaDeviceSDK);
+export const createEncryptedUploadV2Backend = (options: EncryptedUploadV2BackendOptions) =>
+  createManagedEncryptedUploadV2Backend(NativeBotaUploadV2Backend, BotaDeviceSDK.recordings, options);
+export type { EncryptedUploadV2BackendOptions, EncryptedUploadV2Backend, EncryptedUploadV2SyncTarget } from './encryptedUploadV2Backend';
 setDefaultCompatibilityClient(BotaDeviceSDK);
 
 export { BotaClient } from './BotaClient';

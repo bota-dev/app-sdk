@@ -40,6 +40,7 @@ export const generateCodegen = (outputPath) => {
       codegenName,
       schemaPath,
       resolve(packageRoot, 'src/specs/NativeBotaDeviceSDK.ts'),
+      resolve(packageRoot, 'src/specs/NativeBotaUploadV2Backend.ts'),
     ]
   );
 

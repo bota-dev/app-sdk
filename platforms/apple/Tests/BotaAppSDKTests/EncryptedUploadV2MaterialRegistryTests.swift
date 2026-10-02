@@ -291,10 +291,34 @@ final class EncryptedUploadV2MaterialRegistryTests: XCTestCase {
         }
     }
 
+    func testReconciliationRequiresExactManifestAndCurrentLease() async throws {
+        let registry = EncryptedUploadV2MaterialRegistry()
+        let manifest = Data(repeating: 4, count: 580)
+        let evidence = makeEvidence(manifest: manifest)
+        try await registry.register(id: "v2-material-1", provider: makeProvider(reconcile: { received, _ in
+            XCTAssertEqual(received, manifest)
+            return false
+        }))
+        let prepared = try await registry.preparedMaterial(id: "v2-material-1")
+        await XCTAssertThrowsErrorAsync(try await registry.shouldUploadCiphertext(
+            id: "v2-material-1", lease: prepared.lease, evidence: evidence, manifest: Data(repeating: 0, count: 580)
+        )) { XCTAssertEqual($0 as? EncryptedUploadV2MaterialRegistryError, .invalidManifest) }
+        let upload = try await registry.shouldUploadCiphertext(
+            id: "v2-material-1", lease: prepared.lease, evidence: evidence, manifest: manifest
+        )
+        XCTAssertFalse(upload)
+        try await registry.terminate(id: "v2-material-1", outcome: .completed)
+        try await registry.register(id: "v2-material-1", provider: makeProvider())
+        await XCTAssertThrowsErrorAsync(try await registry.shouldUploadCiphertext(
+            id: "v2-material-1", lease: prepared.lease, evidence: evidence, manifest: manifest
+        )) { XCTAssertEqual($0 as? EncryptedUploadV2MaterialRegistryError, .missingMaterial) }
+    }
+
     private func makeProvider(
         authorization: Data = Data(repeating: 1, count: 408),
         receipt: Data = Data(repeating: 2, count: 336),
-        calls: MaterialProviderCalls? = nil
+        calls: MaterialProviderCalls? = nil,
+        reconcile: EncryptedUploadV2Material.StagingReconciler? = nil
     ) -> EncryptedUploadV2MaterialProvider {
         EncryptedUploadV2MaterialProvider(
             authorization: authorization,
@@ -306,7 +330,8 @@ final class EncryptedUploadV2MaterialRegistryTests: XCTestCase {
             submitManifest: { _ in },
             finalize: { _ in },
             completionReceipt: { _ in receipt },
-            cancel: { await calls?.record(.cancel) }
+            cancel: { await calls?.record(.cancel) },
+            reconcileStaging: reconcile
         )
     }
 

@@ -1,5 +1,10 @@
 # Bota App SDK
 
+Current source adds a [managed encrypted-v2 backend adapter](docs/parity/v2-managed-backend.md)
+for React Native on iOS/Android, reducing customer native integration to a
+configured authenticated proxy, identity and lifecycle hooks. Publication and
+physical acceptance remain separate from source implementation.
+
 Published synchronized beta **2.0.0-beta.10** retires the exact Android connection
 when explicit disconnect times out or is cancelled without a native callback.
 All five public packages and their release consumer checks passed. See the

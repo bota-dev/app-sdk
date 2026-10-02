@@ -97,12 +97,37 @@ internal class EncryptedUploadV2MaterialRegistryTest {
         }
     }
 
+    @Test
+    fun reconciliationReceivesOnlyVerifiedManifestAndRetainsLeaseValidation() = runTest {
+        val registry = EncryptedUploadV2MaterialRegistry()
+        val manifest = ByteArray(580) { 4 }
+        var calls = 0
+        registry.register("material-1", material(reconcile = { received, _ ->
+            calls++
+            assertArrayEquals(manifest, received)
+            false
+        }))
+        val prepared = registry.preparedMaterial("material-1")
+        assertFailsSuspend<EncryptedUploadV2MaterialRegistryException> {
+            registry.shouldUploadCiphertext("material-1", prepared.lease, evidence(manifest), ByteArray(580))
+        }
+        assertEquals(0, calls)
+        assertFalse(registry.shouldUploadCiphertext("material-1", prepared.lease, evidence(manifest), manifest))
+        assertEquals(1, calls)
+        registry.terminate("material-1", EncryptedUploadV2TerminalOutcome.Completed)
+        registry.register("material-1", material())
+        assertFailsSuspend<EncryptedUploadV2MaterialRegistryException> {
+            registry.shouldUploadCiphertext("material-1", prepared.lease, evidence(manifest), manifest)
+        }
+    }
+
     private fun material(
         authorization: ByteArray = ByteArray(408) { 1 },
         receipt: ByteArray = ByteArray(336) { 2 },
         calls: MutableList<String> = mutableListOf(),
         cancel: suspend () -> Unit = { calls += "cancel" },
         shouldUpload: suspend (EncryptedUploadV2TransferEvidence) -> Boolean = { true },
+        reconcile: (suspend (ByteArray, EncryptedUploadV2TransferEvidence) -> Boolean)? = null,
     ) = EncryptedUploadV2Material(
         materialId = "material-1",
         recordingId = "recording-1",
@@ -124,6 +149,7 @@ internal class EncryptedUploadV2MaterialRegistryTest {
         },
         cancel = cancel,
         shouldUploadCiphertext = shouldUpload,
+        reconcileStaging = reconcile,
     )
 
     private fun evidence(manifest: ByteArray) = EncryptedUploadV2TransferEvidence(
