@@ -63,6 +63,7 @@ export function createManagedEncryptedUploadV2Backend(
       let operationId: string | undefined;
       let selected: (BotaEncryptedUploadV2ProfileDecision & { recordingId: string }) | undefined;
       let cancelTask: Promise<void> | undefined;
+      let completed = false;
       const check = () => {
         if (disposed || signal.signal.aborted || config.signal.aborted || target.signal?.aborted) {
           throw new Error('Encrypted upload cancelled');
@@ -143,9 +144,12 @@ export function createManagedEncryptedUploadV2Backend(
         if (!operationId || !selected) throw new Error('Encrypted upload confirmation is missing');
         // The native sync only resolves after signed receipt/CONFIRM. Never infer this from HTTP 2xx.
         await native.complete(operationId);
+        completed = true;
         return { recordingId: selected.recordingId };
       } finally {
-        try { await cancel(); }
+        // Native complete already releases the operation. A later bridge cancellation
+        // failure must not turn confirmed device cleanup into a retryable sync failure.
+        try { if (completed) signal.abort(); else await cancel(); }
         finally {
           attempts.delete(attempt);
           config.signal.removeEventListener('abort', abort);

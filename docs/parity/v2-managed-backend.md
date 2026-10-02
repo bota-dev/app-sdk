@@ -39,7 +39,10 @@ invalidation and the reconnect/sync trigger. Construct a new helper for a new
 scope; an A → B → A account transition never revives an aborted helper. The
 existing legacy `complete`/`uploadRecoveryProvider` callbacks do not select v2.
 A package upgrade alone does not migrate an application using the legacy path.
-A new native app binary is required for the added TurboModule.
+A new native app binary is required for the added TurboModule. When migrating
+an existing custom journal, pass its exact per-recording `priorUpload` pointer
+to `sync`; the helper cannot infer identities stored by arbitrary host code.
+Keep unresolved old work until reconciled instead of treating it as a new upload.
 
 The HTTPS base URL is the route prefix of the customer's authenticated proxy.
 It must expose the existing Bota encrypted-v2 recording creation, session
@@ -59,7 +62,8 @@ The journal stores metadata and cloud identity, not credentials or signed
 documents. Reopening and syncing the same recording reuses that identity and
 queries the session. An ambiguous initial recording/session creation is parked
 instead of issuing a potentially duplicate POST; automatic reconciliation of
-that initial unknown outcome remains a backend idempotency gap.
+that initial unknown outcome is not implemented in this adapter. The first-party
+dashboard has a scoped lookup endpoint, but it is not a public API-key route.
 
 Before any new ciphertext PUT, the SDK tries the exact manifest, then validates
 the retained local file after the provider callback. An accepted manifest skips PUT. Only HTTP 409 with
@@ -81,6 +85,9 @@ Native SDK/firmware validate the receipt before CONFIRM/deletion; the backend
 journal is removed only after native sync confirms success. App closure can
 interrupt cleanup while cloud verification continues.
 
+After successful native cleanup, the helper does not issue a redundant cancel
+that could turn confirmed success into a spurious retry after bridge teardown.
+
 ## Design and acceptance review
 
 Reviewed against Upload Management §1.1 and Encrypted Upload v2. Tests are
@@ -88,7 +95,7 @@ listed here as requirements/evidence targets until CI has passed.
 
 | Requirement | Evidence | Status / remaining check |
 | --- | --- | --- |
-| Small customer integration; app authentication stays scoped | Exported helper, native credential broker, eight JS integration cases | Local JS cases pass; linked native consumers pending CI |
+| Small customer integration; app authentication stays scoped | Exported helper, native credential broker, nine JS integration cases | Local JS cases pass; linked native consumers pending CI |
 | Reuse exact recording/session after interruption | Ported native journals and restart/nonce recovery suites | Native CI required; initial ambiguous create remains parked |
 | Lost PUT response does not cause another upload | Native manifest replay tests and registry manifest/lease validation tests | CI and physical interruption checks pending |
 | Account changes reject late work | Captured scope, AbortSignal, fresh credential requests, cancel/dispose tests | Local JS passes; native cancellation suites pending CI |

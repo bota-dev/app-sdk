@@ -41,7 +41,7 @@ test('managed sync uses only metadata and removes journal only after native conf
   assert.equal(input.scope.apiBasePath, '/v1');
   assert.deepEqual(Object.keys(input.recording).sort(), Object.keys(recording).sort());
   assert.equal(input.journalKey, undefined); // Derived and validated in native code.
-  assert.deepEqual(f.calls.map(c => c[0]), ['prepare', 'selected', 'confirmed', 'complete', 'cancel']);
+  assert.deepEqual(f.calls.map(c => c[0]), ['prepare', 'selected', 'confirmed', 'complete']);
   assert.equal(f.listeners.size, 0);
 });
 test('backend origin, account and target are captured before async provider work', async () => {
@@ -54,6 +54,12 @@ test('backend origin, account and target are captured before async provider work
   const scope = f.calls.find(c => c[0] === 'prepare')[1].scope;
   assert.equal(scope.apiOrigin, 'https://customer.example'); assert.equal(scope.accountId, 'account-a');
   assert.equal(scope.deviceId, 'dev_a'); assert.equal(scope.serialNumber, 'BOTA123'); assert.equal(scope.bindingGeneration, 1);
+});
+test('confirmed cleanup is not turned into failure by redundant bridge cancellation', async () => {
+  const f = fixture();
+  f.native.cancel = async () => { throw new Error('bridge unavailable'); };
+  assert.deepEqual(await f.create().sync(device, recording, target), { recordingId: 'rec_a' });
+  assert.equal(f.listeners.size, 0);
 });
 test('each credential request gets a fresh token and foreign operations are ignored', async () => {
   const f = fixture(), gate = deferred(); let issued = 0;

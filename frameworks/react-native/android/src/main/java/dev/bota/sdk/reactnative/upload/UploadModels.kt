@@ -29,8 +29,7 @@ internal fun JSONObject.string(key: String): String = (opt(key) as? String)?.als
   demand(it.isNotEmpty() && it.length <= 8192)
 } ?: fail("INVALID_INPUT")
 internal fun JSONObject.integer(key: String, minimum: Long = 0, maximum: Long = 9007199254740991L): Long {
-  val raw = opt(key)
-  demand(raw is Number)
+  val raw = opt(key) as? Number ?: fail("INVALID_INPUT")
   val text = raw.toString()
   demand(text.matches(Regex("0|[1-9][0-9]*")))
   val number = text.toLongOrNull() ?: fail("INVALID_INPUT")

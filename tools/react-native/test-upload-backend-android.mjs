@@ -6,7 +6,8 @@ import { spawnSync } from 'node:child_process';
 
 // Compile the native backend and SDK models together to exercise opaque callbacks.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-if (process.platform === 'win32') throw new Error('Run on Linux/macOS: host durability tests require POSIX directory fsync.');
+const compileOnly = process.argv.length === 3 && process.argv[2] === '--compile-only';
+if (process.platform === 'win32' && !compileOnly) throw new Error('Run on Linux/macOS: host durability tests require POSIX directory fsync; --compile-only does not run tests.');
 const sdk = root;
 if (!process.env.JAVA_HOME) throw new Error('Set JAVA_HOME to JDK 17.');
 const java = join(process.env.JAVA_HOME, 'bin/java');
@@ -36,7 +37,7 @@ const compiler = [
   jar('org.jetbrains.intellij.deps', 'trove4j', '1.0.20200330'),
 ];
 const source = join(root, 'frameworks/react-native/android/src/main/java/dev/bota/sdk/reactnative/upload');
-if (process.argv.length > 2) throw new Error('This harness runs host JVM tests only.');
+if (process.argv.length > 2 && !compileOnly) throw new Error('Usage: test-upload-backend-android.mjs [--compile-only]');
 const output = mkdtempSync(join(tmpdir(), 'bota-upload-android-jvm-'));
 function run(args) {
   const result = spawnSync(java, args, { stdio: 'inherit' });
@@ -54,7 +55,8 @@ try {
   sources.push(join(sdk, 'frameworks/react-native/android/src/main/java/dev/bota/sdk/reactnative/BotaDeviceSDKEncryptedUploadV2Materials.kt'));
   if (run(['-cp', compiler.join(delimiter), 'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler',
     '-Werror', '-no-stdlib', '-no-reflect', '-jvm-target', '17', '-classpath', runtime.join(delimiter), '-d', output, ...sources])) {
-    run(['-cp', [output, ...runtime].join(delimiter), 'org.junit.runner.JUnitCore', 'dev.bota.sdk.reactnative.upload.NativeUploadTest']);
+    if (compileOnly) console.log('Native backend sources/tests compiled; execution not requested.');
+    else run(['-cp', [output, ...runtime].join(delimiter), 'org.junit.runner.JUnitCore', 'dev.bota.sdk.reactnative.upload.NativeUploadTest']);
   }
 } finally {
   rmSync(output, { recursive: true, force: true });
