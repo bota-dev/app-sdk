@@ -1,12 +1,13 @@
 # Bota App SDK
 
-Source candidate **2.0.0-beta.10** retires the exact Android connection when
-explicit disconnect times out or is cancelled without a native callback.
-Beta.9 remains the published baseline; see the
-[beta.10 preparation and acceptance review](release/evidence/2.0.0-beta.10-preflight.md).
-The separate intermittent GATT 8/133 reconnect issue is not established as fixed.
+Published synchronized beta **2.0.0-beta.10** retires the exact Android connection
+when explicit disconnect times out or is cancelled without a native callback.
+All five public packages and their release consumer checks passed. See the
+[publication and acceptance review](release/evidence/2.0.0-beta.10-publication.md).
+The separate intermittent GATT 8/133 reconnect issue is not established as fixed;
+physical acceptance remains separate from automated release checks.
 
-Published synchronized beta **2.0.0-beta.9** adds Android adapter-off cleanup
+The earlier synchronized beta **2.0.0-beta.9** added Android adapter-off cleanup
 even when the system omits the GATT loss callback. All five public packages and
 their release consumer checks passed. Explicit reconnect remains required.
 See the [publication and acceptance review](release/evidence/2.0.0-beta.9-preflight.md#publication)
@@ -18,16 +19,16 @@ September 29, 2026. New React Native integrations use
 existing old releases remain available and the successor is still beta.
 
 Rebuild native applications; restore Bluetooth, scan and reconnect explicitly
-after loss. The [independent examples review](https://github.com/bota-dev/examples/blob/main/docs/independent-examples-review.md#beta9-adoption)
+after loss. The [independent examples review](https://github.com/bota-dev/examples/blob/main/docs/independent-examples-review.md#beta10-adoption)
 records public-package builds and bounded phone recovery separately from SDK
 publication. Other hardware, background/out-of-range behavior and full recording
 workflows need their own acceptance.
 
-Unreleased Android source also retires an explicit disconnect when its wait
+Beta.10 also retires an explicit disconnect when its wait
 times out or is cancelled without a system callback. Its exact-generation loss
 still reaches observers after driver cleanup. See the
 [source review](docs/parity/android-disconnection-events.md#explicit-disconnect-without-an-android-callback).
-Public beta.9 does not contain this follow-up; no reconnect reliability claim is added.
+Earlier beta.9 does not contain this follow-up; no reconnect reliability claim is added.
 
 ## Client presence (beta.6)
 
@@ -100,13 +101,13 @@ The synchronized App SDK is currently a beta. React Native consumers pin the
 exact prerelease:
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.9
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.10
 ```
 
 Apple and Android do not use npm dist-tags, so beta consumers pin the exact
 synchronized version shown in the installation sections below. New synchronized
 releases use `2.x.y-beta.n`; promotion to a stable channel is a separate release
-decision. The new-name npm `beta` tags point to `2.0.0-beta.9`; `latest` stays
+decision. The new-name npm `beta` tags point to `2.0.0-beta.10`; `latest` stays
 at `2.0.0-beta.0` under the owner-approved bootstrap exception. This is not
 stable promotion. Later betas must not advance `latest`. Historical npm tags
 are unchanged.
@@ -478,12 +479,12 @@ In Xcode, choose **File > Add Package Dependencies** and enter:
 https://github.com/bota-dev/app-sdk.git
 ```
 
-Select exact version `2.0.0-beta.9`, then add the
+Select exact version `2.0.0-beta.10`, then add the
 `BotaAppSDK` product to an iOS 15+ or macOS 13+ target. Swift packages can
 declare the dependency directly:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.9")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.10")
 ```
 
 Import and configure the client from application code:
@@ -505,7 +506,7 @@ provide the Bluetooth usage description shown to users.
 Pin the exact synchronized Maven Central beta:
 
 ```kotlin
-implementation("dev.bota:bota-app-sdk:2.0.0-beta.9")
+implementation("dev.bota:bota-app-sdk:2.0.0-beta.10")
 ```
 
 ## Flutter Beta Installation
@@ -515,7 +516,7 @@ build gates passed and `bota_app_sdk` is public on pub.dev. Pin the exact versio
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.9
+  bota_app_sdk: 2.0.0-beta.10
 ```
 
 See the
@@ -533,7 +534,7 @@ Historical packages remain available under their original names. Install the
 renamed package at its verified exact version:
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.9
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.10
 ```
 
 Web Bluetooth requires a secure context and a browser implementation that

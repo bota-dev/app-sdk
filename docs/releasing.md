@@ -1,13 +1,23 @@
-# Next synchronized candidate: 2.0.0-beta.10
+# Published synchronized beta: 2.0.0-beta.10
 
-Beta.10 packages the verified Android explicit-disconnect cleanup fix at `2ef85809`.
-The owner requested the next step with direct pushes and no PR. The
-[preparation and design review](../release/evidence/2.0.0-beta.10-preflight.md)
-separates automated regressions, exact final CI, protected publication and public
-consumer acceptance. Preserve the single human `release-approval` gate, immutable
-artifacts and npm `latest`. Beta.9 remains published during preparation.
+Protected [release 36798449511](https://github.com/bota-dev/app-sdk/actions/runs/36798449511),
+attempt 10, completed successfully on October 1, 2026 (Pacific time). All five
+platforms were published from exact-main CI artifacts, with public native
+consumers and the complete Flutter archive verified. The immutable tag binds
+source `f5c6482`, main CI `36796610805` and its 49-file inventory. See the
+[publication and design review](../release/evidence/2.0.0-beta.10-publication.md).
+Preserve the single protected approval, immutable artifacts and npm `latest`
+at beta.0. Physical and application acceptance remain separate from publication.
 
-# Published synchronized beta: 2.0.0-beta.9
+CocoaPods registration, public CDN readiness and consumer verification are
+separate gates. Beta.10 attempts 6-8 timed out on the Trunk-to-GitHub commit;
+attempt 9 registered and verified the pod but exhausted Flutter's CDN readiness
+polls. Attempt 10 passed readiness, Flutter consumers, preserved publication and
+final verification. A timeout alone proves neither publication nor absence;
+verify exact public metadata/bytes and resume the preserved workflow, never
+rebuild or replace an occupied version.
+
+# Previous synchronized beta: 2.0.0-beta.9
 
 Protected release [36761509388](https://github.com/bota-dev/app-sdk/actions/runs/36761509388)
 published all five platforms from exact-main CI artifacts and verified public

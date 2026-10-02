@@ -252,8 +252,8 @@ This publication does not broaden the physical or automatic-reconnect claims.
 
 ## Explicit disconnect without an Android callback
 
-Status: selected for the [beta.10 candidate](../../release/evidence/2.0.0-beta.10-preflight.md);
-not published. The published beta.9 artifacts
+Status: published in [beta.10](../../release/evidence/2.0.0-beta.10-publication.md).
+The earlier beta.9 artifacts
 remain immutable. This follow-up addresses explicit disconnect timeout/cancellation
 while the adapter stays on and Android does not deliver its disconnect callback.
 It is separate from adapter shutdown and from the example's observed GATT 8/133
@@ -308,4 +308,4 @@ main integration; they cover packaging and consumers beyond these local checks.
 Changed-symbol and timeout/cancellation searches covered the SDK docs, workspace
 internal/public docs and repository README/ARCHITECTURE/AGENTS/CLAUDE surfaces.
 No target design or released API contract changed. This record and the SDK's
-README, architecture and contributor guidance describe the unreleased behavior.
+README, architecture and contributor guidance describe the beta.10 behavior.

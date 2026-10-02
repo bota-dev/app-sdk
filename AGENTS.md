@@ -45,22 +45,18 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Current Authority
 
-- The next synchronized candidate is `2.0.0-beta.10`, packaging exact-session
+- The synchronized published beta is `2.0.0-beta.10`, including exact-session
   Android cleanup when explicit disconnect times out or is cancelled without
-  a native callback. See the [candidate review](release/evidence/2.0.0-beta.10-preflight.md).
-  Beta.9 remains published until protected publication and public consumers pass.
+  a native callback. Source `f5c6482ac4378a2f35e902ade172a5cb779dffa6` passed
+  exact main CI and protected publication, public native consumers and complete
+  Flutter archive verification. See the [release evidence](release/evidence/2.0.0-beta.10-publication.md).
   Preserve the separate GATT 8/133 reconnect limitation; this fix does not
-  establish its cause or resolution. Regenerate Flutter inventory after any
-  packaged documentation change.
-
-- The synchronized published beta is `2.0.0-beta.9`, including Android
-  adapter-off cleanup when GATT omits its disconnect callback. Exact release
-  source is `89cb6f14eb0ea6327c196ac2cbeb8215df3423bd`; protected publication,
-  all public native consumers and the Flutter archive passed. See the
-  [release evidence](release/evidence/2.0.0-beta.9-preflight.md#publication).
-  Do not overwrite published artifacts/tags or advance npm `latest`.
-  Keep public-package phone evidence separate from earlier candidate labs.
-  Regenerate the Flutter inventory after any packaged documentation change.
+  establish its cause or resolution. Keep public-package phone evidence separate
+  from candidate labs and broad physical acceptance. Earlier beta.9 remains
+  immutable. Do not overwrite published artifacts/tags or advance npm `latest`.
+  Tagged packaged docs retain their original candidate scope; current status is
+  recorded in the nonpackaged release evidence. Regenerate the Flutter inventory
+  after any future packaged documentation change.
 
 - Beta.8 Android disconnect propagation connects confirmed GATT generations
   to native connection observers and RN without a status subscription. Preserve
@@ -202,7 +198,7 @@ before the cancellation check starts. This is test ordering, not a runtime chang
   `finally` removes active ownership; a new generation or close invalidates the
   retired marker. Reuse the runtime loss collector for facade and encrypted
   ownership cleanup. Run API 26/35 framework and controlled driver/facade ordering
-  regressions; see the [unreleased review](docs/parity/android-disconnection-events.md#explicit-disconnect-without-an-android-callback).
+  regressions; see the [implementation review](docs/parity/android-disconnection-events.md#explicit-disconnect-without-an-android-callback).
 
 - One synchronized SDK version comes from `sdk-version.toml`.
 - Rust owns protocol and deterministic workflow behavior.

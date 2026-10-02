@@ -1,12 +1,13 @@
 # Architecture
 
-Source candidate **2.0.0-beta.10** retires the exact Android connection when
-explicit disconnect times out or is cancelled without a native callback.
-Beta.9 remains the published baseline; see the
-[beta.10 preparation and acceptance review](release/evidence/2.0.0-beta.10-preflight.md).
-The separate intermittent GATT 8/133 reconnect issue is not established as fixed.
+Published synchronized beta **2.0.0-beta.10** retires the exact Android connection
+when explicit disconnect times out or is cancelled without a native callback.
+All five public packages and their release consumer checks passed. See the
+[publication and acceptance review](release/evidence/2.0.0-beta.10-publication.md).
+The separate intermittent GATT 8/133 reconnect issue is not established as fixed;
+physical acceptance remains separate from automated release checks.
 
-Published synchronized beta **2.0.0-beta.9** adds Android adapter-off cleanup
+The earlier synchronized beta **2.0.0-beta.9** added Android adapter-off cleanup
 even when the system omits the GATT loss callback. All five public packages and
 their release consumer checks passed. Explicit reconnect remains required.
 See the [publication and acceptance review](release/evidence/2.0.0-beta.9-preflight.md#publication)
@@ -19,7 +20,7 @@ owner-approved beta-stage cutover, retained history and remaining acceptance lim
 The 2.x source uses explicit App SDK distribution names. The historical beta.1
 release first verified the complete renamed family: Apple SwiftPM/CocoaPods,
 Android Maven, React Native/Web npm and Flutter pub.dev. The selected current
-release is 2.0.0-beta.9; its [release evidence](release/evidence/2.0.0-beta.9-preflight.md#publication)
+release is 2.0.0-beta.10; its [release evidence](release/evidence/2.0.0-beta.10-publication.md)
 tracks publication separately from application rollout and physical acceptance.
 See the [migration guide](docs/migrations/app-sdk-package-names.md). Historical
 checkpoints below retain their original names and versions.
@@ -56,14 +57,14 @@ RN connection timed out and recovered on retry. Those pre-version results remain
 separate from final public-package checks in the independent examples review.
 Wider hardware, background and out-of-range acceptance remain separate.
 
-The unreleased explicit-disconnect follow-up closes the exact GATT session on
+The published beta.10 explicit-disconnect follow-up closes the exact GATT session on
 timeout/cancellation even if Android omits its callback. The driver retains a
 one-shot retired-generation marker until the native loss is consumed, a new
 generation replaces it, or the driver closes. This lets the existing runtime
 loss collector invalidate facade state and release encrypted-upload ownership
 even after the caller's wait ends. Late old loss cannot invalidate a replacement.
 See the [source review](docs/parity/android-disconnection-events.md#explicit-disconnect-without-an-android-callback);
-published beta.9 and the broader recovery acceptance remain unchanged.
+earlier beta.9 artifacts and the broader recovery acceptance remain unchanged.
 
 ## Purpose
 
