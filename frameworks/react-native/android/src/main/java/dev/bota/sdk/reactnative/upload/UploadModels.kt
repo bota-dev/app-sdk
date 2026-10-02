@@ -157,7 +157,7 @@ internal data class UploadInput(
       val capability = json.getJSONObject("capability")
       val bytes = hex(capability.string("rawValueHex"))
       demand(bytes.size == 24)
-      
+
       val keyFields = listOf(scope.scopeKey, scope.deviceId, scope.bindingGeneration, recording.uuid,
         recording.generation, recording.ciphertextLength.toString(), recording.ciphertextSha256)
       // Android org.json escapes slashes; the existing JS journal key uses JSON.stringify.
