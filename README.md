@@ -1,5 +1,9 @@
 # Bota App SDK
 
+Source candidate **2.0.0-beta.11** adds the managed encrypted-v2 backend adapter for
+React Native iOS/Android. Beta.10 remains published until exact CI, protected
+publication and public consumers pass. See the [candidate review](release/evidence/2.0.0-beta.11-preflight.md).
+
 Current source adds a [managed encrypted-v2 backend adapter](docs/parity/v2-managed-backend.md)
 for React Native on iOS/Android, reducing customer native integration to a
 configured authenticated proxy, identity and lifecycle hooks. Publication and
@@ -283,7 +287,7 @@ their upload succeeds. Upload
 handoff exposes only ownership outcomes, OTA keeps request and firmware bytes
 in native hosts, and logs expose only complete core-sanitized lines. The AAR
 also carries a one-major deprecated
-`com.bota.sdk` adapter frozen from Android revision `0f06d2a…`; JVM descriptor,
+`com.bota.sdk` adapter frozen from Android revision `0f06d2aâ€¦`; JVM descriptor,
 source, already-compiled bytecode, API 26, and API 35 consumer gates pass. New
 applications resolve only `dev.bota:bota-android-sdk` and must not package the
 old AAR beside it. See [Android SDK migration](docs/migration/android.md).

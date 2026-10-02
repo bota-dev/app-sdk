@@ -1,3 +1,7 @@
+## 2.0.0-beta.11 (candidate)
+
+- Synchronize with the RN managed encrypted-v2 backend adapter release. Flutter integration and firmware gates remain unchanged.
+
 ## 2.0.0-beta.10 (candidate)
 
 - Retire the exact Android session when explicit disconnect times out or is cancelled without a native disconnect callback.

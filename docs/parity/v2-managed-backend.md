@@ -61,8 +61,8 @@ queries the session. An ambiguous initial recording/session creation is parked
 instead of issuing a potentially duplicate POST; automatic reconciliation of
 that initial unknown outcome remains a backend idempotency gap.
 
-Before any new ciphertext PUT, the SDK validates the retained local file and
-tries the exact manifest. An accepted manifest skips PUT. Only HTTP 409 with
+Before any new ciphertext PUT, the SDK tries the exact manifest, then validates
+the retained local file after the provider callback. An accepted manifest skips PUT. Only HTTP 409 with
 `encrypted_upload_v2_staging_missing` permits PUT. Generic conflict, permissions,
 transport failure and server failure do not prove the object absent. Already
 staged/ready/processing/published sessions also skip PUT.
@@ -95,6 +95,11 @@ listed here as requirements/evidence targets until CI has passed.
 | Cloud commitment and device cleanup are distinct | Native receipt validation/CONFIRM unchanged; journal completion delayed | Host suites required; device power-loss qualification not run |
 | No opaque artifacts or audio in JS | Metadata projection and native material registry | Codegen/type checks pass; packaged consumers required |
 | Existing custom integrations remain valid | Optional native callback defaults to old decision provider | Existing suite and native CI required |
+
+The first CI pass caught a file-check ordering regression: provider callbacks
+can change the file, so validation must remain after the callback, including
+when it skips PUT. The original tampering regression is retained unchanged.
+The corrected candidate must pass it before release.
 
 The change does not claim cross-channel deduplication, a new async API, physical
 parity, streaming-v2, or release-gate enablement. The standalone Apple/Android

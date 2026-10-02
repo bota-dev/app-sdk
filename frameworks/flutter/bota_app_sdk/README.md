@@ -1,5 +1,9 @@
 # Bota SDK for Flutter
 
+Source candidate `2.0.0-beta.11` keeps the five-platform version synchronized.
+The managed HTTP helper is React Native only; other facade behavior is unchanged.
+Beta.10 remains the published baseline until release gates pass.
+
 ## Package Name Migration
 
 The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
@@ -47,7 +51,7 @@ Pin the exact prerelease version after its publication:
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.10
+  bota_app_sdk: 2.0.0-beta.11
 ```
 
 For source development, point at an exact checkout rather than a moving branch:

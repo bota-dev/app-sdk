@@ -1,5 +1,9 @@
 # Bota SDK for Web
 
+Source candidate `2.0.0-beta.11` keeps the five-platform version synchronized.
+The managed HTTP helper is React Native only; other facade behavior is unchanged.
+Beta.10 remains the published baseline until release gates pass.
+
 `@bota.dev/web-app-sdk` is the foreground browser distribution of the Bota App
 SDK. It combines Web Bluetooth and tenant-scoped browser storage with the shared
 Rust core compiled to WebAssembly. Rust owns protocol sequencing, integrity,
@@ -17,7 +21,7 @@ This source prepares synchronized `2.0.0-beta.10`; Web behavior is unchanged.
 Use the pin below after publication is verified; beta.9 remains published:
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.10
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.11
 ```
 
 Use a secure context in a desktop Chromium browser with Web Bluetooth. The

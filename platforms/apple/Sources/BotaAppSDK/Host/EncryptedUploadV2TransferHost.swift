@@ -899,11 +899,6 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         let operationGeneration = generation
         let transportSessionID = state.active.context.transportSessionID
         try Task.checkCancellation()
-        try await state.active.receiver.verifyCompletedFile()
-        try validateCompletionOperation(
-            generation: operationGeneration, transportSessionID: transportSessionID,
-            materialID: state.materialID, evidence: state.completed.evidence
-        )
         let shouldUpload = try await state.services.materialRegistry.shouldUploadCiphertext(
             id: state.materialID, lease: state.materialLease,
             evidence: state.completed.evidence, manifest: state.completed.manifest
@@ -913,6 +908,11 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             transportSessionID: transportSessionID,
             materialID: state.materialID,
             evidence: state.completed.evidence
+        )
+        try await state.active.receiver.verifyCompletedFile()
+        try validateCompletionOperation(
+            generation: operationGeneration, transportSessionID: transportSessionID,
+            materialID: state.materialID, evidence: state.completed.evidence
         )
         if shouldUpload {
             let request = try await state.services.materialRegistry.stagingRequest(

@@ -1,3 +1,10 @@
+# Next synchronized candidate: 2.0.0-beta.11
+
+The owner requested test, commit and publication of the managed encrypted-v2
+backend adapter. See the [candidate design review](../release/evidence/2.0.0-beta.11-preflight.md).
+Keep the single protected approval, exact main-CI artifacts and npm `latest`
+protection. Beta.10 remains published until all public consumers pass.
+
 # Published synchronized beta: 2.0.0-beta.10
 
 Protected [release 36798449511](https://github.com/bota-dev/app-sdk/actions/runs/36798449511),

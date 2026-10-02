@@ -1,5 +1,9 @@
 # Architecture
 
+Source candidate **2.0.0-beta.11** adds the managed encrypted-v2 backend adapter for
+React Native iOS/Android. Beta.10 remains published until exact CI, protected
+publication and public consumers pass. See the [candidate review](release/evidence/2.0.0-beta.11-preflight.md).
+
 The managed encrypted-v2 adapter in current source moves Demo's native HTTP and
 session journal into the RN App SDK. Hosts supply authenticated proxy routes,
 fresh app tokens and scope cancellation. Native code owns manifest reconciliation,
@@ -260,8 +264,8 @@ exhaustive twelve-effect host port with typed failure and staged-notification
 routing, and an in-memory application-material registry keyed by opaque ID.
 The shared Rust engine keeps cancellation ordinary when the CONFIRM effect is
 only queued or doing local cleanup. Apple and Android atomically claim native
-cancellation before the canonical write, or—once that write is actually
-attempted—settle exact completion or stable cleanup-uncertainty code 19 without
+cancellation before the canonical write, orâ€”once that write is actually
+attemptedâ€”settle exact completion or stable cleanup-uncertainty code 19 without
 a later rollback. When cancellation races Apple engine startup return, exact
 Completed or code 19 preserves terminal material, while an ordinary cancel
 failure after a pre-CONFIRM claim removes the material as cancelled. Android
@@ -617,7 +621,7 @@ every registered resource close, preserving cleanup failures without leaking
 the Bluetooth thread or native engine.
 
 The one-major Android migration adapter preserves the public `com.bota.sdk`
-JVM descriptors from pinned revision `0f06d2a…` while delegating supported
+JVM descriptors from pinned revision `0f06d2aâ€¦` while delegating supported
 behavior to this facade. Kotlin API dumps, source recompilation, and
 already-compiled bytecode run against the replacement AAR on API 26 and API 35.
 The checked-in binary fixture contains only that consumer bytecode and binds
@@ -831,7 +835,7 @@ not platform-visible reducer models. All current BLE, timer, persistence,
 host-material, recording-sink, firmware-blob, secure-storage, and network
 callbacks return through `bota_device_sdk_v1_engine_dispatch`; the additive v2
 surface carries only identifiers, bounds, opaque registration IDs, checkpoint
-metadata, and digests—not ciphertext or cryptographic documents. Operation,
+metadata, and digestsâ€”not ciphertext or cryptographic documents. Operation,
 request, and cancellation ownership are checked before the reducer advances.
 The ABI's typed protocol decode/encode entry points delegate status,
 recording-list, recording-state/result, recording-control opcodes, transfer, OTA, provisioning,

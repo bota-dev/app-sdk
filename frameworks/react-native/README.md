@@ -1,5 +1,9 @@
 # Bota SDK for React Native
 
+Source candidate `2.0.0-beta.11` keeps the five-platform version synchronized.
+The managed HTTP helper is React Native only; other facade behavior is unchanged.
+Beta.10 remains the published baseline until release gates pass.
+
 Bluetooth device SDK for Bota Pin and Bota Note applications. The 2.x candidate
 preserves the public TypeScript API of `@bota.dev/react-native-sdk@0.0.65`
 while moving Bluetooth workflows and recording, streaming, and firmware bytes
@@ -35,7 +39,7 @@ co-install both. Standalone maintenance ended September 29, 2026; follow the
 [retirement and migration notice](../../docs/migrations/react-native-sdk-sunset.md).
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.10
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.11
 npx pod-install
 ```
 
