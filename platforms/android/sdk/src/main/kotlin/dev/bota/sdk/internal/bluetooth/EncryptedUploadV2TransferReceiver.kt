@@ -81,6 +81,8 @@ internal class EncryptedUploadV2TransferReceiver(
     val file: Path = rootDirectory.resolve("$sinkId.encrypted-upload-v2")
     private val expectedCiphertextSha256 = expectedCiphertextSha256.copyOf()
     private var checkpoint = checkpoint.copy(prefixSha256 = checkpoint.prefixSha256.copyOf())
+    private var highestTransportSequence = checkpoint.highestContiguousSequence
+    private var opening = true
     private val packets = mutableMapOf<UInt, PacketMetadata>()
     private var pendingWindow: PendingWindow? = null
     private val manifest = ByteArray(ManifestLength)
@@ -121,6 +123,15 @@ internal class EncryptedUploadV2TransferReceiver(
     }
 
     @Synchronized
+    fun resumeAccepted() {
+        requireValid(prepared && opening && !terminal && !completed && checkpoint.nextCiphertextOffset > 0uL,
+            "resume acceptance is outside transfer opening")
+        // Packet numbering belongs to the new attempt, not the durable prefix.
+        highestTransportSequence = 0u
+        opening = false
+    }
+
+    @Synchronized
     fun reconciliationCheckpoint(value: EncryptedUploadV2ResumeRejection): EncryptedUploadV2CheckpointValue {
         requireValid(
             prepared && !terminal && packets.isEmpty() && pendingWindow == null &&
@@ -140,6 +151,7 @@ internal class EncryptedUploadV2TransferReceiver(
     @Synchronized
     fun receive(payload: EncryptedUploadV2TransferPayload): EncryptedUploadV2TransferReceiverEvent? {
         requireValid(prepared && !terminal && !completed, "receiver is not active")
+        opening = false
         val session = when (payload) {
             is EncryptedUploadV2TransferPayload.Data -> payload.value.transportSessionId
             is EncryptedUploadV2TransferPayload.WindowEnd -> payload.value.transportSessionId
@@ -191,6 +203,7 @@ internal class EncryptedUploadV2TransferReceiver(
             value.prefixSha256, value.revision, emptyList(),
         )
         checkpoint = value.copy(prefixSha256 = value.prefixSha256.copyOf())
+        highestTransportSequence = value.highestContiguousSequence
         packets.clear()
         pendingWindow = null
         return ack
@@ -231,7 +244,7 @@ internal class EncryptedUploadV2TransferReceiver(
     }
 
     private fun receiveWindowEnd(value: EncryptedUploadV2WindowEndValue): EncryptedUploadV2WindowStageValue {
-        val previous = checkpoint.highestContiguousSequence
+        val previous = highestTransportSequence
         val follows = previous?.let { it != UInt.MAX_VALUE && value.firstSequence == it + 1u } ?: true
         val span = value.lastSequence.toULong() - value.firstSequence.toULong()
         requireValid(
@@ -284,7 +297,7 @@ internal class EncryptedUploadV2TransferReceiver(
 
     private fun receiveEof(value: EncryptedUploadV2EofValue): EncryptedUploadV2CompletedTransferValue {
         requireValid(
-            pendingWindow == null && packets.isEmpty() && checkpoint.highestContiguousSequence == value.finalSequence &&
+            pendingWindow == null && packets.isEmpty() && highestTransportSequence == value.finalSequence &&
                 value.blockCount > 0u && value.ciphertextLength == expectedCiphertextLength &&
                 secureEqual(value.ciphertextSha256, expectedCiphertextSha256) &&
                 manifestSha256?.let { secureEqual(it, value.manifestSha256) } == true &&

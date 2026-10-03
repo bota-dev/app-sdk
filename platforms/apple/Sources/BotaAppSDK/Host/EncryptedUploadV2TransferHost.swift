@@ -763,6 +763,21 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             reader = retainedReader
             reconciliation = nil
         }
+        if checkpoint.nextCiphertextOffset > 0 {
+            do {
+                try await receiver.resumeAccepted()
+                try Task.checkCancellation()
+                guard generation == startGeneration,
+                      retainedTransportSessionID == context.transportSessionID,
+                      !cancellationClaimed
+                else {
+                    throw Self.failure(code: 16, detail: "encrypted upload v2 transfer opening was cancelled")
+                }
+            } catch {
+                await reader.cancel()
+                throw error
+            }
+        }
         activeTransfer = ActiveTransfer(
             context: context,
             receiver: receiver,

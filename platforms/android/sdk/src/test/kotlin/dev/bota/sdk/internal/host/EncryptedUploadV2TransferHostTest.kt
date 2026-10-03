@@ -50,6 +50,74 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EncryptedUploadV2TransferHostTest {
+    @Test
+    fun completedSameOwnerResumeAcceptsZeroSequenceEofAndPreservesCheckpoint() = runTest {
+        assertSameOwnerResume(4)
+    }
+
+    @Test
+    fun partialSameOwnerResumeStartsAtSequenceOneAndPersistsOnlyVerifiedProgress() = runTest {
+        assertSameOwnerResume(2)
+    }
+
+    private suspend fun kotlinx.coroutines.test.TestScope.assertSameOwnerResume(offset: Int) {
+        val ciphertext = byteArrayOf(3, 4, 5, 6)
+        val manifest = ByteArray(580)
+        val root = Files.createTempDirectory("bota-v2-accepted-resume")
+        val file = root.resolve("$SinkId.encrypted-upload-v2")
+        Files.write(file, ciphertext)
+        val services = services(registry(AtomicInteger()), mutableListOf()).copyForOpen { _, checkpoint ->
+            assertEquals(339u, checkpoint!!.highestContiguousSequence)
+            assertEquals(offset.toULong(), checkpoint.nextCiphertextOffset)
+            EncryptedUploadV2OpenResult.Opened(flow {
+                if (offset < ciphertext.size) {
+                    emit(EncryptedUploadV2TransferPayload.Data(
+                        EncryptedUploadV2DataValue(9u, 1u, offset.toULong(), ciphertext.copyOfRange(offset, ciphertext.size)),
+                    ))
+                    emit(EncryptedUploadV2TransferPayload.WindowEnd(
+                        EncryptedUploadV2WindowEndValue(9u, 0u, 1u, 1u, 4u, sha(ciphertext), 35u),
+                    ))
+                }
+                emit(EncryptedUploadV2TransferPayload.ManifestChunk(
+                    EncryptedUploadV2ManifestChunkValue(9u, 580u, 0u, sha(manifest), manifest),
+                ))
+                emit(EncryptedUploadV2TransferPayload.Eof(
+                    EncryptedUploadV2EofValue(9u, if (offset == ciphertext.size) 0u else 1u, 1u,
+                        4u, sha(ciphertext), sha(manifest)),
+                ))
+            })
+        }
+        val original = PersistedEncryptedUploadV2Checkpoint(
+            byteArrayOf(99), "EVFXXW67KP", RecordingId, 4u, UploadSession, 2u, 9u, SinkId,
+            1u, 2u, 34u, offset.toULong(), sha(ciphertext.copyOf(offset)), 339u,
+        )
+        services.checkpointStore.save(original)
+        val host = EncryptedUploadV2TransferHost(root, services)
+        try {
+            host.execute(loadEffect()).toList()
+            val prepared = host.execute(effect(CoreEffectKind.EncryptedUploadV2PrepareSession, CoreField.Text(12, "material-1"))).toList()
+            val authorization = prepared.single().fields.filterIsInstance<CoreField.Bytes>().single().value
+            val events = host.execute(startEffect("material-1", authorization, ciphertext, checkpoint = original.coreCheckpoint)).produceIn(this)
+            assertEquals(HostEventKind.EncryptedUploadV2TransferStarted, events.receive().kind)
+            if (offset < ciphertext.size) {
+                assertEquals(HostEventKind.EncryptedUploadV2WindowStaged, events.receive().kind)
+                assertEquals(339u, services.checkpointStore.load(UploadSession)!!.highestContiguousSequence)
+                host.execute(effect(CoreEffectKind.EncryptedUploadV2SaveCheckpoint, CoreField.Bytes(28, byteArrayOf(100)))).toList()
+                host.execute(effect(CoreEffectKind.EncryptedUploadV2AcknowledgeWindow, CoreField.Bytes(28, byteArrayOf(100)))).toList()
+            }
+            assertEquals(HostEventKind.EncryptedUploadV2TransferCompleted, events.receive().kind)
+            withTimeout(AsyncSettlementTimeoutMilliseconds) {
+                assertTrue(events.receiveCatching().isClosed)
+            }
+            val saved = services.checkpointStore.load(UploadSession)!!
+            assertEquals(if (offset == ciphertext.size) 339u else 1u, saved.highestContiguousSequence)
+            assertEquals(if (offset == ciphertext.size) 34u else 35u, saved.revision)
+            assertTrue(Files.readAllBytes(file).contentEquals(ciphertext))
+        } finally {
+            host.close()
+        }
+    }
+
     private fun EncryptedUploadV2Material(
         materialId: String,
         recordingId: String,

@@ -493,16 +493,31 @@ class EncryptedUploadV2TransferControlTest {
     @Test
     fun completedResumeAcceptsManifestAndEofWithoutAnotherWindow() = runBlocking {
         val driver = ControlDriver()
-        val mapper = CoreModelMapper(TransferControlCore(listOf(openingReply(0x45, 2u))))
+        val ciphertext = byteArrayOf(1, 2)
+        val digest = MessageDigest.getInstance("SHA-256").digest(ciphertext)
+        val checkpoint = EncryptedUploadV2CheckpointValue(1u, 2u, digest, 339u)
+        val reply = openingReply(0x45, 2u).let { packet ->
+            packet.dataValues[packet.fieldIds.indexOf(143)] = digest
+            packet
+        }
+        val mapper = CoreModelMapper(TransferControlCore(listOf(reply), ciphertext))
         val control = testControl(driver, mapper)
+        val root = java.nio.file.Files.createTempDirectory("bota-v2-control-receiver")
+        val sinkId = UUID.randomUUID().toString()
+        java.nio.file.Files.write(root.resolve("$sinkId.encrypted-upload-v2"), ciphertext)
+        val receiver = EncryptedUploadV2TransferReceiver(root, sinkId, 9u, 2u, digest, 1u, 1u, 1u, checkpoint)
+        receiver.prepare()
         try {
-            val opened = control.open("device", request(), reconciledCheckpoint(2u)) as EncryptedUploadV2OpenResult.Opened
+            val opened = control.open("device", request().copy(expectedCiphertextSha256 = digest), checkpoint) as EncryptedUploadV2OpenResult.Opened
+            receiver.resumeAccepted()
             val received = async(start = CoroutineStart.UNDISPATCHED) { opened.notifications.take(2).toList() }
             driver.emit(byteArrayOf(0x43))
             driver.emit(byteArrayOf(0x44))
             val payloads = withContext(Dispatchers.Default) { withTimeout(TestSettlementTimeoutMilliseconds) { received.await() } }
             assertTrue(payloads[0] is EncryptedUploadV2TransferPayload.ManifestChunk)
             assertTrue(payloads[1] is EncryptedUploadV2TransferPayload.Eof)
+            assertEquals(null, receiver.receive(payloads[0]))
+            assertTrue(receiver.receive(payloads[1]) is EncryptedUploadV2TransferReceiverEvent.Completed)
             assertEquals(1, driver.writeCount)
         } finally {
             control.release(9u)
@@ -696,7 +711,10 @@ private class ControlDriver(
     override fun close() = Unit
 }
 
-private class TransferControlCore(controlReplies: List<NativePacket> = emptyList()) : NativeCore {
+private class TransferControlCore(
+    controlReplies: List<NativePacket> = emptyList(),
+    private val completedCiphertext: ByteArray? = null,
+) : NativeCore {
     private val controlReplies = controlReplies.iterator()
     val encoded = mutableListOf<NativePacket>()
     override fun encode(packet: NativePacket): NativePacket {
@@ -712,13 +730,15 @@ private class TransferControlCore(controlReplies: List<NativePacket> = emptyList
             value?.firstOrNull()?.toInt() == 0x42 -> windowEndPacket()
             value?.firstOrNull()?.toInt() == 0x43 -> listOf(
                 CoreField.Unsigned(61, 3u), CoreField.Unsigned(127, 0x43u), CoreField.Unsigned(128, 9u),
-                CoreField.Unsigned(139, 580u), CoreField.Unsigned(39, 0u), CoreField.Unsigned(150, 1u),
-                CoreField.Bytes(142, ByteArray(32)), CoreField.Bytes(30, byteArrayOf(1)),
+                CoreField.Unsigned(139, 580u), CoreField.Unsigned(39, 0u), CoreField.Unsigned(150, if (completedCiphertext == null) 1u else 580u),
+                CoreField.Bytes(142, if (completedCiphertext == null) ByteArray(32) else sha(ByteArray(580))),
+                CoreField.Bytes(30, if (completedCiphertext == null) byteArrayOf(1) else ByteArray(580)),
             ).toNativePacket(0x0525)
             value?.firstOrNull()?.toInt() == 0x44 -> listOf(
                 CoreField.Unsigned(61, 3u), CoreField.Unsigned(127, 0x44u), CoreField.Unsigned(128, 9u),
-                CoreField.Unsigned(38, 1u), CoreField.Unsigned(145, 1u), CoreField.Unsigned(130, 2u),
-                CoreField.Bytes(144, ByteArray(32)), CoreField.Bytes(142, ByteArray(32)),
+                CoreField.Unsigned(38, if (completedCiphertext == null) 1u else 0u), CoreField.Unsigned(145, 1u), CoreField.Unsigned(130, 2u),
+                CoreField.Bytes(144, completedCiphertext?.let(::sha) ?: ByteArray(32)),
+                CoreField.Bytes(142, if (completedCiphertext == null) ByteArray(32) else sha(ByteArray(580))),
             ).toNativePacket(0x0525)
             else -> if (controlReplies.hasNext()) controlReplies.next() else controlPacket()
         }
@@ -780,4 +800,6 @@ private class TransferControlCore(controlReplies: List<NativePacket> = emptyList
 
     private fun uuidBytes(id: UUID) = java.nio.ByteBuffer.allocate(16)
         .putLong(id.mostSignificantBits).putLong(id.leastSignificantBits).array()
+
+    private fun sha(value: ByteArray) = MessageDigest.getInstance("SHA-256").digest(value)
 }

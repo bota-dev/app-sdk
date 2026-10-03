@@ -348,6 +348,7 @@ final class EncryptedUploadV2TransferReceiverTests: XCTestCase {
             )
         )
         try await receiver.prepare()
+        try await receiver.resumeAccepted()
         let leadingManifest = try await receiver.receive(Self.manifestChunk(
             sessionID: fixture.sessionID,
             totalLength: 580,
@@ -374,7 +375,7 @@ final class EncryptedUploadV2TransferReceiverTests: XCTestCase {
         )
         let completed = try await receiver.receive(Self.eof(
             sessionID: fixture.sessionID,
-            finalSequence: 93,
+            finalSequence: 0,
             blockCount: 1,
             ciphertextLength: 6,
             ciphertextSHA256: evidence.ciphertextSHA256,
@@ -384,6 +385,98 @@ final class EncryptedUploadV2TransferReceiverTests: XCTestCase {
             completed,
             .completed(.init(fileURL: fixture.fileURL, manifest: manifest, evidence: evidence))
         )
+    }
+
+    func testCompletedResumeStillRejectsStaleSequenceAndInvalidIntegrityEvidence() async throws {
+        let ciphertext = Data([1, 2, 3, 4])
+        let manifest = Data(repeating: 7, count: 580)
+        for fault in ["old-sequence", "ciphertext-hash", "manifest-hash", "manifest-bytes", "file", "length", "block-count"] {
+            let (fixture, receiver) = try await preparedResume(ciphertext, offset: 4)
+            var receivedManifest = manifest
+            if fault == "manifest-bytes" { receivedManifest[0] = 42 }
+            for offset in [0, 300] {
+                _ = try await receiver.receive(Self.manifestChunk(
+                    sessionID: fixture.sessionID, totalLength: 580, offset: UInt16(offset),
+                    digest: Self.sha256(manifest), bytes: Data(receivedManifest[offset..<min(offset + 300, 580)])
+                ))
+            }
+            if fault == "file" { try Data([4, 3, 2, 1]).write(to: fixture.fileURL) }
+            await XCTAssertThrowsErrorAsync(try await receiver.receive(Self.eof(
+                sessionID: fixture.sessionID, finalSequence: fault == "old-sequence" ? 339 : 0,
+                blockCount: fault == "block-count" ? 0 : 1,
+                ciphertextLength: fault == "length" ? 3 : 4,
+                ciphertextSHA256: fault == "ciphertext-hash" ? Data(repeating: 0, count: 32) : Self.sha256(ciphertext),
+                manifestSHA256: fault == "manifest-hash" ? Data(repeating: 0, count: 32) : Self.sha256(manifest)
+            )))
+        }
+    }
+
+    func testPartialResumeUsesSequenceOneAndRejectsThePreviousAttemptWindow() async throws {
+        let ciphertext = Data([1, 2, 3, 4])
+        for sequence in [UInt32(1), 340] {
+            let (fixture, receiver) = try await preparedResume(ciphertext, offset: 2)
+            _ = try await receiver.receive(Self.dataPacket(
+                sessionID: fixture.sessionID, sequence: sequence, offset: 2, bytes: Data([3, 4])
+            ))
+            let window = Self.windowEnd(
+                sessionID: fixture.sessionID, windowIndex: 0, firstSequence: sequence,
+                lastSequence: sequence, nextOffset: 4, prefixSHA256: Self.sha256(ciphertext), checkpointRevision: 35
+            )
+            if sequence != 1 {
+                await XCTAssertThrowsErrorAsync(try await receiver.receive(window)) { error in
+                    XCTAssertEqual(error as? EncryptedUploadV2TransferReceiverError, .malformedWindow)
+                }
+                continue
+            }
+            guard case let .windowStaged(staged)? = try await receiver.receive(window) else {
+                XCTFail("expected a verified window")
+                return
+            }
+            await XCTAssertThrowsErrorAsync(try await receiver.windowAcknowledgement(for: staged.checkpoint))
+            try await receiver.checkpointDidPersist(staged.checkpoint)
+            let acknowledgement = try await receiver.windowAcknowledgement(for: staged.checkpoint)
+            XCTAssertEqual(Self.readUInt32(acknowledgement, at: 16), 1)
+            let manifest = Data(repeating: 0, count: 580)
+            for offset in [0, 300] {
+                _ = try await receiver.receive(Self.manifestChunk(
+                    sessionID: fixture.sessionID, totalLength: 580, offset: UInt16(offset),
+                    digest: Self.sha256(manifest), bytes: Data(manifest[offset..<min(offset + 300, 580)])
+                ))
+            }
+            let result = try await receiver.receive(Self.eof(
+                sessionID: fixture.sessionID, finalSequence: 1, blockCount: 1, ciphertextLength: 4,
+                ciphertextSHA256: Self.sha256(ciphertext), manifestSHA256: Self.sha256(manifest)
+            ))
+            guard case .completed? = result else { return XCTFail("expected completion") }
+        }
+    }
+
+    func testResumeSequenceResetCannotRepeatOrRunAfterPayload() async throws {
+        let (fixture, receiver) = try await preparedResume(Data([1, 2, 3, 4]), offset: 2)
+        await XCTAssertThrowsErrorAsync(try await receiver.resumeAccepted())
+        _ = try await receiver.receive(Self.dataPacket(
+            sessionID: fixture.sessionID, sequence: 1, offset: 2, bytes: Data([3, 4])
+        ))
+        await XCTAssertThrowsErrorAsync(try await receiver.resumeAccepted())
+        let fresh = try fixture.receiver(expectedCiphertext: Data([1, 2, 3, 4]))
+        await XCTAssertThrowsErrorAsync(try await fresh.resumeAccepted())
+        try await fresh.prepare()
+        await XCTAssertThrowsErrorAsync(try await fresh.resumeAccepted())
+    }
+
+    private func preparedResume(
+        _ ciphertext: Data, offset: Int
+    ) async throws -> (Fixture, EncryptedUploadV2TransferReceiver) {
+        let fixture = try Fixture()
+        try FileManager.default.createDirectory(at: fixture.root, withIntermediateDirectories: true)
+        try ciphertext.write(to: fixture.fileURL)
+        let receiver = try fixture.receiver(expectedCiphertext: ciphertext, checkpoint: .init(
+            revision: 34, nextCiphertextOffset: UInt64(offset), prefixSHA256: Self.sha256(Data(ciphertext.prefix(offset))),
+            highestContiguousSequence: 339
+        ))
+        try await receiver.prepare()
+        try await receiver.resumeAccepted()
+        return (fixture, receiver)
     }
 
     private struct Fixture {

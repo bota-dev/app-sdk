@@ -58,12 +58,17 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 - Source candidate `2.0.0-beta.12` adds the Android completed-resume intake
   transition after validated `ResumeAccepted`, before releasing queued packets.
+  Android and Apple also reset an attempt-local packet counter once after a
+  validated resumed opening, before pumping notifications. Persisted checkpoint
+  sequences remain historical evidence until a verified new window is saved.
   Fresh/partial resumes retain the window phase. Do not bypass receipt/CONFIRM
   or relax identity, prefix, revision, nonce or owner checks. See the
   [regression and acceptance review](docs/parity/android-complete-resume-recovery.md).
-  Exact branch CI and License Gate passed for `0e6e9a1`; candidate-derived Apple
-  pins are prepared. Candidate native phone recovery, final main CI, publication
-  and public consumers remain separate gates; beta.11 remains immutable.
+  Initial `0e6e9a1`/`72ca200` branch checks passed, but that native phone candidate
+  failed with `integrity_failed`; source and regressions isolate the stale
+  sequence mismatch, without a physical packet trace. New source CI,
+  regenerated Apple pins and another physical retry remain required, followed
+  by final main CI, publication and public consumers. Beta.11 remains immutable.
 
 - The synchronized published beta is `2.0.0-beta.11`, adding the managed native
   encrypted-v2 backend adapter for React Native. Exact main CI and protected

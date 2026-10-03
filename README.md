@@ -1,9 +1,9 @@
 # Bota App SDK
 
-Source candidate **2.0.0-beta.12** repairs Android encrypted-v2 recovery when a
-validated resume starts at the complete ciphertext boundary. Manifest/EOF can
-then arrive without another data window; signed receipt/CONFIRM still gates
-cleanup. It also includes the existing Android connect/MTU cleanup follow-up.
+Source candidate **2.0.0-beta.12** repairs the Android encrypted-v2 manifest
+phase at a complete resume and separates each resumed attempt's packet counter
+from the durable checkpoint on Android and Apple. Signed receipt/CONFIRM still
+gates cleanup. It also includes the existing Android connect/MTU cleanup follow-up.
 Beta.11 remains published until release gates pass. See the
 [candidate review](release/evidence/2.0.0-beta.12-preflight.md).
 

@@ -839,6 +839,22 @@ final class EncryptedUploadV2TransferHostTests: XCTestCase {
             highestContiguousSequence: 1
         ))
 
+        for offset in [0, 300] {
+            resumeNotifications.continuation.yield(Self.manifestChunk(
+                sessionID: fixture.transportSessionID, totalLength: 580,
+                offset: UInt16(offset), digest: fixture.manifestSHA256,
+                bytes: Data(fixture.manifest[offset..<min(offset + 300, 580)])
+            ))
+        }
+        resumeNotifications.continuation.yield(Self.eof(
+            sessionID: fixture.transportSessionID, finalSequence: 0,
+            ciphertextLength: UInt64(fixture.ciphertext.count),
+            ciphertextSHA256: fixture.ciphertextSHA256, manifestSHA256: fixture.manifestSHA256
+        ))
+        let completed = try await start.next()
+        XCTAssertEqual(completed?.kind, EncryptedUploadV2Abi.eventTransferCompleted)
+        XCTAssertEqual(try Data(contentsOf: fixture.fileURL), fixture.ciphertext)
+
         let deleted = try await Self.collect(await reloadedHost.execute(fixture.deleteEffect()))
         XCTAssertTrue(deleted.isEmpty)
         let emptyHost = EncryptedUploadV2TransferHost(

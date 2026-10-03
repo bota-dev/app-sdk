@@ -381,7 +381,9 @@ internal class EncryptedUploadV2TransferHost(
                 val result = services.openTransfer(request, persisted?.nativeCheckpoint?.takeIf { it.nextCiphertextOffset > 0uL })
                 cancelOpening = result.cancel
                 when (result) {
-                    is EncryptedUploadV2OpenResult.Opened -> result
+                    is EncryptedUploadV2OpenResult.Opened -> result.also {
+                        if (checkpoint.nextCiphertextOffset > 0uL) transferReceiver.resumeAccepted()
+                    }
                     is EncryptedUploadV2OpenResult.ResumeRejected -> {
                         ensureOpening()
                         result.assertActive()
@@ -410,7 +412,9 @@ internal class EncryptedUploadV2TransferHost(
                             requireValue(generation == startGeneration && !cancellationStarted, "transfer was cancelled", 16u)
                             loadedCheckpoint = recovered
                         }
-                        result.retry(reconciled)
+                        result.retry(reconciled).also {
+                            if (reconciled.nextCiphertextOffset > 0uL) transferReceiver.resumeAccepted()
+                        }
                     }
                 }
             } catch (error: Throwable) {

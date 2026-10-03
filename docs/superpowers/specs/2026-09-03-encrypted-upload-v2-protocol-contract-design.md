@@ -713,6 +713,18 @@ session. A new transport session may resume the same upload session only after
 the exact resume handshake. Unproved tail bytes in the App sink are truncated
 before RESUME_ACCEPT advances.
 
+Packet numbering belongs to each newly admitted transport attempt, independently
+of the saved checkpoint's byte offset, prefix digest and revision. Existing
+firmware starts DATA at sequence 1 for a new START or accepted RESUME. If a
+resume starts at the complete ciphertext boundary, it sends no DATA and EOF's
+final DATA sequence is 0. An exact duplicate RESUME that still matches the
+active context is idempotent and does not reset its counters; a stale request
+that no longer matches after progress is rejected. Receivers compare
+WINDOW_END and EOF to the current attempt's acknowledged sequence; restoring
+the historical checkpoint sequence as that counter is invalid. This clarifies
+the existing implementation and maintenance receiver contract without changing
+message layouts or vector bytes.
+
 ## Stable Result and Error Codes
 
 Signed-blob results, ERROR, and resume rejection use the same `u16` namespace:

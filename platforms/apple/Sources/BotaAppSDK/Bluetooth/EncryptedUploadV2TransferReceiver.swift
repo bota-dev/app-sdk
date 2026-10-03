@@ -84,6 +84,8 @@ actor EncryptedUploadV2TransferReceiver {
     private let mapper: CoreModelMapper
 
     private var checkpoint: EncryptedUploadV2CheckpointValue
+    private var highestTransportSequence: UInt32?
+    private var opening = true
     private var prepared = false
     private var packets: [UInt32: PacketMetadata] = [:]
     private var pendingWindow: PendingWindow?
@@ -129,6 +131,7 @@ actor EncryptedUploadV2TransferReceiver {
         self.maximumWindowPackets = maximumWindowPackets
         self.maximumMissingSequences = maximumMissingSequences
         self.checkpoint = checkpoint
+        self.highestTransportSequence = checkpoint.highestContiguousSequence
         self.mapper = mapper
         self.fileManager = fileManager
     }
@@ -166,6 +169,15 @@ actor EncryptedUploadV2TransferReceiver {
         prepared = true
     }
 
+    func resumeAccepted() throws {
+        guard prepared, opening, !terminal, !completed, checkpoint.nextCiphertextOffset > 0 else {
+            throw EncryptedUploadV2TransferReceiverError.unexpectedPayload
+        }
+        // Packet numbering belongs to the new attempt, not the durable prefix.
+        highestTransportSequence = 0
+        opening = false
+    }
+
     func verifyCompletedFile() throws {
         guard completed, try fileSize() == expectedCiphertextLength,
               try Self.secureEqual(sha256Prefix(length: expectedCiphertextLength), expectedCiphertextSHA256) else {
@@ -201,6 +213,7 @@ actor EncryptedUploadV2TransferReceiver {
         guard prepared, !terminal, !completed else {
             throw EncryptedUploadV2TransferReceiverError.notPrepared
         }
+        opening = false
         do {
             let payload = try mapper.decodeEncryptedUploadV2TransferPayload(rawValue)
             guard payload.transportSessionID == transportSessionID else {
@@ -284,6 +297,7 @@ actor EncryptedUploadV2TransferReceiver {
             missingSequences: []
         )
         checkpoint = persistedCheckpoint
+        highestTransportSequence = persistedCheckpoint.highestContiguousSequence
         packets.removeAll(keepingCapacity: true)
         self.pendingWindow = nil
         return acknowledgement
@@ -335,7 +349,7 @@ actor EncryptedUploadV2TransferReceiver {
         let (span, sequenceOverflow) = value.lastSequence.subtractingReportingOverflow(
             value.firstSequence
         )
-        let followsAcknowledgedSequence = checkpoint.highestContiguousSequence.map { highest in
+        let followsAcknowledgedSequence = highestTransportSequence.map { highest in
             let (expected, overflow) = highest.addingReportingOverflow(1)
             return !overflow && value.firstSequence == expected
         } ?? true
@@ -433,7 +447,7 @@ actor EncryptedUploadV2TransferReceiver {
     ) throws -> EncryptedUploadV2CompletedTransferValue {
         guard pendingWindow == nil,
               packets.isEmpty,
-              checkpoint.highestContiguousSequence == value.finalSequence,
+              highestTransportSequence == value.finalSequence,
               value.blockCount > 0,
               value.ciphertextLength == expectedCiphertextLength,
               Self.secureEqual(value.ciphertextSHA256, expectedCiphertextSHA256),

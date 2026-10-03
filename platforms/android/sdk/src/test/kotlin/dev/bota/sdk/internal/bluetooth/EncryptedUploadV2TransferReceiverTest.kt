@@ -15,6 +15,90 @@ import org.junit.Test
 
 class EncryptedUploadV2TransferReceiverTest {
     @Test
+    fun completedResumeUsesAttemptSequenceAndStillChecksEveryEofIntegrityField() {
+        val ciphertext = byteArrayOf(1, 2, 3, 4)
+        val manifest = ByteArray(580) { (it % 251).toByte() }
+        for (fault in listOf("none", "old-sequence", "ciphertext-hash", "manifest-hash", "manifest-bytes", "file", "length", "block-count")) {
+            val receiver = resumedReceiver(ciphertext, ciphertext.size)
+            receiver.prepare()
+            receiver.resumeAccepted()
+            val receivedManifest = manifest.copyOf().also { if (fault == "manifest-bytes") it[0] = 42 }
+            receiver.receive(EncryptedUploadV2TransferPayload.ManifestChunk(
+                EncryptedUploadV2ManifestChunkValue(9u, 580u, 0u, sha(manifest), receivedManifest),
+            ))
+            if (fault == "file") Files.write(receiver.file, byteArrayOf(4, 3, 2, 1))
+            val eof = EncryptedUploadV2TransferPayload.Eof(EncryptedUploadV2EofValue(
+                9u, if (fault == "old-sequence") 339u else 0u,
+                if (fault == "block-count") 0u else 1u,
+                if (fault == "length") 3u else 4u,
+                if (fault == "ciphertext-hash") ByteArray(32) else sha(ciphertext),
+                if (fault == "manifest-hash") ByteArray(32) else sha(manifest),
+            ))
+            if (fault == "none") {
+                assertTrue(receiver.receive(eof) is EncryptedUploadV2TransferReceiverEvent.Completed)
+            } else {
+                assertThrows(fault, EncryptedUploadV2TransferReceiverException::class.java) { receiver.receive(eof) }
+            }
+        }
+    }
+
+    @Test
+    fun partialResumeRejectsOldWindowSequenceAndRequiresPersistedNewAttemptProgress() {
+        val ciphertext = byteArrayOf(1, 2, 3, 4)
+        for (sequence in listOf(1u, 340u)) {
+            val receiver = resumedReceiver(ciphertext, 2)
+            receiver.prepare()
+            receiver.resumeAccepted()
+            receiver.receive(EncryptedUploadV2TransferPayload.Data(
+                EncryptedUploadV2DataValue(9u, sequence, 2u, byteArrayOf(3, 4)),
+            ))
+            val window = EncryptedUploadV2TransferPayload.WindowEnd(
+                EncryptedUploadV2WindowEndValue(9u, 0u, sequence, sequence, 4u, sha(ciphertext), 35u),
+            )
+            if (sequence != 1u) {
+                assertThrows(EncryptedUploadV2TransferReceiverException::class.java) { receiver.receive(window) }
+                continue
+            }
+            val staged = receiver.receive(window) as EncryptedUploadV2TransferReceiverEvent.WindowStaged
+            assertThrows(EncryptedUploadV2TransferReceiverException::class.java) { receiver.windowAcknowledgement(staged.value.checkpoint) }
+            receiver.checkpointDidPersist(staged.value.checkpoint)
+            assertEquals(1u, receiver.windowAcknowledgement(staged.value.checkpoint).highestContiguousSequence)
+            val manifest = ByteArray(580)
+            receiver.receive(EncryptedUploadV2TransferPayload.ManifestChunk(
+                EncryptedUploadV2ManifestChunkValue(9u, 580u, 0u, sha(manifest), manifest),
+            ))
+            assertTrue(receiver.receive(EncryptedUploadV2TransferPayload.Eof(
+                EncryptedUploadV2EofValue(9u, 1u, 1u, 4u, sha(ciphertext), sha(manifest)),
+            )) is EncryptedUploadV2TransferReceiverEvent.Completed)
+        }
+    }
+
+    @Test
+    fun resumeSequenceResetIsOnlyAllowedOnceBeforeReceivingPayload() {
+        val ciphertext = byteArrayOf(1, 2, 3, 4)
+        val resumed = resumedReceiver(ciphertext, 2)
+        assertThrows(EncryptedUploadV2TransferReceiverException::class.java) { resumed.resumeAccepted() }
+        resumed.prepare()
+        resumed.resumeAccepted()
+        assertThrows(EncryptedUploadV2TransferReceiverException::class.java) { resumed.resumeAccepted() }
+        resumed.receive(EncryptedUploadV2TransferPayload.Data(EncryptedUploadV2DataValue(9u, 1u, 2u, byteArrayOf(3, 4))))
+        assertThrows(EncryptedUploadV2TransferReceiverException::class.java) { resumed.resumeAccepted() }
+        val fresh = receiver(Files.createTempDirectory("bota-v2-fresh"), ciphertext, 2u, 2u)
+        fresh.prepare()
+        assertThrows(EncryptedUploadV2TransferReceiverException::class.java) { fresh.resumeAccepted() }
+    }
+
+    private fun resumedReceiver(ciphertext: ByteArray, offset: Int): EncryptedUploadV2TransferReceiver {
+        val root = Files.createTempDirectory("bota-v2-resume-sequence")
+        val sink = UUID.randomUUID().toString()
+        Files.write(root.resolve("$sink.encrypted-upload-v2"), ciphertext)
+        return EncryptedUploadV2TransferReceiver(
+            root, sink, 9u, ciphertext.size.toULong(), sha(ciphertext), 4u, 2u, 2u,
+            EncryptedUploadV2CheckpointValue(34u, offset.toULong(), sha(ciphertext.copyOf(offset)), 339u),
+        )
+    }
+
+    @Test
     fun repairsAWindowBeforePersistingAndAcknowledgingTheCleanCheckpoint() {
         val root = Files.createTempDirectory("bota-v2-receiver")
         val ciphertext = "abcdef".encodeToByteArray()
