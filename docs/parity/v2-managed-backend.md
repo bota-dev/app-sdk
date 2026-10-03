@@ -1,9 +1,9 @@
 # Managed encrypted-v2 backend adapter
 
-Current source adds `createEncryptedUploadV2Backend` to the React Native App
+Published beta.11 adds `createEncryptedUploadV2Backend` to the React Native App
 SDK on iOS and Android. It packages the native HTTP/journal implementation
-previously supplied by Demo. Publication and physical acceptance are separate
-gates; beta.10 does not contain this helper. Existing custom native providers
+previously supplied by Demo. Package publication and public consumers pass;
+physical acceptance remains separate. Beta.10 does not contain this helper. Existing custom native providers
 remain supported. The Apple/Android material API gains an optional
 `reconcileStaging` callback without changing the wire protocol.
 
@@ -90,23 +90,24 @@ that could turn confirmed success into a spurious retry after bridge teardown.
 
 ## Design and acceptance review
 
-Reviewed against Upload Management §1.1 and Encrypted Upload v2. Tests are
-listed here as requirements/evidence targets until CI has passed.
+Reviewed against Upload Management §1.1 and Encrypted Upload v2. Exact main
+CI `37078793682` and License Gate `37078793554` pass at `344cd2e`; see the
+[publication record](../../release/evidence/2.0.0-beta.11-publication.md).
 
 | Requirement | Evidence | Status / remaining check |
 | --- | --- | --- |
-| Small customer integration; app authentication stays scoped | Exported helper, native credential broker, nine JS integration cases | Local JS cases pass; linked native consumers pending CI |
-| Reuse exact recording/session after interruption | Ported native journals and restart/nonce recovery suites | Native CI required; initial ambiguous create remains parked |
-| Lost PUT response does not cause another upload | Native manifest replay tests and registry manifest/lease validation tests | CI and physical interruption checks pending |
-| Account changes reject late work | Captured scope, AbortSignal, fresh credential requests, cancel/dispose tests | Local JS passes; native cancellation suites pending CI |
-| Cloud commitment and device cleanup are distinct | Native receipt validation/CONFIRM unchanged; journal completion delayed | Host suites required; device power-loss qualification not run |
-| No opaque artifacts or audio in JS | Metadata projection and native material registry | Codegen/type checks pass; packaged consumers required |
-| Existing custom integrations remain valid | Optional native callback defaults to old decision provider | Existing suite and native CI required |
+| Small customer integration; app authentication stays scoped | Exported helper, native credential broker, nine JS integration cases | 158 RN tests and linked iOS/Android consumers pass |
+| Reuse exact recording/session after interruption | Ported native journals and restart/nonce recovery suites | 43 Android recovery tests and 16 Apple suites pass; initial ambiguous create remains parked |
+| Lost PUT response does not cause another upload | Native manifest replay tests and registry manifest/lease validation tests | Native host/registry CI passes; physical interruption checks remain unverified |
+| Account changes reject late work | Captured scope, AbortSignal, fresh credential requests, cancel/dispose tests | JS/native cancellation suites pass |
+| Cloud commitment and device cleanup are distinct | Native receipt validation/CONFIRM unchanged; journal completion delayed | Host suites pass; device power-loss qualification not run |
+| No opaque artifacts or audio in JS | Metadata projection and native material registry | Codegen/type checks and linked packaged consumers pass |
+| Existing custom integrations remain valid | Optional native callback defaults to old decision provider | Existing suite and native CI pass |
 
 The first CI pass caught a file-check ordering regression: provider callbacks
 can change the file, so validation must remain after the callback, including
 when it skips PUT. The original tampering regression is retained unchanged.
-The corrected candidate must pass it before release.
+The corrected source passes it in exact candidate and main CI.
 
 The change does not claim cross-channel deduplication, a new async API, physical
 parity, streaming-v2, or release-gate enablement. The standalone Apple/Android

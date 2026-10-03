@@ -8,7 +8,7 @@ status reads. Adapter-off cleanup closes sessions when Android shuts down its
 adapter without delivering a GATT callback. Current source also closes an
 incomplete connect/MTU handshake on failure, timeout or cancellation, preserving
 the original error and queued replacement connection. This handshake follow-up
-is absent from beta.10 and the beta.11 release candidate at `344cd2e`.
+is absent from published beta.10 and beta.11 (`344cd2e`).
 These changes do not automatically reconnect or
 authorize BLE upload fallback.
 

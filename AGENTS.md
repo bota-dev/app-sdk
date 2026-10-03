@@ -56,7 +56,14 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Current Authority
 
-- The synchronized published beta is `2.0.0-beta.10`, including exact-session
+- The synchronized published beta is `2.0.0-beta.11`, adding the managed native
+  encrypted-v2 backend adapter for React Native. Exact main CI and protected
+  publication passed; see [beta.11 evidence](release/evidence/2.0.0-beta.11-publication.md).
+  New native app binaries and one-time v2 proxy/auth/scope/reconnect wiring are
+  required. Initial unknown-create reconciliation and physical interruption
+  qualification remain open; do not enable device rollout gates implicitly.
+
+- Earlier beta.10 added exact-session
   Android cleanup when explicit disconnect times out or is cancelled without
   a native callback. Source `f5c6482ac4378a2f35e902ade172a5cb779dffa6` passed
   exact main CI and protected publication, public native consumers and complete
@@ -118,7 +125,8 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 - Native Demo integration includes mixed legacy/v2 catalog discovery, native
   upload-context relay, exact-operation cancellation, scoped native nonce
   access and structural signed-owner replacement checks. See
-  `docs/parity/v2-demo-*.md`. Applications own backend HTTP; no opaque upload
+  `docs/parity/v2-demo-*.md`. Custom providers own backend HTTP; beta.11 also
+  offers the SDK-managed native adapter with host auth/scope callbacks. No opaque upload
   material or recording bytes cross RN. Historical checkpoints without
   ciphertext identity permit same-owner resume only. Matching native artifacts
   and a matching application binary are required. Publication and hardware
@@ -210,7 +218,7 @@ before the cancellation check starts. This is test ordering, not a runtime chang
   must not touch an existing session. Retire ownership before cleanup loss is
   consumed, and fence late callbacks and MTU publication by generation. Run
   controlled driver and API 26/35 framework regressions. This source follow-up is
-  absent from beta.10 and the beta.11 release candidate at `344cd2e`; see the
+  absent from published beta.10 and beta.11 (`344cd2e`); see the
   [review](docs/parity/android-disconnection-events.md#failed-connect-and-mtu-handshake).
 
 - Android explicit-disconnect cancellation must retire the captured GATT, not

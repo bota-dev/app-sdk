@@ -313,7 +313,7 @@ README, architecture and contributor guidance describe the beta.10 behavior.
 ## Failed connect and MTU handshake
 
 Status: source follow-up after `344cd2e`. This fix is absent from published
-beta.10 and the separate beta.11 release candidate at `344cd2e`; neither release's
+beta.10 and beta.11 at `344cd2e`; neither release's
 tags or artifacts are changed by this work.
 
 The Android driver has a ten-second connect/MTU operation deadline. After Android
@@ -395,3 +395,16 @@ README/ARCHITECTURE/AGENTS surfaces. Within SDK documentation, relevant hits wer
 this parity record and the historical Android facade implementation plan (a file
 creation list, unchanged). Root contributor/architecture and Android setup notes
 describe the source-only follow-up. No public API or target design contract changed.
+
+Source `6abfccf5f30394ce8f67c239e68d4d02c339181c` passed
+[CI 37085019298](https://github.com/bota-dev/app-sdk/actions/runs/37085019298)
+(all eight jobs) and
+[License Gate 37085020744](https://github.com/bota-dev/app-sdk/actions/runs/37085020744).
+The full Android suite passed on Linux, along with API 26/35 consumers, Apple,
+React Native, Flutter, Web and final inventory assembly. Inventory artifact
+`11260502965` matched the exact source and checksum
+`00f547be1b2ca1732d215529a06465f3feff0b3896d11862f5df5918f7fbc409`.
+Concurrent beta.11 publication documentation was subsequently retained without
+changing the tested runtime code. The resulting integration revision requires
+its own exact CI and License Gate; these validation artifacts do not publish the
+handshake fix or modify any released package.
