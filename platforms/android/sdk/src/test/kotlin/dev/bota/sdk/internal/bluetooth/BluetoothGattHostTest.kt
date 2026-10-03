@@ -311,6 +311,172 @@ class BluetoothGattHostTest {
     }
 
     @Test
+    fun mtuTimeoutRetiresTheConnectedHandshakeAndPreservesTimeout() = runTest {
+        val platform = FakeBluetoothPlatform().apply { mtuGate = CompletableDeferred() }
+        val driver = BluetoothGattDriver(platform, operationTimeoutMilliseconds = 100)
+        val connecting = async(start = CoroutineStart.UNDISPATCHED) { runCatching { driver.connect("device") } }
+        withTimeout(5_000) { platform.mtuStarted.await() }
+        val failure = withTimeout(5_000) { connecting.await() }.exceptionOrNull()
+        assertTrue(failure is BluetoothTransportException && failure.message?.contains("timed out") == true)
+        assertEquals(408, (failure as BluetoothTransportException).platformCode)
+        assertTrue(runCatching { driver.connectionGeneration("device") }.isFailure)
+        assertTrue(runCatching { driver.maximumWriteLength("device") }.isFailure)
+        assertEquals(listOf("abort:device:1"), platform.calls.filter { it.startsWith("abort:") })
+    }
+
+    @Test
+    fun callerCancellationDuringMtuRetiresOnlyItsHandshake() = runTest {
+        val platform = FakeBluetoothPlatform().apply { mtuGate = CompletableDeferred() }
+        val driver = BluetoothGattDriver(platform)
+        val connecting = async(start = CoroutineStart.UNDISPATCHED) { driver.connect("device") }
+        withTimeout(5_000) { platform.mtuStarted.await() }
+        val cancellation = CancellationException("caller cancelled handshake")
+        connecting.cancel(cancellation)
+        val failure = runCatching { withTimeout(5_000) { connecting.await() } }.exceptionOrNull()
+        assertTrue(failure is CancellationException && failure !is TimeoutCancellationException)
+        assertEquals(cancellation.message, failure?.message)
+        assertTrue(runCatching { driver.connectionGeneration("device") }.isFailure)
+        assertEquals(listOf("abort:device:1"), platform.calls.filter { it.startsWith("abort:") })
+        platform.mtuGate = null
+        driver.connect("device")
+        assertEquals(2L, driver.connectionGeneration("device"))
+        assertEquals(514, driver.maximumWriteLength("device"))
+    }
+
+    @Test
+    fun mtuFailurePreservesItsErrorAndRetiresTheHandshake() = runTest {
+        val platform = FakeBluetoothPlatform().apply { mtuGate = CompletableDeferred() }
+        val driver = BluetoothGattDriver(platform)
+        val connecting = async(start = CoroutineStart.UNDISPATCHED) { runCatching { driver.connect("device") } }
+        withTimeout(5_000) { platform.mtuStarted.await() }
+        platform.nextStatus = 133
+        platform.mtuGate!!.complete(Unit)
+        val failure = withTimeout(5_000) { connecting.await() }.exceptionOrNull()
+        assertTrue(failure is BluetoothTransportException && failure.message?.contains("133") == true)
+        assertEquals(133, (failure as BluetoothTransportException).platformCode)
+        assertTrue(runCatching { driver.connectionGeneration("device") }.isFailure)
+        assertEquals(listOf("abort:device:1"), platform.calls.filter { it.startsWith("abort:") })
+    }
+
+    @Test
+    fun cancellationBeforeQueueEntryDoesNotAbortTheCurrentConnection() = runTest {
+        val platform = FakeBluetoothPlatform()
+        val queue = GattOperationQueue()
+        val driver = BluetoothGattDriver(platform, queue)
+        driver.connect("device")
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val holding = async(start = CoroutineStart.UNDISPATCHED) {
+            queue.run("device") { entered.complete(Unit); release.await() }
+        }
+        withTimeout(5_000) { entered.await() }
+        val queued = async(start = CoroutineStart.UNDISPATCHED) { driver.connect("device") }
+        queued.cancel()
+        withTimeout(5_000) { queued.join() }
+        assertFalse(platform.calls.any { it.startsWith("abort:") })
+        assertEquals(1L, driver.connectionGeneration("device"))
+        assertEquals(514, driver.maximumWriteLength("device"))
+        release.complete(Unit)
+        withTimeout(5_000) { holding.await() }
+    }
+
+    @Test
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun retiredHandshakeClosurePreservesReplacementWaitingForCleanup() = runTest {
+        val platform = FakeBluetoothPlatform().apply {
+            mtuGate = CompletableDeferred()
+            abortGate = CompletableDeferred()
+        }
+        val driver = BluetoothGattDriver(platform)
+        val events = Channel<ConfirmedBluetoothDisconnect>(Channel.UNLIMITED)
+        backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            driver.confirmedDisconnects().collect { events.send(it) }
+        }
+        val first = async(start = CoroutineStart.UNDISPATCHED) { driver.connect("device") }
+        withTimeout(5_000) { platform.mtuStarted.await() }
+        first.cancel(CancellationException("cancel first handshake"))
+        withTimeout(5_000) { platform.abortStarted.await() }
+        val replacement = async(start = CoroutineStart.UNDISPATCHED) { driver.connect("device") }
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 1))
+        assertEquals(ConfirmedBluetoothDisconnect("device", 1), withTimeout(5_000) { events.receive() })
+        assertFalse(replacement.isCompleted)
+        platform.mtuGate = null
+        platform.abortGate!!.complete(Unit)
+        withTimeout(5_000) { first.join(); replacement.await() }
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 1))
+        runCurrent()
+        assertTrue(events.tryReceive().isFailure)
+        assertEquals(2L, driver.connectionGeneration("device"))
+        assertEquals(514, driver.maximumWriteLength("device"))
+        assertEquals(listOf("abort:device:1"), platform.calls.filter { it.startsWith("abort:") })
+    }
+
+    @Test
+    fun cleanupFailureDoesNotReplaceTheConnectFailure() = runTest {
+        val cleanupError = IllegalStateException("native cleanup failed")
+        val platform = FakeBluetoothPlatform().apply { nextStatus = 133; abortError = cleanupError }
+        val driver = BluetoothGattDriver(platform)
+        val failure = runCatching { driver.connect("device") }.exceptionOrNull()
+        assertTrue(failure is BluetoothTransportException && failure.message?.contains("133") == true)
+        assertEquals(133, (failure as BluetoothTransportException).platformCode)
+        assertEquals(cleanupError.javaClass, failure.suppressed.single().javaClass)
+        assertEquals(cleanupError.message, failure.suppressed.single().message)
+        assertTrue(runCatching { driver.connectionGeneration("device") }.isFailure)
+    }
+
+    @Test
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun stalledCleanupIsBoundedAndPreservesCallerCancellation() = runTest {
+        val platform = FakeBluetoothPlatform().apply {
+            mtuGate = CompletableDeferred()
+            abortGate = CompletableDeferred()
+        }
+        val driver = BluetoothGattDriver(platform)
+        val first = async(start = CoroutineStart.UNDISPATCHED) { driver.connect("device") }
+        withTimeout(5_000) { platform.mtuStarted.await() }
+        val cancellation = CancellationException("cancel handshake with stalled cleanup")
+        first.cancel(cancellation)
+        withTimeout(5_000) { platform.abortStarted.await(); first.join() }
+        val failure = runCatching { first.await() }.exceptionOrNull()
+        assertTrue(failure is CancellationException && failure !is TimeoutCancellationException)
+        assertEquals(cancellation.message, failure?.message)
+        assertEquals(1_000L, testScheduler.currentTime)
+        assertTrue(runCatching { driver.connectionGeneration("device") }.isFailure)
+    }
+
+    @Test
+    fun nativeLossBeforeHandshakeCatchDoesNotCancelQueuedReplacementOrRestoreMtu() = runTest {
+        val platform = FakeBluetoothPlatform().apply { mtuGate = CompletableDeferred() }
+        val driver = BluetoothGattDriver(platform)
+        val events = Channel<ConfirmedBluetoothDisconnect>(Channel.UNLIMITED)
+        backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            driver.confirmedDisconnects().collect { events.send(it) }
+        }
+        val first = async(start = CoroutineStart.UNDISPATCHED) { runCatching { driver.connect("device") } }
+        withTimeout(5_000) { platform.mtuStarted.await() }
+        val replacement = async(start = CoroutineStart.UNDISPATCHED) { runCatching { driver.connect("device") } }
+        platform.confirmedDisconnects.emit(ConfirmedBluetoothDisconnect("device", 1))
+        assertEquals(ConfirmedBluetoothDisconnect("device", 1), withTimeout(5_000) { events.receive() })
+        assertTrue(runCatching { driver.maximumWriteLength("device") }.isFailure)
+        platform.mtuGate!!.complete(Unit) // A queued MTU success for the lost session must not restore it.
+        assertTrue(withTimeout(5_000) { first.await() }.isFailure)
+        assertTrue(withTimeout(5_000) { replacement.await() }.isSuccess)
+        assertEquals(2L, driver.connectionGeneration("device"))
+        assertEquals(514, driver.maximumWriteLength("device"))
+    }
+
+    @Test
+    fun failedConnectRetiresGenerationWithoutRequestingMtu() = runTest {
+        val platform = FakeBluetoothPlatform().apply { nextStatus = 133 }
+        val driver = BluetoothGattDriver(platform)
+        val failure = runCatching { driver.connect("device") }.exceptionOrNull()
+        assertTrue(failure is BluetoothTransportException && failure.message?.contains("133") == true)
+        assertTrue(runCatching { driver.connectionGeneration("device") }.isFailure)
+        assertFalse(platform.calls.any { it.startsWith("mtu:") })
+        assertEquals(listOf("abort:device:1"), platform.calls.filter { it.startsWith("abort:") })
+    }
+
+    @Test
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     fun timedOutDisconnectStillReportsItsDelayedNativeClosureOnce() = runTest {
         val platform = FakeBluetoothPlatform()
@@ -482,6 +648,11 @@ private class FakeBluetoothPlatform(
     val disconnected = mutableListOf<String>()
     var disconnectGate: CompletableDeferred<Unit>? = null
     val disconnectStarted = CompletableDeferred<Unit>()
+    var mtuGate: CompletableDeferred<Unit>? = null
+    val mtuStarted = CompletableDeferred<Unit>()
+    var abortGate: CompletableDeferred<Unit>? = null
+    val abortStarted = CompletableDeferred<Unit>()
+    var abortError: Throwable? = null
     val readUuids = mutableListOf<Pair<UUID, UUID>>()
     val writeGate = mutableMapOf<String, CompletableDeferred<Unit>>()
     var nextStatus = 0
@@ -501,6 +672,8 @@ private class FakeBluetoothPlatform(
 
     override suspend fun requestMtu(peripheralId: String, generation: Long, mtu: Int): GattResult<Int> {
         calls += "mtu:$peripheralId:$generation:$mtu"
+        mtuStarted.complete(Unit)
+        mtuGate?.await()
         return result(generation, negotiatedMtu)
     }
 
@@ -573,6 +746,13 @@ private class FakeBluetoothPlatform(
     }
 
     override fun confirmedDisconnects(): Flow<ConfirmedBluetoothDisconnect> = confirmedDisconnects
+
+    override suspend fun abortConnection(peripheralId: String, generation: Long) {
+        calls += "abort:$peripheralId:$generation"
+        abortStarted.complete(Unit)
+        abortGate?.await()
+        abortError?.let { throw it }
+    }
 
     override fun close() = Unit
 

@@ -58,7 +58,7 @@ physical recovery evidence, candidate checksums and public acceptance.
 Published beta.9 handles adapter shutdown independently of GATT
 callbacks. It retires current sessions on the platform handler, closes native
 clients, fails pending work, and forwards loss through the existing native and
-framework streams. Cancelled connection attempts also close their GATT clients;
+framework streams. Attempts cancelled before the connected callback close their GATT clients;
 late disconnect completion preserves newer driver generations. This adds no
 public adapter-power API or reconnect policy. See the
 [follow-up acceptance record](docs/parity/android-disconnection-events.md#adapter-off-follow-up).
@@ -76,6 +76,16 @@ loss collector invalidate facade state and release encrypted-upload ownership
 even after the caller's wait ends. Late old loss cannot invalidate a replacement.
 See the [source review](docs/parity/android-disconnection-events.md#explicit-disconnect-without-an-android-callback);
 earlier beta.9 artifacts and the broader recovery acceptance remain unchanged.
+
+Current Android source extends cleanup across the entire connect/MTU handshake.
+The driver retires only the failed attempt's generation and MTU ownership, then
+asks the platform to close that exact GATT without waiting for a disconnect
+callback. Handshake loss must not cancel a replacement waiting in the operation
+queue; established-session loss retains its existing cancellation behavior.
+Cleanup preserves the original timeout, cancellation or transport error. This
+is source-only behavior, absent from beta.10 and the beta.11 release candidate
+at `344cd2e`. Wider physical reliability remains separate; see the
+[review](docs/parity/android-disconnection-events.md#failed-connect-and-mtu-handshake).
 
 ## Purpose
 

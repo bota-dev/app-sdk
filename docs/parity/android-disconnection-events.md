@@ -309,3 +309,89 @@ Changed-symbol and timeout/cancellation searches covered the SDK docs, workspace
 internal/public docs and repository README/ARCHITECTURE/AGENTS/CLAUDE surfaces.
 No target design or released API contract changed. This record and the SDK's
 README, architecture and contributor guidance describe the beta.10 behavior.
+
+## Failed connect and MTU handshake
+
+Status: source follow-up after `344cd2e`. This fix is absent from published
+beta.10 and the separate beta.11 release candidate at `344cd2e`; neither release's
+tags or artifacts are changed by this work.
+
+The Android driver has a ten-second connect/MTU operation deadline. After Android
+reports connected, a delayed or missing MTU callback could exhaust that deadline
+while leaving the GATT handle and driver generation owned. The original platform
+connect cancellation handler no longer covers that later wait, and cancelling a
+generic MTU request only removed its continuation. A physical trace with a late
+MTU callback motivated the review, but that trace alone does not establish callback
+ordering or the cause of the radio delay. The controlled tests reproduce the
+cleanup gap independently.
+
+Failed connect/MTU now retires its captured generation and MTU state while still
+holding the operation queue. Internal `abortConnection` requests disconnect and
+closes that exact native generation through the existing terminal cleanup path,
+without waiting for an Android callback. Cleanup runs despite caller cancellation,
+with a separate one-second settlement bound; a cleanup error remains secondary to
+the original failure. The connect/MTU deadline remains ten seconds. If Android's
+handler itself stalls, reporting remains bounded but physical closure awaits that
+handler; its queued abort cannot close a newer generation.
+
+A generation marked as still handshaking does not cancel the entire peripheral
+queue when native loss arrives first: native terminal cleanup already settles
+that handshake's pending waiter. Established-session loss retains its existing
+queue cancellation. Loss arriving after retirement is accepted once without
+cancelling a waiting replacement, and MTU admission checks the current generation
+atomically so a late success cannot restore stale state.
+
+### Verification and design review
+
+The unchanged-production baseline ran 39 focused tests with six expected failures:
+four driver ownership failures (connect status, MTU status, MTU timeout and caller
+cancellation), plus an open GATT after MTU cancellation on API 26 and 35. The
+queued-before-entry cancellation control passed. Additional tests cover loss
+before the catch, loss during cleanup with a queued replacement, duplicate events,
+late MTU/disconnect callbacks, exact old-generation abort, secondary cleanup
+failure and bounded cleanup. The framework deadline test uses virtual time after
+explicit handler barriers; asynchronous settlement uses five-second watchdogs.
+The post-fix focused/facade run passed all 74 tests with no failures or skips:
+`BluetoothGattHostTest` (31), `FrameworkAndroidBluetoothPlatformTest` (14 across
+API 26/35), `DeviceManagerTest` (25), and `DeviceRuntimeTest` (4). The full Android
+unit suite ran 270 tests: 268 passed and two unchanged encrypted-transfer tests
+failed on Windows. `successfulConfirmHandoffIsAtomicBeforeHostContinuation`
+failed when `syncDirectory` opened a directory with `FileChannel`;
+`disconnectDuringPostWriteCleanupSettlesCompletionBeforeClearingPoison` timed out
+waiting for post-write cleanup entry. Running that class alone reproduced the
+same two failures among 22 tests. A control run at unchanged `344cd2e` restored
+both original production files and their matching tests and reproduced exactly
+the same two failures among 22 tests. The candidate's four files were then restored
+byte-identically and hash-checked. These are the previously recorded Windows
+directory-sync limitations, not regressions introduced by handshake cleanup. No
+test was disabled or transfer behavior changed. The existing CI and License Gate
+still apply to the exact integration revision; local JVM tests do not establish
+publication or physical acceptance.
+
+Local verification used JDK 17, Gradle 8.13 and the cached Android toolchain:
+
+```sh
+./gradlew :sdk:testDebugUnitTest --offline --max-workers=2 --no-daemon \
+  '-Dorg.gradle.jvmargs=-Xmx3g' \
+  --tests '*BluetoothGattHostTest' --tests '*FrameworkAndroidBluetoothPlatformTest' \
+  --tests '*DeviceManagerTest' --tests '*DeviceRuntimeTest'
+./gradlew :sdk:testDebugUnitTest --offline --max-workers=2 --no-daemon \
+  '-Dorg.gradle.jvmargs=-Xmx3g'
+```
+
+These commands run from `platforms/android`; Windows uses `gradlew.bat`.
+
+| Requirement / authority | Implementation and evidence | Status |
+| --- | --- | --- |
+| GATT lifecycle, App SDK Architecture section 5.2 and Android ownership section 6.2 | Captured native session closes after failed connect/MTU, even with disconnect callback withheld; API 26/35 deadline and cancellation regressions pass | matched in simulated lifecycle tests |
+| Serialization, section 5.4 | Cleanup stays inside the owning queue; handshake loss does not cancel a waiting replacement; queued-before-entry cancellation owns no session | matched in controlled tests |
+| Error/cancellation parity, section 8 | Original platform failure or caller cancellation survives cleanup; timeout retains error 408; cleanup failure is secondary and cleanup wait is bounded | matched in controlled tests |
+| Shared native facade, sections 6.3-6.4 | Fix lives in the Kotlin transport used by React Native and Flutter; no bridge workaround or protocol fork | matched by source review; packaged consumer adoption unverified |
+| Connection Management section 2.1 | Cleanup adds no automatic retry, radio reset, firmware write, recording mutation or upload fallback | matched by source review |
+| Physical reliability and publication | No new phone test or release is part of this change; radio-delay causes and broader GATT 8/133 behavior remain unresolved | unverified |
+
+Changed-symbol searches covered the workspace internal/public docs and repository
+README/ARCHITECTURE/AGENTS surfaces. Within SDK documentation, relevant hits were
+this parity record and the historical Android facade implementation plan (a file
+creation list, unchanged). Root contributor/architecture and Android setup notes
+describe the source-only follow-up. No public API or target design contract changed.

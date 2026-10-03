@@ -1,11 +1,16 @@
 # Bota SDK for Android
 
-Published beta.8 connection-loss propagation and the unreleased adapter-off
-follow-up are recorded in the [review](../../docs/parity/android-disconnection-events.md).
+Published beta.8 connection-loss propagation, beta.9 adapter-off cleanup and
+beta.10 explicit-disconnect cleanup are recorded in the
+[review](../../docs/parity/android-disconnection-events.md).
 Confirmed GATT loss invalidates exact-generation facade state independently of
-status reads. The follow-up also closes sessions when Android shuts down its
-adapter without delivering a GATT callback, and releases cancelled connection
-attempts. Neither change automatically reconnects or authorizes BLE upload fallback.
+status reads. Adapter-off cleanup closes sessions when Android shuts down its
+adapter without delivering a GATT callback. Current source also closes an
+incomplete connect/MTU handshake on failure, timeout or cancellation, preserving
+the original error and queued replacement connection. This handshake follow-up
+is absent from beta.10 and the beta.11 release candidate at `344cd2e`.
+These changes do not automatically reconnect or
+authorize BLE upload fallback.
 
 This directory contains the Android facade for the Bota App SDK family.
 It produces `dev.bota:bota-app-sdk` from the synchronized version in the

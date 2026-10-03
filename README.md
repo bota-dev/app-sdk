@@ -9,6 +9,13 @@ for React Native on iOS/Android, reducing customer native integration to a
 configured authenticated proxy, identity and lifecycle hooks. Publication and
 physical acceptance remain separate from source implementation.
 
+Current Android source also closes an incomplete connection when connect or MTU
+negotiation fails, times out or is cancelled. Cleanup preserves the original
+failure and a queued replacement connection. This follow-up is absent from
+beta.10 and the beta.11 release candidate at `344cd2e`;
+see the [handshake cleanup review](docs/parity/android-disconnection-events.md#failed-connect-and-mtu-handshake).
+It does not establish a fix for every GATT 8/133 failure.
+
 Published synchronized beta **2.0.0-beta.10** retires the exact Android connection
 when explicit disconnect times out or is cancelled without a native callback.
 All five public packages and their release consumer checks passed. See the

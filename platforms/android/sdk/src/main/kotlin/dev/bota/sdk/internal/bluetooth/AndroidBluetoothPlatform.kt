@@ -215,6 +215,7 @@ internal interface AndroidBluetoothPlatform : AutoCloseable {
         characteristicUuid: UUID,
     ): Flow<BluetoothNotification>
     suspend fun disconnect(peripheralId: String, generation: Long): GattResult<Unit>
+    suspend fun abortConnection(peripheralId: String, generation: Long)
     fun confirmedDisconnects(): Flow<ConfirmedBluetoothDisconnect> = kotlinx.coroutines.flow.emptyFlow()
     override fun close()
 }
@@ -486,6 +487,17 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
                 gatt.disconnect()
             }
         }
+
+    override suspend fun abortConnection(peripheralId: String, generation: Long) = onHandler {
+        val gatt = gatts[peripheralId]
+        if (gatt != null && gattGenerations[gatt] == generation) {
+            try {
+                gatt.disconnect()
+            } finally {
+                completeDisconnection(gatt, ImmediateFailure)
+            }
+        }
+    }
 
     override fun confirmedDisconnects(): Flow<ConfirmedBluetoothDisconnect> = confirmedDisconnects.flow()
 

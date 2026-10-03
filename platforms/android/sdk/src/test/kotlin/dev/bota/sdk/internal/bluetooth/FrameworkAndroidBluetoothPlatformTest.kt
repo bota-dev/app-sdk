@@ -16,6 +16,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -159,6 +161,99 @@ class FrameworkAndroidBluetoothPlatformTest {
             assertTrue(shadowOf(gatt).isClosed)
         } finally {
             platform.close()
+        }
+    }
+
+    @Test
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun handshakeDeadlineAfterConnectClosesGattBeforeDelayedMtu() = runBlocking {
+        shadowOf(adapter).setState(BluetoothAdapter.STATE_ON)
+        val platform = FrameworkAndroidBluetoothPlatform(application)
+        val scheduler = TestCoroutineScheduler()
+        val driver = BluetoothGattDriver(platform, operationTimeoutMilliseconds = 100)
+        val created = CompletableDeferred<BluetoothGatt>()
+        shadowOf(adapter.getRemoteDevice(address)).setGattConnectionInterceptor { created.complete(it) }
+        val connecting = async(StandardTestDispatcher(scheduler), start = CoroutineStart.UNDISPATCHED) {
+            runCatching { driver.connect(address) }
+        }
+        try {
+            val gatt = withTimeout(5_000) { created.await() }
+            val callback = shadowOf(gatt).gattCallback
+            shadowOf(gatt).setGattCallback(object : BluetoothGattCallback() {})
+            callback.onConnectionStateChange(gatt, 0, BluetoothProfile.STATE_CONNECTED)
+            platform.connectedAdvertisements() // Settle the connected callback before driving virtual time.
+            scheduler.runCurrent() // Resume connect and enqueue the MTU request.
+            platform.connectedAdvertisements()
+            assertFalse(connecting.isCompleted)
+            scheduler.advanceTimeBy(100)
+            scheduler.runCurrent() // The handshake deadline cancels MTU and posts exact-session abort.
+            platform.connectedAdvertisements()
+            scheduler.runCurrent()
+            val failure = withTimeout(5_000) { connecting.await() }.exceptionOrNull()
+            assertTrue(failure is BluetoothTransportException && failure.message?.contains("timed out") == true)
+            assertTrue(shadowOf(gatt).isClosed)
+            callback.onMtuChanged(gatt, 512, 0)
+            platform.connectedAdvertisements()
+            assertTrue(runCatching { driver.connectionGeneration(address) }.isFailure)
+            assertTrue(runCatching { driver.maximumWriteLength(address) }.isFailure)
+        } finally {
+            connecting.cancel()
+            scheduler.runCurrent()
+            platform.connectedAdvertisements()
+            scheduler.runCurrent()
+            driver.close()
+        }
+    }
+
+    @Test
+    fun cancelledHandshakeAfterConnectClosesGattWithoutMtuOrDisconnectCallback() = runBlocking {
+        shadowOf(adapter).setState(BluetoothAdapter.STATE_ON)
+        val platform = FrameworkAndroidBluetoothPlatform(application)
+        val mtuStarted = CompletableDeferred<Unit>()
+        val driver = BluetoothGattDriver(object : AndroidBluetoothPlatform by platform {
+            override suspend fun requestMtu(peripheralId: String, generation: Long, mtu: Int): GattResult<Int> {
+                mtuStarted.complete(Unit)
+                return platform.requestMtu(peripheralId, generation, mtu)
+            }
+        })
+        val events = Channel<ConfirmedBluetoothDisconnect>(Channel.UNLIMITED)
+        val observer = launch(start = CoroutineStart.UNDISPATCHED) {
+            driver.confirmedDisconnects().collect { events.send(it) }
+        }
+        try {
+            val created = CompletableDeferred<BluetoothGatt>()
+            shadowOf(adapter.getRemoteDevice(address)).setGattConnectionInterceptor { created.complete(it) }
+            val connecting = async(start = CoroutineStart.UNDISPATCHED) { driver.connect(address) }
+            val gatt = withTimeout(5_000) { created.await() }
+            val callback = shadowOf(gatt).gattCallback
+            shadowOf(gatt).setGattCallback(object : BluetoothGattCallback() {})
+            callback.onConnectionStateChange(gatt, 0, BluetoothProfile.STATE_CONNECTED)
+            withTimeout(5_000) { mtuStarted.await() }
+            platform.connectedAdvertisements()
+            assertFalse(connecting.isCompleted)
+            connecting.cancel()
+            withTimeout(5_000) { connecting.join() }
+            platform.connectedAdvertisements()
+            assertTrue(shadowOf(gatt).isClosed)
+            assertTrue(runCatching { driver.connectionGeneration(address) }.isFailure)
+            assertEquals(ConfirmedBluetoothDisconnect(address, 1), withTimeout(5_000) { events.receive() })
+            val replacementCreated = CompletableDeferred<BluetoothGatt>()
+            shadowOf(adapter.getRemoteDevice(address)).setGattConnectionInterceptor { replacementCreated.complete(it) }
+            val reconnecting = async(start = CoroutineStart.UNDISPATCHED) { driver.connect(address) }
+            val replacement = withTimeout(5_000) { replacementCreated.await() }
+            assertTrue(replacement.connect())
+            withTimeout(5_000) { reconnecting.await() }
+            callback.onMtuChanged(gatt, 100, 0)
+            callback.onConnectionStateChange(gatt, 0, BluetoothProfile.STATE_DISCONNECTED)
+            platform.abortConnection(address, 1)
+            platform.connectedAdvertisements()
+            assertFalse(shadowOf(replacement).isClosed)
+            assertEquals(2L, driver.connectionGeneration(address))
+            assertEquals(514, driver.maximumWriteLength(address))
+            assertTrue(events.tryReceive().isFailure)
+        } finally {
+            driver.close()
+            observer.cancel()
         }
     }
 

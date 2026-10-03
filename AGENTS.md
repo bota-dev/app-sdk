@@ -204,6 +204,15 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Invariants
 
+- Android failed connect/MTU handshakes must retire only their captured generation
+  and close its native GATT even after the connected callback. Preserve the
+  original error and queued replacement work; cancellation before queue entry
+  must not touch an existing session. Retire ownership before cleanup loss is
+  consumed, and fence late callbacks and MTU publication by generation. Run
+  controlled driver and API 26/35 framework regressions. This source follow-up is
+  absent from beta.10 and the beta.11 release candidate at `344cd2e`; see the
+  [review](docs/parity/android-disconnection-events.md#failed-connect-and-mtu-handshake).
+
 - Android explicit-disconnect cancellation must retire the captured GATT, not
   only its waiter. Preserve one-shot exact-generation loss delivery after driver
   `finally` removes active ownership; a new generation or close invalidates the

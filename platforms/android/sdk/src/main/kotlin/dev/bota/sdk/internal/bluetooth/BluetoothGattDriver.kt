@@ -3,10 +3,12 @@ package dev.bota.sdk.internal.bluetooth
 import dev.bota.sdk.internal.host.NativeHostException
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
 
 internal open class BluetoothTransportException(
     platformCode: Int,
@@ -51,6 +53,7 @@ internal class BluetoothGattDriver(
     private val generations = mutableMapOf<String, Long>()
     private val generationCounters = mutableMapOf<String, Long>()
     private val retiredGenerations = mutableMapOf<String, Long>()
+    private val connectingGenerations = mutableMapOf<String, Long>()
     private val negotiatedMtus = mutableMapOf<String, Int>()
 
     override suspend fun connectedAdvertisements(): List<BluetoothAdvertisement> = platform.connectedAdvertisements()
@@ -64,12 +67,44 @@ internal class BluetoothGattDriver(
             (generationCounters[peripheralId] ?: 0L).plus(1).also {
                 generationCounters[peripheralId] = it
                 generations[peripheralId] = it
+                connectingGenerations[peripheralId] = it
+                negotiatedMtus.remove(peripheralId)
                 retiredGenerations.remove(peripheralId)
             }
         }
-        validate(peripheralId, generation, platform.connect(peripheralId, generation))
-        val mtu = validate(peripheralId, generation, platform.requestMtu(peripheralId, generation, PreferredMtu))
-        synchronized(generationLock) { negotiatedMtus[peripheralId] = mtu }
+        try {
+            validate(peripheralId, generation, platform.connect(peripheralId, generation))
+            val mtu = validate(peripheralId, generation, platform.requestMtu(peripheralId, generation, PreferredMtu))
+            synchronized(generationLock) {
+                if (generations[peripheralId] != generation) {
+                    throw BluetoothTransportException(409, "connection lost during GATT handshake for $peripheralId")
+                }
+                negotiatedMtus[peripheralId] = mtu
+                connectingGenerations.remove(peripheralId, generation)
+            }
+        } catch (error: Throwable) {
+            synchronized(generationLock) {
+                if (generations[peripheralId] == generation) {
+                    generations.remove(peripheralId)
+                    negotiatedMtus.remove(peripheralId)
+                    retiredGenerations[peripheralId] = generation
+                }
+            }
+            // Still hold the operation queue, but never cancel a replacement waiting in it.
+            // Bound handler settlement so a stalled Android looper cannot hide the original error.
+            try {
+                withContext(NonCancellable) {
+                    withTimeout(HandshakeCleanupTimeoutMilliseconds) {
+                        platform.abortConnection(peripheralId, generation)
+                    }
+                }
+            } catch (cleanupError: Throwable) {
+                if (cleanupError !== error) error.addSuppressed(cleanupError)
+            }
+            throw error
+        } finally {
+            synchronized(generationLock) { connectingGenerations.remove(peripheralId, generation) }
+        }
         Unit
     }
 
@@ -187,7 +222,9 @@ internal class BluetoothGattDriver(
             if (generations[event.peripheralId] == event.generation) {
                 generations.remove(event.peripheralId)
                 negotiatedMtus.remove(event.peripheralId)
-                cancelWork = true
+                // Native terminal cleanup settles connect/MTU waiters itself. Cancelling the
+                // entire queue here would also cancel a replacement waiting for that handshake.
+                cancelWork = connectingGenerations[event.peripheralId] != event.generation
                 true
             } else {
                 // Explicit disconnect already cancelled its work. Consume only its exact late closure;
@@ -207,6 +244,7 @@ internal class BluetoothGattDriver(
             generations.clear()
             negotiatedMtus.clear()
             retiredGenerations.clear()
+            connectingGenerations.clear()
         }
         platform.close()
     }
@@ -242,5 +280,6 @@ internal class BluetoothGattDriver(
 
     private companion object {
         const val PreferredMtu: Int = 517
+        const val HandshakeCleanupTimeoutMilliseconds: Long = 1_000
     }
 }
