@@ -62,9 +62,9 @@ counter. All ciphertext, manifest, block-count, identity and receipt checks stay
 | Preserve exact identity and checkpoint validation | Existing validation precedes the transition; full control suite retained | Matched in source and host tests |
 | Keep attempt sequences separate from durable progress | One-time accepted-opening reset; full/partial host and receiver cases retain old checkpoint until verified save | Matched in Android and Apple host tests |
 | Reject stale sequences and invalid completion evidence | Old sequence, ciphertext/manifest hash, manifest bytes, file, length and block-count cases | Matched in Android and Apple host tests |
-| Preserve signed receipt/CONFIRM and native journal cleanup | No backend, host cleanup or authorization changes | Matched in source; physical recovery unverified |
+| Preserve signed receipt/CONFIRM and native journal cleanup | No backend, host cleanup or authorization changes; corrected Android recovery retained the same receipt/owner and cleared both journals/device pending state | Matched in source and narrow Android physical test |
 | Maintain Apple parity | Same sequence defect fixed; no Android intake gate added to Apple | Matched in source review and macOS tests |
-| Recover a real interrupted published recording | First candidate failed its next integrity gate; corrected native binary and retry still needed | Unverified for the corrected patch |
+| Recover a real interrupted published recording | First candidate failed its next integrity gate; corrected same-source Android binary recovered the retained full checkpoint and completed cleanup | Matched for the supervised Android case; Apple physical recovery unverified |
 
 The current encrypted-v2 resume and delete-after-confirmation contract is the
 acceptance basis; this change introduces no wire format, API or firmware gate.
@@ -104,8 +104,8 @@ and [License Gate 37103548045](https://github.com/bota-dev/app-sdk/actions/runs/
 including the full Android native tests and API 26/35 consumers. Its verified
 Android AAR and matching React Native package were used in the failed physical
 candidate described above. Those checks do not cover the sequence correction.
-New exact branch CI, Apple artifact-derived pins, a new native physical retry,
-final main CI and publication remain separate gates.
+Corrected-source CI, Apple artifact-derived pins, a new native physical retry,
+final main CI and publication required the separate evidence below.
 
 Corrected source `07c915ee635469ca2230a7b0e56cf3864fe5351c` passed all eight jobs,
 including Android native/API 26/35, Apple package/consumer and Flutter, in
@@ -114,8 +114,34 @@ All five targeted Apple complete/partial, stale/integrity, reset-guard and host
 reload regressions explicitly passed. [License Gate 37108791793](https://github.com/bota-dev/app-sdk/actions/runs/37108791793)
 also passed. The corrected AAR and matching React Native package have verified
 artifact digests and source identities; Apple pins are regenerated from its
-verified archives. Checks for the final pinned metadata revision remain
-required. Physical recovery with these bytes is still pending.
+verified archives. Final pinned-metadata checks and the narrow Android physical
+retry subsequently passed as recorded below.
 Candidate beta.12 also includes the previously merged connect/MTU cleanup;
 it does not establish a fix for every GATT 8/133 failure. New native application
 binaries are required; an OTA JavaScript update cannot install this fix.
+
+## Corrected physical recovery and main verification
+
+The corrected Android Demo 1.0.11 APK used exact `07c915e` CI artifacts and was
+installed in place, preserving the owner-revision-3 pointer and full checkpoint
+(revision 34, offset/length 155960, historical sequence 339). After launch on
+2026-10-03 at 08:42:27Z, the native backend-adapter pointer and SDK checkpoint store both cleared.
+The actual app and an independent device read showed zero pending recordings;
+direct WiFi/4G uploads remained disabled throughout recovery. Backend evidence
+confirmed the same unique recording/session/owner, valid receipt and matching
+streamed plaintext hash. Original cloud/device connection settings were fully
+restored afterward, including all 12 setting bytes and streaming disabled.
+
+Final pinned source `5da63b0` passed exact branch and main CI/License gates.
+Main [CI 37111210813](https://github.com/bota-dev/app-sdk/actions/runs/37111210813)
+and [License Gate 37111210790](https://github.com/bota-dev/app-sdk/actions/runs/37111210790)
+are the annotated release inputs. All ten package payloads match corrected
+`07c915e`; the official promotion verifier checked all 49 inventory files.
+
+This is evidence for retained-published/full-checkpoint Android recovery and
+receipt-gated cleanup. The cloud publication occurred before the interruption.
+No physical packet trace or actual-app PUT count was recorded, and this does not
+qualify Apple hardware, arbitrary OS scheduling or physical partial-resume
+failure injection. Protected release `37112341485` attempt 2 subsequently
+passed all five publications, public native consumers and the complete Flutter
+archive check; see the [release evidence](../../release/evidence/2.0.0-beta.12-publication.md).

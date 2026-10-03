@@ -56,7 +56,7 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Current Authority
 
-- Source candidate `2.0.0-beta.12` adds the Android completed-resume intake
+- Published synchronized beta `2.0.0-beta.12` adds the Android completed-resume intake
   transition after validated `ResumeAccepted`, before releasing queued packets.
   Android and Apple also reset an attempt-local packet counter once after a
   validated resumed opening, before pumping notifications. Persisted checkpoint
@@ -67,11 +67,17 @@ before the cancellation check starts. This is test ordering, not a runtime chang
   Initial `0e6e9a1`/`72ca200` branch checks passed, but that native phone candidate
   failed with `integrity_failed`; source and regressions isolate the stale
   sequence mismatch, without a physical packet trace. Corrected `07c915e` passed
-  all eight CI jobs and License Gate; its verified Apple pins are prepared.
-  Exact metadata-revision checks and another physical retry remain gates before
-  final main CI/publication. Beta.11 remains immutable.
+  all eight CI jobs and License Gate; its verified Apple pins are committed.
+  Corrected Android full-checkpoint recovery and settings restoration passed;
+  final `5da63b0` branch/main checks, payload equivalence and protected tag
+  promotion/approval passed. Release `37112341485` attempt 2 resumed the preserved
+  Central deployment after a polling timeout, then passed all five package
+  publications, public native consumers and complete Flutter archive verification.
+  See the [release evidence](release/evidence/2.0.0-beta.12-publication.md).
+  The beta.11 and beta.12 tags remain immutable; no Apple physical or measured
+  actual-app PUT-count claim is established by the Android test.
 
-- The synchronized published beta is `2.0.0-beta.11`, adding the managed native
+- Earlier published beta `2.0.0-beta.11` added the managed native
   encrypted-v2 backend adapter for React Native. Exact main CI and protected
   publication passed; see [beta.11 evidence](release/evidence/2.0.0-beta.11-publication.md).
   New native app binaries and one-time v2 proxy/auth/scope/reconnect wiring are

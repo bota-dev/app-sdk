@@ -1,18 +1,19 @@
-# Next synchronized candidate: 2.0.0-beta.12
+# Published synchronized beta: 2.0.0-beta.12
 
-The candidate repairs the Android complete-resume intake and Android/Apple
+The release repairs the Android complete-resume intake and Android/Apple
 attempt-local sequence recovery, plus the existing failed connect/MTU cleanup.
-See the [candidate design review](../release/evidence/2.0.0-beta.12-preflight.md).
-Initial source `0e6e9a1` and pinned `72ca200` passed branch checks, but the
-physical candidate exposed the next sequence mismatch. Those Apple pins are
-replaced with the corrected `07c915e` archives, now verified and pinned. All
-eight source CI jobs and License Gate passed; final metadata checks and physical
-recovery remain required. Require final main-push
-CI and License Gate, matching Apple pins, the single protected release approval
-and public-consumer verification. Beta.11 remains immutable; preparation does
-not publish or advance npm `latest`.
+See the [publication and recovery review](../release/evidence/2.0.0-beta.12-publication.md)
+and immutable [candidate snapshot](../release/evidence/2.0.0-beta.12-preflight.md).
+Protected [release 37112341485](https://github.com/bota-dev/app-sdk/actions/runs/37112341485)
+completed on attempt 2 from source `5da63b0`, exact main CI `37111210813` and its
+49-file inventory. All five packages, public native consumers and complete
+Flutter archive verification passed. The corrected Android retained-published/
+full-checkpoint recovery passed, including receipt-gated cleanup and original
+settings restoration. Apple physical and broader interruption qualification
+remain separate. Keep the single protected approval and immutable versions;
+npm `beta` is beta.12 and `latest` remains beta.0. New app binaries are required.
 
-# Published synchronized beta: 2.0.0-beta.11
+# Previous synchronized beta: 2.0.0-beta.11
 
 [Protected release 37080688370](https://github.com/bota-dev/app-sdk/actions/runs/37080688370) completed successfully from
 source `344cd2e`, main CI `37078793682` and its exact five-platform inventory.
