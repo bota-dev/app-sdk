@@ -1,17 +1,20 @@
 # Architecture
 
-Source candidate **2.0.0-beta.11** adds the managed encrypted-v2 backend adapter for
-React Native iOS/Android. Beta.10 remains published until exact CI, protected
-publication and public consumers pass. See the [candidate review](release/evidence/2.0.0-beta.11-preflight.md).
+Published synchronized beta **2.0.0-beta.11** adds the managed encrypted-v2
+backend adapter for React Native iOS/Android. All five packages, public native
+consumers and Flutter archive verification passed. See the
+[publication and design review](release/evidence/2.0.0-beta.11-publication.md).
+Native app rebuild, authenticated v2 proxy routes and scoped lifecycle wiring
+are required; publication does not establish physical interruption acceptance.
 
-The managed encrypted-v2 adapter in current source moves Demo's native HTTP and
+The managed encrypted-v2 adapter in beta.11 moves Demo's native HTTP and
 session journal into the RN App SDK. Hosts supply authenticated proxy routes,
 fresh app tokens and scope cancellation. Native code owns manifest reconciliation,
 polling and receipt delivery; device cleanup still follows signed receipt/CONFIRM.
 See the [integration and acceptance review](docs/parity/v2-managed-backend.md).
-This helper is not in published beta.10; device rollout gates remain unchanged.
+Earlier beta.10 does not include this helper; device rollout gates remain unchanged.
 
-Published synchronized beta **2.0.0-beta.10** retires the exact Android connection
+The earlier synchronized beta **2.0.0-beta.10** retires the exact Android connection
 when explicit disconnect times out or is cancelled without a native callback.
 All five public packages and their release consumer checks passed. See the
 [publication and acceptance review](release/evidence/2.0.0-beta.10-publication.md).
@@ -31,7 +34,7 @@ owner-approved beta-stage cutover, retained history and remaining acceptance lim
 The 2.x source uses explicit App SDK distribution names. The historical beta.1
 release first verified the complete renamed family: Apple SwiftPM/CocoaPods,
 Android Maven, React Native/Web npm and Flutter pub.dev. The selected current
-release is 2.0.0-beta.10; its [release evidence](release/evidence/2.0.0-beta.10-publication.md)
+release is 2.0.0-beta.11; its [release evidence](release/evidence/2.0.0-beta.11-publication.md)
 tracks publication separately from application rollout and physical acceptance.
 See the [migration guide](docs/migrations/app-sdk-package-names.md). Historical
 checkpoints below retain their original names and versions.
@@ -100,7 +103,8 @@ and upload-context codecs in Rust. Apple and Android own GATT context exchange,
 native files, checkpoint identity, exact-operation cancellation and opaque
 material lifetime. React Native carries catalog/progress metadata and opaque
 registration IDs only; the application-native adapter owns authenticated
-backend HTTP and its exact-scope recovery journal. This does not change the
+backend HTTP and its exact-scope recovery journal. Beta.11 also packages that
+adapter behind `createEncryptedUploadV2Backend` for React Native. This does not change the
 firmware/release/hardware gates or enable v2 compatibility metadata. See
 `docs/parity/v2-demo-*.md` for local verification and retained limitations.
 

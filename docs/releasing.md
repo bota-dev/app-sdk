@@ -1,11 +1,13 @@
-# Next synchronized candidate: 2.0.0-beta.11
+# Published synchronized beta: 2.0.0-beta.11
 
-The owner requested test, commit and publication of the managed encrypted-v2
-backend adapter. See the [candidate design review](../release/evidence/2.0.0-beta.11-preflight.md).
-Keep the single protected approval, exact main-CI artifacts and npm `latest`
-protection. Beta.10 remains published until all public consumers pass.
+[Protected release 37080688370](https://github.com/bota-dev/app-sdk/actions/runs/37080688370) completed successfully from
+source `344cd2e`, main CI `37078793682` and its exact five-platform inventory.
+All registries, public native consumers and Flutter archive verification passed.
+See the [publication and design review](../release/evidence/2.0.0-beta.11-publication.md).
+Keep the single protected approval, immutable artifacts and npm `latest` at
+beta.0. Physical acceptance and application rollout remain separate.
 
-# Published synchronized beta: 2.0.0-beta.10
+# Previous synchronized beta: 2.0.0-beta.10
 
 Protected [release 36798449511](https://github.com/bota-dev/app-sdk/actions/runs/36798449511),
 attempt 10, completed successfully on October 1, 2026 (Pacific time). All five
@@ -1004,5 +1006,7 @@ macOS applications must enable **App Sandbox > Hardware > Bluetooth**, which
 sets `com.apple.security.device.bluetooth`; macOS applications should also
 provide the Bluetooth usage description displayed to users.
 
-The package contains no Bota backend API client. Host applications remain
-responsible for backend grants, device tokens, and presigned upload targets.
+React Native beta.11 includes an optional native encrypted-v2 backend adapter
+for a customer-authenticated proxy. Hosts still provide fresh app credentials,
+exact identity and lifecycle wiring; this is not the separate Bota API SDK.
+Other facades and custom providers retain host-managed backend integration.

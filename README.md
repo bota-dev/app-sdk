@@ -1,15 +1,18 @@
 # Bota App SDK
 
-Source candidate **2.0.0-beta.11** adds the managed encrypted-v2 backend adapter for
-React Native iOS/Android. Beta.10 remains published until exact CI, protected
-publication and public consumers pass. See the [candidate review](release/evidence/2.0.0-beta.11-preflight.md).
+Published synchronized beta **2.0.0-beta.11** adds the managed encrypted-v2
+backend adapter for React Native iOS/Android. All five packages, public native
+consumers and Flutter archive verification passed. See the
+[publication and design review](release/evidence/2.0.0-beta.11-publication.md).
+Native app rebuild, authenticated v2 proxy routes and scoped lifecycle wiring
+are required; publication does not establish physical interruption acceptance.
 
-Current source adds a [managed encrypted-v2 backend adapter](docs/parity/v2-managed-backend.md)
+Beta.11 adds a [managed encrypted-v2 backend adapter](docs/parity/v2-managed-backend.md)
 for React Native on iOS/Android, reducing customer native integration to a
-configured authenticated proxy, identity and lifecycle hooks. Publication and
-physical acceptance remain separate from source implementation.
+configured authenticated proxy, identity and lifecycle hooks. Physical
+acceptance and application rollout remain separate from package publication.
 
-Published synchronized beta **2.0.0-beta.10** retires the exact Android connection
+The earlier synchronized beta **2.0.0-beta.10** retires the exact Android connection
 when explicit disconnect times out or is cancelled without a native callback.
 All five public packages and their release consumer checks passed. See the
 [publication and acceptance review](release/evidence/2.0.0-beta.10-publication.md).
@@ -110,13 +113,13 @@ The synchronized App SDK is currently a beta. React Native consumers pin the
 exact prerelease:
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.10
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.11
 ```
 
 Apple and Android do not use npm dist-tags, so beta consumers pin the exact
 synchronized version shown in the installation sections below. New synchronized
 releases use `2.x.y-beta.n`; promotion to a stable channel is a separate release
-decision. The new-name npm `beta` tags point to `2.0.0-beta.10`; `latest` stays
+decision. The new-name npm `beta` tags point to `2.0.0-beta.11`; `latest` stays
 at `2.0.0-beta.0` under the owner-approved bootstrap exception. This is not
 stable promotion. Later betas must not advance `latest`. Historical npm tags
 are unchanged.
@@ -488,12 +491,12 @@ In Xcode, choose **File > Add Package Dependencies** and enter:
 https://github.com/bota-dev/app-sdk.git
 ```
 
-Select exact version `2.0.0-beta.10`, then add the
+Select exact version `2.0.0-beta.11`, then add the
 `BotaAppSDK` product to an iOS 15+ or macOS 13+ target. Swift packages can
 declare the dependency directly:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.10")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.11")
 ```
 
 Import and configure the client from application code:
@@ -515,7 +518,7 @@ provide the Bluetooth usage description shown to users.
 Pin the exact synchronized Maven Central beta:
 
 ```kotlin
-implementation("dev.bota:bota-app-sdk:2.0.0-beta.10")
+implementation("dev.bota:bota-app-sdk:2.0.0-beta.11")
 ```
 
 ## Flutter Beta Installation
@@ -525,7 +528,7 @@ build gates passed and `bota_app_sdk` is public on pub.dev. Pin the exact versio
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.10
+  bota_app_sdk: 2.0.0-beta.11
 ```
 
 See the
@@ -543,7 +546,7 @@ Historical packages remain available under their original names. Install the
 renamed package at its verified exact version:
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.10
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.11
 ```
 
 Web Bluetooth requires a secure context and a browser implementation that
