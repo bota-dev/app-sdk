@@ -15,9 +15,11 @@ manifest therefore failed with `unexpected_event` before backend reconciliation.
 
 A supervised Android app interruption after cloud publication retained one
 version-3 checkpoint whose offset equalled its ciphertext length. Restart
-failed with `unexpected_event`. This physical metadata establishes the complete
-resume condition, not a BLE packet trace. Firmware source and the host control
-regression establish the manifest-first sequence and intake mismatch.
+failed with `unexpected_event`. Bounded identity references also matched the
+exact device, recording/generation, upload session, owner and ciphertext hash.
+This physical metadata establishes the complete resume condition, not a BLE
+packet trace. Firmware source and the host control regression establish the
+manifest-first sequence and intake mismatch.
 
 ## Change and design review
 
@@ -53,9 +55,14 @@ changed class and test source with warnings as errors against the released
 beta.11 dependency classes and real CoreModelMapper/types. Transport/JNI packet
 boundaries are fakes, so this proves host control behavior, not JNI or hardware.
 
-Independent source review found no phase-ordering or validation bypass. Full
-source CI, License Gate, a source-built native candidate and physical recovery
-of the retained recording remain required before release qualification.
+Independent source review found no phase-ordering or validation bypass. Exact
+source `0e6e9a1` passed all eight jobs in
+[CI 37103546154](https://github.com/bota-dev/app-sdk/actions/runs/37103546154)
+and [License Gate 37103548045](https://github.com/bota-dev/app-sdk/actions/runs/37103548045),
+including the full Android native tests and API 26/35 consumers. Its verified
+Android AAR and matching React Native package are available for the physical
+candidate. Recovery of the retained recording with that binary remains
+unverified; final main CI and publication are separate release gates.
 Candidate beta.12 also includes the previously merged connect/MTU cleanup;
 it does not establish a fix for every GATT 8/133 failure. New native application
 binaries are required; an OTA JavaScript update cannot install this fix.

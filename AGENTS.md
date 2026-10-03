@@ -61,8 +61,9 @@ before the cancellation check starts. This is test ordering, not a runtime chang
   Fresh/partial resumes retain the window phase. Do not bypass receipt/CONFIRM
   or relax identity, prefix, revision, nonce or owner checks. See the
   [regression and acceptance review](docs/parity/android-complete-resume-recovery.md).
-  Exact CI, candidate native phone recovery, publication and public consumers
-  remain separate gates; beta.11 remains immutable.
+  Exact branch CI and License Gate passed for `0e6e9a1`; candidate-derived Apple
+  pins are prepared. Candidate native phone recovery, final main CI, publication
+  and public consumers remain separate gates; beta.11 remains immutable.
 
 - The synchronized published beta is `2.0.0-beta.11`, adding the managed native
   encrypted-v2 backend adapter for React Native. Exact main CI and protected

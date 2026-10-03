@@ -3,10 +3,12 @@
 The candidate repairs Android recovery from a complete encrypted-v2 ciphertext
 checkpoint and includes the existing failed connect/MTU cleanup follow-up.
 See the [candidate design review](../release/evidence/2.0.0-beta.12-preflight.md).
-Require exact candidate CI and License Gate, verified native candidate phone
-recovery, final main CI, candidate-derived Apple checksums, the single protected
-release approval and public-consumer verification. Beta.11 remains immutable;
-preparation does not publish or advance npm `latest`.
+Source `0e6e9a1` passed exact branch CI and License Gate; Apple pins derive from
+its verified candidate archives. Native candidate phone recovery remains
+pending. Require exact checks for the final metadata revision, final main-push
+CI and License Gate, matching Apple pins, the single protected release approval
+and public-consumer verification. Beta.11 remains immutable; preparation does
+not publish or advance npm `latest`.
 
 # Published synchronized beta: 2.0.0-beta.11
 
