@@ -28,7 +28,9 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.onSubscription
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -489,6 +491,50 @@ class EncryptedUploadV2TransferControlTest {
     }
 
     @Test
+    fun completedResumeAcceptsManifestAndEofWithoutAnotherWindow() = runBlocking {
+        val driver = ControlDriver()
+        val mapper = CoreModelMapper(TransferControlCore(listOf(openingReply(0x45, 2u))))
+        val control = testControl(driver, mapper)
+        try {
+            val opened = control.open("device", request(), reconciledCheckpoint(2u)) as EncryptedUploadV2OpenResult.Opened
+            val received = async(start = CoroutineStart.UNDISPATCHED) { opened.notifications.take(2).toList() }
+            driver.emit(byteArrayOf(0x43))
+            driver.emit(byteArrayOf(0x44))
+            val payloads = withContext(Dispatchers.Default) { withTimeout(TestSettlementTimeoutMilliseconds) { received.await() } }
+            assertTrue(payloads[0] is EncryptedUploadV2TransferPayload.ManifestChunk)
+            assertTrue(payloads[1] is EncryptedUploadV2TransferPayload.Eof)
+            assertEquals(1, driver.writeCount)
+        } finally {
+            control.release(9u)
+            control.close()
+            mapper.close()
+        }
+    }
+
+    @Test
+    fun acceptedOpeningStillRejectsPayloadFromAnotherTransferPhase() = runBlocking {
+        for ((offset, payload) in listOf(0uL to 0x43, 1uL to 0x43, 2uL to 0x41, 2uL to 0x42)) {
+            val driver = ControlDriver()
+            val mapper = CoreModelMapper(TransferControlCore(listOf(openingReply(if (offset == 0uL) 0x40 else 0x45, offset))))
+            val control = testControl(driver, mapper)
+            try {
+                val checkpoint = reconciledCheckpoint(offset).takeIf { offset != 0uL }
+                val opened = control.open("device", request(), checkpoint) as EncryptedUploadV2OpenResult.Opened
+                val received = async(start = CoroutineStart.UNDISPATCHED) {
+                    runCatching { opened.notifications.first() }.exceptionOrNull()
+                }
+                driver.emit(byteArrayOf(payload.toByte()))
+                val failure = withContext(Dispatchers.Default) { withTimeout(TestSettlementTimeoutMilliseconds) { received.await() } }
+                assertEquals(9u, (failure as EncryptedUploadV2HostException).errorCode)
+            } finally {
+                control.release(9u)
+                control.close()
+                mapper.close()
+            }
+        }
+    }
+
+    @Test
     fun intakeRejectsPrematureNextWindowAndManifestAtArrival() {
         val nextWindow = EncryptedUploadV2TransferIntake(9u)
         nextWindow.accept(windowEnd())
@@ -664,6 +710,16 @@ private class TransferControlCore(controlReplies: List<NativePacket> = emptyList
             value?.size == 512 -> dataPacket()
             value?.firstOrNull()?.toInt() == 0x41 -> dataPacket()
             value?.firstOrNull()?.toInt() == 0x42 -> windowEndPacket()
+            value?.firstOrNull()?.toInt() == 0x43 -> listOf(
+                CoreField.Unsigned(61, 3u), CoreField.Unsigned(127, 0x43u), CoreField.Unsigned(128, 9u),
+                CoreField.Unsigned(139, 580u), CoreField.Unsigned(39, 0u), CoreField.Unsigned(150, 1u),
+                CoreField.Bytes(142, ByteArray(32)), CoreField.Bytes(30, byteArrayOf(1)),
+            ).toNativePacket(0x0525)
+            value?.firstOrNull()?.toInt() == 0x44 -> listOf(
+                CoreField.Unsigned(61, 3u), CoreField.Unsigned(127, 0x44u), CoreField.Unsigned(128, 9u),
+                CoreField.Unsigned(38, 1u), CoreField.Unsigned(145, 1u), CoreField.Unsigned(130, 2u),
+                CoreField.Bytes(144, ByteArray(32)), CoreField.Bytes(142, ByteArray(32)),
+            ).toNativePacket(0x0525)
             else -> if (controlReplies.hasNext()) controlReplies.next() else controlPacket()
         }
     }

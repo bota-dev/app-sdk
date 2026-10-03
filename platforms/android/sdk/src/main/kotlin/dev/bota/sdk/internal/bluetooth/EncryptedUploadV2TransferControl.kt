@@ -105,6 +105,12 @@ internal class EncryptedUploadV2TransferIntake(private val transportSessionId: U
     }
 
     @Synchronized
+    fun acceptCompletedResume() {
+        expected(state == State.Window, "completed resume is not at transfer opening")
+        state = State.Manifest
+    }
+
+    @Synchronized
     fun continueWith(next: EncryptedUploadV2TransferContinuation) {
         expected(state == State.Paused, "transfer continuation is not at a window boundary")
         state = when (next) {
@@ -258,6 +264,9 @@ internal class EncryptedUploadV2TransferControl(
                 is EncryptedUploadV2TransferControlValue.ResumeAccepted -> {
                     expected(checkpoint != null, "RESUME received an unexpected reply type")
                     validateResume(request, checkpoint, control.value)
+                    if (control.value.nextCiphertextOffset == request.expectedCiphertextLength) {
+                        session.intake.acceptCompletedResume()
+                    }
                 }
                 is EncryptedUploadV2TransferControlValue.ResumeRejected -> {
                     identity(

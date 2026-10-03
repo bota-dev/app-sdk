@@ -1,22 +1,21 @@
 # Bota SDK for Flutter
 
-Source candidate `2.0.0-beta.11` keeps the five-platform version synchronized.
-The managed HTTP helper is React Native only; other facade behavior is unchanged.
-Beta.10 remains the published baseline until release gates pass.
+Source candidate `2.0.0-beta.12` keeps the five-platform version synchronized.
+Android repairs completed encrypted-v2 resume and failed connect/MTU cleanup;
+Apple and Web runtime behavior is unchanged. Beta.11 remains the published
+baseline until release gates pass. Native applications require a new binary.
 
 ## Package Name Migration
 
 The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
 `dev.bota:bota-app-sdk` on Android. Replace the old dependency and Dart imports;
 do not install both packages in the same application. Historical 1.x releases
-remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.10`.
-Published `2.0.0-beta.9` remains the installation baseline until beta.10 completes
-protected publication and public-consumer verification. The install pin below
-targets beta.10 after those gates pass. Beta.10 retires the exact Android
-connection when explicit disconnect times out or is cancelled without a native
-callback, preserving replacement sessions. Reconnect explicitly. The separate
-GATT 8/133 reconnect issue remains unverified. See the
-[preflight](../../../release/evidence/2.0.0-beta.10-preflight.md).
+remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.12`.
+Published beta.11 remains the installation baseline until protected publication
+and public-consumer verification pass. Use the install pin below after those
+gates pass; see the [preflight](../../../release/evidence/2.0.0-beta.12-preflight.md).
+Rebuild native applications and reconnect explicitly after connection loss.
+Completed-resume and broader hardware acceptance remain separate.
 
 ### Client presence
 
@@ -51,7 +50,7 @@ Pin the exact prerelease version after its publication:
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.11
+  bota_app_sdk: 2.0.0-beta.12
 ```
 
 For source development, point at an exact checkout rather than a moving branch:

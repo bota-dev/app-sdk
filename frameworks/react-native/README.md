@@ -1,8 +1,9 @@
 # Bota SDK for React Native
 
-Source candidate `2.0.0-beta.11` keeps the five-platform version synchronized.
-The managed HTTP helper is React Native only; other facade behavior is unchanged.
-Beta.10 remains the published baseline until release gates pass.
+Source candidate `2.0.0-beta.12` keeps the five-platform version synchronized.
+Android repairs completed encrypted-v2 resume and failed connect/MTU cleanup;
+Apple and Web runtime behavior is unchanged. Beta.11 remains the published
+baseline until release gates pass. Native applications require a new binary.
 
 Bluetooth device SDK for Bota Pin and Bota Note applications. The 2.x candidate
 preserves the public TypeScript API of `@bota.dev/react-native-sdk@0.0.65`
@@ -27,19 +28,17 @@ adopting this source API; published-package availability is a separate gate.
 
 ## Install
 
-Published beta.9 remains available. Install this beta.10 source candidate with
-the exact pin below only after publication is verified. Beta.10 retires the
-exact Android connection when explicit disconnect times out or is cancelled
-without a native callback, preserving replacement sessions. Reconnect explicitly.
-The [preflight](../../release/evidence/2.0.0-beta.10-preflight.md) separates
-automated cleanup regressions from publication and physical acceptance.
-The intermittent GATT 8/133 reconnect issue remains unverified.
+Published beta.11 remains available. Use the beta.12 pin below only after
+publication is verified; see the
+[preflight](../../release/evidence/2.0.0-beta.12-preflight.md).
+Rebuild native applications and reconnect explicitly after connection loss.
+Physical completed-resume acceptance and wider GATT recovery remain separate.
 Remove `@bota.dev/react-native-sdk` before adding the replacement; do not
 co-install both. Standalone maintenance ended September 29, 2026; follow the
 [retirement and migration notice](../../docs/migrations/react-native-sdk-sunset.md).
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.11
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.12
 npx pod-install
 ```
 

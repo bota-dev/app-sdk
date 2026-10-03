@@ -1,5 +1,12 @@
 # Architecture
 
+Source candidate **2.0.0-beta.12** repairs Android encrypted-v2 recovery when a
+validated resume starts at the complete ciphertext boundary. Manifest/EOF can
+then arrive without another data window; signed receipt/CONFIRM still gates
+cleanup. It also includes the existing Android connect/MTU cleanup follow-up.
+Beta.11 remains published until release gates pass. See the
+[candidate review](release/evidence/2.0.0-beta.12-preflight.md).
+
 Published synchronized beta **2.0.0-beta.11** adds the managed encrypted-v2
 backend adapter for React Native iOS/Android. All five packages, public native
 consumers and Flutter archive verification passed. See the

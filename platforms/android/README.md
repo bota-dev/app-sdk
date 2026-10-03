@@ -1,5 +1,11 @@
 # Bota SDK for Android
 
+Candidate beta.12 accepts manifest/EOF immediately after a validated RESUME at
+the full ciphertext boundary. Fresh/partial transfer openings still require
+data windows. Signed receipt and device CONFIRM remain mandatory before cleanup;
+see the [regression and acceptance review](../../docs/parity/android-complete-resume-recovery.md).
+Native application rebuild and physical interruption acceptance are separate gates.
+
 Published beta.8 connection-loss propagation, beta.9 adapter-off cleanup and
 beta.10 explicit-disconnect cleanup are recorded in the
 [review](../../docs/parity/android-disconnection-events.md).

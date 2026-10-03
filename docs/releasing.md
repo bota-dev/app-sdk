@@ -1,3 +1,13 @@
+# Next synchronized candidate: 2.0.0-beta.12
+
+The candidate repairs Android recovery from a complete encrypted-v2 ciphertext
+checkpoint and includes the existing failed connect/MTU cleanup follow-up.
+See the [candidate design review](../release/evidence/2.0.0-beta.12-preflight.md).
+Require exact candidate CI and License Gate, verified native candidate phone
+recovery, final main CI, candidate-derived Apple checksums, the single protected
+release approval and public-consumer verification. Beta.11 remains immutable;
+preparation does not publish or advance npm `latest`.
+
 # Published synchronized beta: 2.0.0-beta.11
 
 [Protected release 37080688370](https://github.com/bota-dev/app-sdk/actions/runs/37080688370) completed successfully from

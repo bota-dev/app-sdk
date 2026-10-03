@@ -1,3 +1,10 @@
+## 2.0.0-beta.12 (candidate)
+
+- Accept manifest/EOF after an exact validated Android encrypted-v2 resume at the full ciphertext boundary, without requesting another data window.
+- Keep signed receipt/CONFIRM and scope, owner, nonce, prefix and revision checks before cleanup.
+- Include Android failed connect/MTU handshake cleanup already present on main. Public APIs and firmware rollout gates are unchanged; rebuild native applications.
+- Focused host regressions pass; candidate physical recovery and publication remain separate gates.
+
 ## 2.0.0-beta.11 (candidate)
 
 - Synchronize with the RN managed encrypted-v2 backend adapter release. Flutter integration and firmware gates remain unchanged.
