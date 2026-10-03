@@ -4,9 +4,10 @@ The candidate repairs the Android complete-resume intake and Android/Apple
 attempt-local sequence recovery, plus the existing failed connect/MTU cleanup.
 See the [candidate design review](../release/evidence/2.0.0-beta.12-preflight.md).
 Initial source `0e6e9a1` and pinned `72ca200` passed branch checks, but the
-physical candidate exposed the next sequence mismatch. Its Apple pins must be
-regenerated from the corrected source's new artifacts. Physical recovery and
-exact checks remain pending. Require final main-push
+physical candidate exposed the next sequence mismatch. Those Apple pins are
+replaced with the corrected `07c915e` archives, now verified and pinned. All
+eight source CI jobs and License Gate passed; final metadata checks and physical
+recovery remain required. Require final main-push
 CI and License Gate, matching Apple pins, the single protected release approval
 and public-consumer verification. Beta.11 remains immutable; preparation does
 not publish or advance npm `latest`.

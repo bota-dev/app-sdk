@@ -60,10 +60,10 @@ counter. All ciphertext, manifest, block-count, identity and receipt checks stay
 | Resume completed ciphertext without another window | `acceptCompletedResume` after `validateResume`, before `controlAccepted`; manifest/EOF regression | Matched in host test |
 | Reject packets outside the validated phase | Fresh/partial manifest and complete-resume DATA/WINDOW_END rejection cases | Matched in host test |
 | Preserve exact identity and checkpoint validation | Existing validation precedes the transition; full control suite retained | Matched in source and host tests |
-| Keep attempt sequences separate from durable progress | One-time accepted-opening reset; full/partial host and receiver cases retain old checkpoint until verified save | Matched in Android host tests; Apple execution pending |
-| Reject stale sequences and invalid completion evidence | Old sequence, ciphertext/manifest hash, manifest bytes, file, length and block-count cases | Matched in Android host tests; Apple execution pending |
+| Keep attempt sequences separate from durable progress | One-time accepted-opening reset; full/partial host and receiver cases retain old checkpoint until verified save | Matched in Android and Apple host tests |
+| Reject stale sequences and invalid completion evidence | Old sequence, ciphertext/manifest hash, manifest bytes, file, length and block-count cases | Matched in Android and Apple host tests |
 | Preserve signed receipt/CONFIRM and native journal cleanup | No backend, host cleanup or authorization changes | Matched in source; physical recovery unverified |
-| Maintain Apple parity | Same sequence defect fixed; no Android intake gate added to Apple | Matched in source review; macOS tests pending |
+| Maintain Apple parity | Same sequence defect fixed; no Android intake gate added to Apple | Matched in source review and macOS tests |
 | Recover a real interrupted published recording | First candidate failed its next integrity gate; corrected native binary and retry still needed | Unverified for the corrected patch |
 
 The current encrypted-v2 resume and delete-after-confirmation contract is the
@@ -89,7 +89,8 @@ transport/JNI remains simulated; host tests use the validated-open service
 boundary. Local full host execution additionally encountered Windows directory
 fsync `AccessDenied` and its cleanup timeout in existing confirmation tests;
 required Linux/macOS CI remains authoritative for those paths. Apple receiver
-and host tests are added, but cannot execute on this Windows host.
+and host tests cannot execute on this Windows host; they passed in the exact
+corrected-source macOS job below.
 The final focused JVM run passes 34 tests: all 22 control tests, all eight
 receiver tests, both accepted-resume host cases and the existing zero/nonzero
 reconciliation and repair host cases. No production source was substituted to
@@ -105,6 +106,16 @@ Android AAR and matching React Native package were used in the failed physical
 candidate described above. Those checks do not cover the sequence correction.
 New exact branch CI, Apple artifact-derived pins, a new native physical retry,
 final main CI and publication remain separate gates.
+
+Corrected source `07c915ee635469ca2230a7b0e56cf3864fe5351c` passed all eight jobs,
+including Android native/API 26/35, Apple package/consumer and Flutter, in
+[CI 37108789844](https://github.com/bota-dev/app-sdk/actions/runs/37108789844).
+All five targeted Apple complete/partial, stale/integrity, reset-guard and host
+reload regressions explicitly passed. [License Gate 37108791793](https://github.com/bota-dev/app-sdk/actions/runs/37108791793)
+also passed. The corrected AAR and matching React Native package have verified
+artifact digests and source identities; Apple pins are regenerated from its
+verified archives. Checks for the final pinned metadata revision remain
+required. Physical recovery with these bytes is still pending.
 Candidate beta.12 also includes the previously merged connect/MTU cleanup;
 it does not establish a fix for every GATT 8/133 failure. New native application
 binaries are required; an OTA JavaScript update cannot install this fix.
