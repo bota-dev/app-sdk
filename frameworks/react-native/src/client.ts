@@ -1,3 +1,4 @@
+import { Buffer } from 'buffer';
 import type {
   NativeClientContext,
   NativeCapabilities,
@@ -1063,6 +1064,12 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
               commandId: request.commandId,
               bindingGeneration: request.bindingGeneration,
             });
+            const grant = Buffer.from(grantBlob, 'base64');
+            if (request.serialNumber !== device.serialNumber || request.commandId !== options.commandId ||
+                request.bindingGeneration !== options.bindingGeneration || grant.length !== 179 ||
+                grant.toString('base64') !== grantBlob || grant.readUInt32BE(0) !== options.bindingGeneration) {
+              throw new Error('Factory reset requires an exact-device, exact-generation reset grant; deprovision permission is insufficient');
+            }
             await module.resolveFactoryResetGrant(request.requestId, grantBlob);
           } catch (error) {
             await module.rejectApplicationMaterial(

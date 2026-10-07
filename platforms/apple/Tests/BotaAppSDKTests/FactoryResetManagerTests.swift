@@ -18,7 +18,7 @@ final class FactoryResetManagerTests: XCTestCase {
         ) { request in
             XCTAssertEqual(request.commandID, "reset-command-1")
             XCTAssertEqual(request.bindingGeneration, 9)
-            return Data([0x44])
+            return Data([0, 0, 0, 9]) + Data(repeating: 0x44, count: 175)
         }
 
         XCTAssertEqual(completion, .init(commandID: "reset-command-1", bindingGeneration: 9))

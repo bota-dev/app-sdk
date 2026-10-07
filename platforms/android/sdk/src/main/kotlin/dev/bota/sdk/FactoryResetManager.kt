@@ -68,7 +68,14 @@ public class FactoryResetManager internal constructor() {
                 }
             }
             configured.registerFactoryReset(grantId) { serialNumber, nonce ->
-                provider(FactoryResetGrantRequest(serialNumber, nonce, commandId, bindingGeneration))
+                val grant = provider(FactoryResetGrantRequest(serialNumber, nonce, commandId, bindingGeneration))
+                val generation = if (grant.size == 179) grant.take(4).fold(0uL) { value, byte ->
+                    (value shl 8) or byte.toUByte().toULong()
+                } else null
+                require(generation == bindingGeneration) {
+                    "factory reset requires an exact-generation reset grant; deprovision permission is insufficient"
+                }
+                grant
             }
             awaitWorkflowCompletion(command, configured)
             return FactoryResetCompletion(commandId, bindingGeneration)

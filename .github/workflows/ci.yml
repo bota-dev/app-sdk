@@ -19,6 +19,26 @@ permissions:
   contents: read
 
 jobs:
+  prepare-reset-protocol:
+    name: Prepare reset protocol sources
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.98.0
+          components: rustfmt
+      - run: cargo xtask protocol generate
+      - run: cargo fmt --all
+      - run: cargo test -p bota-device-sdk-core
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: reset-protocol-sources
+          path: |
+            core/device-sdk-core/src/generated/protocol.rs
+            core/device-sdk-core/src/workflow/factory_reset.rs
+            core/device-sdk-core/tests/factory_reset_workflow.rs
   quality:
     name: Rust and tooling
     runs-on: ubuntu-latest

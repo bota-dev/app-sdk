@@ -29,7 +29,7 @@ class FactoryResetManagerTest {
         ) { request ->
             assertEquals("reset-command-1", request.commandId)
             assertEquals(9uL, request.bindingGeneration)
-            byteArrayOf(0x44)
+            byteArrayOf(0, 0, 0, 9) + ByteArray(175) { 0x44 }
         }
 
         val command = fixture.runner.commands.single()

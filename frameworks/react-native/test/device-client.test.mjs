@@ -949,6 +949,24 @@ test('recording controls preserve typed results and own state subscriptions nati
   ]);
 });
 
+const resetGrant = (generation = 9, length = 179) => {
+  const grant = Buffer.alloc(length, 0x44);
+  grant.writeUInt32BE(generation, 0);
+  return grant.toString('base64');
+};
+
+test('factory reset refuses remove-only and stale-generation grants before native delivery', async () => {
+  for (const grant of [resetGrant(9, 171), resetGrant(8)]) {
+    const fixture = nativeFixture();
+    const client = createBotaDeviceSDK(fixture.module);
+    await assert.rejects(client.factoryReset.factoryReset(
+      connected, { commandId: 'reset-command-1', bindingGeneration: 9 }, async () => grant
+    ), /exact-device, exact-generation reset grant/);
+    assert.equal(fixture.calls.some(call => call[0] === 'resolveFactoryResetGrant'), false);
+    assert.equal(fixture.calls.some(call => call[0] === 'deprovision'), false);
+  }
+});
+
 test('factory reset resolves a nonce-bound grant and resumes only the exact generation', async () => {
   const fixture = nativeFixture();
   const client = createBotaDeviceSDK(fixture.module);
@@ -963,7 +981,7 @@ test('factory reset resolves a nonce-bound grant and resumes only the exact gene
         commandId: 'reset-command-1',
         bindingGeneration: 9,
       });
-      return 'Z3JhbnQ=';
+      return resetGrant();
     }
   );
   const resumed = await client.factoryReset.resumePendingFactoryReset(
@@ -978,7 +996,7 @@ test('factory reset resolves a nonce-bound grant and resumes only the exact gene
   assert.deepEqual(resumed, completion);
   assert.deepEqual(fixture.calls, [
     ['factoryReset', connected, 'reset-command-1', 9, false],
-    ['resolveFactoryResetGrant', 'factory-reset-request', 'Z3JhbnQ='],
+    ['resolveFactoryResetGrant', 'factory-reset-request', resetGrant()],
     ['resumePendingFactoryReset', connected, 9, false],
   ]);
 });
@@ -991,7 +1009,7 @@ test('factory reset awaits application result persistence before native completi
   const completion = await client.factoryReset.factoryReset(
     connected,
     { commandId: 'reset-command-1', bindingGeneration: 9 },
-    async () => 'Z3JhbnQ=',
+    async () => resetGrant(),
     async (result) => {
       persisted.push(result);
     }
@@ -1004,7 +1022,7 @@ test('factory reset awaits application result persistence before native completi
   });
   assert.deepEqual(fixture.calls, [
     ['factoryReset', connected, 'reset-command-1', 9, true],
-    ['resolveFactoryResetGrant', 'factory-reset-request', 'Z3JhbnQ='],
+    ['resolveFactoryResetGrant', 'factory-reset-request', resetGrant()],
     ['resolveFactoryResetResultPersistence', 'factory-reset-persistence'],
   ]);
 });

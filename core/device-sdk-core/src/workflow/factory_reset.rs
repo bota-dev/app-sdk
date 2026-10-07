@@ -22,7 +22,7 @@ use crate::{
 
 const FACTORY_RESET_TIMEOUT_MS: u64 = 30_000;
 const FACTORY_RESET_TIMER_ID: u64 = 1;
-const FACTORY_RESET_GRANT_LENGTH: usize = 171;
+const FACTORY_RESET_GRANT_LENGTH: usize = 179;
 
 #[derive(Clone, Debug)]
 enum Mode {
@@ -58,6 +58,7 @@ pub(crate) struct FactoryResetWorkflow {
     phase: Phase,
     nonce: Option<ProvisioningNonce>,
     grant: Vec<u8>,
+    binding_generation: [u8; 4],
     durable_result: Option<DurableFactoryResetResult>,
     nonce_request_id: Option<RequestId>,
     material_request_id: Option<RequestId>,
@@ -87,6 +88,7 @@ impl FactoryResetWorkflow {
             phase: Phase::ReadingNonce,
             nonce: None,
             grant: Vec::new(),
+            binding_generation: [0; 4],
             durable_result: None,
             nonce_request_id: None,
             material_request_id: None,
@@ -116,6 +118,7 @@ impl FactoryResetWorkflow {
             phase: Phase::Subscribing,
             nonce: None,
             grant: Vec::new(),
+            binding_generation: [0; 4],
             durable_result: None,
             nonce_request_id: None,
             material_request_id: None,
@@ -187,7 +190,7 @@ impl FactoryResetWorkflow {
         let write = context.request(Effect::Ble(BleEffect::Write {
             service_uuid: SERVICE_BOTA_CONTROL.into(),
             characteristic_uuid: CHAR_DEVICE_COMMAND.into(),
-            payload: vec![DEVICE_CMD_BLE_FACTORY_RESET],
+            payload: [vec![DEVICE_CMD_BLE_FACTORY_RESET], self.binding_generation.to_vec()].concat(),
             with_response: true,
         }));
         self.write_request_id = Some(write.request_id);
@@ -390,7 +393,7 @@ impl WorkflowReducer for FactoryResetWorkflow {
                                 Operation::FactoryReset,
                                 false,
                             )
-                            .with_detail("factory-reset grant must be exactly 171 bytes"),
+                            .with_detail("factory-reset grant must be exactly 179 bytes; deprovision grants cannot authorize reset"),
                             context,
                         ));
                     }
@@ -400,6 +403,7 @@ impl WorkflowReducer for FactoryResetWorkflow {
                     }
                 };
                 grant.fill(0);
+                self.binding_generation.copy_from_slice(&bounded[..4]);
                 self.grant = bounded;
                 if let Some(nonce) = &mut self.nonce {
                     nonce.0.fill(0);

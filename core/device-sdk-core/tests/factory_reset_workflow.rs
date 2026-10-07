@@ -17,6 +17,20 @@ use bota_device_sdk_core::{
 
 const CANCELLATION: CancellationId = CancellationId::from_bytes([4; 16]);
 
+#[test]
+fn legacy_deprovision_grant_never_reaches_a_reset_write() {
+    let mut engine = WorkflowEngine::default();
+    let effects = engine.start(Command::FactoryReset {
+        device: device(), command_id: command_id(), grant_id: HostMaterialId::new("grant-1").unwrap(),
+    }, &capabilities(), CANCELLATION).unwrap();
+    let read = request_id(&effects, |effect| matches!(effect, Effect::Ble(BleEffect::Read { .. })));
+    let prepared = engine.dispatch(host(read, HostEventKind::Ble(BleEvent::ReadCompleted { value: vec![3; 16] }))).unwrap();
+    let request = request_id(&prepared, |effect| matches!(effect, Effect::HostMaterial(HostMaterialEffect::PrepareFactoryResetGrant { .. })));
+    let failed = engine.dispatch(host(request, HostEventKind::FactoryResetGrantPrepared { grant: vec![4; 171] })).unwrap();
+    assert!(!failed.iter().any(|request| matches!(request.effect, Effect::Ble(BleEffect::Write { .. }))));
+    assert!(matches!(engine.status(), WorkflowStatus::Failed { error } if error.code == ErrorCode::InvalidInput));
+}
+
 fn capabilities() -> CapabilitySet {
     CapabilitySet::from([
         Capability::Ble,
@@ -79,7 +93,7 @@ fn start_reset(engine: &mut WorkflowEngine) -> (RequestId, RequestId) {
         .dispatch(host(
             grant_request,
             HostEventKind::FactoryResetGrantPrepared {
-                grant: vec![0x44; 171],
+                grant: vec![0x44; 179],
             },
         ))
         .unwrap();
@@ -97,7 +111,7 @@ fn start_reset(engine: &mut WorkflowEngine) -> (RequestId, RequestId) {
         .unwrap();
     let grant_write_request = request_id(
         &grant_write,
-        |effect| matches!(effect, Effect::Ble(BleEffect::Write { characteristic_uuid, payload, .. }) if characteristic_uuid == CHAR_DEVICE_COMMAND && payload == &vec![0x44; 171]),
+        |effect| matches!(effect, Effect::Ble(BleEffect::Write { characteristic_uuid, payload, .. }) if characteristic_uuid == CHAR_DEVICE_COMMAND && payload == &vec![0x44; 179]),
     );
     let opcode_write = engine
         .dispatch(host(
@@ -107,7 +121,7 @@ fn start_reset(engine: &mut WorkflowEngine) -> (RequestId, RequestId) {
         .unwrap();
     let opcode_request = request_id(
         &opcode_write,
-        |effect| matches!(effect, Effect::Ble(BleEffect::Write { payload, .. }) if payload == &[DEVICE_CMD_BLE_FACTORY_RESET]),
+        |effect| matches!(effect, Effect::Ble(BleEffect::Write { payload, .. }) if payload == &[DEVICE_CMD_BLE_FACTORY_RESET, 0x44, 0x44, 0x44, 0x44]),
     );
     engine
         .dispatch(host(

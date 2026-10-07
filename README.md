@@ -1,5 +1,8 @@
 # Bota App SDK
 
+Factory reset requires a dedicated action authorization, separate from
+remove-only deprovision. See [the reset contract and verification boundary](docs/parity/factory-reset-authorization.md).
+
 Source candidate **2.0.0-beta.12** repairs the Android encrypted-v2 manifest
 phase at a complete resume and separates each resumed attempt's packet counter
 from the durable checkpoint on Android and Apple. Signed receipt/CONFIRM still

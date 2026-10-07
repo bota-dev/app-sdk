@@ -84,12 +84,18 @@ public actor FactoryResetManager {
             }
         }
         await runtime.registerFactoryReset(grantID) { request in
-            try await provider(.init(
+            let grant = try await provider(.init(
                 serialNumber: request.serialNumber,
                 nonce: request.nonce,
                 commandID: commandID,
                 bindingGeneration: bindingGeneration
             ))
+            guard grant.count == 179,
+                  grant.prefix(4).reduce(UInt64(0), { ($0 << 8) | UInt64($1) }) == bindingGeneration else {
+                throw BotaSDKError(code: .invalidInput, operation: .factoryReset, retryable: false,
+                    detail: "factory reset requires an exact-generation reset grant; deprovision permission is insufficient")
+            }
+            return grant
         }
         do {
             try await run(

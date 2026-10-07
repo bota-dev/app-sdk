@@ -82,6 +82,9 @@ services:
       - { name: CHAR_BOTA_SERIAL_NUMBER, uuid: B07A0008-0001-1000-8000-00805F9B34FB }
 
 constantGroups:
+  factory_reset_authorization:
+    FACTORY_RESET_GRANT_VERSION: 2
+    FACTORY_RESET_GRANT_SCOPE: 16
   device_diagnostics_commands:
     DEVICE_DIAGNOSTICS_CMD_LIST: 16
     DEVICE_DIAGNOSTICS_CMD_ACK: 17
@@ -1066,6 +1069,7 @@ layouts:
       - { name: reserved, offset: 22, width: 2, encoding: zero }
 
 limits:
+  FACTORY_RESET_GRANT_LENGTH: 179
   UPLOAD_CONTEXT_NONCE_LENGTH: 16
   UPLOAD_CONTEXT_PROOF_MIN_LENGTH: 116
   UPLOAD_CONTEXT_PROOF_MAX_LENGTH: 366
