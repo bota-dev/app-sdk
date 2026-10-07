@@ -1,6 +1,8 @@
 # AGENTS.md
 
-October 7 root tooling lock patches fast-uri to 3.1.8 for High #1/#2.
+October 7 tooling locks select fast-uri 3.1.8 (High #1/#2), shell-quote
+1.11.0 (new Critical #8) and source-map-js 1.2.2 (new High #9).
+See [follow-on evidence](docs/security/2026-10-07-new-alerts.md).
 Run the crafted URI/Ajv and existing schema/vector regressions; retain exact
 revision CI/release gates. See [security evidence](docs/security/2026-10-07-fast-uri.md).
 
