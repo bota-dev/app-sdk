@@ -1,522 +1,66 @@
 # Bota App SDK
 
-Factory reset requires a dedicated action authorization, separate from
-remove-only deprovision. See [the reset contract and verification boundary](docs/parity/factory-reset-authorization.md).
+Connect your application to **Bota Pin** and **Bota Note** devices. The Bota App
+SDK provides Bluetooth discovery and connection, device status, recording
+transfer, provisioning, WiFi configuration, recording control, and firmware
+updates through a shared Rust core and platform-native adapters.
 
-Source candidate **2.0.0-beta.12** repairs the Android encrypted-v2 manifest
-phase at a complete resume and separates each resumed attempt's packet counter
-from the durable checkpoint on Android and Apple. Signed receipt/CONFIRM still
-gates cleanup. It also includes the existing Android connect/MTU cleanup follow-up.
-Beta.11 remains published until release gates pass. See the
-[candidate review](release/evidence/2.0.0-beta.12-preflight.md).
+**Current beta: `2.0.0-beta.12`.** Pin exact versions when installing. See the
+[Changelog](CHANGELOG.md) for changes and [GitHub Releases](https://github.com/bota-dev/app-sdk/releases)
+for published artifacts. The SDK is in beta; supported workflows depend on the
+platform and device firmware.
 
-Published synchronized beta **2.0.0-beta.11** adds the managed encrypted-v2
-backend adapter for React Native iOS/Android. All five packages, public native
-consumers and Flutter archive verification passed. See the
-[publication and design review](release/evidence/2.0.0-beta.11-publication.md).
-Native app rebuild, authenticated v2 proxy routes and scoped lifecycle wiring
-are required; publication does not establish physical interruption acceptance.
+## Platforms
 
-Beta.11 adds a [managed encrypted-v2 backend adapter](docs/parity/v2-managed-backend.md)
-for React Native on iOS/Android, reducing customer native integration to a
-configured authenticated proxy, identity and lifecycle hooks. Physical
-acceptance and application rollout remain separate from package publication.
+| Platform | Package | Requirements | Guide |
+| --- | --- | --- | --- |
+| React Native | `@bota.dev/react-native-app-sdk` | RN 0.86.3+ with New Architecture, React 19.2.3+, iOS 15.1+ / Android API 26+ | [React Native](frameworks/react-native/README.md) |
+| Apple | `BotaAppSDK` | iOS 15+ / macOS 13+ | [Installation](#apple) |
+| Android | `dev.bota:bota-app-sdk` | Android API 26+ | [Android](platforms/android/README.md) |
+| Flutter | `bota_app_sdk` | iOS 15+ / Android API 26+ | [Flutter](frameworks/flutter/bota_app_sdk/README.md) |
+| Web | `@bota.dev/web-app-sdk` | Desktop Chromium with Web Bluetooth, HTTPS, foreground use | [Web](frameworks/web/README.md) |
 
-Current Android source also closes an incomplete connection when connect or MTU
-negotiation fails, times out or is cancelled. Cleanup preserves the original
-failure and a queued replacement connection. This follow-up is absent from
-published beta.10 and beta.11 (`344cd2e`);
-see the [handshake cleanup review](docs/parity/android-disconnection-events.md#failed-connect-and-mtu-handshake).
-It does not establish a fix for every GATT 8/133 failure.
+Windows and a dedicated Electron SDK are planned. Flutter Web and desktop are
+not supported. Consult each platform guide for its capability limits.
 
-The earlier synchronized beta **2.0.0-beta.10** retires the exact Android connection
-when explicit disconnect times out or is cancelled without a native callback.
-All five public packages and their release consumer checks passed. See the
-[publication and acceptance review](release/evidence/2.0.0-beta.10-publication.md).
-The separate intermittent GATT 8/133 reconnect issue is not established as fixed;
-physical acceptance remains separate from automated release checks.
+## Installation
 
-The earlier synchronized beta **2.0.0-beta.9** added Android adapter-off cleanup
-even when the system omits the GATT loss callback. All five public packages and
-their release consumer checks passed. Explicit reconnect remains required.
-See the [publication and acceptance review](release/evidence/2.0.0-beta.9-preflight.md#publication)
-for immutable artifact evidence and the separate physical acceptance limits.
+The examples below use the published `2.0.0-beta.12` release. npm's `beta` tag
+tracks newer prereleases; `latest` remains at the initial `2.0.0-beta.0`.
+An unversioned npm install therefore does not select the current beta.
 
-The standalone `@bota.dev/react-native-sdk` maintenance line was retired on
-September 29, 2026. New React Native integrations use
-`@bota.dev/react-native-app-sdk`. See the [retirement and migration notice](docs/migrations/react-native-sdk-sunset.md);
-existing old releases remain available and the successor is still beta.
+### React Native
 
-Rebuild native applications; restore Bluetooth, scan and reconnect explicitly
-after loss. The [independent examples review](https://github.com/bota-dev/examples/blob/main/docs/independent-examples-review.md#beta10-adoption)
-records public-package builds and bounded phone recovery separately from SDK
-publication. Other hardware, background/out-of-range behavior and full recording
-workflows need their own acceptance.
-
-Beta.10 also retires an explicit disconnect when its wait
-times out or is cancelled without a system callback. Its exact-generation loss
-still reaches observers after driver cleanup. See the
-[source review](docs/parity/android-disconnection-events.md#explicit-disconnect-without-an-android-callback).
-Earlier beta.9 does not contain this follow-up; no reconnect reliability claim is added.
-
-## Client presence (beta.6)
-
-Web, Apple, Android, React Native and Flutter expose passive
-`clientPresence.nextReport(deviceId)` metadata (Apple uses `deviceID:`).
-Use the SDK connection handle, not a backend `dev_*` ID. Null means no current
-verified connection. Reports contain only schema version, a random in-memory
-connection session, increasing sequence, platform and generated SDK identity.
-Reconnect rotates the session; disconnect/destroy invalidate it. Native getters
-also check local transport ownership, without a GATT read or a network request.
-
-The host must first obtain a fresh device status, then explicitly attach this
-metadata to its existing authenticated heartbeat with the matching project,
-device and binding generation. Map native/framework camelCase fields to the
-heartbeat's snake_case `client_context` fields. An optional developer-supplied
-app identifier belongs to the host; the SDK does not infer app names, collect
-phone identifiers, or persist a client identity. Reports are diagnostics, not
-device attestation or command authority. Command routing is unchanged.
-
-The maintenance React Native SDK and deployed host applications are separate
-adoption steps. This source API is not evidence of a published package or
-physical-device acceptance.
-
-The beta.6 release added maintenance-source presence and scoped upload recovery
-alongside native encrypted-v2, reconnect and recording-transfer work. Its native
-and npm artifacts are public; Flutter publication failed before upload.
-The synchronized 2.0.0-beta.7 successor fixes publication staging without runtime
-changes. Its [release record](release/evidence/2.0.0-beta.7-preflight.md) tracks
-exact CI and public-consumer gates, which must pass before adopting the whole
-family. The current installation pins are described above; stable promotion remains
-separate from the subsequent standalone retirement linked above.
-
-Future releases reuse verified artifacts from one exact successful main CI run.
-The tag records that run and its inventory checksum; one approval starts the
-publication graph, followed by public installation checks. Retry verifies already
-published packages before uploading. See [the release procedure](docs/releasing.md)
-for artifact retention and historical recovery requirements.
-
-One Android encrypted batch upload over BLE and subsequent cloud playback has
-been verified with a local Demo integration. Other physical platform and recovery
-scenarios remain unverified; this does not enable v2 compatibility metadata or
-constitute production qualification.
-
-The `2.0.0-beta.1` release uses explicit App SDK package names and includes the
-Flutter Android normal-install fix. Apple SwiftPM
-and CocoaPods, Android Maven, React Native npm, Web npm, and Flutter pub.dev
-artifacts are public and verified. Clean public native consumers and fresh
-Flutter Android/iOS release builds passed. Physical-device acceptance remains
-NOT RUN; this is a beta, not production qualification. See the
-[package migration guide](docs/migrations/app-sdk-package-names.md) before
-changing dependencies; historical releases below retain their names.
-
-Source monorepo for the **Bota App SDK** family. The repository provides a
-shared Rust protocol and workflow core with platform-native Bluetooth
-transports and Apple, Android, React Native, Flutter, and Web facades. The Web
-facade implements the browser-feasible foreground workflow surface for the
-`2.0.0-beta.1` release. Its supervised physical Chromium matrix has not run;
-the release owner requested beta rollout before that test. The Windows facade
-remains planned.
-
-`@bota.dev/react-native-sdk@1.1.0`, `BotaAppleSDK`, and
-`dev.bota:bota-android-sdk:1.1.0` are the first synchronized public App SDK
-release. This immutable version is now classified as beta while the production
-React Native maintenance line remains on `0.0.x`. The former standalone SDK
-repositories remain migration inputs.
-
-## Release Channels
-
-The synchronized App SDK is currently a beta. React Native consumers pin the
-exact prerelease:
+Use Node.js 22+ to install and build your app:
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.11
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.12
+npx pod-install
 ```
 
-Apple and Android do not use npm dist-tags, so beta consumers pin the exact
-synchronized version shown in the installation sections below. New synchronized
-releases use `2.x.y-beta.n`; promotion to a stable channel is a separate release
-decision. The new-name npm `beta` tags point to `2.0.0-beta.11`; `latest` stays
-at `2.0.0-beta.0` under the owner-approved bootstrap exception. This is not
-stable promotion. Later betas must not advance `latest`. Historical npm tags
-are unchanged.
+Rebuild the native iOS and Android applications. Expo projects require a
+development or production build; Expo Go cannot load this native module.
+Follow the [React Native setup guide](frameworks/react-native/README.md#install)
+for permissions and Expo configuration.
 
-Flutter publication uses the same beta.6 candidate inventory and release graph;
-its registry and public-file verification results are linked from the beta.6
-release record. Earlier 1.x candidates did not publish Flutter. Automatic
-PR/main CI runs verification and fresh consumer builds; publication remains a
-separate protected release action.
+```ts
+import { BotaClient } from '@bota.dev/react-native-app-sdk';
 
-## Historical beta.1 checkpoint
-
-The earlier synchronized `2.0.0-beta.1` release composes
-the foreground Web managers for picker and authorized reconnect, snapshots,
-recording workflows, provisioning and settings, WiFi, recording control, OTA,
-and device logs over one shared Rust/WASM runtime. Unit, packed-consumer, and
-automated Chromium gates passed. Supervised physical-device acceptance remains
-open; background browser behavior remains unsupported. Both protected release
-workflows passed and attached the verified evidence. React Native, Web, and
-Flutter published through their new-name OIDC publishers without interactive
-registry authentication or token fallback. See the
-[publication record](release/evidence/2.0.0-beta.1-publication.md) for exact
-consumer checks and registry propagation recovery.
-
-### Historical Release Attempts
-
-The beta.3 Android coordinate is public, but the synchronized release is
-incomplete: its protected workflow stopped before npm, Apple, and Flutter
-publication after the HTML-index timeout and signed-bundle mismatch on retry.
-Beta.4 passed main CI but stopped in tagged Android tests before publication.
-Beta.5 also passed main CI but its tagged Android unit step stalled; its run
-was cancelled before publication.
-Beta.6 passed main CI but stopped in tagged Android unit tests before
-publication.
-Beta.7 published Apple SwiftPM, Android Maven, React Native npm, and Web npm.
-The first CocoaPod was rejected after local validation because its podspec
-used `prepare_command`; Flutter publication was held. Beta.8 replaced that
-podspec with a checksummed, script-free CocoaPods archive. Its Apple SwiftPM,
-CocoaPods, Android Maven, React Native npm, and Web npm artifacts are public,
-but the CocoaPods workflow missed its own Trunk registration through the CDN
-and held Flutter. Beta.9 checks Trunk directly before any push; its Apple,
-Android, React Native, and Web artifacts are public, and all public consumers
-passed. GitHub then skipped Flutter because the deliberately skipped recovery
-job propagated through the release dependency graph. Beta.10 corrected that
-condition and published the native and npm artifacts, but its ordered Flutter
-consumer job could not locate the CocoaPods 1.16.2 executable installed on the
-macOS runner. Beta.11 published the native, npm, and CocoaPods artifacts but
-still failed before Flutter packaging because the runner's default Ruby
-selected a different `pod` version. Beta.12 isolates the CocoaPods gem and
-executable, with a public-pod consumer check in main CI.
-
-The App SDK has published synchronized beta release `1.1.0`: the repository has a generated
-protocol manifest, 64 language-neutral compatibility fixtures, bounded Rust
-decoders, byte-exact serializers, stable models/errors, and deterministic
-discovery, connection-recovery, provisioning, authenticated-reset, resumable
-recording-transfer, guarded upload-handoff, and resumable firmware-update
-reducers, plus exclusive device-log subscription ownership and line delivery.
-Thirty-three canonical workflow scenarios are schema validated, pinned to the
-React Native `0.0.67` executable workflow baseline, and backed by 29 executable
-Rust tests covering positive, rejection, cancellation, and resume or
-restart-recovery behavior. The separate `0.0.65` baseline remains the semantic
-TypeScript compatibility contract for all 80 root exports, expanded type
-aliases, static factories, and reachable
-public members; future React Native packages must match that digest in addition
-to the protocol and workflow gates. A private `frameworks/react-native`
-foundation now pins the apps' React Native 0.86.3 New Architecture floor,
-validates a low-volume lifecycle, device-connection, device-status,
-nonce-bound provisioning, native-decoded connection-settings reads and
-normalized writes,
-authenticated-reset, native-file recording transfer, guarded upload ownership,
-native-download OTA, sanitized device-log, and native-owned WiFi configuration,
-disconnect, status, status-subscription, and scan TurboModule contracts for iOS
-and Android, and
-rejects Codegen drift or bridge fields that could carry recording bytes,
-firmware bytes, or raw log packets. Its Apple lifecycle adapter now serializes
-configuration and destruction through `BotaAppleSDK`; its device adapter owns
-discovery/status subscriptions
-and delegates selected connect, serial-strict reconnect, disconnect, and status
-reads. Its one-shot material broker delegates provisioning, grant-gated
-remove-only deprovision, authenticated reset, and receipt-only reset recovery without
-reopening the nonce race. The reset grant crosses JavaScript as an encoded
-application value and becomes bytes only inside the native adapter. The same
-facade expands frozen connection-setting defaults in JavaScript, then delegates
-device-model normalization, serialization, and BLE writes to Apple and Android.
-An omitted heartbeat setting retains the frozen both-channels-enabled default.
-Reads keep characteristic bytes and decoding native, returning only the typed
-settings value for mapping to the frozen JavaScript field names.
-A disposable CocoaPods application proves that the generated TurboModule,
-typed event emitter,
-Objective-C++, Swift, Swift Package, and Rust XCFramework layers compile and
-link together. Its Android adapters provide the same lifecycle, connection,
-status, provisioning, connection-settings reads and writes, authenticated-reset,
-recording control and state, recording-transfer, upload ownership, OTA,
-device-log, and WiFi slices through `BotaDeviceClient.shared`; a checked-in
-React Native Gradle consumer runs
-Codegen, Kotlin tests, lint, and release assembly against the exact locally
-packaged AAR. The package now
-matches all 80 frozen `0.0.65` root exports: every public type, the pure
-errors, sync-status derivation, device-log decoder, and the native-backed
-`BotaClient`, `DeviceManager`, `RecordingManager`, `StreamingSession`, and
-`OTAManager`. Recording files
-and live-stream chunks remain native-owned; Codegen carries only upload
-destinations, metadata, state, and progress. The package is published on npm as
-`@bota.dev/react-native-sdk@1.1.0` under the `beta` dist-tag; the protected
-`release.yml` workflow packs, publishes, and verifies its exact tarball through
-npm trusted publishing without moving `latest`. Local
-consumer acceptance installs that registry artifact without a workspace
-symlink and produces release-mode iOS and Android Expo bundles for both Demo
-and Bota One.
-The Flutter source package now exposes the same native-owned mobile workflows
-through typed Pigeon channels. Its Dart conformance suite discovers all 29
-canonical workflow traces and checks typed operation, event, and error routing
-without implementing another reducer. A compact device-management example and
-fresh generated consumers build release-mode Android and iOS applications
-against exact local native artifacts. Backend callbacks fail closed until an
-application supplies request-bound provisioning, reset, persistence, firmware,
-WiFi, and upload integration. Release tooling now preserves a deterministic
-archive, complete normalized inventory, lock and license evidence, and dry-run
-result; protected publication remains a separate external release action.
-The exported `DeviceManager` compatibility owner delegates scan,
-selected connection, status, settings, logs, WiFi/cache behavior, provisioning
-state and key reads, direct provisioning writes, and time sync. Those low-volume
-commands run through native Apple and Android `DeviceControlManager` facades;
-certificate framing and public-key bytes do not cross JavaScript. The sibling
-controls facade also exposes native-owned recording start/stop, state reads,
-and one state subscription using typed Codegen values only. The compatibility
-owner preserves the frozen grant-fetcher overloads, pending-state behavior,
-cache fallback, synchronous removal, one serialized reconnect attempt, and
-native-link-loss auto-reconnect. Authenticated reset recovery survives app
-reinstallation by waiting for the firmware replay, persisting it through the
-application hook, and sending only the receipt.
-The Android package foundation now pins JDK 17, Gradle 8.13, Android Gradle
-Plugin 8.13.2, Kotlin 2.1.20, API 26/36, NDK 28.2.13676358, and CMake 3.22.1.
-It produces a version-synchronized, unsigned local AAR with sources, Dokka
-Javadocs, POM, and Gradle metadata. The AAR now packages the frozen Rust ABI and
-thin JNI ownership adapter for four Android ABIs; real API 35 instrumentation
-proves typed codec calls, workflow polling, and exact-once native ownership.
-Immutable public Kotlin models now map all 55 canonical protocol fixtures
-through the Rust codec, preserve unknown wire values, normalize Bota Note
-settings, and expose stable machine-readable errors. A single-thread coroutine
-runtime now owns every Android JNI call, preserves 128-bit cancellation and
-host callback correlation, and maps all 10 commands, 30 effects, 34 events,
-and 12 notifications. API 35 instrumentation validates the generated resource
-covering all 33 canonical workflow scenarios. Its exhaustive host executor
-routes every effect through a narrow typed native port, validates callback
-kinds and payload bounds, and preserves correlation while mapping platform
-failures to stable ABI events. The Android BluetoothGatt host now keeps
-framework objects on one HandlerThread, serializes operations per connection,
-rejects stale callback generations, and enforces the API 26 and API 31+
-permission contracts without prompting. API 26 and API 35 instrumentation
-verify the merged permission manifest. Android durable hosts now use AtomicFile
-journals, non-exportable Keystore AES-GCM secrets, bounded
-ParcelFileDescriptor/FileChannel recording and firmware access, one-shot
-application material, and application-authorized OkHttp registrations. The
-concrete framework contracts pass on API 26 and API 35.
-The public Android client now exposes serial-verified discovery, connect and
-reconnect, status observation, provisioning, normalized connection settings,
-remove-only deprovision, authenticated factory reset, and exact-generation
-reset receipt recovery. An optional application persistence callback is awaited
-after the native reset journal is saved and before the firmware result receipt
-is written. Application material stays behind opaque native registrations, and
-every manager shares one facade operation owner. Recording
-sync now returns native file paths; `transferMetadata` reports whether that
-specific transfer used E2E framing and its optional device SHA-256; the lookup
-consumes that ephemeral metadata. `syncRecording` confirms by default, while
-callers that retain the device copy must invoke `confirmRecording` only after
-their upload succeeds. Upload
-handoff exposes only ownership outcomes, OTA keeps request and firmware bytes
-in native hosts, and logs expose only complete core-sanitized lines. The AAR
-also carries a one-major deprecated
-`com.bota.sdk` adapter frozen from Android revision `0f06d2aâ€¦`; JVM descriptor,
-source, already-compiled bytecode, API 26, and API 35 consumer gates pass. New
-applications resolve only `dev.bota:bota-android-sdk` and must not package the
-old AAR beside it. See [Android SDK migration](docs/migration/android.md).
-The release coordinator accepted the Apple and Android physical-device matrix
-for `1.1.0`. Maven Central deployment
-`6c4384ae-fe6a-4ec4-b9b3-774e437f07f7` is published, and release workflow run
-`33685720066` resolved the immutable AAR from the public repository on Android
-API 26 and API 35.
-Ordinary CI builds one deterministic Android release payload and
-runs that exact AAR through API 26 x86 and API 35 x86_64 instrumentation,
-legacy migration, and unrelated Maven consumer lanes. The reviewed Maven
-dependency policy is checked against both Gradle module metadata and the SPDX
-SBOM. The protected `v1.1.0` release job signs only in memory, persists the
-Central deployment UUID and state before polling, supports explicit recovery
-without rebuilding or re-signing, and byte-verifies the complete public Maven
-directory before enabling API 26 and API 35 consumer smoke tests. Uncertain
-deployments resume by UUID without another upload; confirmed failed deployments
-can be replaced only by uploading the exact preserved signed bundle.
-The native-boundary spike selected a manually owned C ABI after comparing it
-with pinned UniFFI `0.32.1`. The versioned shipping crate now maps every core
-command, host event, host effect, and workflow notification through typed
-packets. Shared protocol decode/encode entry points cover the frozen status,
-recording list and control, transfer, OTA, provisioning, settings, and log fixtures. The Apple
-package and Android AAR are public platform distributions. The Flutter facade
-and read-only Web source are implemented, but the current Flutter-bearing
-source has no releasable synchronized version; the remaining planned facades
-are also unpublished.
-Encrypted Upload v2 has an additive engine/ABI surface whose compatibility
-metadata remains contract-only while firmware, React Native, release, and
-hardware gates remain open. The surface provides profile-gated session
-coordination, opaque checkpoint metadata, staging
-evidence, and receipt-gated confirmation. Apple now maps its opaque command and
-all twelve effects through a dedicated internal host boundary and recognizes
-typed failures plus the staged notification. Apple also has an in-memory,
-opaque-ID provider registry for application-supplied authorization, staging
-requests, manifest submission, finalization, and receipt retrieval. It rejects
-wrong document sizes, non-HTTPS or body-bearing staging requests, duplicate
-registrations, and removes material on every modeled terminal outcome. The
-Apple runtime pins the separate `0406..040B` characteristic allocation and can
-perform an uncached `0406` capability read through the shared Rust decoder,
-returning the exact bytes, digest, and typed bounds internally. The production
-ABI also provides additive packet kind `0x0523` so native facades can encode
-authenticated signed-blob frames through the shared Rust codec instead of
-reconstructing them. Additive kind `0x0524` does the same for app-originated
-LIST, START, WINDOW_ACK, RESUME_REQUEST, CONFIRM, and ABORT frames, while
-rejecting device-originated transfer messages. Its normalized ABI keeps
-upload-session UUIDs as 16-byte values and missing sequences as one packed
-little-endian u32 byte field in both directions. The internal Apple mapper also
-uses that ABI for WINDOW_ACK/CONFIRM output and typed DATA, WINDOW_END,
-MANIFEST_CHUNK, EOF, and ERROR input. A bounded internal receiver now writes
-opaque DATA by offset to a protected native file, verifies resume prefixes and
-EOF evidence, requests exact missing sequences, and keeps clean WINDOW_ACK
-creation locked until the matching checkpoint is reported persisted. An
-internal transfer host now connects it to the retained `0409` stream for
-START/RESUME, DATA/window repair, manifest, EOF, abort, protected ciphertext
-file writes, and native checkpoint recovery. It emits structured staged
-evidence and sends only Rust-encoded ACK/repair frames through the exact owned
-transport session. Its phase-aware notification queue is capped at 1 MiB,
-premature post-window traffic fails closed, START/ABORT races cannot resurrect
-ownership, and checkpoint replacement or deletion flushes the file and parent
-directory before success. Optional internal completion services bind START to
-the prepared authorization and exact material-registration lease, upload the
-verified opaque native file before submitting the fixed manifest, and await the
-exact accepted receipt. It durably removes its local ciphertext and checkpoint
-before delivering that receipt and sending canonical CONFIRM, so a cleanup,
-receipt, material, or evidence failure cannot reach device deletion.
-Cancellation owns the routed task before entering the asynchronous v2 host
-callback. Once CONFIRM is written, cancellation or subscription-cleanup
-uncertainty cannot reverse completion; uncertain cleanup poisons BLE ownership
-until reconnect. Production configuration installs the internal host, and
-`RecordingManager.syncEncryptedRecordingV2` reads a fresh capability plus the
-matching native checkpoint before calling an application-owned provider for an
-explicit v2 decision. It never substitutes a legacy transfer after that
-selection; cancellation owns the operation before selection, records through
-engine startup, and reaches that exact workflow before it consumes output or
-cleanup begins. Already-claimed cancellation cleanup stays bound to its original
-runtime even if the caller finishes first or another operation replaces it.
-Its native checkpoint sidecar includes the
-session, sink, safe negotiated bounds, and highest contiguous sequence needed
-for exact resume and EOF validation.
-Apple's internal
-writer now
-serializes ownership, chunks
-against the current CoreBluetooth write-with-response limit capped at 512
-bytes, subscribes before BEGIN, checks cancellation between writes, and starts
-the exact-matching RESULT timeout after COMMIT. Its ABORT/unsubscribe cleanup
-is bounded and uncertain cleanup fails closed until confirmed disconnect. An
-internal transfer-control actor now subscribes to notify-only `0409` before
-writing Rust-encoded START or RESUME_REQUEST to `0408`, fails closed on
-foreign-session traffic, exactly validates successful reply identity,
-ciphertext and checkpoint context, and preserves device checkpoint data on
-rejection. Acceptance retains the live `0409` stream and serialized owner for
-the remaining transfer; cancellation and explicit abort use the same bounded,
-fail-closed cleanup.
-Android mirrors the native workflow through its established coroutine runtime
-and exhaustive host executor. `RecordingManager.syncEncryptedRecordingV2`
-owns cancellation before its first suspension, reads `0406` fresh, loads only
-exact non-secret resume metadata, asks the application to select material, and
-then starts only command `0x010c` with no legacy fallback. Dedicated
-`0407..0409` owners send only Rust-encoded signed documents and transfer
-controls. The collector is attached before START; the platform plus transfer
-queues share a one-MiB byte cap and reject overflow, cross-phase traffic, mixed
-profiles, and completion before EOF. A bounded `FileChannel` receiver repairs
-exact missing sequences, forces each clean window before its single AtomicFile
-checkpoint catalog is acknowledged, and verifies the fixed manifest plus EOF evidence. The application supplies an
-empty HTTPS PUT template, manifest submission, finalization, and receipt
-callbacks; OkHttp streams the verified native ciphertext body without a
-control-plane API call. The exact receipt gates canonical CONFIRM, and all
-pre-CONFIRM failure or cancellation paths retain the device copy and clean up
-opaque application material once. Effect emission and local cleanup do not yet
-cross the deletion boundary; once the native host actually attempts CONFIRM,
-cancellation cannot send ABORT and both native runtimes wait for the exact
-confirmation result, exposing completion or stable code 19 uncertainty. When
-cancellation races Apple engine startup return, only exact completion or code 19
-preserves terminal material; other claimed-cancellation errors remove it as
-cancelled. Android latches a successful driver write before releasing its
-transfer owner. Disconnect reset installs the replacement barrier, removes the
-exact control/writer owners under its DeviceRuntime mutex, then waits for
-settlement outside that mutex. It fails the exact old effect and joins its pump
-before replacement ownership can start. Android
-rejects phase-invalid frames when they arrive, broadcasts
-bounded notifications to each observer, resets poisoned ownership after either
-the exact current explicit or spontaneous GATT-generation disconnect, and
-merges every retired split checkpoint/index pair into an existing or recovered
-AtomicFile catalog. Cleanup uncertainty blocks
-replacement ownership until that disconnect/reset. Physical power-loss
-durability remains unverified.
-React Native now has an additive explicit encrypted-upload-v2
-selection/progress surface. Codegen carries only fresh capability, recording,
-checkpoint, session, progress, stable-error, and opaque native-registration
-metadata; native Apple and Android registries retain authorization, staging,
-manifest, receipt, file, and cryptographic material. Existing `BotaClient` and
-legacy-provider behavior is unchanged and there is no implicit fallback.
-Runtime compatibility metadata remains disabled until the outstanding
-firmware, release, and hardware gates pass.
-ABI v1 is frozen at the typed public header and verified by standalone C and
-Swift callers. Its exact ownership contract, artifact digests, packet coverage,
-and platform exclusions are recorded in
-[`release/evidence/1.0.0-alpha.1-native-abi.md`](release/evidence/1.0.0-alpha.1-native-abi.md).
-The Apple package shell now builds an iOS device, universal iOS simulator, and
-universal macOS XCFramework from that frozen header and proves a Swift package
-can import the real ABI. Its Swift value models and protocol codecs are fixture
-tested against the shared Rust implementation, including unknown wire values
-and Bota Note connection normalization. A serialized Swift actor now establishes
-the ABI workflow owner and registers initially queued host effects before
-returning each stream, drives the real Rust workflow engine, preserves
-request/cancellation correlation, and checks all 33 canonical workflow traces
-from generated SwiftPM resources. Its
-host executor exhaustively routes the released effects plus all twelve additive
-Encrypted Upload v2 effects through narrow native ports, bounds raw payloads,
-and isolates cancelled or late completions.
-A concrete CoreBluetooth driver now owns Apple delegate state on one serial
-queue, while an actor host merges system-connected peripherals, deduplicates
-scan results, serializes operations per peripheral, and preempts background
-reconnect for manual selection. Native host services now atomically persist
-non-secret workflow journals, isolate secrets in Keychain, keep recording and
-firmware bytes in bounded files, resolve application material by opaque ID, and
-stream URLSession progress without exposing paths or credentials to Rust. The
-public `BotaDeviceClient` now configures those hosts once and exposes
-serial-verified discovery, selected-device connection with identity learned
-from GATT, strict known-serial connection, canonical reconnect, explicit
-disconnect, connection observation, and decoded device-status streams. Client
-destruction cancels active work, stops status subscriptions, disconnects the
-verified peripheral, and closes observers. Public secure-lifecycle managers now
-resolve provisioning and command-bound reset material through application
-callbacks, normalize Bota Note connection settings, keep remove-only
-deprovision separate from destructive reset, write its nonce-bound grant before
-opcode `0x05`, await the typed firmware result, and resume only an exact durable
-reset result for the current binding generation. The Apple and Android control facades also
-writes command-bound recording grants, subscribes before start/stop opcodes,
-preserves the frozen stop pacing, and exposes shared-decoder state reads and
-updates. Public recording, upload
-ownership, OTA, and device-log managers now expose typed async streams while
-keeping recording and firmware bytes in native files and accepting only opaque
-application-supplied upload identifiers. An unrelated Swift package now imports
-only `BotaAppSDK`, runs a macOS smoke executable, and type-checks every public
-manager. CI also compiles generic iOS device and simulator destinations with
-strict concurrency diagnostics, then produces a deterministic XCFramework zip,
-checksums, SPDX 2.3 SBOM, copied license, and validated release manifest as
-release evidence. An opt-in physical target selects a device only by exact
-serial verification and keeps settings, provisioning, recording deletion, OTA,
-deprovision, and authenticated reset behind separate gates. Its default run
-skips before client configuration. The supervised Bota Pin and Bota Note matrix
-is not inferred from CI and remains a human release approval. The root Swift
-package distributes the Apple facade for iOS and macOS while keeping the Rust
-core in a checksummed XCFramework. This release does not replace the production
-React Native maintenance line or claim Windows availability. Flutter is now
-published and verified as `bota_app_sdk@2.0.0-beta.1`.
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) and the
-[firmware compatibility matrix](protocol/compatibility/firmware-compatibility.json).
-
-## Apple Beta Installation
-
-In Xcode, choose **File > Add Package Dependencies** and enter:
-
-```text
-https://github.com/bota-dev/app-sdk.git
+await BotaClient.configure({ environment: 'production' });
+await BotaClient.waitForBluetooth();
 ```
 
-Select exact version `2.0.0-beta.11`, then add the
-`BotaAppSDK` product to an iOS 15+ or macOS 13+ target. Swift packages can
-declare the dependency directly:
+After configuration, use `BotaClient.devices`, `BotaClient.recordings`, and
+`BotaClient.ota` for device workflows.
+
+### Apple
+
+In Xcode, add `https://github.com/bota-dev/app-sdk.git` at exact version
+`2.0.0-beta.12` and select the **BotaAppSDK** product. With Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.11")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.12")
 ```
-
-Import and configure the client from application code:
 
 ```swift
 import BotaAppSDK
@@ -525,262 +69,76 @@ let bota = BotaDeviceClient.shared
 try await bota.configure()
 ```
 
-iOS applications must provide `NSBluetoothAlwaysUsageDescription`. Sandboxed
-macOS applications must enable **App Sandbox > Hardware > Bluetooth**, which
-adds `com.apple.security.device.bluetooth`; macOS applications should also
-provide the Bluetooth usage description shown to users.
+Add `NSBluetoothAlwaysUsageDescription` to your application. Sandboxed macOS
+apps also need the **App Sandbox > Hardware > Bluetooth** entitlement.
 
-## Android Beta Installation
+### Android
 
-Pin the exact synchronized Maven Central beta:
+Add the dependency with `mavenCentral()` configured in your repositories:
 
 ```kotlin
-implementation("dev.bota:bota-app-sdk:2.0.0-beta.11")
+implementation("dev.bota:bota-app-sdk:2.0.0-beta.12")
 ```
 
-## Flutter Beta Installation
+Your app requests Bluetooth runtime permissions. See the
+[Android guide](platforms/android/README.md) for client lifecycle and permission
+requirements.
 
-The Flutter facade supports iOS 15+ and Android API 26+. Its source and local
-build gates passed and `bota_app_sdk` is public on pub.dev. Pin the exact version:
+### Flutter
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.11
+  bota_app_sdk: 2.0.0-beta.12
 ```
 
-See the
-[Flutter integration guide](frameworks/flutter/bota_app_sdk/README.md) for
-exact-version installation, permissions, backend callbacks, serial-strict
-reconnect, retained encrypted batch handoff, WiFi, OTA, remove-only
-deprovision, authenticated reset, and unsupported targets.
+Follow the [Flutter guide](frameworks/flutter/bota_app_sdk/README.md) for native
+setup and backend callbacks, then rebuild the iOS or Android app.
 
-`1.2.0-beta.0` is occupied by an immutable non-Flutter tag and must not be reused.
-Package publication does not establish physical-device acceptance.
-
-## Web Beta Installation
-
-Historical packages remain available under their original names. Install the
-renamed package at its verified exact version:
+### Web
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.11
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.12
 ```
 
-Web Bluetooth requires a secure context and a browser implementation that
-supports it. Call `connect` directly from a user gesture so the browser may
-show its device picker. The serial number must come from the authenticated
-Portal device record; the SDK does not trust the advertised device name.
+Start the Bluetooth picker from a user gesture. Web integration requires
+compatible firmware with the Bota Identity service; background and closed-tab
+work are unsupported. See the [Web guide](frameworks/web/README.md) for client
+creation, exact-serial connection and tenant-scoped storage.
 
-```ts
-import { BotaDeviceClient } from '@bota.dev/web-app-sdk'
+## Integrating your backend
 
-const bota = await BotaDeviceClient.create()
+Your application owns user authentication and scoped backend authorization.
+Provide fresh credentials and operation-specific callbacks; the SDK owns device
+transport, transfer state and local recovery. Recording and firmware bytes stay
+in native files on mobile, outside the JavaScript and Dart bridges.
 
-if (!bota.devices.isSupported) {
-  throw new Error('This browser does not support Web Bluetooth')
-}
+For React Native encrypted uploads, start with the
+[managed backend adapter](docs/parity/v2-managed-backend.md). It communicates
+with your authenticated proxy and handles native session recovery and signed
+receipts. Cloud upload commitment and device cleanup are separate phases;
+follow the integration contract before deleting a device recording.
 
-const device = await bota.devices.connect({
-  expectedSerialNumber: 'YOUR_DEVICE_SERIAL',
-})
-const snapshot = await bota.devices.readSnapshot()
+## Client presence
 
-console.log(device.serialNumber, snapshot.status.batteryPercent)
+`clientPresence.nextReport(deviceId)` returns passive metadata for the current
+verified SDK connection, or null. The host can relay it with fresh status and
+the matching authenticated scope. See the [client-presence guide](docs/client-presence.md)
+for field mapping and lifecycle rules; the getter does not send heartbeats.
 
-await bota.destroy()
-```
+## Documentation
 
-Construction without options remains valid for read-only connection and
-snapshot use. The `2.0.0-beta.3` candidate's `devices.connectSelected()` reads a
-selected device's SN before application registration, without a supplied serial.
-It is not included in published `2.0.0-beta.1`; see the
-[Web integration guide](frameworks/web/README.md#discover-identity-before-registration).
-Known-device connection and every reconnect remain serial-strict.
-Durable foreground workflows require a non-empty tenant
-`storageNamespace`; a custom storage adapter must report that exact namespace.
-On logout or tenant switch, await `destroy()` and then
-`clearPersistedData()` so active owners and subscriptions settle before only
-that tenant's local data is removed. Manager names are available as TypeScript
-instance types, while construction remains owned by `BotaDeviceClient.create()`;
-applications do not instantiate managers directly. Destruction also joins an
-open picker or reconnect-hint load, removes passive subscriptions before its
-single disconnect, and prevents late startup results from publishing a device.
-Cleanup rejection does not short-circuit later teardown: every initiated stage
-settles before the first stable SDK cleanup error is returned.
-
-The foreground Web beta exposes recording, provisioning, WiFi, recording
-control, firmware update, and device-log managers alongside connection and
-snapshot APIs. Backend-dependent work remains host-provided through explicit
-provider callbacks; the SDK does not own application authentication or call the
-Bota API implicitly.
-
-### Web capability matrix
-
-| Capability | `2.0.0-beta.1` release |
-|---|---|
-| Explicit picker connect and exact-serial snapshot | Implemented, foreground only; the picker must start from a user gesture |
-| Exact authorized-device reconnect | Implemented when `navigator.bluetooth.getDevices()` is available; never falls back by name |
-| Recording list and legacy sync | Implemented with tenant-scoped durable state and host-provided upload callbacks |
-| Encrypted Upload v2 sync | Implemented only when freshly advertised by firmware and exactly authorized by the host |
-| Provisioning and remove-only deprovision | Implemented through host-provided, attempt-bound material; deprovision is not factory reset |
-| Connection settings | Implemented for read and write |
-| WiFi | Implemented for scan, configure, disconnect, status read, and foreground status subscription |
-| Recording control | Implemented for host-authorized start and stop |
-| Firmware update | Implemented with verified OPFS download, progress, cancellation, reload recovery, reboot, and exact-device reconnect |
-| Device logs | Implemented as one sanitized foreground subscription with explicit removal |
-| Background/closed-tab work, live streaming, factory reset | Unavailable |
-| Safari/iOS Web Bluetooth fallback, Flutter Web, Windows | Unavailable |
-
-The full provider examples and browser lifecycle rules are in the
-[Web integration guide](frameworks/web/README.md). Durable workflows require a
-secure context, a non-empty tenant namespace, IndexedDB and OPFS, and the exact
-host provider for each backend-authorized operation. Bluetooth permission is
-not device identity or backend authorization. Always destroy the client before
-tenant cleanup, and always use the authenticated device serial rather than an
-advertised name.
-
-## Development
-
-Requirements:
-
-- Node.js 22
-- Rust 1.98.0 with rustfmt and Clippy
-- Xcode 26 and CocoaPods 1.13 or newer for React Native Apple consumers; source
-  verification locks CocoaPods 1.16.2, xcodeproj 1.27.0, and Bundler 2.6.9
-- JDK 17, Android SDK 36, build-tools 35.0.0, NDK 28.2.13676358, and CMake
-  3.22.1 for the Android facade
-- Flutter 3.47.2 with Dart 3.13.2 through the repository wrapper for Flutter
-  facade verification
-- Playwright 1.63.0 with only its Chromium build installed under
-  `target/playwright-browsers` for the packed Web consumer gate
-
-The Web release gate packs once with npm 12.0.2, verifies and inventories that
-tarball exactly once with strict archive-header and publication-metadata
-checks, then installs only that local path into the Vite consumer. The browser
-stage does not parse the archive again: it validates the original inventory
-checksum, source revision, tarball identity, and installed regular-file hashes
-before running the Chromium suite against the production ESM/WASM build.
-
-```bash
-npm ci
-npm run check
-npm run test:release
-npm run web:verify
-npm run baseline:react-native:api -- --sdk-path ../react-native-sdk
-npm run sync:android-fixtures
-npm run sync:apple-fixtures
-npm run test:fixtures
-npm run test:workflows -- --sdk-path ../react-native-sdk
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace
-cargo xtask protocol generate --check
-tools/ffi-smoke/run-native-c-smoke.sh
-tools/ffi-smoke/run-native-swift-smoke.sh
-tools/apple/test-package.sh
-tools/apple/test-consumer.sh
-cd frameworks/react-native
-npm ci
-bundle _2.6.9_ install
-npm run verify
-npm run test:apple:lifecycle
-npm run test:apple:spm-workaround
-bundle _2.6.9_ exec npm run test:apple:integration
-# After the matching GitHub Release is public:
-bundle _2.6.9_ exec npm run test:apple:remote-resolution
-cd ../../platforms/android
-./gradlew :sdk:testDebugUnitTest :sdk:lintRelease :sdk:assembleRelease
-cd ../..
-npm run test:android:foundation
-tools/android/test-package.sh --api 35 \
-  --instrumentation-class dev.bota.sdk.internal.jni.NativeCoreBridgeTest
-tools/android/inspect-aar.sh platforms/android/sdk/build/outputs/aar/sdk-release.aar
-tools/android/test-publication-graphs.sh
-tools/android/package-release.sh --check
-tools/android/install-release-repository.sh target/android-release target/android-m2
-tools/android/test-emulator-lane.sh --api 26
-tools/android/test-emulator-lane.sh --api 35
-tools/flutter/run-flutter.sh test frameworks/flutter/bota_app_sdk/test
-tools/flutter/test-android-adapter.sh
-tools/flutter/test-consumers.sh
-npm run flutter:verify
-# For the selected synchronized beta.1 candidate:
-tools/flutter/package-release.sh --check
-```
-
-The React Native API check expects `npm ci` to have installed the reference SDK
-checkout's `package-lock.json` tree so inherited and dependency-owned
-declarations are included reproducibly in the frozen surface. Missing packages
-are accepted only when the lock marks them optional for the current platform.
-The replacement React Native package has its own lockfile so its native
-toolchain does not enlarge the root tooling install. Its committed Codegen
-contract is generated by React Native 0.86.3 for both iOS and Android. The
-React Native pod therefore uses that release's iOS 15.1 floor. By default it
-resolves the exact matching `BotaAppSDK` release tag;
-`BOTA_APPLE_SDK_PACKAGE_PATH` is only a source and CI override and must not be
-used in a published application dependency. CI selects Xcode 26.3 and Ruby
-3.3.12 explicitly and uses the locked Ruby toolchain. Main CI tests the nested
-local package after building its XCFramework from source; the tag release
-resolves the default remote package URL to the exact synchronized version after
-publishing its binary archive.
-
-On Android, the package consumes `dev.bota:bota-app-sdk` at the same
-`sdk-version.toml` version. CI reconstructs a local Maven repository from the
-immutable release payload, verifies the AAR digest, and runs the checked-in
-Codegen/Kotlin consumer with
-`tools/react-native/test-android-adapter.sh --repository target/android-m2`.
-
-The pod includes a target-scoped compatibility hook for React Native 0.86.3's
-duplicate binary Swift-package module maps on Xcode 26.3; applications do not
-need to patch their Podfile for this combination.
-
-The supervised Apple lab procedure is documented in
-[docs/testing/apple-physical-device.md](docs/testing/apple-physical-device.md).
-Normal development and CI must leave `BOTA_PHYSICAL_TESTS` unset.
-
-The full reproducible gate includes the frozen React Native wire, test-count,
-source-digest, and public-TypeScript-API comparators. Release evidence is
-recorded in `release/evidence/`.
-
-Release maintainers must follow [docs/releasing.md](docs/releasing.md). Release
-tags must not be pushed until the `release-approval` human gate and the `release`
-publishing environment are configured as described in `docs/releasing.md`.
-Beta.4 is partially published; its CocoaPods timeout and held Flutter publication
-must use the [protected recovery procedure](docs/releasing.md#immutable-beta4-recovery-after-the-approval-cutover).
-The existing tag and successful public packages remain immutable.
-
-## Naming
-
-`app-sdk` is the source repository name. Public physical-device packages belong
-to the **Bota App SDK** family. Customer-facing documentation and package names
-follow this matrix:
-
-The matrix describes the 2.x source candidate, not published availability.
-Historical 1.x and production RN 0.0.x retain their old identities. See the
-[migration guide](docs/migrations/app-sdk-package-names.md).
-
-| Platform | Documentation name | Package or module identifier |
-|---|---|---|
-| Apple | Bota SDK for Apple platforms | `BotaAppSDK` |
-| Android | Bota SDK for Android | `dev.bota:bota-app-sdk` |
-| React Native | Bota SDK for React Native | `@bota.dev/react-native-app-sdk` |
-| Flutter | Bota SDK for Flutter | `bota_app_sdk` |
-| Web | Bota SDK for Web | `@bota.dev/web-app-sdk` |
-| Windows | Bota SDK for Windows | `Bota.WindowsSdk` |
-| Electron | Bota SDK for Electron | `@bota.dev/electron-sdk`, only when a dedicated native desktop bridge exists |
-
-Electron applications use the Web SDK where Web Bluetooth satisfies the
-capability matrix. A separate Electron SDK is published only when native
-desktop BLE requires a distinct supported transport.
-
-Internal Rust and C artifacts retain their existing `device-sdk` names. Future
-backend API clients belong to a separate **Bota API SDK** family and repository.
+- [Examples](https://github.com/bota-dev/examples): applications using the public packages.
+- [Package migration](docs/migrations/app-sdk-package-names.md): replace historical package names and imports.
+- [Standalone React Native retirement](docs/migrations/react-native-sdk-sunset.md): migrate from the deprecated `@bota.dev/react-native-sdk`; do not co-install both packages.
+- [Architecture](ARCHITECTURE.md): shared core, platform boundaries and workflow ownership.
+- [Changelog](CHANGELOG.md): release changes and links to verification evidence.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development and verification rules.
-Report vulnerabilities using [SECURITY.md](SECURITY.md), not a public issue.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, required checks,
+and documentation conventions. Maintainers use the [release procedure](docs/releasing.md).
+Report vulnerabilities through [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT
+[MIT](LICENSE)

@@ -719,8 +719,8 @@ fn flutter_candidate_tooling_refuses_the_occupied_beta_zero_identity() {
 }
 
 #[test]
-fn primary_operator_docs_mark_beta_zero_occupied() {
-    for path in ["README.md", "docs/releasing.md"] {
+fn release_operator_docs_mark_beta_zero_occupied() {
+    for path in ["CONTRIBUTING.md", "docs/releasing.md"] {
         let contents = fs::read_to_string(root().join(path)).unwrap();
         assert!(contents.contains("`1.2.0-beta.0` is occupied"), "{path}");
         assert!(

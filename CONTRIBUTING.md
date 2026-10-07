@@ -16,6 +16,26 @@ not need access to those documents to open an issue or propose a change.
 5. Update fixtures, compatibility data, and documentation.
 6. Commit one coherent behavior change.
 
+## Documentation
+
+Keep the root README focused on what the SDK does, supported platforms,
+installation and links to integration guides. Keep its install pins aligned
+with a verified published release, not an unreleased source candidate.
+
+- Record user-facing version changes in [CHANGELOG.md](CHANGELOG.md), with
+  unpublished behavior under **Unreleased**.
+- Put detailed API and integration contracts in the platform guides or `docs/`.
+- Keep CI runs, artifact hashes, publication retries and physical acceptance
+  evidence in `release/evidence/` or the relevant `docs/parity/` review.
+- Keep architecture in [ARCHITECTURE.md](ARCHITECTURE.md) and maintainer
+  publication procedures in [docs/releasing.md](docs/releasing.md).
+
+## Release maintenance
+
+Follow [the release procedure](docs/releasing.md) before tagging or publishing.
+`1.2.0-beta.0` is occupied by an immutable non-Flutter tag and must not be reused.
+Historical tags and package artifacts stay immutable.
+
 ## CI build time
 
 CI and the dependency license gate run on pull requests and main-branch pushes.
