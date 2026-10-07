@@ -20,15 +20,48 @@ const CANCELLATION: CancellationId = CancellationId::from_bytes([4; 16]);
 #[test]
 fn legacy_deprovision_grant_never_reaches_a_reset_write() {
     let mut engine = WorkflowEngine::default();
-    let effects = engine.start(Command::FactoryReset {
-        device: device(), command_id: command_id(), grant_id: HostMaterialId::new("grant-1").unwrap(),
-    }, &capabilities(), CANCELLATION).unwrap();
-    let read = request_id(&effects, |effect| matches!(effect, Effect::Ble(BleEffect::Read { .. })));
-    let prepared = engine.dispatch(host(read, HostEventKind::Ble(BleEvent::ReadCompleted { value: vec![3; 16] }))).unwrap();
-    let request = request_id(&prepared, |effect| matches!(effect, Effect::HostMaterial(HostMaterialEffect::PrepareFactoryResetGrant { .. })));
-    let failed = engine.dispatch(host(request, HostEventKind::FactoryResetGrantPrepared { grant: vec![4; 171] })).unwrap();
-    assert!(!failed.iter().any(|request| matches!(request.effect, Effect::Ble(BleEffect::Write { .. }))));
-    assert!(matches!(engine.status(), WorkflowStatus::Failed { error } if error.code == ErrorCode::InvalidInput));
+    let effects = engine
+        .start(
+            Command::FactoryReset {
+                device: device(),
+                command_id: command_id(),
+                grant_id: HostMaterialId::new("grant-1").unwrap(),
+            },
+            &capabilities(),
+            CANCELLATION,
+        )
+        .unwrap();
+    let read = request_id(&effects, |effect| {
+        matches!(effect, Effect::Ble(BleEffect::Read { .. }))
+    });
+    let prepared = engine
+        .dispatch(host(
+            read,
+            HostEventKind::Ble(BleEvent::ReadCompleted { value: vec![3; 16] }),
+        ))
+        .unwrap();
+    let request = request_id(&prepared, |effect| {
+        matches!(
+            effect,
+            Effect::HostMaterial(HostMaterialEffect::PrepareFactoryResetGrant { .. })
+        )
+    });
+    let failed = engine
+        .dispatch(host(
+            request,
+            HostEventKind::FactoryResetGrantPrepared {
+                grant: vec![4; 171],
+            },
+        ))
+        .unwrap();
+    assert!(
+        !failed
+            .iter()
+            .any(|request| matches!(request.effect, Effect::Ble(BleEffect::Write { .. })))
+    );
+    assert!(
+        matches!(engine.status(), WorkflowStatus::Failed { error } if error.code == ErrorCode::InvalidInput)
+    );
 }
 
 fn capabilities() -> CapabilitySet {

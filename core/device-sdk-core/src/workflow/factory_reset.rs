@@ -10,7 +10,8 @@ use crate::{
     generated::protocol::{
         CHAR_AUTH_NONCE, CHAR_DEVICE_COMMAND, CHAR_PROVISIONING_RESULT,
         DEVICE_CMD_BLE_FACTORY_RESET, DEVICE_CMD_BLE_FACTORY_RESET_RESULT_ACK,
-        PROVISIONING_SUCCESS, SERVICE_BOTA_AUTH, SERVICE_BOTA_CONTROL, SERVICE_BOTA_PROVISIONING,
+        FACTORY_RESET_GRANT_LENGTH, PROVISIONING_SUCCESS, SERVICE_BOTA_AUTH, SERVICE_BOTA_CONTROL,
+        SERVICE_BOTA_PROVISIONING,
     },
     model::{
         DeviceSerialNumber, DurableFactoryResetResult, FactoryResetCommandId, FactoryResetResult,
@@ -22,7 +23,6 @@ use crate::{
 
 const FACTORY_RESET_TIMEOUT_MS: u64 = 30_000;
 const FACTORY_RESET_TIMER_ID: u64 = 1;
-const FACTORY_RESET_GRANT_LENGTH: usize = 179;
 
 #[derive(Clone, Debug)]
 enum Mode {
@@ -190,7 +190,11 @@ impl FactoryResetWorkflow {
         let write = context.request(Effect::Ble(BleEffect::Write {
             service_uuid: SERVICE_BOTA_CONTROL.into(),
             characteristic_uuid: CHAR_DEVICE_COMMAND.into(),
-            payload: [vec![DEVICE_CMD_BLE_FACTORY_RESET], self.binding_generation.to_vec()].concat(),
+            payload: [
+                vec![DEVICE_CMD_BLE_FACTORY_RESET],
+                self.binding_generation.to_vec(),
+            ]
+            .concat(),
             with_response: true,
         }));
         self.write_request_id = Some(write.request_id);

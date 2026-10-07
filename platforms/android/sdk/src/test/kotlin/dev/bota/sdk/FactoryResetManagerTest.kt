@@ -16,6 +16,22 @@ import org.junit.Test
 
 class FactoryResetManagerTest {
     @Test
+    fun resetProviderRejectsDeprovisionAndStaleGenerationGrants() = runTest {
+        for (grant in listOf(ByteArray(171), byteArrayOf(0, 0, 0, 8) + ByteArray(175))) {
+            val fixture = SecureRuntimeFixture()
+            val manager = FactoryResetManager()
+            fixture.connect()
+            manager.attach(fixture.runtime)
+            manager.factoryReset(fixture.device, "reset-command-1", 9u) { grant }
+            val provider = fixture.resetProviders.values.single()
+            val error = runCatching { provider(fixture.device.serialNumber, ByteArray(16)) }.exceptionOrNull()
+            assertTrue(error is IllegalArgumentException)
+            assertTrue(error?.message?.contains("deprovision permission is insufficient") == true)
+            manager.detach()
+        }
+    }
+
+    @Test
     fun resetBindsOpaqueGrantToCommandAndBindingGeneration() = runTest {
         val fixture = SecureRuntimeFixture()
         val manager = FactoryResetManager()

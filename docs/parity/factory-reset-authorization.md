@@ -40,7 +40,7 @@ manufacturing identity remain outside the reset deletion boundary.
 | Requirement | Evidence | Status |
 |---|---|---|
 | Dedicated action/device/nonce/generation/expiry | Backend HPKE roundtrip/signature tests and dedicated service/route tests | Matched in source/host tests |
-| Reject legacy grants and generation mismatch before native delivery | React Native device-client test; native provider validation; Rust rejection regression | JS verified; Rust/native validation pending |
+| Reject legacy grants and generation mismatch before native delivery | React Native device-client test; native provider validation; Rust rejection regression | JS and hosted Rust verified; native checks pending |
 | Preserve durable result and receipt recovery | Existing factory-reset workflow tests and Demo reset-finalization suite | Host/source verified; physical acceptance pending |
 
 A new native SDK release and app binaries, backend rollout and firmware update

@@ -1,5 +1,11 @@
 # AGENTS.md
 
+Reset authorization source: only a 179-byte dedicated envelope with the exact
+requested generation may start reset; reject 171-byte deprovision grants.
+Core writes `0x06` plus u32BE generation. Receipt recovery sends no new grant
+or reset. See [contract](docs/parity/factory-reset-authorization.md).
+Native publication, consuming app binaries and hardware acceptance are separate.
+
 ## Managed encrypted-v2 upload adapter
 
 Current source packages customer-proxy HTTP/session recovery in the React Native

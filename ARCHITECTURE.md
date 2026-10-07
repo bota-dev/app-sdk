@@ -494,6 +494,10 @@ authenticated-reset, recording control and state, recording-transfer,
 upload-ownership, OTA, device-log, and WiFi integration only; the remaining
 workflow bindings and application parity remain open.
 
+Reset uses a dedicated 179-byte envelope and exact generation. Core sends
+`0x06` followed by signed generation; platform providers reject deprovision
+envelopes without fallback. See [contract](docs/parity/factory-reset-authorization.md).
+
 The React Native reset broker exposes only the nonce, command ID, binding
 generation, and an encoded grant string. Apple and Android decode the grant into
 native bytes before calling their public `FactoryResetManager`; Codegen never

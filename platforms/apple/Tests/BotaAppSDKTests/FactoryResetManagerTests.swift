@@ -4,6 +4,25 @@ import XCTest
 @testable import BotaAppSDK
 
 final class FactoryResetManagerTests: XCTestCase {
+    func testResetProviderRejectsDeprovisionAndStaleGenerationGrants() async throws {
+        for grant in [Data(repeating: 0, count: 171), Data([0, 0, 0, 8]) + Data(repeating: 0, count: 175)] {
+            let recorder = SecureLifecycleRecorder()
+            let manager = FactoryResetManager()
+            await manager.attach(await secureRuntime(runner: SecureWorkflowRunner(), recorder: recorder))
+            _ = try await manager.factoryReset(
+                secureDevice(), commandID: "reset-command-1", grantID: "reset-grant-1", bindingGeneration: 9
+            ) { _ in grant }
+            let registered = await recorder.resetProvider
+            let provider = try XCTUnwrap(registered)
+            do {
+                _ = try await provider(.init(serialNumber: "EVFXXW67KP", nonce: Data(repeating: 3, count: 16)))
+                XCTFail("deprovision or stale generation must not reach the reset workflow")
+            } catch let error as BotaSDKError {
+                XCTAssertEqual(error.code, .invalidInput)
+            }
+        }
+    }
+
     func testResetProviderIsBoundToCommandAndBindingGeneration() async throws {
         let runner = SecureWorkflowRunner()
         let recorder = SecureLifecycleRecorder()
