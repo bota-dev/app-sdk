@@ -37,6 +37,12 @@ Web, Flutter, release inventory and License Gate. Hosted results will be recorde
 in the delivery evidence before branch cleanup. Physical reconnection and
 application installation remain unverified by these controlled tests.
 
+Concurrent security work reached `main` at `9886207` during verification.
+The integrated source preserves its crafted security regressions and deliberate
+shell-quote 1.11.0 selection, which satisfies the existing seven-day release-age
+rule. That security pin supersedes the branch's younger 1.12.0 proposal.
+source-map-js 1.2.2 is already included by the same main history.
+
 The first integrated run passed its Apple regression suite and React Native
 package gate, but repository tooling stopped on the old `fast-xml-parser`
 5.11.1 test expectation. The test now requires the newly installed exact 5.11.2

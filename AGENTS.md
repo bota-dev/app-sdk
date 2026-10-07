@@ -5,7 +5,9 @@
 - Before reporting completion, use `bota-skills:compound-engineering` (1.2.5+) to compare results with the current authoritative design and acceptance criteria. Follow the [review requirements](CONTRIBUTING.md#post-implementation-design-review).
 - If the skill is unavailable, record each relevant requirement, implementation evidence, conformance status, and remaining verification directly. Update affected docs and report deviations or unavailable checks without claiming full conformance.
 
-October 7 root tooling lock patches fast-uri to 3.1.8 for High #1/#2.
+October 7 tooling locks select fast-uri 3.1.8 (High #1/#2), shell-quote
+1.11.0 (new Critical #8) and source-map-js 1.2.2 (new High #9).
+See [follow-on evidence](docs/security/2026-10-07-new-alerts.md).
 Run the crafted URI/Ajv and existing schema/vector regressions; retain exact
 revision CI/release gates. See [security evidence](docs/security/2026-10-07-fast-uri.md).
 
