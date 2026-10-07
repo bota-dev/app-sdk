@@ -162,12 +162,14 @@ envelope.
 
 ## License And Reproducibility
 
-UniFFI `0.32.1` is MPL-2.0. Exact package-specific exceptions are recorded in
+The original comparison used UniFFI `0.32.1`. Current tooling pins `0.32.2`,
+also MPL-2.0. Exact package-specific exceptions are recorded in
 `deny.toml` for the non-shipping spike crates; MPL-2.0 was not added to the
-repository-wide allow list. `cargo deny check` passes.
+repository-wide allow list. The patch update retains that scope; exact-revision
+License Gate and the Linux/macOS generated-binding smoke tests must pass.
 
 The repository pins Rust `1.98.0`, locks dependencies in `Cargo.lock`, and pins
-UniFFI exactly to `0.32.1`. Linux CI compiles and runs the shipping typed C
+UniFFI exactly to `0.32.2`. Linux CI compiles and runs the shipping typed C
 caller, runs the feature-gated UniFFI comparison, and regenerates Swift and
 Kotlin output with formatting disabled. macOS CI compiles and runs both the
 shipping typed Swift caller and the generated comparison binding.

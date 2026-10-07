@@ -7,6 +7,9 @@ tracked separately.
 
 ## Unreleased
 
+- Preserve Apple error codes, descriptions, operation, retry policy and optional
+  protocol status when `BotaSDKError` bridges to `NSError`. See the
+  [error bridge review](docs/parity/apple-error-bridge.md).
 - Correct recording-control decoding so an activity snapshot's UUID bytes are
   not treated as a command result. Android waits for the requested activity or
   an explicit result. See the [recording-control review](docs/parity/recording-control-notifications.md).

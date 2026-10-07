@@ -33,6 +33,12 @@ acceptance remain distinct gates.
 
 ## CI policy
 
+Apple `BotaSDKError` conforms to `CustomNSError` and `LocalizedError`; retain
+the existing domain, ABI error numbers, stable names, retry policy and optional
+protocol status through Objective-C bridging. Keep unknown numeric codes and
+use a stable code/operation description when detail is empty. See
+[the error bridge review](docs/parity/apple-error-bridge.md).
+
 - Never add CI-skip markers or bypass required checks. Local verification supplements CI; it never replaces it.
 - Run CI and License Gate for the exact pushed revision, using their existing manual dispatch when a feature-branch push has no automatic trigger. Require successful CI before merge or release.
 - A version bump must regenerate the Flutter archive inventory in the matching
@@ -863,7 +869,7 @@ before the cancellation check starts. This is test ordering, not a runtime chang
   application context. It must never initiate Bluetooth, storage, or network
   work during process startup.
 - Native facades use the manually owned opaque C ABI selected in ADR 0001;
-  UniFFI `0.32.1` exists only in the non-published comparison spike.
+  UniFFI `0.32.2` exists only in the non-published comparison spike.
 - ABI v1 numeric meanings and ownership rules are frozen by
   `release/evidence/1.0.0-alpha.1-native-abi.md`; facade work may add Swift or
   Kotlin types but must not redesign the C boundary.

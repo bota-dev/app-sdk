@@ -14,6 +14,7 @@ final class BotaSDKErrorTests: XCTestCase {
         XCTAssertEqual(bridged.domain, "BotaAppSDK.BotaSDKError")
         XCTAssertEqual(bridged.code, 10)
         XCTAssertEqual(bridged.localizedDescription, failure.detail)
+        XCTAssertEqual(failure.errorDescription, failure.detail)
         XCTAssertEqual(bridged.userInfo["botaErrorCode"] as? String, "device_not_found")
         XCTAssertEqual(bridged.userInfo["botaOperation"] as? String, "reconnect")
         XCTAssertEqual(bridged.userInfo["retryable"] as? Bool, true)
@@ -54,5 +55,16 @@ final class BotaSDKErrorTests: XCTestCase {
         XCTAssertEqual(bridged.userInfo["botaErrorCode"] as? String, "unknown")
         XCTAssertEqual(bridged.userInfo["botaOperation"] as? String, "unknown")
         XCTAssertEqual(bridged.localizedDescription, "unknown during unknown")
+    }
+
+    func testReadStatusErrorUsesNativeOperationName() {
+        let failure = BotaSDKError(
+            code: .notConnected, operation: .readStatus, retryable: true, detail: ""
+        )
+        let bridged = failure as NSError
+
+        XCTAssertEqual(bridged.code, 14)
+        XCTAssertEqual(bridged.userInfo["botaOperation"] as? String, "read_status")
+        XCTAssertEqual(bridged.localizedDescription, "not_connected during read_status")
     }
 }
