@@ -1,5 +1,10 @@
 # AGENTS.md
 
+RecordingStatus has distinct six-byte results and 18-byte activity/UUID
+snapshots. Never decode UUID byte 5 as a result. Android waits for the requested
+activity or an explicit result. See [review](docs/parity/recording-control-notifications.md);
+publication and physical acceptance remain separate.
+
 Reset authorization source: only a 179-byte dedicated envelope with the exact
 requested generation may start reset; reject 171-byte deprovision grants.
 Core writes `0x06` plus u32BE generation. Receipt recovery sends no new grant

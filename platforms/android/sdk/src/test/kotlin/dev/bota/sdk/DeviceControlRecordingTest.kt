@@ -19,6 +19,47 @@ import org.junit.Test
 
 class DeviceControlRecordingTest {
     @Test
+    fun unrelatedActivityDoesNotCompleteARecordingCommand() = runTest {
+        for (command in listOf(RecordingControlCommand.Start, RecordingControlCommand.Stop)) {
+            val expectedActive = command == RecordingControlCommand.Start
+            val unrelated = ByteArray(18).apply { this[0] = if (expectedActive) 0 else 1 }
+            val matching = ByteArray(18).apply { this[0] = if (expectedActive) 1 else 0 }
+            val fixture = RecordingControlRuntimeFixture(
+                notifications = mapOf(BotaBluetoothUUIDs.RecordingStatus to listOf(unrelated, matching)),
+                recordingStateDecoder = { RecordingState(it[0].toInt() == 1) },
+            )
+            val controls = DeviceControlManager()
+            fixture.connect()
+            controls.attach(fixture.runtime)
+            val grant = Base64.getEncoder().encodeToString(byteArrayOf(1))
+            val result = if (expectedActive) {
+                controls.requestStartRecording(fixture.device, grant)
+            } else {
+                controls.requestStopRecording(fixture.device, grant)
+            }
+            assertEquals(RecordingControlResult(true), result)
+            assertEquals(listOf(matching.toList()), fixture.decodedResults)
+        }
+    }
+
+    @Test
+    fun inactiveSnapshotDoesNotHideAnExplicitStartRejection() = runTest {
+        val rejection = byteArrayOf(0, 0, 0, 0, 0, 2)
+        val fixture = RecordingControlRuntimeFixture(
+            notifications = mapOf(BotaBluetoothUUIDs.RecordingStatus to listOf(ByteArray(18), rejection)),
+            recordingResult = RecordingControlResult(false, RecordingControlError.AlreadyRecording),
+        )
+        val controls = DeviceControlManager()
+        fixture.connect()
+        controls.attach(fixture.runtime)
+        assertEquals(
+            RecordingControlResult(false, RecordingControlError.AlreadyRecording),
+            controls.requestStartRecording(fixture.device, Base64.getEncoder().encodeToString(byteArrayOf(1))),
+        )
+        assertEquals(listOf(rejection.toList()), fixture.decodedResults)
+    }
+
+    @Test
     fun startRecordingSubscribesBeforeWritingTheSharedOpcode() = runTest {
         val fixture = RecordingControlRuntimeFixture(
             notifications = mapOf(BotaBluetoothUUIDs.RecordingStatus to listOf(byteArrayOf(1, 1, 0, 0, 0, 0))),
@@ -149,10 +190,12 @@ private class RecordingControlRuntimeFixture(
     private val openSubscriptions: Set<UUID> = emptySet(),
     private val recordingState: RecordingState = RecordingState(false),
     private val recordingResult: RecordingControlResult = RecordingControlResult(true),
+    private val recordingStateDecoder: (ByteArray) -> RecordingState = { recordingState },
 ) {
     val device = SecureRuntimeFixture().device
     val connection = DeviceConnectionRegistry()
     val actions = mutableListOf<RecordingControlAction>()
+    val decodedResults = mutableListOf<List<Byte>>()
     val runtime = DeviceRuntime(
         engine = SecureWorkflowRunner(),
         capabilities = CoreCapabilities.Bluetooth + CoreCapabilities.Timer,
@@ -182,8 +225,8 @@ private class RecordingControlRuntimeFixture(
             actions += RecordingControlAction.Unsubscribe(characteristic)
         },
         delay = { actions += RecordingControlAction.Delay(it) },
-        parseRecordingState = { recordingState },
-        parseRecordingControlResult = { recordingResult },
+        parseRecordingState = recordingStateDecoder,
+        parseRecordingControlResult = { decodedResults += it.toList(); recordingResult },
         createRecordingControlCommand = { command ->
             byteArrayOf(if (command == RecordingControlCommand.Start) 0x10 else 0x11)
         },

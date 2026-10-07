@@ -246,7 +246,7 @@ public class DeviceControlManager internal constructor() {
                     BotaBluetoothUUIDs.RecordingControl,
                     configured.createRecordingControlCommand(command),
                 )
-                awaitRecordingControlResult(notifications, configured)
+                awaitRecordingControlResult(notifications, configured, command)
             }
         }
     }
@@ -307,9 +307,15 @@ public class DeviceControlManager internal constructor() {
     private suspend fun awaitRecordingControlResult(
         notifications: Flow<ByteArray>,
         configured: DeviceRuntime,
+        command: RecordingControlCommand,
     ): RecordingControlResult = try {
         withTimeout(recordingControlTimeoutMilliseconds) {
-            configured.parseRecordingControlResult(notifications.first())
+            val expectedActive = command == RecordingControlCommand.Start
+            val response = notifications.first { bytes ->
+                bytes.size != 18 ||
+                    configured.parseRecordingState(bytes).active == expectedActive
+            }
+            configured.parseRecordingControlResult(response)
         }
     } catch (_: TimeoutCancellationException) {
         throw BotaSDKError.Core(

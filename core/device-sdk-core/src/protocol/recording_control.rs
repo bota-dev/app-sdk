@@ -75,6 +75,15 @@ pub fn parse_recording_control_result(
     let Some(state) = bytes.first().copied() else {
         return Ok(failure(RecordingControlError::InvalidResponse));
     };
+    // The shared characteristic also carries [active, initiator, uuid[16]].
+    // Its byte 5 is part of the UUID, never a command-result code.
+    if bytes.len() == 18 {
+        return Ok(if state <= 1 {
+            success()
+        } else {
+            failure(RecordingControlError::InvalidResponse)
+        });
+    }
     let result = if bytes.len() >= 6 { bytes[5] } else { state };
 
     Ok(match result {
@@ -86,7 +95,7 @@ pub fn parse_recording_control_result(
         protocol::RECORDING_RESULT_INVALID_GRANT => failure(RecordingControlError::InvalidGrant),
         protocol::RECORDING_RESULT_GRANT_EXPIRED => failure(RecordingControlError::GrantExpired),
         protocol::RECORDING_RESULT_INVALID_STATE => failure(RecordingControlError::InvalidState),
-        _ if state <= 1 => success(),
+        _ if bytes.len() < 6 && state <= 1 => success(),
         _ => failure(RecordingControlError::UnknownError),
     })
 }
@@ -118,6 +127,42 @@ mod tests {
         assert_eq!(
             encode_recording_control_command(RecordingControlCommand::Stop),
             [0x11]
+        );
+    }
+
+    #[test]
+    fn state_uuid_bytes_are_never_interpreted_as_result_codes() {
+        for active in [0, 1] {
+            for uuid_byte in 0..=255 {
+                let mut state = [0x55; 18];
+                state[0] = active;
+                state[1] = 0;
+                state[5] = uuid_byte;
+                assert_eq!(parse_recording_control_result(&state).unwrap(), success());
+            }
+        }
+    }
+
+    #[test]
+    fn result_errors_do_not_fall_back_to_the_activity_flag() {
+        for (code, error) in [
+            (2, RecordingControlError::AlreadyRecording),
+            (3, RecordingControlError::NotRecording),
+            (4, RecordingControlError::InvalidGrant),
+            (5, RecordingControlError::GrantExpired),
+            (6, RecordingControlError::InvalidState),
+            (255, RecordingControlError::UnknownError),
+        ] {
+            assert_eq!(
+                parse_recording_control_result(&[0, 0, 0, 0, 0, code]).unwrap(),
+                failure(error)
+            );
+        }
+        let mut state = [0; 18];
+        state[0] = 2;
+        assert_eq!(
+            parse_recording_control_result(&state).unwrap(),
+            failure(RecordingControlError::InvalidResponse)
         );
     }
 }
