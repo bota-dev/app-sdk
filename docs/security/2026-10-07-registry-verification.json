@@ -1,0 +1,16 @@
+{
+  "checkedAtUtc": "2026-10-07T19:25:12.310759+00:00",
+  "packages": [
+    {
+      "package": "fast-uri",
+      "version": "3.1.8",
+      "publishedAtUtc": "2026-09-15T07:36:25.444000+00:00",
+      "releaseAgeDays": 22.49,
+      "sevenDayReleaseAge": "pass",
+      "tarballSha512MatchesRegistry": true,
+      "integrity": "sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==",
+      "license": "BSD-3-Clause",
+      "resolved": "https://registry.npmjs.org/fast-uri/-/fast-uri-3.1.8.tgz"
+    }
+  ]
+}

@@ -1,5 +1,9 @@
 # AGENTS.md
 
+October 7 root tooling lock patches fast-uri to 3.1.8 for High #1/#2.
+Run the crafted URI/Ajv and existing schema/vector regressions; retain exact
+revision CI/release gates. See [security evidence](docs/security/2026-10-07-fast-uri.md).
+
 RecordingStatus has distinct six-byte results and 18-byte activity/UUID
 snapshots. Never decode UUID byte 5 as a result. Android waits for the requested
 activity or an explicit result. See [review](docs/parity/recording-control-notifications.md);
