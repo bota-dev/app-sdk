@@ -16,6 +16,18 @@ not need access to those documents to open an issue or propose a change.
 5. Update fixtures, compatibility data, and documentation.
 6. Commit one coherent behavior change.
 
+## Post-Implementation Design Review
+
+Before reporting completion, compare the result with the current authoritative
+design and acceptance criteria. Use the shared `bota-skills:compound-engineering`
+skill when available; otherwise perform the comparison directly.
+
+Record each requirement, implementation evidence, verification result, status,
+and remaining check in the relevant review or conformance document. Distinguish
+source tests from publication, application integration, and physical-device
+acceptance. Fix discrepancies within scope and report unavailable checks without
+claiming full conformance.
+
 ## Documentation
 
 Structure the root README for an application developer: features, platform

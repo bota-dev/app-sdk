@@ -1,5 +1,10 @@
 # AGENTS.md
 
+## Post-Implementation Design Review
+
+- Before reporting completion, use `bota-skills:compound-engineering` (1.2.5+) to compare results with the current authoritative design and acceptance criteria. Follow the [review requirements](CONTRIBUTING.md#post-implementation-design-review).
+- If the skill is unavailable, record each relevant requirement, implementation evidence, conformance status, and remaining verification directly. Update affected docs and report deviations or unavailable checks without claiming full conformance.
+
 October 7 root tooling lock patches fast-uri to 3.1.8 for High #1/#2.
 Run the crafted URI/Ajv and existing schema/vector regressions; retain exact
 revision CI/release gates. See [security evidence](docs/security/2026-10-07-fast-uri.md).
