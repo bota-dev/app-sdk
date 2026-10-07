@@ -18,9 +18,10 @@ not need access to those documents to open an issue or propose a change.
 
 ## Documentation
 
-Keep the root README focused on what the SDK does, supported platforms,
-installation and links to integration guides. Keep its install pins aligned
-with a verified published release, not an unreleased source candidate.
+Structure the root README for an application developer: features, platform
+selection, installation, a short working example, backend integration, and
+links to detailed guides. Verify examples against the public API and keep
+install pins aligned with a verified published release.
 
 - Record user-facing version changes in [CHANGELOG.md](CHANGELOG.md), with
   unpublished behavior under **Unreleased**.

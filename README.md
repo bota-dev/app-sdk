@@ -1,16 +1,33 @@
 # Bota App SDK
 
-Connect your application to **Bota Pin** and **Bota Note** devices. The Bota App
-SDK provides Bluetooth discovery and connection, device status, recording
-transfer, provisioning, WiFi configuration, recording control, and firmware
-updates through a shared Rust core and platform-native adapters.
+[![CI](https://github.com/bota-dev/app-sdk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bota-dev/app-sdk/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Current beta: `2.0.0-beta.12`.** Pin exact versions when installing. See the
-[Changelog](CHANGELOG.md) for changes and [GitHub Releases](https://github.com/bota-dev/app-sdk/releases)
-for published artifacts. The SDK is in beta; supported workflows depend on the
-platform and device firmware.
+The official SDK for connecting your application to **Bota Pin** and **Bota
+Note** recording devices. Build device discovery, recording sync, and firmware
+update flows in React Native, Swift, Kotlin, Flutter, or a web application.
 
-## Platforms
+[Getting started](#installation) · [Quick start](#quick-start) ·
+[Documentation](#documentation) · [Examples](https://github.com/bota-dev/examples) ·
+[Changelog](CHANGELOG.md)
+
+## Features
+
+- **Device connectivity:** discover nearby devices, connect, reconnect by serial
+  number, and observe battery, storage, and recording status.
+- **Recordings:** control recording, list device recordings, and transfer and
+  upload them with progress reporting and recovery support.
+- **Device setup:** integrate provisioning, connection settings, and device-side
+  WiFi configuration with your backend's authorization flow.
+- **Firmware updates:** download and transfer firmware through the SDK's OTA
+  workflows.
+- **Native mobile integration:** shared Rust workflows with Apple and Android
+  adapters keep recording and firmware files outside JavaScript and Dart bridges.
+
+Capabilities vary by platform and device firmware. Use the platform guides below
+to check the workflows available to your application.
+
+## Supported platforms
 
 | Platform | Package | Requirements | Guide |
 | --- | --- | --- | --- |
@@ -25,9 +42,12 @@ not supported. Consult each platform guide for its capability limits.
 
 ## Installation
 
-The examples below use the published `2.0.0-beta.12` release. npm's `beta` tag
-tracks newer prereleases; `latest` remains at the initial `2.0.0-beta.0`.
-An unversioned npm install therefore does not select the current beta.
+**Current release: `2.0.0-beta.12` (beta).** The examples below pin this published
+version. See [GitHub Releases](https://github.com/bota-dev/app-sdk/releases) for
+artifacts and [CHANGELOG.md](CHANGELOG.md) for version changes.
+
+Choose the package for your application. npm's `beta` tag tracks prereleases;
+`latest` remains at `2.0.0-beta.0`, so use an explicit version when installing.
 
 ### React Native
 
@@ -43,16 +63,6 @@ development or production build; Expo Go cannot load this native module.
 Follow the [React Native setup guide](frameworks/react-native/README.md#install)
 for permissions and Expo configuration.
 
-```ts
-import { BotaClient } from '@bota.dev/react-native-app-sdk';
-
-await BotaClient.configure({ environment: 'production' });
-await BotaClient.waitForBluetooth();
-```
-
-After configuration, use `BotaClient.devices`, `BotaClient.recordings`, and
-`BotaClient.ota` for device workflows.
-
 ### Apple
 
 In Xcode, add `https://github.com/bota-dev/app-sdk.git` at exact version
@@ -62,15 +72,15 @@ In Xcode, add `https://github.com/bota-dev/app-sdk.git` at exact version
 .package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.12")
 ```
 
+Add `NSBluetoothAlwaysUsageDescription` to your application. Sandboxed macOS
+apps also need the **App Sandbox > Hardware > Bluetooth** entitlement.
+
 ```swift
 import BotaAppSDK
 
 let bota = BotaDeviceClient.shared
 try await bota.configure()
 ```
-
-Add `NSBluetoothAlwaysUsageDescription` to your application. Sandboxed macOS
-apps also need the **App Sandbox > Hardware > Bluetooth** entitlement.
 
 ### Android
 
@@ -105,18 +115,60 @@ compatible firmware with the Bota Identity service; background and closed-tab
 work are unsupported. See the [Web guide](frameworks/web/README.md) for client
 creation, exact-serial connection and tenant-scoped storage.
 
+## Quick start
+
+This React Native example discovers devices and reads the status of a device
+selected by the user. Complete the platform's Bluetooth permission setup before
+running it.
+
+```ts
+import {
+  BotaClient,
+  type DiscoveredDevice,
+} from '@bota.dev/react-native-app-sdk';
+
+await BotaClient.configure({ environment: 'production' });
+await BotaClient.waitForBluetooth();
+
+// Present these discoveries in your application's device picker.
+BotaClient.devices.on('deviceDiscovered', (device) => {
+  console.log(device.id, device.name);
+});
+await BotaClient.devices.startScan({ timeout: 30_000 });
+
+// Call this with the device selected in your picker.
+async function inspectDevice(selectedDevice: DiscoveredDevice) {
+  BotaClient.devices.stopScan();
+  const device = await BotaClient.devices.connect(selectedDevice);
+  const status = await BotaClient.devices.getStatus(device);
+  return { device, status };
+}
+```
+
+Use `BotaClient.devices` for connectivity and device controls,
+`BotaClient.recordings` for recording sync, and `BotaClient.ota` for updates.
+Call `await BotaClient.destroy()` when ending the SDK session, such as on logout.
+See the [React Native guide](frameworks/react-native/README.md) for the native
+upload API and lifecycle details, or choose another platform above.
+
 ## Integrating your backend
 
-Your application owns user authentication and scoped backend authorization.
-Provide fresh credentials and operation-specific callbacks; the SDK owns device
-transport, transfer state and local recovery. Recording and firmware bytes stay
-in native files on mobile, outside the JavaScript and Dart bridges.
+Your backend authenticates users and authorizes device operations. The App SDK
+handles device communication, file transfer, and local recovery. A typical
+recording integration has three steps:
+
+1. Your application asks its authenticated backend for a recording upload session.
+2. The SDK transfers the recording and uploads it using the supplied destination.
+3. The backend acknowledges cloud commitment before the SDK confirms device cleanup.
+
+Provide fresh credentials and scoped callbacks for each operation. Cloud upload
+commitment and device cleanup are separate phases; an upload result alone does
+not authorize deletion of the device recording.
 
 For React Native encrypted uploads, start with the
 [managed backend adapter](docs/parity/v2-managed-backend.md). It communicates
 with your authenticated proxy and handles native session recovery and signed
-receipts. Cloud upload commitment and device cleanup are separate phases;
-follow the integration contract before deleting a device recording.
+receipts. See [Bota API documentation](https://docs.bota.dev) for the backend API.
 
 ## Client presence
 
@@ -127,17 +179,32 @@ for field mapping and lifecycle rules; the getter does not send heartbeats.
 
 ## Documentation
 
-- [Examples](https://github.com/bota-dev/examples): applications using the public packages.
-- [Package migration](docs/migrations/app-sdk-package-names.md): replace historical package names and imports.
-- [Standalone React Native retirement](docs/migrations/react-native-sdk-sunset.md): migrate from the deprecated `@bota.dev/react-native-sdk`; do not co-install both packages.
-- [Architecture](ARCHITECTURE.md): shared core, platform boundaries and workflow ownership.
-- [Changelog](CHANGELOG.md): release changes and links to verification evidence.
+| I want to… | Start here |
+| --- | --- |
+| Integrate React Native | [React Native guide](frameworks/react-native/README.md) |
+| Integrate Swift / Apple | [Apple installation and configuration](#apple) |
+| Integrate Kotlin / Android | [Android guide](platforms/android/README.md) |
+| Integrate Flutter | [Flutter guide](frameworks/flutter/bota_app_sdk/README.md) |
+| Integrate Web Bluetooth | [Web guide](frameworks/web/README.md) |
+| Add encrypted recording uploads | [Managed backend adapter](docs/parity/v2-managed-backend.md) |
+| Explore example applications | [Bota examples](https://github.com/bota-dev/examples) |
+| Migrate an existing integration | [Package migration](docs/migrations/app-sdk-package-names.md) and [standalone SDK retirement](docs/migrations/react-native-sdk-sunset.md) |
+| Understand the SDK's design | [Architecture](ARCHITECTURE.md) |
+| See what changed between versions | [Changelog](CHANGELOG.md) |
+
+When migrating from `@bota.dev/react-native-sdk`, replace the old dependency and
+imports, then rebuild the native app. Install only the replacement package.
+
+## Support
+
+For SDK bugs and feature requests, [open an issue](https://github.com/bota-dev/app-sdk/issues).
+Include your SDK version, platform, device firmware, and a minimal reproduction.
+Report security vulnerabilities through [SECURITY.md](SECURITY.md).
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, required checks,
 and documentation conventions. Maintainers use the [release procedure](docs/releasing.md).
-Report vulnerabilities through [SECURITY.md](SECURITY.md).
 
 ## License
 
