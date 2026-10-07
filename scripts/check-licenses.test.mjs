@@ -104,5 +104,5 @@ test('normal repository scan reports the pinned Android release tooling dependen
   });
 
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
-  assert.match(result.stdout, /release tooling: fast-xml-parser@5\.11\.1, fflate@0\.8\.3/);
+  assert.match(result.stdout, /release tooling: fast-xml-parser@5\.11\.2, fflate@0\.8\.3/);
 });

@@ -25,9 +25,9 @@ the integration base, so this is the before-fix evidence.
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |
-| Preserve structured native errors across Foundation bridging | `BotaSDKError` conformances and regression tests | unverified until hosted tests |
-| Preserve all 21 ABI numeric identities and unknown values | Existing mapper plus numeric round-trip and unknown-code regressions | unverified until hosted tests |
-| Retain detail, operation, retryability and optional protocol status | Reconnect, provisioning, empty-detail and read-status regressions | unverified until hosted tests |
+| Preserve structured native errors across Foundation bridging | `BotaSDKError` conformances; strict Apple package tests passed at `363b26c` in [integration CI](https://github.com/bota-dev/app-sdk/actions/runs/37677822521) | matched in controlled tests |
+| Preserve all 21 ABI numeric identities and unknown values | Existing mapper plus numeric round-trip and unknown-code regressions in the passing Apple suite | matched in controlled tests |
+| Retain detail, operation, retryability and optional protocol status | Reconnect, provisioning, empty-detail and read-status regressions in the passing Apple suite | matched in controlled tests |
 | Integrate useful branch work while retaining newer main fixes | Six branch histories integrated; current security locks and agent guidance retained | matched in source |
 | Dependency updates and Flutter instruction inventory remain valid | Frozen npm installation; canonical Flutter archive generator; full CI and License Gate required before main | partial; local installation and inventory passed |
 
@@ -36,3 +36,11 @@ and warnings treated as errors, native and React Native consumers, Rust/UniFFI,
 Web, Flutter, release inventory and License Gate. Hosted results will be recorded
 in the delivery evidence before branch cleanup. Physical reconnection and
 application installation remain unverified by these controlled tests.
+
+The first integrated run passed its Apple regression suite and React Native
+package gate, but repository tooling stopped on the old `fast-xml-parser`
+5.11.1 test expectation. The test now requires the newly installed exact 5.11.2
+pin. That failed run is evidence for the Apple behavior only, not a successful
+full integration gate. Windows Central-repository normalization tests also
+retain their existing path-separator failure; the hosted Linux publication
+tests remain authoritative for the dependency update.
