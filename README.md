@@ -42,9 +42,11 @@ not supported. Consult each platform guide for its capability limits.
 
 ## Installation
 
-**Current release: `2.0.0-beta.12` (beta).** The examples below pin this published
-version. See [GitHub Releases](https://github.com/bota-dev/app-sdk/releases) for
-artifacts and [CHANGELOG.md](CHANGELOG.md) for version changes.
+**Selected SDK version: `2.0.0-beta.13` (beta).** The examples below pin this
+version. Use it after the protected release and public-consumer checks pass.
+[GitHub Releases](https://github.com/bota-dev/app-sdk/releases) provides the
+publication status and verified artifacts; [CHANGELOG.md](CHANGELOG.md) records
+version changes.
 
 Choose the package for your application. npm's `beta` tag tracks prereleases;
 `latest` remains at `2.0.0-beta.0`, so use an explicit version when installing.
@@ -54,7 +56,7 @@ Choose the package for your application. npm's `beta` tag tracks prereleases;
 Use Node.js 22+ to install and build your app:
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.12
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.13
 npx pod-install
 ```
 
@@ -66,10 +68,10 @@ for permissions and Expo configuration.
 ### Apple
 
 In Xcode, add `https://github.com/bota-dev/app-sdk.git` at exact version
-`2.0.0-beta.12` and select the **BotaAppSDK** product. With Swift Package Manager:
+`2.0.0-beta.13` and select the **BotaAppSDK** product. With Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.12")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.13")
 ```
 
 Add `NSBluetoothAlwaysUsageDescription` to your application. Sandboxed macOS
@@ -87,7 +89,7 @@ try await bota.configure()
 Add the dependency with `mavenCentral()` configured in your repositories:
 
 ```kotlin
-implementation("dev.bota:bota-app-sdk:2.0.0-beta.12")
+implementation("dev.bota:bota-app-sdk:2.0.0-beta.13")
 ```
 
 Your app requests Bluetooth runtime permissions. See the
@@ -98,7 +100,7 @@ requirements.
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.12
+  bota_app_sdk: 2.0.0-beta.13
 ```
 
 Follow the [Flutter guide](frameworks/flutter/bota_app_sdk/README.md) for native
@@ -107,7 +109,7 @@ setup and backend callbacks, then rebuild the iOS or Android app.
 ### Web
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.12
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.13
 ```
 
 Start the Bluetooth picker from a user gesture. Web integration requires
