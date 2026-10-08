@@ -34,21 +34,28 @@ jobs:
           tools/flutter/install-pinned-cocoapods.sh
       - name: Generate canonical client identity and Codegen
         run: |
+          mkdir -p target/prepared-beta13
+          git rev-parse HEAD > target/prepared-beta13/source-revision.txt
           npm ci
           npm ci --prefix frameworks/react-native
           cargo xtask client-identity generate
           cargo xtask client-identity generate --check
           npm run codegen --prefix frameworks/react-native
           npm run codegen:check --prefix frameworks/react-native
-      - name: Generate canonical Apple and Flutter manifests
+      - name: Generate canonical Apple manifests and commit generator snapshot
         run: |
           tools/apple/package-release.sh --write-package-manifest
           swift package dump-package
+          git -c user.name='OpenAI Codex' -c user.email='noreply@openai.com' commit -am 'chore: stage canonical release generator output' -m 'Co-Authored-By: OpenAI Codex <noreply@openai.com>'
+      - name: Generate canonical Flutter manifest from clean generator snapshot
+        run: |
           tools/flutter/package-release.sh --write-example
-          mkdir -p target/prepared-beta13
-          git diff --binary > target/prepared-beta13/generated.patch
-          git rev-parse HEAD > target/prepared-beta13/source-revision.txt
+      - name: Record generated patch against original source
+        if: always()
+        run: |
+          git diff --binary "$(cat target/prepared-beta13/source-revision.txt)" > target/prepared-beta13/generated.patch
       - name: Preserve generated patch and archive evidence
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: beta13-prepared-${{ github.sha }}
