@@ -94,7 +94,11 @@ an older plaintext/no-callback compatibility path may retain its list estimate.
   a recovery provider is configured. Without it, old credentials are discarded
   and tasks wait for scoped foreground sync with fresh credentials.
 - Providers are called again after failed attempts. Expired initial credentials
-  are disposed and refreshed through the provider before sending bytes. A null
+  and deferred credentials with an empty destination URL are disposed and
+  refreshed through the provider before sending bytes. The provider receives
+  the native file length and detected route after transfer; a foreground retry
+  uses the retained task's route before validating the refreshed credentials.
+  A nonempty destination still cannot change the original route. A null
   result parks the task for 30 seconds without consuming its retry budget.
 - Up to two background uploads run concurrently. Failures use persisted delays
   of 30 seconds, 2 minutes, 10 minutes, 1 hour, then 4 hours, with six retries
@@ -130,6 +134,29 @@ an older plaintext/no-callback compatibility path may retain its list estimate.
   controlled HTTP responses; JS tests inject the native boundary, not audio.
 
 ## Test Evidence
+
+### October 7 deferred destination correction (unpublished source)
+
+Demo intentionally prepares an empty destination until native transfer determines
+the plaintext/relay route. The previous queue treated that placeholder as usable
+because it had no expiry. A fresh attempt passed an empty URL to native HTTP;
+a foreground plaintext retry rejected the placeholder relay as a route change.
+The queue now obtains scoped credentials before either action. This does not
+repair truncated audio or establish that a hash-matched object is playable.
+
+| Requirement | Evidence | Status |
+| --- | --- | --- |
+| Upload Management §1.1: SDK owns App-mediated recovery | Three red/green tests cover fresh plaintext, fresh relay and retained plaintext destinations | matched at the mocked native boundary |
+| Original identity, route and account scope remain fenced | Existing recovery rejection/cancellation tests plus actual transfer-size assertions | matched at the mocked native boundary |
+| Cloud acknowledgement precedes file release and device confirmation | Regression asserts completion, native release and foreground confirmation; existing missing-ACK tests remain | matched at the mocked native boundary |
+| Usable cloud audio and physical cleanup | Two incident objects and retained native files contain one byte; capture origin remains under investigation | unverified; this credential change is not audio recovery |
+
+Focused recovery suite: 35/35 passed; package metadata, Codegen, TypeScript and
+build passed on Windows. Full RN suite: 156 passed, six failed in existing
+Windows file-URL/path handling. Codegen's initial comparison failure was checkout
+CRLF; normalizing only its local JSON to LF matched the unchanged Git contract.
+Hosted exact-revision CI and License Gate are required before integration.
+Published beta.12 bytes and installed applications do not include this change.
 
 Red/green regressions were observed for legacy credential persistence, byte
 store rejection, premature unlink, expired initial credentials, missing native

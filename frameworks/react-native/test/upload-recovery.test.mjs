@@ -4,6 +4,7 @@ import { afterEach, test } from 'node:test';
 
 const require = createRequire(import.meta.url);
 const { RecordingManager } = require('../lib/commonjs/managers/RecordingManager.js');
+const { NativeUploadQueue } = require('../lib/commonjs/managers/NativeUploadQueue.js');
 const { BotaClient } = require('../lib/commonjs/BotaClient.js');
 const { setCompatibilityClientForTesting } = require('../lib/commonjs/compatibility/runtime.js');
 const managers = [];
@@ -210,6 +211,49 @@ test('expired initial credentials refresh through the same scoped provider befor
   await drain(f.manager.syncRecording(device, recording, fresh({ uploadUrl: 'https://expired', expiresAt: new Date(0), dispose: () => disposed++ })));
   assert.equal(recovered, 1); assert.equal(disposed, 1);
   assert.equal(f.uploads[0].uploadUrl, 'https://fresh.example');
+});
+
+for (const encrypted of [false, true]) {
+  test(`deferred ${encrypted ? 'relay' : 'plaintext'} credentials refresh after native transfer`, async () => {
+    let recovered = 0; let disposed = 0; let completed = 0;
+    const target = encrypted ? { uploadUrl: '', relay: { url: 'https://relay.example', bearerToken: 'synthetic' } } : {};
+    const f = fixture([], async context => {
+      recovered++;
+      assert.equal(f.transfers, 1);
+      assert.equal(context.relayUpload, encrypted);
+      assert.equal(context.fileSizeBytes, 4);
+      return fresh({ ...target, complete: async () => completed++ });
+    });
+    f.client.recordings.syncRecording = async () => {
+      f.transfers++;
+      return { localPath: '/native/recording.recording', e2eEncrypted: encrypted, fileSizeBytes: 4 };
+    };
+    await f.manager.initialize();
+    await drain(f.manager.syncRecording(device, recording, fresh({
+      uploadUrl: '', relay: { url: '', bearerToken: '' }, complete: undefined, dispose: () => disposed++,
+    })));
+    assert.equal(recovered, 1); assert.equal(disposed, 1); assert.equal(completed, 1);
+    assert.equal(f.uploads.length, 1);
+    assert.equal(encrypted ? f.uploads[0].relay.url : f.uploads[0].uploadUrl,
+      encrypted ? 'https://relay.example' : 'https://fresh.example');
+    assert.equal(f.releases.length, 1); assert.equal(f.confirms.length, 1);
+    assert.doesNotMatch(JSON.stringify(f.persisted), /fresh.example|relay.example|synthetic|bearerToken/);
+  });
+}
+
+test('retained plaintext task replaces a deferred relay placeholder before route validation', async () => {
+  let recovered = 0; const f = fixture([]);
+  const queue = new NativeUploadQueue(f.client.recordings, async context => {
+    recovered++; assert.equal(context.relayUpload, false); return fresh();
+  });
+  managers.push({ destroy: () => queue.destroy() });
+  await queue.initialize();
+  await queue.add({ ...task(), status: 'pending' }, fresh({ uploadUrl: '',
+    relay: { url: '', bearerToken: '' }, complete: undefined }));
+  await queue.run('task-1');
+  assert.equal(recovered, 1); assert.equal(f.uploads.length, 1);
+  assert.equal(f.uploads[0].uploadUrl, 'https://fresh.example');
+  assert.equal(f.uploads[0].relay, undefined); assert.equal(f.releases.length, 1);
 });
 
 test('foreground supplies fresh credentials for retained bytes without a background provider', async () => {

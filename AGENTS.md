@@ -1,5 +1,11 @@
 # AGENTS.md
 
+October 7 compatibility upload recovery: empty deferred plaintext/relay targets
+must refresh through the scoped provider after native transfer and before route
+validation/HTTP. Keep durable completion and original identity fences. See the
+[regression and design review](docs/parity/upload-recovery.md#october-7-deferred-destination-correction-unpublished-source).
+This source correction does not repair one-byte audio or update published beta.12.
+
 ## Post-Implementation Design Review
 
 - Before reporting completion, use `bota-skills:compound-engineering` (1.2.5+) to compare results with the current authoritative design and acceptance criteria. Follow the [review requirements](CONTRIBUTING.md#post-implementation-design-review).

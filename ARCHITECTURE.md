@@ -1,5 +1,11 @@
 # Architecture
 
+Compatibility `NativeUploadQueue` refreshes an empty deferred destination through
+the host provider using the native file length and persisted transfer route.
+Original recording/account/route validation and durable completion still precede
+cleanup. See the [unpublished correction](docs/parity/upload-recovery.md#october-7-deferred-destination-correction-unpublished-source)
+for source evidence and physical capture limitations.
+
 Source candidate **2.0.0-beta.12** repairs the Android encrypted-v2 manifest
 phase at a complete resume and separates each resumed attempt's packet counter
 from the durable checkpoint on Android and Apple. Signed receipt/CONFIRM still

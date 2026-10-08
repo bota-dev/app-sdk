@@ -149,7 +149,10 @@ export class NativeUploadQueue extends EventEmitter<RecordingManagerEvents> {
       initialSignal?.addEventListener('abort', initialAbort, { once: true });
       if (initialSignal?.aborted) initialAbort();
       check();
-      if (info?.expiresAt && info.expiresAt.getTime() <= Date.now() && !info.alreadyUploaded && this.provider && !info.signal?.aborted) {
+      if (info && !info.alreadyUploaded && this.provider && !info.signal?.aborted && (
+        !(info.relay ? info.relay.url : info.uploadUrl) ||
+        (info.expiresAt && info.expiresAt.getTime() <= Date.now())
+      )) {
         dispose(info);
         info = undefined;
       }
