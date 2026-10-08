@@ -7,6 +7,12 @@ tracked separately.
 
 ## Unreleased
 
+## 2.0.0-beta.13 (candidate)
+
+- Refresh React Native legacy upload destinations only when native files are ready.
+  See the [upload recovery review](docs/parity/upload-recovery.md#october-7-deferred-destination-correction-unpublished-source).
+- Update reviewed dependency security patches and parser/Rust tooling pins.
+
 - Preserve Apple error codes, descriptions, operation, retry policy and optional
   protocol status when `BotaSDKError` bridges to `NSError`. See the
   [error bridge review](docs/parity/apple-error-bridge.md).
@@ -17,6 +23,8 @@ tracked separately.
   accepting remove-only deprovision grants. Receipt recovery does not issue a
   new reset. This needs matching SDK, app, backend and firmware releases; see
   the [reset contract](docs/parity/factory-reset-authorization.md).
+
+Publication remains pending; see the [beta.13 preflight](release/evidence/2.0.0-beta.13-preflight.md).
 
 ## 2.0.0-beta.12
 

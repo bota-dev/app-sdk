@@ -1,3 +1,3 @@
 public enum BotaAppleSDKVersion: Sendable {
-    public static let current = "2.0.0-beta.12"
+    public static let current = "2.0.0-beta.13"
 }

@@ -1,9 +1,10 @@
 # Bota SDK for React Native
 
-Source candidate `2.0.0-beta.12` keeps the five-platform version synchronized.
-Android repairs completed encrypted-v2 resume and failed connect/MTU cleanup;
-Apple and Web runtime behavior is unchanged. Beta.11 remains the published
-baseline until release gates pass. Native applications require a new binary.
+Source candidate `2.0.0-beta.13` synchronizes the five-platform SDK family.
+It includes corrected recording-control decoding, dedicated reset authorization,
+Apple error metadata and React Native deferred upload-destination recovery.
+Beta.12 remains published until this candidate completes its release gates.
+Native applications require a new binary.
 
 Bluetooth device SDK for Bota Pin and Bota Note applications. The 2.x candidate
 preserves the public TypeScript API of `@bota.dev/react-native-sdk@0.0.65`
@@ -28,9 +29,9 @@ adopting this source API; published-package availability is a separate gate.
 
 ## Install
 
-Published beta.11 remains available. Use the beta.12 pin below only after
+Published beta.12 remains available. Use the beta.13 pin below only after
 publication is verified; see the
-[preflight](../../release/evidence/2.0.0-beta.12-preflight.md).
+[preflight](../../release/evidence/2.0.0-beta.13-preflight.md).
 Rebuild native applications and reconnect explicitly after connection loss.
 Physical completed-resume acceptance and wider GATT recovery remain separate.
 Remove `@bota.dev/react-native-sdk` before adding the replacement; do not
@@ -38,7 +39,7 @@ co-install both. Standalone maintenance ended September 29, 2026; follow the
 [retirement and migration notice](../../docs/migrations/react-native-sdk-sunset.md).
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.12
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.13
 npx pod-install
 ```
 

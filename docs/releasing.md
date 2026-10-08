@@ -1,3 +1,13 @@
+# Candidate synchronized beta: 2.0.0-beta.13
+
+The owner requested commit and publication of the latest main source on October 8,
+2026 (Pacific time). Beta.13 includes the post-beta.12 fixes described in the
+[preflight and design review](../release/evidence/2.0.0-beta.13-preflight.md).
+Require exact successful branch and main CI/License Gate, generated public Apple
+pins, complete five-platform inventory and the existing protected release approval.
+Beta.12 remains the published baseline until final public consumer/archive gates
+pass. Existing versions and npm `latest` stay intact.
+
 # Published synchronized beta: 2.0.0-beta.12
 
 The release repairs the Android complete-resume intake and Android/Apple

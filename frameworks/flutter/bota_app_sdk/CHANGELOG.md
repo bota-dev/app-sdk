@@ -1,3 +1,9 @@
+## 2.0.0-beta.13 (candidate)
+
+- Synchronize native reset authorization, recording-control and Apple error metadata fixes.
+- Keep application HTTP authorization and durable completion host-owned.
+- Publication and physical acceptance are separate; see the release preflight.
+
 ## 2.0.0-beta.12 (candidate)
 
 - Accept manifest/EOF after an exact validated Android encrypted-v2 resume at the full ciphertext boundary, without requesting another data window.

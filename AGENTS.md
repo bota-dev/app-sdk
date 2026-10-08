@@ -1,5 +1,8 @@
 # AGENTS.md
 
+**Upload completion architecture (target; partial implementation):**
+Review upload work against durable verification/cleanup phases and identity recovery. Test exit after PUT, pending 425, worker success while offline, reconnect-only cleanup, numeric evidence and legacy full-UUID limitations; do not claim all installed facades share current source behavior. See the [public recovery contract](docs/parity/upload-recovery.md).
+
 October 7 compatibility upload recovery: empty deferred plaintext/relay targets
 must refresh through the scoped provider after native transfer and before route
 validation/HTTP. Keep durable completion and original identity fences. See the

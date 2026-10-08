@@ -1,5 +1,8 @@
 # Architecture
 
+**Upload completion architecture (target; partial implementation):**
+SDK/native or browser storage owns App-mediated upload recovery and durable device-cleanup intent; authenticated backend HTTP stays host-owned. Target phases separate bytes received, verification, cloud commitment and cleanup, with stable recording identity across retries/channels. Current facade/profile conformance is partial. See the [public recovery contract](docs/parity/upload-recovery.md).
+
 Compatibility `NativeUploadQueue` refreshes an empty deferred destination through
 the host provider using the native file length and persisted transfer route.
 Original recording/account/route validation and durable completion still precede
