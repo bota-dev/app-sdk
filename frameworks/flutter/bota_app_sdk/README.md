@@ -1,9 +1,9 @@
 # Bota SDK for Flutter
 
-Source candidate `2.0.0-beta.13` synchronizes the five-platform SDK family.
-It includes corrected recording-control decoding, dedicated reset authorization,
-Apple error metadata and React Native deferred upload-destination recovery.
-Beta.12 remains published until this candidate completes its release gates.
+Source candidate `2.0.0-beta.14` synchronizes the five-platform SDK family.
+It adds React Native compatibility completion polling and durable
+`completionPending` recovery. Other facade workflow support is unchanged.
+Beta.13 remains the published baseline until this candidate completes its gates.
 Native applications require a new binary.
 
 ## Package Name Migration
@@ -11,10 +11,10 @@ Native applications require a new binary.
 The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
 `dev.bota:bota-app-sdk` on Android. Replace the old dependency and Dart imports;
 do not install both packages in the same application. Historical 1.x releases
-remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.13`.
-Published beta.12 remains the installation baseline until protected publication
+remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.14`.
+Published beta.13 remains the installation baseline until protected publication
 and public-consumer verification pass. Use the install pin below after those
-gates pass; see the [preflight](../../../release/evidence/2.0.0-beta.13-preflight.md).
+gates pass; see the [preflight](../../../release/evidence/2.0.0-beta.14-preflight.md).
 Rebuild native applications and reconnect explicitly after connection loss.
 Completed-resume and broader hardware acceptance remain separate.
 
@@ -51,7 +51,7 @@ Pin the exact prerelease version after its publication:
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.13
+  bota_app_sdk: 2.0.0-beta.14
 ```
 
 For source development, point at an exact checkout rather than a moving branch:

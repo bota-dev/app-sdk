@@ -6,6 +6,7 @@ const require = createRequire(import.meta.url);
 const { RecordingManager } = require('../lib/commonjs/managers/RecordingManager.js');
 const { NativeUploadQueue } = require('../lib/commonjs/managers/NativeUploadQueue.js');
 const { BotaClient } = require('../lib/commonjs/BotaClient.js');
+const { createUploadRecoveryProvider } = require('../lib/commonjs/uploadRecovery.js');
 const { setCompatibilityClientForTesting } = require('../lib/commonjs/compatibility/runtime.js');
 const managers = [];
 afterEach(() => { managers.splice(0).forEach(manager => manager.destroy()); setCompatibilityClientForTesting(null); });
@@ -40,6 +41,145 @@ function fixture(persisted = [task()], provider) {
   f.manager = new RecordingManager({ uploadRecoveryProvider: provider }); managers.push(f.manager);
   return f;
 }
+
+function completionBackend(status, complete) {
+  const controller = new AbortController();
+  const backend = {
+    scopeKey: 'account/project/production', signal: controller.signal,
+    checkScope() { if (controller.signal.aborted) throw new Error('scope changed'); }, dispose() {},
+    async getRecording(id) { return { id, status, file_size_bytes: 4 }; },
+    targets: 0,
+    async getUploadInfo() { backend.targets++; return { uploadUrl: 'https://fresh.example' }; },
+    completeRecording: complete,
+  };
+  return { backend, provider: createUploadRecoveryProvider(async () => backend) };
+}
+
+test('matching API decimal size recovers uploaded bytes without PUT and waits for completion ACK', async () => {
+  const entered = deferred(); const ack = deferred();
+  const { backend, provider } = completionBackend('uploaded', async () => { entered.resolve(); await ack.promise; });
+  backend.getRecording = async id => ({ id, status: 'uploaded', file_size_bytes: '4' });
+  const f = fixture([{ ...task(), completionPending: true }], provider);
+  await f.manager.initialize(); await until(() => f.persisted[0].status === 'uploading');
+  await entered.promise;
+  assert.equal(backend.targets, 0); assert.equal(f.uploads.length, 0); assert.equal(f.releases.length, 0);
+  const foreground = drain(f.manager.syncRecording(device, recording, fresh()));
+  ack.resolve(); await foreground;
+  assert.equal(f.releases.length, 1); assert.equal(f.confirms.length, 1); assert.equal(f.uploads.length, 0);
+});
+
+test('mismatched or invalid API wire sizes retain completion-pending audio without PUT or cleanup', async () => {
+  for (const wire of ['5', '-1', '1.5', '4e0', '9007199254740992']) {
+    let completions = 0;
+    const { backend, provider } = completionBackend('uploaded', async () => { completions++; });
+    backend.getRecording = async id => ({ id, status: 'uploaded', file_size_bytes: wire });
+    const f = fixture([{ ...task(), completionPending: true }], provider);
+    await f.manager.initialize(); await until(() => f.persisted[0].retryCount === 1);
+    assert.equal(f.persisted[0].completionPending, true); assert.notEqual(f.persisted[0].status, 'completed');
+    assert.equal(backend.targets, 0); assert.equal(completions, 0);
+    assert.equal(f.uploads.length, 0); assert.equal(f.releases.length, 0); assert.equal(f.confirms.length, 0);
+    f.manager.destroy(); await tick();
+  }
+});
+
+test('pending verification sends one PUT and cannot release or CONFIRM before exact completion ACK', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  let completions = 0; const ack = deferred();
+  const { backend, provider } = completionBackend('pending', async () => {
+    assert.equal(f.persisted[0].completionPending, true);
+    completions++;
+    if (completions < 3) throw { status: 425, data: { error: { code: 'upload_verification_pending' } } };
+    await ack.promise;
+  });
+  const f = fixture([task()], provider); await f.manager.initialize();
+  await until(() => completions === 1);
+  const foreground = drain(f.manager.syncRecording(device, recording, fresh()));
+  for (let i = 0; i < 2; i++) { t.mock.timers.tick(2_000); await tick(); }
+  assert.equal(completions, 3); assert.equal(backend.targets, 1);
+  assert.equal(f.uploads.length, 1); assert.equal(f.releases.length, 0); assert.equal(f.confirms.length, 0);
+  ack.resolve(); await foreground;
+  assert.equal(f.uploads.length, 1); assert.equal(f.releases.length, 1); assert.equal(f.confirms.length, 1);
+  assert.equal(f.persisted[0].status, 'completed'); assert.equal(f.persisted[0].completionPending, undefined);
+});
+
+test('verification budget expiry retains phase and retry budget across restart while server is still pending', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 0 });
+  let calls = 0;
+  const first = completionBackend('pending', async () => {
+    calls++; throw { status: 425, data: { error: { code: 'upload_verification_pending' } } };
+  });
+  const f = fixture([{ ...task(), retryCount: 5 }], first.provider); await f.manager.initialize();
+  await until(() => calls === 1);
+  for (let i = 0; i < 60; i++) { t.mock.timers.tick(2_000); await tick(); }
+  await until(() => f.manager.getAllUploads()[0].status === 'pending');
+  assert.equal(f.persisted[0].completionPending, true); assert.equal(f.persisted[0].retryCount, 5);
+  assert.equal(f.uploads.length, 1); assert.equal(f.releases.length, 0); assert.equal(f.confirms.length, 0);
+  f.manager.destroy(); await tick();
+
+  const ack = deferred(); let resumed = 0;
+  const second = completionBackend('pending', async () => { resumed++; await ack.promise; });
+  const recovered = fixture(f.persisted, second.provider); await recovered.manager.initialize();
+  t.mock.timers.tick(30_000); await until(() => resumed === 1);
+  assert.equal(second.backend.targets, 0); assert.equal(recovered.uploads.length, 0);
+  assert.equal(recovered.releases.length, 0); assert.equal(recovered.persisted[0].retryCount, 5);
+  ack.resolve(); await until(() => recovered.releases.length === 1);
+  assert.equal(recovered.persisted[0].status, 'completed'); assert.equal(recovered.confirms.length, 0);
+});
+
+test('successful PUT is persisted before a lost completion response and restart never repeats its bytes', async () => {
+  const first = completionBackend('pending', async () => {
+    assert.equal(f.persisted[0].completionPending, true);
+    throw new Error('response lost');
+  });
+  const f = fixture([task()], first.provider); await f.manager.initialize();
+  await until(() => f.persisted[0].retryCount === 1);
+  assert.equal(f.persisted[0].completionPending, true); assert.equal(f.uploads.length, 1);
+  assert.equal(f.releases.length, 0); f.manager.destroy(); await tick();
+  const recoveredTasks = f.persisted.map(value => ({ ...value, nextAttemptAt: 0 }));
+  const second = completionBackend('pending', async () => {});
+  const recovered = fixture(recoveredTasks, second.provider); await recovered.manager.initialize();
+  await until(() => recovered.releases.length === 1);
+  assert.equal(recovered.uploads.length, 0); assert.equal(second.backend.targets, 0);
+});
+
+test('explicit backend integrity failure permits repair and resets pending phase before new PUT', async () => {
+  const { backend, provider } = completionBackend('integrity_failure', async () => {
+    assert.equal(f.persisted[0].completionPending, true);
+  });
+  const f = fixture([{ ...task(), completionPending: true }], provider);
+  f.client.recordings.uploadRecordingFile = async value => {
+    assert.equal(f.persisted[0].completionPending, false); f.uploads.push(value);
+  };
+  await f.manager.initialize(); await until(() => f.releases.length === 1);
+  assert.equal(backend.targets, 1); assert.equal(f.uploads.length, 1);
+  assert.equal(f.persisted[0].status, 'completed');
+});
+
+test('mistyped completion phase cannot overwrite the journal or release a file', async () => {
+  const f = fixture([{ ...task(), completionPending: 'true' }]);
+  await assert.rejects(f.manager.initialize(), /Invalid upload recovery journal/);
+  assert.equal(f.saves.length, 0); assert.equal(f.releases.length, 0);
+});
+
+test('fresh foreground upload credentials cannot resend a completion-pending object', async () => {
+  const { backend, provider } = completionBackend('pending', async () => {});
+  const f = fixture([{ ...task(), status: 'pending', completionPending: true, nextAttemptAt: Date.now() + 60_000 }], provider);
+  await f.manager.initialize();
+  await drain(f.manager.syncRecording(device, recording, fresh()));
+  assert.equal(backend.targets, 0); assert.equal(f.uploads.length, 0); assert.equal(f.transfers, 0);
+  assert.equal(f.releases.length, 1); assert.equal(f.confirms.length, 1);
+});
+
+test('account cancellation during completion preserves pending phase and fences a late ACK', async () => {
+  const identity = new AbortController(); const entered = deferred(); const ack = deferred();
+  const f = fixture([task()], async () => fresh({ signal: identity.signal,
+    complete: async () => { entered.resolve(); await ack.promise; } }));
+  await f.manager.initialize(); await entered.promise;
+  identity.abort(); await until(() => f.manager.getAllUploads()[0].status === 'pending');
+  ack.resolve(); await tick();
+  assert.equal(f.persisted[0].completionPending, true); assert.equal(f.persisted[0].retryCount, 0);
+  assert.equal(f.uploads.length, 1); assert.equal(f.releases.length, 0); assert.equal(f.confirms.length, 0);
+});
 
 test('migrates interrupted tasks to metadata only and never reuses legacy credentials', async () => {
   const f = fixture(); await f.manager.initialize();

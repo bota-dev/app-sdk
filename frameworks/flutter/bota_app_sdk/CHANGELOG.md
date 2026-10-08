@@ -1,3 +1,9 @@
+## 2.0.0-beta.14 (candidate)
+
+- Synchronize SDK package identities with the React Native completion-recovery fix.
+- Flutter workflow support is unchanged; publication and physical acceptance
+  remain separate gates.
+
 ## 2.0.0-beta.13 (candidate)
 
 - Synchronize native reset authorization, recording-control and Apple error metadata fixes.

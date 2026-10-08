@@ -1,9 +1,9 @@
 # Bota SDK for React Native
 
-Source candidate `2.0.0-beta.13` synchronizes the five-platform SDK family.
-It includes corrected recording-control decoding, dedicated reset authorization,
-Apple error metadata and React Native deferred upload-destination recovery.
-Beta.12 remains published until this candidate completes its release gates.
+Source candidate `2.0.0-beta.14` synchronizes the five-platform SDK family.
+It adds React Native compatibility completion polling and durable
+`completionPending` recovery. Other facade workflow support is unchanged.
+Beta.13 remains the published baseline until this candidate completes its gates.
 Native applications require a new binary.
 
 Bluetooth device SDK for Bota Pin and Bota Note applications. The 2.x candidate
@@ -29,9 +29,9 @@ adopting this source API; published-package availability is a separate gate.
 
 ## Install
 
-Published beta.12 remains available. Use the beta.13 pin below only after
+Published beta.13 remains available. Use the beta.14 pin below only after
 publication is verified; see the
-[preflight](../../release/evidence/2.0.0-beta.13-preflight.md).
+[preflight](../../release/evidence/2.0.0-beta.14-preflight.md).
 Rebuild native applications and reconnect explicitly after connection loss.
 Physical completed-resume acceptance and wider GATT recovery remain separate.
 Remove `@bota.dev/react-native-sdk` before adding the replacement; do not
@@ -39,7 +39,7 @@ co-install both. Standalone maintenance ended September 29, 2026; follow the
 [retirement and migration notice](../../docs/migrations/react-native-sdk-sunset.md).
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.13
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.14
 npx pod-install
 ```
 
@@ -211,3 +211,16 @@ fresh credentials, and completes the original backend recording before native
 cleanup. Supply the initial `recoveryScope` and configure the provider before
 starting batch sync. Do not call backend completion only after the sync generator
 returns: device confirmation has already happened then.
+
+For legacy completion, preserve a pending response as numeric `status: 425`
+with `data.error.code === 'upload_verification_pending'`. The current source
+helper retries only that classification with 1–2 second jitter for two minutes;
+the queue then retains completion for a later attempt without consuming its
+upload-repair budget. The native journal's `completionPending` phase prevents
+another PUT after restart while the backend remains pending. This phase never
+permits cleanup without the exact completion ACK; only authenticated
+`integrity_failure` permits a repair upload. Scope changes and cancellation
+remain fenced. The host must honor request aborts and provide HTTP timeouts.
+This unpublished correction requires rebuilt native adapters, not just updated
+JavaScript. Timers require a live JS runtime; encrypted-v2 receipt recovery is
+unchanged. See `docs/parity/upload-recovery.md` for evidence and limits.

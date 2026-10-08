@@ -99,6 +99,22 @@ final class BotaDeviceSDKAppleRecordingUploadsTests: XCTestCase {
         XCTAssertEqual(tasks[0]["status"] as? String, "failed")
     }
 
+    func testCompletionPendingPersistsWithoutAuthorizingRelease() async throws {
+        let fixture = try UploadFixture()
+        let uploads = BotaDeviceSDKAppleRecordingUploads(queueFile: fixture.queueFile)
+        try await uploads.saveQueue(fixture.journal(status: "pending").replacingOccurrences(
+            of: "\"status\":\"pending\"", with: "\"status\":\"pending\",\"completionPending\":true"
+        ))
+        let stored = try await uploads.loadQueue()
+        let tasks = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(stored.utf8)) as? [[String: Any]])
+        XCTAssertEqual(tasks[0]["completionPending"] as? Bool, true)
+        do {
+            try await uploads.release(taskID: "task-1", localPath: fixture.recordingFile.path)
+            XCTFail("verification pending is not completion acknowledgement")
+        } catch {}
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.recordingFile.path))
+    }
+
     func testReleaseRequiresExactCompletedJournalAndIsIdempotent() async throws {
         let fixture = try UploadFixture()
         let uploads = BotaDeviceSDKAppleRecordingUploads(queueFile: fixture.queueFile)
@@ -146,6 +162,8 @@ final class BotaDeviceSDKAppleRecordingUploadsTests: XCTestCase {
             ("\"createdAt\":\"2026-09-24T00:00:00Z\"", "\"createdAt\":\"invalid\""),
             ("\"status\":\"completed\"", "\"status\":\"completed\",\"fileSizeBytes\":\"4\""),
             ("\"status\":\"completed\"", "\"status\":\"completed\",\"recoveryScope\":123"),
+            ("\"status\":\"completed\"", "\"status\":\"completed\",\"completionPending\":\"true\""),
+            ("\"status\":\"completed\"", "\"status\":\"completed\",\"completionPending\":1"),
         ] {
             let fixture = try UploadFixture()
             let contents = fixture.journal(status: "completed").replacingOccurrences(of: old, with: invalid)

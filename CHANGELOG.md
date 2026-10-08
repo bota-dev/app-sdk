@@ -7,6 +7,18 @@ tracked separately.
 
 ## Unreleased
 
+## 2.0.0-beta.14 (candidate)
+
+- Retry the exact compatibility upload-verification-pending response within the
+  existing operation and persist native completion intent across app restarts.
+- Accept canonical safe decimal `file_size_bytes` strings from existing backend
+  integrations while preserving numeric validation and optional missing values.
+- Retain device audio until completion acknowledgement; publication, native app
+  delivery and physical qualification remain separate gates.
+- See the [source design review](docs/parity/upload-recovery.md#october-8-pending-completion-recovery-unpublished-source)
+  and [release preflight](release/evidence/2.0.0-beta.14-preflight.md).
+
+
 ## 2.0.0-beta.13 (candidate)
 
 - Refresh React Native legacy upload destinations only when native files are ready.

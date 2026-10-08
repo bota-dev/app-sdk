@@ -3,6 +3,13 @@
 **Upload completion architecture (target; partial implementation):**
 Review upload work against durable verification/cleanup phases and identity recovery. Test exit after PUT, pending 425, worker success while offline, reconnect-only cleanup, numeric evidence and legacy full-UUID limitations; do not claim all installed facades share current source behavior. See the [public recovery contract](docs/parity/upload-recovery.md).
 
+October 8 unpublished compatibility completion: exact pending 425 is polled
+within a two-minute budget; the native `completionPending` journal phase
+prevents another PUT while waiting and parks without consuming repair retries.
+It is not verification proof. Explicit authenticated integrity failure permits
+repair; native rebuild, hosted checks and physical acceptance remain required.
+See the [design review](docs/parity/upload-recovery.md#october-8-pending-completion-recovery-unpublished-source).
+
 October 7 compatibility upload recovery: empty deferred plaintext/relay targets
 must refresh through the scoped provider after native transfer and before route
 validation/HTTP. Keep durable completion and original identity fences. See the

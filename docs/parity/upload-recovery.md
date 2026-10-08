@@ -16,11 +16,16 @@ native workflow; this document describes the compatibility batch upload queue.
   initialization waits for previous writes and the native stop promise.
 - `UploadRecoveryContext` carries task, backend recording, device, device
   recording UUID, non-secret `recoveryScope`, actual native file size when
-  known, relay route, content type, optional device SHA-256, and an attempt
+  known, relay route, content type, optional device SHA-256, optional
+  `completionPending` phase, and an attempt
   `AbortSignal`. Providers must return credentials for the exact original
   recording ID and scope, and must not change the persisted upload route.
   Scope should identify account, project, and environment, never credentials.
-- `UploadInfo` adds `recoveryScope`, `alreadyUploaded`, `complete`, `signal`,
+  The helper accepts backend `file_size_bytes` as a nonnegative safe integer
+  or canonical unsigned-decimal string; null/absent evidence remains optional.
+  It normalizes strings before comparing bytes and rejects malformed, unsafe or
+  mismatched evidence without PUT or cleanup, so hosts need no numeric decoder.
+- `UploadInfo` adds `recoveryScope`, `alreadyUploaded`, `reuploadRequired`, `complete`, `signal`,
   and `dispose`. `complete` resolves only after durable backend acknowledgement.
   Its context contains native file length, optional integrity hash, and the
   attempt signal. The signal must be honored by the host when its account or
@@ -46,7 +51,8 @@ configuration changes the recording root. Release accepts only UUID-named
 `.recording` regular files immediately within that configured root, not
 symlinks, directories, or arbitrary paths from a journal.
 
-The journal contains only IDs, native local path, size, scope, route flag,
+The journal contains only IDs, native local path, size, scope, route and
+`completionPending` flags,
 content type/hash, status, retry count/backoff, and timestamps. URLs, upload
 tokens, bearer authorization, functions, signals, callback objects, unknown
 properties, and arbitrary error text are excluded by whitelisting. In-memory
@@ -90,6 +96,31 @@ an older plaintext/no-callback compatibility path may retain its list estimate.
 
 ## Retry And Lifecycle
 
+- `createUploadRecoveryProvider` retries only an error with numeric `status: 425`
+  and exact `data.error.code: 'upload_verification_pending'`. The host preserves
+  that stable error classification while retaining responsibility for HTTP
+  authorization, request timeout and abort handling. Other statuses, codes or
+  message strings do not qualify. Completion polls reuse the original recording
+  and identical evidence with 1–2 second jitter for up to two minutes (at most
+  120 attempts); cancellation and scope checks fence every request and ACK.
+  The polling budget does not replace a host HTTP request timeout.
+- Before invoking host completion after a successful byte upload, the queue
+  durably writes `completionPending: true`. Restart or fresh foreground
+  credentials preserve that phase even while the cloud record is still
+  `pending`: the provider reconciles the same record and retries completion
+  without requesting an upload URL or sending bytes. The phase is **not**
+  verification or permission to delete. Only an authenticated backend
+  `integrity_failure` makes the helper return `reuploadRequired: true`, which
+  durably clears the phase before an explicit repair upload. Custom providers
+  must restrict that flag to the same authoritative repair decision.
+- Exhausting the verification polling budget retains the native/device copies,
+  parks completion for 30 seconds, and preserves the upload-repair retry count.
+  The live queue can then retry completion; a restarted app honors the persisted
+  next-attempt time. No background OS wakeup is installed. Backend ACK still
+  precedes the durable completed journal, native release and foreground device
+  confirmation. Both native journal adapters must be rebuilt to retain the new
+  optional phase; this behavior cannot be delivered by a JS-only update to an
+  older native binary.
 - Startup automatically schedules eligible retained pending files only when
   a recovery provider is configured. Without it, old credentials are discarded
   and tasks wait for scoped foreground sync with fresh credentials.
@@ -117,6 +148,10 @@ an older plaintext/no-callback compatibility path may retain its list estimate.
 
 ## Limits
 
+- A process loss between successful PUT and the phase journal write can still
+  require backend reconciliation without that local evidence. This change does
+  not make S3 and the local journal atomic or prove exactly one PUT in that gap.
+  Backend status/evidence checks and idempotent completion remain necessary.
 - This queue does not resume partially received BLE files. A crash before the
   completed-file metadata commit requires another device transfer; the device
   copy has not been confirmed or deleted.
@@ -134,6 +169,49 @@ an older plaintext/no-callback compatibility path may retain its list estimate.
   controlled HTTP responses; JS tests inject the native boundary, not audio.
 
 ## Test Evidence
+
+### October 8 pending completion recovery (unpublished source)
+
+The first exact pending 425 previously escaped the helper, consuming an upload
+retry and allowing a later still-pending record to receive another PUT. The
+helper now owns bounded completion polling; the queue and native journal retain
+the byte-upload phase separately from backend commitment. Legacy compatibility
+uploads are the scope. Encrypted-upload-v2 signed receipts and transfer recovery
+are unchanged.
+
+| Requirement | Evidence | Conformance |
+| --- | --- | --- |
+| Retry exact verification-pending responses with the same identity/evidence | Host tests reject seven wrong classifications, repeat the same completion payload, and bound the polling budget | matched at the host callback boundary |
+| Exit/restart while verification remains pending without a second PUT | Queue tests persist the phase before completion, restart after budget exhaustion or a lost response, and reject fresh foreground byte resend | matched with injected native storage; physical acceptance pending |
+| Verification waiting does not consume repair attempts | Exhausted polling at retry count five parks with that count unchanged | matched at the queue boundary |
+| Explicit integrity repair remains possible | An authenticated integrity-failure record clears the durable phase before one repair PUT | matched at the queue boundary |
+| No cleanup before ACK or after account/cancellation changes | Pending, late-ACK, native journal release and scope regressions | source tests; native execution recorded separately |
+| Durable phase survives platform persistence | Android/Apple journal regressions retain the boolean, reject mistyped values and reject release while pending | Android focused JVM regression passed with an injected directory barrier; Apple execution and full native durability remain hosted gates |
+| Wider architecture and device behavior | No v2, firmware, cross-channel identity, OS scheduling or unknown-create recovery change | partial; no new physical claim |
+
+The original host regression reproduced six failures before implementation.
+The final focused RN recovery/API suite passed 62/62; the v2/API contract suite
+passed 7/7. Build, TypeScript, Codegen, package metadata and license checks
+passed. The full RN Windows run passed 177/182, with five existing file-URL or
+spawn-path failures; checkout-only LF normalization restored the unchanged
+Codegen/vector fixtures, and ordinary locked installs corrected stale local
+dependencies. Historical API snapshots were not rewritten: the surface test
+explicitly enumerates the three new optional properties.
+
+The wire-size follow-up reproduced two failures before implementation, then
+passed all 73 affected recovery, API and v2 contract tests plus build and
+TypeScript. It covers matching decimal strings without PUT, optional absence,
+safe-integer boundaries, malformed values, mismatch retention and ACK-gated
+cleanup. This adds no physical or native durability qualification.
+
+Android compiled the complete adapter/test sources against public beta.13, JDK
+17, with two Gradle workers. The targeted new journal regression passed,
+including boolean preservation and invalid-flag rejection. Its directory
+barrier is injected; the earlier full 13-test attempt hit seven raw Windows
+path/JSON fixture failures. This is not native filesystem crash qualification.
+Apple execution, exact-revision hosted CI, rebuilt native binaries and physical
+application acceptance remain separate gates. Historical release evidence
+below is unchanged.
 
 ### October 7 deferred destination correction (unpublished source)
 

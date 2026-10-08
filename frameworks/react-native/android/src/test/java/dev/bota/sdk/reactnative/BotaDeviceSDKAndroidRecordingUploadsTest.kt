@@ -8,6 +8,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import org.json.JSONArray
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -97,6 +98,26 @@ class BotaDeviceSDKAndroidRecordingUploadsTest {
     }
 
     @Test
+    fun completionPendingPersistsWithoutAuthorizingRelease() = runTest {
+        val fixture = UploadFixture()
+        var barriers = 0
+        val uploads = BotaDeviceSDKAndroidRecordingUploads(fixture.queueFile, syncDirectory = { barriers++ })
+        // This metadata test injects the directory barrier so it also runs on
+        // Windows; separate durability tests exercise the real POSIX barrier.
+        val journal = fixture.journal("pending").replace(fixture.recordingFile.path, fixture.recordingFile.path.replace("\\", "\\\\"))
+        uploads.saveQueue(journal.replace("\"status\":\"pending\"", "\"status\":\"pending\",\"completionPending\":true"))
+        val stored = JSONArray(uploads.loadQueue()).getJSONObject(0)
+        assertTrue(stored.getBoolean("completionPending"))
+        assertTrue(barriers > 0)
+        assertTrue(runCatching { uploads.release("task-1", fixture.recordingFile.path) }.isFailure)
+        assertTrue(fixture.recordingFile.exists())
+        for (invalid in listOf("\"true\"", "1")) {
+            assertTrue(runCatching { uploads.saveQueue(journal.replace("\"status\":\"pending\"", "\"status\":\"pending\",\"completionPending\":$invalid")) }.isFailure)
+            assertTrue(JSONArray(uploads.loadQueue()).getJSONObject(0).getBoolean("completionPending"))
+        }
+    }
+
+    @Test
     fun releaseRequiresExactCompletedJournalAndIsIdempotent() = runTest {
         val fixture = UploadFixture()
         val uploads = BotaDeviceSDKAndroidRecordingUploads(fixture.queueFile)
@@ -140,6 +161,8 @@ class BotaDeviceSDKAndroidRecordingUploadsTest {
             "\"createdAt\":\"2026-09-24T00:00:00Z\"" to "\"createdAt\":\"invalid\"",
             "\"status\":\"completed\"" to "\"status\":\"completed\",\"fileSizeBytes\":\"4\"",
             "\"status\":\"completed\"" to "\"status\":\"completed\",\"recoveryScope\":123",
+            "\"status\":\"completed\"" to "\"status\":\"completed\",\"completionPending\":\"true\"",
+            "\"status\":\"completed\"" to "\"status\":\"completed\",\"completionPending\":1",
         )) {
             val fixture = UploadFixture()
             val contents = fixture.journal("completed").replace(old, invalid)

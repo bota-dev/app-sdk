@@ -1,4 +1,15 @@
 import type { UploadInfo, UploadRecoveryContext, UploadRecoveryProvider } from './models/Recording';
+import { isUploadVerificationPending, UploadVerificationPendingError } from './managers/uploadVerificationPending';
+
+const waitForCompletion = (milliseconds: number, signals: AbortSignal[]): Promise<void> =>
+  new Promise((resolve, reject) => {
+    const unique = [...new Set(signals)];
+    const clean = () => { clearTimeout(timer); unique.forEach(signal => signal.removeEventListener('abort', abort)); };
+    const abort = () => { clean(); reject(new Error('Upload recovery cancelled')); };
+    const timer = setTimeout(() => { clean(); resolve(); }, milliseconds);
+    unique.forEach(signal => signal.addEventListener('abort', abort, { once: true }));
+    if (unique.some(signal => signal.aborted)) abort();
+  });
 
 /** A host-owned, authenticated lease. It must permanently reject changed identities. */
 export interface UploadRecoveryBackend {
@@ -8,7 +19,7 @@ export interface UploadRecoveryBackend {
   dispose(): void;
   getRecording(id: string, signal: AbortSignal): Promise<{
     id: string; status: string; metadata?: Record<string, unknown>;
-    content_sha256?: string | null; file_size_bytes?: number | null;
+    content_sha256?: string | null; file_size_bytes?: number | string | null;
   }>;
   getUploadInfo(id: string, relay: boolean, contentType: string | undefined, signal: AbortSignal): Promise<Pick<UploadInfo, 'uploadUrl' | 'relay' | 'contentType'>>;
   completeRecording(id: string, data: { duration_seconds?: number; file_size_bytes: number; content_sha256?: string }, signal: AbortSignal): Promise<unknown>;
@@ -36,26 +47,49 @@ export function createUploadRecoveryProvider(
       check();
       const recording = await api.getRecording(task.recordingId, task.signal);
       check();
+      const wireSize = recording.file_size_bytes;
+      if (typeof wireSize === 'string' && !/^(0|[1-9][0-9]*)$/.test(wireSize)) throw new Error('Invalid upload recovery file size');
+      const fileSize = typeof wireSize === 'string' ? Number(wireSize) : wireSize;
+      if (fileSize != null && (typeof fileSize !== 'number' || !Number.isSafeInteger(fileSize) || fileSize < 0)) {
+        throw new Error('Invalid upload recovery file size');
+      }
       if (recording.id !== task.recordingId || (!task.relayUpload && (
         (task.contentSha256 && recording.content_sha256 && task.contentSha256 !== recording.content_sha256) ||
-        (task.fileSizeBytes !== undefined && recording.file_size_bytes != null && task.fileSizeBytes !== recording.file_size_bytes)
+        (task.fileSizeBytes !== undefined && fileSize != null && task.fileSizeBytes !== fileSize)
       ))) throw new Error('Upload recovery identity or evidence changed');
       if (!['pending', 'uploaded', 'integrity_failure'].includes(recording.status)) throw new Error('Recording unavailable for recovery');
       const start = Date.parse(String(recording.metadata?.started_at ?? ''));
       const end = Date.parse(String(recording.metadata?.ended_at ?? ''));
       const duration = Number.isFinite(start) && Number.isFinite(end) && end >= start ? Math.floor((end - start) / 1000) : undefined;
-      const target = recording.status === 'uploaded' ? { uploadUrl: '' }
+      const alreadyUploaded = recording.status === 'uploaded' || (task.completionPending === true && recording.status === 'pending');
+      const target = alreadyUploaded ? { uploadUrl: '' }
         : await api.getUploadInfo(task.recordingId, task.relayUpload, task.contentType, task.signal);
       check();
       return {
         ...target, recordingId: task.recordingId, recoveryScope: task.recoveryScope,
-        alreadyUploaded: recording.status === 'uploaded', signal: api.signal, dispose: () => api.dispose(),
+        alreadyUploaded, reuploadRequired: recording.status === 'integrity_failure',
+        signal: api.signal, dispose: () => api.dispose(),
         complete: async ({ fileSizeBytes, contentSha256, signal }) => {
-          check(signal);
-          await api.completeRecording(task.recordingId, {
+          const data = {
             duration_seconds: duration, file_size_bytes: fileSizeBytes, content_sha256: contentSha256,
-          }, signal);
-          check(signal);
+          };
+          const deadline = Date.now() + 120_000;
+          for (let poll = 0; ; poll++) {
+            check(signal);
+            if (poll > 0 && (Date.now() >= deadline || poll >= 120)) throw new UploadVerificationPendingError();
+            try {
+              await api.completeRecording(task.recordingId, data, signal);
+              check(signal);
+              return;
+            } catch (error) {
+              check(signal);
+              if (!isUploadVerificationPending(error)) throw error;
+              const remaining = deadline - Date.now();
+              if (remaining <= 0) throw new UploadVerificationPendingError();
+              await waitForCompletion(Math.min(1_000 + Math.floor(Math.random() * 1_000), remaining),
+                [signal, task.signal, api.signal]);
+            }
+          }
         },
       };
     } catch {

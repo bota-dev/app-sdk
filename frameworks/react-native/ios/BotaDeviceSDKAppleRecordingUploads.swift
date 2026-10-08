@@ -179,7 +179,7 @@ actor BotaDeviceSDKAppleRecordingUploads {
         guard let tasks = try JSONSerialization.jsonObject(with: Data(serialized.utf8)) as? [[String: Any]] else {
             throw UploadError.invalidJournal
         }
-        let fields: Set<String> = ["id", "recordingId", "deviceId", "recordingUuid", "localPath", "status", "retryCount", "createdAt", "updatedAt", "recoveryScope", "fileSizeBytes", "nextAttemptAt", "contentType", "contentSha256", "relayUpload"]
+        let fields: Set<String> = ["id", "recordingId", "deviceId", "recordingUuid", "localPath", "status", "retryCount", "createdAt", "updatedAt", "recoveryScope", "fileSizeBytes", "nextAttemptAt", "contentType", "contentSha256", "relayUpload", "completionPending"]
         var ids = Set<String>()
         return try tasks.map { task in
             guard let id = task["id"] as? String, !id.isEmpty, ids.insert(id).inserted,
@@ -195,8 +195,8 @@ actor BotaDeviceSDKAppleRecordingUploads {
             for key in ["fileSizeBytes", "nextAttemptAt"] where task[key] != nil {
                 guard validInteger(task[key]) else { throw UploadError.invalidJournal }
             }
-            if let relay = task["relayUpload"] {
-                guard let number = relay as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { throw UploadError.invalidJournal }
+            for key in ["relayUpload", "completionPending"] where task[key] != nil {
+                guard let number = task[key] as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { throw UploadError.invalidJournal }
             }
             let dates = ISO8601DateFormatter()
             let fractionalDates = ISO8601DateFormatter()

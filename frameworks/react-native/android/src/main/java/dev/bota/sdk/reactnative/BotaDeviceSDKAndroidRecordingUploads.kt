@@ -236,7 +236,7 @@ internal class BotaDeviceSDKAndroidRecordingUploads(
 
     private fun metadata(serialized: String): JSONArray {
         val tasks = JSONArray(serialized)
-        val fields = setOf("id", "recordingId", "deviceId", "recordingUuid", "localPath", "status", "retryCount", "createdAt", "updatedAt", "recoveryScope", "fileSizeBytes", "nextAttemptAt", "contentType", "contentSha256", "relayUpload")
+        val fields = setOf("id", "recordingId", "deviceId", "recordingUuid", "localPath", "status", "retryCount", "createdAt", "updatedAt", "recoveryScope", "fileSizeBytes", "nextAttemptAt", "contentType", "contentSha256", "relayUpload", "completionPending")
         val ids = mutableSetOf<String>()
         return JSONArray().apply {
             for (index in 0 until tasks.length()) {
@@ -247,7 +247,7 @@ internal class BotaDeviceSDKAndroidRecordingUploads(
                 require(validInteger(task.get("retryCount")) && task.getString("status") in setOf("pending", "uploading", "completed", "failed")) { "invalid upload recovery journal" }
                 for (key in listOf("recordingUuid", "recoveryScope", "contentType", "contentSha256")) if (task.has(key)) require(task.get(key) is String) { "invalid upload recovery journal" }
                 for (key in listOf("fileSizeBytes", "nextAttemptAt")) if (task.has(key)) require(validInteger(task.get(key))) { "invalid upload recovery journal" }
-                if (task.has("relayUpload")) require(task.get("relayUpload") is Boolean) { "invalid upload recovery journal" }
+                for (key in listOf("relayUpload", "completionPending")) if (task.has(key)) require(task.get(key) is Boolean) { "invalid upload recovery journal" }
                 for (key in listOf("createdAt", "updatedAt")) require(runCatching { java.time.Instant.parse(task.getString(key)) }.isSuccess) { "invalid upload recovery journal" }
                 put(JSONObject().apply {
                     for (key in fields) if (task.has(key)) {

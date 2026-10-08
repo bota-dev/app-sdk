@@ -34,6 +34,8 @@ export interface UploadInfo {
   recoveryScope?: string;
   /** Skip sending the object; complete must still acknowledge host durability. */
   alreadyUploaded?: boolean;
+  /** Explicit authenticated integrity failure permits repair of a completion-pending object. */
+  reuploadRequired?: boolean;
   /** Resolve only after the backend durably acknowledges this exact recording. */
   complete?: (context: {
     fileSizeBytes: number;
@@ -92,6 +94,8 @@ export interface UploadRecoveryContext {
   relayUpload: boolean;
   contentType?: string;
   contentSha256?: string;
+  /** Bytes were sent; recover completion before considering another upload. Not verification proof. */
+  completionPending?: boolean;
   signal: AbortSignal;
 }
 
@@ -152,6 +156,8 @@ export interface UploadTask {
   fileSizeBytes?: number;
   relayUpload?: boolean;
   nextAttemptAt?: number;
+  /** Durable byte-upload completion; backend acknowledgement and cleanup are still required. */
+  completionPending?: boolean;
   /** Volatile compatibility field; never included in queue persistence. */
   complete?: UploadInfo['complete'];
   /** Unique task identifier */

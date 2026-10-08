@@ -20,6 +20,7 @@ export function persistedUploadQueue(tasks: UploadTask[]): UploadTask[] {
     ...(task.nextAttemptAt === undefined ? {} : { nextAttemptAt: task.nextAttemptAt }),
     ...(task.contentType === undefined ? {} : { contentType: task.contentType }),
     ...(task.contentSha256 === undefined ? {} : { contentSha256: task.contentSha256 }),
+    ...(task.completionPending === undefined ? {} : { completionPending: task.completionPending }),
     relayUpload: task.relayUpload ?? !!task.relay,
   }));
 }
@@ -44,6 +45,7 @@ export function restoreUploadQueue(value: unknown): UploadTask[] {
       if (task[field] !== undefined && (!Number.isSafeInteger(task[field]) || task[field]! < 0)) return invalid();
     }
     if (task.relayUpload !== undefined && typeof task.relayUpload !== 'boolean') return invalid();
+    if (task.completionPending !== undefined && typeof task.completionPending !== 'boolean') return invalid();
     const createdAt = new Date(task.createdAt);
     const updatedAt = new Date(task.updatedAt);
     if (!Number.isFinite(createdAt.getTime()) || !Number.isFinite(updatedAt.getTime())) return invalid();

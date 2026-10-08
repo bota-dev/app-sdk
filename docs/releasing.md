@@ -1,3 +1,14 @@
+# Candidate synchronized beta: 2.0.0-beta.14
+
+Beta.14 carries the React Native compatibility pending-completion recovery fix.
+See the [preflight](../release/evidence/2.0.0-beta.14-preflight.md).
+[Beta.13 is published](https://github.com/bota-dev/app-sdk/releases/download/v2.0.0-beta.13/beta13-publication-review.md)
+from immutable source `958696b603be0ff6b30adba95e499dc1b5bc05b7`; the older
+candidate sections below retain their original preparation state. Keep every
+existing version/tag intact. Require canonical Apple/Flutter generation, exact
+branch and main CI/License Gate, the protected release approval, all public
+consumers and Flutter archive verification before reporting beta.14 published.
+
 # Candidate synchronized beta: 2.0.0-beta.13
 
 The owner requested commit and publication of the latest main source on October 8,
