@@ -1,6 +1,7 @@
 schemaVersion: 1
 protocolRevision: firmware-8b175a89374c
 contractRevisions:
+  RECORDING_MARKERS_CONTRACT_REVISION: recording-markers-v1-candidate-2026-10-09
   ENCRYPTED_UPLOAD_V2_CONTRACT_REVISION: encrypted-upload-v2-contract-v1
 
 services:
@@ -352,6 +353,13 @@ constantGroups:
     ENCRYPTED_UPLOAD_V2_MODE_STREAMING: 2
 
 wordConstantGroups:
+  recording_markers:
+    RECORDING_MARKER_REQUEST: 1
+    RECORDING_MARKER_SEAL: 2
+    RECORDING_MARKER_PAGE: 3
+    RECORDING_MARKER_ACK: 4097
+    RECORDING_MARKER_COMPLETION: 4098
+    RECORDING_MARKER_AUTHORIZATION: 4099
   diagnostic_reasons:
     DIAGNOSTIC_REASON_WATCHDOG_TIMEOUT: 1
     DIAGNOSTIC_REASON_CPU_ILLEGAL_INSTRUCTION: 2
@@ -422,6 +430,7 @@ dwordConstantGroups:
     ENCRYPTED_UPLOAD_V2_CAP_RECOVERY_REQUIRED_MASK: 895
 
 byteStrings:
+  RECORDING_MARKER_MAGIC: 424f54414d524b31
   ENCRYPTED_UPLOAD_V2_STORAGE_MAGIC: 424f5441454e4332
   ENCRYPTED_UPLOAD_V2_TRAILER_MAGIC: 424f5441454e4432
   UPLOAD_AUTHORIZATION_V2_MAGIC: 424f544141555432
@@ -431,6 +440,7 @@ byteStrings:
   UPLOAD_CONTEXT_RESULT_MAGIC: 424f544143545852
 
 asciiStrings:
+  RECORDING_MARKER_EVENT_DOMAIN: BOTA-MARKER-EVENT-V1
   ENCRYPTED_UPLOAD_V2_DOMAIN_LOCAL_WRAP: bota/enc-v2/local-wrap/v1
   ENCRYPTED_UPLOAD_V2_DOMAIN_WRAPPED_KEY_AAD: bota/enc-v2/wrapped-key-aad/v1
   ENCRYPTED_UPLOAD_V2_DOMAIN_BLOCK_AAD: bota/enc-v2/block-aad/v1
@@ -447,6 +457,29 @@ asciiStrings:
   ENCRYPTED_UPLOAD_V2_DOMAIN_PUBLICATION: bota/enc-v2/publication/v1
 
 layouts:
+  RECORDING_MARKER_BODY:
+    minimumLength: 52
+    fixedLength: 52
+    fields:
+      - { name: uuid, offset: 0, width: 16, encoding: bytes }
+      - { name: sequence, offset: 16, width: 4, encoding: u32_le }
+      - { name: media_offset_ms, offset: 20, width: 8, encoding: u64_le }
+      - { name: segment_index, offset: 28, width: 4, encoding: u32_le }
+      - { name: segment_offset_ms, offset: 32, width: 8, encoding: u64_le }
+      - { name: created_at_utc_ms, offset: 40, width: 8, encoding: i64_le }
+      - { name: source, offset: 48, width: 1, encoding: u8 }
+      - { name: flags, offset: 49, width: 1, encoding: u8 }
+      - { name: reserved, offset: 50, width: 2, encoding: zero }
+  RECORDING_MARKER_HEADER:
+    minimumLength: 64
+    fixedLength: 64
+    fields:
+      - { name: magic, offset: 0, width: 8, encoding: bytes }
+      - { name: version, offset: 8, width: 2, encoding: u16_le }
+      - { name: kind, offset: 10, width: 2, encoding: u16_le }
+      - { name: total_length, offset: 12, width: 4, encoding: u32_le }
+      - { name: request_uuid, offset: 16, width: 16, encoding: bytes }
+      - { name: context_digest, offset: 32, width: 32, encoding: bytes }
   UPLOAD_CONTEXT_BEGIN:
     minimumLength: 8
     fixedLength: 8
@@ -1069,6 +1102,14 @@ layouts:
       - { name: reserved, offset: 22, width: 2, encoding: zero }
 
 limits:
+  RECORDING_MARKER_BODY_LENGTH: 52
+  RECORDING_MARKER_HEADER_LENGTH: 64
+  RECORDING_MARKER_REQUEST_LENGTH: 228
+  RECORDING_MARKER_SEAL_LENGTH: 200
+  RECORDING_MARKER_PAGE_OVERHEAD: 216
+  RECORDING_MARKER_ACK_LENGTH: 208
+  RECORDING_MARKER_COMPLETION_LENGTH: 296
+  RECORDING_MARKER_AUTHORIZATION_LENGTH: 280
   FACTORY_RESET_GRANT_LENGTH: 179
   UPLOAD_CONTEXT_NONCE_LENGTH: 16
   UPLOAD_CONTEXT_PROOF_MIN_LENGTH: 116

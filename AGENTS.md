@@ -1,5 +1,11 @@
 # AGENTS.md
 
+Recording markers #201: [protocol foundation](docs/parity/recording-markers.md) contains candidate codecs and host validation only; runtime admission, persistence, publication/cleanup gates and App integration remain outstanding. No marker profile is enabled. Keep the 16-byte recipient UUID and 280-byte metadata authorization consistent across components.
+
+
+Recording markers #201: [protocol foundation](docs/parity/recording-markers.md) contains candidate codecs and host validation only; runtime admission, persistence, publication/cleanup gates and App integration remain outstanding. No marker profile is enabled. Keep the 16-byte recipient UUID and 280-byte metadata authorization consistent across components.
+
+
 **Upload completion architecture (target; partial implementation):**
 Review upload work against durable verification/cleanup phases and identity recovery. Test exit after PUT, pending 425, worker success while offline, reconnect-only cleanup, numeric evidence and legacy full-UUID limitations; do not claim all installed facades share current source behavior. See the [public recovery contract](docs/parity/upload-recovery.md).
 

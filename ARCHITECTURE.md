@@ -1,5 +1,8 @@
 # Architecture
 
+Recording markers #201: [protocol foundation](docs/parity/recording-markers.md) contains candidate codecs and host validation only; runtime admission, persistence, publication/cleanup gates and App integration remain outstanding. No marker profile is enabled. Keep the 16-byte recipient UUID and 280-byte metadata authorization consistent across components.
+
+
 **Upload completion architecture (target; partial implementation):**
 SDK/native or browser storage owns App-mediated upload recovery and durable device-cleanup intent; authenticated backend HTTP stays host-owned. Target phases separate bytes received, verification, cloud commitment and cleanup, with stable recording identity across retries/channels. Current facade/profile conformance is partial. See the [public recovery contract](docs/parity/upload-recovery.md).
 
