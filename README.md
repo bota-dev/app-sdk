@@ -43,7 +43,8 @@ not supported. Consult each platform guide for its capability limits.
 ## Installation
 
 **Selected SDK version: `2.0.0-beta.14` (beta).** The examples below pin this
-version. Use it after the protected release and public-consumer checks pass.
+version. Protected publication and all public-consumer checks passed; see the
+[publication review](release/evidence/2.0.0-beta.14-publication.md).
 [GitHub Releases](https://github.com/bota-dev/app-sdk/releases) provides the
 publication status and verified artifacts; [CHANGELOG.md](CHANGELOG.md) records
 version changes.

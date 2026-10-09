@@ -3,11 +3,13 @@
 **Upload completion architecture (target; partial implementation):**
 Review upload work against durable verification/cleanup phases and identity recovery. Test exit after PUT, pending 425, worker success while offline, reconnect-only cleanup, numeric evidence and legacy full-UUID limitations; do not claim all installed facades share current source behavior. See the [public recovery contract](docs/parity/upload-recovery.md).
 
-October 8 unpublished compatibility completion: exact pending 425 is polled
+October 8 beta.14 compatibility completion: exact pending 425 is polled
 within a two-minute budget; the native `completionPending` journal phase
 prevents another PUT while waiting and parks without consuming repair retries.
 It is not verification proof. Explicit authenticated integrity failure permits
-repair; native rebuild, hosted checks and physical acceptance remain required.
+repair. Exact hosted CI and protected publication passed; native application
+delivery and physical acceptance remain separate. See the
+[publication evidence](release/evidence/2.0.0-beta.14-publication.md).
 See the [design review](docs/parity/upload-recovery.md#october-8-pending-completion-recovery-unpublished-source).
 
 October 7 compatibility upload recovery: empty deferred plaintext/relay targets
@@ -99,6 +101,14 @@ before the cancellation check starts. This is test ordering, not a runtime chang
   to public files.
 
 ## Current Authority
+
+- Published synchronized beta `2.0.0-beta.14` adds bounded compatibility
+  completion polling, durable native completion intent and canonical safe decimal
+  byte-count handling. Exact main CI/License and protected release attempt 2
+  passed all five publications, public native consumers and Flutter inventory
+  verification. npm `beta` is beta.14; `latest` remains beta.0. Native app binaries
+  require rebuilding; managed encrypted-v2 receipts and firmware are unchanged.
+  See [publication and design review](release/evidence/2.0.0-beta.14-publication.md).
 
 - Published synchronized beta `2.0.0-beta.12` adds the Android completed-resume intake
   transition after validated `ResumeAccepted`, before releasing queued packets.

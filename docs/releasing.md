@@ -1,13 +1,20 @@
-# Candidate synchronized beta: 2.0.0-beta.14
+# Published synchronized beta: 2.0.0-beta.14
 
 Beta.14 carries the React Native compatibility pending-completion recovery fix.
-See the [preflight](../release/evidence/2.0.0-beta.14-preflight.md).
-[Beta.13 is published](https://github.com/bota-dev/app-sdk/releases/download/v2.0.0-beta.13/beta13-publication-review.md)
-from immutable source `958696b603be0ff6b30adba95e499dc1b5bc05b7`; the older
-candidate sections below retain their original preparation state. Keep every
-existing version/tag intact. Require canonical Apple/Flutter generation, exact
-branch and main CI/License Gate, the protected release approval, all public
-consumers and Flutter archive verification before reporting beta.14 published.
+Exact main CI/License, annotation-bound promotion and protected
+[release 37866955956](https://github.com/bota-dev/app-sdk/actions/runs/37866955956)
+attempt 2 passed all five publications, public native consumers and complete
+Flutter archive verification. See the
+[publication and design review](../release/evidence/2.0.0-beta.14-publication.md)
+and immutable [preflight](../release/evidence/2.0.0-beta.14-preflight.md).
+The first attempt timed out on CocoaPods CDN propagation; ordinary failed-job
+retry retained successful publication and the exact preserved artifacts. npm
+`beta` is beta.14 and `latest` remains beta.0. Application binaries, physical
+interruption qualification and host HTTP timeouts remain separate.
+
+[Beta.13 publication evidence](https://github.com/bota-dev/app-sdk/releases/download/v2.0.0-beta.13/beta13-publication-review.md)
+remains available. The older candidate sections below retain their original
+preparation checkpoints; no existing tag or accepted payload was replaced.
 
 # Candidate synchronized beta: 2.0.0-beta.13
 

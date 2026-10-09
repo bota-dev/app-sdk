@@ -3,12 +3,14 @@
 **Upload completion architecture (target; partial implementation):**
 SDK/native or browser storage owns App-mediated upload recovery and durable device-cleanup intent; authenticated backend HTTP stays host-owned. Target phases separate bytes received, verification, cloud commitment and cleanup, with stable recording identity across retries/channels. Current facade/profile conformance is partial. See the [public recovery contract](docs/parity/upload-recovery.md).
 
-The unpublished compatibility-queue correction durably separates bytes sent
+The beta.14 compatibility-queue correction durably separates bytes sent
 (`completionPending`) from backend acknowledgement. Exact pending 425 retries
 completion within a bounded window, then parks without another PUT or a repair
 retry charge. An authenticated integrity-failure decision is required to clear
 that phase for repair. Native journal adapters require a rebuild; encrypted-v2
-receipt handling is unchanged. See the [October 8 review](docs/parity/upload-recovery.md#october-8-pending-completion-recovery-unpublished-source).
+receipt handling is unchanged. See the [source review](docs/parity/upload-recovery.md#october-8-pending-completion-recovery-unpublished-source)
+and [publication review](release/evidence/2.0.0-beta.14-publication.md). Native
+application delivery and broader hardware qualification remain separate.
 
 Compatibility `NativeUploadQueue` refreshes an empty deferred destination through
 the host provider using the native file length and persisted transfer route.

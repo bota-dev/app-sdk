@@ -7,7 +7,7 @@ tracked separately.
 
 ## Unreleased
 
-## 2.0.0-beta.14 (candidate)
+## 2.0.0-beta.14
 
 - Retry the exact compatibility upload-verification-pending response within the
   existing operation and persist native completion intent across app restarts.
@@ -16,7 +16,11 @@ tracked separately.
 - Retain device audio until completion acknowledgement; publication, native app
   delivery and physical qualification remain separate gates.
 - See the [source design review](docs/parity/upload-recovery.md#october-8-pending-completion-recovery-unpublished-source)
-  and [release preflight](release/evidence/2.0.0-beta.14-preflight.md).
+  and [publication review](release/evidence/2.0.0-beta.14-publication.md).
+
+All five packages, public native consumers and complete Flutter archive
+verification passed. New native app binaries and physical acceptance remain
+separate.
 
 
 ## 2.0.0-beta.13 (candidate)
