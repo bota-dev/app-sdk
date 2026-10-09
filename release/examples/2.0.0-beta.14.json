@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "sdkFamily": "bota-app-sdk",
   "sdkVersion": "2.0.0-beta.14",
-  "sourceRevision": "983c0409e99f4865102bf085c68d311290e18c61",
+  "sourceRevision": "5690bdb8b6877cd53ce2edbec528bbb6082785cc",
   "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.17",
@@ -16,7 +16,7 @@
       "name": "BotaDeviceSDKCore.xcframework.zip",
       "ecosystem": "swiftpm",
       "version": "2.0.0-beta.14",
-      "checksumSha256": "dda1884234218816ba0a27a6d02a77fcf2893baf65924540ef294f3bb1a00014",
+      "checksumSha256": "8dc962f7cb4a7060e9852dc2f2194db12d8bdd9ad521658669d9ad3ac5bef122",
       "capabilities": [
         "connection_settings",
         "device_logs",
@@ -73,9 +73,9 @@
       "name": "bota_app_sdk-2.0.0-beta.14.tar.gz",
       "ecosystem": "pub",
       "version": "2.0.0-beta.14",
-      "checksumSha256": "0265b8cce7568ac24692319ae967ec71dc5438e4d9f49a364f30cec11110efaa",
-      "sourceRevision": "983c0409e99f4865102bf085c68d311290e18c61",
-      "normalizedArchiveSha256": "2c56cf1689371da173cb722b70d0818bd6eb6fe3eb433d04f0c32e8aaf737a1f",
+      "checksumSha256": "09a1f5d7bd22ea9decc43bb249084fca7cb41148c304b563fbd4f31c667d0c21",
+      "sourceRevision": "5690bdb8b6877cd53ce2edbec528bbb6082785cc",
+      "normalizedArchiveSha256": "03d251d64ed01a0e32cd176451a7453cab0f5a1552f24e750fe9ed724260c2db",
       "generator": {
         "name": "pigeon",
         "version": "28.0.0"
@@ -84,12 +84,12 @@
         {
           "path": "AGENTS.md",
           "byteLength": 6412,
-          "sha256": "1e9a5c02141cbfce753fc5f08ed75733a6e184c546bc42c3a150ae1358e8c28e"
+          "sha256": "8ec4c1a973dbff7743644d7fd1a728fd87d9c32cb7f84dc5b3c91042beb3a367"
         },
         {
           "path": "CHANGELOG.md",
-          "byteLength": 7144,
-          "sha256": "cb687d33f969c806fc66d8e555e62091c6264a1e53e4e5f06c90b70371a8fb8d"
+          "byteLength": 7361,
+          "sha256": "7a52de1b3594b50f9cced1a734c4ef2a3495555049c562db29f966f962ea5351"
         },
         {
           "path": "LICENSE",
@@ -98,8 +98,8 @@
         },
         {
           "path": "README.md",
-          "byteLength": 12843,
-          "sha256": "25530d9c096f7424877229c1dd888d56a2ae0d685c6b5c2d34773c027bf79738"
+          "byteLength": 12831,
+          "sha256": "233dd9e0a37e3ca8f004e3141e9b555493f1031bfcf173815152db8e7e92242b"
         },
         {
           "path": "analysis_options.yaml",
@@ -114,7 +114,7 @@
         {
           "path": "android/sdk-version.toml",
           "byteLength": 26,
-          "sha256": "5a3e613984604793ebdf93d684505831d16dea07838078ac82922e428c2496ec"
+          "sha256": "80ea53e49e1a54d489fc28fbda8eaa1a12b0a5411773b97964a130abd945ece8"
         },
         {
           "path": "android/settings.gradle.kts",
@@ -199,7 +199,7 @@
         {
           "path": "ios/bota_app_sdk/Package.swift",
           "byteLength": 753,
-          "sha256": "929d389e4459638457e23e65381e2f21d48f19f3335c1cb3ee2a1cf0ecc3ee53"
+          "sha256": "aa0d77ba61add9cee6b3c83627ed6b9127069de99ebd8f7f533bd85395ef35ba"
         },
         {
           "path": "ios/bota_app_sdk/Sources/bota_app_sdk/BotaApi.g.swift",
@@ -309,7 +309,7 @@
         {
           "path": "lib/src/sdk_identity.dart",
           "byteLength": 138,
-          "sha256": "0b87fb283aafcc5da8c1259e1aef46a5465e928fe7b36b08a9669117539e833a"
+          "sha256": "55fbf31c265b1caf21ff4815e560b77cefced16f707f60e5c5ac1c556a3ff917"
         },
         {
           "path": "pigeon_options.yaml",
@@ -324,7 +324,7 @@
         {
           "path": "pubspec.yaml",
           "byteLength": 646,
-          "sha256": "48fbe1de3f3f897408214025d7274d5c89aefc1492da7a09e577348e5206436e"
+          "sha256": "8aad43686150f5b7b4c1cfa187a060c2fac1589a9214f603c9016c39c2cfb73b"
         },
         {
           "path": "test/bridge_contract_test.dart",
