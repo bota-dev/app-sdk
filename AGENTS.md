@@ -53,6 +53,12 @@ acceptance remain distinct gates.
 
 ## CI policy
 
+OTA reboot recovery retries transient discovery/connection failures within one
+two-minute deadline. Transfer-status loss is recoverable only after successful
+image verification; earlier failures remain terminal. Never equate ACK, expected
+disconnect or a phone Bluetooth toggle with installed-version proof. See the
+[Android OTA review](docs/parity/android-write-completion.md#normal-preview-build-and-reboot-recovery--october-9).
+
 Apple `BotaSDKError` conforms to `CustomNSError` and `LocalizedError`; retain
 the existing domain, ABI error numbers, stable names, retry policy and optional
 protocol status through Objective-C bridging. Keep unknown numeric codes and

@@ -1264,7 +1264,12 @@ A compatible verified blob can be reused after reload, while an
 incomplete blob restarts from byte zero with a freshly resolved request.
 
 Rust owns OTA transfer, device status handling, verification, reboot, reconnect,
-and public workflow errors. Reboot recovery requires authorized-device
+and public workflow errors. After successful image verification, loss of the
+transfer-status stream enters reboot recovery instead of failing immediately.
+Transient discovery/connection failures retry after one second within the same
+two-minute deadline; identity and target-version read-back remain required.
+Before successful verification, stream loss remains an error. This unpublished
+source behavior requires rebuilt native consumers. Reboot recovery requires authorized-device
 enumeration and filters it to the exact browser device ID captured by the
 verified connection. Cancellation retains mutation ownership until provider,
 fetch, OPFS, GATT, subscription, and timer work settles, then reconciles the

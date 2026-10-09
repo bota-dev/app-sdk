@@ -99,3 +99,65 @@ started from the candidate. The account selected a different default device;
 candidate Bluetooth was paused while the owner confirms the intended target.
 Physical OTA acceptance remains **unverified**. Raw logs, APK and provenance are
 kept outside Git.
+
+## Normal Preview build and reboot recovery — October 9
+
+The owner's requested normal Demo Preview application was rebuilt from Demo
+`910ec7c30484b4a1d3d02b22c795f98e9f0d9515` plus the local current/available
+firmware display edit. SDK `ccffe760` differs from native executable source
+`999896d` only in documentation. The private resolved AAR hash remains the
+verified CI candidate above. The React Native facade remains beta.14.
+
+The normal package `com.galaxysaillab.bota.demo.preview`, version `1.0.12`,
+was built for arm64-v8a with embedded JavaScript and automatic updates disabled.
+Typecheck, 15 focused Demo checks, release assembly/lint and APK signature
+verification passed. APK SHA-256:
+`152a0f52878d7a99fe9eccbf6329b03d1ba4d5d7f8d670e39fa1a76c8896f76e`.
+Installation replaced the normal Preview identity; no new application was created.
+
+The physical attempt passed transfer and verification, then failed in reboot
+recovery at 15:08:59 Pacific. Android reported disconnect status 8 and the SDK
+returned `firmware BLE operation failed with code Some(-8)`. The earlier `-201`
+did not recur. The owner reports that toggling the phone's Bluetooth restored
+connection and then reports Android OTA fixed. The owner subsequently clarified
+that the active test is a GDP Note with the latest firmware; do not treat that
+as independent Pin installed-version proof. These reports do not establish
+fresh target-version read-back or automatic SDK recovery without the toggle.
+
+The source reducer accepted `Disconnected` during `AwaitingReboot`, but Android's
+lost notification stream arrived as `Failed` first. Also, one unsuccessful short
+scan failed the child connection reducer before the outer two-minute deadline.
+The correction permits transfer-status loss only after successful verification,
+and retries transient discovery/connection failure after one second without
+restarting the overall deadline or downloading/transferring again. Same-serial
+verification and exact target-version read-back remain unchanged. Android already
+closes the GATT object on confirmed disconnect; a persistent GATT leak has not
+been independently established by the Bluetooth-toggle observation.
+
+| Requirement | Evidence / verification | Status |
+|---|---|---|
+| Normal local Android build with write sequencing fix | Exact resolved AAR and signed installed APK; physical transfer/verification passed without `-201` | matched for this candidate |
+| Expected reboot transport loss enters recovery | Regression reproduces post-verification `-8`; earlier stream loss must still fail | source verified; new native consumer pending |
+| Wait for device within a bounded recovery window | Empty-scan retry regression preserves the original 120-second deadline | source verified; physical automatic recovery pending |
+| Same device and installed target version | Existing serial/version workflow regression retained | source verified; independent physical read-back pending |
+| Release old GATT without a phone radio toggle | Native confirmed-disconnect path closes GATT; owner needed radio toggle in this attempt | partial; automatic recovery pending |
+
+This follow-up is unpublished source. The installed APK above does not yet
+contain the reboot-recovery correction. Hosted CI/License, rebuilt consuming
+APK and another supervised automatic reconnect test remain separate gates.
+
+Local Rust formatting and workspace Clippy passed. The focused OTA suite passes
+all ten tests, including the two initially failing regressions and the negative
+pre-verification case. The wider workspace run passed 225 tests in 40 groups
+before Windows Application Control blocked the `xtask` test executable with
+OS error 4551. That executable was not run; a full local workspace pass is not
+claimed. Required exact-revision hosted CI must cover this remaining gate.
+
+For the next isolated arm64 consumer, the unchanged JNI/Android classes from the
+verified candidate were retained and only `jni/arm64-v8a/libbota_device_sdk_ffi.so`
+was rebuilt from this source with the pinned API-26 NDK. All other AAR entries
+match. The exported symbols remain identical and ELF LOAD alignment is 16 KiB.
+This mixed-ABI private AAR is for the arm64 test app only, not publication:
+SHA-256 `dfffe9cd31b627818dbc62f4d1607c572b0b71969fd73085a44237e436b0705b`;
+rebuilt core SHA-256
+`f543f1a1121016578dd091557bdac7b2aa8486e543d66889b97e6095dcbaf789`.

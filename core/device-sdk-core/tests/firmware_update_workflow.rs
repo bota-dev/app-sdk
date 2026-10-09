@@ -544,6 +544,117 @@ fn verify_success_requires_expected_disconnect_and_reconnect_is_bounded() {
 }
 
 #[test]
+fn verified_image_subscription_loss_enters_reconnect_instead_of_failing() {
+    let mut engine = WorkflowEngine::default();
+    let (subscription, verify, _) = reach_verify(&mut engine, 500);
+    engine
+        .dispatch(host(verify, HostEventKind::Ble(BleEvent::WriteCompleted)))
+        .unwrap();
+    engine
+        .dispatch(host(
+            subscription,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_TRANSFER_STATUS.into(),
+                value: vec![FIRMWARE_UPLOAD_VERIFY, 0],
+            }),
+        ))
+        .unwrap();
+    let effects = engine
+        .dispatch(host(
+            subscription,
+            HostEventKind::Ble(BleEvent::Failed {
+                platform_code: Some(-8),
+            }),
+        ))
+        .unwrap();
+    assert!(
+        effects
+            .iter()
+            .any(|request| matches!(request.effect, Effect::Ble(BleEffect::StartScan { .. })))
+    );
+    assert!(!matches!(engine.status(), WorkflowStatus::Failed { .. }));
+}
+
+#[test]
+fn subscription_loss_before_image_verification_remains_a_failure() {
+    let mut engine = WorkflowEngine::default();
+    let (subscription, _, _) = reach_verify(&mut engine, 500);
+    engine
+        .dispatch(host(
+            subscription,
+            HostEventKind::Ble(BleEvent::Failed {
+                platform_code: Some(-8),
+            }),
+        ))
+        .unwrap();
+    assert!(matches!(engine.status(), WorkflowStatus::Failed { error }
+        if error.code == ErrorCode::ConnectionFailed));
+}
+
+#[test]
+fn reboot_reconnect_retries_empty_scans_without_restarting_the_overall_deadline() {
+    let mut engine = WorkflowEngine::default();
+    let reconnecting = reach_reconnect(&mut engine);
+    let deadline = request_id(&reconnecting, |effect| {
+        matches!(
+            effect,
+            Effect::Timer(TimerEffect::Schedule {
+                delay_ms: 120_000,
+                ..
+            })
+        )
+    });
+    let scan_timer = request_id(&reconnecting, |effect| {
+        matches!(
+            effect,
+            Effect::Timer(TimerEffect::Schedule {
+                delay_ms: 1_000,
+                ..
+            })
+        )
+    });
+    let stopping = engine
+        .dispatch(host(scan_timer, HostEventKind::TimerFired { timer_id: 1 }))
+        .unwrap();
+    let stop = request_id(&stopping, |effect| {
+        matches!(effect, Effect::Ble(BleEffect::StopScan))
+    });
+    let waiting = engine
+        .dispatch(host(stop, HostEventKind::Ble(BleEvent::ScanStopped)))
+        .unwrap();
+    assert!(!matches!(engine.status(), WorkflowStatus::Failed { .. }));
+    let retry = request_id(&waiting, |effect| {
+        matches!(
+            effect,
+            Effect::Timer(TimerEffect::Schedule {
+                timer_id: 104,
+                delay_ms: 1_000
+            })
+        )
+    });
+    let next = engine
+        .dispatch(host(retry, HostEventKind::TimerFired { timer_id: 104 }))
+        .unwrap();
+    assert!(
+        next.iter()
+            .any(|request| matches!(request.effect, Effect::Ble(BleEffect::StartScan { .. })))
+    );
+    assert!(!next.iter().any(|request| matches!(
+        request.effect,
+        Effect::Timer(TimerEffect::Schedule {
+            delay_ms: 120_000,
+            ..
+        }) | Effect::Network(_)
+    )));
+    engine
+        .dispatch(host(deadline, HostEventKind::TimerFired { timer_id: 103 }))
+        .unwrap();
+    assert!(
+        matches!(engine.status(), WorkflowStatus::Failed { error } if error.code == ErrorCode::Timeout)
+    );
+}
+
+#[test]
 fn successful_reconnect_reads_back_the_target_firmware_version() {
     let mut engine = WorkflowEngine::default();
     let reconnecting = reach_reconnect(&mut engine);

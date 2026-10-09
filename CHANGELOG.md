@@ -7,6 +7,12 @@ tracked separately.
 
 ## Unreleased
 
+- Firmware OTA treats loss of the transfer-status stream after successful image
+  verification as reboot recovery. Reconnect retries short scans within the
+  existing two-minute deadline and still requires the same serial and target
+  firmware version before success. This source change requires a native app
+  rebuild; it does not update installed applications.
+
 - Android waits for local completion of Bluetooth writes without response before
   sending the next GATT operation, preventing overlapping OTA writes. Cancelling
   an issued write retires that connection before retry. Immediate Android write
