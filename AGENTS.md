@@ -287,6 +287,14 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Invariants
 
+- Android characteristic writes, including `WRITE_TYPE_NO_RESPONSE`, must await
+  the local completion callback before releasing the per-device GATT queue.
+  Preserve immediate Android status codes and retire the exact session if an
+  issued write is cancelled before completion. Run the API 26/35 framework
+  sequencing, rejection and cancellation regressions plus the controlled driver
+  suite. This source correction is absent from published beta.14; see the
+  [review](docs/parity/android-write-completion.md).
+
 - Android failed connect/MTU handshakes must retire only their captured generation
   and close its native GATT even after the connected callback. Preserve the
   original error and queued replacement work; cancellation before queue entry

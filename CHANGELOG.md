@@ -7,6 +7,12 @@ tracked separately.
 
 ## Unreleased
 
+- Android waits for local completion of Bluetooth writes without response before
+  sending the next GATT operation, preventing overlapping OTA writes. Cancelling
+  an issued write retires that connection before retry. Immediate Android write
+  errors retain their original code. See the
+  [source review](docs/parity/android-write-completion.md).
+
 ## 2.0.0-beta.14
 
 - Retry the exact compatibility upload-verification-pending response within the
