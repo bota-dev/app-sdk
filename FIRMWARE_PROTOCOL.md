@@ -6,9 +6,20 @@ New SDK development belongs in this repository. The retired
 `bota-dev/react-native-sdk` repository is retained as migration history.
 
 This edition covers recording control and the #201 recording-marker extension:
-marked BATCH transfer and the App boundary of protected direct STREAMING. It
-retains the existing GATT allocations and ordinary v2 transport. It is not a
+marked BATCH transfer, the App boundary and the device HTTP contract of protected
+direct STREAMING. It retains the existing GATT allocations and ordinary v2 transport. It is not a
 complete reference for provisioning, OTA or every other device service.
+
+## Integration Documents
+
+Read this entry point for behavior, BLE allocation and SDK/App boundaries, then:
+
+- [Marker security and binary format](docs/firmware/recording-markers-security.md): context, marker bodies, encryption, signature domains, BATCH HTTP and durable recovery.
+- [Protected direct STREAMING](docs/firmware/protected-streaming.md): device admission, key grant, audio/marker ACKs, all HTTP endpoints, retry/expiry and final proofs.
+- [Interoperability fixtures](docs/firmware/vectors/README.md): downloadable test-only bytes, verification command and required rejection cases.
+
+These appendices are part of this contract and keep transport delivery, durable
+marker acceptance, final publication and local deletion as separate outcomes.
 
 ## Availability and Compatibility
 
@@ -106,7 +117,7 @@ session ID u64@4. The transport ID is not the backend session UUID.
 5. Send blob kind 5: audio authorization408 + capture context176 + marker authorization280 = **864 bytes**. It must match the exact recording/generation/session/owner and negotiated limits.
 6. Transfer encrypted audio/manifest and all marker documents. Marker chunks are emitted before EOF. New START/RESUME replays the metadata; preserve exact documents and request identities.
 7. After the audio manifest, submit the encrypted marker seal/pages to the backend. Await both durable final receipts. Send blob kind 6: audio receipt336 + marker receipt296 = **632 bytes**, then the existing CONFIRM flow. Keep existing audio-prefix hash semantics: hash the audio 408/336-byte prefix where required, not the whole marked bundle.
-8. Firmware verifies signatures, context, owner and exact content, persists/read-backs its local terminal, then may delete audio and subsequently sidecars. Incomplete/conflicting proof keeps the payload.
+8. During kind6 COMMIT, firmware verifies signatures, context, owner and exact content, then persists/read-backs its authenticated local terminal before successful blob RESULT. CONFIRM separately rechecks identity and that terminal before deleting audio and subsequently sidecars. Incomplete/conflicting proof keeps the payload.
 
 Signed blob wrapper (existing transport): BEGIN `60`, DATA `61`, COMMIT `62`,
 ABORT `63`, RESULT `64` (hex). Common prefix: code/version/kind/reserved=0 at
@@ -184,8 +195,11 @@ App/native -> Device: durable-checkpoint WINDOW_ACK for each audio window
 Device -> App/native: MARKER_CHUNK(0x4A): seal + all pages; EOF
 App/native -> Backend: finalize audio manifest and submit exact marker batch
 Backend -> App/native: final audio336 + marker296 receipts
-App/native -> Device: signed blob kind6(632), CONFIRM(84)
-Device: verify both receipts -> persist/read-back terminal -> cleanup
+App/native -> Device: signed blob kind6(632), COMMIT
+Device: verify both receipts -> persist/read-back authenticated local terminal
+Device -> App/native: signed-blob RESULT
+App/native -> Device: CONFIRM(84)
+Device: recheck exact identity + persisted terminal -> cleanup
 Device -> App/native: exact-session completion result
 ```
 
@@ -240,7 +254,8 @@ App reads through its authorized Dashboard project context:
 - New native SDK `createProtectedStreamingStatusBackend(options).getStatus(identity)` is an optional read facade requiring a matching native binary. Identity contains recordingId, sessionId, recordingGeneration and string writerEpoch. Demo currently uses its Dashboard API instead of importing this unpublished facade.
 
 The device-only direct HTTP profile is separate from the App-facing BLE
-protocol. Apps must not call its write endpoints with application credentials.
+protocol and is specified in the [direct STREAMING appendix](docs/firmware/protected-streaming.md).
+Apps must not call its write endpoints with application credentials.
 Its final response carries an audio296 proof, marker296 proof and exact
 canonical snapshot; these are not the BATCH 632-byte receipt bundle. No signed
 proof/key is part of the new JS status interface.
