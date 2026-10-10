@@ -15,7 +15,8 @@ both BATCH and the new status API, including revision `0` and exact decimal owne
 epochs; numeric epochs and signed-document `markersRequired` are rejected.
 
 Archive SHA-256: `01b9fae80e32bc23d964a10625c881a126ff0ed856000657786c1db58bc18311`.
-Evidence: `/private/tmp/markers-status-candidate/{snapshot-manifest.json,consumer-validation.json}`.
+Local evidence files: `snapshot-manifest.json` and `consumer-validation.json`
+in the temporary candidate output directory; these are not hosted release artifacts.
 This remains an explicitly nonpublishable dirty-source snapshot, using unchanged
 beta.14 metadata. No registry upload or native target build is implied. The prior
 250-file snapshot and 187-test checkpoint below are historical; current RN checks
