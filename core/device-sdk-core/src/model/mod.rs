@@ -1,3 +1,5 @@
+mod byo_checkpoint;
+mod byo_upload;
 mod device;
 mod discovery;
 mod ota;
@@ -7,6 +9,7 @@ mod settings;
 mod upload;
 mod upload_profile;
 
+pub use byo_upload::*;
 pub use device::*;
 pub use discovery::*;
 pub use ota::*;

@@ -177,6 +177,9 @@ pub mod kind {
     pub const PROTOCOL_DECODE_UPLOAD_CONTEXT_DOCUMENT: u32 = 0x052a;
     pub const PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_AUTHORIZATION_IDENTITY: u32 = 0x052b;
     pub const PROTOCOL_VALIDATE_ENCRYPTED_UPLOAD_V2_ADMISSION: u32 = 0x052c;
+    pub const PROTOCOL_REDUCE_BYO_RECOVERY: u32 = 0x052d;
+    pub const PROTOCOL_ENCODE_BYO_BLE: u32 = 0x052e;
+    pub const PROTOCOL_DECODE_BYO_BLE: u32 = 0x052f;
 }
 
 pub mod field_type {
@@ -392,6 +395,24 @@ pub mod field_id {
     pub const MIN_CIPHERTEXT_LENGTH: u32 = 202;
     pub const MAX_CIPHERTEXT_LENGTH: u32 = 203;
     pub const REQUIRE_EXPIRED_SESSION_RECOVERY: u32 = 204;
+    pub const BYO_ENVIRONMENT: u32 = 205;
+    pub const BYO_ORGANIZATION_ID: u32 = 206;
+    pub const BYO_PROJECT_ID: u32 = 207;
+    pub const BYO_DEVICE_ID: u32 = 208;
+    pub const BYO_BINDING_GENERATION: u32 = 209;
+    pub const BYO_ASSIGNMENT_GENERATION: u32 = 210;
+    pub const BYO_POLICY_REVISION: u32 = 211;
+    pub const BYO_RECORDING_ID: u32 = 212;
+    pub const BYO_CONFIGURATION_ID: u32 = 213;
+    pub const BYO_CONFIGURATION_REVISION: u32 = 214;
+    pub const BYO_CONFIGURATION_SHA256: u32 = 215;
+    pub const BYO_DESTINATION_REF: u32 = 216;
+    pub const BYO_SESSION_ID: u32 = 217;
+    pub const BYO_MODE: u32 = 218;
+    pub const BYO_OPERATION_ID: u32 = 219;
+    pub const BYO_RETRY_AFTER_MS: u32 = 220;
+    pub const BYO_MAY_CLEANUP: u32 = 221;
+    pub const BYO_RENEWAL_REVISION: u32 = 222;
 }
 
 #[repr(C)]

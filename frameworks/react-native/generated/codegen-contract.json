@@ -4144,6 +4144,50 @@
           ],
           "methods": [
             {
+              "name": "syncByo",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "StringTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "inputJSON",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "cancelByo",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "operationId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
               "name": "prepare",
               "optional": false,
               "typeAnnotation": {
@@ -4274,11 +4318,11 @@
       },
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaUploadV2BackendSpec.java",
-        "sha256": "50844eb0e1ed98848de2819d2a88f00ccc4a550d4bcfdc5db21039a1eb17127f"
+        "sha256": "762fdcacdef7b1bc272e1c8074d997290a23c99389b1551d2f34e595906ce87e"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "f1a82f3cf03616e6f08655204af85317087cd2b0f633c052f2939eb49448c6b8"
+        "sha256": "7b10fd4f202c30014b075b084f6a11ec79a3d6d3ed2f43decfd5505b568b9987"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -4290,23 +4334,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "6c5309bc7b6b6b4b2e62e5bed85a7fab8a9da8c43af9e3904692e50756de9e0f"
+        "sha256": "f864802e29fac9caa9dbc23f202d6326ae4bdecaee1af84cf0e9e7fb9a279928"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "8bee25e75f2e73f0b989b65e1c083fb851ba77ca3d4384aecaabb1bcb252fe7a"
+        "sha256": "23592d0e6ab128b8a11626ccc93fde5aa2d3de35ce178a59c1f8c8f276ae4cd8"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "6bef81e2a87bb83ddbc3021e69ddbd280dac23a5049af675b738925454b1c22c"
+        "sha256": "451b2c8f23662bda1f200b95afad001d3650b0275e7c5955b0e314faadff0bea"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "6c5309bc7b6b6b4b2e62e5bed85a7fab8a9da8c43af9e3904692e50756de9e0f"
+        "sha256": "f864802e29fac9caa9dbc23f202d6326ae4bdecaee1af84cf0e9e7fb9a279928"
       }
     ]
   },
-  "contractDigest": "89bbee822844c65336f805fe3311d15b35f4615254f4841561f7a4d2dc3ae23d"
+  "contractDigest": "83ad7534d30f6201b79c0b67c2d0c7b8c248077ff57d8fbb34a493ebe178a29e"
 }

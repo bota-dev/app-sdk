@@ -24,6 +24,11 @@ internal class BotaUploadV2BackendModule(context: ReactApplicationContext) : Nat
       putString("requestId", requestId); putString("operationId", operationId)
     })
   }
+  private val byo = ByoBridgeDriver(File(context.noBackupFilesDir, "BotaSDKByo")) { requestId, operationId ->
+    emitOnCredentialsRequested(Arguments.createMap().apply {
+      putString("requestId", requestId); putString("operationId", operationId)
+    })
+  }
   private val upload = NativeUpload(
     UploadJournal(File(context.noBackupFilesDir, "BotaSDKUploadV2"), object : JournalDurability {
       override fun syncDirectory(directory: File) {
@@ -41,25 +46,28 @@ internal class BotaUploadV2BackendModule(context: ReactApplicationContext) : Nat
     work.launch {
       try { demand(!destroyed, "CANCELLED"); promise.resolve(block()) }
       catch (error: Exception) {
-        val code = (error as? UploadFailure)?.code ?: "BOTA_UPLOAD_NATIVE"
+        val code = (error as? dev.bota.sdk.ByoStorageException)?.message ?: (error as? UploadFailure)?.code ?: "BOTA_UPLOAD_NATIVE"
         promise.reject(code, code, null)
       }
     }
   }
+  override fun syncByo(inputJSON: String, promise: Promise) = invoke(promise) { byo.sync(inputJSON) }
+  override fun cancelByo(operationId: String, promise: Promise) = invoke(promise) { byo.cancel(operationId); null }
   override fun prepare(inputJSON: String, promise: Promise) = invoke(promise) {
     JSONObject(upload.prepare(inputJSON)).toString()
   }
   override fun cancel(operationId: String, promise: Promise) = invoke(promise) { upload.cancel(operationId); null }
   override fun complete(operationId: String, promise: Promise) = invoke(promise) { upload.complete(operationId); null }
   override fun resolveCredentials(requestId: String, token: String, promise: Promise) = invoke(promise) {
-    credentials.resolve(requestId, token); null
+    credentials.resolve(requestId, token); byo.resolve(requestId, token); null
   }
   override fun rejectCredentials(requestId: String, promise: Promise) = invoke(promise) {
-    credentials.reject(requestId); null
+    credentials.reject(requestId); byo.reject(requestId); null
   }
   override fun invalidate() {
     destroyed = true
     upload.cancelAll()
+    work.launch { byo.stop() }
     // Dispatched identity-creating requests must drain into their original journal.
     super.invalidate()
   }

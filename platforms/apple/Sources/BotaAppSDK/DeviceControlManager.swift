@@ -222,7 +222,7 @@ public actor DeviceControlManager {
         grantBlob: String
     ) async throws -> RecordingControlResult {
         let grant = try Self.grantData(grantBlob)
-        return try await performOperation(device, operation: .encode) { runtime in
+        return try await performOperation(device, operation: .encode, recordingControl: command == .stop) { runtime in
             try await runtime.directWrite(
                 device.id,
                 BotaBluetoothUUIDs.controlService,
@@ -247,12 +247,13 @@ public actor DeviceControlManager {
     private func performOperation<T: Sendable>(
         _ device: ConnectedDevice,
         operation: BotaOperation,
+        recordingControl: Bool = false,
         body: @escaping @Sendable (DeviceRuntime) async throws -> T
     ) async throws -> T {
         let runtime = try configuredRuntime()
         try await runtime.connection.require(device)
         let id = UUID()
-        try await runtime.operations.begin(id, operation: operation)
+        try await runtime.operations.begin(id, operation: operation, recordingControl: recordingControl)
         do {
             let value = try await body(runtime)
             await runtime.operations.end(id)

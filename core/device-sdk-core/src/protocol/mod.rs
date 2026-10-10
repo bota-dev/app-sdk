@@ -1,3 +1,4 @@
+mod byo_ble;
 mod cursor;
 mod diagnostics;
 mod encode;
@@ -13,6 +14,7 @@ mod settings;
 mod status;
 mod transfer;
 
+pub use byo_ble::*;
 pub use diagnostics::*;
 pub use encode::*;
 pub use encrypted_upload_v2::*;

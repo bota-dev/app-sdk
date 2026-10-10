@@ -1,5 +1,15 @@
 # AGENTS.md
 
+BYO live and whole-file uploads now connect Rust framing/recovery to Apple/Android
+BLE, HTTP and WS, private durable journals and receipt-gated cleanup. Native
+`streamByoRecording` and RN `stream(device, null, target)` discover the active
+physical capture; explicit identities also work. Three WS reconnects precede a
+fenced full-file successor; initial WS failure stays on HTTP segments. Stop
+Recording can run during a live upload; unrelated device operations stay exclusive.
+Only metadata crosses JS. See [integration and review](docs/parity/byo-storage.md)
+for source evidence and separate customer, package and hardware acceptance gates.
+
+
 **Upload completion architecture (target; partial implementation):**
 Review upload work against durable verification/cleanup phases and identity recovery. Test exit after PUT, pending 425, worker success while offline, reconnect-only cleanup, numeric evidence and legacy full-UUID limitations; do not claim all installed facades share current source behavior. See the [public recovery contract](docs/parity/upload-recovery.md).
 

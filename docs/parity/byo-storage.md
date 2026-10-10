@@ -1,0 +1,145 @@
+# BYO customer storage integration
+
+October 10 unreleased source. Apple, Android and React Native connect both live
+and whole-file BYO uploads to the independent firmware protocol. New live entry
+points use qualified HTTP segments/WS and fenced Batch completion. Firmware,
+backend gates, customer endpoint qualification and matching native binaries are
+required; this is not a claim of published package or physical acceptance.
+
+## Application integration
+
+```ts
+import { createByoStorageBackend } from '@bota.dev/react-native-app-sdk';
+
+const lifetime = new AbortController();
+const uploads = createByoStorageBackend({
+  baseUrl: 'https://your-backend.example/v1',
+  scopeKey: 'production/account/project/user',
+  organizationId, projectId, environment: 'production',
+  signal: lifetime.signal,
+  getAccessToken: signal => getCurrentAppAccessToken(signal),
+});
+const target = { deviceId, bindingGeneration };
+const recordings = await uploads.list(device, target);
+for (const recording of recordings) {
+  const result = await uploads.sync(device, recording, target);
+  // result contains recordingId and uploadSessionId only.
+}
+// Also invoke sync for the same identity after reconnect/restart.
+// On logout, scope change or teardown:
+lifetime.abort();
+await uploads.dispose();
+```
+
+The customer proxy authenticates the app user, constrains device access and
+forwards the existing physical-context routes plus
+`/v1/devices/{deviceId}/byo-uploads` and `/byo-streams` under a server-held project/restricted key. The stream proxy must also forward WSS `/byo-streams/ws`, authorization/binding headers and subprotocol `bota-byo-stream-v1`.
+`X-Bota-Device-Binding` is mandatory. Never put a Bota secret API key in the app.
+Apple/Android expose `recordings.listByoRecordings` and `syncByoRecording` with
+`ByoStorageOptions`; direct hosts supply private state storage, fresh credentials
+and a current-scope validation callback. The host owns reconnect/sync scheduling.
+
+No customer selection returns the typed `not_selected` outcome before BYO
+ownership. Hosts can then select their existing Bota upload adapter. Once selected
+intent is durable, customer outages or policy changes do not permit that fallback.
+BLE cannot take over a radio-channel Batch session. Foreground native operations
+are implemented; OS background scheduling is not promised.
+
+## Responsibilities and flow
+
+| Layer | Owns |
+| --- | --- |
+| Rust | Independent BLE frame codec, lifecycle scope/recovery transitions, durable renewal identity and typed ABI |
+| Apple/Android | BLE/HTTP I/O, physical-context refresh, private journal/files, cancellation settlement and receipt ordering |
+| React Native | Immutable account/project/device metadata, app-token callback, explicit cancellation and result metadata |
+| Firmware | Physical key/source authority, BYO intent, exact encrypted bytes, signature verification and source deletion |
+| Customer backend | User authorization/proxy, customer storage/verifier contract and immutable publication |
+
+Native captures scope and connection generation, reserves the SDK device owner,
+refreshes physical context, negotiates actual capability, then persists selected
+intent before CREATE. Full UUID and generation identify the recording; no short
+BLE catalog ID is used. Native retrieves historical authorization via `/prepare`,
+requests upload instructions, and opens the exact device owner. BLE reads stream
+into a private file, validate the entire SHA-256, then PUT directly to the customer.
+Opaque documents, bytes and signed URLs never pass through JS or Dart.
+
+The original manifest persists before completion. Native saves the verification
+phase before `/complete`, reconciles status, passes the signed receipt back to the
+device for verification and persistence, then confirms its exact digest. Device
+source deletion is never authorized by HTTP PUT success alone.
+
+## Recovery and cancellation
+
+- CREATE loss replays the same recording identity after durable native/device
+  selection. No new destination is chosen for the selected recording.
+- Only explicit `expired` triggers `/recover`. Renewal UUID and expected revision
+  commit before I/O; response loss replays that request. Other HTTP 409 conflicts
+  retain the source. Upload and cleanup permits retain original signed evidence.
+- Lost completion does not cause another PUT. Lost CONFIRM requires saved cleanup
+  state, a fresh authenticated device absence proof and the exact server receipt.
+- Journals use private permissions, exclusive leases, atomic replacement, file
+  and directory fsync and readback. Failed persistence stops dependent actions.
+- BLE frames retry identically with bounded attempts. HTTP transient retries
+  respect Retry-After; long backoffs return to the host rather than retry early.
+- Cancellation/teardown waits for native settlement before releasing ownership.
+  Uncertain unsubscribe/abort disconnects the device. Late token/results cannot
+  revive a cancelled RN operation. Local source/journal survives cancellation.
+
+## Design review and evidence
+
+Rust workspace: 299 tests, Clippy, generated constants and format checks pass. Android: full SDK source
+and actual RN BYO driver compile with explicit API/warnings-as-errors against
+Android 36; 22 host/JNI tests exercise the real reducer, framing and production
+orchestrator. Apple: complete SDK source builds with Swift 6; RN Swift sources
+pass type checking. A real Rust/native executable tests durable storage and
+normal/lost-completion/lost-CONFIRM recovery, live HTTP/WS, three reconnects,
+uncertain handoff and Stop concurrency. XCTest is unavailable in the local
+Command Line Tools; no full Xcode/iOS suite is claimed. RN typecheck, build and
+codegen pass with 192 tests; 43 legacy Android upload tests also pass.
+
+`tools/byo/test-native-android.mjs` uses cached pinned dependencies and a built
+host JNI library via `BOTA_BYO_JNI_DIRECTORY`; `--compile-sdk` additionally uses
+`BOTA_ANDROID_JAR`. `tools/byo/native-apple-smoke.swift` is an executable linked
+against the built SDK module and Rust static library. These tests fake physical
+BLE and customer HTTP responses; actual signature/journal crypto has separate
+firmware/backend tests. No released AAR/XCFramework/app or hardware acceptance
+is implied.
+
+Host validation must load the freshly built Rust dynamic library from the JNI
+search directory. A stale copy can make new operation codes fail despite current
+Kotlin/C sources; refresh that test artifact before interpreting an ABI failure.
+
+## Live entry and recovery
+
+After recording has started, use `uploads.stream(device, null, target)`; native
+code discovers the active full UUID/generation through fresh physical admission.
+An explicit `ByoRecording` is also accepted. Apple/Android expose the equivalent
+`streamByoRecording` with a nullable recording. Stop through the existing recording
+control API while awaiting the upload result. Stop is the only concurrent control
+exception; provisioning, deletion and other transfers remain exclusive.
+
+The device keeps the complete encrypted source. Native reads 4 KiB BLE ranges,
+forms 16 KiB HTTP/WS segments and releases only RAM after customer-durable ACK.
+No bytes, signed URLs, manifests or keys cross JS. Customer-qualified modes are
+checked before selecting stream intent. Initial WS failure stays HTTP; established
+failure gets three reconnects (1/2/4 seconds), then waits for close and fences a
+full-file restart. Restart, cancellation or queue overflow use the same pinned
+recording/destination and full-file recovery. The private stream journal preserves
+selection, reconnect budget, handoff input and exact successor. Device `.BY4`–`.BY6`
+provide independent recovery evidence. A lost handoff keeps its original mode;
+`assembled` skips another full-file PUT but still reconciles the Batch customer
+task, exact manifest and verified receipt. No source is deleted by ACK or PUT.
+
+`sync` discovers a retained stream owner and resumes the fenced transition.
+Connection loss still returns to the host for reconnection; it does not invent a
+new BLE connection or background scheduler. The supported profile is 128 MiB and
+four hours; an incomplete/over-limit source is retained with an error.
+
+Validation uses production native orchestration and the real Rust/JNI/static ABI
+with fake customer HTTP and physical BLE boundaries. Live WS/HTTP, three retries,
+uncertain handoff, cancellation, unsupported modes, Stop concurrency and receipt
+cleanup have host tests. Full Android source/RN-driver compilation and full Apple
+SDK/RN Swift checking are separate from mobile packaging and real devices.
+Remaining acceptance: AAR/XCFramework/app builds, customer proxy/TLS, physical
+BLE/radio/power-loss and consuming apps. The direct requirement/evidence review
+is used because compound-engineering is unavailable locally.

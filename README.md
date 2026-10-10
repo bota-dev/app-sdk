@@ -1,5 +1,7 @@
 # Bota App SDK
 
+BYO live-upload source now connects encrypted capture, HTTP/WS and fenced Batch recovery. See [current implementation and validation](docs/parity/byo-storage.md); rollout and physical qualification remain separate.
+
 [![CI](https://github.com/bota-dev/app-sdk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bota-dev/app-sdk/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -212,3 +214,5 @@ and documentation conventions. Maintainers use the [release procedure](docs/rele
 ## License
 
 [MIT](LICENSE)
+
+See [BYO native/RN source preview](docs/parity/byo-storage.md) for integration, recovery and unreleased capability limits.

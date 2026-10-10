@@ -9,6 +9,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 internal class StreamingOperationState(private val label: String) {
     private data class Active(
@@ -16,6 +19,7 @@ internal class StreamingOperationState(private val label: String) {
         val runtime: DeviceRuntime,
         val cleanup: suspend () -> Unit,
         val settleBeforeTaskCancellation: Boolean,
+        val nativeTask: Boolean,
         var task: Job? = null,
     )
 
@@ -42,7 +46,12 @@ internal class StreamingOperationState(private val label: String) {
         val operation = snapshot.first
         try {
             if (operation != null) {
-                if (operation.settleBeforeTaskCancellation) {
+                if (operation.nativeTask) {
+                    withContext(NonCancellable) {
+                        operation.task?.cancelAndJoin()
+                        runCleanupActions(operation.cleanup, { operation.runtime.operations.end(operation.id) })
+                    }
+                } else if (operation.settleBeforeTaskCancellation) {
                     var exactSettlement = false
                     var confirmationSettlement = false
                     runCleanupActions(
@@ -99,8 +108,10 @@ internal class StreamingOperationState(private val label: String) {
         cleanup: suspend () -> Unit = {},
         task: Job? = null,
         settleBeforeTaskCancellation: Boolean = false,
+        nativeTask: Boolean = false,
+        allowRecordingControl: Boolean = false,
     ) {
-        configured.operations.begin(id, operation)
+        configured.operations.begin(id, operation, allowRecordingControl = allowRecordingControl)
         try {
             synchronized(lock) {
                 if (runtime !== configured) throw BotaSDKError.Core(
@@ -117,7 +128,7 @@ internal class StreamingOperationState(private val label: String) {
                     protocolStatus = null,
                     detail = "another $label operation is already active",
                 )
-                active = Active(id, configured, cleanup, settleBeforeTaskCancellation, task)
+                active = Active(id, configured, cleanup, settleBeforeTaskCancellation, nativeTask, task)
             }
         } catch (error: Throwable) {
             configured.operations.end(id)
@@ -143,6 +154,13 @@ internal class StreamingOperationState(private val label: String) {
 
     suspend fun cancel(id: UUID, cancelTask: Boolean, ignoreEngineFailure: Boolean = true): Boolean {
         val operation = remove(id) ?: return false
+        if (operation.nativeTask) {
+            withContext(NonCancellable) {
+                if (cancelTask) operation.task?.cancelAndJoin()
+                runCleanupActions(operation.cleanup, { operation.runtime.operations.end(id) })
+            }
+            return true
+        }
         if (operation.settleBeforeTaskCancellation) {
             var exactSettlement = false
             var confirmationSettlement = false

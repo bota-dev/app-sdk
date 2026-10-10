@@ -2,6 +2,8 @@ use crate::{
     ABI_VERSION, BotaDeviceSdkPacketV1, BotaDeviceSdkPacketViewV1, command::PacketFields, field_id,
     packet_kind,
 };
+mod byo_ble;
+mod byo_recovery;
 mod v2_demo;
 use bota_device_sdk_core::{
     error::{DeviceSdkError, ErrorCode, Operation},
@@ -142,6 +144,9 @@ pub(crate) unsafe fn decode(
     log_decoder: &mut DeviceLogDecoder,
 ) -> Result<BotaDeviceSdkPacketV1, DeviceSdkError> {
     validate_packet(packet)?;
+    if packet.kind == packet_kind::PROTOCOL_DECODE_BYO_BLE {
+        return unsafe { byo_ble::process(packet, true) };
+    }
     if matches!(
         packet.kind,
         packet_kind::PROTOCOL_DECODE_UPLOAD_CONTEXT_SNAPSHOT
@@ -446,6 +451,12 @@ pub(crate) unsafe fn encode(
     validate_packet(packet)?;
     let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
     let bytes = match packet.kind {
+        packet_kind::PROTOCOL_ENCODE_BYO_BLE => {
+            return unsafe { byo_ble::process(packet, false) };
+        }
+        packet_kind::PROTOCOL_REDUCE_BYO_RECOVERY => {
+            return unsafe { byo_recovery::reduce(packet) };
+        }
         packet_kind::PROTOCOL_ENCODE_UPLOAD_CONTEXT_BEGIN => {
             fields.validate_allowed(&[field_id::CONTEXT_ATTEMPT_ID])?;
             bota_device_sdk_core::protocol::encode_upload_context_begin(to_u32(
