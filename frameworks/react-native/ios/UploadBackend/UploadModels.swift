@@ -101,6 +101,7 @@ struct UploadInput: Codable, Sendable {
     var durationMs: String
     var plaintextLength: String
     var storageFormat: UInt8
+    var markersRequired: Bool? = nil
   }
   struct Capability: Codable, Sendable { var rawValueHex: String; var flags: UInt32 }
   struct Checkpoint: Codable, Sendable {
@@ -187,7 +188,9 @@ struct UploadInput: Codable, Sendable {
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
     var identityScope = scope
     if !includeTransport { identityScope.nativeDeviceId = "" }
-    return UploadValidation.hash(try encoder.encode(Identity(scope: identityScope, recording: recording)))
+    var identityRecording = recording
+    if identityRecording.markersRequired == false { identityRecording.markersRequired = nil }
+    return UploadValidation.hash(try encoder.encode(Identity(scope: identityScope, recording: identityRecording)))
   }
 
   func validateCheckpoint(_ entry: UploadJournalEntry?) throws {
@@ -242,6 +245,8 @@ struct UploadSession: Decodable, Sendable {
   let plaintext_length: UInt64?
   let completion_receipt_base64: String?
   let completion_receipt_sha256: String?
+  let marker_completion_receipt_base64: String?
+  let marker_completion_receipt_sha256: String?
 
   func validatePointer() throws {
     guard profile == "encrypted_upload_v2", UploadValidation.uuid(session_id), owner_revision > 0,

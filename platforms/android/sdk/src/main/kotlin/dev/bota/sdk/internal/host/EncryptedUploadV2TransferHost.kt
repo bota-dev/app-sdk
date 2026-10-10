@@ -117,6 +117,7 @@ internal class EncryptedUploadV2TransferHost(
     private var loadedCheckpoint: PersistedEncryptedUploadV2Checkpoint? = null
     private var activeContext: Context? = null
     private var receiver: EncryptedUploadV2TransferReceiver? = null
+    private var markersRequired = false
     private var preparedMaterialId: String? = null
     private var preparedAuthorizationSha256: ByteArray? = null
     private var materialLease: EncryptedUploadV2MaterialLease? = null
@@ -325,7 +326,8 @@ internal class EncryptedUploadV2TransferHost(
         val materialId = requiredText(effect, 12)
         val prepared = services.materialRegistry.preparedMaterial(materialId)
         services.materialRegistry.refreshUploadContext(materialId, prepared.lease, services.refreshUploadContext)
-        services.sendSignedDocument(1u, nonzeroWriteId(), prepared.authorization, 408u)
+        services.sendSignedDocument(if (prepared.authorization.size == 864) 5u else 1u, nonzeroWriteId(), prepared.authorization, prepared.authorization.size.toUShort())
+        markersRequired = prepared.authorization.size == 864
         preparedMaterialId = materialId
         preparedAuthorizationSha256 = prepared.authorizationSha256
         materialLease = prepared.lease
@@ -555,6 +557,7 @@ internal class EncryptedUploadV2TransferHost(
         services.materialRegistry.submitManifest(
             state.context.materialId, state.lease, state.completed.manifest, state.completed.evidence,
         )
+        services.materialRegistry.submitMarkers(state.context.materialId, state.lease, state.completed.markerDocuments, state.completed.evidence)
         stagedEvidence = state.completed.evidence
         emit(CoreHostEventPayload(HostEventKind.EncryptedUploadV2ArtifactsStaged))
     }
@@ -585,7 +588,7 @@ internal class EncryptedUploadV2TransferHost(
         services.materialRegistry.refreshUploadContext(context.materialId, lease, services.refreshUploadContext)
         services.checkpointStore.delete(context.uploadSessionId)
         if (Files.deleteIfExists(completed.file)) syncDirectory(completed.file.parent)
-        services.sendSignedDocument(2u, nonzeroWriteId(), receipt.receipt, 336u)
+        services.sendSignedDocument(if (receipt.receipt.size == 632) 6u else 2u, nonzeroWriteId(), receipt.receipt, receipt.receipt.size.toUShort())
         val frame = services.encodeConfirm(
             context.transportSessionId, context.uploadSessionId, context.recordingUuid,
             context.recordingGeneration, context.ownerRevision, receipt.receiptSha256,
@@ -720,7 +723,7 @@ internal class EncryptedUploadV2TransferHost(
         EncryptedUploadV2TransferReceiver(
             rootDirectory, context.sinkId, context.transportSessionId, context.ciphertextLength,
             context.ciphertextSha256, context.dataPayloadBytes, context.windowPackets,
-            context.maximumMissingSequences, checkpoint,
+            context.maximumMissingSequences, checkpoint, markersRequired,
         )
 
     private suspend fun replayWindow(
@@ -852,6 +855,7 @@ internal class EncryptedUploadV2TransferHost(
         loadedCheckpoint = null
         preparedMaterialId = null
         preparedAuthorizationSha256 = null
+        markersRequired = false
         materialLease = null
         pendingCheckpoint = null
         pendingMissing = emptyList()

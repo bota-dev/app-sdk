@@ -1,6 +1,6 @@
 # Architecture
 
-Recording markers #201: [protocol foundation](docs/parity/recording-markers.md) contains candidate codecs and host validation only; runtime admission, persistence, publication/cleanup gates and App integration remain outstanding. No marker profile is enabled. Keep the 16-byte recipient UUID and 280-byte metadata authorization consistent across components.
+Recording markers #201: [native BATCH integration and successor review](docs/parity/recording-markers.md) covers opaque transfers, authorization recovery, owner/channel fences and dual receipts. The unpublished [STREAMING scalar status provider](docs/parity/protected-streaming-status.md) is wired through native HTTPS; Demo uses its dashboard read API and existing BLE control for device-direct streaming. A new BLE audio relay is outside this scope. Published beta.14 lacks the new marker/status native capabilities; target artifacts and consuming native App release remain pending. No marker profile is enabled; preserve UUID[16] and 280-byte authorization. See [local package evidence](docs/testing/recording-markers-local-candidate.md).
 
 
 **Upload completion architecture (target; partial implementation):**

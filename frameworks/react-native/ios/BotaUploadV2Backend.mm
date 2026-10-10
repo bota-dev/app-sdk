@@ -16,6 +16,15 @@ RCT_EXPORT_MODULE(BotaUploadV2Backend)
   if ((self = [super init])) { _backend = [BotaUploadV2BackendBridge new]; }
   return self;
 }
+- (void)readProtectedStreamingStatus:(NSString *)requestId inputJSON:(NSString *)inputJSON resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject {
+  [_backend readProtectedStreamingStatus:requestId inputJSON:inputJSON completion:^(NSString *result, NSError *error) {
+    if (error) { reject(@"BOTA_STREAM_STATUS_FAILED", @"BOTA_STREAM_STATUS_FAILED", nil); }
+    else { resolve(result); }
+  }];
+}
+- (void)cancelProtectedStreamingStatus:(NSString *)requestId resolve:(RCTPromiseResolveBlock)resolve reject:(__unused RCTPromiseRejectBlock)reject {
+  [_backend cancelProtectedStreamingStatus:requestId completion:^{ resolve(nil); }];
+}
 - (void)prepare:(NSString *)inputJSON resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject {
   __weak BotaUploadV2Backend *weakSelf = self;
   [_backend prepare:inputJSON credentialsRequested:^(NSString *requestId, NSString *operationId) {

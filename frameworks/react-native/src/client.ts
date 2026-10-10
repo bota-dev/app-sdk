@@ -550,6 +550,7 @@ const mapPendingRecording = (value: NativePendingRecording): DeviceRecording | B
   const plaintextLength = recording.plaintextLength;
   if (typeof recording.uuid !== 'string' || !uuidPattern.test(recording.uuid) ||
       recording.storageFormat !== 3 || typeof plaintextLength !== 'string' ||
+      (recording.markersRequired !== undefined && typeof recording.markersRequired !== 'boolean') ||
       !/^(0|[1-9][0-9]{0,19})$/.test(plaintextLength) || BigInt(plaintextLength) > 0xffffffffffffffffn ||
       typeof recording.ciphertextLength !== 'string' || !/^[1-9][0-9]{0,19}$/.test(recording.ciphertextLength) || BigInt(recording.ciphertextLength) > 0xffffffffffffffffn ||
       typeof recording.ciphertextSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(recording.ciphertextSha256) ||
@@ -560,6 +561,7 @@ const mapPendingRecording = (value: NativePendingRecording): DeviceRecording | B
     uuid: recording.uuid, generation: recording.generation,
     ciphertextLength: recording.ciphertextLength, ciphertextSha256: recording.ciphertextSha256,
     storageFormat: 3, plaintextLength, startedAtMs: recording.startedAtMs,
+    markersRequired: recording.markersRequired ?? false,
     startedAt: new Date(catalogInteger(recording.startedAtMs, 8640000000000000n)),
     durationMs: catalogInteger(recording.durationMs),
   };

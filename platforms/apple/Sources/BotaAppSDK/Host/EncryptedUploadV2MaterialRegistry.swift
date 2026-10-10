@@ -53,6 +53,7 @@ struct EncryptedUploadV2MaterialProvider:
     let reconcileStaging: EncryptedUploadV2Material.StagingReconciler?
     var validateConnection: @Sendable () async throws -> Void = {}
     private let stagingRequestProvider: StagingRequestProvider
+    let submitMarkers: EncryptedUploadV2Material.MarkerSubmitter?
     private let manifestSubmitter: ManifestSubmitter
     private let finalizer: Finalizer
     private let receiptProvider: ReceiptProvider
@@ -67,7 +68,8 @@ struct EncryptedUploadV2MaterialProvider:
         cancel: @escaping @Sendable () async throws -> Void,
         uploadContext: EncryptedUploadV2ContextProvider? = nil,
         shouldUploadCiphertext: @escaping EncryptedUploadV2Material.CiphertextUploadDecision = { _ in true },
-        reconcileStaging: EncryptedUploadV2Material.StagingReconciler? = nil
+        reconcileStaging: EncryptedUploadV2Material.StagingReconciler? = nil,
+        submitMarkers: EncryptedUploadV2Material.MarkerSubmitter? = nil
     ) {
         self.authorization = authorization
         stagingRequestProvider = stagingRequest
@@ -78,6 +80,7 @@ struct EncryptedUploadV2MaterialProvider:
         self.uploadContext = uploadContext
         self.shouldUploadCiphertext = shouldUploadCiphertext
         self.reconcileStaging = reconcileStaging
+        self.submitMarkers = submitMarkers
     }
 
     var description: String { "EncryptedUploadV2MaterialProvider(<redacted>)" }
@@ -154,7 +157,8 @@ actor EncryptedUploadV2MaterialRegistry {
         guard Self.isValidMaterialID(id) else {
             throw EncryptedUploadV2MaterialRegistryError.invalidMaterialID
         }
-        guard provider.authorization.count == Self.authorizationByteCount else {
+        guard [Self.authorizationByteCount, 864].contains(provider.authorization.count),
+              provider.authorization.count != 864 || provider.submitMarkers != nil else {
             throw EncryptedUploadV2MaterialRegistryError.invalidAuthorization
         }
         guard providers[id] == nil else {
@@ -168,7 +172,7 @@ actor EncryptedUploadV2MaterialRegistry {
         let provider = entry.provider
         return EncryptedUploadV2PreparedMaterial(
             authorization: provider.authorization,
-            authorizationSHA256: Self.sha256(provider.authorization),
+            authorizationSHA256: Self.sha256(provider.authorization.prefix(Self.authorizationByteCount)),
             lease: .init(registrationID: entry.registrationID)
         )
     }
@@ -247,6 +251,25 @@ actor EncryptedUploadV2MaterialRegistry {
         try requireCurrent(id: id, registrationID: entry.registrationID)
     }
 
+    func submitMarkers(
+        id: String, lease: EncryptedUploadV2MaterialLease,
+        documents: [Data], evidence: EncryptedUploadV2TransferEvidence
+    ) async throws {
+        try Self.validate(evidence)
+        let entry = try requiredEntry(id, lease: lease)
+        if entry.provider.authorization.count == 864 {
+            guard (2...4097).contains(documents.count), documents.first?.count == 200,
+                  documents.allSatisfy({ (200...402).contains($0.count) }),
+                  let submit = entry.provider.submitMarkers else {
+                throw EncryptedUploadV2MaterialRegistryError.invalidManifest
+            }
+            try await submit(documents, evidence)
+            try requireCurrent(id: id, registrationID: entry.registrationID)
+        } else if !documents.isEmpty {
+            throw EncryptedUploadV2MaterialRegistryError.invalidManifest
+        }
+    }
+
     func finalizeAndReceiveReceipt(
         id: String,
         lease: EncryptedUploadV2MaterialLease,
@@ -258,12 +281,12 @@ actor EncryptedUploadV2MaterialRegistry {
         try requireCurrent(id: id, registrationID: entry.registrationID)
         let receipt = try await entry.provider.completionReceipt(evidence)
         try requireCurrent(id: id, registrationID: entry.registrationID)
-        guard receipt.count == Self.receiptByteCount else {
+        guard receipt.count == (entry.provider.authorization.count == 864 ? 632 : Self.receiptByteCount) else {
             throw EncryptedUploadV2MaterialRegistryError.invalidReceipt
         }
         return EncryptedUploadV2AcceptedReceipt(
             receipt: receipt,
-            receiptSHA256: Self.sha256(receipt)
+            receiptSHA256: Self.sha256(receipt.prefix(Self.receiptByteCount))
         )
     }
 

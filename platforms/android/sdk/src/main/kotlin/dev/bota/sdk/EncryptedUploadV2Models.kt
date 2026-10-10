@@ -34,6 +34,7 @@ public class EncryptedUploadV2Recording(
     public val durationMs: ULong = 0u,
     public val plaintextLength: ULong = 0u,
     public val storageFormat: UByte = 3u,
+    public val markersRequired: Boolean = false,
 ) {
     private val storedCiphertextSha256: ByteArray = ciphertextSha256.copyOf()
     public val ciphertextSha256: ByteArray get() = storedCiphertextSha256.copyOf()
@@ -100,6 +101,7 @@ public class EncryptedUploadV2Material(
     private val cancel: suspend () -> Unit = {},
     public val uploadContext: EncryptedUploadV2ContextProvider? = null,
     internal val shouldUploadCiphertext: suspend (EncryptedUploadV2TransferEvidence) -> Boolean = { true },
+    internal val submitMarkers: (suspend (List<ByteArray>, EncryptedUploadV2TransferEvidence) -> Unit)? = null,
     internal val reconcileStaging: (suspend (ByteArray, EncryptedUploadV2TransferEvidence) -> Boolean)? = null,
 ) {
     private val storedAuthorization: ByteArray = authorization.copyOf()

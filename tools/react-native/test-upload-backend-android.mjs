@@ -22,6 +22,7 @@ const jar = (group, artifact, version) => {
 const runtime = [
   jar('org.jetbrains.kotlin', 'kotlin-stdlib', '2.1.20'),
   jar('org.jetbrains.kotlinx', 'kotlinx-coroutines-core-jvm', '1.10.2'),
+  jar('org.jetbrains.kotlinx', 'kotlinx-coroutines-test-jvm', '1.10.2'),
   jar('com.squareup.okhttp3', 'okhttp', '4.12.0'),
   jar('com.squareup.okio', 'okio-jvm', '3.6.0'),
   jar('org.json', 'json', '20240303'),
@@ -53,10 +54,38 @@ try {
   sources.push(join(sdk, 'platforms/android/sdk/src/main/kotlin/dev/bota/sdk/model/DeviceModels.kt'));
   sources.push(join(sdk, 'platforms/android/sdk/src/main/kotlin/dev/bota/sdk/model/ConnectionModels.kt'));
   sources.push(join(sdk, 'frameworks/react-native/android/src/main/java/dev/bota/sdk/reactnative/BotaDeviceSDKEncryptedUploadV2Materials.kt'));
+  // The same JVM run exercises the SDK's real receiver and material registry.
+  const sdkMain = join(sdk, 'platforms/android/sdk/src/main/kotlin/dev/bota/sdk');
+  for (const file of [
+    'internal/core/EncryptedUploadV2ContractModels.kt', 'internal/core/CoreCommand.kt',
+    'internal/core/CoreEffect.kt', 'internal/core/CoreHostEvent.kt', 'internal/jni/NativePacket.kt',
+    'internal/host/CoreHost.kt', 'internal/host/EncryptedUploadV2Host.kt',
+    'internal/host/EncryptedUploadV2MaterialRegistry.kt', 'internal/bluetooth/EncryptedUploadV2TransferReceiver.kt',
+    'internal/core/EncryptedUploadV2CapabilityReader.kt',
+    'BotaSDKError.kt', 'RecordingControlCommand.kt', 'internal/core/CoreModelMapper.kt', 'internal/core/Protocol.kt',
+    'internal/jni/NativeCoreBridge.kt', 'internal/bluetooth/BluetoothDriver.kt',
+    'internal/bluetooth/BotaBluetoothUUIDs.kt', 'internal/bluetooth/EncryptedUploadV2TransferControl.kt',
+    'internal/bluetooth/EncryptedUploadV2CatalogReader.kt', 'internal/host/JournalStore.kt',
+    'internal/host/EncryptedUploadV2CheckpointStore.kt', 'internal/host/EncryptedUploadV2TransferHost.kt',
+    'internal/host/EncryptedUploadV2MaterialValidation.kt',
+  ]) sources.push(join(sdkMain, file));
+  for (const file of ['internal/bluetooth/EncryptedUploadV2TransferReceiverTest.kt',
+    'internal/host/EncryptedUploadV2MaterialRegistryTest.kt',
+    'internal/host/EncryptedUploadV2TransferHostTest.kt',
+    'internal/bluetooth/EncryptedUploadV2CatalogReaderTest.kt',
+    'internal/core/EncryptedUploadV2DemoCodecTest.kt']) {
+    sources.push(join(sdk, 'platforms/android/sdk/src/test/kotlin/dev/bota/sdk', file));
+  }
+  sources.push(...files(join(sdkMain, 'model')).filter(p => p.endsWith('.kt') && !sources.includes(p)));
   if (run(['-cp', compiler.join(delimiter), 'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler',
     '-Werror', '-no-stdlib', '-no-reflect', '-jvm-target', '17', '-classpath', runtime.join(delimiter), '-d', output, ...sources])) {
     if (compileOnly) console.log('Native backend sources/tests compiled; execution not requested.');
-    else run(['-cp', [output, ...runtime].join(delimiter), 'org.junit.runner.JUnitCore', 'dev.bota.sdk.reactnative.upload.NativeUploadTest']);
+    else run(['-cp', [output, ...runtime].join(delimiter), 'org.junit.runner.JUnitCore', 'dev.bota.sdk.reactnative.upload.NativeUploadTest',
+      'dev.bota.sdk.internal.bluetooth.EncryptedUploadV2TransferReceiverTest',
+      'dev.bota.sdk.internal.host.EncryptedUploadV2MaterialRegistryTest',
+      'dev.bota.sdk.internal.host.EncryptedUploadV2TransferHostTest',
+      'dev.bota.sdk.internal.bluetooth.EncryptedUploadV2CatalogReaderTest',
+      'dev.bota.sdk.internal.core.EncryptedUploadV2DemoCodecTest']);
   }
 } finally {
   rmSync(output, { recursive: true, force: true });

@@ -670,6 +670,7 @@ RCT_EXPORT_MODULE(BotaDeviceSDK)
                            durationMs:recording.durationMs()
                       plaintextLength:recording.plaintextLength()
                         storageFormat:recording.storageFormat().has_value() ? @(recording.storageFormat().value()) : nil
+                      markersRequired:recording.markersRequired().value_or(false)
                           operationID:operationId
                      onProfileRequest:^(NSDictionary *request) {
                        [weakSelf emitOnEncryptedUploadV2ProfileRequested:request];

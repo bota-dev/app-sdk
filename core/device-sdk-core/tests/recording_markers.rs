@@ -124,3 +124,68 @@ fn shares_exact_body_vectors_with_backend_and_firmware() {
         }
     }
 }
+
+#[test]
+fn protected_batch_ble_frames_and_exact_bundle_lengths() {
+    use bota_device_sdk_core::protocol::{
+        CommonHeaderV2, EncryptedUploadV2SignedBlob, EncryptedUploadV2Transfer, MarkerChunkV2,
+        decode_encrypted_upload_v2_signed_blob, decode_encrypted_upload_v2_transfer,
+        encode_encrypted_upload_v2_signed_blob, encode_encrypted_upload_v2_transfer,
+    };
+    let common = CommonHeaderV2 {
+        message_type: 0x25,
+        flags: 0,
+        transport_session_id: 17,
+    };
+    let bytes = encode_encrypted_upload_v2_transfer(&EncryptedUploadV2Transfer::MarkedList(common))
+        .unwrap();
+    assert_eq!(&bytes[12..], &[1, 0, 0, 0]);
+    assert!(matches!(
+        decode_encrypted_upload_v2_transfer(&bytes).unwrap(),
+        EncryptedUploadV2Transfer::MarkedList(_)
+    ));
+    let chunk = EncryptedUploadV2Transfer::MarkerChunk(MarkerChunkV2 {
+        common: CommonHeaderV2 {
+            message_type: 0x4a,
+            ..common
+        },
+        document_index: 1,
+        document_count: 3,
+        chunk_offset: 0,
+        document_length: 402,
+        document_sha256: [7; 32],
+        chunk: &[8; 180],
+    });
+    let bytes = encode_encrypted_upload_v2_transfer(&chunk).unwrap();
+    assert_eq!(decode_encrypted_upload_v2_transfer(&bytes).unwrap(), chunk);
+    for offset in [1, 2, 3, 17, 21, 22, 25, 26] {
+        let mut invalid = bytes.clone();
+        invalid[offset] = 255;
+        assert!(
+            decode_encrypted_upload_v2_transfer(&invalid).is_err(),
+            "offset {offset}"
+        );
+    }
+    for (kind, size) in [(5, 864), (6, 632)] {
+        let frame = EncryptedUploadV2SignedBlob::Begin {
+            kind,
+            write_id: 1,
+            total_length: size,
+            sha256: [0; 32],
+        };
+        let encoded = encode_encrypted_upload_v2_signed_blob(&frame).unwrap();
+        assert_eq!(
+            decode_encrypted_upload_v2_signed_blob(&encoded).unwrap(),
+            frame
+        );
+        assert!(
+            encode_encrypted_upload_v2_signed_blob(&EncryptedUploadV2SignedBlob::Begin {
+                kind,
+                write_id: 1,
+                total_length: size - 1,
+                sha256: [0; 32]
+            })
+            .is_err()
+        );
+    }
+}

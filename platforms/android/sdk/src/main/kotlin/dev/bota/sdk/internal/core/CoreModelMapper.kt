@@ -78,14 +78,14 @@ internal class CoreModelMapper(
             dev.bota.sdk.EncryptedUploadV2Recording(
                 ids[index], generations[index].toUIntExact("generation"), ciphertext[index], hashes[index],
                 started[index] * 1_000u, duration[index] * 1_000u, plaintext[index],
-                storage[index].toUByteExact("storage format"),
+                storage[index].toUByteExact("storage format"), completion[index] == 2uL,
             )
         }
     }
 
-    fun createEncryptedUploadV2List(sessionId: ULong): ByteArray = encode(0x0524, listOf(
+    fun createEncryptedUploadV2List(sessionId: ULong, includeMarkers: Boolean = false): ByteArray = encode(0x0524, listOf(
         Field.unsigned(127, 0x25u), Field.unsigned(128, sessionId),
-    ))
+    ) + if (includeMarkers) listOf(Field.unsigned(157, 1u)) else emptyList())
 
     fun createEncryptedUploadV2ContextBegin(attemptId: UInt): ByteArray =
         encode(0x0528, listOf(Field.unsigned(199, attemptId.toULong())))
@@ -809,6 +809,12 @@ internal class CoreModelMapper(
                     ),
                 )
             }
+            0x4a -> EncryptedUploadV2TransferPayload.MarkerChunk(EncryptedUploadV2MarkerChunkValue(
+                sessionId, fields.requiredUInt(EncryptedUploadV2Protocol.Field.Sequence), fields.requiredUInt(85),
+                fields.requiredUShort(EncryptedUploadV2Protocol.Field.Offset),
+                fields.requiredUShort(EncryptedUploadV2Protocol.Field.BodyLength), fields.requiredBytes(123),
+                fields.requiredBytes(EncryptedUploadV2Protocol.Field.Value),
+            ))
             0x44 -> EncryptedUploadV2TransferPayload.Eof(
                 EncryptedUploadV2EofValue(
                     sessionId,

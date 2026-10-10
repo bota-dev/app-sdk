@@ -26,6 +26,7 @@ private final class FakeHTTP: UploadHTTP {
 @main
 private struct AppleUploadTests {
   @MainActor static func main() async throws {
+    try await protectedStreamingStatus()
     try await journalAndCredentials()
     try await prepareAndResume()
     try await reconnectJournalIdentity()
@@ -42,7 +43,206 @@ private struct AppleUploadTests {
     try await uncertainCreateRetention()
     try await rollbackGuardsAndDurability()
     try await manifestReconciliation()
-    print("PASS Apple upload: 16 suites including manifest replay, retained identity and explicit missing-object handling")
+    try await markedUpload()
+    try await markedAdmissionRecovery()
+    try await markedSuccessorCompletionFences()
+    try await markedPostManifestAdmissionFences()
+    print("PASS Apple upload: 21 suites including protected streaming status and marked recovery fences")
+  }
+
+  @MainActor private static func protectedStreamingStatus() async throws {
+    let http = FakeHTTP()
+    let provider = UploadStreamingStatus(http: http)
+    let input: [String: Any] = ["url": "https://api.example/dashboard/projects/proj_a/recordings/rec_a/streaming-status?session_id=12345678-1234-4234-8234-123456789012", "token": "app-token", "organizationId": "org_a"]
+    let request = String(decoding: try JSONSerialization.data(withJSONObject: input), as: UTF8.self)
+    var payload: [String: Any] = ["profile": "recording_markers_stream_v1", "recording_id": "rec_a",
+      "session_id": "12345678-1234-4234-8234-123456789012", "recording_generation": 1, "writer_epoch": "1",
+      "revision": "9007199254740993", "received_count": 0, "contiguous_sequence": 0,
+      "state": "open", "expected_count": NSNull(), "authorization_expired": false]
+    let good = try JSONSerialization.data(withJSONObject: payload)
+    http.handler = { _ in UploadHTTPResponse(status: 200, body: good) }
+    let result = try await provider.read(request)
+    try expect(result.contains("9007199254740993"), "Lossless revision")
+    try expect(http.requests[0].httpMethod == "GET" && http.requests[0].value(forHTTPHeaderField: "X-Organization-Id") == "org_a", "Scoped GET")
+    for status in [302, 401, 403, 404, 503] {
+      http.handler = { _ in UploadHTTPResponse(status: status, body: Data()) }
+      try await rejects(.http(status)) { _ = try await provider.read(request) }
+    }
+    try expect(http.requests.count == 6, "No auth fallback")
+    payload["authorization"] = "must-stay-native"
+    let opaque = try JSONSerialization.data(withJSONObject: payload)
+    http.handler = { _ in UploadHTTPResponse(status: 200, body: opaque) }
+    try await rejects(.invalidDocument) { _ = try await provider.read(request) }
+    http.handler = { _ in UploadHTTPResponse(status: 200, body: Data(repeating: 32, count: 16385)) }
+    try await rejects(.invalidDocument) { _ = try await provider.read(request) }
+    try await rejects(.invalidInput) { _ = try await provider.read(request.replacingOccurrences(of: "https", with: "http")) }
+  }
+
+  @MainActor private static func markedAdmissionRecovery() async throws {
+    for readStatus in [200, 404, 403, 409] {
+      let (ordinary, journal, root, http, credentials) = try fixture()
+      defer { try? FileManager.default.removeItem(at: root) }
+      var input = ordinary
+      input.recording.markersRequired = true
+      var posts = 0
+      http.handler = { request in
+        if request.url!.path.hasSuffix("/recordings") { return try json(["id": "rec_one"]) }
+        if request.url!.path.hasSuffix("/markers/authorization") {
+          if request.httpMethod == "GET" && readStatus != 200 { return UploadHTTPResponse(status: readStatus, body: Data()) }
+          if request.httpMethod == "POST" { posts += 1 }
+          let bytes = Data(repeating: 3, count: 280)
+          return try json(["profile": "recording-markers/1", "context_base64": Data(repeating: 0, count: 176).base64EncodedString(),
+            "authorization_base64": bytes.base64EncodedString(), "authorization_sha256": UploadValidation.hash(bytes)])
+        }
+        return try json(session("staging"))
+      }
+      let op = operation(input, journal, http, credentials)
+      if [403, 409].contains(readStatus) { try await rejects(.http(readStatus)) { _ = try await op.prepare() } }
+      else { _ = try await op.prepare() }
+      try expect(posts == (readStatus == 404 ? 1 : 0), "Only explicit absence allows a new marker admission")
+    }
+  }
+
+  @MainActor private static func markedSuccessorCompletionFences() async throws {
+    for invalid in ["owner", "wifi", "cellular", "marker-hash"] {
+      let (ordinary, journal, root, http, credentials) = try fixture()
+      defer { try? FileManager.default.removeItem(at: root) }
+      var input = ordinary
+      input.recording.markersRequired = true
+      try journal.save(input, entry: .init(recordingId: "rec_one", sessionId: sessionID, ownerRevision: 1))
+      let child = "33333333-3333-3333-3333-333333333333"
+      let context = Data(repeating: 4, count: 176)
+      let markerAuth = Data(repeating: 3, count: 280)
+      http.handler = { request in
+        let path = request.url!.path
+        if path.hasSuffix("/markers/authorization") {
+          try expect(request.httpMethod == "GET" && path.hasSuffix(child + "/markers/authorization") &&
+            request.url!.query == "owner_revision=2", "Successor restores its own persisted admission")
+          return try json(["profile": "recording-markers/1", "context_base64": context.base64EncodedString(),
+            "authorization_base64": markerAuth.base64EncodedString(), "authorization_sha256": UploadValidation.hash(markerAuth)])
+        }
+        if path.hasSuffix(sessionID + "/recover") {
+          let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
+          try expect(body["owner_revision"] as? Int == 1, "Recover exact parent owner")
+        }
+        var status = session(path.hasSuffix(sessionID) ? "expired" : "staging")
+        if path.hasSuffix(child) || path.hasSuffix("/recover") {
+          status["session_id"] = child
+          status["owner_revision"] = 2
+        }
+        return try json(status)
+      }
+      let op = operation(input, journal, http, credentials)
+      let prepared = try await op.prepare()
+      try expect(prepared.session.session_id == child && prepared.session.owner_revision == 2, "Select durable successor")
+      try expect(prepared.authorization == Data(repeating: 1, count: 408) + context + markerAuth, "Preserve successor admission bytes")
+      let retained = try journal.load(input)
+      try expect(retained?.sessionId == child && retained?.ownerRevision == 2, "Persist successor before admission")
+      http.handler = { request in
+        try expect(request.url!.path.hasSuffix(child), "Poll only selected successor")
+        var status = session("published")
+        status["session_id"] = invalid == "owner" ? sessionID : child
+        status["owner_revision"] = invalid == "owner" ? 1 : 2
+        status["channel"] = ["wifi", "cellular"].contains(invalid) ? invalid : "ble"
+        status["plaintext_length"] = 256
+        let audio = Data(repeating: 6, count: 336)
+        status["completion_receipt_base64"] = audio.base64EncodedString()
+        status["completion_receipt_sha256"] = UploadValidation.hash(audio)
+        status["marker_completion_receipt_base64"] = Data(repeating: 5, count: 296).base64EncodedString()
+        status["marker_completion_receipt_sha256"] = String(repeating: "0", count: 64)
+        return try json(status)
+      }
+      let evidence = UploadEvidence(ciphertextLength: 512, ciphertextSHA256: Data(repeating: 0xaa, count: 32),
+        manifestLength: 580, manifestSHA256: Data(repeating: 0, count: 32))
+      try await rejects(invalid == "marker-hash" ? .invalidDocument : .identityConflict) { try await op.finalize(evidence) }
+      try await rejects(.state) { _ = try op.completionReceipt(evidence) }
+      try await rejects(.state) { try op.complete() }
+      try expect(try journal.load(input) == retained, "Rejected completion retains exact successor journal")
+      try expect(http.requests.filter { $0.url!.path.hasSuffix("/recover") }.count == 1, "One successor request")
+      try expect(!http.requests.contains { $0.url!.path.hasSuffix("/markers/authorization") && $0.httpMethod == "POST" },
+        "Saved child admission never recreated")
+      op.cancel()
+    }
+  }
+
+  @MainActor private static func markedPostManifestAdmissionFences() async throws {
+    for state in ["staging", "ready", "processing", "published"] {
+      for readStatus in [404, 503] {
+        if state == "staging" && readStatus == 404 { continue }
+        let (ordinary, journal, root, http, credentials) = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        var input = ordinary
+        input.recording.markersRequired = true
+        let retained = UploadJournalEntry(recordingId: "rec_one", sessionId: sessionID, ownerRevision: 1)
+        try journal.save(input, entry: retained)
+        http.handler = { request in
+          try expect(request.httpMethod == "GET", "Failure never reopens admission")
+          if request.url!.path.hasSuffix("/markers/authorization") { return try json([:], status: readStatus) }
+          return try json(session(state))
+        }
+        try await rejects(.http(readStatus)) { _ = try await operation(input, journal, http, credentials).prepare() }
+        try expect(try journal.load(input) == retained, "Failed admission lookup retains owner")
+      }
+    }
+  }
+
+  @MainActor private static func markedUpload() async throws {
+    let (ordinary, journal, root, http, credentials) = try fixture()
+    defer { try? FileManager.default.removeItem(at: root) }
+    var input = ordinary
+    input.recording.markersRequired = true
+    let markerAuthorization = Data(repeating: 3, count: 280)
+    let context = Data(repeating: 4, count: 176)
+    let markerReceipt = Data(repeating: 5, count: 296)
+    let audioReceipt = Data(repeating: 6, count: 336)
+    var published = false
+    var includeMarkerReceipt = false
+    var batches = 0
+    http.handler = { request in
+      let path = request.url!.path
+      if path.hasSuffix("/recordings") { return try json(["id": "rec_one"]) }
+      if path.hasSuffix("/markers/authorization") {
+        return try json(["profile": "recording-markers/1", "context_base64": context.base64EncodedString(),
+          "authorization_base64": markerAuthorization.base64EncodedString(),
+          "authorization_sha256": UploadValidation.hash(markerAuthorization)])
+      }
+      if path.hasSuffix("/markers/batch") {
+        let body = try JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
+        try expect((body["pages_base64"] as? [String])?.count == 1, "Native marker page forwarding")
+        batches += 1
+        return try json(["state": "verified"])
+      }
+      var status = session(published ? "published" : "staging")
+      if published {
+        status["plaintext_length"] = 256
+        status["completion_receipt_base64"] = audioReceipt.base64EncodedString()
+        status["completion_receipt_sha256"] = UploadValidation.hash(audioReceipt)
+        if includeMarkerReceipt {
+          status["marker_completion_receipt_base64"] = markerReceipt.base64EncodedString()
+          status["marker_completion_receipt_sha256"] = UploadValidation.hash(markerReceipt)
+        }
+      }
+      return try json(status)
+    }
+    let op = operation(input, journal, http, credentials)
+    let prepared = try await op.prepare()
+    try expect(prepared.authorization == Data(repeating: 1, count: 408) + context + markerAuthorization, "Marked bundle order")
+    let evidence = UploadEvidence(ciphertextLength: 512, ciphertextSHA256: Data(repeating: 0xaa, count: 32),
+      manifestLength: 580, manifestSHA256: Data(repeating: 0, count: 32))
+    try await rejects(.invalidDocument) { try await op.submitMarkers([Data(repeating: 0, count: 200)], evidence: evidence) }
+    try await op.submitMarkers([Data(repeating: 0, count: 200), Data(repeating: 0, count: 216)], evidence: evidence)
+    try expect(batches == 1, "Incomplete metadata never submitted")
+    published = true
+    try await rejects(.invalidDocument) { try await op.finalize(evidence) }
+    try await rejects(.state) { _ = try op.completionReceipt(evidence) }
+    try expect(try journal.load(input) != nil, "Audio-only completion retains journal")
+    includeMarkerReceipt = true
+    try await op.finalize(evidence)
+    try expect(try op.completionReceipt(evidence) == audioReceipt + markerReceipt, "Exact dual completion")
+    var explicitFalse = ordinary
+    explicitFalse.recording.markersRequired = false
+    try expect(try ordinary.identity() == explicitFalse.identity(), "Ordinary journal remains compatible")
+    try expect(try ordinary.identity() != input.identity(), "Marker requirement bound to journal identity")
   }
 
   static func input() throws -> UploadInput {

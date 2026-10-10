@@ -1,3 +1,5 @@
+import { createManagedProtectedStreamingStatusBackend } from './protectedStreamingStatus';
+import type { ProtectedStreamingStatusBackendOptions } from './protectedStreamingStatus';
 import NativeBotaDeviceSDK from './specs/NativeBotaDeviceSDK';
 import { createBotaDeviceSDK } from './client';
 import NativeBotaUploadV2Backend from './specs/NativeBotaUploadV2Backend';
@@ -58,6 +60,10 @@ export const BotaDeviceSDK = createBotaDeviceSDK(NativeBotaDeviceSDK);
 export const createEncryptedUploadV2Backend = (options: EncryptedUploadV2BackendOptions) =>
   createManagedEncryptedUploadV2Backend(NativeBotaUploadV2Backend, BotaDeviceSDK.recordings, options);
 export type { EncryptedUploadV2BackendOptions, EncryptedUploadV2Backend, EncryptedUploadV2SyncTarget } from './encryptedUploadV2Backend';
+export const createProtectedStreamingStatusBackend = (options: ProtectedStreamingStatusBackendOptions) =>
+  createManagedProtectedStreamingStatusBackend(NativeBotaUploadV2Backend, options);
+export type { ProtectedStreamingIdentity, ProtectedStreamingStatus, ProtectedStreamingStatusBackend,
+  ProtectedStreamingStatusBackendOptions } from './protectedStreamingStatus';
 setDefaultCompatibilityClient(BotaDeviceSDK);
 
 export { BotaClient } from './BotaClient';

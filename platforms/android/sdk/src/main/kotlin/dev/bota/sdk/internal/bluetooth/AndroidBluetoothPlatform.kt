@@ -34,29 +34,6 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-internal data class BluetoothAdvertisement(
-    val peripheralId: String,
-    val name: String?,
-    val rssi: Int,
-    val advertisedAddress: String?,
-)
-
-internal data class GattResult<T>(val generation: Long, val status: Int, val value: T)
-
-internal data class GattCharacteristic(val serviceUuid: UUID, val characteristicUuid: UUID)
-
-internal data class GattDiscovery(
-    val serviceUuids: Set<UUID>,
-    val characteristics: Set<GattCharacteristic>,
-)
-
-internal enum class GattWriteApi { Api33, Legacy }
-
-internal class BluetoothNotification(generation: Long, value: ByteArray) {
-    val generation: Long = generation
-    val value: ByteArray = value.copyOf()
-}
-
 internal class AndroidDisconnectBuffer(private val capacity: Int = 64) {
     private val lock = Any()
     private val pending = ArrayDeque<ConfirmedBluetoothDisconnect>()

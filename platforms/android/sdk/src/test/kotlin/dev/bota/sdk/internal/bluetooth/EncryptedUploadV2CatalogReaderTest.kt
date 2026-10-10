@@ -19,6 +19,17 @@ import org.junit.Test
 
 class EncryptedUploadV2CatalogReaderTest {
     @Test
+    fun explicitUnsupportedMarkedListRetriesLegacyAfterCleanUnsubscribe() = runTest {
+        val flags = mutableListOf<ULong>()
+        val driver = CatalogDriver(reject = true, rejectOnce = true)
+        val values = EncryptedUploadV2CatalogReader(driver, mapper(status = 3u, flags = flags)).read("device", 9u)
+        assertTrue(values.isEmpty())
+        assertEquals(listOf(1uL, 0uL), flags)
+        assertEquals(2, driver.calls.count { it == "write" })
+        assertEquals(4, driver.calls.count { it.startsWith("unsubscribe") })
+    }
+
+    @Test
     fun subscribesToCatalogAndErrorsBeforeListAndReleasesBoth() = runTest {
         val driver = CatalogDriver()
         val mapper = mapper()
@@ -56,12 +67,12 @@ class EncryptedUploadV2CatalogReaderTest {
         assertTrue(runCatching { malformed.readIfPresent("device") }.isFailure)
     }
 
-    private fun mapper(malformed: Boolean = false) = CoreModelMapper(CodecCore(
-        encode = { listOf(CoreField.Bytes(30, byteArrayOf(7))).toNativePacket(it.kind) },
+    private fun mapper(malformed: Boolean = false, status: ULong = 9u, flags: MutableList<ULong> = mutableListOf()) = CoreModelMapper(CodecCore(
+        encode = { flags += it.unsigneds(157).singleOrNull() ?: 0u; listOf(CoreField.Bytes(30, byteArrayOf(7))).toNativePacket(it.kind) },
         decode = { input ->
             when {
                 input.kind == 0x0522 -> listOf(CoreField.Unsigned(61, 3u), CoreField.Unsigned(127, 0x4fu),
-                    CoreField.Unsigned(128, 9u), CoreField.Unsigned(155, 9u), CoreField.Unsigned(97, 0x25u),
+                    CoreField.Unsigned(128, 9u), CoreField.Unsigned(155, status), CoreField.Unsigned(97, 0x25u),
                     CoreField.Unsigned(133, 0u)).toNativePacket(input.kind)
                 input.bytes(30)!!.isEmpty() -> emptyList<CoreField>().toNativePacket(input.kind)
                 malformed -> error("Rust rejected malformed catalog")
@@ -72,7 +83,7 @@ class EncryptedUploadV2CatalogReaderTest {
     ))
 }
 
-private class CatalogDriver(private val reject: Boolean = false) : BluetoothDriver {
+private class CatalogDriver(private val reject: Boolean = false, private val rejectOnce: Boolean = false) : BluetoothDriver {
     val calls = mutableListOf<String>()
     private val channels = mutableMapOf<UUID, Channel<BluetoothNotification>>()
     private fun label(id: UUID): String = if (id == BotaBluetoothUUIDs.RecordingListV2) "list" else "errors"
@@ -86,7 +97,7 @@ private class CatalogDriver(private val reject: Boolean = false) : BluetoothDriv
     }
     override suspend fun write(peripheralId: String, serviceUuid: UUID, characteristicUuid: UUID, value: ByteArray, withResponse: Boolean) {
         calls += "write"
-        val channel = if (reject) BotaBluetoothUUIDs.RecordingTransferV2 else BotaBluetoothUUIDs.RecordingListV2
+        val channel = if (reject && (!rejectOnce || calls.count { it == "write" } == 1)) BotaBluetoothUUIDs.RecordingTransferV2 else BotaBluetoothUUIDs.RecordingListV2
         channels.getValue(channel).send(BluetoothNotification(1, byteArrayOf(1)))
     }
     override suspend fun read(peripheralId: String, serviceUuid: UUID, characteristicUuid: UUID): ByteArray = error("unused")

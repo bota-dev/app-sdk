@@ -909,7 +909,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
-    @objc(syncEncryptedRecordingV2WithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:recordingUUID:generation:ciphertextLength:ciphertextSHA256:startedAtMs:durationMs:plaintextLength:storageFormat:operationID:onProfileRequest:onProgress:completion:)
+    @objc(syncEncryptedRecordingV2WithID:serialNumber:deviceType:firmwareVersion:hardwareRevision:isProvisioned:connectionState:mtu:recordingUUID:generation:ciphertextLength:ciphertextSHA256:startedAtMs:durationMs:plaintextLength:storageFormat:markersRequired:operationID:onProfileRequest:onProgress:completion:)
     public func syncEncryptedRecordingV2(
         id: String,
         serialNumber: String,
@@ -927,6 +927,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         durationMs: String?,
         plaintextLength: String?,
         storageFormat: NSNumber?,
+        markersRequired: Bool,
         operationID: String,
         onProfileRequest: @escaping @Sendable ([String: Any]) -> Void,
         onProgress: @escaping @Sendable ([String: Any]) -> Void,
@@ -964,7 +965,8 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                         startedAtMs: try Self.catalogDecimal(startedAtMs),
                         durationMs: try Self.catalogDecimal(durationMs),
                         plaintextLength: try Self.catalogDecimal(plaintextLength),
-                        storageFormat: format
+                        storageFormat: format,
+                        markersRequired: markersRequired
                     ),
                     operationID: operationID,
                     onProfileRequest: onProfileRequest,
