@@ -57,6 +57,12 @@ acceptance remain distinct gates.
 
 ## CI policy
 
+OTA reboot recovery retries transient discovery/connection failures within one
+two-minute deadline. Transfer-status loss is recoverable only after successful
+image verification; earlier failures remain terminal. Never equate ACK, expected
+disconnect or a phone Bluetooth toggle with installed-version proof. See the
+[Android OTA review](docs/parity/android-write-completion.md#normal-preview-build-and-reboot-recovery--october-9).
+
 Apple `BotaSDKError` conforms to `CustomNSError` and `LocalizedError`; retain
 the existing domain, ABI error numbers, stable names, retry policy and optional
 protocol status through Objective-C bridging. Keep unknown numeric codes and
@@ -290,6 +296,14 @@ before the cancellation check starts. This is test ordering, not a runtime chang
   packages that the lock marks optional for the current platform.
 
 ## Invariants
+
+- Android characteristic writes, including `WRITE_TYPE_NO_RESPONSE`, must await
+  the local completion callback before releasing the per-device GATT queue.
+  Preserve immediate Android status codes and retire the exact session if an
+  issued write is cancelled before completion. Run the API 26/35 framework
+  sequencing, rejection and cancellation regressions plus the controlled driver
+  suite. This source correction is absent from published beta.14; see the
+  [review](docs/parity/android-write-completion.md).
 
 - Android failed connect/MTU handshakes must retire only their captured generation
   and close its native GATT even after the connected callback. Preserve the

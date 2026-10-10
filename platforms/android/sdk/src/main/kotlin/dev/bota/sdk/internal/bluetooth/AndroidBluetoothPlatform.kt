@@ -363,15 +363,32 @@ internal class FrameworkAndroidBluetoothPlatform(context: Context) : AndroidBlue
         api: GattWriteApi,
     ): GattResult<Unit> {
         val key = CharacteristicKey(peripheralId, generation, serviceUuid, characteristicUuid)
-        return if (!withResponse) {
-            onHandler {
-                val (gatt, characteristic) = characteristic(key)
-                val status = writeCharacteristic(gatt, characteristic, value, false, api)
-                GattResult(generation, status, Unit)
-            }
-        } else {
-            pending(key, writes) { gatt, characteristic ->
-                writeCharacteristic(gatt, characteristic, value, true, api) == BluetoothGatt.GATT_SUCCESS
+        return suspendCancellableCoroutine { continuation ->
+            handler.post {
+                if (!continuation.isActive) return@post
+                try {
+                    val (gatt, characteristic) = characteristic(key)
+                    writes.remove(key)?.cancel()
+                    writes[key] = continuation
+                    continuation.invokeOnCancellation {
+                        handler.post {
+                            if (writes[key] === continuation) {
+                                writes.remove(key)
+                                // Android cannot cancel an issued write. Retire this session before retry.
+                                gatt.disconnect()
+                                completeDisconnection(gatt, ImmediateFailure)
+                            }
+                        }
+                    }
+                    // NO_RESPONSE still has a local Android completion callback; initiation is not completion.
+                    val status = writeCharacteristic(gatt, characteristic, value, withResponse, api)
+                    if (status != BluetoothGatt.GATT_SUCCESS) {
+                        writes.remove(key)?.resume(GattResult(generation, status, Unit))
+                    }
+                } catch (error: Throwable) {
+                    writes.remove(key)
+                    continuation.resumeWithException(error)
+                }
             }
         }
     }

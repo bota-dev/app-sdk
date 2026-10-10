@@ -597,6 +597,12 @@ HandlerThread. A per-device queue serializes MTU, discovery, read, write, and
 CCCD operations while allowing independent devices to progress. Monotonic GATT
 generations reject callbacks from replaced connections, disconnect cancels
 blocked work, and manual selection preempts background reconnect ownership.
+Unreleased Android source holds write ownership through `onCharacteristicWrite`
+for both response modes. An issued write cancelled before that callback retires
+its exact GATT session; late callbacks cannot settle a replacement connection.
+Immediate write rejections retain their Android status. See the
+[source review](docs/parity/android-write-completion.md); native publication and
+installed application acceptance remain separate.
 Scan identity uses peripheral IDs plus advertised manufacturer data; names are
 display metadata only. The host checks location permission through API 30 and
 scan/connect permissions on API 31+ before an effect reaches the platform.
@@ -1261,7 +1267,12 @@ A compatible verified blob can be reused after reload, while an
 incomplete blob restarts from byte zero with a freshly resolved request.
 
 Rust owns OTA transfer, device status handling, verification, reboot, reconnect,
-and public workflow errors. Reboot recovery requires authorized-device
+and public workflow errors. After successful image verification, loss of the
+transfer-status stream enters reboot recovery instead of failing immediately.
+Transient discovery/connection failures retry after one second within the same
+two-minute deadline; identity and target-version read-back remain required.
+Before successful verification, stream loss remains an error. This unpublished
+source behavior requires rebuilt native consumers. Reboot recovery requires authorized-device
 enumeration and filters it to the exact browser device ID captured by the
 verified connection. Cancellation retains mutation ownership until provider,
 fetch, OPFS, GATT, subscription, and timer work settles, then reconciles the
