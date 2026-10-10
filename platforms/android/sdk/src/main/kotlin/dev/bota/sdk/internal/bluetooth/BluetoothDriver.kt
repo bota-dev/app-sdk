@@ -60,4 +60,3 @@ internal class BluetoothNotification(generation: Long, value: ByteArray) {
     val generation: Long = generation
     val value: ByteArray = value.copyOf()
 }
-
