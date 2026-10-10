@@ -60,13 +60,36 @@ class EncryptedUploadV2TransferHostTest {
         assertSameOwnerResume(2)
     }
 
-    private suspend fun kotlinx.coroutines.test.TestScope.assertSameOwnerResume(offset: Int) {
+    @Test
+    fun markedResumeStagesMetadataBeforeDualReceiptAndUsesMarkedSignedBlobs() = runTest {
+        assertSameOwnerResume(4, marked = true)
+    }
+
+    private suspend fun kotlinx.coroutines.test.TestScope.assertSameOwnerResume(offset: Int, marked: Boolean = false) {
         val ciphertext = byteArrayOf(3, 4, 5, 6)
         val manifest = ByteArray(580)
         val root = Files.createTempDirectory("bota-v2-accepted-resume")
         val file = root.resolve("$SinkId.encrypted-upload-v2")
         Files.write(file, ciphertext)
-        val services = services(registry(AtomicInteger()), mutableListOf()).copyForOpen { _, checkpoint ->
+        val actions = mutableListOf<String>()
+        val documents = listOf(ByteArray(200) { 8 }, ByteArray(216) { 9 })
+        val registry = if (marked) EncryptedUploadV2MaterialRegistry().also {
+            it.register("material-1", NativeEncryptedUploadV2Material(
+                materialId = "material-1", recordingId = RecordingId, uploadSessionId = UploadSession,
+                ownerRevision = 2u, policy = EncryptedUploadV2SecurityPolicy.V2Required,
+                authorization = ByteArray(864),
+                stagingRequest = { Request.Builder().url("https://example.test/upload").put(ByteArray(0).toRequestBody()).build() },
+                submitManifest = { _, _ -> actions += "manifest" }, finalize = { actions += "finalize" },
+                completionReceipt = { ByteArray(632) },
+                uploadContext = { error("test service does not request an exchange") },
+                submitMarkers = { received, _ ->
+                    assertEquals(2, received.size)
+                    documents.forEachIndexed { index, bytes -> assertTrue(bytes.contentEquals(received[index])) }
+                    actions += "markers"
+                },
+            ))
+        } else registry(AtomicInteger())
+        val services = services(registry, actions).copyForOpen { _, checkpoint ->
             assertEquals(339u, checkpoint!!.highestContiguousSequence)
             assertEquals(offset.toULong(), checkpoint.nextCiphertextOffset)
             EncryptedUploadV2OpenResult.Opened(flow {
@@ -81,6 +104,11 @@ class EncryptedUploadV2TransferHostTest {
                 emit(EncryptedUploadV2TransferPayload.ManifestChunk(
                     EncryptedUploadV2ManifestChunkValue(9u, 580u, 0u, sha(manifest), manifest),
                 ))
+                if (marked) documents.forEachIndexed { index, bytes ->
+                    emit(EncryptedUploadV2TransferPayload.MarkerChunk(
+                        dev.bota.sdk.internal.core.EncryptedUploadV2MarkerChunkValue(
+                            9u, index.toUInt(), 2u, 0u, bytes.size.toUShort(), sha(bytes), bytes)))
+                }
                 emit(EncryptedUploadV2TransferPayload.Eof(
                     EncryptedUploadV2EofValue(9u, if (offset == ciphertext.size) 0u else 1u, 1u,
                         4u, sha(ciphertext), sha(manifest)),
@@ -113,6 +141,35 @@ class EncryptedUploadV2TransferHostTest {
             assertEquals(if (offset == ciphertext.size) 339u else 1u, saved.highestContiguousSequence)
             assertEquals(if (offset == ciphertext.size) 34u else 35u, saved.revision)
             assertTrue(Files.readAllBytes(file).contentEquals(ciphertext))
+            if (marked) {
+                val evidence = evidenceFields(ciphertext, manifest)
+                host.execute(effect(CoreEffectKind.EncryptedUploadV2StageArtifacts,
+                    CoreField.Text(12, "material-1"), CoreField.Text(14, SinkId), *evidence)).toList()
+                val receipt = host.execute(effect(CoreEffectKind.EncryptedUploadV2AwaitReceipt,
+                    CoreField.Text(12, "material-1"), *evidence)).toList().single()
+                    .fields.filterIsInstance<CoreField.Bytes>().single().value
+                assertTrue(receipt.contentEquals(sha(ByteArray(336))))
+                for (staleMaterial in listOf(false, true)) {
+                    val failure = runCatching {
+                        host.execute(effect(CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt,
+                            CoreField.Text(12, if (staleMaterial) "previous-owner-material" else "material-1"),
+                            CoreField.Bytes(162, if (staleMaterial) receipt else sha(ByteArray(336) { 1 })))).toList()
+                    }.exceptionOrNull()
+                    assertTrue("Stale marked CONFIRM must fail", failure is EncryptedUploadV2HostException)
+                    assertTrue(Files.readAllBytes(file).contentEquals(ciphertext))
+                    val retained = services.checkpointStore.load(UploadSession)!!
+                    assertEquals(saved.uploadSessionId, retained.uploadSessionId)
+                    assertEquals(saved.ownerRevision, retained.ownerRevision)
+                    assertEquals(saved.revision, retained.revision)
+                    assertEquals(saved.nextCiphertextOffset, retained.nextCiphertextOffset)
+                    assertTrue(saved.coreCheckpoint.contentEquals(retained.coreCheckpoint))
+                    assertTrue(saved.prefixSha256.contentEquals(retained.prefixSha256))
+                    assertEquals(listOf("signed-5", "manifest", "markers", "finalize"), actions)
+                }
+                host.execute(effect(CoreEffectKind.EncryptedUploadV2ConfirmWithReceipt,
+                    CoreField.Text(12, "material-1"), CoreField.Bytes(162, receipt))).toList()
+                assertEquals(listOf("signed-5", "manifest", "markers", "finalize", "signed-6"), actions)
+            }
         } finally {
             host.close()
         }

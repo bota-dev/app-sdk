@@ -160,6 +160,7 @@ export type NativeEncryptedUploadV2Recording = {
   durationMs?: string;
   plaintextLength?: string;
   storageFormat?: number;
+  markersRequired?: boolean;
 };
 
 export type NativePendingRecording = {

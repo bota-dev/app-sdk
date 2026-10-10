@@ -174,9 +174,15 @@ internal data class EncryptedUploadV2EofValue(
     val manifestSha256: ByteArray,
 )
 
+internal data class EncryptedUploadV2MarkerChunkValue(
+    val transportSessionId: ULong, val documentIndex: UInt, val documentCount: UInt,
+    val offset: UShort, val documentLength: UShort, val sha256: ByteArray, val bytes: ByteArray,
+)
+
 internal sealed interface EncryptedUploadV2TransferPayload {
     data class Data(val value: EncryptedUploadV2DataValue) : EncryptedUploadV2TransferPayload
     data class WindowEnd(val value: EncryptedUploadV2WindowEndValue) : EncryptedUploadV2TransferPayload
+    data class MarkerChunk(val value: EncryptedUploadV2MarkerChunkValue) : EncryptedUploadV2TransferPayload
     data class ManifestChunk(val value: EncryptedUploadV2ManifestChunkValue) : EncryptedUploadV2TransferPayload
     data class Eof(val value: EncryptedUploadV2EofValue) : EncryptedUploadV2TransferPayload
     data class Error(val value: EncryptedUploadV2TransferErrorValue) : EncryptedUploadV2TransferPayload

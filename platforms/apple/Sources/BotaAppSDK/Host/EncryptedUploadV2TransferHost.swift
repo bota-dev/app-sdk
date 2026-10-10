@@ -86,6 +86,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
     private var openingTask: Task<EncryptedUploadV2TransferOpenResult, Error>?
     private var pumpTask: Task<Void, Never>?
     private var generation: UInt64 = 0
+    private var markersRequired = false
     private var preparedMaterialID: String?
     private var preparedAuthorizationSHA256: Data?
     private var preparedMaterialLease: EncryptedUploadV2MaterialLease?
@@ -362,6 +363,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         openingTransportSessionID = nil
         self.openingTask = nil
         preparedMaterialID = nil
+        markersRequired = false
         preparedAuthorizationSHA256 = nil
         let materialLease = preparedMaterialLease
         preparedMaterialLease = nil
@@ -400,6 +402,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         defer { completionOperationActive = false }
         let materialID = try effect.packet.fields.v2RequiredText(EncryptedUploadV2Abi.fieldMaterialID)
         preparedMaterialID = nil
+        markersRequired = false
         preparedAuthorizationSHA256 = nil
         preparedMaterialLease = nil
         completedTransfer = nil
@@ -409,6 +412,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         let prepared = try await services.materialRegistry.preparedMaterial(id: materialID)
         try validateGeneration(operationGeneration)
         preparedMaterialID = materialID
+        markersRequired = prepared.authorization.count == 864
         preparedAuthorizationSHA256 = prepared.authorizationSHA256
         preparedMaterialLease = prepared.lease
         let contextProvider = try await services.materialRegistry.contextProvider(id: materialID, lease: prepared.lease)
@@ -423,7 +427,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             throw Self.failure(code: 1, detail: "encrypted upload v2 signed-document write ID is zero")
         }
         try Task.checkCancellation()
-        try await services.sendSignedDocument(1, writeID, prepared.authorization, 408)
+        try await services.sendSignedDocument(markersRequired ? 5 : 1, writeID, prepared.authorization, UInt16(prepared.authorization.count))
         try validateGeneration(operationGeneration)
         return Self.single(.init(
             kind: EncryptedUploadV2Abi.eventSessionPrepared,
@@ -678,7 +682,8 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             maximumWindowPackets: context.windowPackets,
             maximumMissingSequences: context.maximumMissingSequences,
             checkpoint: checkpoint,
-            mapper: mapper
+            mapper: mapper,
+            markersRequired: markersRequired
         )
         generation &+= 1
         let startGeneration = generation
@@ -959,6 +964,14 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             materialID: state.materialID,
             evidence: state.completed.evidence
         )
+        try await state.services.materialRegistry.submitMarkers(
+            id: state.materialID, lease: state.materialLease,
+            documents: state.completed.markerDocuments, evidence: state.completed.evidence
+        )
+        try validateCompletionOperation(
+            generation: operationGeneration, transportSessionID: transportSessionID,
+            materialID: state.materialID, evidence: state.completed.evidence
+        )
         stagedEvidence = state.completed.evidence
         return Self.single(.init(kind: EncryptedUploadV2Abi.eventArtifactsStaged))
     }
@@ -1047,7 +1060,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
             throw Self.failure(code: 1, detail: "encrypted upload v2 signed-document write ID is zero")
         }
         try Task.checkCancellation()
-        try await services.sendSignedDocument(2, writeID, acceptedReceipt.receipt, 336)
+        try await services.sendSignedDocument(markersRequired ? 6 : 2, writeID, acceptedReceipt.receipt, UInt16(acceptedReceipt.receipt.count))
         try validateCompletionOperation(
             generation: operationGeneration,
             transportSessionID: context.transportSessionID,
@@ -1172,6 +1185,7 @@ actor EncryptedUploadV2TransferHost: EncryptedUploadV2Host {
         persistedCoreCheckpoint = nil
         retainedTransportSessionID = nil
         preparedMaterialID = nil
+        markersRequired = false
         preparedAuthorizationSHA256 = nil
         preparedMaterialLease = nil
         completedTransfer = nil

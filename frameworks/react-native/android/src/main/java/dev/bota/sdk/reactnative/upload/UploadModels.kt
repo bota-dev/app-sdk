@@ -78,15 +78,18 @@ internal data class UploadScope(
 internal data class UploadRecording(
   val uuid: String, val generation: Long, val ciphertextLength: Long, val ciphertextSha256: String,
   val startedAtMs: Long, val durationMs: Long, val plaintextLength: Long, val storageFormat: Long,
+  val markersRequired: Boolean = false,
 ) {
   fun identity(): List<Any> = listOf(uuid, generation, ciphertextLength.toString(), ciphertextSha256,
-    startedAtMs.toString(), durationMs.toString(), plaintextLength.toString(), storageFormat)
+    startedAtMs.toString(), durationMs.toString(), plaintextLength.toString(), storageFormat) +
+    if (markersRequired) listOf(true) else emptyList()
 
   companion object {
     fun parse(json: JSONObject): UploadRecording = UploadRecording(uuid(json.string("uuid")),
       json.integer("generation", 1, 4294967295), json.decimal("ciphertextLength", 1),
       hashString(json.string("ciphertextSha256")), json.decimal("startedAtMs"), json.decimal("durationMs"),
-      json.decimal("plaintextLength"), json.integer("storageFormat", 3, 3)).also {
+      json.decimal("plaintextLength"), json.integer("storageFormat", 3, 3),
+      if (json.has("markersRequired")) (json.get("markersRequired") as? Boolean ?: fail("INVALID_DOCUMENT")) else false).also {
       demand(it.startedAtMs + it.durationMs <= 8640000000000000L)
     }
   }

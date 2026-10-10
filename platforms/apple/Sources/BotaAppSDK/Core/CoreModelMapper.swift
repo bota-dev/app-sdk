@@ -857,6 +857,16 @@ final class CoreModelMapper: @unchecked Sendable {
                 manifestSHA256: try fields.requiredBytes(BotaPrivateProtocol.manifestSHA256),
                 bytes: bytes
             ))
+        case 0x4A:
+            return .markerChunk(.init(
+                transportSessionID: transportSessionID,
+                documentIndex: try fields.requiredUInt32(BotaPrivateProtocol.sequence),
+                documentCount: try fields.requiredUInt32(85),
+                offset: try fields.requiredUInt16(BotaPrivateProtocol.offset),
+                documentLength: try fields.requiredUInt16(BotaPrivateProtocol.bodyLength),
+                sha256: try fields.requiredBytes(123),
+                bytes: try fields.requiredBytes(BotaPrivateProtocol.value)
+            ))
         case 0x44:
             return .eof(EncryptedUploadV2EOFValue(
                 transportSessionID: transportSessionID,
@@ -896,10 +906,12 @@ final class CoreModelMapper: @unchecked Sendable {
         ]))
     }
 
-    func createEncryptedUploadV2List(transportSessionID: UInt64) throws -> Data {
-        try encode(0x0524, fields: [
+    func createEncryptedUploadV2List(transportSessionID: UInt64, includeMarkers: Bool = false) throws -> Data {
+        var fields: [CoreField] = [
             .unsigned(id: 127, value: 0x25), .unsigned(id: 128, value: transportSessionID),
-        ])
+        ]
+        if includeMarkers { fields.append(.unsigned(id: 157, value: 1)) }
+        return try encode(0x0524, fields: fields)
     }
 
     func validateEncryptedUploadV2Admission(_ capability: Data) throws {
@@ -918,12 +930,13 @@ final class CoreModelMapper: @unchecked Sendable {
         let uuids = fields.texts(13)
         let generations = fields.unsigneds(129)
         let formats = fields.unsigneds(147)
+        let completion = fields.unsigneds(146)
         let starts = fields.unsigneds(68)
         let durations = fields.unsigneds(149)
         let plaintext = fields.unsigneds(131)
         let ciphertext = fields.unsigneds(130)
         let hashes = fields.bytes(144)
-        guard [uuids.count, generations.count, formats.count, starts.count, durations.count,
+        guard [uuids.count, generations.count, formats.count, completion.count, starts.count, durations.count,
                plaintext.count, ciphertext.count, hashes.count].allSatisfy({ $0 == count }) else {
             throw Self.invalid("v2 catalog fields have inconsistent counts")
         }
@@ -935,7 +948,7 @@ final class CoreModelMapper: @unchecked Sendable {
                 uuid: uuids[index], generation: try Self.uint32(generations[index], "recording generation"),
                 ciphertextLength: ciphertext[index], ciphertextSHA256: hashes[index],
                 startedAtMs: start.partialValue, durationMs: duration.partialValue, plaintextLength: plaintext[index],
-                storageFormat: try Self.uint8(formats[index], "storage format")
+                storageFormat: try Self.uint8(formats[index], "storage format"), markersRequired: completion[index] == 2
             )
         }
     }
@@ -944,14 +957,15 @@ final class CoreModelMapper: @unchecked Sendable {
         material: EncryptedUploadV2Material, recording: EncryptedUploadV2Recording,
         capability: EncryptedUploadV2CapabilitySnapshot, checkpoint: EncryptedUploadV2Checkpoint?
     ) throws {
-        let auth = try decode(0x052b, material.authorization)
+        let auth = try decode(0x052b, material.authorization.prefix(408))
         let flags = try auth.requiredUInt16(69)
         let replacement = flags & 8 != 0
         _ = try client.protocolDecode(Self.protocolPacket(kind: 0x052c, fields: [
             .bytes(id: 30, value: capability.rawValue), .bool(id: 204, value: replacement),
         ]))
         let policy: UInt8 = switch material.policy { case .legacyAllowed: 0; case .v2Preferred: 1; case .v2Required: 2 }
-        guard material.ownerRevision > 0, material.ownerRevision <= Int32.max,
+        guard recording.markersRequired == (material.authorization.count == 864),
+              material.ownerRevision > 0, material.ownerRevision <= Int32.max,
               try auth.requiredUInt32(165) == material.ownerRevision,
               try auth.requiredUInt8(154) == 3, recording.storageFormat == 3,
               try auth.requiredUInt8(147) == recording.storageFormat,

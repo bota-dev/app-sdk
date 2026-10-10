@@ -1216,6 +1216,13 @@
                 "typeAnnotation": {
                   "type": "NumberTypeAnnotation"
                 }
+              },
+              {
+                "name": "markersRequired",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
               }
             ]
           },
@@ -4144,6 +4151,57 @@
           ],
           "methods": [
             {
+              "name": "readProtectedStreamingStatus",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "StringTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "inputJSON",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "cancelProtectedStreamingStatus",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
               "name": "prepare",
               "optional": false,
               "typeAnnotation": {
@@ -4274,11 +4332,11 @@
       },
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaUploadV2BackendSpec.java",
-        "sha256": "50844eb0e1ed98848de2819d2a88f00ccc4a550d4bcfdc5db21039a1eb17127f"
+        "sha256": "47c355227968294ba465aca1466439f9f6f4c8881fb706a4479fb163c63fe728"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "f1a82f3cf03616e6f08655204af85317087cd2b0f633c052f2939eb49448c6b8"
+        "sha256": "2b1ff12bb16f0a9b13edcb51750efdd7c3557fe9003da0efffd45740bc606e66"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -4290,23 +4348,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "6c5309bc7b6b6b4b2e62e5bed85a7fab8a9da8c43af9e3904692e50756de9e0f"
+        "sha256": "745a7e0053689919a446bb6164283bcd67891afe8ef6422770502ad017a8d32c"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "8bee25e75f2e73f0b989b65e1c083fb851ba77ca3d4384aecaabb1bcb252fe7a"
+        "sha256": "bcd05e7edfbf89548716d15d67b244e45d9bc957bca46ffb69b0997123060175"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "6bef81e2a87bb83ddbc3021e69ddbd280dac23a5049af675b738925454b1c22c"
+        "sha256": "3cc19a94846d9bfe9ab41c32932dff143b2701f5d4c5f7319f2c5cf12b7b5614"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "6c5309bc7b6b6b4b2e62e5bed85a7fab8a9da8c43af9e3904692e50756de9e0f"
+        "sha256": "745a7e0053689919a446bb6164283bcd67891afe8ef6422770502ad017a8d32c"
       }
     ]
   },
-  "contractDigest": "89bbee822844c65336f805fe3311d15b35f4615254f4841561f7a4d2dc3ae23d"
+  "contractDigest": "23fe87f28bec8c349e789f1184c333510d23aff8552be176ccca485037c47615"
 }

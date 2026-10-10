@@ -1,6 +1,5 @@
 package dev.bota.sdk.internal.bluetooth
 
-import dev.bota.sdk.internal.host.NativeHostException
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -9,40 +8,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withContext
-
-internal open class BluetoothTransportException(
-    platformCode: Int,
-    message: String,
-) : NativeHostException(platformCode, message)
-
-internal class BluetoothCharacteristicNotFoundException : BluetoothTransportException(
-    404, "GATT characteristic was not discovered",
-)
-
-internal data class ConfirmedBluetoothDisconnect(val peripheralId: String, val generation: Long)
-
-internal interface BluetoothDriver : AutoCloseable {
-    suspend fun connectedAdvertisements(): List<BluetoothAdvertisement>
-    fun scan(allowDuplicates: Boolean): Flow<BluetoothAdvertisement>
-    suspend fun stopScan()
-    suspend fun connect(peripheralId: String)
-    suspend fun discoverServices(peripheralId: String)
-    suspend fun read(peripheralId: String, serviceUuid: UUID, characteristicUuid: UUID): ByteArray
-    suspend fun write(
-        peripheralId: String,
-        serviceUuid: UUID,
-        characteristicUuid: UUID,
-        value: ByteArray,
-        withResponse: Boolean,
-    )
-    suspend fun subscribe(peripheralId: String, serviceUuid: UUID, characteristicUuid: UUID): Flow<BluetoothNotification>
-    suspend fun unsubscribe(peripheralId: String, serviceUuid: UUID, characteristicUuid: UUID)
-    fun maximumWriteLength(peripheralId: String): Int
-    suspend fun disconnect(peripheralId: String)
-    fun connectionGeneration(peripheralId: String): Long = 1L
-    fun confirmedDisconnects(): Flow<ConfirmedBluetoothDisconnect> = kotlinx.coroutines.flow.emptyFlow()
-    override fun close()
-}
 
 internal class BluetoothGattDriver(
     private val platform: AndroidBluetoothPlatform,

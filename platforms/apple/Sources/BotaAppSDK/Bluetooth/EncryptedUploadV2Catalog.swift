@@ -35,6 +35,14 @@ actor EncryptedUploadV2Catalog {
         }
         active = true
         defer { active = false }
+        do {
+            return try await listAttempt(peripheralID: peripheralID, timeoutNanoseconds: timeoutNanoseconds, includeMarkers: true)
+        } catch let error as BotaSDKError where error.code == .protocolRejected && error.protocolStatus == 3 {
+            return try await listAttempt(peripheralID: peripheralID, timeoutNanoseconds: timeoutNanoseconds, includeMarkers: false)
+        }
+    }
+
+    private func listAttempt(peripheralID: String, timeoutNanoseconds: UInt64, includeMarkers: Bool) async throws -> [EncryptedUploadV2Recording] {
         let sessionID = UInt64.random(in: 1...UInt64.max)
         _ = try mapper.decodeEncryptedUploadV2Catalog(Data(), transportSessionID: sessionID)
         defer { _ = try? mapper.decodeEncryptedUploadV2Catalog(Data(), transportSessionID: sessionID) }
@@ -73,7 +81,7 @@ actor EncryptedUploadV2Catalog {
                 }
                 defer { group.cancelAll() }
                 try Task.checkCancellation()
-                try await write(peripheralID, mapper.createEncryptedUploadV2List(transportSessionID: sessionID))
+                try await write(peripheralID, mapper.createEncryptedUploadV2List(transportSessionID: sessionID, includeMarkers: includeMarkers))
                 guard let value = try await group.next() else { throw Self.closed() }
                 return value
             }
@@ -82,8 +90,13 @@ actor EncryptedUploadV2Catalog {
             }
             return result
         } catch {
+            var cleanupFailed = false
             for uuid in subscribed {
-                try? await unsubscribe(peripheralID, uuid)
+                do { try await unsubscribe(peripheralID, uuid) } catch { cleanupFailed = true }
+            }
+            if cleanupFailed {
+                throw BotaSDKError(code: .unexpectedEvent, operation: .transferRecording,
+                                   retryable: false, detail: "v2 catalog cleanup failed; reconnect before retrying")
             }
             throw error
         }

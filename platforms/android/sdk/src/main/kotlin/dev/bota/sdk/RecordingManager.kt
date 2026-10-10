@@ -362,7 +362,7 @@ public class RecordingManager internal constructor() {
             }
             if (runtime.connectionGeneration(device.id) != generation) throw cancelled(BotaOperation.TransferRecording)
             runtime.connection.require(device)
-            val authorization = runtime.decodeEncryptedUploadV2Authorization(material.authorization)
+            val authorization = runtime.decodeEncryptedUploadV2Authorization(material.authorization.copyOfRange(0, minOf(408, material.authorization.size)))
             val replacement = dev.bota.sdk.internal.host.validateEncryptedUploadV2Material(
                 material, recording, checkpoint, authorization,
             )

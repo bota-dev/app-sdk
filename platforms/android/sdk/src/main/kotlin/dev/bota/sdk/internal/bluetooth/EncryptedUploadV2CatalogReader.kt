@@ -19,7 +19,14 @@ internal class EncryptedUploadV2CatalogReader(
 ) {
     private var uncertainOwner: ConfirmedBluetoothDisconnect? = null
 
-    suspend fun read(peripheralId: String, sessionId: ULong): List<EncryptedUploadV2Recording> {
+    suspend fun read(peripheralId: String, sessionId: ULong): List<EncryptedUploadV2Recording> = try {
+        readAttempt(peripheralId, sessionId, true)
+    } catch (error: EncryptedUploadV2HostException) {
+        if (error.errorCode != 17u || error.protocolStatus?.toInt() != 3 || error.suppressed.isNotEmpty()) throw error
+        readAttempt(peripheralId, sessionId, false)
+    }
+
+    private suspend fun readAttempt(peripheralId: String, sessionId: ULong, includeMarkers: Boolean): List<EncryptedUploadV2Recording> {
         val owner = ConfirmedBluetoothDisconnect(peripheralId, driver.connectionGeneration(peripheralId))
         if (uncertainOwner == owner) throw EncryptedUploadV2HostException(
             19u, false, message = "catalog cleanup is uncertain; reconnect before retrying",
@@ -63,7 +70,7 @@ internal class EncryptedUploadV2CatalogReader(
                     try {
                         if (result.isCompleted) result.await()
                         driver.write(peripheralId, BotaBluetoothUUIDs.StorageService,
-                            BotaBluetoothUUIDs.TransferControlV2, mapper.createEncryptedUploadV2List(sessionId), true)
+                            BotaBluetoothUUIDs.TransferControlV2, mapper.createEncryptedUploadV2List(sessionId, includeMarkers), true)
                         result.await()
                     } finally {
                         listJob.cancel()

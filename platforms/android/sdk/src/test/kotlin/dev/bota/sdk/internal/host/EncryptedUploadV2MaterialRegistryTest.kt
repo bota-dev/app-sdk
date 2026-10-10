@@ -11,11 +11,35 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
 import org.junit.Assert.fail
 import org.junit.Test
 
 internal class EncryptedUploadV2MaterialRegistryTest {
+    @Test
+    fun markedMaterialRequiresDualReceiptAndUsesAudioDigestsForTransferIdentity() = runTest {
+        val registry = EncryptedUploadV2MaterialRegistry()
+        val auth = ByteArray(864) { 1 }
+        val manifest = ByteArray(580) { 7 }
+        for (size in listOf(336, 632)) {
+            val id = "marked-$size"
+            val receipt = ByteArray(size) { 2 }
+            registry.register(id, material(authorization = auth, receipt = receipt))
+            val prepared = registry.preparedMaterial(id)
+            assertTrue(prepared.authorizationSha256.contentEquals(sha256(auth.copyOf(408))))
+            if (size == 336) {
+                assertFailsSuspend<EncryptedUploadV2MaterialRegistryException> {
+                    registry.finalizeAndReceiveReceipt(id, prepared.lease, evidence(manifest))
+                }
+            } else {
+                val completed = registry.finalizeAndReceiveReceipt(id, prepared.lease, evidence(manifest))
+                assertTrue(completed.receipt.contentEquals(receipt))
+                assertTrue(completed.receiptSha256.contentEquals(sha256(receipt.copyOf(336))))
+            }
+        }
+    }
+
     @Test
     fun alreadyStagedMaterialSkipsRequestAndRejectsLateDecision() = runTest {
         val registry = EncryptedUploadV2MaterialRegistry()
@@ -150,6 +174,7 @@ internal class EncryptedUploadV2MaterialRegistryTest {
         cancel = cancel,
         shouldUploadCiphertext = shouldUpload,
         reconcileStaging = reconcile,
+        submitMarkers = if (authorization.size == 864) { _, _ -> calls += "markers" } else null,
     )
 
     private fun evidence(manifest: ByteArray) = EncryptedUploadV2TransferEvidence(

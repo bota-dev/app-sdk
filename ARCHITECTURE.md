@@ -1,5 +1,8 @@
 # Architecture
 
+Recording markers #201: [native BATCH integration and successor review](docs/parity/recording-markers.md) covers opaque transfers, authorization recovery, owner/channel fences and dual receipts. The unpublished [STREAMING scalar status provider](docs/parity/protected-streaming-status.md) is wired through native HTTPS; Demo uses its dashboard read API and existing BLE control for device-direct streaming. A new BLE audio relay is outside this scope. Published beta.14 lacks the new marker/status native capabilities; target artifacts and consuming native App release remain pending. No marker profile is enabled; preserve UUID[16] and 280-byte authorization. See [local package evidence](docs/testing/recording-markers-local-candidate.md).
+
+
 **Upload completion architecture (target; partial implementation):**
 SDK/native or browser storage owns App-mediated upload recovery and durable device-cleanup intent; authenticated backend HTTP stays host-owned. Target phases separate bytes received, verification, cloud commitment and cleanup, with stable recording identity across retries/channels. Current facade/profile conformance is partial. See the [public recovery contract](docs/parity/upload-recovery.md).
 

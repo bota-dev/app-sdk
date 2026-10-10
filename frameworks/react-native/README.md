@@ -183,6 +183,23 @@ separate physical-device and application rollout gates.
 
 ## Documentation
 
+Unpublished source also exports `createProtectedStreamingStatusBackend` for
+read-only protected STREAMING metadata. Configure a scoped HTTPS `baseUrl`,
+optional `organizationId`, lifetime `signal` and fresh application
+`getAccessToken`; call `getStatus({ recordingId, sessionId,
+recordingGeneration, writerEpoch })`. The exact session identity is checked;
+`revision` remains a decimal string and may be `"0"`. Cancel the lifetime and
+call `dispose()` on workspace or account changes. A matching rebuilt native
+binary is required; published beta.14 lacks these methods. `sealed` means
+marker metadata only, never audio completion or permission to delete. This
+reader does not start protected capture or relay signed documents.
+See `docs/parity/protected-streaming-status.md` in the source repository.
+
+未发布源码新增上述只读状态接口，必须使用匹配的原生二进制；已发布 beta.14 不包含
+这些方法。查询校验精确会话身份，revision 保持字符串且允许 `"0"`；账号或工作空间
+变化时取消并释放。`sealed` 仅指标记元数据，不代表音频完成或允许删除；本接口不启动
+protected 采集，也不转发签名文档。
+
 See [docs.bota.dev](https://docs.bota.dev) for pairing, provisioning,
 recording transfer, WiFi, OTA, and device-management guides.
 
