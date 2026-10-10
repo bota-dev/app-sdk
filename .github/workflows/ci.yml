@@ -145,7 +145,7 @@ jobs:
           npx --yes "npm@$NPM_CLI_VERSION" pack --pack-destination ../../target/react-native-release
 
       - name: Upload React Native candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: react-native-ci-${{ github.sha }}
           path: target/react-native-release/
@@ -197,7 +197,7 @@ jobs:
           test "$(jq -r .sourceRevision target/web-release/web-package-files.json)" = "$GITHUB_SHA"
 
       - name: Upload Web candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: web-ci-${{ github.sha }}
           path: target/web-release/
@@ -301,7 +301,7 @@ jobs:
         run: tools/android/test-emulator-lane.sh --api 35
 
       - name: Upload non-publishing Android evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-ci-${{ github.sha }}
           path: target/android-release/
@@ -439,7 +439,7 @@ jobs:
           tools/apple/test-pod-archive.sh --evidence-only
 
       - name: Upload unpublished Apple evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: apple-package-${{ github.sha }}
           path: target/apple-release/
@@ -516,7 +516,7 @@ jobs:
 
       - name: Upload Flutter candidate
         if: steps.package.outputs.candidate-ready == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: flutter-ci-${{ github.sha }}
           path: target/flutter-release/
@@ -595,7 +595,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload candidate inventory
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-candidate-${{ github.sha }}
           path: |
