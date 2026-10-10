@@ -56,7 +56,7 @@ internal class UploadStreamingStatus(private val client: OkHttpClient = OkHttpCl
     private val numberFields = setOf("recording_generation", "received_count", "contiguous_sequence")
     fun scalarStatus(body: String): String {
       val json = sanitized("INVALID_DOCUMENT") { JSONObject(body) }
-      demand(json.keySet() == stringFields + numberFields + setOf("expected_count", "authorization_expired"), "INVALID_DOCUMENT")
+      demand(json.keys().asSequence().toSet() == stringFields + numberFields + setOf("expected_count", "authorization_expired"), "INVALID_DOCUMENT")
       stringFields.forEach { demand(json.get(it) is String && (json.get(it) as String).length <= 160, "INVALID_DOCUMENT") }
       numberFields.forEach { demand(json.get(it) is Number, "INVALID_DOCUMENT") }
       demand(json.isNull("expected_count") || json.get("expected_count") is Number, "INVALID_DOCUMENT")

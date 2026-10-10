@@ -99,3 +99,7 @@ evidence that these new methods were packaged or installed.
 | 完整 protected 采集流程 | START/opaque relay 需要独立原生设备权限和 BLE 接线 | 本次状态读取未实现该流程，profile 保持关闭 |
 
 验证命令同英文。此前本地 beta.14 候选包早于本次修改，不能证明新增方法已打包或安装。
+
+## Android JSON compatibility
+
+The native scalar allowlist enumerates `JSONObject.keys()` through its iterator. Android does not expose the JVM JSON library’s `keySet()` API; using the iterator preserves exact-field rejection on both runtimes. Native Android compilation remains covered by the Android AAR/RN consumer CI lane.
