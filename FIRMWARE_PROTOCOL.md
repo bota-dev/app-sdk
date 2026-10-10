@@ -264,4 +264,3 @@ Remaining delivery: target firmware/mobile builds and joint runtime validation;
 WRGB board driver requires LED part, pins, polarity/control and calibration
 facts. The logical marker feedback and protocol do not establish physical LED
 operation. No deployment or feature activation is authorized by this document.
-
