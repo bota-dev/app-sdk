@@ -261,6 +261,14 @@ that a Bota service exists. API 33+ uses value-bearing write APIs and older
 versions use the legacy characteristic and descriptor fields. CCCD writes occur
 only after local notification state changes.
 
+Unreleased source waits for `onCharacteristicWrite` for both write modes before
+releasing the per-device queue. A write without response still has an Android
+completion callback; accepting the request does not mean the local GATT command
+is finished. Immediate rejection and callback status codes are preserved. Cancelling
+an issued write before completion closes that exact GATT session, requiring a
+reconnect before retry. See the [write sequencing review](../../docs/parity/android-write-completion.md).
+Published beta.14 and existing application binaries do not include this correction.
+
 The host expands the core's 16-bit and 32-bit Bluetooth UUIDs to Android's
 128-bit base UUID before GATT access, including Device Information `180A` and
 Serial Number `2A25`. Subscription callbacks retain the core's original UUID

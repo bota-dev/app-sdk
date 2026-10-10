@@ -31,6 +31,8 @@ const REBOOT_TIMEOUT_ID: u64 = 102;
 const REBOOT_TIMEOUT_MS: u64 = 30_000;
 const RECONNECT_TIMEOUT_ID: u64 = 103;
 const RECONNECT_TIMEOUT_MS: u64 = 120_000;
+const RECONNECT_RETRY_ID: u64 = 104;
+const RECONNECT_RETRY_MS: u64 = 1_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Phase {
@@ -46,6 +48,7 @@ enum Phase {
     AwaitingVerify,
     AwaitingReboot,
     Reconnecting,
+    WaitingReconnectRetry,
     ReadingVersion,
     Completed,
     Failed,
@@ -299,12 +302,6 @@ impl FirmwareUpdateWorkflow {
     }
 
     fn begin_reconnect(&mut self, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
-        self.phase = Phase::Reconnecting;
-        self.connection = Some(Box::new(ConnectionWorkflow::reconnect(
-            self.device.clone(),
-            self.reconnect_hint.clone(),
-            self.cancellation_id,
-        )));
         let mut effects = vec![
             self.progress(
                 FirmwareUpdatePhase::Reconnecting,
@@ -320,13 +317,23 @@ impl FirmwareUpdateWorkflow {
         }));
         self.reconnect_timer_request_id = Some(reconnect_timer.request_id);
         effects.push(reconnect_timer);
+        effects.extend(self.start_reconnect_attempt(context));
+        effects
+    }
+
+    fn start_reconnect_attempt(&mut self, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
+        self.phase = Phase::Reconnecting;
+        self.connection = Some(Box::new(ConnectionWorkflow::reconnect(
+            self.device.clone(),
+            self.reconnect_hint.clone(),
+            self.cancellation_id,
+        )));
         let connection_effects = self
             .connection
             .as_mut()
             .expect("connection was assigned above")
             .start(context);
-        effects.extend(Self::filter_connection_effects(connection_effects));
-        effects
+        Self::filter_connection_effects(connection_effects)
     }
 
     fn read_version(&mut self, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
@@ -530,6 +537,21 @@ impl FirmwareUpdateWorkflow {
             return Ok(effects);
         }
 
+        if self.phase == Phase::WaitingReconnectRetry {
+            if matches!(
+                event.kind,
+                HostEventKind::TimerFired {
+                    timer_id: RECONNECT_RETRY_ID
+                }
+            ) && Some(event.request_id) == self.timer_request_id
+            {
+                let mut effects = self.cancel_timer(context);
+                effects.extend(self.start_reconnect_attempt(context));
+                return Ok(effects);
+            }
+            return Ok(Vec::new());
+        }
+
         let connection = self
             .connection
             .as_mut()
@@ -546,7 +568,27 @@ impl FirmwareUpdateWorkflow {
             }
             Some(WorkflowStatus::Failed { error }) => {
                 self.connection = None;
-                Ok(self.fail(error, context))
+                if error.retryable
+                    && matches!(
+                        error.code,
+                        ErrorCode::DeviceNotFound
+                            | ErrorCode::ConnectionFailed
+                            | ErrorCode::NotConnected
+                            | ErrorCode::Timeout
+                    )
+                {
+                    self.phase = Phase::WaitingReconnectRetry;
+                    self.retry_count = self.retry_count.saturating_add(1);
+                    let mut filtered = Self::filter_connection_effects(effects);
+                    filtered.extend(self.schedule_timer(
+                        RECONNECT_RETRY_ID,
+                        RECONNECT_RETRY_MS,
+                        context,
+                    ));
+                    Ok(filtered)
+                } else {
+                    Ok(self.fail(error, context))
+                }
             }
             _ => Ok(Self::filter_connection_effects(effects)),
         }
@@ -574,7 +616,10 @@ impl WorkflowReducer for FirmwareUpdateWorkflow {
             return Ok(Vec::new());
         }
 
-        if self.phase == Phase::Reconnecting {
+        if matches!(
+            self.phase,
+            Phase::Reconnecting | Phase::WaitingReconnectRetry
+        ) {
             return self.dispatch_reconnect(event, context);
         }
 
@@ -589,11 +634,14 @@ impl WorkflowReducer for FirmwareUpdateWorkflow {
         }
 
         if self.phase == Phase::AwaitingReboot
-            && matches!(
+            && (matches!(
                 event.kind,
                 HostEventKind::Ble(BleEvent::Disconnected { .. })
-            )
+            ) || (Some(event.request_id) == self.subscription_request_id
+                && matches!(event.kind, HostEventKind::Ble(BleEvent::Failed { .. }))))
         {
+            // Android closes the notification stream with a transport error at reboot.
+            // Recovery is permitted only after the device accepted image verification.
             let mut effects = self.cancel_timer(context);
             effects.extend(self.unsubscribe(context));
             effects.extend(self.begin_reconnect(context));
@@ -918,6 +966,7 @@ mod tests {
             Phase::AwaitingVerify,
             Phase::AwaitingReboot,
             Phase::Reconnecting,
+            Phase::WaitingReconnectRetry,
             Phase::ReadingVersion,
         ] {
             let mut workflow = FirmwareUpdateWorkflow::new(

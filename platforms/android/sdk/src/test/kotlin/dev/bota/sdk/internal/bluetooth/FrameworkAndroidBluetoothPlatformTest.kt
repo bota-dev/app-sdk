@@ -39,6 +39,140 @@ class FrameworkAndroidBluetoothPlatformTest {
     private val address = "00:11:22:33:44:55"
 
     @Test
+    fun writeWithoutResponseWaitsForAndroidCompletionBeforeNextWrite() = runBlocking {
+        shadowOf(adapter).setState(BluetoothAdapter.STATE_ON)
+        val platform = FrameworkAndroidBluetoothPlatform(application)
+        try {
+            val created = CompletableDeferred<BluetoothGatt>()
+            shadowOf(adapter.getRemoteDevice(address)).setGattConnectionInterceptor { created.complete(it) }
+            val connecting = async(start = CoroutineStart.UNDISPATCHED) { platform.connect(address, 1) }
+            val gatt = withTimeout(5_000) { created.await() }
+            assertTrue(gatt.connect())
+            withTimeout(5_000) { connecting.await() }
+            val service = BluetoothGattService(BotaBluetoothUUIDs.DeviceInformationService, BluetoothGattService.SERVICE_TYPE_PRIMARY)
+            val characteristic = BluetoothGattCharacteristic(BotaBluetoothUUIDs.SerialNumber, BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE, BluetoothGattCharacteristic.PERMISSION_WRITE)
+            service.addCharacteristic(characteristic)
+            shadowOf(gatt).addDiscoverableService(service)
+            platform.discoverServices(address, 1)
+            val callback = shadowOf(gatt).gattCallback
+            val started = Channel<ByteArray>(Channel.UNLIMITED)
+            shadowOf(gatt).setGattCallback(object : BluetoothGattCallback() {
+                override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+                    @Suppress("DEPRECATION")
+                    started.trySend(characteristic.value.copyOf())
+                }
+            })
+            val queue = GattOperationQueue()
+            val api = if (platform.apiLevel >= 33) GattWriteApi.Api33 else GattWriteApi.Legacy
+            val first = async(start = CoroutineStart.UNDISPATCHED) {
+                queue.run(address) { platform.write(address, 1, service.uuid, characteristic.uuid, byteArrayOf(1), false, api) }
+            }
+            assertEquals(1, withTimeout(5_000) { started.receive() }[0].toInt())
+            val secondEntered = CompletableDeferred<Unit>()
+            val second = async(start = CoroutineStart.UNDISPATCHED) {
+                secondEntered.complete(Unit)
+                queue.run(address) { platform.write(address, 1, service.uuid, characteristic.uuid, byteArrayOf(2), false, api) }
+            }
+            withTimeout(5_000) { secondEntered.await() }
+            platform.connectedAdvertisements() // Drain the handler while the first completion is withheld.
+            assertFalse(first.isCompleted)
+            assertTrue(started.tryReceive().isFailure)
+            callback.onCharacteristicWrite(gatt, characteristic, BluetoothGatt.GATT_SUCCESS)
+            assertEquals(0, withTimeout(5_000) { first.await() }.status)
+            assertEquals(2, withTimeout(5_000) { started.receive() }[0].toInt())
+            assertFalse(second.isCompleted)
+            callback.onCharacteristicWrite(gatt, characteristic, 133)
+            assertEquals(133, withTimeout(5_000) { second.await() }.status)
+        } finally {
+            platform.close()
+        }
+    }
+
+    @Test
+    fun rejectedWritePreservesImmediateStatusAndDoesNotWaitForCallback() = runBlocking {
+        shadowOf(adapter).setState(BluetoothAdapter.STATE_ON)
+        val platform = FrameworkAndroidBluetoothPlatform(application)
+        try {
+            val created = CompletableDeferred<BluetoothGatt>()
+            shadowOf(adapter.getRemoteDevice(address)).setGattConnectionInterceptor { created.complete(it) }
+            val connecting = async(start = CoroutineStart.UNDISPATCHED) { platform.connect(address, 1) }
+            val gatt = withTimeout(5_000) { created.await() }
+            assertTrue(gatt.connect())
+            withTimeout(5_000) { connecting.await() }
+            val service = BluetoothGattService(BotaBluetoothUUIDs.DeviceInformationService, BluetoothGattService.SERVICE_TYPE_PRIMARY)
+            val characteristic = BluetoothGattCharacteristic(BotaBluetoothUUIDs.SerialNumber, BluetoothGattCharacteristic.PROPERTY_READ, BluetoothGattCharacteristic.PERMISSION_READ)
+            service.addCharacteristic(characteristic)
+            shadowOf(gatt).addDiscoverableService(service)
+            platform.discoverServices(address, 1)
+            val api = if (platform.apiLevel >= 33) GattWriteApi.Api33 else GattWriteApi.Legacy
+            for (withResponse in listOf(false, true)) {
+                val result = withTimeout(5_000) {
+                    platform.write(address, 1, service.uuid, characteristic.uuid, byteArrayOf(1), withResponse, api)
+                }
+                assertEquals(if (api == GattWriteApi.Api33) BluetoothGatt.GATT_FAILURE else -1, result.status)
+                assertFalse(shadowOf(gatt).isClosed)
+            }
+        } finally {
+            platform.close()
+        }
+    }
+
+    @Test
+    fun cancelledWriteClosesExactSessionAndLateCallbackCannotCompleteReplacement() = runBlocking {
+        shadowOf(adapter).setState(BluetoothAdapter.STATE_ON)
+        val platform = FrameworkAndroidBluetoothPlatform(application)
+        val started = Channel<Unit>(Channel.UNLIMITED)
+        val suppressCompletion = object : BluetoothGattCallback() {
+            override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+                started.trySend(Unit)
+            }
+        }
+        try {
+            suspend fun connected(generation: Long): Pair<BluetoothGatt, BluetoothGattCharacteristic> {
+                val created = CompletableDeferred<BluetoothGatt>()
+                shadowOf(adapter.getRemoteDevice(address)).setGattConnectionInterceptor { created.complete(it) }
+                val connecting = async(start = CoroutineStart.UNDISPATCHED) { platform.connect(address, generation) }
+                val gatt = withTimeout(5_000) { created.await() }
+                assertTrue(gatt.connect())
+                withTimeout(5_000) { connecting.await() }
+                val service = BluetoothGattService(BotaBluetoothUUIDs.DeviceInformationService, BluetoothGattService.SERVICE_TYPE_PRIMARY)
+                val characteristic = BluetoothGattCharacteristic(BotaBluetoothUUIDs.SerialNumber, BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE, BluetoothGattCharacteristic.PERMISSION_WRITE)
+                service.addCharacteristic(characteristic)
+                shadowOf(gatt).addDiscoverableService(service)
+                platform.discoverServices(address, generation)
+                return gatt to characteristic
+            }
+            val (gatt, characteristic) = connected(1)
+            val callback = shadowOf(gatt).gattCallback
+            shadowOf(gatt).setGattCallback(suppressCompletion)
+            val api = if (platform.apiLevel >= 33) GattWriteApi.Api33 else GattWriteApi.Legacy
+            val writing = async(start = CoroutineStart.UNDISPATCHED) {
+                platform.write(address, 1, characteristic.service.uuid, characteristic.uuid, byteArrayOf(1), false, api)
+            }
+            withTimeout(5_000) { started.receive() }
+            writing.cancel()
+            withTimeout(5_000) { writing.join() }
+            platform.connectedAdvertisements()
+            assertTrue(shadowOf(gatt).isClosed)
+            val (replacement, nextCharacteristic) = connected(2)
+            val nextCallback = shadowOf(replacement).gattCallback
+            shadowOf(replacement).setGattCallback(suppressCompletion)
+            val nextWrite = async(start = CoroutineStart.UNDISPATCHED) {
+                platform.write(address, 2, nextCharacteristic.service.uuid, nextCharacteristic.uuid, byteArrayOf(2), false, api)
+            }
+            withTimeout(5_000) { started.receive() }
+            callback.onCharacteristicWrite(gatt, characteristic, 0)
+            platform.connectedAdvertisements()
+            assertFalse(nextWrite.isCompleted)
+            assertFalse(shadowOf(replacement).isClosed)
+            nextCallback.onCharacteristicWrite(replacement, nextCharacteristic, 0)
+            assertEquals(0, withTimeout(5_000) { nextWrite.await() }.status)
+        } finally {
+            platform.close()
+        }
+    }
+
+    @Test
     fun adapterOffWithoutGattCallbackClosesSessionAndReportsLossOnce() = runBlocking {
         shadowOf(adapter).setState(BluetoothAdapter.STATE_ON)
         val platform = FrameworkAndroidBluetoothPlatform(application)
