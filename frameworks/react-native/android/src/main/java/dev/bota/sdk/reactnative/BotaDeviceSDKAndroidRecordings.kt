@@ -106,6 +106,7 @@ internal data class BotaEncryptedUploadV2Recording(
     val durationMs: String,
     val plaintextLength: String,
     val storageFormat: Int,
+    val markersRequired: Boolean = false,
 )
 
 internal data class BotaEncryptedUploadV2Capability(
@@ -225,6 +226,7 @@ internal fun BotaEncryptedUploadV2Recording.toWritableMap(): WritableMap = Argum
     putString("durationMs", durationMs)
     putString("plaintextLength", plaintextLength)
     putInt("storageFormat", storageFormat)
+    putBoolean("markersRequired", markersRequired)
 }
 
 private fun BotaEncryptedUploadV2Capability.toWritableMap(): WritableMap = Arguments.createMap().apply {
@@ -779,6 +781,7 @@ internal fun EncryptedUploadV2Recording.toBridgeValue(): BotaEncryptedUploadV2Re
         durationMs.toString(),
         plaintextLength.toString(),
         storageFormat.toInt(),
+        markersRequired,
     )
 
 private fun EncryptedUploadV2CapabilitySnapshot.toBridgeValue(): BotaEncryptedUploadV2Capability {

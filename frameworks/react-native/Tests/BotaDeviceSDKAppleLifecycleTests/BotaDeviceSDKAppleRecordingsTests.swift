@@ -205,8 +205,9 @@ final class BotaDeviceSDKAppleRecordingsTests: XCTestCase {
         XCTAssertEqual(Set(request.keys), ["requestId", "operationId", "recording", "capability", "checkpoint"])
         XCTAssertEqual(Set((request["recording"] as! [String: Any]).keys), [
             "uuid", "generation", "ciphertextLength", "ciphertextSha256",
-            "startedAtMs", "durationMs", "plaintextLength", "storageFormat",
+            "startedAtMs", "durationMs", "plaintextLength", "storageFormat", "markersRequired",
         ])
+        XCTAssertEqual((request["recording"] as! [String: Any])["markersRequired"] as? Bool, false)
         let capability = request["capability"] as! [String: Any]
         XCTAssertEqual(Set(capability.keys), [
             "encodingVersion", "transferProfileVersion", "rawValueHex", "sha256Hex", "flags",

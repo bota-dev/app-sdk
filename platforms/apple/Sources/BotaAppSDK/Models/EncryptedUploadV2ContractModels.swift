@@ -73,11 +73,12 @@ public struct EncryptedUploadV2Recording: Equatable, Sendable {
     public let durationMs: UInt64
     public let plaintextLength: UInt64
     public let storageFormat: UInt8
+    public let markersRequired: Bool
 
     public init(
         uuid: String, generation: UInt32, ciphertextLength: UInt64, ciphertextSHA256: Data,
         startedAtMs: UInt64 = 0, durationMs: UInt64 = 0,
-        plaintextLength: UInt64 = 0, storageFormat: UInt8 = 3
+        plaintextLength: UInt64 = 0, storageFormat: UInt8 = 3, markersRequired: Bool = false
     ) {
         self.uuid = uuid
         self.generation = generation
@@ -87,6 +88,7 @@ public struct EncryptedUploadV2Recording: Equatable, Sendable {
         self.durationMs = durationMs
         self.plaintextLength = plaintextLength
         self.storageFormat = storageFormat
+        self.markersRequired = markersRequired
     }
 }
 
@@ -192,6 +194,7 @@ public enum EncryptedUploadV2SecurityPolicy: Sendable {
 
 public struct EncryptedUploadV2Material: @unchecked Sendable {
     public typealias StagingRequest = @Sendable (EncryptedUploadV2TransferEvidence) async throws -> URLRequest
+    public typealias MarkerSubmitter = @Sendable ([Data], EncryptedUploadV2TransferEvidence) async throws -> Void
     public typealias ManifestSubmitter = @Sendable (Data, EncryptedUploadV2TransferEvidence) async throws -> Void
     public typealias Finalizer = @Sendable (EncryptedUploadV2TransferEvidence) async throws -> Void
     public typealias ReceiptProvider = @Sendable (EncryptedUploadV2TransferEvidence) async throws -> Data
@@ -209,6 +212,7 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
     public let shouldUploadCiphertext: CiphertextUploadDecision
     public let reconcileStaging: StagingReconciler?
     let stagingRequest: StagingRequest
+    let submitMarkers: MarkerSubmitter?
     let submitManifest: ManifestSubmitter
     let finalize: Finalizer
     let completionReceipt: ReceiptProvider
@@ -229,7 +233,8 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
         cancel: @escaping CancellationHandler = {},
         uploadContext: EncryptedUploadV2ContextProvider? = nil,
         shouldUploadCiphertext: @escaping CiphertextUploadDecision = { _ in true },
-        reconcileStaging: StagingReconciler? = nil
+        reconcileStaging: StagingReconciler? = nil,
+        submitMarkers: MarkerSubmitter? = nil
     ) {
         self.materialID = materialID
         self.recordingID = recordingID
@@ -245,6 +250,7 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
         self.uploadContext = uploadContext
         self.shouldUploadCiphertext = shouldUploadCiphertext
         self.reconcileStaging = reconcileStaging
+        self.submitMarkers = submitMarkers
     }
 
     var provider: EncryptedUploadV2MaterialProvider {
@@ -257,7 +263,8 @@ public struct EncryptedUploadV2Material: @unchecked Sendable {
             cancel: { try await cancellation.run(cancellationHandler) },
             uploadContext: uploadContext,
             shouldUploadCiphertext: shouldUploadCiphertext,
-            reconcileStaging: reconcileStaging
+            reconcileStaging: reconcileStaging,
+            submitMarkers: submitMarkers
         )
     }
 
@@ -424,6 +431,16 @@ struct EncryptedUploadV2ManifestChunkValue: Equatable, Sendable {
     let bytes: Data
 }
 
+struct EncryptedUploadV2MarkerChunkValue: Equatable, Sendable {
+    let transportSessionID: UInt64
+    let documentIndex: UInt32
+    let documentCount: UInt32
+    let offset: UInt16
+    let documentLength: UInt16
+    let sha256: Data
+    let bytes: Data
+}
+
 struct EncryptedUploadV2EOFValue: Equatable, Sendable {
     let transportSessionID: UInt64
     let finalSequence: UInt32
@@ -437,6 +454,7 @@ enum EncryptedUploadV2TransferPayloadValue: Equatable, Sendable {
     case data(EncryptedUploadV2DataValue)
     case windowEnd(EncryptedUploadV2WindowEndValue)
     case manifestChunk(EncryptedUploadV2ManifestChunkValue)
+    case markerChunk(EncryptedUploadV2MarkerChunkValue)
     case eof(EncryptedUploadV2EOFValue)
     case error(EncryptedUploadV2TransferErrorValue)
 }

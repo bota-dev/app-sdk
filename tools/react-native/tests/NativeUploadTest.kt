@@ -25,8 +25,45 @@ import org.json.JSONObject
 import org.json.JSONArray
 import org.junit.Assert.*
 import org.junit.Test
+import okhttp3.ResponseBody.Companion.toResponseBody
 
 class NativeUploadTest {
+  @Test fun protectedStreamingStatusUsesNativeHttpAndRejectsOpaqueResponses() = runBlocking {
+    val session = "12345678-1234-4234-8234-123456789012"
+    val url = "https://api.example/dashboard/projects/proj_a/recordings/rec_a/streaming-status?session_id=$session"
+    val input = JSONObject().put("url", url).put("token", "app-token").put("organizationId", "org_a").toString()
+    val payload = JSONObject().put("profile", "recording_markers_stream_v1").put("recording_id", "rec_a")
+      .put("session_id", session).put("recording_generation", 1).put("writer_epoch", "1")
+      .put("revision", "9007199254740993").put("received_count", 0).put("contiguous_sequence", 0)
+      .put("state", "open").put("expected_count", JSONObject.NULL).put("authorization_expired", false)
+    var responseCode = 200
+    var body = payload.toString()
+    var count = 0
+    val client = okhttp3.OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).addInterceptor { chain ->
+      count++
+      assertEquals(url, chain.request().url.toString())
+      assertEquals("GET", chain.request().method)
+      assertEquals("Bearer app-token", chain.request().header("Authorization"))
+      assertEquals("org_a", chain.request().header("X-Organization-Id"))
+      okhttp3.Response.Builder().request(chain.request()).protocol(okhttp3.Protocol.HTTP_1_1)
+        .code(responseCode).message("fixture").header("Location", "https://other.example/v1")
+        .body(body.toResponseBody()).build()
+    }.build()
+    val reader = UploadStreamingStatus(client)
+    assertEquals("9007199254740993", JSONObject(reader.read(input)).getString("revision"))
+    for (code in listOf(302, 401, 403, 404, 503)) {
+      responseCode = code
+      try { reader.read(input); fail("HTTP errors must fail closed") } catch (_: UploadFailure) { }
+    }
+    assertEquals(6, count)
+    responseCode = 200
+    body = payload.put("authorization", "must-stay-native").toString()
+    try { reader.read(input); fail("Opaque fields must not cross RN") } catch (_: UploadFailure) { }
+    body = " ".repeat(16385)
+    try { reader.read(input); fail("Unbounded response") } catch (_: UploadFailure) { }
+    try { reader.read(input.replace("https://", "http://")); fail("Insecure URL") } catch (_: UploadFailure) { }
+    client.dispatcher.executorService.shutdown(); client.connectionPool.evictAll()
+  }
   @org.junit.Rule @JvmField val timeout = org.junit.rules.Timeout.seconds(30)
   private val recordingUuid = "10000000-0000-0000-0000-000000000001"
   private val sessionId = "20000000-0000-0000-0000-000000000001"
@@ -102,6 +139,146 @@ class NativeUploadTest {
   private fun harness() = Harness(Files.createTempDirectory("bota-upload-test-").toFile())
   private suspend fun expectFailure(code: String, block: suspend () -> Unit) {
     try { block(); fail("Expected $code") } catch (error: UploadFailure) { assertEquals(code, error.code) }
+  }
+
+  @Test fun markedUploadForwardsOpaquePagesAndRequiresBothReceipts() = runBlocking {
+    val h = harness()
+    try {
+      val marked = input().apply { getJSONObject("recording").put("markersRequired", true) }
+      var published = false
+      var includeMarkerReceipt = false
+      var batches = 0
+      val markerReceipt = ByteArray(296) { 5 }
+      val context = ByteArray(176) { 4 }
+      val markerAuth = ByteArray(280) { 3 }
+      h.response = { request -> when {
+        request.path.endsWith("/recordings") -> JSONObject().put("id", "rec_a")
+        request.path.contains("/markers/authorization") -> JSONObject().put("profile", "recording-markers/1")
+          .put("context_base64", encoded(context)).put("authorization_base64", encoded(markerAuth))
+          .put("authorization_sha256", digest(markerAuth))
+        request.path.endsWith("/markers/batch") -> {
+          assertEquals(1, request.body!!.getJSONArray("pages_base64").length())
+          batches++
+          JSONObject().put("state", "verified")
+        }
+        else -> session(if (published) "published" else "staging").apply {
+          if (includeMarkerReceipt) put("marker_completion_receipt_base64", encoded(markerReceipt))
+            .put("marker_completion_receipt_sha256", digest(markerReceipt))
+        }
+      } }
+      val adapter = h.adapter(now)
+      val result = adapter.prepare(marked.toString())
+      val material = BotaDeviceSDKEncryptedUploadV2Materials.remove(result["materialRegistrationId"] as String)!!
+      assertTrue(material.authorization.contentEquals(authorization + context + markerAuth))
+      material.submitMarkers!!(listOf(ByteArray(200), ByteArray(216)), evidence())
+      assertEquals(1, batches)
+      published = true
+      expectFailure("BOTA_UPLOAD_INVALID_DOCUMENT") { material.finalize(evidence()) }
+      expectFailure("BOTA_UPLOAD_NOT_COMPLETE") { material.completionReceipt(evidence()) }
+      includeMarkerReceipt = true
+      material.finalize(evidence())
+      assertTrue(material.completionReceipt(evidence()).contentEquals(receipt + markerReceipt))
+      val plain = UploadInput.parse(input().toString())
+      val explicitFalse = UploadInput.parse(input().apply { getJSONObject("recording").put("markersRequired", false) }.toString())
+      assertEquals(plain.identitySha256, explicitFalse.identitySha256)
+      assertNotEquals(plain.identitySha256, UploadInput.parse(marked.toString()).identitySha256)
+    } finally { h.directory.deleteRecursively() }
+  }
+
+  @Test fun markedAdmissionRestoresSavedBytesAndCreatesOnlyAfterExplicitAbsence() = runBlocking {
+    for (readStatus in listOf(200, 404, 403, 409)) {
+      val h = harness()
+      try {
+        val marked = input().apply { getJSONObject("recording").put("markersRequired", true) }
+        var posts = 0
+        h.response = { request -> when {
+          request.path.endsWith("/recordings") -> JSONObject().put("id", "rec_a")
+          request.path.contains("/markers/authorization") -> {
+            if (request.body == null && readStatus != 200) throw UploadFailure("BOTA_UPLOAD_HTTP_$readStatus")
+            if (request.body != null) posts++
+            val bytes = ByteArray(280) { 3 }
+            JSONObject().put("profile", "recording-markers/1").put("context_base64", encoded(ByteArray(176)))
+              .put("authorization_base64", encoded(bytes)).put("authorization_sha256", digest(bytes))
+          }
+          else -> session("staging")
+        } }
+        if (readStatus in listOf(403, 409)) {
+          expectFailure("BOTA_UPLOAD_HTTP_$readStatus") { h.adapter(now).prepare(marked.toString()) }
+        } else h.adapter(now).prepare(marked.toString())
+        assertEquals(if (readStatus == 404) 1 else 0, posts)
+      } finally { h.directory.deleteRecursively() }
+    }
+  }
+
+  @Test fun markedSuccessorUsesSavedChildAdmissionAndRejectsStaleCompletion() = runBlocking {
+    for (invalid in listOf("owner", "wifi", "cellular", "marker-hash")) {
+      val h = harness()
+      try {
+        val marked = resumed().apply { getJSONObject("recording").put("markersRequired", true) }
+        val parsed = UploadInput.parse(marked.toString())
+        val child = "30000000-0000-0000-0000-000000000001"
+        val context = ByteArray(176) { 4 }
+        val markerAuth = ByteArray(280) { 3 }
+        h.response = { request -> when {
+          request.path.endsWith("/$sessionId/recover") -> session("staging", child, 2).also {
+            assertEquals(1, request.body!!.getInt("owner_revision"))
+          }
+          request.path.contains("/markers/authorization") -> {
+            assertNull(request.body)
+            assertTrue(request.path.endsWith("/$child/markers/authorization?owner_revision=2"))
+            JSONObject().put("profile", "recording-markers/1").put("context_base64", encoded(context))
+              .put("authorization_base64", encoded(markerAuth)).put("authorization_sha256", digest(markerAuth))
+          }
+          request.path.endsWith("/$sessionId") -> session("expired")
+          request.path.endsWith("/$child") -> session("staging", child, 2)
+          else -> error("Unexpected successor request: ${request.path}")
+        } }
+        val adapter = h.adapter(now)
+        val result = adapter.prepare(marked.toString())
+        val material = BotaDeviceSDKEncryptedUploadV2Materials.remove(result["materialRegistrationId"] as String)!!
+        assertEquals(child, result["uploadSessionId"])
+        assertTrue(material.authorization.contentEquals(authorization + context + markerAuth))
+        val retained = h.journal.load(parsed)!!
+        assertEquals(child, retained.pointer!!.sessionId)
+        assertEquals(2L, retained.pointer!!.ownerRevision)
+        h.response = { request ->
+          assertTrue(request.path.endsWith("/$child"))
+          session("published", if (invalid == "owner") sessionId else child, if (invalid == "owner") 1 else 2)
+            .put("channel", if (invalid in listOf("wifi", "cellular")) invalid else "ble")
+            .put("marker_completion_receipt_base64", encoded(ByteArray(296) { 5 }))
+            .put("marker_completion_receipt_sha256", "00".repeat(32))
+        }
+        expectFailure(if (invalid == "marker-hash") "BOTA_UPLOAD_INVALID_DOCUMENT" else "BOTA_UPLOAD_IDENTITY_CONFLICT") {
+          material.finalize(evidence())
+        }
+        expectFailure("BOTA_UPLOAD_NOT_COMPLETE") { material.completionReceipt(evidence()) }
+        expectFailure("BOTA_UPLOAD_NOT_COMPLETE") { adapter.complete("operation-a") }
+        assertEquals(retained, h.journal.load(parsed))
+        assertEquals(1, h.requests.count { it.path.endsWith("/recover") })
+        assertFalse(h.requests.any { it.path.contains("/markers/authorization") && it.body != null })
+        adapter.cancelAll()
+      } finally { h.directory.deleteRecursively() }
+    }
+  }
+
+  @Test fun markedPostManifestAbsenceAndServerFailureNeverReadmit() = runBlocking {
+    for (state in listOf("staging", "ready", "processing", "published")) {
+      for (readStatus in listOf(404, 503)) {
+        if (state == "staging" && readStatus == 404) continue // Covered by the explicit admission test.
+        val h = harness()
+        try {
+          val marked = resumed().apply { getJSONObject("recording").put("markersRequired", true) }
+          h.response = { request ->
+            assertNull(request.body)
+            if (request.path.contains("/markers/authorization")) throw UploadFailure("BOTA_UPLOAD_HTTP_$readStatus")
+            session(state)
+          }
+          expectFailure("BOTA_UPLOAD_HTTP_$readStatus") { h.adapter(now).prepare(marked.toString()) }
+          assertEquals(sessionId, h.journal.load(UploadInput.parse(marked.toString()))!!.pointer!!.sessionId)
+          assertTrue(h.requests.all { it.body == null })
+        } finally { h.directory.deleteRecursively() }
+      }
+    }
   }
 
   @Test fun initialSessionHasOnlyMetadataAndFreshCredentials() = runBlocking {

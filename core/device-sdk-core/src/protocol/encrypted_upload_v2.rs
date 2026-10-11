@@ -129,6 +129,17 @@ pub struct ManifestChunkV2<'a> {
     pub chunk: &'a [u8],
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MarkerChunkV2<'a> {
+    pub common: CommonHeaderV2,
+    pub document_index: u32,
+    pub document_count: u32,
+    pub chunk_offset: u16,
+    pub document_length: u16,
+    pub document_sha256: [u8; 32],
+    pub chunk: &'a [u8],
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EofV2 {
     pub common: CommonHeaderV2,
@@ -174,6 +185,7 @@ pub struct ConfirmV2 {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum EncryptedUploadV2Transfer<'a> {
     List(CommonHeaderV2),
+    MarkedList(CommonHeaderV2),
     RecordingEntry(RecordingEntryV2),
     RecordingListEnd {
         common: CommonHeaderV2,
@@ -192,6 +204,7 @@ pub enum EncryptedUploadV2Transfer<'a> {
     WindowEnd(WindowEndV2),
     WindowAck(WindowAckV2),
     ManifestChunk(ManifestChunkV2<'a>),
+    MarkerChunk(MarkerChunkV2<'a>),
     Eof(EofV2),
     ResumeRequest(ResumeV2),
     ResumeAccept(ResumeV2),
@@ -647,6 +660,7 @@ pub fn decode_encrypted_upload_v2_transfer(
         protocol::ENCRYPTED_UPLOAD_V2_WINDOW_END => decode_window_end(&cursor),
         protocol::ENCRYPTED_UPLOAD_V2_WINDOW_ACK => decode_window_ack(&cursor),
         protocol::ENCRYPTED_UPLOAD_V2_MANIFEST_CHUNK => decode_manifest_chunk(&cursor),
+        protocol::ENCRYPTED_UPLOAD_V2_MARKER_CHUNK => decode_marker_chunk(&cursor),
         protocol::ENCRYPTED_UPLOAD_V2_EOF => decode_eof(&cursor),
         protocol::ENCRYPTED_UPLOAD_V2_RESUME_REQUEST => decode_resume(&cursor, false),
         protocol::ENCRYPTED_UPLOAD_V2_RESUME_ACCEPT => decode_resume(&cursor, true),
@@ -665,9 +679,38 @@ pub fn encode_encrypted_upload_v2_transfer(
         EncryptedUploadV2Transfer::List(common) => {
             encode_common_fixed(common, protocol::ENCRYPTED_UPLOAD_V2_LIST, 16)
         }
+        EncryptedUploadV2Transfer::MarkedList(common) => {
+            let mut bytes = encode_common_fixed(common, protocol::ENCRYPTED_UPLOAD_V2_LIST, 16)?;
+            put_u32(&mut bytes, 12, 1);
+            Ok(bytes)
+        }
+        EncryptedUploadV2Transfer::MarkerChunk(value) => {
+            let mut bytes = encode_common_fixed(
+                &value.common,
+                protocol::ENCRYPTED_UPLOAD_V2_MARKER_CHUNK,
+                60 + value.chunk.len(),
+            )?;
+            put_u32(&mut bytes, 12, value.document_index);
+            put_u32(&mut bytes, 16, value.document_count);
+            put_u16(&mut bytes, 20, value.chunk_offset);
+            put_u16(&mut bytes, 22, value.document_length);
+            put_u16(
+                &mut bytes,
+                24,
+                value
+                    .chunk
+                    .len()
+                    .try_into()
+                    .map_err(|_| invalid_encode("marker chunk length"))?,
+            );
+            bytes[28..60].copy_from_slice(&value.document_sha256);
+            bytes[60..].copy_from_slice(value.chunk);
+            decode_marker_chunk(&Cursor::new(&bytes))?;
+            Ok(bytes)
+        }
         EncryptedUploadV2Transfer::RecordingEntry(value) => {
             if value.storage_format != protocol::STORAGE_FORMAT_BOTA_ENC_V2
-                || value.completion_state != protocol::ENCRYPTED_UPLOAD_V2_COMPLETION_COMPLETE
+                || !matches!(value.completion_state, 1 | 2)
             {
                 return Err(invalid_encode(
                     "recording entry is not committed bota_enc_v2",
@@ -856,8 +899,44 @@ fn decode_list<'a>(cursor: &Cursor<'a>) -> Result<EncryptedUploadV2Transfer<'a>,
     cursor.require_exact(protocol::ENCRYPTED_UPLOAD_V2_LIST_FIXED_LENGTH)?;
     let common = decode_common(cursor, protocol::ENCRYPTED_UPLOAD_V2_LIST)?;
     let request_flags = cursor.u32_le(protocol::ENCRYPTED_UPLOAD_V2_LIST_REQUEST_FLAGS_OFFSET)?;
-    require_known_bits(request_flags, 0, "LIST request flags")?;
-    Ok(EncryptedUploadV2Transfer::List(common))
+    require_known_bits(request_flags, 1, "LIST request flags")?;
+    Ok(if request_flags == 1 {
+        EncryptedUploadV2Transfer::MarkedList(common)
+    } else {
+        EncryptedUploadV2Transfer::List(common)
+    })
+}
+
+fn decode_marker_chunk<'a>(
+    cursor: &Cursor<'a>,
+) -> Result<EncryptedUploadV2Transfer<'a>, DeviceSdkError> {
+    cursor.require(61)?;
+    ensure_frame_limit(cursor.len(), Operation::Decode)?;
+    let common = decode_common(cursor, protocol::ENCRYPTED_UPLOAD_V2_MARKER_CHUNK)?;
+    let index = cursor.u32_le(12)?;
+    let count = cursor.u32_le(16)?;
+    let offset = cursor.u16_le(20)?;
+    let length = cursor.u16_le(22)?;
+    let size = cursor.u16_le(24)?;
+    require_zero(cursor.slice(26, 2)?, "marker chunk reserved")?;
+    if !(2..=4097).contains(&count)
+        || index >= count
+        || !(200..=402).contains(&length)
+        || size == 0
+        || usize::from(offset) + usize::from(size) > usize::from(length)
+        || cursor.len() != 60 + usize::from(size)
+    {
+        return Err(invalid_decode("marker chunk bounds"));
+    }
+    Ok(EncryptedUploadV2Transfer::MarkerChunk(MarkerChunkV2 {
+        common,
+        document_index: index,
+        document_count: count,
+        chunk_offset: offset,
+        document_length: length,
+        document_sha256: fixed::<32>(cursor, 28)?,
+        chunk: cursor.tail(60)?,
+    }))
 }
 
 fn decode_recording_entry<'a>(
@@ -876,8 +955,7 @@ fn decode_recording_entry<'a>(
         cursor.u8(protocol::ENCRYPTED_UPLOAD_V2_RECORDING_ENTRY_STORAGE_FORMAT_OFFSET)?;
     let completion_state =
         cursor.u8(protocol::ENCRYPTED_UPLOAD_V2_RECORDING_ENTRY_COMPLETION_STATE_OFFSET)?;
-    if storage_format != protocol::STORAGE_FORMAT_BOTA_ENC_V2
-        || completion_state != protocol::ENCRYPTED_UPLOAD_V2_COMPLETION_COMPLETE
+    if storage_format != protocol::STORAGE_FORMAT_BOTA_ENC_V2 || !matches!(completion_state, 1 | 2)
     {
         return Err(invalid_decode(
             "RECORDING_ENTRY is not committed bota_enc_v2",
@@ -1849,6 +1927,8 @@ fn signed_document_length(kind: u8, operation: Operation) -> Result<usize, Devic
         protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_CONTEXT_RESULT => {
             Ok(protocol::UPLOAD_CONTEXT_RESULT_FIXED_LENGTH)
         }
+        protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_MARKED_AUTHORIZATION => Ok(864),
+        protocol::ENCRYPTED_UPLOAD_V2_BLOB_KIND_MARKED_RECEIPT => Ok(632),
         _ if operation == Operation::Decode => Err(unknown_decode(kind, "signed blob kind")),
         _ => Err(invalid_encode("unknown signed blob kind")),
     }

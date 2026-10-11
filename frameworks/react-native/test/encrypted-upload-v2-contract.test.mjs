@@ -100,6 +100,7 @@ test('encrypted upload v2 Codegen exposes only the approved metadata aliases', (
       'ciphertextSha256!:StringTypeAnnotation',
       'durationMs?:StringTypeAnnotation',
       'generation!:NumberTypeAnnotation',
+      'markersRequired?:BooleanTypeAnnotation',
       'plaintextLength?:StringTypeAnnotation',
       'startedAtMs?:StringTypeAnnotation',
       'storageFormat?:NumberTypeAnnotation',

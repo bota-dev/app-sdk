@@ -15,6 +15,43 @@ import org.junit.Test
 
 class EncryptedUploadV2TransferReceiverTest {
     @Test
+    fun markedTransfersRequireCompleteOrderedAndUntamperedDocuments() {
+        val audio = byteArrayOf(1, 2, 3, 4)
+        val manifest = ByteArray(580) { 7 }
+        for (fault in listOf("none", "missing", "reorder", "tampered", "count", "offset", "ordinary")) {
+            val receiver = resumedReceiver(audio, 4, fault != "ordinary")
+            receiver.prepare()
+            receiver.resumeAccepted()
+            receiver.receive(EncryptedUploadV2TransferPayload.ManifestChunk(
+                EncryptedUploadV2ManifestChunkValue(9u, 580u, 0u, sha(manifest), manifest)))
+            val documents = listOf(ByteArray(200) { 8 }, ByteArray(402) { 9 })
+            val transfer = {
+                documents.forEachIndexed { index, document ->
+                    if (!(fault == "missing" && index == 1)) {
+                        for (offset in document.indices step 100) {
+                            val bytes = document.copyOfRange(offset, minOf(offset + 100, document.size))
+                            if (fault == "tampered") bytes[0] = 42
+                            receiver.receive(EncryptedUploadV2TransferPayload.MarkerChunk(
+                                dev.bota.sdk.internal.core.EncryptedUploadV2MarkerChunkValue(
+                                    9u, if (fault == "reorder") 1u else index.toUInt(),
+                                    if (fault == "count") 4098u else 2u,
+                                    if (fault == "offset") 1u else offset.toUShort(), document.size.toUShort(), sha(document), bytes)))
+                        }
+                    }
+                }
+                receiver.receive(EncryptedUploadV2TransferPayload.Eof(
+                    EncryptedUploadV2EofValue(9u, 0u, 1u, 4u, sha(audio), sha(manifest))))
+            }
+            if (fault == "none") {
+                val result = transfer() as EncryptedUploadV2TransferReceiverEvent.Completed
+                assertEquals(2, result.value.markerDocuments.size)
+                documents.forEachIndexed { index, document -> assertTrue(document.contentEquals(result.value.markerDocuments[index])) }
+            } else assertThrows(fault, EncryptedUploadV2TransferReceiverException::class.java) { transfer() }
+            assertTrue(Files.readAllBytes(receiver.file).contentEquals(audio))
+        }
+    }
+
+    @Test
     fun completedResumeUsesAttemptSequenceAndStillChecksEveryEofIntegrityField() {
         val ciphertext = byteArrayOf(1, 2, 3, 4)
         val manifest = ByteArray(580) { (it % 251).toByte() }
@@ -88,13 +125,13 @@ class EncryptedUploadV2TransferReceiverTest {
         assertThrows(EncryptedUploadV2TransferReceiverException::class.java) { fresh.resumeAccepted() }
     }
 
-    private fun resumedReceiver(ciphertext: ByteArray, offset: Int): EncryptedUploadV2TransferReceiver {
+    private fun resumedReceiver(ciphertext: ByteArray, offset: Int, marked: Boolean = false): EncryptedUploadV2TransferReceiver {
         val root = Files.createTempDirectory("bota-v2-resume-sequence")
         val sink = UUID.randomUUID().toString()
         Files.write(root.resolve("$sink.encrypted-upload-v2"), ciphertext)
         return EncryptedUploadV2TransferReceiver(
             root, sink, 9u, ciphertext.size.toULong(), sha(ciphertext), 4u, 2u, 2u,
-            EncryptedUploadV2CheckpointValue(34u, offset.toULong(), sha(ciphertext.copyOf(offset)), 339u),
+            EncryptedUploadV2CheckpointValue(34u, offset.toULong(), sha(ciphertext.copyOf(offset)), 339u), marked,
         )
     }
 

@@ -13,6 +13,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineStart
 import org.json.JSONObject
 
 @ReactModule(name = BotaUploadV2BackendModule.NAME)
@@ -35,6 +37,8 @@ internal class BotaUploadV2BackendModule(context: ReactApplicationContext) : Nat
       }
     }), BackendUploadHttp(), credentials::request, BotaDeviceSDKEncryptedUploadV2Materials::readAuthNonce,
   )
+  private val statusReader = UploadStreamingStatus()
+  private val statusJobs = mutableMapOf<String, Job>()
   @Volatile private var destroyed = false
 
   private fun invoke(promise: Promise, block: suspend () -> Any?) {
@@ -45,6 +49,27 @@ internal class BotaUploadV2BackendModule(context: ReactApplicationContext) : Nat
         promise.reject(code, code, null)
       }
     }
+  }
+  override fun readProtectedStreamingStatus(requestId: String, inputJSON: String, promise: Promise) {
+    val job = work.launch(start = CoroutineStart.LAZY) {
+      try { demand(!destroyed, "CANCELLED"); promise.resolve(statusReader.read(inputJSON)) }
+      catch (_: Exception) { promise.reject("BOTA_STREAM_STATUS_FAILED", "BOTA_STREAM_STATUS_FAILED", null) }
+    }
+    job.invokeOnCompletion { error ->
+      synchronized(statusJobs) { if (statusJobs[requestId] === job) statusJobs.remove(requestId) }
+      if (error != null) promise.reject("BOTA_STREAM_STATUS_FAILED", "BOTA_STREAM_STATUS_FAILED", null)
+    }
+    synchronized(statusJobs) {
+      if (destroyed || statusJobs.containsKey(requestId)) {
+        job.cancel(); return
+      }
+      statusJobs[requestId] = job
+    }
+    job.start()
+  }
+  override fun cancelProtectedStreamingStatus(requestId: String, promise: Promise) {
+    synchronized(statusJobs) { statusJobs[requestId]?.cancel() }
+    promise.resolve(null)
   }
   override fun prepare(inputJSON: String, promise: Promise) = invoke(promise) {
     JSONObject(upload.prepare(inputJSON)).toString()
@@ -60,6 +85,7 @@ internal class BotaUploadV2BackendModule(context: ReactApplicationContext) : Nat
   override fun invalidate() {
     destroyed = true
     upload.cancelAll()
+    synchronized(statusJobs) { statusJobs.values.toList().forEach { it.cancel() }; statusJobs.clear() }
     // Dispatched identity-creating requests must drain into their original journal.
     super.invalidate()
   }

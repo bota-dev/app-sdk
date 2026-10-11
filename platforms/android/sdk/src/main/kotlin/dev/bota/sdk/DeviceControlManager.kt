@@ -30,7 +30,6 @@ import kotlinx.coroutines.withTimeout
 
 public enum class DeviceApiEnvironment { Development, Gamma, Production }
 
-internal enum class RecordingControlCommand { Start, Stop }
 
 public class DeviceControlManager internal constructor() {
     private data class RecordingStateObserver(

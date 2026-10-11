@@ -649,8 +649,19 @@ fn encode_encrypted_upload_v2_transfer_packet(
 
     match message_type {
         wire::ENCRYPTED_UPLOAD_V2_LIST => {
-            fields.validate_allowed(&[field_id::MESSAGE_TYPE, field_id::TRANSPORT_SESSION_ID])?;
-            encode_encrypted_upload_v2_transfer(&EncryptedUploadV2Transfer::List(common))
+            fields.validate_allowed(&[
+                field_id::MESSAGE_TYPE,
+                field_id::TRANSPORT_SESSION_ID,
+                field_id::REQUEST_FLAGS,
+            ])?;
+            let flags = fields.optional_u64(field_id::REQUEST_FLAGS)?.unwrap_or(0);
+            match flags {
+                0 => encode_encrypted_upload_v2_transfer(&EncryptedUploadV2Transfer::List(common)),
+                1 => encode_encrypted_upload_v2_transfer(&EncryptedUploadV2Transfer::MarkedList(
+                    common,
+                )),
+                _ => Err(invalid("unsupported catalog flags")),
+            }
         }
         wire::ENCRYPTED_UPLOAD_V2_START => {
             fields.validate_allowed(&[
@@ -911,6 +922,16 @@ fn decode_encrypted_upload_v2_transfer_packet(
         EncryptedUploadV2Transfer::List(common) => {
             encrypted_v2_common(output, common).with_u64(field_id::REQUEST_FLAGS, 0)
         }
+        EncryptedUploadV2Transfer::MarkedList(common) => {
+            encrypted_v2_common(output, common).with_u64(field_id::REQUEST_FLAGS, 1)
+        }
+        EncryptedUploadV2Transfer::MarkerChunk(value) => encrypted_v2_common(output, value.common)
+            .with_u64(field_id::SEQUENCE, u64::from(value.document_index))
+            .with_u64(field_id::RECORDING_COUNT, u64::from(value.document_count))
+            .with_u64(field_id::OFFSET, u64::from(value.chunk_offset))
+            .with_u64(field_id::BODY_LENGTH, u64::from(value.document_length))
+            .with_bytes(field_id::CONTENT_SHA256, value.document_sha256.to_vec())
+            .with_bytes(field_id::VALUE, value.chunk.to_vec()),
         EncryptedUploadV2Transfer::RecordingEntry(value) => {
             v2_demo::recording_fields(encrypted_v2_common(output, value.common), value)
         }

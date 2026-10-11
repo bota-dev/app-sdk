@@ -257,13 +257,29 @@ internal class NativeUpload(
         else -> fail("INVALID_DOCUMENT")
       }
       timestamp(selected.string("expires_at"))
-      val authorization = opaque(selected.string("authorization_base64"), 408, selected.string("authorization_sha256"))
+      var authorization = opaque(selected.string("authorization_base64"), 408, selected.string("authorization_sha256"))
+      if (input.recording.markersRequired) {
+        val path = sessionPath() + "/markers/authorization"
+        val admission = try {
+          retry { request(path + "?owner_revision=" + pointer!!.ownerRevision) }
+        } catch (error: UploadFailure) {
+          if (error.code != "BOTA_UPLOAD_HTTP_404" || selected.optString("state") !in setOf("", "created", "staging", "staged")) throw error
+          retry { request(path, JSONObject().put("owner_revision", pointer!!.ownerRevision)
+            .put("request_uuid", pointer!!.sessionId)) }
+        }
+        demand(admission.string("profile") == "recording-markers/1", "INVALID_DOCUMENT")
+        authorization += opaque(admission.string("context_base64"), 176)
+        authorization += opaque(admission.string("authorization_base64"), 280, admission.string("authorization_sha256"))
+      }
       val material = EncryptedUploadV2Material(
         materialId = UUID.randomUUID().toString(), recordingId = input.recording.uuid,
         uploadSessionId = UUID.fromString(pointer!!.sessionId), ownerRevision = pointer!!.ownerRevision!!.toUInt(),
         policy = nativePolicy, authorization = authorization,
         stagingRequest = { evidence -> callbacks.withLock { staging(evidence) } },
         submitManifest = { bytes, evidence -> callbacks.withLock { manifest(bytes, evidence) } },
+        submitMarkers = if (input.recording.markersRequired) { documents, evidence ->
+          callbacks.withLock { markers(documents, evidence) }
+        } else null,
         finalize = { evidence -> callbacks.withLock { finalize(evidence) } },
         completionReceipt = { evidence -> callbacks.withLock {
           verifyEvidence(evidence)
@@ -349,6 +365,15 @@ internal class NativeUpload(
       uploadCiphertext = false
       sendManifest = false
     }
+    private suspend fun markers(documents: List<ByteArray>, evidence: EncryptedUploadV2TransferEvidence) {
+      verifyEvidence(evidence)
+      demand(input.recording.markersRequired && documents.size in 2..4097 && documents[0].size == 200 &&
+        documents.drop(1).all { it.size in 216..402 }, "INVALID_DOCUMENT")
+      val pages = org.json.JSONArray()
+      documents.drop(1).forEach { pages.put(encoded(it)) }
+      retry { request(sessionPath() + "/markers/batch", JSONObject().put("owner_revision", pointer!!.ownerRevision)
+        .put("seal_base64", encoded(documents[0])).put("pages_base64", pages)) }
+    }
     private suspend fun finalize(evidence: EncryptedUploadV2TransferEvidence) {
       verifyEvidence(evidence)
       for (poll in 0 until 60) {
@@ -356,7 +381,10 @@ internal class NativeUpload(
         applyStatus(status)
         if (status.string("state") == "published") {
           demand(status.integer("plaintext_length") == input.recording.plaintextLength, "INVALID_DOCUMENT")
-          receipt = opaque(status.string("completion_receipt_base64"), 336, status.string("completion_receipt_sha256"))
+          val audio = opaque(status.string("completion_receipt_base64"), 336, status.string("completion_receipt_sha256"))
+          receipt = if (input.recording.markersRequired) audio + opaque(
+            (status.opt("marker_completion_receipt_base64") as? String ?: fail("INVALID_DOCUMENT")), 296,
+            (status.opt("marker_completion_receipt_sha256") as? String ?: fail("INVALID_DOCUMENT"))) else audio
           return
         }
         wait(2000, operation)

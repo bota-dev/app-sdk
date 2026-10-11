@@ -112,7 +112,8 @@ export function createManagedEncryptedUploadV2Backend(
             recording: { uuid: context.recording.uuid, generation: context.recording.generation,
               ciphertextLength: context.recording.ciphertextLength, ciphertextSha256: context.recording.ciphertextSha256,
               startedAtMs: context.recording.startedAtMs, durationMs: context.recording.durationMs,
-              plaintextLength: context.recording.plaintextLength, storageFormat: context.recording.storageFormat },
+              plaintextLength: context.recording.plaintextLength, storageFormat: context.recording.storageFormat,
+              ...(context.recording.markersRequired ? { markersRequired: true } : {}) },
             capability: { rawValueHex: context.capability.rawValueHex, flags: context.capability.flags },
             ...(context.checkpoint === undefined ? {} : { checkpoint: {
               version: context.checkpoint.version, uploadSessionId: context.checkpoint.uploadSessionId,

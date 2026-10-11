@@ -18,7 +18,7 @@ internal fun validateEncryptedUploadV2Material(
         EncryptedUploadV2SecurityPolicy.V2Required -> 2.toUByte()
     }
     fun invalid(): Nothing = throw EncryptedUploadV2MaterialRegistryException("encrypted upload material identity mismatch", 18u)
-    if (material.ownerRevision == 0u || material.ownerRevision > Int.MAX_VALUE.toUInt() ||
+    if (recording.markersRequired != (material.authorization.size == 864) || material.ownerRevision == 0u || material.ownerRevision > Int.MAX_VALUE.toUInt() ||
         auth.ownerRevision != material.ownerRevision || auth.profile != 3.toUByte() ||
         recording.storageFormat != 3.toUByte() || auth.storageFormat != recording.storageFormat ||
         auth.policy != policy || auth.channels.toInt() and 1 == 0 || auth.flags and 0xfffffff0u != 0u || auth.flags and 1u == 0u ||
