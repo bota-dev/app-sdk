@@ -2,6 +2,15 @@
 
 External firmware integrations use the all-English [FIRMWARE_PROTOCOL.md](FIRMWARE_PROTOCOL.md) in this active SDK repository. The #201 marker section is a development contract, not proof of released package support; keep protocol facts aligned with the feature implementation/manifest, distinguish source from release availability, and preserve exact owner/completion/deletion semantics. Do not send new SDK work to the retired standalone react-native-sdk repository.
 
+BYO live and whole-file uploads now connect Rust framing/recovery to Apple/Android
+BLE, HTTP and WS, private durable journals and receipt-gated cleanup. Native
+`streamByoRecording` and RN `stream(device, null, target)` discover the active
+physical capture; explicit identities also work. Three WS reconnects precede a
+fenced full-file successor; initial WS failure stays on HTTP segments. Stop
+Recording can run during a live upload; unrelated device operations stay exclusive.
+Only metadata crosses JS. See [integration and review](docs/parity/byo-storage.md)
+for source evidence and separate customer, package and hardware acceptance gates.
+
 Recording markers #201: [native BATCH integration and successor review](docs/parity/recording-markers.md) covers opaque transfers, authorization recovery, owner/channel fences and dual receipts. The unpublished [STREAMING scalar status provider](docs/parity/protected-streaming-status.md) is wired through native HTTPS; Demo uses its dashboard read API and existing BLE control for device-direct streaming. A new BLE audio relay is outside this scope. Published beta.14 lacks the new marker/status native capabilities; target artifacts and consuming native App release remain pending. No marker profile is enabled; preserve UUID[16] and 280-byte authorization. See [local package evidence](docs/testing/recording-markers-local-candidate.md).
 
 **Upload completion architecture (target; partial implementation):**

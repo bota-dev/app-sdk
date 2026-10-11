@@ -55,21 +55,24 @@ internal class DeviceConnectionRegistry {
 internal class DeviceOperationCoordinator {
     private val lock = Any()
     private var owner: UUID? = null
+    private var control: UUID? = null
+    private var live = false
 
-    fun begin(id: UUID, operation: BotaOperation) {
+    fun begin(id: UUID, operation: BotaOperation, allowRecordingControl: Boolean = false, recordingControl: Boolean = false) {
         synchronized(lock) {
-            if (owner != null) throw BotaSDKError.Core(
+            if (owner != null && live && recordingControl && control == null) { control = id; return }
+            if (owner != null || control != null) throw BotaSDKError.Core(
                 BotaErrorCode.OperationInProgress,
                 operation,
                 retryable = false,
                 protocolStatus = null,
                 detail = "another device operation is already active",
             )
-            owner = id
+            owner = id; live = allowRecordingControl
         }
     }
 
     fun end(id: UUID) {
-        synchronized(lock) { if (owner == id) owner = null }
+        synchronized(lock) { if (control == id) control = null; if (owner == id) {owner = null; live = false} }
     }
 }

@@ -174,3 +174,8 @@ export type {
   SyncStatus,
   SyncStatusInputs,
 } from './sync/syncStatus';
+
+export type { ByoStorageBackendOptions, ByoStorageBackend, ByoRecording, ByoSyncTarget, ByoUploadResult } from './byoStorageBackend';
+import { createManagedByoStorageBackend, type ByoStorageBackendOptions } from './byoStorageBackend';
+export const createByoStorageBackend = (options: ByoStorageBackendOptions) =>
+  createManagedByoStorageBackend(NativeBotaUploadV2Backend, options);

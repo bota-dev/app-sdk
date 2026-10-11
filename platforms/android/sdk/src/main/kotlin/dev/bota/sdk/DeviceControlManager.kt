@@ -229,7 +229,7 @@ public class DeviceControlManager internal constructor() {
         grantBlob: String,
     ): RecordingControlResult {
         val grant = grantData(grantBlob)
-        return performOperation(device, BotaOperation.Encode) { configured ->
+        return performOperation(device, BotaOperation.Encode, recordingControl = command == RecordingControlCommand.Stop) { configured ->
             configured.directWrite(
                 device.id,
                 BotaBluetoothUUIDs.ControlService,
@@ -264,13 +264,14 @@ public class DeviceControlManager internal constructor() {
     private suspend fun <T> performOperation(
         device: ConnectedDevice,
         operation: BotaOperation,
+        recordingControl: Boolean = false,
         body: suspend (DeviceRuntime) -> T,
     ): T {
         val configured = configuredRuntime()
         configured.connection.require(device)
         configured.authorize(operation)
         val id = UUID.randomUUID()
-        configured.operations.begin(id, operation)
+        configured.operations.begin(id, operation, recordingControl = recordingControl)
         return try {
             body(configured)
         } finally {

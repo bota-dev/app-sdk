@@ -31,6 +31,7 @@ public actor RecordingManager {
     private var runtime: DeviceRuntime?
     private var activeCancellationID: UUID?
     private var activeTask: Task<Void, Never>?
+    private var activeByoTask: ByoOperationTask?
     private var activeCleanup: (@Sendable () async -> Void)?
     private var activeEncryptedUploadV2Lifecycle: EncryptedUploadV2OperationLifecycle?
     private var transferMetadataBySinkID: [String: RecordingTransferMetadata] = [:]
@@ -42,7 +43,10 @@ public actor RecordingManager {
     func detach() async {
         activeTask?.cancel()
         if let id = activeCancellationID {
-            if let lifecycle = activeEncryptedUploadV2Lifecycle, let runtime {
+            if let task = activeByoTask, let runtime {
+                task.cancel(); await task.settle()
+                await finishCancellation(id, runtime: runtime)
+            } else if let lifecycle = activeEncryptedUploadV2Lifecycle, let runtime {
                 await cancelEncryptedUploadV2(id, lifecycle: lifecycle, runtime: runtime)
             } else {
                 try? await runtime?.engine.cancel(id)
@@ -54,6 +58,54 @@ public actor RecordingManager {
         activeCleanup = nil
         transferMetadataBySinkID.removeAll()
         runtime = nil
+    }
+
+    public func listByoRecordings(_ device: ConnectedDevice, options: ByoStorageOptions) async throws -> [ByoRecording] {
+        let runtime = try configuredRuntime(); try await runtime.connection.require(device)
+        let id = UUID(); try await begin(id, operation: .transferRecording, runtime: runtime)
+        let owner = self
+        let task = Task {
+            try await ByoDeviceSession.list(runtime: runtime, device: device, options: options,
+                validateOwner: { try await owner.requireActive(id) })
+        }
+        activeByoTask = ByoOperationTask(task)
+        return try await withTaskCancellationHandler {
+            do { let result = try await task.value; await finish(id, runtime: runtime); return result }
+            catch { await finish(id, runtime: runtime); throw ByoStorageError.safe(error) }
+        } onCancel: { task.cancel() }
+    }
+
+    /// Independent BYO batch upload. It never invokes the legacy upload path
+    /// after destination selection; reinvocation resumes the native journal.
+    public func syncByoRecording(_ device: ConnectedDevice, recording: ByoRecording,
+                                 options: ByoStorageOptions) async throws -> ByoUploadResult {
+        try await byoRecording(device, recording: recording, options: options, live: false)
+    }
+    /// Streams ciphertext while recording; Batch owns final verification and cleanup.
+    public func streamByoRecording(_ device: ConnectedDevice, recording: ByoRecording?,
+                                   options: ByoStorageOptions) async throws -> ByoUploadResult {
+        try await byoRecording(device, recording: recording, options: options, live: true)
+    }
+    private func byoRecording(_ device: ConnectedDevice, recording: ByoRecording?,
+                              options: ByoStorageOptions, live: Bool) async throws -> ByoUploadResult {
+        let runtime = try configuredRuntime()
+        try await runtime.connection.require(device)
+        let id = UUID()
+        try await begin(id, operation: .transferRecording, runtime: runtime, allowRecordingControl: live)
+        let owner = self
+        let task = Task {
+            try await ByoDeviceSession.run(runtime: runtime, device: device, recording: recording, options: options, live: live,
+                validateOwner: {
+                    try await owner.requireActive(id)
+                })
+        }
+        activeByoTask = ByoOperationTask(task)
+        return try await withTaskCancellationHandler {
+            do {
+                let result = try await task.value
+                await finish(id, runtime: runtime); return result
+            } catch { await finish(id, runtime: runtime); throw ByoStorageError.safe(error) }
+        } onCancel: { task.cancel() }
     }
 
     public func listRecordings(_ device: ConnectedDevice) async throws -> [DeviceRecording] {
@@ -512,7 +564,10 @@ public actor RecordingManager {
     public func cancelCurrentOperation() async throws {
         guard let id = activeCancellationID else { return }
         let runtime = try configuredRuntime()
-        if let lifecycle = activeEncryptedUploadV2Lifecycle {
+        if let task = activeByoTask {
+            task.cancel(); await task.settle()
+            await finishCancellation(id, runtime: runtime)
+        } else if let lifecycle = activeEncryptedUploadV2Lifecycle {
             let cancellation = lifecycle.requestCancellation()
             if cancellation.cancelEngine {
                 do {
@@ -698,7 +753,7 @@ public actor RecordingManager {
         }
     }
 
-    private func begin(_ id: UUID, operation: BotaOperation, runtime: DeviceRuntime) async throws {
+    private func begin(_ id: UUID, operation: BotaOperation, runtime: DeviceRuntime, allowRecordingControl: Bool = false) async throws {
         guard activeCancellationID == nil else {
             throw BotaSDKError(
                 code: .operationInProgress,
@@ -707,7 +762,7 @@ public actor RecordingManager {
                 detail: "another recording operation is already active"
             )
         }
-        try await runtime.operations.begin(id, operation: operation)
+        try await runtime.operations.begin(id, operation: operation, allowRecordingControl: allowRecordingControl)
         activeCancellationID = id
     }
 
@@ -718,6 +773,7 @@ public actor RecordingManager {
         activeTask = nil
         activeCleanup = nil
         activeEncryptedUploadV2Lifecycle = nil
+        activeByoTask = nil
         await cleanup?()
         await runtime.operations.end(id)
     }
@@ -729,7 +785,10 @@ public actor RecordingManager {
 
     private func cancel(_ id: UUID) async {
         guard activeCancellationID == id, let runtime else { return }
-        if let lifecycle = activeEncryptedUploadV2Lifecycle {
+        if let task = activeByoTask {
+            task.cancel(); await task.settle()
+            await finishCancellation(id, runtime: runtime)
+        } else if let lifecycle = activeEncryptedUploadV2Lifecycle {
             await cancelEncryptedUploadV2(
                 id,
                 lifecycle: lifecycle,
@@ -976,4 +1035,12 @@ func facadePublicError(_ error: Error) -> Error {
     if let error = error as? BotaSDKError { return error }
     if let error = error as? CoreError { return BotaSDKError(error) }
     return error
+}
+
+private struct ByoOperationTask: Sendable {
+    let cancel: @Sendable () -> Void
+    let settle: @Sendable () async -> Void
+    init<T: Sendable>(_ task: Task<T, Error>) {
+        cancel = { task.cancel() }; settle = { _ = await task.result }
+    }
 }

@@ -47,7 +47,7 @@ function run(args) {
   return result.status === 0;
 }
 try {
-  const sources = files(source).filter((p) => p.endsWith('.kt') && basename(p) !== 'BotaUploadV2BackendModule.kt');
+  const sources = files(source).filter((p) => p.endsWith('.kt') && !['BotaUploadV2BackendModule.kt', 'ByoBridgeDriver.kt'].includes(basename(p)));
   sources.push(...files(join(root, 'tools/react-native/tests')).filter((p) => p.endsWith('.kt')));
   sources.push(join(sdk, 'platforms/android/sdk/src/main/kotlin/dev/bota/sdk/EncryptedUploadV2Models.kt'));
   sources.push(join(sdk, 'platforms/android/sdk/src/main/kotlin/dev/bota/sdk/model/RecordingModels.kt'));

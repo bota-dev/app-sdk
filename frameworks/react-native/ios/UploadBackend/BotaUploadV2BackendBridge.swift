@@ -4,6 +4,7 @@ import Foundation
 @objc(BotaUploadV2BackendBridge)
 public final class BotaUploadV2BackendBridge: NSObject, @unchecked Sendable {
   @MainActor private var coordinator: UploadCoordinator?
+  @MainActor private var byo: ByoBridgeDriver?
   @MainActor private var destroyed = false
   @MainActor private var statusJobs: [String: Task<Void, Never>] = [:]
   @MainActor private var credentialsRequested: (@Sendable (String, String) -> Void)?
@@ -41,6 +42,26 @@ public final class BotaUploadV2BackendBridge: NSObject, @unchecked Sendable {
     }
   }
 
+  @objc(syncByo:credentialsRequested:completion:)
+  public func syncByo(_ json: String, credentialsRequested: @escaping @Sendable (String, String) -> Void,
+    completion: @escaping @Sendable (String?, NSError?) -> Void) {
+    Task { @MainActor in
+      do {
+        guard !destroyed else { throw UploadFailure.cancelled }
+        self.credentialsRequested = credentialsRequested
+        completion(try await byoService().sync(json), nil)
+      } catch { completion(nil, (error is ByoStorageError ? error : UploadFailure.safe(error)) as NSError) }
+    }
+  }
+  @objc(cancelByo:completion:)
+  public func cancelByo(_ id: String, completion: @escaping @Sendable () -> Void) {
+    Task { @MainActor in await byoService().cancel(id); completion() }
+  }
+  @MainActor private func byoService() -> ByoBridgeDriver {
+    if let byo { return byo }
+    let value = ByoBridgeDriver(credentials: service().credentials); byo = value; return value
+  }
+
   @objc(cancel:completion:)
   public func cancel(_ id: String, completion: @escaping @Sendable () -> Void) {
     Task { @MainActor in coordinator?.cancel(id); completion() }
@@ -63,7 +84,11 @@ public final class BotaUploadV2BackendBridge: NSObject, @unchecked Sendable {
     Task { @MainActor in coordinator?.credentials.reject(requestId: id); completion() }
   }
   @objc public func invalidate() {
-    Task { @MainActor in destroyed = true; coordinator?.cancelAll(); credentialsRequested = nil; statusJobs.values.forEach { $0.cancel() }; statusJobs.removeAll() }
+    Task { @MainActor in
+      destroyed = true; coordinator?.cancelAll(); credentialsRequested = nil
+      statusJobs.values.forEach { $0.cancel() }; statusJobs.removeAll()
+      await byo?.stop()
+    }
   }
 
   @MainActor private func service() -> UploadCoordinator {

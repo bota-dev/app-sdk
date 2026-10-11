@@ -34,6 +34,18 @@ RCT_EXPORT_MODULE(BotaUploadV2Backend)
     else { resolve(result); }
   }];
 }
+- (void)syncByo:(NSString *)inputJSON resolve:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject {
+  __weak BotaUploadV2Backend *weakSelf = self;
+  [_backend syncByo:inputJSON credentialsRequested:^(NSString *requestId, NSString *operationId) {
+    [weakSelf emitOnCredentialsRequested:@{@"requestId": requestId, @"operationId": operationId}];
+  } completion:^(NSString *result, NSError *error) {
+    if (error) { reject(error.userInfo[@"byoCode"] ?: @"byo_upload_failed", error.localizedDescription, nil); }
+    else { resolve(result); }
+  }];
+}
+- (void)cancelByo:(NSString *)operationId resolve:(RCTPromiseResolveBlock)resolve reject:(__unused RCTPromiseRejectBlock)reject {
+  [_backend cancelByo:operationId completion:^{ resolve(nil); }];
+}
 - (void)cancel:(NSString *)operationId resolve:(RCTPromiseResolveBlock)resolve reject:(__unused RCTPromiseRejectBlock)reject {
   [_backend cancel:operationId completion:^{ resolve(nil); }];
 }

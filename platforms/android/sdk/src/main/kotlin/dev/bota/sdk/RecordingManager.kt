@@ -74,6 +74,42 @@ public class RecordingManager internal constructor() {
         state.detach()
     }
 
+    public suspend fun listByoRecordings(device: ConnectedDevice, options: ByoStorageOptions): List<ByoRecording> = coroutineScope {
+        val runtime = state.configuredRuntime(); runtime.connection.require(device)
+        val id = UUID.randomUUID()
+        state.begin(runtime, id, BotaOperation.TransferRecording,
+            task = currentCoroutineContext()[kotlinx.coroutines.Job], nativeTask = true)
+        try {
+            dev.bota.sdk.internal.byo.ByoDeviceSession.list(runtime, device, options) {
+                if (!state.isActive(id, runtime)) throw cancelled(BotaOperation.TransferRecording)
+            }
+        } catch(error: Throwable) { throw ByoStorageException.safe(error) }
+        finally { withContext(NonCancellable) { state.finish(id) } }
+    }
+
+    /** Independent BYO operation. Cancellation settles native I/O before releasing the device. */
+    public suspend fun syncByoRecording(device: ConnectedDevice, recording: ByoRecording,
+        options: ByoStorageOptions): ByoUploadResult = byoRecording(device,recording,options,false)
+
+    /** Stream encrypted capture bytes; interrupted sessions recover through independent Batch. */
+    public suspend fun streamByoRecording(device: ConnectedDevice, recording: ByoRecording?,
+        options: ByoStorageOptions): ByoUploadResult = byoRecording(device,recording,options,true)
+
+    private suspend fun byoRecording(device: ConnectedDevice,recording: ByoRecording?,
+        options: ByoStorageOptions,live: Boolean): ByoUploadResult = coroutineScope {
+        val runtime = state.configuredRuntime()
+        runtime.connection.require(device)
+        val id = UUID.randomUUID()
+        state.begin(runtime, id, BotaOperation.TransferRecording,
+            task = currentCoroutineContext()[kotlinx.coroutines.Job], nativeTask = true, allowRecordingControl = live)
+        try {
+            dev.bota.sdk.internal.byo.ByoDeviceSession.run(runtime, device, recording, options, live) {
+                if (!state.isActive(id, runtime)) throw cancelled(BotaOperation.TransferRecording)
+            }
+        } catch(error: Throwable) { throw ByoStorageException.safe(error) }
+        finally { withContext(NonCancellable) { state.finish(id) } }
+    }
+
     public suspend fun listEncryptedUploadV2Recordings(device: ConnectedDevice): List<EncryptedUploadV2Recording> =
         catalogOperation(device) { runtime ->
             val capability = runtime.readEncryptedUploadV2Capabilities(device.id)

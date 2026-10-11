@@ -9,6 +9,8 @@ export interface Spec extends TurboModule {
     requestId: string;
     operationId: string;
   }>;
+  syncByo: (inputJSON: string) => Promise<string>;
+  cancelByo: (operationId: string) => Promise<void>;
   readProtectedStreamingStatus: (requestId: string, inputJSON: string) => Promise<string>;
   cancelProtectedStreamingStatus: (requestId: string) => Promise<void>;
   prepare: (inputJSON: string) => Promise<string>;

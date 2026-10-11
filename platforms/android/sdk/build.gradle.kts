@@ -209,7 +209,20 @@ tasks.withType<Jar>().matching { it.name == "javaDocReleaseJar" }.configureEach 
     exclude("deprecated.html")
 }
 
+// JVM BYO integration tests exercise the actual Rust ABI, not Android-target .so files.
+val hostJniDirectory = layout.buildDirectory.dir("generated/bota/hostJni")
+val buildHostJni by tasks.registering(Exec::class) {
+    group = "verification"
+    description = "Builds the host Rust/JNI libraries required by native JVM integration tests."
+    val repositoryRoot = rootProject.projectDir.parentFile.parentFile
+    environment("JAVA_HOME", System.getProperty("java.home"))
+    commandLine("bash", repositoryRoot.resolve("tools/byo/build-host-jni.sh"), hostJniDirectory.get().asFile)
+}
+
 tasks.withType<Test>().configureEach {
+    dependsOn(buildHostJni)
+    inputs.dir(hostJniDirectory)
+    systemProperty("java.library.path", hostJniDirectory.get().asFile.absolutePath)
     systemProperty("bota.test.sdkVersion", project.version.toString())
 }
 
