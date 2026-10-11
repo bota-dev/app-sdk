@@ -91,7 +91,11 @@ actor ByoStreamSession {
                       facts["failed"] as? Bool == false else { throw ByoFailure.identityConflict }
                 let length = try number(facts, "ciphertext_length")
                 guard length >= offset, length <= 134217728, let closed = facts["closed"] as? Bool else { throw ByoFailure.protocolViolation }
-                if try facts["overflow"] as? Bool == true || number(facts, "retained_offset") > offset { fallback = true }
+                if facts["overflow"] as? Bool == true {
+                    fallback = true
+                } else if try number(facts, "retained_offset") > offset {
+                    fallback = true
+                }
                 let count = min(16384, length - offset)
                 if !fallback && count > 0 && (count == 16384 || closed) {
                     do {

@@ -118,7 +118,7 @@ internal class ByoHTTP(private val options: ByoStorageOptions): ByoControlClient
                 val frame=java.nio.ByteBuffer.allocate(4+header.size+bytes.size).putInt(header.size).put(header).put(bytes).array()
                 try {return withTimeout(30000) {
                     check(socket.send(okio.ByteString.of(*frame)));val ack=JSONObject(messages.receive())
-                    require(ack.getString("type")=="ack" && ack.getString("session_id")==session && ack.getJSONObject("segment").similar(segment))
+                    require(ack.getString("type")=="ack" && ack.getString("session_id")==session && ack.getJSONObject("segment").byoEquivalent(segment))
                     options.validateScope();ack
                 }} finally {frame.fill(0)}
             }

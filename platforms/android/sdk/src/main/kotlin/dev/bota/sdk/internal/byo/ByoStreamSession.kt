@@ -99,13 +99,13 @@ internal class ByoStreamSession(private val options: ByoStorageOptions,private v
                             }
                         } else {
                             var proof=http.streamControl("$endpoint/grants",segment).getJSONObject("result")
-                            require(proof.getJSONObject("segment").similar(segment))
+                            require(proof.getJSONObject("segment").byoEquivalent(segment))
                             if(proof.getString("state")!="confirmed") {
                                 require(proof.getString("state")=="write_authorized")
                                 store.createCiphertext().use {file ->val buffer=ByteBuffer.wrap(bytes);while(buffer.hasRemaining()) file.write(buffer);file.force(true)}
                                 http.put(proof.getJSONObject("grant"),store.ciphertext());proof=http.streamControl("$endpoint/confirm",segment).getJSONObject("result")
                             }
-                            require(proof.getString("state")=="confirmed" && proof.getJSONObject("segment").similar(segment))
+                            require(proof.getString("state")=="confirmed" && proof.getJSONObject("segment").byoEquivalent(segment))
                         }
                         offset+=count;index++;rpc(11,identity+ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(offset.toInt()).array())
                     } catch(error: CancellationException) {throw error}
@@ -129,7 +129,7 @@ internal class ByoStreamSession(private val options: ByoStorageOptions,private v
                 val mode=pending?.getString("mode") ?: docs.optJSONObject("handoff")?.getString("mode") ?: if(!fallback && offset==length) "assembled" else "whole_file"
                 val body=JSONObject().put("mode",mode).put("final",JSONObject().put("ciphertext_length",length)
                     .put("ciphertext_sha256",facts.getString("ciphertext_sha256")).put("segment_count",(length+16383)/16384))
-                require(!docs.has("handoff") || docs.getJSONObject("handoff").similar(body));docs.put("handoff",body);persist()
+                require(!docs.has("handoff") || docs.getJSONObject("handoff").byoEquivalent(body));docs.put("handoff",body);persist()
                 status=http.streamControl("$endpoint/handoff",body)
             }
             val successor=status.getJSONObject("successor");validate(successor)

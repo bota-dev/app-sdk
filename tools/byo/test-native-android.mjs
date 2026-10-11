@@ -57,7 +57,11 @@ try {
     sources.push(join(root,'frameworks/react-native/android/src/main/java/dev/bota/sdk/reactnative/upload/ByoBridgeDriver.kt'));
     const config=join(output,'BuildConfig.kt');
     writeFileSync(config,'package dev.bota.sdk\ninternal object BuildConfig { const val BOTA_SDK_VERSION = "source-validation" }\n');
-    sources.push(config); runtime.push(process.env.BOTA_ANDROID_JAR);
+    sources.push(config);
+    // Production resolves org.json from Android, not the richer desktop test jar.
+    const desktopJSON = jar('org.json', 'json', '20240303');
+    runtime.splice(runtime.indexOf(desktopJSON), 1);
+    runtime.unshift(process.env.BOTA_ANDROID_JAR);
   }
   if (run(['-cp', compiler.join(delimiter), 'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler',
     '-Werror', ...(compileSDK ? ['-Xexplicit-api=strict'] : []), '-no-stdlib', '-no-reflect', '-jvm-target', '17', '-classpath', runtime.join(delimiter), '-d', output, ...sources])) {

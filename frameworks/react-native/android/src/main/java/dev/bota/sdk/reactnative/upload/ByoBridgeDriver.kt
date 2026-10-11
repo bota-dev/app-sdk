@@ -29,7 +29,7 @@ internal class ByoBridgeDriver(private val root: File,private val emit: (String,
             val type=when(value.getString("deviceType")) {"bota_pin"->DeviceType.BotaPin;"bota_pin_4g"->DeviceType.BotaPin4G;"bota_note"->DeviceType.BotaNote;else->fail("INVALID_INPUT")}
             demand(value.getString("connectionState")=="connected" && value.getInt("mtu") in 23..517,"INVALID_INPUT")
             val device=ConnectedDevice(value.getString("id"),value.getString("serialNumber"),type,value.getString("firmwareVersion"),
-                if(value.isNull("hardwareRevision")) null else value.optString("hardwareRevision",null),
+                if(value.isNull("hardwareRevision")) null else value.optString("hardwareRevision"),
                 value.getBoolean("isProvisioned"),ConnectionState.Connected,value.getInt("mtu"))
             val binding=scope.getLong("bindingGeneration");val generation=recording?.getLong("generation") ?: 0
             demand(binding in 1..0xffffffffL && generation in 0..0xffffffffL,"INVALID_INPUT")

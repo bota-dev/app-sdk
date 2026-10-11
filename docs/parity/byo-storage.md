@@ -159,7 +159,7 @@ Current checkout verification:
 - `npm run verify --prefix frameworks/react-native`: 192 tests, typecheck,
   generated-contract validation and license gate pass.
 - `node tools/byo/test-native-android.mjs --compile-sdk`: full SDK/RN driver
-  compile passes against Android 36 with warnings as errors.
+  initially passed with desktop JSON shadowing Android; corrected below.
 - `node tools/byo/test-native-android.mjs`: 22 tests pass using a newly built
   host Rust library/JNI bridge, JDK 17 and the pinned dependency cache.
 - Public firmware fixture verifier: five hashes and 13 signed documents pass.
@@ -172,3 +172,26 @@ PR submission does not publish beta.14 again or activate customer/device gates.
 A separately versioned native candidate, rebuilt consumers, live customer
 qualification and physical acceptance remain required. The separate marker SDK
 PR must retain both feature contracts if it merges before or after this branch.
+
+### Hosted CI compatibility corrections
+
+Initial PR CI found Android's `JSONObject` has no desktop `similar()` method,
+which also blocked the Flutter consumer and license dependency build. Replace
+that call with a platform-only recursive proof comparator: exact keys and array
+order, null/missing distinction, no string/boolean coercion, and decimal number
+comparison without lossy Double conversion. A regression covers reordered keys,
+nested arrays, mismatched types and adjacent integers above Double precision.
+The full-source compile check now excludes desktop JSON from its production
+classpath; it reproduced the seven missing-method errors before the fix.
+The RN optional hardware revision also respects Android's non-null fallback API.
+
+Swift strict concurrency rejected the live overflow short-circuit autoclosure
+capturing actor-isolated JSON. Separate branches preserve short-circuit behavior
+without capturing the dictionary in that closure; no unchecked Sendable or
+weakened concurrency flag is used. Hosted Apple compilation validates the fix
+because the local compiler/SDK mismatch remains.
+
+Requirement review: identity/receipt equality, fallback triggers and cleanup
+proof are unchanged. Android platform-only compilation and 23 host/JNI tests
+pass after the correction. Exact-revision hosted CI and License Gate must pass
+before merge; source tests do not establish hardware or customer acceptance.

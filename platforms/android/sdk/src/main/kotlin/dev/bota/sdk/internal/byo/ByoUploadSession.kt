@@ -30,7 +30,7 @@ internal class ByoUploadSession(private val options: ByoStorageOptions,private v
             docs.put("identity",identity)
             successor?.let { seed ->
                 val context=seed.getJSONObject("context");scope(context)
-                require(docs.optJSONObject("context")?.similar(context)!=false)
+                require(docs.optJSONObject("context")?.byoEquivalent(context)!=false)
                 docs.put("context",context).put("assembled",seed.getString("mode")=="assembled");persist()
             }
             recovery=ByoRecoveryHost({store.load("state")},{store.save("state",it)})
@@ -85,7 +85,7 @@ internal class ByoUploadSession(private val options: ByoStorageOptions,private v
             val saved=docs.getJSONObject("context");val session=saved.getString("upload_session_id")
             require(UUID.fromString(session).toString()==session)
             val current=http.control("/$session").getJSONObject("receipt")
-            check(docs.getJSONObject("receipt").similar(current) && advance(15).mayCleanup)
+            check(docs.getJSONObject("receipt").byoEquivalent(current) && advance(15).mayCleanup)
             advance(12);store.removeCiphertext();return result(saved)
         }
         require(facts.getString("recording_uuid")==recording.uuid && facts.getLong("recording_generation")==recording.generation.toLong())
@@ -123,7 +123,7 @@ internal class ByoUploadSession(private val options: ByoStorageOptions,private v
             JSONObject(rpc(3,bundle().toString().toByteArray()).decodeToString())
         }
         val manifest=opened.getJSONObject("manifest")
-        require(docs.optJSONObject("manifest")?.similar(manifest)!=false)
+        require(docs.optJSONObject("manifest")?.byoEquivalent(manifest)!=false)
         docs.put("manifest",manifest);persist()
         if(status.optJSONObject("receipt")==null && phase==5uL) {
             if(!docs.optBoolean("assembled")) upload.optJSONObject("upload")?.let {instructions ->download(length,hash);http.put(instructions,store.ciphertext())}
