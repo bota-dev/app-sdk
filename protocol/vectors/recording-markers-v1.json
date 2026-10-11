@@ -1,0 +1,71 @@
+{
+  "status": "design candidate, not runtime or cryptographic interoperability evidence",
+  "schema": "MarkerBodyV1",
+  "byte_length": 52,
+  "digest_domain_hex": "424f54412d4d41524b45522d4556454e542d563100",
+  "vectors": [
+    {
+      "name": "basic",
+      "hex": "000102030405060708090a0b0c0d0e0f01000000d20400000000000000000000d204000000000000000000000000000001000000",
+      "expected": "accept",
+      "marker_digest": "676650ee380a722a6d047877b88a61c531bf87a6c26ff390452048022745c8cd",
+      "media_offset_ms": "1234"
+    },
+    {
+      "name": "distinct_press_same_time",
+      "hex": "000102030405060708090a0b0c0d0e0f02000000d20400000000000000000000d204000000000000000000000000000001000000",
+      "expected": "accept",
+      "marker_digest": "bcd3237bace2c0d4bf5c232051c3f3198638fb87c621e38ce30c2b2cc260d9b9",
+      "media_offset_ms": "1234"
+    },
+    {
+      "name": "above_js_safe_integer",
+      "hex": "000102030405060708090a0b0c0d0e0f010000000100000000002000000000000100000000002000000000000000000001000000",
+      "expected": "accept",
+      "marker_digest": "b7d2b1062d445304f69f114339efa1eef6ab133c71047f46138d500e0aa9c6d0",
+      "media_offset_ms": "9007199254740993"
+    },
+    {
+      "name": "with_utc",
+      "hex": "000102030405060708090a0b0c0d0e0f01000000d20400000000000000000000d204000000000000009bb81da101000001010000",
+      "expected": "accept",
+      "marker_digest": "f3d42009f2f9642cd6e0b2e1e320967dd3da92396a56c9260582ca622579c363",
+      "media_offset_ms": "1234"
+    },
+    {
+      "name": "truncated",
+      "hex": "000102030405060708090a0b0c0d0e0f01000000d20400000000000000000000d2040000000000000000000000000000010000",
+      "expected": "invalid_length"
+    },
+    {
+      "name": "trailing",
+      "hex": "000102030405060708090a0b0c0d0e0f01000000d20400000000000000000000d20400000000000000000000000000000100000000",
+      "expected": "invalid_length"
+    },
+    {
+      "name": "zero_sequence",
+      "hex": "000102030405060708090a0b0c0d0e0f00000000d20400000000000000000000d204000000000000000000000000000001000000",
+      "expected": "invalid_sequence"
+    },
+    {
+      "name": "unsupported_source",
+      "hex": "000102030405060708090a0b0c0d0e0f01000000d20400000000000000000000d204000000000000000000000000000002000000",
+      "expected": "unsupported_source"
+    },
+    {
+      "name": "unknown_flag",
+      "hex": "000102030405060708090a0b0c0d0e0f01000000d20400000000000000000000d204000000000000000000000000000001800000",
+      "expected": "invalid_flags"
+    },
+    {
+      "name": "absent_utc_nonzero",
+      "hex": "000102030405060708090a0b0c0d0e0f01000000d20400000000000000000000d204000000000000010000000000000001000000",
+      "expected": "noncanonical_utc"
+    },
+    {
+      "name": "nonzero_reserved",
+      "hex": "000102030405060708090a0b0c0d0e0f01000000d20400000000000000000000d204000000000000000000000000000001000100",
+      "expected": "nonzero_reserved"
+    }
+  ]
+}

@@ -1216,6 +1216,13 @@
                 "typeAnnotation": {
                   "type": "NumberTypeAnnotation"
                 }
+              },
+              {
+                "name": "markersRequired",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "BooleanTypeAnnotation"
+                }
               }
             ]
           },
@@ -4188,6 +4195,57 @@
               }
             },
             {
+              "name": "readProtectedStreamingStatus",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "StringTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  },
+                  {
+                    "name": "inputJSON",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "name": "cancelProtectedStreamingStatus",
+              "optional": false,
+              "typeAnnotation": {
+                "type": "FunctionTypeAnnotation",
+                "returnTypeAnnotation": {
+                  "type": "PromiseTypeAnnotation",
+                  "elementType": {
+                    "type": "VoidTypeAnnotation"
+                  }
+                },
+                "params": [
+                  {
+                    "name": "requestId",
+                    "optional": false,
+                    "typeAnnotation": {
+                      "type": "StringTypeAnnotation"
+                    }
+                  }
+                ]
+              }
+            },
+            {
               "name": "prepare",
               "optional": false,
               "typeAnnotation": {
@@ -4318,11 +4376,11 @@
       },
       {
         "path": "java/dev/bota/sdk/reactnative/NativeBotaUploadV2BackendSpec.java",
-        "sha256": "762fdcacdef7b1bc272e1c8074d997290a23c99389b1551d2f34e595906ce87e"
+        "sha256": "a6b48b64cb3531d04b204172456115c041025d18db612d836174ced2617d50fe"
       },
       {
         "path": "jni/BotaDeviceSDKSpec-generated.cpp",
-        "sha256": "7b10fd4f202c30014b075b084f6a11ec79a3d6d3ed2f43decfd5505b568b9987"
+        "sha256": "c98c66a2a320b56be0f7106e35a867d4664e6c8029836c153443cea4e1dd38ce"
       },
       {
         "path": "jni/BotaDeviceSDKSpec.h",
@@ -4334,23 +4392,23 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "f864802e29fac9caa9dbc23f202d6326ae4bdecaee1af84cf0e9e7fb9a279928"
+        "sha256": "6c3ab34b33b2e18b2237e389bbca5f813aa679c3ec66e61441ac8fea4a1904a5"
       }
     ],
     "ios": [
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec-generated.mm",
-        "sha256": "23592d0e6ab128b8a11626ccc93fde5aa2d3de35ce178a59c1f8c8f276ae4cd8"
+        "sha256": "23bd8488e1e6a59795ec1845d7d6287731e7924e3211655899a58992efa3f6e1"
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "451b2c8f23662bda1f200b95afad001d3650b0275e7c5955b0e314faadff0bea"
+        "sha256": "221da1ba25df2b6c8bac02a90fccdb701dc3644c0bfd9df31c75c117a2f9b47c"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "f864802e29fac9caa9dbc23f202d6326ae4bdecaee1af84cf0e9e7fb9a279928"
+        "sha256": "6c3ab34b33b2e18b2237e389bbca5f813aa679c3ec66e61441ac8fea4a1904a5"
       }
     ]
   },
-  "contractDigest": "83ad7534d30f6201b79c0b67c2d0c7b8c248077ff57d8fbb34a493ebe178a29e"
+  "contractDigest": "4590f5782ea3a5a025c569ccdc57c4c3e9367668b527150227e6db9e75039360"
 }

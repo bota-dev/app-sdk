@@ -29,6 +29,7 @@ struct EncryptedUploadV2CompletedTransferValue: Equatable, Sendable {
     let fileURL: URL
     let manifest: Data
     let evidence: EncryptedUploadV2TransferEvidence
+    var markerDocuments: [Data] = []
 }
 
 enum EncryptedUploadV2TransferReceiverEvent: Equatable, Sendable {
@@ -89,6 +90,12 @@ actor EncryptedUploadV2TransferReceiver {
     private var prepared = false
     private var packets: [UInt32: PacketMetadata] = [:]
     private var pendingWindow: PendingWindow?
+    private let markersRequired: Bool
+    private var markerDocuments: [Data] = []
+    private var markerCount: UInt32?
+    private var markerPartial = Data()
+    private var markerDigest: Data?
+    private var markerLength = 0
     private var manifest = Data(repeating: 0, count: manifestLength)
     private var manifestBytesPresent = [Bool](repeating: false, count: manifestLength)
     private var manifestSHA256: Data?
@@ -106,7 +113,8 @@ actor EncryptedUploadV2TransferReceiver {
         maximumMissingSequences: UInt16,
         checkpoint: EncryptedUploadV2CheckpointValue,
         mapper: CoreModelMapper,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        markersRequired: Bool = false
     ) throws {
         guard UUID(uuidString: sinkID) != nil,
               transportSessionID != 0,
@@ -134,6 +142,7 @@ actor EncryptedUploadV2TransferReceiver {
         self.highestTransportSequence = checkpoint.highestContiguousSequence
         self.mapper = mapper
         self.fileManager = fileManager
+        self.markersRequired = markersRequired
     }
 
     func prepare() throws {
@@ -225,6 +234,9 @@ actor EncryptedUploadV2TransferReceiver {
                 return nil
             case let .windowEnd(value):
                 return .windowStaged(try receiveWindowEnd(value))
+            case let .markerChunk(value):
+                try receiveMarker(value)
+                return nil
             case let .manifestChunk(value):
                 try receiveManifest(value)
                 return nil
@@ -442,10 +454,42 @@ actor EncryptedUploadV2TransferReceiver {
         manifestSHA256 = value.manifestSHA256
     }
 
+    private func receiveMarker(_ value: EncryptedUploadV2MarkerChunkValue) throws {
+        guard markersRequired, pendingWindow == nil, packets.isEmpty,
+              manifestBytesPresent.allSatisfy({ $0 }),
+              (2...4097).contains(value.documentCount),
+              value.documentIndex == UInt32(markerDocuments.count),
+              value.documentIndex < value.documentCount,
+              markerCount == nil || markerCount == value.documentCount,
+              (200...402).contains(value.documentLength), value.sha256.count == 32,
+              !value.bytes.isEmpty, Int(value.offset) == markerPartial.count,
+              value.bytes.count <= Int(value.documentLength) - markerPartial.count else {
+            throw EncryptedUploadV2TransferReceiverError.integrityMismatch
+        }
+        if markerPartial.isEmpty {
+            markerDigest = value.sha256
+            markerLength = Int(value.documentLength)
+        }
+        guard markerLength == Int(value.documentLength), markerDigest == value.sha256 else {
+            throw EncryptedUploadV2TransferReceiverError.integrityMismatch
+        }
+        markerCount = value.documentCount
+        markerPartial.append(value.bytes)
+        if markerPartial.count == markerLength {
+            guard Self.sha256(markerPartial) == markerDigest else {
+                throw EncryptedUploadV2TransferReceiverError.integrityMismatch
+            }
+            markerDocuments.append(markerPartial)
+            markerPartial = Data()
+            markerDigest = nil
+        }
+    }
+
     private func receiveEOF(
         _ value: EncryptedUploadV2EOFValue
     ) throws -> EncryptedUploadV2CompletedTransferValue {
-        guard pendingWindow == nil,
+        guard (!markersRequired || (markerCount != nil && UInt32(markerDocuments.count) == markerCount && markerPartial.isEmpty)),
+              pendingWindow == nil,
               packets.isEmpty,
               highestTransportSequence == value.finalSequence,
               value.blockCount > 0,
@@ -469,7 +513,7 @@ actor EncryptedUploadV2TransferReceiver {
             manifestSHA256: value.manifestSHA256,
             blockCount: value.blockCount
         )
-        return .init(fileURL: fileURL, manifest: manifest, evidence: evidence)
+        return .init(fileURL: fileURL, manifest: manifest, evidence: evidence, markerDocuments: markerDocuments)
     }
 
     private func write(_ data: Data, at offset: UInt64) throws {
@@ -535,6 +579,7 @@ private extension EncryptedUploadV2TransferPayloadValue {
         case let .data(value): value.transportSessionID
         case let .windowEnd(value): value.transportSessionID
         case let .manifestChunk(value): value.transportSessionID
+        case let .markerChunk(value): value.transportSessionID
         case let .eof(value): value.transportSessionID
         case let .error(value): value.transportSessionID
         }

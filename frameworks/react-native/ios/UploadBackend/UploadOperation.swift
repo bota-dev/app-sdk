@@ -201,7 +201,28 @@ struct UploadContext: Sendable {
     try selected.validatePointer()
     _ = try UploadValidation.date(selected.expires_at)
     guard UploadValidation.hex(selected.authorization_sha256, bytes: 32) else { throw UploadFailure.invalidDocument }
-    let authorization = try UploadValidation.document(selected.authorization_base64, hash: selected.authorization_sha256, size: 408)
+    var authorization = try UploadValidation.document(selected.authorization_base64, hash: selected.authorization_sha256, size: 408)
+    if input.recording.markersRequired == true {
+      struct Admission: Decodable {
+        let profile: String
+        let context_base64: String
+        let authorization_base64: String
+        let authorization_sha256: String
+      }
+      let path = try sessionPath() + "/markers/authorization"
+      let admitted: Data
+      do {
+        admitted = try await retry { try await request(path + "?owner_revision=\(selected.owner_revision)") }
+      } catch UploadFailure.http(404) where ["", "created", "staging", "staged"].contains(selected.state ?? "") {
+        admitted = try await retry { try await request(path, method: "POST", body: [
+          "owner_revision": selected.owner_revision, "request_uuid": selected.session_id,
+        ]) }
+      }
+      let admission: Admission = try decode(admitted)
+      guard admission.profile == "recording-markers/1" else { throw UploadFailure.invalidDocument }
+      authorization.append(try UploadValidation.document(admission.context_base64, size: 176))
+      authorization.append(try UploadValidation.document(admission.authorization_base64, hash: admission.authorization_sha256, size: 280))
+    }
     session = selected
     return UploadPrepared(session: selected, authorization: authorization, recordingId: initial.recordingId)
   }
@@ -313,6 +334,18 @@ struct UploadContext: Sendable {
     needsManifest = false
   }
 
+  func submitMarkers(_ documents: [Data], evidence: UploadEvidence) async throws {
+    try verify(evidence)
+    guard input.recording.markersRequired == true, (2...4097).contains(documents.count),
+          documents.first?.count == 200, documents.dropFirst().allSatisfy({ (216...402).contains($0.count) }),
+          let revision = entry?.ownerRevision else { throw UploadFailure.invalidDocument }
+    let path = try sessionPath() + "/markers/batch"
+    _ = try await retry { try await request(path, method: "POST", body: [
+      "owner_revision": revision, "seal_base64": documents[0].base64EncodedString(),
+      "pages_base64": documents.dropFirst().map { $0.base64EncodedString() },
+    ]) }
+  }
+
   func finalize(_ evidence: UploadEvidence) async throws {
     try verify(evidence)
     guard let entry else { throw UploadFailure.state }
@@ -325,7 +358,12 @@ struct UploadContext: Sendable {
               let hash = status.completion_receipt_sha256, UploadValidation.hex(hash, bytes: 32) else {
           throw UploadFailure.invalidDocument
         }
-        receipt = try UploadValidation.document(status.completion_receipt_base64, hash: hash, size: 336)
+        var completed = try UploadValidation.document(status.completion_receipt_base64, hash: hash, size: 336)
+        if input.recording.markersRequired == true {
+          guard let markerHash = status.marker_completion_receipt_sha256 else { throw UploadFailure.invalidDocument }
+          completed.append(try UploadValidation.document(status.marker_completion_receipt_base64, hash: markerHash, size: 296))
+        }
+        receipt = completed
         return
       }
       try await wait(2000)

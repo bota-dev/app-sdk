@@ -786,6 +786,7 @@ private fun ReadableMap.toEncryptedUploadV2Recording(): EncryptedUploadV2Recordi
         if (hasKey("storageFormat") && !isNull("storageFormat")) {
             getDouble("storageFormat").toUnsignedInt().also { require(it <= 255u) }.toUByte()
         } else 3u,
+        hasKey("markersRequired") && !isNull("markersRequired") && getBoolean("markersRequired"),
     )
 }
 

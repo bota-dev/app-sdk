@@ -60,8 +60,9 @@ test('mixed catalog projects only declared metadata and preserves maximum u64 st
   const [value] = await client.recordings.listPendingRecordings(device);
   assert.deepEqual(Object.keys(value).sort(), [
     'uuid', 'generation', 'storageFormat', 'startedAtMs', 'startedAt', 'durationMs',
-    'plaintextLength', 'ciphertextLength', 'ciphertextSha256',
+    'plaintextLength', 'ciphertextLength', 'ciphertextSha256', 'markersRequired',
   ].sort());
+  assert.equal(value.markersRequired, false);
   assert.equal(value.plaintextLength, '18446744073709551615');
   assert.equal(value.ciphertextLength, '18446744073709551615');
 });

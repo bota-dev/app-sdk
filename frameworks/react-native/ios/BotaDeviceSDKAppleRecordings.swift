@@ -646,6 +646,7 @@ actor BotaDeviceSDKAppleRecordings {
             "durationMs": String(recording.durationMs),
             "plaintextLength": String(recording.plaintextLength),
             "storageFormat": Int(recording.storageFormat),
+            "markersRequired": recording.markersRequired,
         ]
     }
 

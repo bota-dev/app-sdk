@@ -69,6 +69,7 @@ internal class EncryptedUploadV2TransferIntake(private val transportSessionId: U
             is EncryptedUploadV2TransferPayload.Data -> payload.value.transportSessionId
             is EncryptedUploadV2TransferPayload.WindowEnd -> payload.value.transportSessionId
             is EncryptedUploadV2TransferPayload.ManifestChunk -> payload.value.transportSessionId
+            is EncryptedUploadV2TransferPayload.MarkerChunk -> payload.value.transportSessionId
             is EncryptedUploadV2TransferPayload.Eof -> payload.value.transportSessionId
             is EncryptedUploadV2TransferPayload.Error -> payload.value.transportSessionId
         }
@@ -85,6 +86,7 @@ internal class EncryptedUploadV2TransferIntake(private val transportSessionId: U
             }
             State.Manifest -> when (payload) {
                 is EncryptedUploadV2TransferPayload.ManifestChunk -> Unit
+                is EncryptedUploadV2TransferPayload.MarkerChunk -> Unit
                 is EncryptedUploadV2TransferPayload.Eof -> state = State.Terminal
                 else -> expected(false, "transfer payload arrived outside the manifest phase")
             }

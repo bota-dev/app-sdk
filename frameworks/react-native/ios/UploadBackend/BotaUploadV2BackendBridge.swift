@@ -6,7 +6,25 @@ public final class BotaUploadV2BackendBridge: NSObject, @unchecked Sendable {
   @MainActor private var coordinator: UploadCoordinator?
   @MainActor private var byo: ByoBridgeDriver?
   @MainActor private var destroyed = false
+  @MainActor private var statusJobs: [String: Task<Void, Never>] = [:]
   @MainActor private var credentialsRequested: (@Sendable (String, String) -> Void)?
+
+  @objc(readProtectedStreamingStatus:inputJSON:completion:)
+  public func readProtectedStreamingStatus(_ id: String, inputJSON: String,
+    completion: @escaping @Sendable (String?, NSError?) -> Void) {
+    Task { @MainActor in
+      guard !destroyed, statusJobs[id] == nil else { completion(nil, UploadFailure.cancelled as NSError); return }
+      statusJobs[id] = Task { @MainActor in
+        defer { statusJobs[id] = nil }
+        do { let result = try await UploadStreamingStatus().read(inputJSON); completion(result, nil) }
+        catch { completion(nil, UploadFailure.safe(error) as NSError) }
+      }
+    }
+  }
+  @objc(cancelProtectedStreamingStatus:completion:)
+  public func cancelProtectedStreamingStatus(_ id: String, completion: @escaping @Sendable () -> Void) {
+    Task { @MainActor in statusJobs[id]?.cancel(); completion() }
+  }
 
   @objc(prepare:credentialsRequested:completion:)
   public func prepare(_ json: String,
@@ -66,7 +84,11 @@ public final class BotaUploadV2BackendBridge: NSObject, @unchecked Sendable {
     Task { @MainActor in coordinator?.credentials.reject(requestId: id); completion() }
   }
   @objc public func invalidate() {
-    Task { @MainActor in destroyed = true; coordinator?.cancelAll(); await byo?.stop(); credentialsRequested = nil }
+    Task { @MainActor in
+      destroyed = true; coordinator?.cancelAll(); credentialsRequested = nil
+      statusJobs.values.forEach { $0.cancel() }; statusJobs.removeAll()
+      await byo?.stop()
+    }
   }
 
   @MainActor private func service() -> UploadCoordinator {
@@ -90,6 +112,12 @@ public final class BotaUploadV2BackendBridge: NSObject, @unchecked Sendable {
       default: throw UploadFailure.invalidDocument
       }
       guard let sessionId = UUID(uuidString: prepared.session.session_id) else { throw UploadFailure.invalidDocument }
+      let submitMarkers: EncryptedUploadV2Material.MarkerSubmitter?
+      if operation.input.recording.markersRequired == true {
+        submitMarkers = { documents, evidence in
+          try await operation.submitMarkers(documents, evidence: Self.evidence(evidence))
+        }
+      } else { submitMarkers = nil }
       let material = EncryptedUploadV2Material(
         materialID: UUID().uuidString.lowercased(), recordingID: operation.input.recording.uuid,
         uploadSessionID: sessionId, ownerRevision: prepared.session.owner_revision, policy: policy,
@@ -104,7 +132,8 @@ public final class BotaUploadV2BackendBridge: NSObject, @unchecked Sendable {
           return EncryptedUploadV2ContextExchange(challenge: context.challenge, exchangeProof: context.exchangeProof)
         },
         shouldUploadCiphertext: { try await operation.shouldUpload(Self.evidence($0)) },
-        reconcileStaging: { try await operation.reconcileStaging($0, evidence: Self.evidence($1)) }
+        reconcileStaging: { try await operation.reconcileStaging($0, evidence: Self.evidence($1)) },
+        submitMarkers: submitMarkers
       )
       return BotaDeviceSDKEncryptedUploadV2Materials.register(material)
     }, unregister: { id in _ = BotaDeviceSDKEncryptedUploadV2Materials.remove(id) })

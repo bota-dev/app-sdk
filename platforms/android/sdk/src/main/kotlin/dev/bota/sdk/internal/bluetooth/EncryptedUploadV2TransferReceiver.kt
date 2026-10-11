@@ -41,6 +41,7 @@ internal data class EncryptedUploadV2CompletedTransferValue(
     val file: Path,
     val manifest: ByteArray,
     val evidence: EncryptedUploadV2TransferEvidence,
+    val markerDocuments: List<ByteArray> = emptyList(),
 )
 
 internal sealed interface EncryptedUploadV2TransferReceiverEvent {
@@ -63,6 +64,7 @@ internal class EncryptedUploadV2TransferReceiver(
     private val maximumWindowPackets: UShort,
     private val maximumMissingSequences: UShort,
     checkpoint: EncryptedUploadV2CheckpointValue,
+    private val markersRequired: Boolean = false,
 ) {
     private data class PacketMetadata(val offset: ULong, val length: ULong, val sha256: ByteArray) {
         val endOffset: ULong get() = offset + length
@@ -85,6 +87,11 @@ internal class EncryptedUploadV2TransferReceiver(
     private var opening = true
     private val packets = mutableMapOf<UInt, PacketMetadata>()
     private var pendingWindow: PendingWindow? = null
+    private val markerDocuments = mutableListOf<ByteArray>()
+    private var markerCount: UInt? = null
+    private var markerPartial = byteArrayOf()
+    private var markerDigest: ByteArray? = null
+    private var markerLength = 0
     private val manifest = ByteArray(ManifestLength)
     private val manifestPresent = BooleanArray(ManifestLength)
     private var manifestSha256: ByteArray? = null
@@ -153,6 +160,7 @@ internal class EncryptedUploadV2TransferReceiver(
         requireValid(prepared && !terminal && !completed, "receiver is not active")
         opening = false
         val session = when (payload) {
+            is EncryptedUploadV2TransferPayload.MarkerChunk -> payload.value.transportSessionId
             is EncryptedUploadV2TransferPayload.Data -> payload.value.transportSessionId
             is EncryptedUploadV2TransferPayload.WindowEnd -> payload.value.transportSessionId
             is EncryptedUploadV2TransferPayload.ManifestChunk -> payload.value.transportSessionId
@@ -162,6 +170,7 @@ internal class EncryptedUploadV2TransferReceiver(
         try {
             requireValid(session == transportSessionId, "transport session mismatch")
             return when (payload) {
+                is EncryptedUploadV2TransferPayload.MarkerChunk -> receiveMarker(payload.value).let { null }
                 is EncryptedUploadV2TransferPayload.Data -> receiveData(payload.value).let { null }
                 is EncryptedUploadV2TransferPayload.WindowEnd ->
                     EncryptedUploadV2TransferReceiverEvent.WindowStaged(receiveWindowEnd(payload.value))
@@ -295,9 +304,27 @@ internal class EncryptedUploadV2TransferReceiver(
         manifestSha256 = value.manifestSha256.copyOf()
     }
 
+    private fun receiveMarker(value: dev.bota.sdk.internal.core.EncryptedUploadV2MarkerChunkValue) {
+        requireValid(markersRequired && pendingWindow == null && packets.isEmpty() && manifestPresent.all { it }, "unexpected marker phase")
+        requireValid(value.documentCount in 2u..4097u && value.documentIndex == markerDocuments.size.toUInt() &&
+            value.documentIndex < value.documentCount && (markerCount == null || markerCount == value.documentCount) &&
+            value.documentLength.toInt() in 200..402 && value.sha256.size == 32 && value.bytes.isNotEmpty() &&
+            value.offset.toInt() == markerPartial.size && markerPartial.size + value.bytes.size <= value.documentLength.toInt(), "marker bounds")
+        if (markerPartial.isEmpty()) { markerDigest = value.sha256.copyOf(); markerLength = value.documentLength.toInt() }
+        requireValid(markerLength == value.documentLength.toInt() && secureEqual(markerDigest!!, value.sha256), "marker conflict")
+        markerCount = value.documentCount
+        markerPartial += value.bytes
+        if (markerPartial.size == markerLength) {
+            requireValid(secureEqual(sha256(markerPartial), markerDigest!!), "marker digest mismatch")
+            markerDocuments += markerPartial
+            markerPartial = byteArrayOf(); markerDigest = null
+        }
+    }
+
     private fun receiveEof(value: EncryptedUploadV2EofValue): EncryptedUploadV2CompletedTransferValue {
         requireValid(
-            pendingWindow == null && packets.isEmpty() && highestTransportSequence == value.finalSequence &&
+            (!markersRequired || (markerCount != null && markerDocuments.size.toUInt() == markerCount && markerPartial.isEmpty())) &&
+                pendingWindow == null && packets.isEmpty() && highestTransportSequence == value.finalSequence &&
                 value.blockCount > 0u && value.ciphertextLength == expectedCiphertextLength &&
                 secureEqual(value.ciphertextSha256, expectedCiphertextSha256) &&
                 manifestSha256?.let { secureEqual(it, value.manifestSha256) } == true &&
@@ -312,7 +339,7 @@ internal class EncryptedUploadV2TransferReceiver(
             EncryptedUploadV2TransferEvidence(
                 value.ciphertextLength, value.ciphertextSha256, ManifestLength.toUShort(),
                 value.manifestSha256, value.blockCount,
-            ),
+            ), markerDocuments.map { it.copyOf() },
         )
     }
 

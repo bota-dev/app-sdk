@@ -195,3 +195,17 @@ Requirement review: identity/receipt equality, fallback triggers and cleanup
 proof are unchanged. Android platform-only compilation and 23 host/JNI tests
 pass after the correction. Exact-revision hosted CI and License Gate must pass
 before merge; source tests do not establish hardware or customer acceptance.
+
+### Integration with merged recording markers
+
+Main advanced to `6fddbae` (marker SDK PR #29) during submission. The merge
+preserves BYO and protected-streaming status methods, cancels both operation
+families on bridge invalidation, and regenerates Rust constants and RN codegen
+from the combined source contracts. Marker wire values and completion fences
+are unchanged. This supersedes the separate-open-PR note above.
+
+Combined-source checks: 310 Rust tests, Clippy, rustfmt, generated protocol,
+202 RN tests/typecheck/codegen/license checks, Android platform-only full SDK
+and BYO driver compile, and 96 native upload/marker regression tests pass.
+Host BYO tests are rerun against the rebuilt combined Rust library. Apple and
+packaged consumer verification remain subject to exact-head hosted CI.

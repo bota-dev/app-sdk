@@ -43,7 +43,8 @@ internal class EncryptedUploadV2MaterialRegistry {
 
     suspend fun register(id: String, material: EncryptedUploadV2Material) {
         requireMaterialId(id)
-        if (material.authorization.size != AuthorizationBytes) {
+        if (material.authorization.size !in setOf(AuthorizationBytes, 864) ||
+            (material.authorization.size == 864 && material.submitMarkers == null)) {
             throw EncryptedUploadV2MaterialRegistryException("authorization must be exactly $AuthorizationBytes bytes")
         }
         mutex.withLock {
@@ -56,7 +57,7 @@ internal class EncryptedUploadV2MaterialRegistry {
         val entry = requiredEntry(id)
         return EncryptedUploadV2PreparedMaterial(
             entry.material.authorization,
-            sha256(entry.material.authorization),
+            sha256(entry.material.authorization.copyOfRange(0, AuthorizationBytes)),
             EncryptedUploadV2MaterialLease(entry.registrationId),
         )
     }
@@ -138,6 +139,19 @@ internal class EncryptedUploadV2MaterialRegistry {
         requireCurrent(id, entry.registrationId)
     }
 
+    suspend fun submitMarkers(id: String, lease: EncryptedUploadV2MaterialLease,
+        documents: List<ByteArray>, evidence: EncryptedUploadV2TransferEvidence) {
+        validateEvidence(evidence)
+        val entry = requiredEntry(id, lease)
+        if (entry.material.authorization.size == 864) {
+            if (documents.size !in 2..4097 || documents[0].size != 200 || documents.any { it.size !in 200..402 })
+                throw EncryptedUploadV2MaterialRegistryException("incomplete marker documents", 18u)
+            val submit = entry.material.submitMarkers ?: throw EncryptedUploadV2MaterialRegistryException("missing marker provider", 18u)
+            submit(documents.map { it.copyOf() }, evidence)
+            requireCurrent(id, entry.registrationId)
+        } else if (documents.isNotEmpty()) throw EncryptedUploadV2MaterialRegistryException("unexpected marker documents", 18u)
+    }
+
     suspend fun finalizeAndReceiveReceipt(
         id: String,
         lease: EncryptedUploadV2MaterialLease,
@@ -149,10 +163,10 @@ internal class EncryptedUploadV2MaterialRegistry {
         requireCurrent(id, entry.registrationId)
         val receipt = entry.material.completionReceipt(evidence)
         requireCurrent(id, entry.registrationId)
-        if (receipt.size != ReceiptBytes) {
+        if (receipt.size != if (entry.material.authorization.size == 864) 632 else ReceiptBytes) {
             throw EncryptedUploadV2MaterialRegistryException("receipt must be exactly $ReceiptBytes bytes", 18u)
         }
-        return EncryptedUploadV2AcceptedReceipt(receipt, sha256(receipt))
+        return EncryptedUploadV2AcceptedReceipt(receipt, sha256(receipt.copyOfRange(0, ReceiptBytes)))
     }
 
     suspend fun terminate(id: String, outcome: EncryptedUploadV2TerminalOutcome) {

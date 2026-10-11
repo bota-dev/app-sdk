@@ -860,6 +860,11 @@ fn encrypted_transfer_to_web(
             flags: value.flags,
             transport_session_id: value.transport_session_id,
         },
+        EncryptedUploadV2Transfer::MarkedList(_) | EncryptedUploadV2Transfer::MarkerChunk(_) => {
+            return Err(invalid_input(
+                "marker transfer requires the native marker host",
+            ));
+        }
         EncryptedUploadV2Transfer::RecordingEntry(value) => {
             WebEncryptedUploadV2Transfer::RecordingEntry {
                 flags: value.common.flags,
