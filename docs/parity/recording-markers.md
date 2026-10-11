@@ -211,3 +211,14 @@ EOF 前发送 0x4a：12 字节公共头，u32 文档序号@12、u32 总数@16（
 活跃密钥 STREAMING 及实时回执、打标会话 successor/切换通道恢复、实体 WRGB。
 不完整/损坏的不可变导出目前保留而不重建，修复策略仍待接通。WRGB 器件、引脚与
 满电输入仍缺资料。以上是开发缺口，不只是发布验证。
+
+## Main protocol documentation reconciliation — October 11
+
+Merged main `43f606d` (public firmware protocol PR #28) into the native marker
+implementation. Both root guidance conflicts preserve the all-English external
+protocol entry and the native BATCH/status implementation and release boundaries.
+Runtime sources, generated protocol data and package versions are unchanged by
+this merge. The five public fixture hashes and 13 signed documents pass the
+public vector verifier; touched-document relative links and diff whitespace
+checks pass. Exact-revision CI/License Gate remains required; this documentation
+reconciliation does not establish target/device acceptance or publish a package.
