@@ -76,7 +76,7 @@ actor ByoStreamSession {
             let session = context["upload_session_id"] as! String; let endpoint = "/" + session
             var fallback = resumed || docs["fallback"] as? Bool == true
             var offset: UInt32 = 0; var index: UInt32 = 0
-            let started = ContinuousClock.now; var refreshed = started
+            let started = ByoContinuousInstant.now; var refreshed = started
             if !fallback {
                 do { if allowed.contains("ws_relay") { socket = try await http.streamSocket(session) } }
                 catch { try Task.checkCancellation(); socket = nil }
@@ -84,8 +84,8 @@ actor ByoStreamSession {
             }
             while true {
                 try Task.checkCancellation()
-                guard started.duration(to: .now) < .seconds(14400) else { throw ByoFailure.pending }
-                if refreshed.duration(to: .now) > .seconds(30) { try await refresh(); refreshed = .now }
+                guard started.seconds(to: .now) < 14400 else { throw ByoFailure.pending }
+                if refreshed.seconds(to: .now) > 30 { try await refresh(); refreshed = .now }
                 facts = try byoObject(await rpc(9))
                 guard facts["recording_uuid"] as? String == recording.uuid, try number(facts, "recording_generation") == recording.generation,
                       facts["failed"] as? Bool == false else { throw ByoFailure.identityConflict }

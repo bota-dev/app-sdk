@@ -209,3 +209,22 @@ Combined-source checks: 310 Rust tests, Clippy, rustfmt, generated protocol,
 and BYO driver compile, and 96 native upload/marker regression tests pass.
 Host BYO tests are rerun against the rebuilt combined Rust library. Apple and
 packaged consumer verification remain subject to exact-head hosted CI.
+
+### iOS 15 and Android test compilation follow-up
+
+PR CI on `0722cc4` passed Rust, RN, Web and License Gate, but exposed two
+remaining build issues: Swift's `ContinuousClock` requires iOS 16, and two
+Android test assertions still used desktop-only `JSONObject.similar()`.
+BYO now uses Darwin `CLOCK_MONOTONIC_RAW` nanoseconds (available since iOS 10),
+which is monotonic, unaffected by wall-clock changes and advances during sleep.
+The existing 30-second refresh and four-hour live budget keep their strict
+comparison boundaries; new clock tests cover those boundaries. The public
+iOS 15 minimum is unchanged.
+
+The Android assertions now use the platform-compatible proof comparator. The
+local full SDK compilation check additionally compiles BYO tests against
+Android's JSON API and reproduced both missing-method failures before the fix.
+No runtime upload, receipt or deletion semantics change. Local Swift checking
+is still blocked by the compiler/SDK version mismatch; hosted iOS device and
+simulator builds, strict-concurrency tests and packaged consumers are required
+for the exact repaired head before merge.

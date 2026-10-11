@@ -213,9 +213,9 @@ actor ByoUploadSession {
     private func download(length: UInt64, hash: String) async throws {
         let file = try store.createCiphertext(); defer { try? file.close() }
         var digest = SHA256(); var offset: UInt64 = 0
-        var refreshed = ContinuousClock.now
+        var refreshed = ByoContinuousInstant.now
         while offset < length {
-            if refreshed.duration(to: .now) > .seconds(30) { try await refresh(); refreshed = .now }
+            if refreshed.seconds(to: .now) > 30 { try await refresh(); refreshed = .now }
             let count = UInt16(min(4096, length - offset))
             var position = offset.littleEndian; var size = count.littleEndian
             var request = withUnsafeBytes(of: &position) { Data($0) }

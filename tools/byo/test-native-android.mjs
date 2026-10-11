@@ -65,7 +65,15 @@ try {
   }
   if (run(['-cp', compiler.join(delimiter), 'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler',
     '-Werror', ...(compileSDK ? ['-Xexplicit-api=strict'] : []), '-no-stdlib', '-no-reflect', '-jvm-target', '17', '-classpath', runtime.join(delimiter), '-d', output, ...sources])) {
-    if (compileOnly) console.log('Native backend sources/tests compiled; execution not requested.');
+    if (compileSDK) {
+      // Unit tests also compile against Android's JSON API in Gradle.
+      const tests = files(join(root, 'platforms/android/sdk/src/test/kotlin/dev/bota/sdk/internal/byo')).filter(p => p.endsWith('.kt'));
+      if (run(['-cp', compiler.join(delimiter), 'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler',
+        '-Werror', '-no-stdlib', '-no-reflect', '-jvm-target', '17', '-Xfriend-paths=' + output,
+        '-classpath', [output, ...runtime].join(delimiter), '-d', join(output, 'tests'), ...tests])) {
+        console.log('Native SDK, RN BYO driver and BYO tests compiled against Android platform APIs.');
+      }
+    } else if (compileOnly) console.log('Native backend sources/tests compiled; execution not requested.');
     else run(['-Djava.library.path=' + process.env.BOTA_BYO_JNI_DIRECTORY, '-cp', [output, ...runtime].join(delimiter), 'org.junit.runner.JUnitCore', 'dev.bota.sdk.internal.byo.ByoBLECodecTest', 'dev.bota.sdk.internal.byo.ByoBLEHostTest', 'dev.bota.sdk.internal.byo.ByoUploadSessionTest']);
   }
 } finally {

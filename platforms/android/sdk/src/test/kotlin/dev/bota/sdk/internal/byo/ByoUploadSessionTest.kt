@@ -111,7 +111,7 @@ class ByoUploadSessionTest {
             assertFalse(f.calls.contains("PUT"))
             assertEquals("rec_test",f.run().recordingId)
             assertEquals(2,f.renewals.size)
-            assertTrue(JSONObject(f.renewals[0]).similar(JSONObject(f.renewals[1])))
+            assertTrue(JSONObject(f.renewals[0]).byoEquivalent(JSONObject(f.renewals[1])))
             assertEquals(1,f.calls.count {it=="PUT"})
         } finally {f.cleanup()}
     }
@@ -121,7 +121,7 @@ class ByoUploadSessionTest {
             try {f.run();fail("Expected uncertain create")} catch(_: ByoException) {}
             assertEquals("rec_test",f.run().recordingId)
             assertEquals(2,f.createBodies.size)
-            assertTrue(JSONObject(f.createBodies[0]).similar(JSONObject(f.createBodies[1])))
+            assertTrue(JSONObject(f.createBodies[0]).byoEquivalent(JSONObject(f.createBodies[1])))
             assertTrue(f.calls.indexOf("ble:2")<f.calls.indexOf("http:"))
             assertEquals(1,f.calls.count {it=="PUT"})
         } finally {f.cleanup()}

@@ -34,9 +34,9 @@ struct ByoDeviceSession {
         try await withLink(runtime: runtime, device: device, options: options, validateOwner: validateOwner) { ble, _, refresh in
             try await refresh()
             var cursor: UInt32 = 0; var result: [ByoRecording] = []; var seen: Set<String> = []
-            var refreshed = ContinuousClock.now
+            var refreshed = ByoContinuousInstant.now
             for _ in 0..<4097 {
-                if refreshed.duration(to: .now) > .seconds(30) { try await refresh(); refreshed = .now }
+                if refreshed.seconds(to: .now) > 30 { try await refresh(); refreshed = .now }
                 var raw = cursor.littleEndian
                 let request = withUnsafeBytes(of: &raw) { Data($0) }
                 let bytes: Data
