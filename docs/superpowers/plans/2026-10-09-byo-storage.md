@@ -35,6 +35,8 @@ checkpoint version 2 with version-1 restore, and independent BLE encode/decode
 kinds `0x052e`/`0x052f`. Renewal persists UUID/revision before HTTP and cannot
 independently grant cleanup. Protocol constants are manifest-generated.
 
-Live capture producers and client HTTP/WS transport callers remain source gaps.
+The later live implementation connects firmware capture discovery, native HTTP/WS
+callers, three reconnects and fenced Batch handoff; see the current integration
+review above. The earlier whole-file-only checkpoint is superseded.
 Target/mobile package builds, hardware power-loss and customer acceptance remain
 separate from host source validation. No release or feature activation occurred.

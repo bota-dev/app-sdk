@@ -143,3 +143,32 @@ SDK/RN Swift checking are separate from mobile packaging and real devices.
 Remaining acceptance: AAR/XCFramework/app builds, customer proxy/TLS, physical
 BLE/radio/power-loss and consuming apps. The direct requirement/evidence review
 is used because compound-engineering is unavailable locally.
+
+## October 11 PR submission checkpoint
+
+Merged main `43f606d` and retained both the external firmware protocol entry and
+BYO implementation guidance. Removed the obsolete live-transport source-gap
+claim from the earlier plan; native live callers and fenced recovery are present.
+No runtime or wire behavior changed during this main reconciliation.
+
+Current checkout verification:
+
+- `cargo test --workspace`: 302 tests pass across 55 result groups.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`,
+  `cargo fmt --all -- --check`, and `cargo xtask protocol generate --check` pass.
+- `npm run verify --prefix frameworks/react-native`: 192 tests, typecheck,
+  generated-contract validation and license gate pass.
+- `node tools/byo/test-native-android.mjs --compile-sdk`: full SDK/RN driver
+  compile passes against Android 36 with warnings as errors.
+- `node tools/byo/test-native-android.mjs`: 22 tests pass using a newly built
+  host Rust library/JNI bridge, JDK 17 and the pinned dependency cache.
+- Public firmware fixture verifier: five hashes and 13 signed documents pass.
+- Apple host build was attempted but is unavailable in this local environment:
+  Swift 6.3.3 and the installed macOS SDK built with Swift 6.3.2 do not match.
+  Earlier Apple evidence above remains historical, not a pass for this attempt.
+  Exact-revision hosted Apple CI must qualify the submission.
+
+PR submission does not publish beta.14 again or activate customer/device gates.
+A separately versioned native candidate, rebuilt consumers, live customer
+qualification and physical acceptance remain required. The separate marker SDK
+PR must retain both feature contracts if it merges before or after this branch.
