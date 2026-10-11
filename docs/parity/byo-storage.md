@@ -228,3 +228,20 @@ No runtime upload, receipt or deletion semantics change. Local Swift checking
 is still blocked by the compiler/SDK version mismatch; hosted iOS device and
 simulator builds, strict-concurrency tests and packaged consumers are required
 for the exact repaired head before merge.
+
+### Gradle JVM native-library setup
+
+Hosted CI on `79d6f4a` passed both complete Apple lanes, including iOS consumer
+builds and the new clock tests. Android compilation also passed, then 17 BYO
+integration tests failed because Gradle's JVM had no host Rust/JNI libraries.
+All JVM `Test` tasks now depend on `buildHostJni`, use a dedicated host-library
+path and track those libraries as test inputs. The helper builds the explicit
+Rust host target with the locked dependencies and compiles the real JNI bridge;
+Android cross-compiled AAR libraries remain in their separate directory.
+No tests are skipped or replaced with mock ABI results.
+
+The same helper builds on the local macOS host and its fresh libraries pass all
+23 BYO/JNI tests. Shell syntax and diff checks pass. Local Gradle verification
+stops at the missing Android SDK installation; the hosted Linux Gradle unit
+suite remains the required check. This setup supports the existing macOS/Linux
+POSIX host tests and does not assert Windows host-test support.
