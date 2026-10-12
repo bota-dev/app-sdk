@@ -49,10 +49,13 @@ const visit = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
   entry.isDirectory() ? visit(join(dir, entry.name)) : [join(dir, entry.name)]);
 for (const path of visit(output)) {
   if (!/\.(?:js|ts)$/.test(path)) continue;
-  const source = readFileSync(path, 'utf8');
+  const source = readFileSync(path, 'utf8').replace(/^\/\/\# sourceMappingURL=.*\r?\n?/gm, '');
+  writeFileSync(path, source);
   if (/(?:from\s*|require\()['"]react-native/.test(source) || /extends TurboModule/.test(source)) {
     throw new Error(`Native dependency in runtime output: ${path}`);
   }
 }
+writeFileSync(join(output, 'typescript/sdkIdentity.d.ts'),
+  `export declare const SDK_PACKAGE: ${JSON.stringify(pkg.name)};\nexport declare const SDK_VERSION: ${JSON.stringify(pkg.version)};\n`);
 cpSync(join(workspace, 'LICENSE'), join(runtimeRoot, 'LICENSE'));
 console.log(`Built JavaScript-only ${pkg.name}@${pkg.version}; native adapters are supplied by the app.`);

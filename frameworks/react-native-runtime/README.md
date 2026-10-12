@@ -32,3 +32,7 @@ The ordinary `@bota.dev/react-native-app-sdk` remains the bundled/native-adapter
 distribution with its existing setup. Both distributions compile one authoritative
 TypeScript implementation; there is no duplicated protocol or workflow fork.
 See [runtime contracts and evidence](../../docs/parity/react-native-runtime.md).
+
+Generated JavaScript and declaration identities both report this package's own
+version. Build output omits platform-only declarations and dangling source-map
+references; the authoritative workflow source remains in the RN package.
