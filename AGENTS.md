@@ -1,5 +1,10 @@
 # AGENTS.md
 
+October 12 authorized release preparation selects synchronized beta.15, including
+reviewed remote-main OTA/marker/BYO changes and the Apple/RN corrections below.
+Beta.14 remains published until exact CI, protected publication and public consumer
+gates pass. See [preflight](release/evidence/2.0.0-beta.15-preflight.md).
+
 External firmware integrations use the all-English [FIRMWARE_PROTOCOL.md](FIRMWARE_PROTOCOL.md) in this active SDK repository. The #201 marker section is a development contract, not proof of released package support; keep protocol facts aligned with the feature implementation/manifest, distinguish source from release availability, and preserve exact owner/completion/deletion semantics. Do not send new SDK work to the retired standalone react-native-sdk repository.
 
 BYO live and whole-file uploads now connect Rust framing/recovery to Apple/Android
@@ -14,6 +19,28 @@ for source evidence and separate customer, package and hardware acceptance gates
 Recording markers #201: [native BATCH integration and successor review](docs/parity/recording-markers.md) covers opaque transfers, authorization recovery, owner/channel fences and dual receipts. The unpublished [STREAMING scalar status provider](docs/parity/protected-streaming-status.md) is wired through native HTTPS; Demo uses its dashboard read API and existing BLE control for device-direct streaming. A new BLE audio relay is outside this scope. Published beta.14 lacks the new marker/status native capabilities; target artifacts and consuming native App release remain pending. No marker profile is enabled; preserve UUID[16] and 280-byte authorization. See [local package evidence](docs/testing/recording-markers-local-candidate.md).
 
 Protected STREAMING has an unpublished [read-only status provider](docs/parity/protected-streaming-status.md): RN public API calls native HTTPS, strict scalar identity/state parsing, revision `0` allowed. This does not implement protected START/relay or authorize cleanup; published beta.14 lacks these new native methods.
+October 11 unpublished React Native workspace correction: additive
+`pauseAutoReconnect(): Promise<void>` stops future retries and awaits submitted
+reconnects; preserve frozen `disableAutoReconnect(): void`. Hosts must fence new
+work/rearming, inspect and disconnect late connections before changing scope.
+189 package tests pass; private Demo project switching passed on SE. Public
+beta.14 adoption and broader hardware acceptance remain separate. See
+[the review](docs/parity/workspace-reconnect-quiescence.md).
+
+October 11 unpublished Apple connection-ownership correction: a retrieved
+system-connected peripheral must acquire this central's local connection before
+SDK use. Reuse only a callback-confirmed identity; disconnect/failure/Bluetooth
+loss clears ownership. Five regressions pass and the complete Apple suite passes
+273 tests with nine physical skips. Installed apps/public beta.14 remain separate.
+See [the review](docs/parity/apple-connection-ownership.md).
+
+October 9 unpublished Apple encrypted-v2 correction: framed transfer bounds use
+the single ATT-value capacity (`withoutResponse`), rather than CoreBluetooth's
+potential long-write capacity. Device START/RESUME rejection preserves
+`protocol_rejected` and its numeric status through the host executor. Two
+regressions failed before the fix; the fresh complete Apple suite passes.
+Public beta.14 and installed consuming apps remain separate. See
+[the review](docs/parity/v2-demo-apple.md#october-9-single-att-frame-capacity-unpublished-source).
 
 **Upload completion architecture (target; partial implementation):**
 Review upload work against durable verification/cleanup phases and identity recovery. Test exit after PUT, pending 425, worker success while offline, reconnect-only cleanup, numeric evidence and legacy full-UUID limitations; do not claim all installed facades share current source behavior. See the [public recovery contract](docs/parity/upload-recovery.md).

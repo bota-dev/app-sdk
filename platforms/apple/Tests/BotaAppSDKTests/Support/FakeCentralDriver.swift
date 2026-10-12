@@ -7,6 +7,8 @@ actor FakeCentralDriver: CentralDriver {
     var scanned: [CentralAdvertisement]
     var operationDelayNanoseconds: UInt64
     var discoveryDelayNanoseconds: UInt64 = 0
+    var maximumWriteWithResponse = 512
+    var maximumWriteWithoutResponse = 512
     private(set) var log: [String] = []
     private(set) var characteristicLog: [String] = []
     private(set) var maximumConcurrentByPeripheral: [String: Int] = [:]
@@ -80,7 +82,12 @@ actor FakeCentralDriver: CentralDriver {
 
     func maximumWriteValueLength(peripheralID: String, withResponse: Bool) async throws -> Int {
         log.append("maximumWriteValueLength:\(peripheralID):\(withResponse)")
-        return 512
+        return withResponse ? maximumWriteWithResponse : maximumWriteWithoutResponse
+    }
+
+    func setMaximumWriteLengths(withResponse: Int, withoutResponse: Int) {
+        maximumWriteWithResponse = withResponse
+        maximumWriteWithoutResponse = withoutResponse
     }
 
     func write(

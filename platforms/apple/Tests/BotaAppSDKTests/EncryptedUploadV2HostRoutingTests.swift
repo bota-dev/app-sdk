@@ -126,6 +126,24 @@ final class EncryptedUploadV2HostRoutingTests: XCTestCase {
         )])
     }
 
+    func testExecutorPreservesDeviceStartRejectionCodeAndProtocolStatus() async throws {
+        let executor = makeExecutor(encryptedUploadV2: RejectedEncryptedUploadV2Port())
+        let effect = try CoreEffect(packet: EncryptedUploadV2EffectVector.named("start_transfer").packet)
+        var events: [CoreHostEvent] = []
+        for try await event in await executor.execute(effect) { events.append(event) }
+
+        XCTAssertEqual(events, [CoreHostEvent(effect: effect,
+            kind: UInt32(BOTA_DEVICE_SDK_V1_HOST_EVENT_ENCRYPTED_UPLOAD_V2_FAILED),
+            fields: [
+                .unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_ERROR_CODE), value: 17),
+                .bool(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_RETRYABLE), value: false),
+                .unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_PROTOCOL_STATUS), value: 2),
+                .text(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_ERROR_DETAIL),
+                      value: "device rejected the encrypted transfer-control request"),
+            ]
+        )])
+    }
+
     func testExecutorCancellationInterruptsSuspendedEncryptedUploadV2HostCreation() async throws {
         let entered = expectation(description: "encrypted upload v2 host creation entered")
         let cancelled = expectation(description: "encrypted upload v2 host creation cancelled")
@@ -401,6 +419,20 @@ private struct ProbeEncryptedUploadV2Port: EncryptedUploadV2Host {
         return AsyncThrowingStream { continuation in
             vector.eventKinds.forEach { continuation.yield(.init(kind: $0)) }
             continuation.finish()
+        }
+    }
+}
+
+private struct RejectedEncryptedUploadV2Port: EncryptedUploadV2Host {
+    func execute(_ effect: CoreEffect) async -> AsyncThrowingStream<CoreHostEventPayload, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.finish(throwing: EncryptedUploadV2TransferControlRejection(
+                sdkError: BotaSDKError(code: .protocolRejected, operation: .transferRecording,
+                    retryable: false, protocolStatus: 2,
+                    detail: "device rejected the encrypted transfer-control request"),
+                deviceError: .init(transportSessionID: 11, result: 2, failedMessageType: 0x20,
+                                   checkpointRevision: 0)
+            ))
         }
     }
 }

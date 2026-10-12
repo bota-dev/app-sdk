@@ -44,9 +44,9 @@ not supported. Consult each platform guide for its capability limits.
 
 ## Installation
 
-**Selected SDK version: `2.0.0-beta.14` (beta).** The examples below pin this
-version. Protected publication and all public-consumer checks passed; see the
-[publication review](release/evidence/2.0.0-beta.14-publication.md).
+**Selected SDK version: `2.0.0-beta.15` (beta).** The examples below pin this
+version after publication is verified. Beta.14 remains the published baseline;
+see the [release preflight](release/evidence/2.0.0-beta.15-preflight.md).
 [GitHub Releases](https://github.com/bota-dev/app-sdk/releases) provides the
 publication status and verified artifacts; [CHANGELOG.md](CHANGELOG.md) records
 version changes.
@@ -59,7 +59,7 @@ Choose the package for your application. npm's `beta` tag tracks prereleases;
 Use Node.js 22+ to install and build your app:
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.14
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.15
 npx pod-install
 ```
 
@@ -71,10 +71,10 @@ for permissions and Expo configuration.
 ### Apple
 
 In Xcode, add `https://github.com/bota-dev/app-sdk.git` at exact version
-`2.0.0-beta.14` and select the **BotaAppSDK** product. With Swift Package Manager:
+`2.0.0-beta.15` and select the **BotaAppSDK** product. With Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.14")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.15")
 ```
 
 Add `NSBluetoothAlwaysUsageDescription` to your application. Sandboxed macOS
@@ -92,7 +92,7 @@ try await bota.configure()
 Add the dependency with `mavenCentral()` configured in your repositories:
 
 ```kotlin
-implementation("dev.bota:bota-app-sdk:2.0.0-beta.14")
+implementation("dev.bota:bota-app-sdk:2.0.0-beta.15")
 ```
 
 Your app requests Bluetooth runtime permissions. See the
@@ -103,7 +103,7 @@ requirements.
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.14
+  bota_app_sdk: 2.0.0-beta.15
 ```
 
 Follow the [Flutter guide](frameworks/flutter/bota_app_sdk/README.md) for native
@@ -112,7 +112,7 @@ setup and backend callbacks, then rebuild the iOS or Android app.
 ### Web
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.14
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.15
 ```
 
 Start the Bluetooth picker from a user gesture. Web integration requires
@@ -175,7 +175,18 @@ For React Native encrypted uploads, start with the
 with your authenticated proxy and handles native session recovery and signed
 receipts. See [Bota API documentation](https://docs.bota.dev) for the backend API.
 
+The unpublished Apple correction bounds encrypted-v2 DATA and signed-blob
+frames by the current single ATT-value capacity. CoreBluetooth's long-write
+capacity is not a notification limit. It also preserves numeric device
+rejections through native upload errors. See [verification and delivery
+limits](docs/parity/v2-demo-apple.md#october-9-single-att-frame-capacity-unpublished-source).
+
 ## Client presence
+
+The unpublished Apple connection correction distinguishes iOS system connections
+from this application's local connection. It acquires a retrieved peripheral
+through the current central before SDK use and clears local ownership on
+disconnect or Bluetooth loss. See [verification and delivery limits](docs/parity/apple-connection-ownership.md).
 
 `clientPresence.nextReport(deviceId)` returns passive metadata for the current
 verified SDK connection, or null. The host can relay it with fresh status and

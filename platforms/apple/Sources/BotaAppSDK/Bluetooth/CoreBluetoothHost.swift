@@ -124,7 +124,8 @@ actor CoreBluetoothHost: BluetoothHost {
         }
     }
 
-    func maximumWriteValueLength(peripheralID: String, withResponse: Bool = true) async throws -> Int {
+    // Framed protocols need one ATT value; with-response may allow long writes.
+    func maximumWriteValueLength(peripheralID: String, withResponse: Bool = false) async throws -> Int {
         try await serialized(peripheralID) {
             try await driver.maximumWriteValueLength(peripheralID: peripheralID, withResponse: withResponse)
         }

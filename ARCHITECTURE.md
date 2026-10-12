@@ -1,5 +1,10 @@
 # Architecture
 
+The beta.15 candidate combines reviewed main OTA/marker/BYO integrations with
+Apple transfer/local ownership and RN reconnect quiescence corrections.
+Publication, app binary delivery and physical acceptance are distinct gates; see
+[release scope and review](release/evidence/2.0.0-beta.15-preflight.md).
+
 External firmware integrations use the all-English [FIRMWARE_PROTOCOL.md](FIRMWARE_PROTOCOL.md) in this active SDK repository. The #201 marker section is a development contract, not proof of released package support; keep protocol facts aligned with the feature implementation/manifest, distinguish source from release availability, and preserve exact owner/completion/deletion semantics. Do not send new SDK work to the retired standalone react-native-sdk repository.
 
 BYO live and whole-file uploads now connect Rust framing/recovery to Apple/Android
@@ -12,6 +17,11 @@ Only metadata crosses JS. See [integration and review](docs/parity/byo-storage.m
 for source evidence and separate customer, package and hardware acceptance gates.
 
 Recording markers #201: [native BATCH integration and successor review](docs/parity/recording-markers.md) covers opaque transfers, authorization recovery, owner/channel fences and dual receipts. The unpublished [STREAMING scalar status provider](docs/parity/protected-streaming-status.md) is wired through native HTTPS; Demo uses its dashboard read API and existing BLE control for device-direct streaming. A new BLE audio relay is outside this scope. Published beta.14 lacks the new marker/status native capabilities; target artifacts and consuming native App release remain pending. No marker profile is enabled; preserve UUID[16] and 280-byte authorization. See [local package evidence](docs/testing/recording-markers-local-candidate.md).
+The unpublished React Native `pauseAutoReconnect` addition waits for the current
+serialized reconnect chain after stopping future retries. Host workspace fences
+must prevent new work/rearming and disconnect any late connection before changing
+scope. The frozen immediate disable API remains unchanged; see
+[review and acceptance limits](docs/parity/workspace-reconnect-quiescence.md).
 
 **Upload completion architecture (target; partial implementation):**
 SDK/native or browser storage owns App-mediated upload recovery and durable device-cleanup intent; authenticated backend HTTP stays host-owned. Target phases separate bytes received, verification, cloud commitment and cleanup, with stable recording identity across retries/channels. Current facade/profile conformance is partial. See the [public recovery contract](docs/parity/upload-recovery.md).
@@ -1042,7 +1052,14 @@ ownership on a dedicated serial dispatch queue and exposes only value records
 to `CoreBluetoothHost`. The actor host merges peripherals already connected to
 a Bota service with live advertisements, deduplicates by Apple peripheral UUID,
 serializes connect/discovery/read/write/subscription work per peripheral, and
-allows unrelated peripherals to progress independently. Disconnect bypasses
+allows unrelated peripherals to progress independently. System connection state
+alone does not establish local ownership: a retrieved peripheral requires this
+central's connect callback before its connection identity becomes usable.
+`CoreBluetoothConnectionOwnership` retains that identity and pending connect
+continuations on the driver queue, clearing them on disconnect, failed connect
+or Bluetooth loss. The unpublished source correction and physical limits are
+recorded in [the ownership review](docs/parity/apple-connection-ownership.md).
+Disconnect bypasses
 that gate so a broken link can fail pending operations exactly once. A manual
 selection preempts a background reconnect owner, and discovery timeout tears
 down the half-open link before releasing radio ownership. Display names are

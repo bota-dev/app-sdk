@@ -631,6 +631,12 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     }
   }
 
+  /** Stop automatic retries and wait for reconnect attempts already submitted. */
+  pauseAutoReconnect(): Promise<void> {
+    this.disableAutoReconnect();
+    return this.reconnectChain.then(() => undefined);
+  }
+
   onCachedDeviceStateChanged(
     listener: (
       serialNumber: string,

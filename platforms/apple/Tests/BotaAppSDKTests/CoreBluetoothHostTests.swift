@@ -5,6 +5,19 @@ import XCTest
 @testable import BotaAppSDK
 
 final class CoreBluetoothHostTests: XCTestCase {
+    func testFramedTransferCapacityUsesSingleATTValueInsteadOfLongWriteCapacity() async throws {
+        let driver = FakeCentralDriver()
+        await driver.setMaximumWriteLengths(withResponse: 512, withoutResponse: 182)
+        let host = CoreBluetoothHost(driver: driver)
+
+        let frameBytes = try await host.maximumWriteValueLength(peripheralID: "device")
+
+        XCTAssertEqual(frameBytes, 182)
+        // The explicit long-write query remains available to its actual callers.
+        let longWriteBytes = try await host.maximumWriteValueLength(peripheralID: "device", withResponse: true)
+        XCTAssertEqual(longWriteBytes, 512)
+    }
+
     func testScanMergesSystemConnectedPeripheralsAndRespectsDeduplication() async throws {
         let first = CentralAdvertisement(id: "first", name: "Bota Pin", rssi: -40)
         let second = CentralAdvertisement(id: "second", name: "Bota Note", rssi: -50)

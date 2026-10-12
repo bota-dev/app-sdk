@@ -79,6 +79,128 @@ responsibilities, not inferred SDK behavior.
 
 ## Verification
 
+### October 9 single ATT frame capacity (unpublished source)
+
+A supervised consuming-iPhone retry using public beta.14 reached the native
+START effect, then threw `EncryptedUploadV2TransferControlRejection` with
+device result `0x0002` (`INVALID_LENGTH`) and failed message type `0x20`.
+The sink remained zero bytes without a durable checkpoint. The application
+reported `internal` because the executor only recognized host-specific errors.
+This establishes a device START rejection, not cloud publication or cleanup.
+
+`CoreBluetoothHost.maximumWriteValueLength` now defaults to
+`withoutResponse`, which bounds one ATT value. Both v2 transfer negotiation and
+signed-blob framing use that query; writes still use responses. A fake driver
+with a 512-byte long-write capacity and a 182-byte single-value capacity
+reproduced the old 512-byte selection and now returns 182. Existing negotiation
+subtracts the 28-byte DATA header and bounds WINDOW_ACK missing sequences, so
+it selects at most 154 ciphertext bytes for that link. Explicit long-write
+queries remain available. The 140-byte mandatory START_ACK guard is unchanged.
+
+The executor also translates exact transfer-control rejections to ABI code 17
+(`protocol_rejected`), preserving retryability, fixed detail and numeric device
+result. Unknown errors retain their existing generic mapping. No authorization,
+receipt, checkpoint identity or cleanup rule is relaxed.
+
+| Requirement | Evidence | Status |
+| --- | --- | --- |
+| Framed values fit the current ATT link, independent of device capacity | Before-fix capacity regression failed 512 vs 182; corrected host query and existing DATA/window bounds | matched in controlled tests |
+| Preserve exact START rejection through the v2 host boundary | Before-fix event was internal/code 21 without status; regression now requires code 17/status 2 and exact effect identity | matched in controlled tests |
+| Manager START bounds use the single ATT capacity | Real host integration selects DATA 154/window 28 with capacities 512/182; an isolated old-default mutation fails with DATA 484/window 44 | matched in controlled tests |
+| Preserve signed-document framing, cancellation and identity fences | Complete Apple suite: 268 tests, 9 opt-in physical tests skipped, zero failures; focused integration build uses warnings as errors | matched in controlled tests |
+| Public package and normal consuming-iPhone upload/receipt/cleanup | Source remains unpublished; phone retry of the corrected SDK has not run | unverified |
+
+Verification rebuilt the current Rust XCFramework and used a fresh SwiftPM
+scratch directory. An earlier run reused an obsolete copied binary and failed
+diagnostic/catalog/context codecs; the fresh full run passes those cases.
+The actual phone's negotiated frame capacity and rejected START bounds still
+require runtime capture. Android's working result is owner-reported; this
+source change does not claim cross-platform physical acceptance.
+
+```sh
+BOTA_PHYSICAL_TESTS=0 swift test --package-path platforms/apple \
+  --scratch-path target/apple-ios-mtu --jobs 4 -Xswiftc -warnings-as-errors
+```
+
+Exact-revision CI, publication and a rebuilt consuming app remain delivery
+gates. Demo retains its pinned published package; do not patch SDK caches or
+represent this source correction as an installed public release.
+
+October 11 follow-up now confirms cloud commitment for the owner's original
+retained encrypted capture using the private Demo 1.0.15 SE candidate. Normal
+SE logs show a target reconnect and explicit v2 BLE sync immediately before
+publication at 2026-10-12 03:57:07 UTC. Exact scoped metadata found the latest
+owner revision 6 in `published`; the older revision 2 remained `expired`.
+Ciphertext matches the independently observed device catalog's 25,119-byte
+length/hash. Published plaintext is 24,707 bytes with a verified hash, and the
+backend persisted/returned the exact 336-byte completion receipt. Resource
+identities and restricted artifacts stay in private evidence.
+
+This qualifies cloud publication and receipt issuance for that private SE
+capture, not physical source cleanup: the current SDK reconnect cannot find
+the wearable, and a fresh scan returned no Bota advertisements. Empty app/SDK
+upload journals are supporting evidence only. A successful fresh native catalog
+must confirm the exact capture is gone, or existing published-session recovery
+must finish receipt/CONFIRM without another PUT. Public SDK delivery, physical
+system-connected ownership acquisition and wider recovery cases remain open.
+
+The owner subsequently authorized a temporary iPhone candidate. It uses the
+exact public beta.14 Swift source at `a275773`, plus only the two production
+patches above; its published Rust binary URL and checksum are unchanged.
+The native Debug build succeeded and Demo 1.0.13 was installed in place.
+All three retained application journal files were byte-identical after install.
+The ignored native project and normal public beta.14 resolution were restored
+after the candidate build. Normal-UI sync is still unverified: the latest
+Mirroring attempt reports iPhone Not Found and Apple device tools report the
+phone unavailable. The debugger lost its connection and was closed; reconnect
+the phone and leave it locked before continuing automation.
+
+On October 10 the owner switched the consuming target to an iPhone SE (3rd
+generation), iOS 26.6.1. Mac pairing and owner-enabled Developer Mode succeeded.
+The same private candidate was rebuilt with a development profile verified to
+include the SE; signature verification, installation and launch succeeded.
+Normal public SDK resolution was restored after building. Original-phone
+application journals are intact. At that observation, the SE used a different
+Apple Account and was not offered by Mac iPhone Mirroring. The development-server
+connection through the normal client launch URL succeeded. The owner completed login; passive
+runtime inspection verified authenticated/onboarded state and the selected
+device. Reconnection retries prevented a fresh successful recording catalog,
+and a later launch was blocked by the SE's lock screen. Normal-UI
+upload/receipt/cleanup remain unverified.
+
+The owner subsequently clarified that Apple Accounts change between runs. A
+fresh Mirroring selector offered the SE, and the current selection changed to
+it, but setup reached Unlock iPhone and then Unable to Connect. Check current
+eligibility and an actual connected phone screen each run. The later Demo
+1.0.14 fresh-phone reconciliation candidate has compiled but remains uninstalled
+because code signing returns `errSecInternalComponent`; unlocked-keychain and
+valid-identity checks do not establish usable private-key access.
+
+On October 11, SE Mirroring setup completed. The actual Home Screen was observed
+and a swipe changed its page, verifying remote control. Demo was not launched
+in that connection check; encrypted upload, receipt and cleanup remain
+unverified on this phone.
+
+The subsequent October 11 private Demo 1.0.14 build passed signing and strict
+signature/provisioning/runtime checks, and device metadata confirmed an in-place
+SE installation of 1.0.14(1). Candidate inspection again matched the public
+beta.14 manifest/Rust payload and the two reviewed Apple source corrections;
+normal public package resolution was restored. Demo was controlled through
+Mirroring, but native reconnect returned `device_not_found`, operation
+`reconnect`, `retryable: true`, beneath `apple_sdk_error`. No verified SDK
+connection or successful device catalog was obtained, and no sync was invoked.
+Reconnect's fresh-scan/serial-verification path is unchanged by these fixes;
+no journal or old peripheral ID was copied to seed it. Physical upload,
+publication, receipt and cleanup qualification remain open.
+
+A later normal-UI 30-second scan found no Bota-named advertisements. The SDK
+reported Bluetooth ready and five nearby cached peripherals, three unnamed;
+their identity is unverified. Reconnect still returned `device_not_found` after
+the user confirmed other phones were disconnected. Demo exited to Home again;
+no matching crash/Jetsam report was available, so the cause is unconfirmed.
+No binding changes or sync occurred, and the physical qualification gates remain
+open.
+
 Local tests cover model compatibility, native callback forwarding, missing
 context, nonce owner/reconnect fencing, catalog bytes and metadata, malformed
 catalog cleanup, context timeout/late callback fencing, signed replacement

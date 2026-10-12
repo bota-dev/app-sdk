@@ -412,6 +412,31 @@ test('internal DeviceManager auto reconnect starts immediately and user disconne
   manager.destroy();
 });
 
+for (const failed of [false, true]) test(`pausing reconnect waits for a native attempt to settle (${failed ? 'failure' : 'success'})`, async () => {
+  const fake = createFakeClient();
+  const reconnect = deferred();
+  fake.reconnectImplementation = () => reconnect.promise;
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+  manager.enableAutoReconnect(connectedDevice.serialNumber);
+  await tick();
+  let paused = false;
+  const pause = manager.pauseAutoReconnect().then(() => { paused = true; });
+  try {
+    await tick();
+    assert.equal(paused, false, 'workspace teardown must wait for the native attempt');
+  } finally {
+    if (failed) reconnect.reject(new Error('device unavailable'));
+    else reconnect.resolve(connectedDevice);
+    try {
+      await pause;
+      assert.deepEqual(manager.getConnectedDevices(), failed ? [] : [connectedDevice]);
+    } finally { manager.destroy(); }
+  }
+  assert.equal(paused, true);
+  assert.deepEqual(fake.reconnectCalls, [connectedDevice.serialNumber]);
+});
+
 test('internal DeviceManager restarts auto reconnect after a native link loss', async () => {
   const fake = createFakeClient();
   const reconnect = deferred();

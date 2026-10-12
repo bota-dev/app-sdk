@@ -28,6 +28,8 @@ test('preserves all 80 frozen exports plus exact maintenance and completion-reco
   // Keep the historical source inventory immutable; these optional fields belong
   // to the current facade's completion-only retry contract.
   const additions = structuredClone(maintenance.additions);
+  additions.members.DeviceManager.push({ name: 'pauseAutoReconnect', optional: false,
+    readonly: false, declarationKinds: ['MethodDeclaration'], type: '() => Promise<void>' });
   const optionalBoolean = name => ({ name, optional: true, readonly: false,
     declarationKinds: ['PropertySignature'], type: 'boolean | undefined' });
   additions.members.UploadInfo.push(optionalBoolean('reuploadRequired'));

@@ -5,7 +5,16 @@ source changes that are not in the published packages. Published versions and
 tags are immutable; package publication and application/device acceptance are
 tracked separately.
 
-## Unreleased
+## 2.0.0-beta.15 (candidate)
+
+- Bound Apple framed transfers by single-ATT capacity and preserve numeric device
+  rejection details; acquire a system-connected peripheral through the local
+  central callback before SDK use.
+- Add `pauseAutoReconnect()` so hosts can stop retries and await submitted
+  reconnects before changing their scoped workspace.
+- Include reviewed main recording-marker/protected-status and BYO live/batch
+  storage integrations; firmware and customer rollout gates remain separate.
+- Publication is pending; see the [release preflight](release/evidence/2.0.0-beta.15-preflight.md).
 
 - Firmware OTA treats loss of the transfer-status stream after successful image
   verification as reboot recovery. Reconnect retries short scans within the

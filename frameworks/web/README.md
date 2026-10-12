@@ -1,9 +1,10 @@
 # Bota SDK for Web
 
-Source candidate `2.0.0-beta.14` synchronizes the five-platform SDK family.
-It adds React Native compatibility completion polling and durable
-`completionPending` recovery. Other facade workflow support is unchanged.
-Beta.13 remains the published baseline until this candidate completes its gates.
+Source candidate `2.0.0-beta.15` synchronizes the five-platform SDK family.
+It includes Apple single-ATT transfer bounds and local connection ownership,
+awaitable React Native reconnect pause, and the reviewed main OTA, recording
+marker, protected-status and BYO storage changes. Beta.14 remains the published
+baseline until this candidate completes its gates.
 Native applications require a new binary.
 
 `@bota.dev/web-app-sdk` is the foreground browser distribution of the Bota App
@@ -19,11 +20,11 @@ dependency before adding its replacement. Storage namespaces do not change.
 
 ## Install
 
-This source prepares synchronized `2.0.0-beta.14`; See the release preflight for source changes.
-Use the pin below after publication is verified; beta.13 remains published:
+This source prepares synchronized `2.0.0-beta.15`; See the release preflight for source changes.
+Use the pin below after publication is verified; beta.14 remains published:
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.14
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.15
 ```
 
 Use a secure context in a desktop Chromium browser with Web Bluetooth. The

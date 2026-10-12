@@ -1,3 +1,9 @@
+## 2.0.0-beta.15 (candidate)
+
+- Synchronize the reviewed Apple/RN connection and transfer corrections with
+  main OTA, recording-marker/protected-status and BYO storage source.
+- Rebuild native apps; package publication and physical acceptance remain separate.
+
 ## 2.0.0-beta.14 (candidate)
 
 - Synchronize SDK package identities with the React Native completion-recovery fix.

@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import XCTest
+import BotaDeviceSDKC
 @testable import BotaAppSDK
 
 final class EncryptedUploadV2MaintenanceTests: XCTestCase {
@@ -49,6 +50,51 @@ final class EncryptedUploadV2MaintenanceTests: XCTestCase {
         let commands = await runner.commands
         XCTAssertEqual(actualCalls, ["provider"])
         XCTAssertEqual(commands.count, 1)
+    }
+
+    func testEncryptedV2StartBoundsUseSingleATTCapacityThroughBluetoothHost() async throws {
+        let driver = FakeCentralDriver()
+        await driver.setMaximumWriteLengths(withResponse: 512, withoutResponse: 182)
+        let bluetooth = CoreBluetoothHost(driver: driver)
+        let capability = EncryptedUploadV2CapabilitySnapshot(
+            rawValue: Data(), sha256: Data(), capabilities: .init(
+                flags: 0x17f, maximumSignedBlobBytes: 408, maximumManifestBytes: 580,
+                maximumDataPayloadBytes: 484, maximumWindowPackets: 44,
+                durableCheckpointIntervalBlocks: 1, maximumMissingSequences: 44
+            )
+        )
+        let runner = TransferWorkflowRunner { _ in [transferCompleted(operation: 4)] }
+        let recorder = TransferFacadeRecorder()
+        let calls = CatalogCalls()
+        let manager = RecordingManager()
+        await manager.attach(await transferRuntime(runner: runner, recorder: recorder,
+            encryptedUploadV2Capabilities: { _ in capability },
+            encryptedUploadV2MaximumWriteLength: {
+                try await bluetooth.maximumWriteValueLength(peripheralID: $0)
+            },
+            registerEncryptedUploadV2Material: { id, _ in
+                XCTAssertEqual(id, "native")
+                await calls.append("register")
+            }
+        ))
+
+        try await manager.syncEncryptedRecordingV2(transferDevice(), recording: Self.recording) { context in
+            XCTAssertEqual(context.capability, capability)
+            XCTAssertNil(context.checkpoint)
+            await calls.append("provider")
+            return Self.material()
+        }
+
+        let commands = await runner.commands
+        let command = try XCTUnwrap(commands.first)
+        XCTAssertEqual(commands.count, 1)
+        XCTAssertEqual(command.kind, UInt32(BOTA_DEVICE_SDK_V1_COMMAND_TRANSFER_ENCRYPTED_RECORDING))
+        XCTAssertEqual(command.fields.unsigned(EncryptedUploadV2Abi.fieldDataPayloadBytes), 154)
+        XCTAssertEqual(command.fields.unsigned(EncryptedUploadV2Abi.fieldWindowPackets), 28)
+        let actualCalls = await calls.values
+        XCTAssertEqual(actualCalls, ["provider", "register"])
+        let writes = await recorder.writes
+        XCTAssertTrue(writes.isEmpty)
     }
 
     func testTaskCancelledBeforeNativeEntryDoesNotReadBleOrPrepareMaterial() async throws {

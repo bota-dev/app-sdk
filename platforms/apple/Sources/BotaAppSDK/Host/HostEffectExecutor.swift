@@ -231,7 +231,17 @@ actor HostEffectExecutor: CoreHost {
     }
 
     private func encryptedUploadV2FailureEvent(effect: CoreEffect, error: Error) -> CoreHostEvent {
-        let failure = error as? EncryptedUploadV2HostFailure
+        let failure: EncryptedUploadV2HostFailure?
+        if let rejection = error as? EncryptedUploadV2TransferControlRejection {
+            failure = EncryptedUploadV2HostFailure(
+                errorCode: UInt32(BOTA_DEVICE_SDK_V1_ERROR_PROTOCOL_REJECTED),
+                retryable: rejection.sdkError.retryable,
+                protocolStatus: rejection.deviceError.result,
+                detail: rejection.sdkError.detail
+            )
+        } else {
+            failure = error as? EncryptedUploadV2HostFailure
+        }
         var fields: [CoreField] = [
             .unsigned(
                 id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_ERROR_CODE),

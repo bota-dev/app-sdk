@@ -4,7 +4,7 @@ import Foundation
 @main
 enum AppleConsumer {
     static func main() {
-        precondition(BotaAppleSDKVersion.current == "2.0.0-beta.14")
+        precondition(BotaAppleSDKVersion.current == "2.0.0-beta.15")
         _ = BotaConfiguration()
         _ = BotaDeviceClient()
         print("BotaAppSDK \(BotaAppleSDKVersion.current) consumer import passed")

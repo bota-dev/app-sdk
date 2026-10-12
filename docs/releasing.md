@@ -1,3 +1,13 @@
+# Candidate synchronized beta: 2.0.0-beta.15
+
+The owner authorized commit, push and publication on October 12, 2026 (Pacific).
+This candidate includes the Apple/RN corrections and reviewed main changes since
+beta.14. See [scope and verification](../release/evidence/2.0.0-beta.15-preflight.md).
+Exact branch/main CI and License Gate, canonical Apple pins, a complete five-platform
+inventory and the existing protected release approval remain required. Beta.14
+remains published until the registry/public-consumer gates pass. Advance only npm
+`beta`; preserve `latest`, existing tags, receipts and firmware rollout gates.
+
 # Published synchronized beta: 2.0.0-beta.14
 
 Beta.14 carries the React Native compatibility pending-completion recovery fix.
