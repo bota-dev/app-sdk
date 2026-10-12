@@ -44,9 +44,9 @@ not supported. Consult each platform guide for its capability limits.
 
 ## Installation
 
-**Selected SDK version: `2.0.0-beta.15` (beta).** The examples below pin this
-version after publication is verified. Beta.14 remains the published baseline;
-see the [release preflight](release/evidence/2.0.0-beta.15-preflight.md).
+**Published SDK version: `2.0.0-beta.15` (beta).** All five packages and public
+consumer checks passed; see the
+[publication review](release/evidence/2.0.0-beta.15-publication.md).
 [GitHub Releases](https://github.com/bota-dev/app-sdk/releases) provides the
 publication status and verified artifacts; [CHANGELOG.md](CHANGELOG.md) records
 version changes.
@@ -175,7 +175,7 @@ For React Native encrypted uploads, start with the
 with your authenticated proxy and handles native session recovery and signed
 receipts. See [Bota API documentation](https://docs.bota.dev) for the backend API.
 
-The unpublished Apple correction bounds encrypted-v2 DATA and signed-blob
+Beta.15 bounds Apple encrypted-v2 DATA and signed-blob
 frames by the current single ATT-value capacity. CoreBluetooth's long-write
 capacity is not a notification limit. It also preserves numeric device
 rejections through native upload errors. See [verification and delivery
@@ -183,7 +183,7 @@ limits](docs/parity/v2-demo-apple.md#october-9-single-att-frame-capacity-unpubli
 
 ## Client presence
 
-The unpublished Apple connection correction distinguishes iOS system connections
+Beta.15 distinguishes iOS system connections
 from this application's local connection. It acquires a retrieved peripheral
 through the current central before SDK use and clears local ownership on
 disconnect or Bluetooth loss. See [verification and delivery limits](docs/parity/apple-connection-ownership.md).

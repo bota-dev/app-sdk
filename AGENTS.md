@@ -1,9 +1,10 @@
 # AGENTS.md
 
-October 12 authorized release preparation selects synchronized beta.15, including
+October 12 synchronized beta.15 publication passed, including
 reviewed remote-main OTA/marker/BYO changes and the Apple/RN corrections below.
-Beta.14 remains published until exact CI, protected publication and public consumer
-gates pass. See [preflight](release/evidence/2.0.0-beta.15-preflight.md).
+Exact CI, protected publication, all five packages and public consumer gates
+passed. Native application delivery and hardware qualification remain separate.
+See [publication evidence](release/evidence/2.0.0-beta.15-publication.md).
 
 Managed Apple's session POST omits `end_user_id` to match the strict existing
 encrypted-v2 schema; recording creation and native EndUser/scope fences retain
@@ -21,30 +22,31 @@ Recording can run during a live upload; unrelated device operations stay exclusi
 Only metadata crosses JS. See [integration and review](docs/parity/byo-storage.md)
 for source evidence and separate customer, package and hardware acceptance gates.
 
-Recording markers #201: [native BATCH integration and successor review](docs/parity/recording-markers.md) covers opaque transfers, authorization recovery, owner/channel fences and dual receipts. The unpublished [STREAMING scalar status provider](docs/parity/protected-streaming-status.md) is wired through native HTTPS; Demo uses its dashboard read API and existing BLE control for device-direct streaming. A new BLE audio relay is outside this scope. Published beta.14 lacks the new marker/status native capabilities; target artifacts and consuming native App release remain pending. No marker profile is enabled; preserve UUID[16] and 280-byte authorization. See [local package evidence](docs/testing/recording-markers-local-candidate.md).
+Recording markers #201: [native BATCH integration and successor review](docs/parity/recording-markers.md) covers opaque transfers, authorization recovery, owner/channel fences and dual receipts. The [STREAMING scalar status provider](docs/parity/protected-streaming-status.md) is wired through native HTTPS; Demo uses its dashboard read API and existing BLE control for device-direct streaming. A new BLE audio relay is outside this scope. Published beta.15 includes the new marker/status native capabilities; consuming native App delivery and profile/hardware qualification remain separate. No marker profile is enabled; preserve UUID[16] and 280-byte authorization. See [publication evidence](release/evidence/2.0.0-beta.15-publication.md).
 
-Protected STREAMING has an unpublished [read-only status provider](docs/parity/protected-streaming-status.md): RN public API calls native HTTPS, strict scalar identity/state parsing, revision `0` allowed. This does not implement protected START/relay or authorize cleanup; published beta.14 lacks these new native methods.
-October 11 unpublished React Native workspace correction: additive
+Protected STREAMING has a beta.15 [read-only status provider](docs/parity/protected-streaming-status.md): RN public API calls native HTTPS, strict scalar identity/state parsing, revision `0` allowed. This does not implement protected START/relay or authorize cleanup.
+October 11 React Native workspace correction (published beta.15): additive
 `pauseAutoReconnect(): Promise<void>` stops future retries and awaits submitted
 reconnects; preserve frozen `disableAutoReconnect(): void`. Hosts must fence new
 work/rearming, inspect and disconnect late connections before changing scope.
 189 package tests pass; private Demo project switching passed on SE. Public
-beta.14 adoption and broader hardware acceptance remain separate. See
+beta.15 app delivery and broader hardware acceptance remain separate. See
 [the review](docs/parity/workspace-reconnect-quiescence.md).
 
-October 11 unpublished Apple connection-ownership correction: a retrieved
+October 11 Apple connection-ownership correction (published beta.15): a retrieved
 system-connected peripheral must acquire this central's local connection before
 SDK use. Reuse only a callback-confirmed identity; disconnect/failure/Bluetooth
 loss clears ownership. Five regressions pass and the complete Apple suite passes
-273 tests with nine physical skips. Installed apps/public beta.14 remain separate.
+273 tests with nine physical skips at that checkpoint. Rebuilt apps and physical
+acceptance remain separate.
 See [the review](docs/parity/apple-connection-ownership.md).
 
-October 9 unpublished Apple encrypted-v2 correction: framed transfer bounds use
+October 9 Apple encrypted-v2 correction (published beta.15): framed transfer bounds use
 the single ATT-value capacity (`withoutResponse`), rather than CoreBluetooth's
 potential long-write capacity. Device START/RESUME rejection preserves
 `protocol_rejected` and its numeric status through the host executor. Two
 regressions failed before the fix; the fresh complete Apple suite passes.
-Public beta.14 and installed consuming apps remain separate. See
+Rebuilt consuming apps and broader physical acceptance remain separate. See
 [the review](docs/parity/v2-demo-apple.md#october-9-single-att-frame-capacity-unpublished-source).
 
 **Upload completion architecture (target; partial implementation):**
@@ -155,11 +157,21 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Current Authority
 
-- Published synchronized beta `2.0.0-beta.14` adds bounded compatibility
+- Published synchronized beta `2.0.0-beta.15` includes Apple single-ATT sizing,
+  local connection ownership, strict managed session POST and additive RN
+  reconnect pause, together with reviewed main OTA/marker/status/BYO integrations.
+  Exact main CI/License and normal protected release attempt 2 passed all five
+  publications, public native consumers and complete Flutter inventory checks.
+  npm `beta` is beta.15; `latest` remains beta.0. New native application binaries,
+  hardware/profile acceptance and initial unknown-create reconciliation remain
+  separate. See [publication evidence](release/evidence/2.0.0-beta.15-publication.md).
+
+- Earlier published synchronized beta `2.0.0-beta.14` adds bounded compatibility
   completion polling, durable native completion intent and canonical safe decimal
   byte-count handling. Exact main CI/License and protected release attempt 2
   passed all five publications, public native consumers and Flutter inventory
-  verification. npm `beta` is beta.14; `latest` remains beta.0. Native app binaries
+  verification. At publication npm `beta` was beta.14; `latest` remained beta.0.
+  Native app binaries
   require rebuilding; managed encrypted-v2 receipts and firmware are unchanged.
   See [publication and design review](release/evidence/2.0.0-beta.14-publication.md).
 

@@ -1,5 +1,9 @@
 # Awaitable reconnect pause
 
+Released in synchronized beta.15; see the
+[publication evidence](../../release/evidence/2.0.0-beta.15-publication.md).
+The dated source review below retains its original test and app-delivery scope.
+
 October 11, 2026 — unpublished React Native source correction.
 
 A host workspace selector previously treated background reconnect work as an

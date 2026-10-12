@@ -1,9 +1,9 @@
 # Architecture
 
-The beta.15 candidate combines reviewed main OTA/marker/BYO integrations with
+Published beta.15 combines reviewed main OTA/marker/BYO integrations with
 Apple transfer/local ownership and RN reconnect quiescence corrections.
 Publication, app binary delivery and physical acceptance are distinct gates; see
-[release scope and review](release/evidence/2.0.0-beta.15-preflight.md).
+[publication and design review](release/evidence/2.0.0-beta.15-publication.md).
 
 External firmware integrations use the all-English [FIRMWARE_PROTOCOL.md](FIRMWARE_PROTOCOL.md) in this active SDK repository. The #201 marker section is a development contract, not proof of released package support; keep protocol facts aligned with the feature implementation/manifest, distinguish source from release availability, and preserve exact owner/completion/deletion semantics. Do not send new SDK work to the retired standalone react-native-sdk repository.
 
@@ -16,8 +16,8 @@ Recording can run during a live upload; unrelated device operations stay exclusi
 Only metadata crosses JS. See [integration and review](docs/parity/byo-storage.md)
 for source evidence and separate customer, package and hardware acceptance gates.
 
-Recording markers #201: [native BATCH integration and successor review](docs/parity/recording-markers.md) covers opaque transfers, authorization recovery, owner/channel fences and dual receipts. The unpublished [STREAMING scalar status provider](docs/parity/protected-streaming-status.md) is wired through native HTTPS; Demo uses its dashboard read API and existing BLE control for device-direct streaming. A new BLE audio relay is outside this scope. Published beta.14 lacks the new marker/status native capabilities; target artifacts and consuming native App release remain pending. No marker profile is enabled; preserve UUID[16] and 280-byte authorization. See [local package evidence](docs/testing/recording-markers-local-candidate.md).
-The unpublished React Native `pauseAutoReconnect` addition waits for the current
+Recording markers #201: [native BATCH integration and successor review](docs/parity/recording-markers.md) covers opaque transfers, authorization recovery, owner/channel fences and dual receipts. The [STREAMING scalar status provider](docs/parity/protected-streaming-status.md) is wired through native HTTPS; Demo uses its dashboard read API and existing BLE control for device-direct streaming. A new BLE audio relay is outside this scope. Published beta.15 includes the new marker/status native capabilities; consuming native App delivery and profile/hardware qualification remain separate. No marker profile is enabled; preserve UUID[16] and 280-byte authorization. See [publication evidence](release/evidence/2.0.0-beta.15-publication.md).
+The beta.15 React Native `pauseAutoReconnect` addition waits for the current
 serialized reconnect chain after stopping future retries. Host workspace fences
 must prevent new work/rearming and disconnect any late connection before changing
 scope. The frozen immediate disable API remains unchanged; see
@@ -1057,7 +1057,7 @@ alone does not establish local ownership: a retrieved peripheral requires this
 central's connect callback before its connection identity becomes usable.
 `CoreBluetoothConnectionOwnership` retains that identity and pending connect
 continuations on the driver queue, clearing them on disconnect, failed connect
-or Bluetooth loss. The unpublished source correction and physical limits are
+or Bluetooth loss. The beta.15 correction and physical limits are
 recorded in [the ownership review](docs/parity/apple-connection-ownership.md).
 Disconnect bypasses
 that gate so a broken link can fail pending operations exactly once. A manual
@@ -1298,7 +1298,7 @@ and public workflow errors. After successful image verification, loss of the
 transfer-status stream enters reboot recovery instead of failing immediately.
 Transient discovery/connection failures retry after one second within the same
 two-minute deadline; identity and target-version read-back remain required.
-Before successful verification, stream loss remains an error. This unpublished
+Before successful verification, stream loss remains an error. This beta.15
 source behavior requires rebuilt native consumers. Reboot recovery requires authorized-device
 enumeration and filters it to the exact browser device ID captured by the
 verified connection. Cancellation retains mutation ownership until provider,

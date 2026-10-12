@@ -9,7 +9,7 @@ remain supported. The Apple/Android material API gains an optional
 
 ## October 12 Apple session request correction
 
-The beta.15 candidate removes `end_user_id` from the managed Apple's encrypted-v2
+Published beta.15 removes `end_user_id` from the managed Apple's encrypted-v2
 session POST. The strict existing session contract accepts only the ten device,
 capture, capability, nonce and ciphertext fields; the extra EndUser field made
 Apple preparation fail while Android already sent the accepted body. Ordinary
@@ -20,9 +20,11 @@ ownership from the authorized recording and authenticated route.
 The native request regression checks the complete session key set and separately
 retains the EndUser on recording creation. It failed against the previous Apple
 body, then all 21 native upload suites passed after the one-field removal under
-Swift 6 with warnings as errors. This proves emitted request parity, not a new
-physical Bota One upload or a published SDK. Exact beta.15 CI/publication and
-rebuilt consuming apps remain required.
+Swift 6 with warnings as errors. This proves emitted request parity. Exact
+beta.15 CI, protected publication and public package verification passed; see
+[publication evidence](../../release/evidence/2.0.0-beta.15-publication.md).
+Rebuilt consuming apps and a fresh managed Bota One physical upload remain
+separate acceptance gates.
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |

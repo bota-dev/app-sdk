@@ -1,14 +1,20 @@
-# Candidate synchronized beta: 2.0.0-beta.15
+# Published synchronized beta: 2.0.0-beta.15
 
 The owner authorized commit, push and publication on October 12, 2026 (Pacific).
-This candidate includes the Apple/RN corrections and reviewed main changes since
-beta.14. See [scope and verification](../release/evidence/2.0.0-beta.15-preflight.md).
-Exact branch/main CI and License Gate, canonical Apple pins, a complete five-platform
-inventory and the existing protected release approval remain required. Beta.14
-remains published until the registry/public-consumer gates pass. Advance only npm
-`beta`; preserve `latest`, existing tags, receipts and firmware rollout gates.
+Beta.15 includes the Apple/RN corrections and reviewed main changes since
+beta.14. Exact branch/main CI and License Gate, canonical artifacts and protected
+[release 38302263540](https://github.com/bota-dev/app-sdk/actions/runs/38302263540)
+attempt 2 passed all five publications, public native consumers and complete
+Flutter archive verification. A clean canonical CocoaPods install and compile
+qualified the normal failed-job retry after CDN propagation; accepted source,
+tag, artifacts and protections were unchanged. See the
+[publication and design review](../release/evidence/2.0.0-beta.15-publication.md)
+and immutable [preflight](../release/evidence/2.0.0-beta.15-preflight.md).
+npm `beta` is beta.15; `latest` remains beta.0. Native application delivery,
+hardware acceptance, initial unknown-create reconciliation and firmware/profile
+rollout gates remain separate.
 
-# Published synchronized beta: 2.0.0-beta.14
+# Previous published synchronized beta: 2.0.0-beta.14
 
 Beta.14 carries the React Native compatibility pending-completion recovery fix.
 Exact main CI/License, annotation-bound promotion and protected
@@ -19,7 +25,8 @@ Flutter archive verification. See the
 and immutable [preflight](../release/evidence/2.0.0-beta.14-preflight.md).
 The first attempt timed out on CocoaPods CDN propagation; ordinary failed-job
 retry retained successful publication and the exact preserved artifacts. npm
-`beta` is beta.14 and `latest` remains beta.0. Application binaries, physical
+`beta` was beta.14 at that publication and `latest` remained beta.0. Application
+binaries, physical
 interruption qualification and host HTTP timeouts remain separate.
 
 [Beta.13 publication evidence](https://github.com/bota-dev/app-sdk/releases/download/v2.0.0-beta.13/beta13-publication-review.md)

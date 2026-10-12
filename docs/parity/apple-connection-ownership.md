@@ -1,5 +1,9 @@
 # Apple local connection ownership
 
+Released in synchronized beta.15; see the
+[publication evidence](../../release/evidence/2.0.0-beta.15-publication.md).
+The dated source review below retains its original tests and hardware limits.
+
 October 11, 2026: unpublished source correction. A peripheral connected to iOS
 is not necessarily connected to this SDK's `CBCentralManager`. Apple requires
 an application to call `connect` on a retrieved system-connected peripheral

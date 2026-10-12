@@ -1,5 +1,9 @@
 # Apple v2 Maintenance Parity
 
+The reviewed Apple transfer corrections are released in synchronized beta.15;
+see [publication evidence](../../release/evidence/2.0.0-beta.15-publication.md).
+The dated source/candidate entries below retain their original acceptance scope.
+
 Scope: unpublished Apple source parity against maintenance reference
 `318974f925a573cf04b0d624978bee04784af09b`. This is not a release, firmware
 advertisement, backend deployment, or physical-device acceptance claim. Existing
