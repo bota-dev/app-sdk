@@ -44,6 +44,9 @@ export async function updateFirmwareWithRecovery(
   progress: (event: NativeFirmwareUpdateProgress) => void,
   owner: FirmwareRecoveryOwner, policy: ReturnType<typeof normalizeFirmwareRecoveryPolicy>,
 ) {
+  // Legacy progress events have no native timestamp. A delayed bridge callback
+  // must not extend the native recovery window, so use an operation-start cap.
+  const requestDeadline = performance.now() + policy.timeoutMs;
   let verifiedAt: number | undefined;
   let phase: string | undefined;
   let subscribed = true;
@@ -67,7 +70,7 @@ export async function updateFirmwareWithRecovery(
       if (owner.signal.aborted) throw new BotaRuntimeCompatibilityError('operation_cancelled', 'updateFirmware');
       if (verifiedAt === undefined || (phase !== 'rebooting' && phase !== 'reconnecting')) throw failure;
       if (failure && typeof failure === 'object' && 'retryable' in failure && failure.retryable === false) throw failure;
-      const deadline = verifiedAt + policy.timeoutMs;
+      const deadline = Math.min(requestDeadline, verifiedAt + policy.timeoutMs);
       owner.recovering = true;
       while (performance.now() < deadline) {
         await wait(Math.min(policy.delayMs, Math.max(0, deadline - performance.now())), owner.signal);

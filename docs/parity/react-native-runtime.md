@@ -8,6 +8,18 @@ application delivery and physical acceptance are separate checks.
 
 ## Runtime contract
 
+`frameworks/react-native-runtime` now builds the independently versioned source
+candidate `@bota.dev/react-native-app-sdk-runtime@0.1.0-beta.0`. Its only runtime
+dependencies are Buffer and EventEmitter (four packages including transitive
+dependencies). It has no native folders, Codegen config, CocoaPods/Maven dependency
+or React Native type/runtime dependency. Its own CI job builds without Rust,
+Gradle or Xcode. Publication/OIDC configuration and app adoption remain pending.
+
+The runtime package compiles the same authoritative TypeScript source as the
+bundled RN distribution. Structural adapter declarations are generated from the
+exact Codegen types with platform-only type imports removed. Runtime diagnostics
+report the actual JS package/version; device session/sequence remain native.
+
 `@bota.dev/react-native-app-sdk/runtime` builds and loads without React Native's
 registry, Apple artifacts, Android artifacts or a Rust runtime. It accepts a
 `BotaReactNativeAdapter` with `apiVersion: 1`, a device adapter and an optional
@@ -64,6 +76,10 @@ failed native update may enter read-back recovery only after a `rebooting` or
 image verification. Transfer, CRC rejection and explicitly permanent failures
 cannot enter this recovery. One two-minute post-verification budget includes time
 already spent in native recovery; JavaScript does not add a second budget.
+Legacy progress events have no native verification timestamp, so fallback also
+uses an operation-start cap. Long download/transfer time can shorten or exhaust
+the extra JS recovery window; late bridge delivery cannot renew it. Native
+verified success remains valid after that cap.
 Success requires a fresh exact serial and the requested firmware version. It
 never retransmits firmware, reissues verification or treats an ACK as installed
 version proof. Cancellation joins the exact native reconnect; failed cancellation
@@ -80,10 +96,12 @@ retains the JS operation owner until final shared-client destruction.
 | Correct identity, cancellation and lifecycle | Serial mismatch disconnect; abort/backoff; disconnect listener lifecycle regressions | matched |
 | OTA-editable verified reboot recovery | Old-native failure, fresh identity/version, pre-verification rejection, one deadline and cancellation ownership regressions | matched |
 | Frozen RN public API and recovery behavior | Semantic 80-export contract and existing compatibility/upload suites | matched |
-| Minimum native engine implementation | Current default still uses full native facades; no BLE-only replacement driver in this change | partial |
+| Minimal native dependencies for the RN control plane | Separately versioned JS-only package; four JS dependencies; portable declaration and native-import rejection tests | matched |
+| Optional BLE-only replacement adapter | Default bundled adapter still uses full native engines; host may supply a conforming alternative | not implemented |
 | New app OTA on installed production binaries; physical BLE parity | Requires consuming-app deployment and physical acceptance | unverified |
 
-Local React Native suite: 226 tests pass, including 13 portable-runtime and nine
-firmware recovery regressions. Type checking, package verification and license checks are separate
-from exact-source hosted native consumer checks. Keep hosted delivery evidence
+Local React Native suite: 227 tests pass, including 13 portable-runtime and ten
+firmware recovery regressions. The separate JS-only package also passes four
+package/type/identity smoke checks. Type checking, package verification and license
+checks are separate from exact-source hosted native consumer checks. Keep hosted delivery evidence
 with the integration commit; no physical qualification follows from these tests.

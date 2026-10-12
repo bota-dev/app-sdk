@@ -61,6 +61,12 @@ versioned device/backend adapters and OTA-editable foreground policy. This is
 not a published beta.15 addition. Native protocol/file engine changes still need
 an app binary. See the [runtime boundary and review](docs/parity/react-native-runtime.md).
 
+The separate [JavaScript-only runtime](frameworks/react-native-runtime/README.md)
+is source candidate `@bota.dev/react-native-app-sdk-runtime@0.1.0-beta.0`. It has
+no native autolinking and can use a conforming adapter already installed in an
+application. Its version/build are independent of the native SDK family. This
+candidate is not yet published to npm.
+
 Use Node.js 22+ to install and build your app:
 
 ```bash

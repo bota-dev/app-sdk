@@ -118,3 +118,23 @@ test('time spent in native post-verification recovery consumes the same deadline
   await assert.rejects(runtime.sdk.ota.updateFirmware(device, image), /native budget consumed/);
   assert.deepEqual(f.calls, ['remove']);
 });
+
+test('late progress delivery cannot create a fresh JavaScript recovery budget', async () => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'performance');
+  let elapsed = 0;
+  Object.defineProperty(globalThis, 'performance', { configurable: true, value: { now: () => elapsed } });
+  try {
+    const f = fixture();
+    const runtime = createBotaReactNativeRuntime({ apiVersion: 1, device: f.bridge },
+      { firmwareRecovery: { timeoutMs: 20, delayMs: 0 } });
+    f.bridge.updateFirmware = async () => {
+      elapsed = 25;
+      f.report({ phase: 'rebooting', completedUnits: 42, totalUnits: 42 });
+      throw new Error('delayed event');
+    };
+    await assert.rejects(runtime.sdk.ota.updateFirmware(device, image), /delayed event/);
+    assert.deepEqual(f.calls, ['remove']);
+  } finally {
+    Object.defineProperty(globalThis, 'performance', previous);
+  }
+});

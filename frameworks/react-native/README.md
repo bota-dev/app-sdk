@@ -2,6 +2,12 @@
 
 ## TypeScript runtime and app OTA updates
 
+For independent JavaScript-only distribution, see
+[`@bota.dev/react-native-app-sdk-runtime`](../react-native-runtime/README.md).
+That source candidate contains no native autolinking or dependency and can use an
+existing installed adapter. Its package version is independent of this bundled
+native-adapter distribution; registry publication is still pending.
+
 Current main source provides `createBotaReactNativeRuntime` and the independently
 loadable `@bota.dev/react-native-app-sdk/runtime` entry. These additions are not
 claimed to exist in the published beta.15 package. The ordinary package entry

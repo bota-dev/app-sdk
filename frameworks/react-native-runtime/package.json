@@ -1,0 +1,27 @@
+{
+  "name": "@bota.dev/react-native-app-sdk-runtime",
+  "version": "0.1.0-beta.0",
+  "description": "Portable JavaScript control plane for Bota React Native device adapters",
+  "license": "MIT",
+  "author": "Bota",
+  "packageManager": "npm@12.0.2",
+  "main": "lib/commonjs/runtime.js",
+  "module": "lib/module/runtime.js",
+  "types": "lib/typescript/runtime.d.ts",
+  "exports": {
+    ".": { "types": "./lib/typescript/runtime.d.ts", "default": "./lib/commonjs/runtime.js" },
+    "./package.json": "./package.json"
+  },
+  "files": ["lib/", "README.md", "LICENSE"],
+  "engines": { "node": ">=22" },
+  "publishConfig": { "access": "public" },
+  "repository": { "type": "git", "url": "https://github.com/bota-dev/app-sdk.git", "directory": "frameworks/react-native-runtime" },
+  "scripts": {
+    "build": "node ../../tools/react-native/build-runtime-package.mjs",
+    "typecheck": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs",
+    "license-check": "node ../../scripts/check-licenses.mjs",
+    "verify": "npm run build && npm run typecheck && npm test && npm run license-check"
+  },
+  "dependencies": { "buffer": "6.0.3", "eventemitter3": "5.0.1" }
+}

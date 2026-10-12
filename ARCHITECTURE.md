@@ -173,6 +173,9 @@ firmware/release/hardware gates or enable v2 compatibility metadata. See
 - React Native owns its TypeScript control plane over a versioned adapter
   contract; its default device adapter delegates native protocol/file operations
   to the native facades. Flutter delegates to native facades.
+- The separately versioned `frameworks/react-native-runtime` package distributes
+  that same control plane without native autolinking, artifacts or OS type imports.
+  The consuming app supplies its installed conforming adapters.
 - The host application obtains backend grants, device tokens, and presigned
   upload targets. This repository does not provide a Bota API client.
 - Customer-facing package and module names follow the public matrix in

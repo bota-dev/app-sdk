@@ -7,6 +7,13 @@ package-version equality does not establish adapter compatibility. Default nativ
 protocol/file engines remain; native fixes still require an app binary. See the
 [runtime design review](docs/parity/react-native-runtime.md).
 
+The separate `frameworks/react-native-runtime` source package has no native or
+React Native dependency. Build it from the one authoritative RN TypeScript source,
+emit structural adapter declarations, and verify its independent JS identity,
+typecheck, package contents and license gate. Do not add native autolinking or
+couple its package version to the native family; publication/OTA acceptance are
+separate gates.
+
 October 12 synchronized beta.15 publication passed, including
 reviewed remote-main OTA/marker/BYO changes and the Apple/RN corrections below.
 Exact CI, protected publication, all five packages and public consumer gates
