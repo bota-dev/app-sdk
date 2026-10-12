@@ -337,6 +337,12 @@ private struct AppleUploadTests {
     try expect(http.requests.allSatisfy { $0.value(forHTTPHeaderField: "X-Organization-Id") == "org_a" && $0.url!.path.hasPrefix("/v1/") }, "Retain dashboard tenant scope")
     let createdBody = try JSONSerialization.jsonObject(with: http.requests[0].httpBody!) as! [String: Any]
     try expect(createdBody["end_user_id"] as? String == "eu_a", "Retain exact EndUser")
+    let sessionBody = try JSONSerialization.jsonObject(with: http.requests[1].httpBody!) as! [String: Any]
+    try expect(Set(sessionBody.keys) == Set([
+      "device_id", "binding_generation", "recording_uuid", "recording_generation",
+      "storage_format", "channel", "capabilities_base64", "auth_nonce_base64",
+      "ciphertext_length", "ciphertext_sha256",
+    ]), "Session create must match the strict API contract; EndUser belongs to recording creation")
     let saved = try journal.load(input)
     try expect(saved?.recordingId == "rec_one" && saved?.sessionId == sessionID, "Both create identities durable")
     let next = operation(input, UploadJournal(root: root), http, credentials)

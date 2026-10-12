@@ -5,6 +5,11 @@ reviewed remote-main OTA/marker/BYO changes and the Apple/RN corrections below.
 Beta.14 remains published until exact CI, protected publication and public consumer
 gates pass. See [preflight](release/evidence/2.0.0-beta.15-preflight.md).
 
+Managed Apple's session POST omits `end_user_id` to match the strict existing
+encrypted-v2 schema; recording creation and native EndUser/scope fences retain
+it. The native ten-key regression failed before the one-field correction; all
+21 backend suites pass. See [review](docs/parity/v2-managed-backend.md).
+
 External firmware integrations use the all-English [FIRMWARE_PROTOCOL.md](FIRMWARE_PROTOCOL.md) in this active SDK repository. The #201 marker section is a development contract, not proof of released package support; keep protocol facts aligned with the feature implementation/manifest, distinguish source from release availability, and preserve exact owner/completion/deletion semantics. Do not send new SDK work to the retired standalone react-native-sdk repository.
 
 BYO live and whole-file uploads now connect Rust framing/recovery to Apple/Android

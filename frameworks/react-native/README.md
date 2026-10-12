@@ -6,6 +6,9 @@ awaitable React Native reconnect pause, and the reviewed main OTA, recording
 marker, protected-status and BYO storage changes. Beta.14 remains the published
 baseline until this candidate completes its gates.
 Native applications require a new binary.
+The managed Apple backend also matches the strict session-create request without
+an EndUser override; recording creation and native scope fences retain EndUser.
+See [request correction](../../docs/parity/v2-managed-backend.md#october-12-apple-session-request-correction).
 
 Bluetooth device SDK for Bota Pin and Bota Note applications. The 2.x candidate
 preserves the public TypeScript API of `@bota.dev/react-native-sdk@0.0.65`

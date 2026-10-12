@@ -12,6 +12,8 @@ tracked separately.
   central callback before SDK use.
 - Add `pauseAutoReconnect()` so hosts can stop retries and await submitted
   reconnects before changing their scoped workspace.
+- Remove the unsupported EndUser field from managed Apple encrypted-v2 session
+  creation while retaining it on recording creation and native scope checks.
 - Include reviewed main recording-marker/protected-status and BYO live/batch
   storage integrations; firmware and customer rollout gates remain separate.
 - Publication is pending; see the [release preflight](release/evidence/2.0.0-beta.15-preflight.md).

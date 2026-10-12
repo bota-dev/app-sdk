@@ -7,6 +7,29 @@ physical acceptance remains separate. Beta.10 does not contain this helper. Exis
 remain supported. The Apple/Android material API gains an optional
 `reconcileStaging` callback without changing the wire protocol.
 
+## October 12 Apple session request correction
+
+The beta.15 candidate removes `end_user_id` from the managed Apple's encrypted-v2
+session POST. The strict existing session contract accepts only the ten device,
+capture, capability, nonce and ciphertext fields; the extra EndUser field made
+Apple preparation fail while Android already sent the accepted body. Ordinary
+recording creation still includes the exact EndUser, and native journal/account,
+project, device and binding checks are unchanged. The backend derives session
+ownership from the authorized recording and authenticated route.
+
+The native request regression checks the complete session key set and separately
+retains the EndUser on recording creation. It failed against the previous Apple
+body, then all 21 native upload suites passed after the one-field removal under
+Swift 6 with warnings as errors. This proves emitted request parity, not a new
+physical Bota One upload or a published SDK. Exact beta.15 CI/publication and
+rebuilt consuming apps remain required.
+
+| Requirement | Evidence | Status |
+| --- | --- | --- |
+| Emit the existing strict encrypted-v2 session body | Red/green native request regression verifies exactly ten keys | matched |
+| Preserve account/EndUser authorization and recording ownership | Recording-create EndUser assertion remains; no scope/auth/journal code changed | matched in controlled tests; physical acceptance separate |
+| Preserve normal upload/recovery fences | Complete 21-suite native backend regression runner passes | matched in controlled tests |
+
 ## Customer integration
 
 ```ts

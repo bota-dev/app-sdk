@@ -178,7 +178,7 @@ struct UploadContext: Sendable {
     } else {
       let nonce = try await nonce()
       let body: [String: Any] = [
-        "device_id": input.scope.deviceId, "end_user_id": input.scope.endUserId, "binding_generation": input.scope.bindingGeneration,
+        "device_id": input.scope.deviceId, "binding_generation": input.scope.bindingGeneration,
         "recording_uuid": input.recording.uuid, "recording_generation": input.recording.generation,
         "storage_format": "bota_enc_v2", "channel": "ble",
         "capabilities_base64": try UploadValidation.bytes(input.capability.rawValueHex).base64EncodedString(),
