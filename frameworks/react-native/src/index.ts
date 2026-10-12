@@ -1,10 +1,6 @@
-import { createManagedProtectedStreamingStatusBackend } from './protectedStreamingStatus';
-import type { ProtectedStreamingStatusBackendOptions } from './protectedStreamingStatus';
 import NativeBotaDeviceSDK from './specs/NativeBotaDeviceSDK';
-import { createBotaDeviceSDK } from './client';
 import NativeBotaUploadV2Backend from './specs/NativeBotaUploadV2Backend';
-import { createManagedEncryptedUploadV2Backend } from './encryptedUploadV2Backend';
-import type { EncryptedUploadV2BackendOptions } from './encryptedUploadV2Backend';
+import { createBotaReactNativeRuntime } from './runtime';
 import { setDefaultCompatibilityClient } from './compatibility/runtime';
 
 export {
@@ -56,17 +52,20 @@ export type {
   BotaUploadOwnershipResult,
 } from './client';
 
-export const BotaDeviceSDK = createBotaDeviceSDK(NativeBotaDeviceSDK);
-export const createEncryptedUploadV2Backend = (options: EncryptedUploadV2BackendOptions) =>
-  createManagedEncryptedUploadV2Backend(NativeBotaUploadV2Backend, BotaDeviceSDK.recordings, options);
+export { createBotaReactNativeRuntime, BOTA_RUNTIME_API_VERSION, BotaRuntimeCompatibilityError } from './runtime';
+export type { BotaReactNativeAdapter, BotaReactNativeRuntime, BotaDeviceAdapter, BotaNativeOperation, BotaUploadBackendAdapter, BotaReconnectPolicy, BotaFirmwareRecoveryPolicy } from './runtime';
+const defaultRuntime = createBotaReactNativeRuntime({
+  apiVersion: 1, device: NativeBotaDeviceSDK, encryptedUploadBackend: NativeBotaUploadV2Backend,
+});
+export const BotaDeviceSDK = defaultRuntime.sdk;
+export const createEncryptedUploadV2Backend = defaultRuntime.createEncryptedUploadV2Backend;
 export type { EncryptedUploadV2BackendOptions, EncryptedUploadV2Backend, EncryptedUploadV2SyncTarget } from './encryptedUploadV2Backend';
-export const createProtectedStreamingStatusBackend = (options: ProtectedStreamingStatusBackendOptions) =>
-  createManagedProtectedStreamingStatusBackend(NativeBotaUploadV2Backend, options);
+export const createProtectedStreamingStatusBackend = defaultRuntime.createProtectedStreamingStatusBackend;
 export type { ProtectedStreamingIdentity, ProtectedStreamingStatus, ProtectedStreamingStatusBackend,
   ProtectedStreamingStatusBackendOptions } from './protectedStreamingStatus';
 setDefaultCompatibilityClient(BotaDeviceSDK);
 
-export { BotaClient } from './BotaClient';
+export const BotaClient: typeof import('./BotaClient').BotaClient = defaultRuntime.client;
 export type { ClientPresence, SdkClientContext } from './clientPresence';
 export { readClientPresenceObservation } from './clientPresence';
 export { createUploadRecoveryProvider } from './uploadRecovery';
@@ -176,6 +175,4 @@ export type {
 } from './sync/syncStatus';
 
 export type { ByoStorageBackendOptions, ByoStorageBackend, ByoRecording, ByoSyncTarget, ByoUploadResult } from './byoStorageBackend';
-import { createManagedByoStorageBackend, type ByoStorageBackendOptions } from './byoStorageBackend';
-export const createByoStorageBackend = (options: ByoStorageBackendOptions) =>
-  createManagedByoStorageBackend(NativeBotaUploadV2Backend, options);
+export const createByoStorageBackend = defaultRuntime.createByoStorageBackend;

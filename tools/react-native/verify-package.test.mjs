@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-const verifier = new URL('./verify-package.mjs', import.meta.url).pathname;
+const verifier = fileURLToPath(new URL('./verify-package.mjs', import.meta.url));
 
 const validPackage = () => ({
   name: '@bota.dev/react-native-sdk',
@@ -341,7 +342,7 @@ test('executes validation when the CLI entrypoint is relative', () => {
       '--package-root',
       packageRoot,
     ],
-    { cwd: resolve(new URL('../..', import.meta.url).pathname), encoding: 'utf8' }
+    { cwd: resolve(fileURLToPath(new URL('../..', import.meta.url))), encoding: 'utf8' }
   );
 
   assert.notEqual(result.status, 0);

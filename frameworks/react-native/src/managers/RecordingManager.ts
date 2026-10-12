@@ -5,7 +5,8 @@ import type {
   BotaRecordingTransferProgress,
   BotaUploadOwnershipResult,
 } from '../client';
-import { getCompatibilityClient } from '../compatibility/runtime';
+import { getCompatibilityClient, withCompatibilityClient } from '../compatibility/runtime';
+import { BotaRuntimeCompatibilityError } from '../runtimeAdapter';
 import type { ConnectedDevice, StorageInfo } from '../models/Device';
 import type {
   DeviceRecording,
@@ -89,6 +90,7 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
   private readonly client: BotaDeviceSDKClient;
   private readonly queue: NativeUploadQueue;
   private initialized = false;
+  private unavailable?: BotaRuntimeCompatibilityError;
   private destroyed = false;
   private activeStreamingSession: StreamingSession | null = null;
 
@@ -109,7 +111,16 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
   async initialize(): Promise<void> {
     if (this.initialized) return;
     this.assertAlive();
-    await this.queue.initialize();
+    try {
+      await this.queue.initialize();
+    } catch (error) {
+      if (error instanceof BotaRuntimeCompatibilityError && error.code === 'native_operation_unavailable' &&
+        error.operation === 'loadCompatibilityUploadQueue') {
+        this.unavailable = error;
+        return;
+      }
+      throw error;
+    }
     this.assertAlive();
     this.initialized = true;
   }
@@ -463,7 +474,7 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
     if (this.activeStreamingSession?.isActive) {
       throw new Error('A streaming session is already active');
     }
-    const session = new StreamingSession(
+    const session = withCompatibilityClient(this.client, () => new StreamingSession(
       null,
       null,
       device,
@@ -471,7 +482,7 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
       uploadInfoProvider,
       options.chunkSizeKb,
       options.flushIntervalMs
-    );
+    ));
     this.activeStreamingSession = session;
     setStreamingSessionTerminalHandler(session, () => {
       if (this.activeStreamingSession === session) {
@@ -534,6 +545,7 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
 
   private assertReady(): void {
     this.assertAlive();
+    if (this.unavailable) throw this.unavailable;
     if (!this.initialized) {
       throw new Error('RecordingManager has not been initialized');
     }

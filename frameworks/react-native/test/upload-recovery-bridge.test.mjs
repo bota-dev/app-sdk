@@ -20,6 +20,7 @@ test('upload bridge sends the recorded file size to native validation', async ()
   const client = createBotaDeviceSDK({
     onRecordingUploadProgress: () => ({ remove() {} }),
     uploadRecordingFile: async value => { request = value; },
+    cancelRecordingUpload: async () => {},
   });
   await client.recordings.uploadRecordingFile({
     id: 'task-1', recordingId: 'rec_test', deviceId: 'device-1',

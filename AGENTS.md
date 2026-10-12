@@ -1,5 +1,12 @@
 # AGENTS.md
 
+October 12 RN control-plane amendment: use the independently loadable `/runtime`
+entry and version 1 adapter contracts for TypeScript policy and host bindings.
+Preflight complete operation/callback/cancellation support before device work;
+package-version equality does not establish adapter compatibility. Default native
+protocol/file engines remain; native fixes still require an app binary. See the
+[runtime design review](docs/parity/react-native-runtime.md).
+
 October 12 synchronized beta.15 publication passed, including
 reviewed remote-main OTA/marker/BYO changes and the Apple/RN corrections below.
 Exact CI, protected publication, all five packages and public consumer gates

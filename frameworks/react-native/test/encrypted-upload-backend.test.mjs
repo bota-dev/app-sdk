@@ -110,7 +110,8 @@ test('reinvocation uses native journal identity; imported pointer contains metad
 });
 test('missing native binary, unsafe URL and invalid selection fail before journal completion', async () => {
   const f = fixture();
-  await assert.rejects(create(null, f.client, f.config).sync(device, recording, target), /native SDK binary/);
+  await assert.rejects(create(null, f.client, f.config).sync(device, recording, target),
+    error => error.code === 'native_operation_unavailable' && error.operation === 'encryptedUploadBackend');
   for (const baseUrl of ['http://example.com/v1', 'https://token@example.com/v1', 'https://example.com/v1?token=secret', 'https://example.com/v1#fragment']) {
     assert.throws(() => create(f.native, f.client, { ...f.config, baseUrl }), /configuration/);
   }

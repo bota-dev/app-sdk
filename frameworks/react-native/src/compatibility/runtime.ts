@@ -2,6 +2,7 @@ import type { BotaDeviceSDKClient } from '../client';
 
 let defaultClient: BotaDeviceSDKClient | null = null;
 let testClient: BotaDeviceSDKClient | null = null;
+let constructionClient: BotaDeviceSDKClient | null = null;
 
 type CompatibilityDisconnectionListener = (error?: Error) => void;
 
@@ -17,11 +18,18 @@ export const setDefaultCompatibilityClient = (
 };
 
 export const getCompatibilityClient = (): BotaDeviceSDKClient => {
-  const client = testClient ?? defaultClient;
+  const client = constructionClient ?? testClient ?? defaultClient;
   if (!client) {
     throw new Error('BotaDeviceSDK compatibility runtime is not initialized');
   }
   return client;
+};
+
+/** Constructor-only scope: every manager captures its own client before this returns. */
+export const withCompatibilityClient = <T>(client: BotaDeviceSDKClient, construct: () => T): T => {
+  const previous = constructionClient;
+  constructionClient = client;
+  try { return construct(); } finally { constructionClient = previous; }
 };
 
 export const setCompatibilityClientForTesting = (

@@ -8,6 +8,19 @@
   "types": "lib/typescript/index.d.ts",
   "react-native": "src/index.ts",
   "source": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/typescript/index.d.ts",
+      "react-native": "./src/index.ts",
+      "default": "./lib/commonjs/index.js"
+    },
+    "./runtime": {
+      "types": "./lib/typescript/runtime.d.ts",
+      "react-native": "./src/runtime.ts",
+      "default": "./lib/commonjs/runtime.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "BotaDeviceSDK.podspec",
     "LICENSE",

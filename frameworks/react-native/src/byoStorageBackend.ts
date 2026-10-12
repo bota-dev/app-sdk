@@ -1,5 +1,6 @@
 import type { ConnectedDevice } from './models/Device';
-import type { Spec } from './specs/NativeBotaUploadV2Backend';
+import { requireUploadBackend } from './runtimeAdapter';
+import type { BotaUploadBackendAdapter } from './runtimeAdapter';
 
 export interface ByoStorageBackendOptions {
   /** Customer-authenticated HTTPS proxy for Bota device BYO/context routes. */
@@ -23,7 +24,7 @@ export interface ByoStorageBackend {
   dispose(): Promise<void>;
 }
 /** @internal Shared implementation for the production factory and host tests. */
-export function createManagedByoStorageBackend(native: Spec | null, options: ByoStorageBackendOptions): ByoStorageBackend {
+export function createManagedByoStorageBackend(native: BotaUploadBackendAdapter | null, options: ByoStorageBackendOptions): ByoStorageBackend {
   const config = { ...options };
   const url = new URL(config.baseUrl);
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash ||
@@ -32,7 +33,8 @@ export function createManagedByoStorageBackend(native: Spec | null, options: Byo
   let disposed = false;
   const attempts = new Set<{ cancel(): Promise<void>; settled: Promise<void> }>();
   const perform = async (device: ConnectedDevice, recording: ByoRecording | null, target: ByoSyncTarget, live = false): Promise<ByoUploadResult | ByoRecording[]> => {
-      if (!native?.syncByo || !native.cancelByo) throw new Error('BYO requires the matching native SDK binary');
+      requireUploadBackend(native, 'byoStorageBackend', ['syncByo', 'cancelByo',
+        'onCredentialsRequested', 'resolveCredentials', 'rejectCredentials']);
       device = { ...device }; recording = recording && { ...recording }; target = { ...target };
       if ((recording !== null && (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(recording.uuid) ||
         !Number.isSafeInteger(recording.generation) || recording.generation < 0 || recording.generation > 0xffffffff)) ||

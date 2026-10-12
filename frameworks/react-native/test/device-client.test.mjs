@@ -550,6 +550,9 @@ function nativeFixture() {
         calls.push(['rejectEncryptedUploadV2Profile', requestId, errorCode]);
         encryptedUploadV2Reject?.(new Error('encrypted upload v2 material was rejected'));
       },
+      async cancelEncryptedRecordingV2() {},
+      async releaseEncryptedUploadV2Material() {},
+      async cancelFirmwareUpdate() {},
       async observeUploadOwnership(device, request) {
         calls.push(['observeUploadOwnership', device, request]);
         uploadOwnershipProgressHandler?.({

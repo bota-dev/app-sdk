@@ -1,7 +1,8 @@
 import type { BotaDeviceSDKRecordingClient, BotaEncryptedUploadV2Recording,
   BotaEncryptedUploadV2ProfileDecision, BotaEncryptedUploadV2Progress } from './client';
 import type { ConnectedDevice } from './models/Device';
-import type { Spec } from './specs/NativeBotaUploadV2Backend';
+import { requireUploadBackend } from './runtimeAdapter';
+import type { BotaUploadBackendAdapter } from './runtimeAdapter';
 
 export interface EncryptedUploadV2BackendOptions {
   /** Customer-authenticated HTTPS proxy exposing the v2 routes, e.g. https://api.example.com/v1. */
@@ -38,7 +39,7 @@ export interface EncryptedUploadV2Backend {
 
 /** @internal Dependency injection keeps the public facade and host tests on the same implementation. */
 export function createManagedEncryptedUploadV2Backend(
-  native: Spec | null, recordings: BotaDeviceSDKRecordingClient,
+  native: BotaUploadBackendAdapter | null, recordings: BotaDeviceSDKRecordingClient,
   options: EncryptedUploadV2BackendOptions,
 ): EncryptedUploadV2Backend {
   // Capture identity once; mutating the caller's object cannot repoint an active request.
@@ -57,7 +58,8 @@ export function createManagedEncryptedUploadV2Backend(
       device = { ...device };
       recording = { ...recording };
       target = { ...target, priorUpload: target.priorUpload && { ...target.priorUpload } };
-      if (!native) throw new Error('Encrypted upload backend requires the matching native SDK binary');
+      requireUploadBackend(native, 'encryptedUploadBackend', ['prepare', 'cancel', 'complete',
+        'onCredentialsRequested', 'resolveCredentials', 'rejectCredentials']);
       if (disposed || config.signal.aborted || target.signal?.aborted) throw new Error('Encrypted upload cancelled');
       const signal = new AbortController();
       let operationId: string | undefined;

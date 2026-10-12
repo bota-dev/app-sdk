@@ -2,7 +2,7 @@ import EventEmitter from 'eventemitter3';
 import type { ClientPresence } from './clientPresence';
 
 import type { BotaDeviceSDKClient } from './client';
-import { getCompatibilityClient } from './compatibility/runtime';
+import { getCompatibilityClient, withCompatibilityClient } from './compatibility/runtime';
 import { DeviceManager } from './managers/DeviceManager';
 import { OTAManager } from './managers/OTAManager';
 import { RecordingManager } from './managers/RecordingManager';
@@ -32,6 +32,7 @@ const normalizeConfig = (config: BotaConfig): NormalizedConfig => ({
 });
 
 class BotaClientImpl extends EventEmitter<BotaClientEvents> {
+  constructor(private readonly runtimeClient?: BotaDeviceSDKClient) { super(); }
   readonly clientPresence: ClientPresence = {
     nextReport: async (deviceId) => this._deviceManager?.clientPresence.nextReport(deviceId) ?? null,
   };
@@ -164,7 +165,7 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
     this._config = config;
     logger.setLevel(config.logLevel);
     this.setState('initializing');
-    const client = getCompatibilityClient();
+    const client = this.runtimeClient ?? getCompatibilityClient();
     this._client = client;
     this._nativeOwned = true;
 
@@ -182,11 +183,11 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
         capabilities.bluetooth ? 'poweredOn' : 'unsupported'
       );
 
-      deviceManager = new DeviceManager();
+      deviceManager = withCompatibilityClient(client, () => new DeviceManager());
       await deviceManager.initialize();
-      recordingManager = new RecordingManager({ uploadRecoveryProvider: config.uploadRecoveryProvider });
+      recordingManager = withCompatibilityClient(client, () => new RecordingManager({ uploadRecoveryProvider: config.uploadRecoveryProvider }));
       await recordingManager.initialize();
-      otaManager = new OTAManager(deviceManager);
+      otaManager = withCompatibilityClient(client, () => new OTAManager(deviceManager!));
 
       this._deviceManager = deviceManager;
       this._recordingManager = recordingManager;
@@ -241,5 +242,8 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
 }
 
 export const BotaClient = new BotaClientImpl();
+
+/** An independent manager graph over a platform adapter; singleton API remains compatible. */
+export const createBotaClient = (client: BotaDeviceSDKClient): typeof BotaClient => new BotaClientImpl(client);
 
 export type { BluetoothState, BotaConfig, SdkState };

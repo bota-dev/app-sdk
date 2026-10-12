@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-const packageRoot = resolve(new URL('..', import.meta.url).pathname);
+const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const contract = JSON.parse(
   readFileSync(resolve(packageRoot, 'generated/codegen-contract.json'), 'utf8')
 );

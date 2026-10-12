@@ -32,6 +32,12 @@ import type {
   Spec,
 } from './specs/NativeBotaDeviceSDK';
 import { SDK_PACKAGE, SDK_VERSION } from './sdkIdentity';
+import { guardDeviceAdapter, requireNativeOperation, BotaRuntimeCompatibilityError } from './runtimeAdapter';
+import type { BotaDeviceAdapter, BotaNativeOperation } from './runtimeAdapter';
+import { normalizeReconnectPolicy, reconnectWithPolicy } from './reconnectPolicy';
+import type { BotaReconnectPolicy } from './reconnectPolicy';
+import { normalizeFirmwareRecoveryPolicy, updateFirmwareWithRecovery } from './firmwareRecovery';
+import type { BotaFirmwareRecoveryPolicy, FirmwareRecoveryOwner } from './firmwareRecovery';
 
 export type BotaClientPresenceContext = NativeClientContext;
 export type BotaClientPresence = {
@@ -827,17 +833,29 @@ const parseUploadQueue = (serialized: string): UploadTask[] => {
   });
 };
 
-export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKClient => {
+export const createBotaDeviceSDK = (
+  nativeModule: BotaDeviceAdapter | null,
+  options: { reconnect?: BotaReconnectPolicy; firmwareRecovery?: BotaFirmwareRecoveryPolicy } = {},
+): BotaDeviceSDKClient => {
   let presenceStopped = false;
   let presenceGeneration = 0;
-  const requireNativeModule = (): Spec => {
+  let reconnectCancellation = new AbortController();
+  const reconnectPolicy = normalizeReconnectPolicy(options.reconnect);
+  const firmwareRecoveryPolicy = normalizeFirmwareRecoveryPolicy(options.firmwareRecovery);
+  let firmwareOperation: (FirmwareRecoveryOwner & {
+    controller: AbortController; promise: Promise<void>; cancelling: boolean; cancelPromise?: Promise<void>;
+  }) | undefined;
+  const guarded = nativeModule && guardDeviceAdapter(nativeModule);
+  const requireNativeModule = (operation?: BotaNativeOperation): Spec => {
     if (!nativeModule) throw new BotaNativeModuleError();
-    return nativeModule;
+    if (operation) requireNativeOperation(nativeModule, operation);
+    return guarded!;
   };
 
   const devices: BotaDeviceSDKDeviceClient = {
     async startScan(options, onDevice) {
-      const module = requireNativeModule();
+      if (firmwareOperation) throw new BotaRuntimeCompatibilityError('operation_in_progress', 'startScan');
+      const module = requireNativeModule('startScan');
       const subscription = module.onDeviceDiscovered((device) => {
         const discovered = mapDiscoveredDevice(device);
         if (matchesScanOptions(discovered, options)) onDevice(discovered);
@@ -859,6 +877,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
 
     async connect(device) {
+      if (firmwareOperation) throw new BotaRuntimeCompatibilityError('operation_in_progress', 'connect');
       return mapConnectedDevice(
         await requireNativeModule().connectSelected(
           toNativeDiscoveredDevice(device)
@@ -867,15 +886,25 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
 
     async reconnect(serialNumber, options = {}) {
-      return mapConnectedDevice(
-        await requireNativeModule().reconnect(serialNumber, {
+      if (firmwareOperation) throw new BotaRuntimeCompatibilityError('operation_in_progress', 'reconnect');
+      const signal = reconnectCancellation.signal;
+      return reconnectWithPolicy(async () => {
+        const module = requireNativeModule('reconnect');
+        const connected = await module.reconnect(serialNumber, {
           scanTimeoutMs: options.scanTimeout ?? 10_000,
           connectionTimeoutMs: 10_000,
-        })
-      );
+        });
+        if (signal.aborted) throw new BotaRuntimeCompatibilityError('operation_cancelled', 'reconnect');
+        if (connected.serialNumber !== serialNumber) {
+          await module.disconnect();
+          throw new BotaRuntimeCompatibilityError('device_identity_mismatch', 'reconnect');
+        }
+        return mapConnectedDevice(connected);
+      }, reconnectPolicy, signal);
     },
 
     async disconnect() {
+      if (firmwareOperation) throw new BotaRuntimeCompatibilityError('operation_in_progress', 'disconnect');
       await requireNativeModule().disconnect();
     },
 
@@ -884,7 +913,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
 
     async subscribeToStatus(onStatus) {
-      const module = requireNativeModule();
+      const module = requireNativeModule('startStatusUpdates');
       const eventSubscription = module.onDeviceStatusUpdated((status) => {
         onStatus(mapDeviceStatus(status));
       });
@@ -908,7 +937,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
 
   const provisioning: BotaDeviceSDKProvisioningClient = {
     async provision(device, provider) {
-      const module = requireNativeModule();
+      const module = requireNativeModule('provision');
       const subscription = module.onProvisioningMaterialRequested((request) => {
         void (async () => {
           try {
@@ -1032,7 +1061,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
 
     async subscribeToRecordingState(device, onState) {
-      const module = requireNativeModule();
+      const module = requireNativeModule('startRecordingStateUpdates');
       const eventSubscription = module.onRecordingStateUpdated((state) => {
         onState(mapRecordingState(state));
       });
@@ -1056,7 +1085,11 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
 
   const factoryReset: BotaDeviceSDKFactoryResetClient = {
     async factoryReset(device, options, provider, persistResult) {
-      const module = requireNativeModule();
+      const module = requireNativeModule('factoryReset');
+      if (persistResult) {
+        requireNativeOperation(nativeModule!, 'onFactoryResetResultPersistenceRequested');
+        requireNativeOperation(nativeModule!, 'resolveFactoryResetResultPersistence');
+      }
       const grantSubscription = module.onFactoryResetGrantRequested((request) => {
         void (async () => {
           try {
@@ -1113,7 +1146,12 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
 
     async resumePendingFactoryReset(device, currentBindingGeneration, persistResult) {
-      const module = requireNativeModule();
+      const module = requireNativeModule('resumePendingFactoryReset');
+      if (persistResult) {
+        requireNativeOperation(nativeModule!, 'onFactoryResetResultPersistenceRequested');
+        requireNativeOperation(nativeModule!, 'resolveFactoryResetResultPersistence');
+        requireNativeOperation(nativeModule!, 'rejectApplicationMaterial');
+      }
       const subscription = persistResult
         ? module.onFactoryResetResultPersistenceRequested((request) => {
             void (async () => {
@@ -1158,7 +1196,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
 
     async syncRecording(device, recording, onProgress, sinkId) {
-      const module = requireNativeModule();
+      const module = requireNativeModule('syncRecording');
       const subscription = module.onRecordingTransferProgress((progress) => {
         onProgress?.(mapRecordingProgress(progress));
       });
@@ -1175,7 +1213,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
 
     async syncEncryptedRecordingV2(device, recording, provider, onProgress, options = {}) {
       if (options.signal?.aborted) throw new Error('encrypted upload v2 cancelled');
-      const module = requireNativeModule();
+      const module = requireNativeModule('syncEncryptedRecordingV2');
       const operationId = options.operationId ?? createOpaqueId();
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(operationId)) {
         throw new Error('invalid encrypted upload v2 operation ID');
@@ -1261,7 +1299,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
 
     async uploadRecordingFile(task, onProgress) {
-      const module = requireNativeModule();
+      const module = requireNativeModule('uploadRecordingFile');
       const subscription = module.onRecordingUploadProgress((progress) => {
         if (progress.taskId !== task.id) return;
         onProgress?.({
@@ -1308,7 +1346,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
 
     async observeUploadOwnership(device, request, onProgress) {
-      const module = requireNativeModule();
+      const module = requireNativeModule('observeUploadOwnership');
       const subscription = module.onUploadOwnershipProgress((progress) => {
         onProgress?.(mapRecordingProgress(progress));
       });
@@ -1327,30 +1365,46 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
 
   const ota: BotaDeviceSDKOTAClient = {
     async updateFirmware(device, image, onProgress) {
-      const module = requireNativeModule();
-      const subscription = module.onFirmwareUpdateProgress((progress) => {
-        onProgress?.(mapFirmwareProgress(progress));
-      });
+      const module = requireNativeModule('updateFirmware');
+      if (firmwareOperation) throw new BotaRuntimeCompatibilityError('operation_in_progress', 'updateFirmware');
+      const controller = new AbortController();
+      const operation = { controller, signal: controller.signal, recovering: false, cancelling: false,
+        promise: Promise.resolve(), cancelPromise: undefined as Promise<void> | undefined };
+      firmwareOperation = operation;
+      operation.promise = Promise.resolve().then(() => updateFirmwareWithRecovery(
+        module, toNativeConnectedDevice(device), {
+          version: image.version, sizeUnits: image.sizeBytes, crc32: image.crc32, url: image.url,
+        }, event => onProgress?.(mapFirmwareProgress(event)), operation, firmwareRecoveryPolicy,
+      ));
       try {
-        await module.updateFirmware(toNativeConnectedDevice(device), {
-          version: image.version,
-          sizeUnits: image.sizeBytes,
-          crc32: image.crc32,
-          url: image.url,
-        });
+        await operation.promise;
       } finally {
-        subscription.remove();
+        if (firmwareOperation === operation && !operation.cancelling) firmwareOperation = undefined;
       }
     },
 
     async cancelFirmwareUpdate() {
-      await requireNativeModule().cancelFirmwareUpdate();
+      const operation = firmwareOperation;
+      if (operation?.cancelPromise) return operation.cancelPromise;
+      const recovering = operation?.recovering;
+      if (operation) { operation.cancelling = true; operation.controller.abort(); }
+      const module = requireNativeModule();
+      const cancellation = Promise.resolve().then(async () => {
+        let failed = false, failure: unknown;
+        try { await module.cancelFirmwareUpdate(); } catch (error) { failed = true; failure = error; }
+        try { if (recovering) await module.disconnect(); } catch (error) { failed = true; failure ??= error; }
+        if (operation) await operation.promise.catch(() => undefined);
+        if (!failed && firmwareOperation === operation) firmwareOperation = undefined;
+        if (failed) throw failure;
+      });
+      if (operation) operation.cancelPromise = cancellation;
+      return cancellation;
     },
   };
 
   const streaming: BotaDeviceSDKStreamingClient = {
     async startStreaming(device, request, handlers) {
-      const module = requireNativeModule();
+      const module = requireNativeModule('startStreaming');
       const progressSubscription = module.onStreamingProgress((progress) => {
         if (progress.sessionId !== request.sessionId) return;
         handlers.onProgress({
@@ -1446,7 +1500,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
       await requireNativeModule().acknowledgeDiagnosticEvents(toNativeConnectedDevice(device), [...acceptedEventIds]);
     },
     async subscribe(device, onLine) {
-      const module = requireNativeModule();
+      const module = requireNativeModule('startDeviceLogs');
       const eventSubscription = module.onDeviceLog((line) => {
         onLine({
           level: 'debug',
@@ -1501,7 +1555,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     },
 
     async subscribeToStatus(device, onStatus) {
-      const module = requireNativeModule();
+      const module = requireNativeModule('startWiFiStatusUpdates');
       const eventSubscription = module.onWiFiStatusUpdated((status) => {
         onStatus(mapWiFiStatus(status));
       });
@@ -1535,6 +1589,8 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     clientPresence: {
       async nextReport(deviceId) {
         if (presenceStopped) return null;
+        if (!nativeModule) throw new BotaNativeModuleError();
+        if (!nativeModule.nextClientPresence) return null;
         const generation = presenceGeneration;
         const report = await requireNativeModule().nextClientPresence(deviceId);
         if (presenceStopped || generation !== presenceGeneration) return null;
@@ -1552,6 +1608,7 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
     wifi,
 
     async configure(configuration = {}) {
+      if (reconnectCancellation.signal.aborted) reconnectCancellation = new AbortController();
       const generation = presenceGeneration;
       const nativeConfiguration: NativeConfiguration = {
         logLevel: configuration.logLevel ?? 'warn',
@@ -1563,13 +1620,23 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
           : {}),
       };
       await requireNativeModule().configure(nativeConfiguration);
-      if (generation === presenceGeneration) presenceStopped = false;
+      if (generation === presenceGeneration) {
+        presenceStopped = false;
+        subscribeToDisconnections();
+      }
     },
 
     async destroy() {
+      reconnectCancellation.abort();
+      const firmware = firmwareOperation;
+      if (firmware) { firmware.cancelling = true; firmware.controller.abort(); }
       presenceStopped = true;
       presenceGeneration++;
+      disconnectionSubscription?.remove();
+      disconnectionSubscription = undefined;
       await requireNativeModule().destroy();
+      if (firmware) await firmware.promise.catch(() => undefined);
+      if (firmwareOperation === firmware) firmwareOperation = undefined;
     },
 
     async getCapabilities() {
@@ -1580,11 +1647,13 @@ export const createBotaDeviceSDK = (nativeModule: Spec | null): BotaDeviceSDKCli
       return (await requireNativeModule().getState()) as BotaDeviceSDKState;
     },
   };
-  nativeModule?.onDeviceDisconnected?.((event) => {
-    reportCompatibilityDisconnection(
-      client,
-      event.error ? new Error(event.error) : undefined
-    );
-  });
+  let disconnectionSubscription: BotaEventSubscription | undefined;
+  const subscribeToDisconnections = () => {
+    if (disconnectionSubscription || typeof nativeModule?.onDeviceDisconnected !== 'function') return;
+    disconnectionSubscription = nativeModule.onDeviceDisconnected((event) => {
+      reportCompatibilityDisconnection(client, event.error ? new Error(event.error) : undefined);
+    });
+  };
+  subscribeToDisconnections();
   return client;
 };

@@ -1,4 +1,5 @@
-import type { Spec } from './specs/NativeBotaUploadV2Backend';
+import { requireUploadBackend } from './runtimeAdapter';
+import type { BotaUploadBackendAdapter } from './runtimeAdapter';
 
 /** Read-only protected STREAMING metadata. None of these values authorize cleanup. */
 export interface ProtectedStreamingIdentity {
@@ -68,7 +69,7 @@ function decode(value: unknown, identity: ProtectedStreamingIdentity): Protected
 }
 
 /** Public read provider. Protected START/relay and signed ACKs remain native-only. */
-export function createManagedProtectedStreamingStatusBackend(native: Pick<Spec, 'readProtectedStreamingStatus' | 'cancelProtectedStreamingStatus'> | null, options: ProtectedStreamingStatusBackendOptions): ProtectedStreamingStatusBackend {
+export function createManagedProtectedStreamingStatusBackend(native: BotaUploadBackendAdapter | null, options: ProtectedStreamingStatusBackendOptions): ProtectedStreamingStatusBackend {
   const config = { ...options };
   const url = new URL(config.baseUrl);
   const path = url.pathname.replace(/\/$/, '');
@@ -90,7 +91,7 @@ export function createManagedProtectedStreamingStatusBackend(native: Pick<Spec, 
         !generation(identity.recordingGeneration) || !decimal(identity.writerEpoch) || identity.writerEpoch === '0') {
         throw new Error('Invalid protected streaming identity');
       }
-      if (!native?.readProtectedStreamingStatus) throw new Error('Protected streaming status requires the matching native SDK binary');
+      requireUploadBackend(native, 'protectedStreamingStatus', ['readProtectedStreamingStatus', 'cancelProtectedStreamingStatus']);
       const controller = new AbortController();
       const requestId = `${instance}-${++requestSequence}`;
       let dispatched = false;

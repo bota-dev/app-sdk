@@ -3,7 +3,17 @@ import { createRequire } from 'node:module';
 import { test } from 'node:test';
 
 const require = createRequire(import.meta.url);
-const { createBotaDeviceSDK } = require('../lib/commonjs/client.js');
+const { createBotaDeviceSDK: createSDK } = require('../lib/commonjs/client.js');
+// These scenarios exercise a complete v2 bridge, including callbacks unused by
+// each particular race. Partial adapter support has its own preflight regressions.
+const unexpectedCallback = async () => { throw new Error('Unexpected v2 callback'); };
+const createBotaDeviceSDK = module => createSDK({
+  resolveEncryptedUploadV2Profile: unexpectedCallback,
+  rejectEncryptedUploadV2Profile: unexpectedCallback,
+  releaseEncryptedUploadV2Material: unexpectedCallback,
+  cancelEncryptedRecordingV2: unexpectedCallback,
+  ...module,
+});
 const device = { id: 'peripheral', serialNumber: 'TEST', deviceType: 'bota_note',
   firmwareVersion: '1.0.17', isProvisioned: true, connectionState: 'connected', mtu: 247 };
 const recording = { uuid: '12345678-1234-1234-1234-123456789abc', generation: 1,

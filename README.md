@@ -56,6 +56,11 @@ Choose the package for your application. npm's `beta` tag tracks prereleases;
 
 ### React Native
 
+Current main source also provides a portable TypeScript `/runtime` entry with
+versioned device/backend adapters and OTA-editable foreground policy. This is
+not a published beta.15 addition. Native protocol/file engine changes still need
+an app binary. See the [runtime boundary and review](docs/parity/react-native-runtime.md).
+
 Use Node.js 22+ to install and build your app:
 
 ```bash

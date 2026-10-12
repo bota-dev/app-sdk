@@ -170,7 +170,9 @@ firmware/release/hardware gates or enable v2 compatibility metadata. See
   workflow state, retries, checkpoints, and stable errors.
 - Swift/CoreBluetooth, Kotlin/BluetoothGatt, C#/WinRT GATT, and TypeScript/Web
   Bluetooth own platform integration.
-- React Native and Flutter delegate to native facades.
+- React Native owns its TypeScript control plane over a versioned adapter
+  contract; its default device adapter delegates native protocol/file operations
+  to the native facades. Flutter delegates to native facades.
 - The host application obtains backend grants, device tokens, and presigned
   upload targets. This repository does not provide a Bota API client.
 - Customer-facing package and module names follow the public matrix in

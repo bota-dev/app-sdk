@@ -174,7 +174,10 @@ export class OTAManager extends EventEmitter<OTAManagerEvents> {
     if (this.destroyed) return;
     this.destroyed = true;
     this.removeAllListeners();
-    void this.client.ota.cancelFirmwareUpdate();
+    // Unsupported optional firmware operations cannot break destruction of the runtime.
+    // A started update was preflighted with cancellation support; final SDK destroy
+    // still owns transport cleanup if cancellation fails.
+    void this.client.ota.cancelFirmwareUpdate().catch(() => undefined);
   }
 
   private isNewerVersion(newVersion: string, currentVersion: string): boolean {

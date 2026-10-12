@@ -1,5 +1,46 @@
 # Bota SDK for React Native
 
+## TypeScript runtime and app OTA updates
+
+Current main source provides `createBotaReactNativeRuntime` and the independently
+loadable `@bota.dev/react-native-app-sdk/runtime` entry. These additions are not
+claimed to exist in the published beta.15 package. The ordinary package entry
+selects the installed adapters and uses the same TypeScript runtime.
+
+```ts
+import { createBotaReactNativeRuntime } from '@bota.dev/react-native-app-sdk/runtime';
+
+const runtime = createBotaReactNativeRuntime(
+  { apiVersion: 1, device: deviceAdapter, encryptedUploadBackend: backendAdapter },
+  { reconnect: { maxAttempts: 2, delayMs: 3000 } },
+);
+await runtime.client.configure({ environment: 'production' });
+if (runtime.supports('listPendingRecordings')) {
+  // Use runtime.sdk.recordings.listPendingRecordings with a verified device.
+}
+```
+
+`deviceAdapter` and optional `backendAdapter` implement the version 1 asynchronous
+method/event contracts. Each runtime owns its manager graph. Missing optional
+operations fail with a stable compatibility error before device work. Adapter
+contract support, rather than a matching native/npm version string, determines
+whether a JavaScript workflow can run. Compatible TypeScript policy and app UI
+changes may use the application's existing OTA mechanism.
+
+Native protocol/file engines still handle bulk transfers, cryptography,
+background work and durable cleanup. Changing those implementations still needs
+an app build. A smaller adapter must preserve the same safety contracts; no
+BLE-only replacement driver is included. See the [runtime review](../../docs/parity/react-native-runtime.md)
+for the implemented scope and installed-app acceptance limits.
+
+Verified firmware reboot recovery is TypeScript policy too. After native image
+verification, it can recover a lost reconnect using fresh exact serial/version
+read-back within the original two-minute budget. It never retries failed firmware
+transfer/verification or assumes that an ACK proves installation. Cancellation
+retains ownership until the exact native operation settles. This can improve an
+older conforming installed adapter through a compatible JavaScript app update;
+physical acceptance remains separate.
+
 Source candidate `2.0.0-beta.15` synchronizes the five-platform SDK family.
 It includes Apple single-ATT transfer bounds and local connection ownership,
 awaitable React Native reconnect pause, and the reviewed main OTA, recording

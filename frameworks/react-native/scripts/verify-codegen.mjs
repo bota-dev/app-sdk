@@ -92,7 +92,7 @@ try {
     writeFileSync(contractPath, generated);
     console.log(`Codegen contract written: ${contractPath}`);
   } else {
-    const committed = readFileSync(contractPath, 'utf8');
+    const committed = readFileSync(contractPath, 'utf8').replace(/\r\n/g, '\n');
     if (committed !== generated) {
       throw new Error(
         'Codegen contract drifted; run npm run codegen and review the generated contract'
