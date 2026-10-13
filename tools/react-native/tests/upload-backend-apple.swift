@@ -339,7 +339,7 @@ private struct AppleUploadTests {
         "\(prefix)/recordings/rec_one/encrypted-upload-v2/sessions"], "Exact configured root or prefixed route")
     }
     for prefix in ["/", "//evil.example", "v1", "/v1/", "/v1//nested", "/v1/../nested", "/v1?x=1", "/v1#x", "/v%31"] {
-      var invalid = try input()
+      var invalid = try Self.input()
       invalid.scope.apiBasePath = prefix
       try await rejects(.invalidInput) { try invalid.validate() }
     }

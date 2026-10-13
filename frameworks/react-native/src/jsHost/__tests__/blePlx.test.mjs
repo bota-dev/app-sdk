@@ -323,7 +323,7 @@ test('a retired disconnect observer cannot clear a replacement using the same OS
   assert.equal(discoveries, 3);
   assert.equal(await port.getMtu('device', context()), 185);
   // Discovery returns a new object while the physical connection is unchanged.
-  observers[1](new Error('Current physical link'), peripheral(185));
+  observers[1](new Error('Current physical link'), null);
   assert.deepEqual(newReports, ['Current physical link']);
   await assert.rejects(port.getMtu('device', context()), /no local connection/);
   await assert.rejects(port.discoverServices('device', context()), /no local connection/);

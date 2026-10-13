@@ -154,6 +154,7 @@ pub(crate) fn supports(name: &str) -> bool {
     matches!(
         name,
         "reduceManagedUpload"
+            | "isEmptyLegacyAndroidV2CheckpointCatalog"
             | "planEncryptedUploadV2Request"
             | "nativeEncryptedUploadV2Capability"
             | "nativeEncryptedUploadV2Checkpoint"
@@ -165,6 +166,12 @@ pub(crate) fn supports(name: &str) -> bool {
 #[inline(never)]
 pub(crate) fn execute(name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> {
     match name {
+        "isEmptyLegacyAndroidV2CheckpointCatalog" => {
+            let bytes = input::<Bytes>(value)?.bytes;
+            // The legacy native writer persists this exact version-1 empty catalog
+            // after clearing the last checkpoint. Any other evidence stays pending.
+            output(&(bytes.as_slice() == [0x42, 0x56, 0x32, 0x4c, 0, 0, 0, 1, 0, 0, 0, 0]))
+        }
         "reduceManagedUpload" => reduce_managed(value),
         "planEncryptedUploadV2Request" => output(&plan(input(value)?)?),
         "nativeEncryptedUploadV2Capability" => {
@@ -772,6 +779,43 @@ mod tests {
         assert_ne!(
             call("encryptedUploadV2LocalIdentity", other).unwrap(),
             stable
+        );
+    }
+    #[test]
+    fn legacy_android_checkpoint_catalog_accepts_only_the_exact_empty_encoding() {
+        let empty = vec![0x42, 0x56, 0x32, 0x4c, 0, 0, 0, 1, 0, 0, 0, 0];
+        let inspect = |bytes: Vec<u8>| {
+            call(
+                "isEmptyLegacyAndroidV2CheckpointCatalog",
+                object!({"bytes":bytes}),
+            )
+            .unwrap()
+        };
+        assert_eq!(inspect(empty.clone()), object!(true));
+        for length in 0..empty.len() {
+            assert_eq!(inspect(empty[..length].to_vec()), object!(false));
+        }
+        for index in 0..empty.len() {
+            let mut changed = empty.clone();
+            changed[index] ^= 1;
+            assert_eq!(inspect(changed), object!(false));
+        }
+        let mut trailing = empty;
+        trailing.push(0);
+        assert_eq!(inspect(trailing), object!(false));
+        assert!(
+            call(
+                "isEmptyLegacyAndroidV2CheckpointCatalog",
+                object!({"bytes":[256]})
+            )
+            .is_err()
+        );
+        assert!(
+            call(
+                "isEmptyLegacyAndroidV2CheckpointCatalog",
+                object!({"bytes":[],"unknown":true})
+            )
+            .is_err()
         );
     }
     #[test]

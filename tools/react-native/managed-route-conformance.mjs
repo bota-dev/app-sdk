@@ -1,5 +1,16 @@
-/** Execute the same Rust-owned root route checks in Node/native and Hermes. */
+/** Execute the same Rust-owned app route/migration checks in Node/native and Hermes. */
 export function runManagedRouteConformance(codec, success, check, same) {
+  var empty = [0x42, 0x56, 0x32, 0x4c, 0, 0, 0, 1, 0, 0, 0, 0];
+  function catalog(bytes) { return success(codec('isEmptyLegacyAndroidV2CheckpointCatalog', { bytes: bytes }), 'Legacy checkpoint catalog'); }
+  same(catalog(empty), true, 'Exact successful-clear catalog');
+  for (var length = 0; length < empty.length; length++) same(catalog(empty.slice(0, length)), false, 'Truncated catalog remains pending');
+  for (var index = 0; index < empty.length; index++) {
+    var changed = empty.slice(); changed[index] ^= 1;
+    same(catalog(changed), false, 'Noncanonical or nonempty catalog remains pending');
+  }
+  same(catalog(empty.concat([0])), false, 'Trailing catalog data remains pending');
+  check(codec('isEmptyLegacyAndroidV2CheckpointCatalog', { bytes: [256] }).ok === false, 'Malformed catalog bytes reject');
+  check(codec('isEmptyLegacyAndroidV2CheckpointCatalog', { bytes: [], unknown: true }).ok === false, 'Unknown catalog input rejects');
   var input = { operationId: 'upload-1', scope: { apiOrigin: 'https://api.example.com', apiBasePath: '',
     accountId: 'a', projectId: 'p', organizationId: 'org', environment: 'production', endUserId: 'eu_1',
     deviceId: 'dev_1', bindingGeneration: 2, serialNumber: 'BOTA1', nativeDeviceId: 'ble-id', scopeKey: 'a:p:production' },

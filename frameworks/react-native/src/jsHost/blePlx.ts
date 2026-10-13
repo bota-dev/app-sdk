@@ -31,7 +31,7 @@ export interface BlePlxManager {
   monitorCharacteristicForDevice(id: string, service: string, characteristic: string,
     listener: (error: Error | null, value: Characteristic | null) => void,
     transactionId?: string): Subscription;
-  onDeviceDisconnected(id: string, listener: (error: Error | null, device: Peripheral) => void): Subscription;
+  onDeviceDisconnected(id: string, listener: (error: Error | null, device: Peripheral | null) => void): Subscription;
   cancelTransaction(transactionId: string): void | Promise<void>;
 }
 

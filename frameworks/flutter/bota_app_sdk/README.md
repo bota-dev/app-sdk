@@ -1,8 +1,8 @@
 # Bota SDK for Flutter
 
-Source candidate `2.0.0-beta.16` synchronizes the five-platform SDK family and
-adds the React Native generated-JS route through the original package's `/runtime`
-entry. Flutter retains its native facade. Beta.15 remains the published baseline
+Source candidate `2.0.0-beta.17` synchronizes managed root-proxy admission and
+generated-Rust React Native migration helpers through the original package's
+`/runtime` entry. Flutter retains its native facade. Beta.16 remains the published baseline
 while fresh source, canonical Apple/Flutter artifacts, exact main CI, protected
 publication and public-consumer gates are pending. Native applications require
 a new binary; physical acceptance remains separate.
@@ -12,10 +12,10 @@ a new binary; physical acceptance remains separate.
 The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
 `dev.bota:bota-app-sdk` on Android. Replace the old dependency and Dart imports;
 do not install both packages in the same application. Historical 1.x releases
-remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.16`.
-Published beta.15 remains the installation baseline until protected publication
+remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.17`.
+Published beta.16 remains the installation baseline until protected publication
 and public-consumer verification pass. Use the install pin below after those
-gates pass; see the [preflight](../../../release/evidence/2.0.0-beta.16-preflight.md).
+gates pass; see the [preflight](../../../release/evidence/2.0.0-beta.17-preflight.md).
 Rebuild native applications and reconnect explicitly after connection loss.
 Completed-resume and broader hardware acceptance remain separate.
 

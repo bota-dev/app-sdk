@@ -1,5 +1,12 @@
 # AGENTS.md
 
+October 13 follow-up: beta.17 is an unpublished synchronized candidate for
+managed root-proxy admission and generated-Rust RN app migration helpers.
+Published beta.16 remains the released baseline. Flutter API/native contracts
+remain unchanged. Canonical artifact/CI/publication and app/device acceptance
+remain gates; see [beta.17 preflight](../../../release/evidence/2.0.0-beta.17-preflight.md).
+The earlier beta.16 source-preparation paragraph below is historical.
+
 Synchronized beta.16 is the next source candidate; beta.15 remains published.
 RN's generated JS stays under the original public package's `/runtime` entry;
 its companion is private. Flutter continues to use native facades. Fresh source,

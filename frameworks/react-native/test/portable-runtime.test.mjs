@@ -33,9 +33,10 @@ test('portable entry loads without React Native or a native module registry', ()
       return load.call(this, id, ...args);
     };
     const { createBotaReactNativeRuntime, deriveSyncStatus, UPLOAD_RECOVERY_VERSION,
-      readClientPresenceObservation } = require(${JSON.stringify(runtimePath)});
+      readClientPresenceObservation, isEmptyLegacyAndroidV2CheckpointCatalog } = require(${JSON.stringify(runtimePath)});
     if (typeof deriveSyncStatus !== 'function' || UPLOAD_RECOVERY_VERSION !== 1 ||
-      typeof readClientPresenceObservation !== 'function') throw new Error('Missing portable application utilities');
+      typeof readClientPresenceObservation !== 'function' ||
+      typeof isEmptyLegacyAndroidV2CheckpointCatalog !== 'function') throw new Error('Missing portable application utilities');
     createBotaReactNativeRuntime({apiVersion: 1, device: {}});
   `], { encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);

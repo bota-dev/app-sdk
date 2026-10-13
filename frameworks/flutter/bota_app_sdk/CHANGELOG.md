@@ -1,3 +1,10 @@
+## 2.0.0-beta.17 (unreleased)
+
+- Synchronize the SDK family with the managed root-proxy admission correction,
+  portable React Native application helpers and Rust-owned legacy-empty-catalog
+  admission. Flutter API and installed platform contracts remain unchanged.
+  Publication and app/device acceptance require their normal release gates.
+
 ## 2.0.0-beta.16 (candidate)
 
 - Synchronize with the React Native generated-JS runtime under the original
@@ -64,12 +71,6 @@
 
 # Changelog
 
-## 2.0.0-beta.17 (unreleased)
-
-- Synchronize the SDK family with the managed root-proxy admission correction
-  and portable React Native application helpers. Flutter API and installed
-  platform contracts remain unchanged. Publication and app/device acceptance
-  require their normal release gates.
 
 ## 2.0.0-beta.6
 

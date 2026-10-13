@@ -13,6 +13,10 @@ tracked separately.
   exact route and receipt-gated cleanup checks remain enforced.
 - Export portable sync status, upload recovery version and presence helpers from
   `/runtime` so generated-JS applications do not import native compatibility code.
+- Recognize only the exact successful-clear legacy Android checkpoint catalog
+  through a Rust-generated helper; pending, malformed and torn evidence stays
+  protected during app migration. Match the BLE port's disconnect nullability
+  to the actual pinned `react-native-ble-plx` type without app casts.
 
 Synchronized beta.17 is a preparation candidate; beta.16 remains published until
 the normal exact-source and protected release gates pass.

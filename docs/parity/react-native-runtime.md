@@ -1,6 +1,17 @@
 # React Native generated JavaScript runtime and OTA boundary
 
 October 12, 2026 source migration. Shared SDK behavior remains Rust-sourced.
+
+Beta.17 preparation adds `isEmptyLegacyAndroidV2CheckpointCatalog(bytes)` on
+`/runtime`. Generated Rust admits only the exact 12-byte empty catalog left by
+the old Android SDK after successful cleanup. Hosts supply the complete short
+file or a complete 13-byte prefix for longer files; every other encoding remains
+protected migration evidence. This neither imports pending native state nor
+authorizes deletion. Apple successful cleanup removes its sidecar/file; no
+empty Apple catalog exists. The BLE manager contract also admits a nullable
+disconnect device, matching pinned `react-native-ble-plx` 3.5.1; a strict real
+library assignment regression requires no cast. See the
+[beta.17 preflight](../../release/evidence/2.0.0-beta.17-preflight.md).
 React Native runs generated executable JavaScript over versioned installed OS
 ports. Package publication, app OTA delivery and physical acceptance are separate
 gates; published npm execution does not establish installed-app or device acceptance.
