@@ -2,6 +2,8 @@ import type { UploadInfo, UploadRecoveryContext, UploadRecoveryProvider } from '
 import { isUploadVerificationPending, UploadVerificationPendingError } from './managers/uploadVerificationPending';
 import type { CompatibilityUploadPolicyCodec } from './managers/NativeUploadQueue';
 
+export const UPLOAD_RECOVERY_VERSION = 1;
+
 const waitForCompletion = (milliseconds: number, signals: AbortSignal[]): Promise<void> =>
   new Promise((resolve, reject) => {
     const unique = [...new Set(signals)];

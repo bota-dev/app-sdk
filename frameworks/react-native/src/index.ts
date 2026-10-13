@@ -153,7 +153,7 @@ export { DeviceDiagnosticsDecoder, diagnosticEventIdCommand } from './ble/device
 export { DeviceManager } from './managers/DeviceManager';
 export { OTAManager } from './managers/OTAManager';
 export { RecordingManager } from './managers/RecordingManager';
-export const UPLOAD_RECOVERY_VERSION = 1;
+export { UPLOAD_RECOVERY_VERSION } from './uploadRecovery';
 export { StreamingSession } from './managers/StreamingSession';
 export {
   BotaError,

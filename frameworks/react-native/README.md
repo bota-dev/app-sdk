@@ -2,6 +2,14 @@
 
 ## Generated JavaScript runtime and app OTA updates
 
+Beta.17 preparation adds `deriveSyncStatus`, `UPLOAD_RECOVERY_VERSION` and
+`readClientPresenceObservation` to `/runtime`. Use the generated runtime's
+`createUploadRecoveryProvider` method to retain shared Rust recovery policy.
+Managed encrypted-v2 `baseUrl` accepts HTTPS origin-root routes (for example
+`https://your-backend.example/`) and existing path prefixes. Root normalizes to
+an explicit empty API prefix; an omitted low-level prefix still defaults to
+`/v1`. Beta.17 is not yet published or qualified on physical devices.
+
 Published beta.16 adds `createBotaReactNativeJsRuntime` in the
 `@bota.dev/react-native-app-sdk/runtime` entry. Rust supplies the executable JS
 protocol/workflow implementation; no WebAssembly or native Rust engine runs in

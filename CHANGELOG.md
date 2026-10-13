@@ -7,6 +7,16 @@ tracked separately.
 
 ## Unreleased
 
+- Admit HTTPS managed encrypted-v2 proxies whose routes start at the origin root,
+  as well as existing path-prefixed proxies. An explicit empty Rust API prefix
+  selects root routes; omitting it preserves `/v1`. Scope, origin, authorization,
+  exact route and receipt-gated cleanup checks remain enforced.
+- Export portable sync status, upload recovery version and presence helpers from
+  `/runtime` so generated-JS applications do not import native compatibility code.
+
+Synchronized beta.17 is a preparation candidate; beta.16 remains published until
+the normal exact-source and protected release gates pass.
+
 ## 2.0.0-beta.16
 
 - Publish all five beta.16 packages under the existing public package identities.

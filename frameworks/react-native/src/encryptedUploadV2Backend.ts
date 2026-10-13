@@ -5,7 +5,7 @@ import { requireUploadBackend } from './runtimeAdapter';
 import type { BotaUploadBackendAdapter } from './runtimeAdapter';
 
 export interface EncryptedUploadV2BackendOptions {
-  /** Customer-authenticated HTTPS proxy exposing the v2 routes, e.g. https://api.example.com/v1. */
+  /** Customer-authenticated HTTPS proxy exposing the v2 routes at its root or a path prefix. */
   baseUrl: string;
   /** Stable, non-secret account/project/environment identity. */
   scopeKey: string;
@@ -47,7 +47,7 @@ export function createManagedEncryptedUploadV2Backend(
   const url = new URL(config.baseUrl);
   const path = url.pathname.replace(/\/$/, '');
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash ||
-    !/^(\/[A-Za-z0-9_-]+)+$/.test(path) || !config.scopeKey || !config.signal) {
+    (path !== '' && !/^(\/[A-Za-z0-9_-]+)+$/.test(path)) || !config.scopeKey || !config.signal) {
     throw new Error('Invalid encrypted upload backend configuration');
   }
   const apiOrigin = url.origin;

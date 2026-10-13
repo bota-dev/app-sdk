@@ -1,5 +1,14 @@
 # AGENTS.md
 
+Beta.17 is an unpublished preparation candidate for generated-JS Demo/One
+integration: explicit root managed-v2 API prefixes and pure `/runtime` helpers.
+Root normalizes to `apiBasePath: ''`; omission still means `/v1`. Keep exact
+origin/scope, receipt-gated cleanup and shared Rust source ownership. Native
+Rust route regression first failed on beta.16, then all 13 managed-upload tests
+passed. Canonical Linux JS, Apple pins, Flutter inventory, hosted CI/publication
+and physical app acceptance remain gates. See
+[preflight](release/evidence/2.0.0-beta.17-preflight.md).
+
 - October 13 beta.16: `@bota.dev/react-native-app-sdk/runtime` is published under
   the original package identity. Exact source `ed8b5d9` passes all nine main CI
   jobs and License Gate. Protected release attempt 2 passes all five publications,

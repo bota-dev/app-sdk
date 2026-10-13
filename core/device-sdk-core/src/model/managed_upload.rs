@@ -1132,10 +1132,11 @@ fn scope_id(v: &str) -> bool {
             .all(|c| id_byte(c) || matches!(c, b'.' | b':' | b'@'))
 }
 fn base_path(v: &str) -> bool {
-    v.starts_with('/')
-        && v[1..]
-            .split('/')
-            .all(|s| !s.is_empty() && s.bytes().all(id_byte))
+    v.is_empty()
+        || (v.starts_with('/')
+            && v[1..]
+                .split('/')
+                .all(|s| !s.is_empty() && s.bytes().all(id_byte)))
 }
 fn hex(v: &str, n: usize) -> bool {
     v.len() == 2 * n

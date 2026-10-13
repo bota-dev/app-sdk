@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runByoConformance } from './byo-conformance.mjs';
+import { runManagedRouteConformance } from './managed-route-conformance.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const require = createRequire(import.meta.url);
@@ -24,6 +25,10 @@ const hint = { stored_peripheral_id: null, advertised_address: null, stored_name
   scan_timeout_ms: '5000', connection_timeout_ms: '15000' };
 const capabilities = ['Ble', 'Timer', 'Persistence', 'Progress', 'HostMaterial', 'RecordingSink', 'FirmwareBlob', 'NetworkTransfer'];
 const codec = (name, input) => call({ version: 1, action: 'codec', codec: name, input });
+runManagedRouteConformance(codec, (response, label) => {
+  assert.equal(response.ok, true, `${label}: ${JSON.stringify(response)}`); return response.result;
+}, (condition, message) => assert.ok(condition, message),
+(actual, expected, message) => assert.deepEqual(actual, expected, message));
 call({ version: 1, action: 'status' });
 codec('protocolMetadata', {});
 codec('encodeAck', { ack_type: 'ack', sequence: 65535 });

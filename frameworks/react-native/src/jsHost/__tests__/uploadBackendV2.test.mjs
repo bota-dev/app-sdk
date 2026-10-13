@@ -62,6 +62,20 @@ function baseHandler(url, request) {
   throw new Error('unexpected HTTP');
 }
 
+test('generated managed backend sends root and prefixed routes to the exact configured origin', async () => {
+  for (const prefix of ['', '/v1', '/dashboard/projects/proj_a']) {
+    const f = fixture(baseHandler);
+    try {
+      const value = input(); value.scope.apiBasePath = prefix;
+      await f.backend.prepare(JSON.stringify(value));
+      assert.deepEqual(f.calls.map(call => call.url), [
+        `https://api.example.com${prefix}/recordings`,
+        `https://api.example.com${prefix}/recordings/rec_1/encrypted-upload-v2/sessions`,
+      ]);
+    } finally { await f.backend.dispose(); f.core.dispose?.(); }
+  }
+});
+
 test('generated managed policy performs strict create, manifest reconciliation, staging and receipt-gated journal removal', async () => {
   let submitted = false;
   const f = fixture((url, request) => {

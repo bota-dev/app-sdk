@@ -1,5 +1,20 @@
 # Managed encrypted-v2 backend adapter
 
+## October 13 generated-JS root proxy admission (beta.17 preparation)
+
+Some authenticated customer proxies expose `/recordings` directly at the HTTPS
+origin. The RN facade now normalizes that root to an explicit empty
+`apiBasePath`; Rust `ManagedUploadInput` accepts it and produces exact root
+recording/session routes. Existing nonempty prefixes remain strict slash-separated
+ASCII identifiers, and omission still selects `/v1`. This neither rewrites the
+host origin nor introduces a fake prefix or fallback transport. Authorization,
+scope identity, durable recovery and signed receipt cleanup remain unchanged.
+
+The facade and native Rust regressions first fail against beta.16, then exercise
+root/prefixed routing, the omitted-prefix default and malformed path rejection.
+Canonical generated-JS, full hosted CI, publication and physical app acceptance
+remain preparation gates; see the [beta.17 preflight](../../release/evidence/2.0.0-beta.17-preflight.md).
+
 Published beta.11 adds `createEncryptedUploadV2Backend` to the React Native App
 SDK on iOS and Android. It packages the native HTTP/journal implementation
 previously supplied by Demo. Package publication and public consumers pass;

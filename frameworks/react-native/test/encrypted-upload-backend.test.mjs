@@ -55,6 +55,21 @@ test('backend origin, account and target are captured before async provider work
   assert.equal(scope.apiOrigin, 'https://customer.example'); assert.equal(scope.accountId, 'account-a');
   assert.equal(scope.deviceId, 'dev_a'); assert.equal(scope.serialNumber, 'BOTA123'); assert.equal(scope.bindingGeneration, 1);
 });
+test('root and prefixed proxy URLs retain their exact canonical routing prefix', async () => {
+  for (const [baseUrl, prefix] of [['https://customer.example', ''], ['https://customer.example/', ''],
+    ['https://customer.example/v1/', '/v1'], ['https://customer.example/dashboard/projects/proj_a', '/dashboard/projects/proj_a']]) {
+    const f = fixture();
+    f.config.baseUrl = baseUrl;
+    await f.create().sync(device, recording, target);
+    assert.equal(f.calls[0][1].scope.apiOrigin, 'https://customer.example');
+    assert.equal(f.calls[0][1].scope.apiBasePath, prefix);
+  }
+  for (const baseUrl of ['https://customer.example//', 'https://customer.example/v1//nested',
+    'https://customer.example/v%31', 'https://customer.example/v1?x=1', 'https://customer.example/v1#x']) {
+    const f = fixture();
+    assert.throws(() => create(f.native, f.client, { ...f.config, baseUrl }), /configuration/);
+  }
+});
 test('confirmed cleanup is not turned into failure by redundant bridge cancellation', async () => {
   const f = fixture();
   f.native.cancel = async () => { throw new Error('bridge unavailable'); };

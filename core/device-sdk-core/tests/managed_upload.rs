@@ -116,6 +116,53 @@ fn generated_create_body_preserves_strict_ten_keys_and_real_dates() {
     assert_eq!(body["ciphertext_length"], 900);
 }
 #[test]
+fn root_and_prefixed_routes_preserve_exact_origin_and_path() {
+    for prefix in ["", "/v1", "/dashboard/projects/proj_a"] {
+        let mut i = input();
+        i["scope"]["apiBasePath"] = json!(prefix);
+        assert_eq!(
+            run(&i, json!({"type":"CreateRecording"})).unwrap()["path"],
+            format!("{prefix}/recordings")
+        );
+        assert_eq!(
+            run(
+                &i,
+                json!({"type":"CreateSession","entry":{"recordingId":"rec_1"},"nonce":vec![1;16]})
+            )
+            .unwrap()["path"],
+            format!("{prefix}/recordings/rec_1/encrypted-upload-v2/sessions")
+        );
+    }
+    for prefix in [
+        "/",
+        "//evil.example",
+        "v1",
+        "/v1/",
+        "/v1//nested",
+        "/v1/../nested",
+        "/v1?x=1",
+        "/v1#x",
+        "/v%31",
+        "https://evil.example",
+    ] {
+        let mut i = input();
+        i["scope"]["apiBasePath"] = json!(prefix);
+        assert_eq!(
+            run(&i, json!({"type":"CreateRecording"})).unwrap_err(),
+            ManagedUploadError::InvalidInput
+        );
+    }
+    let mut omitted = input();
+    omitted["scope"]
+        .as_object_mut()
+        .unwrap()
+        .remove("apiBasePath");
+    assert_eq!(
+        run(&omitted, json!({"type":"CreateRecording"})).unwrap()["path"],
+        "/v1/recordings"
+    );
+}
+#[test]
 fn unknown_create_cannot_restart_and_exact_rejection_can_rollback() {
     let i = input();
     let identity = run(&i, json!({"type":"Identity"})).unwrap()["identity"].clone();

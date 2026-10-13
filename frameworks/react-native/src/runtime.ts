@@ -31,6 +31,11 @@ import { createJsBluetoothState } from './jsHost/bluetoothState';
 import { setCompatibilityBluetoothState } from './compatibility/bluetoothState';
 
 export { createBlePlxPort } from './jsHost/blePlx';
+export { UPLOAD_RECOVERY_VERSION } from './uploadRecovery';
+export { deriveSyncStatus } from './sync/syncStatus';
+export type { SyncChannel, SyncKind, SyncStatus, SyncStatusInputs } from './sync/syncStatus';
+export { readClientPresenceObservation } from './clientPresence';
+export type { ClientPresence, SdkClientContext } from './clientPresence';
 export type { BlePlxManager } from './jsHost/blePlx';
 export type { JsBackendFetch, JsUploadBackendOptions } from './jsHost/backend';
 export type { JsV2Fetch, JsV2UploadTarget } from './jsHost/uploadBackendV2';
