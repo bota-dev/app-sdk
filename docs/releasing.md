@@ -1,4 +1,4 @@
-# Candidate synchronized beta: 2.0.0-beta.16
+# Published synchronized beta: 2.0.0-beta.16
 
 On October 13, 2026 (Pacific), the owner selected the original
 `@bota.dev/react-native-app-sdk` identity for the generated JavaScript runtime.
@@ -10,22 +10,24 @@ and publication workflow are withdrawn; the
 [old preflight](../release/evidence/react-native-runtime-0.1.0-beta.0-preflight.md)
 is historical evidence only.
 
-Use the existing synchronized `release.yml` and immutable `v2.0.0-beta.16` tag
-procedure. Canonical JS generation and Apple/Flutter preparation pass, as do local
-complete RN and source/declaration checks. The temporary preparation workflow is
-removed. Exact final branch/main nine-job CI/License Gate, complete five-platform
-inventory, protected approval/publication and all public consumers remain pending.
-The React Native
-consumer must exercise the actual published `/runtime` entry with native imports,
-registry access and WebAssembly rejected. Preserve the existing npm `latest` and
-historical package channels; advance only the normal family `beta` channel.
-Do not rebuild or repack accepted CI payloads after approval. See the
-[beta.16 preflight](../release/evidence/2.0.0-beta.16-preflight.md).
+The existing synchronized `release.yml` promotes immutable `v2.0.0-beta.16`
+source `ed8b5d9` and its annotation-bound 49-file main-CI inventory. All nine
+exact-main CI jobs and License Gate pass. Protected release
+[38469841389](https://github.com/bota-dev/app-sdk/actions/runs/38469841389)
+attempt 2 passes all five publications, fresh public `/runtime`
+execution/declarations, native consumers and complete Flutter public archive
+verification. All 12 normal release jobs pass; the two recovery-only jobs are
+correctly skipped. See the
+[publication review and preserved retry](../release/evidence/2.0.0-beta.16-publication.md)
+and historical [preflight](../release/evidence/2.0.0-beta.16-preflight.md).
 
-Beta.15 remains the published baseline until those gates pass. App OTA delivery,
-installed OS-port qualification and physical acceptance remain separate.
+Both current npm `beta` tags are beta.16; `latest` remains beta.0 and retired
+package tags remain unchanged. Do not rebuild or repack accepted CI payloads
+after approval. Beta.15 remains the previous complete synchronized release.
+App OTA delivery, installed OS-port qualification and physical acceptance remain
+separate.
 
-# Published synchronized beta: 2.0.0-beta.15
+# Previous published synchronized beta: 2.0.0-beta.15
 
 The owner authorized commit, push and publication on October 12, 2026 (Pacific).
 Beta.15 includes the Apple/RN corrections and reviewed main changes since

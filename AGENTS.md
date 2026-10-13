@@ -1,11 +1,13 @@
 # AGENTS.md
 
-October 13 RN naming correction: publish generated JS through
-`@bota.dev/react-native-app-sdk/runtime` in synchronized beta.16 using the existing
-`release.yml`. Beta.15 remains published. Canonical JS/Apple/Flutter preparation,
-475 local RN tests and 447 actual Node VM checks pass. Exact final branch/main
-nine-job CI/License, full inventory, protected publication and public consumers
-remain pending.
+- October 13 beta.16: `@bota.dev/react-native-app-sdk/runtime` is published under
+  the original package identity. Exact source `ed8b5d9` passes all nine main CI
+  jobs and License Gate. Protected release attempt 2 passes all five publications,
+  fresh public JS/declaration/native consumers and complete Flutter verification.
+  The 49-file inventory and occupied bytes remain unchanged. App OTA, installed
+  OS ports and physical acceptance remain separate. See
+  [publication evidence](release/evidence/2.0.0-beta.16-publication.md).
+
 `frameworks/react-native-runtime` is a private source-verification fixture with no
 npm publication path. The original package retains native compatibility and
 autolinking; importing `/runtime` evaluates without native modules. See the
@@ -20,7 +22,8 @@ documents are bounded internal JS transport data; device/backend retain trust
 verification and decryption. See [source review](docs/parity/react-native-runtime.md)
 and [generation/acceptance](docs/superpowers/plans/2026-10-12-react-native-generated-js.md).
 Existing native-facade notes below describe the compatibility distribution.
-Publication, app OTA and physical acceptance are separate and pending.
+Package publication, app OTA and physical acceptance remain separate gates;
+current publication evidence is linked above.
 
 October 12 RN control-plane amendment: use the independently loadable `/runtime`
 entry and version 1 adapter contracts for TypeScript policy and host bindings.
@@ -192,12 +195,23 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Current Authority
 
-- Published synchronized beta `2.0.0-beta.15` includes Apple single-ATT sizing,
+- Published synchronized beta `2.0.0-beta.16` has all five packages and public
+  consumer/archive gates verified. The original
+  RN `/runtime` executes generated Rust JavaScript; its companion remains private.
+  Exact-main nine-job CI/License and protected release attempt 2 pass, including
+  generated JS/declarations, SwiftPM, clean CocoaPods, API 26/35 and Flutter.
+  npm `beta` is beta.16; `latest` remains beta.0 and retired package tags remain
+  unchanged. App OTA, installed-host and physical acceptance remain separate.
+  See [publication evidence](release/evidence/2.0.0-beta.16-publication.md).
+
+- Previously published synchronized beta `2.0.0-beta.15` includes Apple single-ATT
+  sizing,
   local connection ownership, strict managed session POST and additive RN
   reconnect pause, together with reviewed main OTA/marker/status/BYO integrations.
   Exact main CI/License and normal protected release attempt 2 passed all five
   publications, public native consumers and complete Flutter inventory checks.
-  npm `beta` is beta.15; `latest` remains beta.0. New native application binaries,
+  At publication npm `beta` was beta.15; `latest` remained beta.0. New native
+  application binaries,
   hardware/profile acceptance and initial unknown-create reconciliation remain
   separate. See [publication evidence](release/evidence/2.0.0-beta.15-publication.md).
 

@@ -5,6 +5,14 @@ from Rust, with installed dependencies limited to narrow OS capabilities.
 Authority: `internal-docs/App SDK Architecture.md` §§5.5 and 6.3. The existing
 TypeScript wrapper over complete Apple/Android workflows does not satisfy this.
 
+October 13 delivery update: beta.16 publishes the generated factory through the
+original `@bota.dev/react-native-app-sdk/runtime` entry. Exact-main CI/License,
+public RN/Web bytes, the fresh runtime/declaration consumer and all native/Flutter
+publication and consumer gates pass. See the
+[publication review](../../../release/evidence/2.0.0-beta.16-publication.md).
+The checkpoint and provenance below retain their original migration-preparation
+snapshot; installed-app OTA and physical acceptance remain separate.
+
 ## Acceptance
 
 1. Compile the canonical Rust codecs and workflows into ordinary JS. Verify
@@ -20,7 +28,7 @@ TypeScript wrapper over complete Apple/Android workflows does not satisfy this.
 5. Commit and push reviewed, verified source to main. npm publication, consuming
    app OTA delivery and physical acceptance are separate gates.
 
-## Current source checkpoint
+## October 12 source checkpoint
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |

@@ -3,15 +3,16 @@
 October 12, 2026 source migration. Shared SDK behavior remains Rust-sourced.
 React Native runs generated executable JavaScript over versioned installed OS
 ports. Package publication, app OTA delivery and physical acceptance are separate
-gates; this document does not claim those gates passed.
+gates; published npm execution does not establish installed-app or device acceptance.
 
 October 13 naming decision: release this route through the existing
-`@bota.dev/react-native-app-sdk/runtime` entry in synchronized beta.16. Beta.15
-remains published. Canonical JS/Apple/Flutter preparation and local RN checks
-pass; final branch/main CI/License, complete inventory, protected publication and
-public consumers remain pending. The companion is a
+`@bota.dev/react-native-app-sdk/runtime` entry in beta.16. Its approved public npm
+bytes and fresh generated-runtime/declaration consumer are verified. Exact-main
+nine-job CI/License and protected release attempt 2 pass all five publications,
+public JS/declaration/native consumers and complete Flutter verification. The companion is a
 private source fixture; the separate registry/publication plan is withdrawn.
-See the [beta.16 preflight](../../release/evidence/2.0.0-beta.16-preflight.md).
+See the [publication review](../../release/evidence/2.0.0-beta.16-publication.md)
+and historical [preflight](../../release/evidence/2.0.0-beta.16-preflight.md).
 
 ## Source and distribution
 
@@ -30,7 +31,9 @@ control-flow optimization while retaining normal `-O` and default parser limits.
 `frameworks/react-native/src/jsHost/generated/core.ts` is a committed executable
 artifact with source provenance. The generator's `--check` rebuilds exact sources;
 `--provenance-only` checks them without a compiler. Regeneration belongs to
-maintainers/CI. Consumers build from committed JS without Cargo, Gradle or Xcode.
+maintainers/CI. Bundling the generated JavaScript uses the committed artifact
+without Rust regeneration. Initial or changed OS ports and native compatibility
+integration still follow the application's normal Gradle/Xcode build process.
 
 Exact generation uses the canonical Rust 1.98.0 compiler host
 `x86_64-unknown-linux-gnu`, matching CI. Cargo includes build-host metadata in
@@ -244,22 +247,23 @@ older adapter behavior.
 
 | Requirement | Check mechanism | Current gate |
 | --- | --- | --- |
-| Rust produces ordinary executable JS | Canonical beta.16 regeneration and 106 matching inputs; prior migration passed 91 native/generated RPCs, 224 core/65 bridge tests and strict Clippy | Beta.16 generation matched; fresh Rust/differential final CI pending |
-| RN engine compatibility | Adopted beta.16 core executes all 447 actual Node VM checks without native imports/WebAssembly; prior migration source passed optimized compilation and pinned Hermes VM checks | Local beta.16 Node execution matched; final pinned Hermes and installed-app gates pending |
-| Primitive-only generated mode | Original `/runtime` source consumer configures/destroys with native imports, registry access and WebAssembly rejected | Local source matched; final candidate/public consumer pending |
+| Rust produces ordinary executable JS | Canonical beta.16 regeneration, 106 matching inputs, 91 native/generated RPC comparisons and shared Rust tests | Matched in exact-main CI at `ed8b5d9` |
+| RN engine compatibility | 447 local Node VM checks and pinned Hermes execution with normal optimization in exact-main CI | Matched source/compiler/VM gates; installed-app acceptance unverified |
+| Primitive-only generated mode | Fresh public beta.16 install configures/destroys the original `/runtime` generated client with native imports, registry access and WebAssembly rejected; strict declarations compile | Matched public consumer in protected release attempt 2 |
 | Public API and feature/recovery parity | 475 RN tests including frozen contracts, BYO/managed/queue, RTC 4, BLE 22 and readiness/lifecycle 9 regressions | Matched source gate; documented maintenance/security gaps remain |
 | Scoped durable receipt cleanup | Requirement/evidence reviews and injected host failures | Installed durability and physical acceptance unverified |
-| Redistribution notices | Prior tar checks retained 47 notices; fresh RN license gate scans 410 packages; private fixture four checks/license scan pass | Source checks matched; final public archive pending |
-| npm publication and application OTA | Separate publication, initial OS-port installation and app rollout | Pending |
+| Redistribution notices | Exact public RN archive contains all 47 notices and generated runtime/declarations; source license gates and private fixture checks pass | Matched public archive and source checks |
+| npm publication and application OTA | Exact approved RN/Web bytes are public; initial OS-port installation and app rollout remain separate | npm matched; app OTA and physical acceptance unverified |
 
 The exact generation provenance, compiler proof and source checks are recorded in
 [the migration review](../superpowers/plans/2026-10-12-react-native-generated-js.md).
 Beta.16 canonical generation and Apple/Flutter preparation are verified in the
 [preflight](../../release/evidence/2.0.0-beta.16-preflight.md), with 106 matching
 generator inputs, 475 fresh RN tests, 447 actual Node VM checks and strict source
-consumer/declaration checks. These do not replace final branch/main nine-job
-CI/License, complete inventory or protected/public-consumer gates. Record the final
-candidate revision and hosted results after delivery. The
+consumer/declaration checks. Exact-main nine-job CI/License, immutable source/tag,
+49-file inventory and public npm/runtime results are recorded in the
+[publication review](../../release/evidence/2.0.0-beta.16-publication.md).
+Synchronized publication is complete; app and device acceptance remain separate. The
 earlier TypeScript-adapter milestone's 227 RN tests remain historical evidence.
 Hardware, customer proxy/TLS,
 OS background behavior and deployed app OTA require separate acceptance evidence.

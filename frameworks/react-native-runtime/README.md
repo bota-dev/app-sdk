@@ -6,16 +6,15 @@ authoritative RN facade and generated Rust artifact without React Native imports
 native autolinking, CocoaPods/Maven dependencies or a Codegen module.
 
 Applications use `@bota.dev/react-native-app-sdk/runtime` from the original public
-package. Synchronized beta.16 prepares that generated-JS route; beta.15 remains
-published. Canonical artifact preparation and local source checks pass; final
-CI/License, complete inventory, protected publication and public consumers remain
-pending. The complete public package
+package. Published beta.16 supplies that generated-JS route; its exact public
+archive and fresh runtime/declaration consumer are verified. All five SDK
+publication/consumer gates pass; app/device acceptance remains separate. The complete public package
 retains native compatibility and autolinking, while `/runtime` evaluates without
 native modules or WebAssembly. See [application setup](../react-native/README.md)
-and [beta.16 preflight](../../release/evidence/2.0.0-beta.16-preflight.md).
+and [publication review](../../release/evidence/2.0.0-beta.16-publication.md).
 
 The following application source example uses the original package's runtime
-entry and requires the generated factory after beta.16 publication is verified:
+entry and its published beta.16 generated factory:
 
 ```ts
 import {
@@ -89,7 +88,9 @@ app OTA and physical acceptance remain separate from source validation.
 
 The private fixture and public runtime entry compile one authoritative RN facade
 and committed Rust artifact. Maintainer/CI regeneration uses the locked compiler;
-consumers build from committed JS without Cargo, Gradle or Xcode. The public entry
+building and checking this private JavaScript fixture uses committed JS without
+Cargo, Gradle or Xcode. Public apps still use their normal native build process
+for initial or changed OS ports and native compatibility integration. The public entry
 reports the original SDK package/version; the fixture reports its internal test
 identity. Maintainers run `npm run verify --prefix frameworks/react-native-runtime`
 from the repository root. Source checks are recorded in the

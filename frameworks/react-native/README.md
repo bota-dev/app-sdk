@@ -2,14 +2,15 @@
 
 ## Generated JavaScript runtime and app OTA updates
 
-The synchronized beta.16 candidate adds `createBotaReactNativeJsRuntime` in the
+Published beta.16 adds `createBotaReactNativeJsRuntime` in the
 `@bota.dev/react-native-app-sdk/runtime` entry. Rust supplies the executable JS
 protocol/workflow implementation; no WebAssembly or native Rust engine runs in
-the application. These migration additions are not claimed in published beta.15.
-Canonical JS/Apple/Flutter preparation and the complete local RN suite pass.
-Exact final branch/main CI/License, full inventory, protected publication and
-public consumers remain pending; see the
-[beta.16 preflight](../../release/evidence/2.0.0-beta.16-preflight.md).
+the application. Its exact public npm archive matches the approved main-CI
+inventory. A fresh public install configures and destroys the generated client
+with native imports, registry access and WebAssembly rejected; strict declarations
+also compile. All five package/public-consumer gates pass; separate app/device
+acceptance is tracked in the
+[publication review](../../release/evidence/2.0.0-beta.16-publication.md).
 The ordinary package retains native adapters, Codegen, autolinking and its
 compatibility API. Importing `/runtime` evaluates without native module imports
 or registry access; selecting it does not disable package autolinking. The
@@ -91,11 +92,11 @@ operation-scoped `registerEncryptedUploadV2Material`/`releaseEncryptedUploadV2Ma
 registry. Managed v2/BYO/status factories use supplied scoped HTTP effects.
 See the [complete port/material contract and review](../../docs/parity/react-native-runtime.md).
 
-Published `2.0.0-beta.15` synchronizes the five-platform native SDK family.
-It includes Apple single-ATT transfer bounds and local connection ownership,
+Beta.16 retains beta.15's native compatibility corrections: Apple single-ATT
+transfer bounds and local connection ownership,
 awaitable React Native reconnect pause, and the reviewed main OTA, recording
-marker, protected-status and BYO storage changes. New generated-JS source
-publication, consuming-app OTA and physical acceptance remain separate. Generic
+marker, protected-status and BYO storage changes. Generated-JS npm publication,
+consuming-app OTA and physical acceptance remain separate gates. Generic
 OS ports must be installed in an initial app binary; compatible generated logic
 can subsequently update through the app's OTA mechanism. New OS capabilities or
 transport fixes still require an app build.
@@ -103,9 +104,9 @@ The managed Apple backend also matches the strict session-create request without
 an EndUser override; recording creation and native scope fences retain EndUser.
 See [request correction](../../docs/parity/v2-managed-backend.md#october-12-apple-session-request-correction).
 
-Bluetooth device SDK for Bota Pin and Bota Note applications. The 2.x candidate
+Bluetooth device SDK for Bota Pin and Bota Note applications. The 2.x distribution
 preserves the public TypeScript API of `@bota.dev/react-native-sdk@0.0.65`
-through its existing native adapters. The generated factory is a separate source
+through its existing native adapters. The generated factory is a separate execution
 path over primitive OS ports; it does not call those full Bota native workflows.
 
 The setup and native-material examples below describe the bundled root entry.
@@ -120,7 +121,7 @@ and its generated version. It makes no HTTP call or device command. Destroy
 discards late metadata results. The host explicitly relays a report alongside
 fresh status; see the root README. The frozen compatibility `BotaClient` and
 compatibility `DeviceManager` APIs are unchanged. Rebuild native binaries when
-adopting this source API; published-package availability is a separate gate.
+adopting changes to that native API.
 
 - React Native `0.86.3` or newer with the New Architecture enabled
 - iOS `15.1` or newer
@@ -129,10 +130,9 @@ adopting this source API; published-package availability is a separate gate.
 
 ## Install
 
-Published beta.15 remains available for the native-adapter path. Generated-JS
-factory availability requires the separate source-publication gate; the version
-pin below does not imply that the new factory is included. See the
-[beta.15 publication evidence](../../release/evidence/2.0.0-beta.15-publication.md).
+Published beta.16 includes the generated-JS factory through `/runtime` and retains
+the native-adapter path. See the
+[publication review](../../release/evidence/2.0.0-beta.16-publication.md).
 Rebuild native applications and reconnect explicitly after connection loss.
 Physical completed-resume acceptance and wider GATT recovery remain separate.
 Remove `@bota.dev/react-native-sdk` before adding the replacement; do not
@@ -140,7 +140,7 @@ co-install both. Standalone maintenance ended September 29, 2026; follow the
 [retirement and migration notice](../../docs/migrations/react-native-sdk-sunset.md).
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.15
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.16
 npx pod-install
 ```
 

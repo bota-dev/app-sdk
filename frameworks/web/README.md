@@ -1,12 +1,10 @@
 # Bota SDK for Web
 
-Source candidate `2.0.0-beta.16` synchronizes the five-platform SDK family and
-adds the React Native generated-JS route through the original package's `/runtime`
-entry. Web retains its Rust/Wasm implementation. Beta.15 remains the published
-baseline. Canonical JS/Apple/Flutter preparation and local RN checks pass; final
-branch/main CI/License, complete inventory, protected publication and public
-consumers remain pending. See the
-[beta.16 preflight](../../release/evidence/2.0.0-beta.16-preflight.md).
+Published `2.0.0-beta.16` retains Web's Rust/Wasm implementation and the existing
+public package identity. Exact public npm bytes match the approved main-CI
+inventory. React Native's generated-JS route uses its original `/runtime` entry.
+All five package/public-consumer gates pass; app/device acceptance remains
+separate. See the [publication review](../../release/evidence/2.0.0-beta.16-publication.md).
 
 `@bota.dev/web-app-sdk` is the foreground browser distribution of the Bota App
 SDK. It combines Web Bluetooth and tenant-scoped browser storage with the shared
@@ -21,8 +19,8 @@ dependency before adding its replacement. Storage namespaces do not change.
 
 ## Install
 
-This source prepares synchronized `2.0.0-beta.16`. Use the candidate pin below
-after publication is verified; beta.15 remains the current published version:
+Install the verified public beta.16 version explicitly; npm `latest` remains
+beta.0:
 
 ```bash
 npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.16
@@ -70,8 +68,9 @@ to deliver commands. Do not include phone names, persistent installation IDs,
 URLs, full user agents, location, or credentials. Metadata is self-reported
 operational information, not proof of continuous physical connectivity.
 
-This additive API is source-only until the next verified package publication;
-it is not present in the published beta.1 package.
+Published beta.16 includes `clientPresence.nextReport`; historical beta.1 lacks
+this additive API. Backend integration and fresh presence observations remain
+host-owned.
 
 ## Create a client and provide backend boundaries
 
