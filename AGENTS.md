@@ -1,5 +1,12 @@
 # AGENTS.md
 
+Independent RN runtime publication uses main-only
+`release-react-native-runtime.yml`, exact main-CI archive promotion and the
+existing `release-approval` then `release` environments. Preserve the standalone
+0.x beta version, occupied bytes and all current/retired RN/Web tags. Initial npm
+authentication/trusted-publisher setup, registry verification and app OTA are
+separate gates. See [runtime preflight](release/evidence/react-native-runtime-0.1.0-beta.0-preflight.md).
+
 October 12 generated-JS migration source: `createBotaReactNativeJsRuntime` runs
 shared Rust codecs/workflows as ordinary JS over version 1 OS ports. Generic host
 libraries supply BLE, scoped durable files/journals, redirect-refusing HTTP and

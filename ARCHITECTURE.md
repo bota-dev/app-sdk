@@ -1,5 +1,11 @@
 # Architecture
 
+The independently versioned React Native JavaScript runtime has a separate
+main-only publication controller with exact successful-CI artifact promotion,
+the existing protected review and npm byte/public-consumer verification. It does
+not join the synchronized native family version matrix. See
+[runtime publication preflight](release/evidence/react-native-runtime-0.1.0-beta.0-preflight.md).
+
 October 12 source adds a generated-JavaScript RN execution route:
 `createBotaReactNativeJsRuntime` compiles the Rust core through pinned
 Rust/Binaryen/Terser into ordinary JS, with no WebAssembly runtime or full Bota

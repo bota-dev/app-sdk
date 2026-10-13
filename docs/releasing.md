@@ -1,3 +1,39 @@
+# Independent React Native JavaScript runtime: 0.1.0-beta.0 candidate
+
+The owner requested continuation of publication after the generated-JS migration
+passed exact source CI. The independently versioned
+`@bota.dev/react-native-app-sdk-runtime` uses the main-only manual
+`release-react-native-runtime.yml` workflow; the synchronized native family
+remains beta.15. See [runtime preflight](../release/evidence/react-native-runtime-0.1.0-beta.0-preflight.md).
+Publication, consuming app OTA and physical acceptance remain separate.
+
+Supply the exact source revision, successful main CI run, GitHub runtime artifact
+ZIP SHA-256 and npm tarball SHA-256. `promote-runtime-ci.mjs` checks successful
+exact main CI/License, artifact ownership/digests and the standalone package
+before preserving its bytes. The existing single `release-approval` gate follows
+verification; `release` retains OIDC without another reviewer gate. Both existing
+environments allow main, so this path changes no environment policies and creates
+no synchronized-family tag. Do not rebuild or repack after approval.
+
+`publish-runtime-npm.mjs` publishes only this independent beta identity. It checks
+occupied versions and exact public tarball bytes, advances only `beta`, and
+preserves both current and retired RN/Web package channels. An existing runtime
+`latest` stays unchanged. On the first publication only, npm may leave `latest`
+absent or create it at the exact first candidate; no other value is permitted.
+A fresh public consumer must load the generated client with native imports and
+WebAssembly rejected, and compile its public declarations.
+
+The new package must first exist before its npm trusted publisher can be added.
+Use the owner's interactive npm authentication to publish the approved exact CI
+tarball, then configure and read back only `bota-dev/app-sdk`, workflow
+`release-react-native-runtime.yml`, environment `release`, publish permission.
+Resume the same protected workflow; it verifies the occupied immutable version.
+Do not copy temporary credentials into source or CI secrets. Current npm staging
+can create a new public package through a `0.0.0-stage` placeholder; this runtime
+procedure publishes the actual reviewed version and adds no placeholder.
+See [npm staging](https://docs.npmjs.com/staged-publishing/) and
+[npm trust](https://docs.npmjs.com/cli/v12/commands/npm-trust/).
+
 # Published synchronized beta: 2.0.0-beta.15
 
 The owner authorized commit, push and publication on October 12, 2026 (Pacific).
@@ -819,7 +855,8 @@ Configure npm trusted publishers for `@bota.dev/react-native-app-sdk` and
 workflow `release.yml`, environment `release`, and allowed action `npm publish`.
 Each package has one trusted publisher. Preserve old-package publishers for
 maintenance and historical recovery. npm requires a package to exist before
-this grant can be configured; staged publication cannot create a new package.
+this grant can be configured. Current staging can create a public placeholder;
+the existing exact-version bootstrap below remains historical evidence.
 See [npm trust](https://docs.npmjs.com/cli/v12/commands/npm-trust/).
 
 Both npm grants are saved and verified as of 2026-09-24. Web setup completed

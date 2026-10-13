@@ -1,10 +1,16 @@
 # Bota React Native JavaScript runtime
 
-Source candidate `@bota.dev/react-native-app-sdk-runtime@0.1.0-beta.0` runs
+Prerelease `@bota.dev/react-native-app-sdk-runtime@0.1.0-beta.0` runs
 generated Rust SDK behavior as ordinary JavaScript over installed OS ports.
-It is independently versioned and not yet published to npm. It has no React
+It is independently versioned. It has no React
 Native dependency, native autolinking, CocoaPods/Maven dependency or Codegen
 module. It needs neither WebAssembly nor a native Rust engine at runtime.
+
+Use an exact prerelease pin when installing the published runtime:
+
+```sh
+npm install @bota.dev/react-native-app-sdk-runtime@0.1.0-beta.0
+```
 
 ```ts
 import {

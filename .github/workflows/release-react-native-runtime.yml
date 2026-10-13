@@ -1,0 +1,127 @@
+name: Release React Native JavaScript runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtimeVersion:
+        description: Independent runtime beta version, for example 0.1.0-beta.0
+        required: true
+        type: string
+      sourceRevision:
+        description: Exact main source revision of the tested runtime
+        required: true
+        type: string
+      candidateRunId:
+        description: Successful exact main CI run containing the runtime tarball
+        required: true
+        type: string
+      archiveSha256:
+        description: SHA-256 of the GitHub runtime artifact ZIP
+        required: true
+        type: string
+      packageSha256:
+        description: SHA-256 of the preserved npm runtime tarball
+        required: true
+        type: string
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  RUNTIME_VERSION: ${{ inputs.runtimeVersion }}
+  RUNTIME_SOURCE_REVISION: ${{ inputs.sourceRevision }}
+  RUNTIME_CANDIDATE_RUN_ID: ${{ inputs.candidateRunId }}
+  RUNTIME_ARCHIVE_SHA256: ${{ inputs.archiveSha256 }}
+  RUNTIME_PACKAGE_SHA256: ${{ inputs.packageSha256 }}
+  RUNTIME_PACKAGE_NAME: '@bota.dev/react-native-app-sdk-runtime'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: react-native-runtime-release-${{ inputs.runtimeVersion }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify and preserve the exact runtime CI artifact
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      package-filename: ${{ steps.promote.outputs.package-filename }}
+    steps:
+      - name: Check out release controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install verification tooling
+        run: npm ci --ignore-scripts
+      - name: Promote successful main CI bytes
+        id: promote
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/release/promote-runtime-ci.mjs
+      - name: Preserve reviewed runtime archive and provenance
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: react-native-runtime-promoted-${{ github.run_id }}
+          path: target/react-native-runtime-release/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  approve-release:
+    name: Approve independent runtime publication
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release-approval
+    permissions: {}
+    steps:
+      - name: Approve the preserved runtime candidate
+        run: echo 'Runtime publication approved; preserve the reviewed CI bytes.'
+
+  publish:
+    name: Publish and verify the JavaScript runtime
+    needs: [verify, approve-release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      RUNTIME_PACKAGE_FILE: target/react-native-runtime-release/${{ needs.verify.outputs.package-filename }}
+    steps:
+      - name: Check out release controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up registry tooling
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Install verification tooling
+        run: npm ci --ignore-scripts
+      - name: Download the approved preserved archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: react-native-runtime-promoted-${{ github.run_id }}
+          path: target/react-native-runtime-release/
+      - name: Publish or verify the exact beta artifact
+        run: node tools/release/publish-runtime-npm.mjs publish "$RUNTIME_VERSION" "$RUNTIME_PACKAGE_SHA256" "$RUNTIME_PACKAGE_FILE"
+      - name: Install a fresh public consumer
+        run: npm install --ignore-scripts --no-audit --no-fund --prefix target/react-native-runtime-consumer "$RUNTIME_PACKAGE_NAME@$RUNTIME_VERSION"
+      - name: Verify public JavaScript execution and declarations
+        run: |
+          node tools/release/verify-runtime-consumer.mjs target/react-native-runtime-consumer "$RUNTIME_VERSION"
+          cp tools/release/runtime-consumer/client.ts tools/release/runtime-consumer/tsconfig.json target/react-native-runtime-consumer/
+          node node_modules/typescript/bin/tsc -p target/react-native-runtime-consumer/tsconfig.json
