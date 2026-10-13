@@ -1,5 +1,16 @@
 # AGENTS.md
 
+October 12 generated-JS migration source: `createBotaReactNativeJsRuntime` runs
+shared Rust codecs/workflows as ordinary JS over version 1 OS ports. Generic host
+libraries supply BLE, scoped durable files/journals, redirect-refusing HTTP and
+optional sockets; no complete Bota native SDK is used by this factory. Receiver,
+managed/BYO recovery and queue decisions are Rust sourced. Ciphertext and signed
+documents are bounded internal JS transport data; device/backend retain trust
+verification and decryption. See [source review](docs/parity/react-native-runtime.md)
+and [generation/acceptance](docs/superpowers/plans/2026-10-12-react-native-generated-js.md).
+Existing native-facade notes below describe the compatibility distribution.
+Publication, app OTA and physical acceptance are separate and pending.
+
 October 12 RN control-plane amendment: use the independently loadable `/runtime`
 entry and version 1 adapter contracts for TypeScript policy and host bindings.
 Preflight complete operation/callback/cancellation support before device work;
@@ -33,7 +44,7 @@ BLE, HTTP and WS, private durable journals and receipt-gated cleanup. Native
 physical capture; explicit identities also work. Three WS reconnects precede a
 fenced full-file successor; initial WS failure stays on HTTP segments. Stop
 Recording can run during a live upload; unrelated device operations stay exclusive.
-Only metadata crosses JS. See [integration and review](docs/parity/byo-storage.md)
+Only metadata crosses JS in the published native distribution. See [integration and review](docs/parity/byo-storage.md)
 for source evidence and separate customer, package and hardware acceptance gates.
 
 Recording markers #201: [native BATCH integration and successor review](docs/parity/recording-markers.md) covers opaque transfers, authorization recovery, owner/channel fences and dual receipts. The [STREAMING scalar status provider](docs/parity/protected-streaming-status.md) is wired through native HTTPS; Demo uses its dashboard read API and existing BLE control for device-direct streaming. A new BLE audio relay is outside this scope. Published beta.15 includes the new marker/status native capabilities; consuming native App delivery and profile/hardware qualification remain separate. No marker profile is enabled; preserve UUID[16] and 280-byte authorization. See [publication evidence](release/evidence/2.0.0-beta.15-publication.md).
@@ -105,7 +116,7 @@ Native publication, consuming app binaries and hardware acceptance are separate.
 
 ## Managed encrypted-v2 upload adapter
 
-Current source packages customer-proxy HTTP/session recovery in the React Native
+The published native distribution packages customer-proxy HTTP/session recovery in the React Native
 SDK's native iOS/Android adapters. `createEncryptedUploadV2Backend` takes fresh
 app auth, exact scope and cancellation; custom providers remain supported.
 Before another PUT, only the exact 409 `encrypted_upload_v2_staging_missing`
@@ -392,13 +403,15 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 - One synchronized SDK version comes from `sdk-version.toml`.
 - Rust owns protocol and deterministic workflow behavior.
-- Platform transports and lifecycle integration remain native.
+- Platform transports and lifecycle use OS facilities; generated RN accesses
+  narrow installed capabilities through JS host libraries.
 - App SDK code does not use Bota secret API keys. The opt-in native RN v2 adapter
   calls the customer's authenticated proxy; hosts own authorization and scope.
 - Unsupported platform capabilities fail before device state changes.
 - One workflow owns the core engine at a time; hosts preserve request and
   cancellation IDs when returning callbacks.
-- High-volume recording bytes stay off JavaScript and Dart bridges.
+- Native-facade and Dart distributions keep recording bytes off their bridges.
+  Generated RN uses bounded internal ciphertext buffers over scoped file ports.
 - The Flutter Dart facade owns one `PigeonBotaPlatform` per engine. It uses
   cryptographically random 32-hex bridge IDs, removes pending operation,
   stream, and callback ownership before completion or cancellation, rejects

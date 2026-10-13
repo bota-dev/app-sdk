@@ -5,6 +5,18 @@ source changes that are not in the published packages. Published versions and
 tags are immutable; package publication and application/device acceptance are
 tracked separately.
 
+## Unreleased
+
+- Add a JavaScript runtime generated from the shared Rust core, with versioned
+  installed OS ports and generic BLE integration. Device workflows, encrypted-v2
+  receivers, managed/BYO uploads and queue policy execute in the OTA bundle.
+- Preserve exact scope, cancellation settlement, durable completion and separate
+  receipt-gated device cleanup. Firmware success requires verified serial and
+  installed version after reboot; compatible JS upgrades do not require rebuilding
+  the full Bota native SDK.
+- Publication, consuming-app integration/OTA and physical acceptance remain
+  separate gates. Existing native factory and frozen compatibility exports remain.
+
 ## 2.0.0-beta.15
 
 - Bound Apple framed transfers by single-ATT capacity and preserve numeric device

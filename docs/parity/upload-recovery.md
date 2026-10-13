@@ -44,7 +44,15 @@ native workflow; this document describes the compatibility batch upload queue.
 
 ## Persistence And Completion
 
-Audio never crosses JavaScript. Default native files remain in Apple's
+The generated-JS source factory also implements file upload, scoped metadata
+recovery and completed-file release using generic file/HTTP ports and Rust
+admission/retry policy. It reopens the original validated queue identity after
+restart; a transient attempt ID cannot choose another file. Exact pending 425
+sets `completionPending` durably and cannot trigger another PUT. See
+[generated source review](react-native-runtime.md); publication and physical
+acceptance are separate.
+
+In the published native distribution, audio never crosses JavaScript. Default native files remain in Apple's
 application-support `BotaDeviceSDK/Recordings` directory and Android's
 `noBackupFilesDir/bota-app-sdk/recordings` directory. Explicit native storage
 configuration changes the recording root. Release accepts only UUID-named

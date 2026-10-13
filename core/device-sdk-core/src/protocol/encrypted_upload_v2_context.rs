@@ -153,6 +153,13 @@ pub fn validate_encrypted_upload_v2_admission(
     require_recovery: bool,
 ) -> Result<EncryptedUploadV2Capabilities, DeviceSdkError> {
     let capabilities = decode_encrypted_upload_v2_capabilities(bytes)?;
+    validate_encrypted_upload_v2_capabilities_admission(capabilities, require_recovery)
+}
+
+pub fn validate_encrypted_upload_v2_capabilities_admission(
+    capabilities: EncryptedUploadV2Capabilities,
+    require_recovery: bool,
+) -> Result<EncryptedUploadV2Capabilities, DeviceSdkError> {
     let required = if require_recovery {
         wire::ENCRYPTED_UPLOAD_V2_CAP_RECOVERY_REQUIRED_MASK
     } else {

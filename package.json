@@ -20,6 +20,8 @@
     "flutter:verify": "node tools/flutter/verify-package.mjs && tools/flutter/run-flutter.sh --version && npm run flutter:analyze && npm run flutter:test",
     "license-check": "npm run check:licenses",
     "react-native:verify": "node tools/react-native/verify-package.mjs",
+    "react-native:generate-js-core": "node tools/react-native/generate-js-core.mjs",
+    "react-native:verify-js-core": "node tools/react-native/verify-js-core.mjs",
     "release:channel": "node tools/release/resolve-release-channel.mjs",
     "sync:android-encrypted-upload-v2-vectors": "node tools/android/sync-encrypted-upload-v2-vectors.mjs --check",
     "sync:android-fixtures": "node tools/android/sync-protocol-fixtures.mjs --check",
@@ -37,9 +39,11 @@
   },
   "devDependencies": {
     "ajv": "8.20.0",
+    "binaryen": "132.0.0",
     "fast-xml-parser": "5.11.2",
     "fflate": "0.8.3",
     "tar": "7.5.22",
+    "terser": "5.51.2",
     "typescript": "6.0.3"
   }
 }

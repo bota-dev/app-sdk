@@ -1,66 +1,93 @@
 # Bota SDK for React Native
 
-## TypeScript runtime and app OTA updates
+## Generated JavaScript runtime and app OTA updates
 
 For independent JavaScript-only distribution, see
 [`@bota.dev/react-native-app-sdk-runtime`](../react-native-runtime/README.md).
-That source candidate contains no native autolinking or dependency and can use an
-existing installed adapter. Its package version is independent of this bundled
-native-adapter distribution; registry publication is still pending.
+That independently versioned source candidate has no native autolinking or
+React Native dependency. It runs generated Rust SDK code over installed generic
+OS ports. Registry publication is pending.
 
-Current main source provides `createBotaReactNativeRuntime` and the independently
-loadable `@bota.dev/react-native-app-sdk/runtime` entry. These additions are not
-claimed to exist in the published beta.15 package. The ordinary package entry
-selects the installed adapters and uses the same TypeScript runtime.
+Current main adds `createBotaReactNativeJsRuntime` in the independently loadable
+`@bota.dev/react-native-app-sdk/runtime` entry. Rust supplies the executable JS
+protocol/workflow implementation; no WebAssembly or native Rust engine runs in
+the application. These migration additions are not claimed in published beta.15.
+The ordinary package entry retains its installed native adapters and existing
+compatibility API.
 
 ```ts
-import { createBotaReactNativeRuntime } from '@bota.dev/react-native-app-sdk/runtime';
+import { createBlePlxPort, createBotaReactNativeJsRuntime,
+  type BotaJsHostPorts } from '@bota.dev/react-native-app-sdk/runtime';
 
-const runtime = createBotaReactNativeRuntime(
-  { apiVersion: 1, device: deviceAdapter, encryptedUploadBackend: backendAdapter },
-  { reconnect: { maxAttempts: 2, delayMs: 3000 } },
-);
+const lifetime = new AbortController();
+const ports: BotaJsHostPorts = {
+  apiVersion: 1,
+  platform: 'ios',
+  signal: lifetime.signal,
+  checkScope: assertCapturedAccountProjectAndBinding,
+  ble: createBlePlxPort(installedBleManager),
+  persistence: privateScopedPersistence,
+  files: reopenableScopedFiles,
+  randomBytes: secureRandomBytes,
+  network: registeredNetworkTransfers,
+};
+const runtime = createBotaReactNativeJsRuntime(ports, {
+  backend: { fetch: redirectRefusingHttps },
+  uploadFile: uploadOpaqueFile,
+  openSocket: openAuthenticatedSocket,
+});
 await runtime.client.configure({ environment: 'production' });
-if (runtime.supports('listPendingRecordings')) {
-  // Use runtime.sdk.recordings.listPendingRecordings with a verified device.
-}
+lifetime.abort(); // logout, reassignment or teardown
+await runtime.client.destroy();
 ```
 
-`deviceAdapter` and optional `backendAdapter` implement the version 1 asynchronous
-method/event contracts. Each runtime owns its manager graph. Missing optional
-operations fail with a stable compatibility error before device work. Adapter
-contract support, rather than a matching native/npm version string, determines
-whether a JavaScript workflow can run. Compatible TypeScript policy and app UI
-changes may use the application's existing OTA mechanism.
+The generic BLE port reports actual radio and permission state through optional
+`readBluetoothState`/`observeBluetoothState` ports, normalized by generated Rust.
+Without those observations the generated client remains `unknown`, and
+`waitForBluetooth` cannot report readiness. Teardown joins state observations.
 
-Native protocol/file engines still handle bulk transfers, cryptography,
-background work and durable cleanup. Changing those implementations still needs
-an app build. A smaller adapter must preserve the same safety contracts; no
-BLE-only replacement driver is included. See the [runtime review](../../docs/parity/react-native-runtime.md)
-for the implemented scope and installed-app acceptance limits.
+The named host values implement exported primitive interfaces. Hosts obtain
+Bluetooth permissions and own installed libraries. Files support scoped reopen,
+bounded reads and durable flush/readback. Journals retain one captured private
+namespace. HTTP/file upload refuses redirects before credentials/data are sent
+and joins cancellation; RN's default XHR-backed fetch cannot provide that fence.
+Optional WSS preserves the qualified BYO subprotocol and joins pending I/O on
+close. Shape preflight checks API version 1 before any OS effect.
 
-Verified firmware reboot recovery is TypeScript policy too. After native image
-verification, it can recover a lost reconnect using fresh exact serial/version
-read-back within the original two-minute budget. It never retries failed firmware
-transfer/verification or assumes that an ACK proves installation. Cancellation
-retains ownership until the exact native operation settles. This can improve an
-older conforming installed adapter through a compatible JavaScript app update;
-physical acceptance remains separate.
+Generated Rust chooses framing, transfer windows, retries, backend recovery and
+receipt-gated cleanup; JS executes OS I/O. Ciphertext and signed documents are
+bounded internal SDK transport values, while public APIs return metadata and
+progress/results. V2/BYO keys remain on the device or behind installed secure
+handles; JS gains no signing/decryption authority. The historical private-PEM
+import remains a compatibility gap outside the modern key target.
 
-Source candidate `2.0.0-beta.15` synchronizes the five-platform SDK family.
+Generated firmware update uses the canonical Rust OTA/reboot recovery loop.
+`firmwareRecovery.timeoutMs` can narrow its budget; `delayMs` is legacy-adapter
+behavior only. Fresh serial/version readback proves installation; an ACK cannot.
+Custom v2 providers use `readEncryptedUploadV2AuthNonce(operationId)` and the
+operation-scoped `registerEncryptedUploadV2Material`/`releaseEncryptedUploadV2Material`
+registry. Managed v2/BYO/status factories use supplied scoped HTTP effects.
+See the [complete port/material contract and review](../../docs/parity/react-native-runtime.md).
+
+Published `2.0.0-beta.15` synchronizes the five-platform native SDK family.
 It includes Apple single-ATT transfer bounds and local connection ownership,
 awaitable React Native reconnect pause, and the reviewed main OTA, recording
-marker, protected-status and BYO storage changes. Beta.14 remains the published
-baseline until this candidate completes its gates.
-Native applications require a new binary.
+marker, protected-status and BYO storage changes. New generated-JS source
+publication, consuming-app OTA and physical acceptance remain separate. Generic
+OS ports must be installed in an initial app binary; compatible generated logic
+can subsequently update through the app's OTA mechanism. New OS capabilities or
+transport fixes still require an app build.
 The managed Apple backend also matches the strict session-create request without
 an EndUser override; recording creation and native scope fences retain EndUser.
 See [request correction](../../docs/parity/v2-managed-backend.md#october-12-apple-session-request-correction).
 
 Bluetooth device SDK for Bota Pin and Bota Note applications. The 2.x candidate
 preserves the public TypeScript API of `@bota.dev/react-native-sdk@0.0.65`
-while moving Bluetooth workflows and recording, streaming, and firmware bytes
-into the native Apple and Android SDKs.
+through its existing native adapters. The generated factory is a separate source
+path over primitive OS ports; it does not call those full Bota native workflows.
+
+The setup and native-material examples below describe the bundled root entry.
+Generated-mode consumers use the version-1 generic ports above.
 
 ## Requirements
 
@@ -80,9 +107,10 @@ adopting this source API; published-package availability is a separate gate.
 
 ## Install
 
-Published beta.14 remains available. Use the beta.15 pin below only after
-publication is verified; see the
-[preflight](../../release/evidence/2.0.0-beta.15-preflight.md).
+Published beta.15 remains available for the native-adapter path. Generated-JS
+factory availability requires the separate source-publication gate; the version
+pin below does not imply that the new factory is included. See the
+[beta.15 publication evidence](../../release/evidence/2.0.0-beta.15-publication.md).
 Rebuild native applications and reconnect explicitly after connection loss.
 Physical completed-resume acceptance and wider GATT recovery remain separate.
 Remove `@bota.dev/react-native-sdk` before adding the replacement; do not
@@ -135,12 +163,12 @@ await BotaClient.waitForBluetooth();
 The `BotaClient.devices`, `BotaClient.recordings`, and `BotaClient.ota`
 managers become available after configuration completes.
 
-Source-only workspace coordination adds
+Published beta.15 workspace coordination adds
 `await BotaClient.devices.pauseAutoReconnect()`. Fence new reconnect work and
 retry rearming first, then inspect fresh device activity and disconnect idle
 connections before changing scope. This method waits for submitted reconnects;
 it does not itself disconnect. Existing `disableAutoReconnect(): void` remains
-unchanged. Published beta.14 does not include the addition; see
+unchanged. Earlier beta.14 does not include the addition; see
 [verification and delivery limits](../../docs/parity/workspace-reconnect-quiescence.md).
 
 Discovery exposes the manufacturer-advertised `macAddress` as uppercase,
@@ -172,7 +200,7 @@ await BotaDeviceSDK.recordings.syncEncryptedRecordingV2(
 );
 ```
 
-The provider receives a fresh native capability snapshot, immutable recording
+For the installed native-adapter path, the provider receives a fresh native capability snapshot, immutable recording
 identity, and optional versioned checkpoint. It returns only the upload
 session, owner revision, security policy, and an opaque native material
 registration ID. Before returning that ID, application-native Swift or Kotlin
@@ -189,7 +217,7 @@ Its target-facade tests and the maintenance SDK `0.0.67` runtime tests are
 cross-referenced by the same canonical v2 workflow evidence in CI and tagged
 release verification. The frozen public compatibility surface remains `0.0.65`.
 
-### Unpublished Native App Integration
+### Native App Integration
 
 Current source adds `BotaDeviceSDK.recordings.listPendingRecordings(device)`.
 It returns legacy recordings and v2 entries tagged by `storageFormat: 3`, with
@@ -216,7 +244,7 @@ Historical checkpoints without ciphertext identity may resume the same owner
 but cannot authorize replacement. See `docs/parity/v2-demo-*.md` for evidence
 and limitations. Hardware and publication gates remain unchanged.
 
-## Unpublished Maintenance Additions
+## Native Compatibility Additions
 
 Current source follows the diagnostic and upload-recovery additions from
 maintenance SDK commit `318974f925a573cf04b0d624978bee04784af09b`. These additions
@@ -242,7 +270,7 @@ separate physical-device and application rollout gates.
 
 ## Documentation
 
-Unpublished source also exports `createProtectedStreamingStatusBackend` for
+Published beta.15 exports `createProtectedStreamingStatusBackend` for
 read-only protected STREAMING metadata. Configure a scoped HTTPS `baseUrl`,
 optional `organizationId`, lifetime `signal` and fresh application
 `getAccessToken`; call `getStatus({ recordingId, sessionId,
@@ -251,10 +279,11 @@ recordingGeneration, writerEpoch })`. The exact session identity is checked;
 call `dispose()` on workspace or account changes. A matching rebuilt native
 binary is required; published beta.14 lacks these methods. `sealed` means
 marker metadata only, never audio completion or permission to delete. This
-reader does not start protected capture or relay signed documents.
+reader does not start protected capture or relay signed documents. The new
+generated runtime implements this read facade through its conforming HTTP port.
 See `docs/parity/protected-streaming-status.md` in the source repository.
 
-未发布源码新增上述只读状态接口，必须使用匹配的原生二进制；已发布 beta.14 不包含
+beta.15 已发布上述只读状态接口，原生适配器路径必须使用匹配的原生二进制；beta.14 不包含
 这些方法。查询校验精确会话身份，revision 保持字符串且允许 `"0"`；账号或工作空间
 变化时取消并释放。`sealed` 仅指标记元数据，不代表音频完成或允许删除；本接口不启动
 protected 采集，也不转发签名文档。
@@ -265,6 +294,9 @@ recording transfer, WiFi, OTA, and device-management guides.
 ## License
 
 MIT
+
+Redistribution of the generated SDK must retain
+[third-party notices](THIRD_PARTY_NOTICES.md) and their complete license texts.
 
 ## Standalone migration additions (beta.6)
 
@@ -281,7 +313,7 @@ scope guard, then attach the report and the authorized `binding_generation` to
 the existing authenticated BLE heartbeat. Skip during competing work; do not
 add timers, replay offline reports, or treat metadata as device authority.
 
-Use `createUploadRecoveryProvider` with an authenticated, disposable
+For the native-adapter path, use `createUploadRecoveryProvider` with an authenticated, disposable
 `UploadRecoveryBackend` lease. The helper checks identity and evidence, obtains
 fresh credentials, and completes the original backend recording before native
 cleanup. Supply the initial `recoveryScope` and configure the provider before
@@ -297,6 +329,7 @@ another PUT after restart while the backend remains pending. This phase never
 permits cleanup without the exact completion ACK; only authenticated
 `integrity_failure` permits a repair upload. Scope changes and cancellation
 remain fenced. The host must honor request aborts and provide HTTP timeouts.
-This unpublished correction requires rebuilt native adapters, not just updated
-JavaScript. Timers require a live JS runtime; encrypted-v2 receipt recovery is
-unchanged. See `docs/parity/upload-recovery.md` for evidence and limits.
+Native implementation fixes require matching rebuilt adapters. Generated-mode
+consumers use `runtime.createUploadRecoveryProvider` with Rust policy and scoped
+file/HTTP effects. Timers require a live JS runtime; encrypted-v2 receipt recovery
+is unchanged. See `docs/parity/upload-recovery.md` for evidence and limits.

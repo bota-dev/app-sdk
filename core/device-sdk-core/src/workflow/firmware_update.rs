@@ -30,9 +30,11 @@ const ACK_TIMEOUT_MS: u64 = 5_000;
 const REBOOT_TIMEOUT_ID: u64 = 102;
 const REBOOT_TIMEOUT_MS: u64 = 30_000;
 const RECONNECT_TIMEOUT_ID: u64 = 103;
-const RECONNECT_TIMEOUT_MS: u64 = 120_000;
+pub const RECONNECT_TIMEOUT_MS: u64 = 120_000;
 const RECONNECT_RETRY_ID: u64 = 104;
 const RECONNECT_RETRY_MS: u64 = 1_000;
+const RESPONSE_TIMEOUT_ID: u64 = 105;
+const RESPONSE_TIMEOUT_MS: u64 = 30_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Phase {
@@ -221,7 +223,9 @@ impl FirmwareUpdateWorkflow {
         self.pending_chunk_units = 0;
         self.latest_ack = None;
         self.waiting_ack = None;
-        self.read_next_or_verify(context)
+        let mut effects = self.cancel_timer(context);
+        effects.extend(self.read_next_or_verify(context));
+        effects
     }
 
     fn read_next_or_verify(&mut self, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
@@ -291,12 +295,13 @@ impl FirmwareUpdateWorkflow {
 
     fn begin_reboot(&mut self, context: &mut WorkflowContext<'_>) -> Vec<EffectRequest> {
         self.phase = Phase::AwaitingReboot;
-        let mut effects = vec![self.progress(
+        let mut effects = self.cancel_timer(context);
+        effects.push(self.progress(
             FirmwareUpdatePhase::Rebooting,
             u64::from(self.image.size_bytes),
             u64::from(self.image.size_bytes),
             context,
-        )];
+        ));
         effects.extend(self.schedule_timer(REBOOT_TIMEOUT_ID, REBOOT_TIMEOUT_MS, context));
         effects
     }
@@ -617,6 +622,27 @@ impl WorkflowReducer for FirmwareUpdateWorkflow {
         }
 
         if matches!(
+            event.kind,
+            HostEventKind::TimerFired {
+                timer_id: RESPONSE_TIMEOUT_ID,
+            }
+        ) {
+            let detail = match self.phase {
+                Phase::AwaitingReady => "device firmware upload readiness timed out",
+                Phase::AwaitingVerify => "device firmware verification result timed out",
+                _ => return Ok(Vec::new()),
+            };
+            if Some(event.request_id) != self.timer_request_id {
+                return Ok(Vec::new());
+            }
+            return Ok(self.fail(
+                DeviceSdkError::new(ErrorCode::Timeout, Operation::UpdateFirmware, true)
+                    .with_detail(detail),
+                context,
+            ));
+        }
+
+        if matches!(
             self.phase,
             Phase::Reconnecting | Phase::WaitingReconnectRetry
         ) {
@@ -730,7 +756,7 @@ impl WorkflowReducer for FirmwareUpdateWorkflow {
                     Ok(self.begin_transfer(context))
                 } else {
                     self.phase = Phase::AwaitingReady;
-                    Ok(Vec::new())
+                    Ok(self.schedule_timer(RESPONSE_TIMEOUT_ID, RESPONSE_TIMEOUT_MS, context))
                 }
             }
             (
@@ -808,7 +834,7 @@ impl WorkflowReducer for FirmwareUpdateWorkflow {
                     Ok(self.begin_reboot(context))
                 } else {
                     self.phase = Phase::AwaitingVerify;
-                    Ok(Vec::new())
+                    Ok(self.schedule_timer(RESPONSE_TIMEOUT_ID, RESPONSE_TIMEOUT_MS, context))
                 }
             }
             (

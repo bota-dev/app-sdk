@@ -8,6 +8,12 @@ import { UploadVerificationPendingError } from './uploadVerificationPending';
 const journalOperations = new WeakMap<object, Promise<unknown>>();
 const journalOwners = new WeakMap<object, NativeUploadQueue>();
 const retryDelays = [30_000, 120_000, 600_000, 3_600_000, 14_400_000];
+export type CompatibilityUploadPolicyCodec = (name: string, input: Record<string, unknown>) => Record<string, unknown>;
+const codecPolicies = new WeakMap<BotaDeviceSDKRecordingClient, CompatibilityUploadPolicyCodec>();
+/** Internal: only generated runtimes bind shared Rust policy; legacy factories retain defaults. */
+export function setCompatibilityUploadPolicy(client: BotaDeviceSDKRecordingClient, codec?: CompatibilityUploadPolicyCodec): void {
+  if (codec) codecPolicies.set(client, codec); else codecPolicies.delete(client);
+}
 const cancelled = () => new Error('Upload cancelled');
 const dispose = (info: UploadInfo | null | undefined) => {
   try { info?.dispose?.(); } catch { /* Cleanup cannot change an acknowledged result. */ }
@@ -144,21 +150,26 @@ export class NativeUploadQueue extends EventEmitter<RecordingManagerEvents> {
     try {
       check();
       const task = this.get(id)!;
+      const codec = codecPolicies.get(this.client);
       info = this.credentials.get(id);
       this.credentials.delete(id);
       initialSignal = info?.signal;
       initialSignal?.addEventListener('abort', initialAbort, { once: true });
       if (initialSignal?.aborted) initialAbort();
       check();
-      if (info && this.provider && !info.signal?.aborted && (task.completionPending || (!info.alreadyUploaded && (
-        !(info.relay ? info.relay.url : info.uploadUrl) ||
-        (info.expiresAt && info.expiresAt.getTime() <= Date.now())
+      const initialExpiry = info?.expiresAt?.getTime();
+      const credentials = codec?.('planCompatibilityUploadCredentials', { hasCredentials: !!info, hasProvider: !!this.provider,
+        aborted: info?.signal?.aborted === true, completionPending: task.completionPending === true,
+        alreadyUploaded: info?.alreadyUploaded === true, targetPresent: !!(info?.relay ? info.relay.url : info?.uploadUrl),
+        expiresAtMs: Number.isFinite(initialExpiry) ? initialExpiry : null, nowMs: Date.now(), hasRecordingUuid: !!task.recordingUuid });
+      if (credentials ? credentials.refresh === true : info && this.provider && !info.signal?.aborted && (task.completionPending || (!info.alreadyUploaded && (
+        !(info.relay ? info.relay.url : info.uploadUrl) || (info.expiresAt && info.expiresAt.getTime() <= Date.now())
       )))) {
         dispose(info);
         info = undefined;
       }
       if (!info) {
-        if (!this.provider || !task.recordingUuid) throw new Error('Upload recovery requires a provider and recordingUuid');
+        if (credentials ? credentials.recoveryAllowed !== true : !this.provider || !task.recordingUuid) throw new Error('Upload recovery requires a provider and recordingUuid');
         info = await abortable(Promise.resolve().then(() => {
           check();
           return this.provider!({
@@ -172,20 +183,28 @@ export class NativeUploadQueue extends EventEmitter<RecordingManagerEvents> {
       }
       check();
       if (!info) {
-        await this.update(id, { status: 'pending', nextAttemptAt: Date.now() + 30_000 }, check);
+        if (!codec) await this.update(id, { status: 'pending', nextAttemptAt: Date.now() + 30_000 }, check);
         throw new Error('Upload waiting for its original account');
       }
-      if (info.recordingId !== task.recordingId || info.recoveryScope !== task.recoveryScope) {
+      if (!codec && (info.recordingId !== task.recordingId || info.recoveryScope !== task.recoveryScope)) {
         throw new Error('Upload recovery identity changed');
       }
-      const uploadRequired = !info.alreadyUploaded && (!task.completionPending || info.reuploadRequired === true);
-      if (uploadRequired && !!info.relay !== !!task.relayUpload) throw new Error('Upload recovery route changed');
-      if (task.completionPending && !info.complete) throw new Error('Pending upload requires durable host completion acknowledgement');
+      const expiresAt = info.expiresAt?.getTime();
+      const route = codec?.('planCompatibilityUploadQueueRoute', { alreadyUploaded: info.alreadyUploaded === true,
+        completionPending: task.completionPending === true, reuploadRequired: info.reuploadRequired === true,
+        routeChanged: !!info.relay !== !!task.relayUpload, hasComplete: !!info.complete,
+        hasProvider: !!this.provider, relay: !!info.relay, completeUrlAndToken: !!(info.completeUrl && info.uploadToken),
+        recordingId: info.recordingId ?? null, expectedRecordingId: task.recordingId, recoveryScope: info.recoveryScope ?? null,
+        expectedRecoveryScope: task.recoveryScope ?? null, expiresAtMs: Number.isFinite(expiresAt) ? expiresAt : null, nowMs: Date.now() });
+      const uploadRequired = route ? route.uploadRequired === true
+        : !info.alreadyUploaded && (!task.completionPending || info.reuploadRequired === true);
+      if (!route && uploadRequired && !!info.relay !== !!task.relayUpload) throw new Error('Upload recovery route changed');
+      if (!route && task.completionPending && !info.complete) throw new Error('Pending upload requires durable host completion acknowledgement');
       hostAbort = () => attempt.controller.abort();
       info.signal?.addEventListener('abort', hostAbort, { once: true });
       if (info.signal?.aborted) hostAbort();
       check();
-      if (info.expiresAt && info.expiresAt.getTime() <= Date.now() && uploadRequired) throw new Error('Upload credentials expired');
+      if (!codec && info.expiresAt && info.expiresAt.getTime() <= Date.now() && uploadRequired) throw new Error('Upload credentials expired');
       await this.update(id, { status: 'uploading', errorMessage: undefined, nextAttemptAt: undefined }, check);
       check();
       this.emit('uploadStarted', id);
@@ -215,7 +234,8 @@ export class NativeUploadQueue extends EventEmitter<RecordingManagerEvents> {
           check();
           return info!.complete!({ fileSizeBytes: task.fileSizeBytes!, contentSha256: task.contentSha256, signal });
         }), signal);
-      } else if (info.alreadyUploaded || (this.provider && !info.relay && !(info.completeUrl && info.uploadToken))) {
+      } else if (route ? route.missingCompletionAcknowledgement === true
+        : info.alreadyUploaded || (this.provider && !info.relay && !(info.completeUrl && info.uploadToken))) {
         throw new Error('Recoverable upload requires durable host completion acknowledgement');
       }
       check();
@@ -228,13 +248,25 @@ export class NativeUploadQueue extends EventEmitter<RecordingManagerEvents> {
       if (!this.destroyed && !this.cancelledTasks.has(id) && this.get(id)?.status !== 'completed') {
         const task = this.get(id)!;
         const verificationPending = error instanceof UploadVerificationPendingError;
-        const parked = info === null || signal.aborted || verificationPending;
-        const retry = !!this.provider && task.retryCount < 6 && Date.now() - task.createdAt.getTime() < 86_400_000;
+        const codec = codecPolicies.get(this.client);
+        const decision = codec ? codec('planCompatibilityUploadQueueFailure', { nowMs: Date.now(),
+          createdAtMs: task.createdAt.getTime(), retryCount: task.retryCount, hasProvider: !!this.provider,
+          credentialUnavailable: info === null, aborted: signal.aborted, verificationPending,
+          completionPending: task.completionPending ?? null }) : (() => {
+            const parked = info === null || signal.aborted || verificationPending;
+            const retry = !!this.provider && task.retryCount < 6 && Date.now() - task.createdAt.getTime() < 86_400_000;
+            return { parked, status: parked || retry ? 'pending' : 'failed', retryCount: task.retryCount + (parked ? 0 : 1),
+              nextAttemptAt: parked ? Date.now() + 30_000 : retry ? Date.now() + retryDelays[Math.min(task.retryCount, 4)] : undefined,
+              errorMessage: verificationPending ? 'Upload verification pending' : parked ? 'Upload waiting for its original account' : 'Upload attempt failed',
+              completionPending: verificationPending ? true : task.completionPending };
+          })();
+        const parked = decision.parked === true;
         await this.update(id, {
-          status: parked || retry ? 'pending' : 'failed',
-          retryCount: task.retryCount + (parked ? 0 : 1),
-          nextAttemptAt: parked ? Date.now() + 30_000 : retry ? Date.now() + retryDelays[Math.min(task.retryCount, 4)] : undefined,
-          errorMessage: verificationPending ? 'Upload verification pending' : parked ? 'Upload waiting for its original account' : 'Upload attempt failed',
+          status: decision.status as UploadTask['status'],
+          retryCount: decision.retryCount as number,
+          nextAttemptAt: decision.nextAttemptAt == null ? undefined : decision.nextAttemptAt as number,
+          errorMessage: decision.errorMessage as string,
+          completionPending: decision.completionPending == null ? undefined : decision.completionPending as boolean,
         }).catch(() => { this.pause(); });
         if (!this.destroyed) this.emit('uploadFailed', id, new Error(verificationPending ? 'Upload verification pending' : parked ? 'Upload paused' : 'Upload attempt failed'));
       }
@@ -313,6 +345,15 @@ export class NativeUploadQueue extends EventEmitter<RecordingManagerEvents> {
     if (this.timer) clearTimeout(this.timer);
     let wake = Infinity;
     for (const task of this.tasks) {
+      const codec = codecPolicies.get(this.client);
+      if (codec) {
+        const decision = codec('planCompatibilityUploadQueueSchedule', { status: task.status, localPath: task.localPath,
+          active: this.active.has(task.id), cancelled: this.cancelledTasks.has(task.id), hasCredentials: this.credentials.has(task.id),
+          hasProvider: !!this.provider, activeCount: this.active.size, nextAttemptAt: task.nextAttemptAt ?? null, nowMs: Date.now() });
+        if (decision.action === 'wait') wake = Math.min(wake, decision.wakeAt as number);
+        else if (decision.action === 'run') void this.run(task.id).catch(() => undefined);
+        continue;
+      }
       if (task.status !== 'pending' || !task.localPath || this.active.has(task.id) || this.cancelledTasks.has(task.id) || (!this.provider && !this.credentials.has(task.id))) continue;
       if ((task.nextAttemptAt ?? 0) > Date.now()) { wake = Math.min(wake, task.nextAttemptAt!); continue; }
       if (this.active.size >= 2) continue;

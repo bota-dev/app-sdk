@@ -1,107 +1,224 @@
-# React Native portable runtime and OTA boundary
+# React Native generated JavaScript runtime and OTA boundary
 
-October 12, 2026 source implementation. The owner requested an independently
-implemented React Native control plane with fewer dependencies on native
-implementation details and support for compatible JavaScript OTA updates.
-This supersedes the facade-only RN control-plane assumption. Package publication,
-application delivery and physical acceptance are separate checks.
+October 12, 2026 source migration. Shared SDK behavior remains Rust-sourced.
+React Native runs generated executable JavaScript over versioned installed OS
+ports. Package publication, app OTA delivery and physical acceptance are separate
+gates; this document does not claim those gates passed.
 
-## Runtime contract
+## Source and distribution
 
-`frameworks/react-native-runtime` now builds the independently versioned source
-candidate `@bota.dev/react-native-app-sdk-runtime@0.1.0-beta.0`. Its only runtime
-dependencies are Buffer and EventEmitter (four packages including transitive
-dependencies). It has no native folders, Codegen config, CocoaPods/Maven dependency
-or React Native type/runtime dependency. Its own CI job builds without Rust,
-Gradle or Xcode. Publication/OIDC configuration and app adoption remain pending.
+`core/device-sdk-core` supplies canonical codecs, reducers and workflows.
+`bindings/device-sdk-js` provides the bounded JSON/u32 bridge and Rust host
+planners, including managed upload and BYO decisions. The locked generator
+compiles Rust 1.98 to an intermediate Wasm module and lowers it with Binaryen
+132.0.0 into ordinary JavaScript. Applications execute JS and typed arrays,
+without WebAssembly support or a native Rust engine.
 
-The runtime package compiles the same authoritative TypeScript source as the
-bundled RN distribution. Structural adapter declarations are generated from the
-exact Codegen types with platform-only type imports removed. Runtime diagnostics
-report the actual JS package/version; device session/sequence remain native.
+The generator preserves numeric compiled function boundaries through
+`Object.freeze`. Their bodies and parameter text stay unchanged; initialization
+retains hoisting and instance captures. This avoids a pathological Hermes
+control-flow optimization while retaining normal `-O` and default parser limits.
 
-`@bota.dev/react-native-app-sdk/runtime` builds and loads without React Native's
-registry, Apple artifacts, Android artifacts or a Rust runtime. It accepts a
-`BotaReactNativeAdapter` with `apiVersion: 1`, a device adapter and an optional
-managed-backend adapter. These are asynchronous method/event contracts; they do
-not name Swift, Kotlin or Rust implementation classes. Their semantic contract
-must still hold, including verified identity and terminal cancellation.
+`frameworks/react-native/src/jsHost/generated/core.ts` is a committed executable
+artifact with source provenance. The generator's `--check` rebuilds exact sources;
+`--provenance-only` checks them without a compiler. Regeneration belongs to
+maintainers/CI. Consumers build from committed JS without Cargo, Gradle or Xcode.
 
-The ordinary package entry selects the installed native adapters and uses this
-same runtime. It preserves the singleton API and all 80 frozen exports. Custom
-runtimes have separate manager graphs, queues and subscriptions. Streaming
-sessions capture their originating runtime, including after another runtime is
-constructed. Adapter objects are captured when a runtime is created; consumers
-must not mutate or replace their methods while operations are active.
+Two distributions compile the same RN facade and generated artifact:
 
-`supports(operation)` checks that an operation and its required event, response
-and cancellation methods exist. Each workflow preflights before subscribing or
-starting a device effect. An unsupported feature returns
-`BotaRuntimeCompatibilityError` with `native_operation_unavailable` and the
-operation name. It does not cause unrelated supported operations to fail. Missing
-passive presence on an otherwise installed adapter returns `null`. An unknown
-adapter API version fails construction with `native_contract_unsupported`.
+- `@bota.dev/react-native-app-sdk/runtime`: an independently loadable subpath.
+  Its root package retains native adapters and frozen compatibility exports.
+- `@bota.dev/react-native-app-sdk-runtime@0.1.0-beta.0`: an independently
+  versioned source candidate with Buffer and EventEmitter dependencies. It has
+  no React Native dependency, native folders, autolinking or Codegen module.
+  Registry publication remains pending.
 
-Foreground reconnect attempts and backoff are TypeScript policy. The default
-remains one attempt. A caller may choose at most ten attempts and a delay of
-zero through 60 seconds. Only an explicitly `retryable: true` failure permits
-another attempt. Destroy interrupts backoff and suppresses late results. The
-returned fresh native identity must equal the requested serial; a mismatched
-connection is disconnected and rejected. Names never establish identity.
+Select the generated path with `createBotaReactNativeJsRuntime`. The legacy
+`createBotaReactNativeRuntime({ apiVersion: 1, device, ... })` still accepts
+installed full-workflow adapters with their existing native responsibilities.
+That legacy path does not substitute for the generated path's OS-port contract.
 
-## OTA and native responsibilities
+## Installed OS ports, API version 1
 
-Changing TypeScript policies, callbacks, manager behavior or app UI can use the
-installed adapter contract without updating its native package version. App OTA
-deployment must still match the application's native runtime and be tested on
-that runtime. Publishing npm source alone does not update an installed app.
+```ts
+import {
+  createBlePlxPort,
+  createBotaReactNativeJsRuntime,
+  type BotaJsHostPorts,
+} from '@bota.dev/react-native-app-sdk-runtime';
 
-The default adapter still uses the existing native protocol/file engines. Bulk
-audio and firmware bytes, cryptographic envelopes, native file transfer,
-background execution and durable device cleanup remain native. Signed manifests,
-authorizations, receipts and ciphertext do not enter JavaScript. This change adds
-no BLE-only native driver and does not make native bug fixes OTA-deliverable.
-Adapter availability cannot compensate for incorrect native transport behavior.
-Smaller alternative adapters must pass the same identity, completion, cancellation
-and recovery contracts before adoption.
+const lifetime = new AbortController();
+const ports: BotaJsHostPorts = {
+  apiVersion: 1,
+  platform: 'ios',
+  signal: lifetime.signal,
+  checkScope: assertCapturedAccountProjectAndBinding,
+  ble: createBlePlxPort(installedBleManager),
+  persistence: privateScopedPersistence,
+  files: reopenableScopedFiles,
+  randomBytes: secureRandomBytes,
+  network: registeredNetworkTransfers,
+  lifecycle: installedLifecycle,
+};
+const runtime = createBotaReactNativeJsRuntime(ports, {
+  backend: { fetch: redirectRefusingHttps },
+  uploadFile: uploadOpaqueFile,
+  openSocket: openAuthenticatedSocket,
+});
+await runtime.client.configure({ environment: 'production' });
 
-Cloud commitment remains separate from cleanup. A legacy `uploaded` response,
-pending completion, a transport ACK or reconnect never authorizes deletion.
-Existing receipt/CONFIRM and generation fences remain unchanged. See
-[upload recovery](upload-recovery.md) and [managed v2](v2-managed-backend.md).
+// On logout, project/device reassignment or teardown:
+lifetime.abort();
+await runtime.client.destroy();
+```
 
-Firmware reboot recovery now also belongs to the TypeScript control plane. A
-failed native update may enter read-back recovery only after a `rebooting` or
-`reconnecting` progress event, which the existing contract emits after successful
-image verification. Transfer, CRC rejection and explicitly permanent failures
-cannot enter this recovery. One two-minute post-verification budget includes time
-already spent in native recovery; JavaScript does not add a second budget.
-Legacy progress events have no native verification timestamp, so fallback also
-uses an operation-start cap. Long download/transfer time can shorten or exhaust
-the extra JS recovery window; late bridge delivery cannot renew it. Native
-verified success remains valid after that cap.
-Success requires a fresh exact serial and the requested firmware version. It
-never retransmits firmware, reissues verification or treats an ACK as installed
-version proof. Cancellation joins the exact native reconnect; failed cancellation
-retains the JS operation owner until final shared-client destruction.
+Named host values implement the exported structural interfaces and perform OS
+I/O rather than complete Bota workflows. JS can implement them through installed
+libraries. Bluetooth, durable files, secure randomness and background execution
+use OS facilities installed in the app binary. `createBlePlxPort` adapts a generic
+`react-native-ble-plx` manager without the native Bota SDK. The host owns permissions
+and manager lifetime.
 
-## Design review
+| Port | Required behavior |
+| --- | --- |
+| BLE | Scan, connect/discover/disconnect, read/write and notifications; propagate errors; cancel and join submitted I/O; provide ATT capacity and physical disconnect observations for protected workflows |
+| Persistence | Capture one account/project/user/environment namespace; atomically save private durable journals with readback; retain that namespace during cancellation |
+| Files | Reopen scoped logical files after restart; bounded reads, exact durable append/truncate, metadata and CRC finalization; explicit flush is required for protected/BYO persistence |
+| Randomness | Return exactly the requested number of cryptographically secure bytes |
+| HTTPS | Refuse redirects before forwarding credentials/data, omit ambient cookies, honor aborts/timeouts, bound responses and preserve exact status/identity |
+| File upload | Upload the captured opaque file with validated method/headers; join cancellation and report progress without changing owner |
+| WSS | Optional qualified BYO relay; preserve `bota-byo-stream-v1`, authentication/binding headers and bounded messages; close cancels and joins sends/receives |
+| Lifecycle | Report foreground/background/suspended state; claim background execution only when the installed host can actually run and settle JS work |
 
-| Requirement | Evidence | Status |
-|---|---|---|
-| Independently built TypeScript runtime | Bob CommonJS/ES module/declaration builds; package `/runtime` import with native imports rejected | matched |
-| Interchangeable conforming platform implementations | iOS/Android adapter fixtures; independent manager graphs and backend bindings | matched |
-| OTA-compatible policy over a stable interface | Version 1 adapter; foreground retries changed without changing adapter; fixed Codegen contract | matched |
-| Older/partial adapters preserve supported operations | Capability, encrypted workflow and managed backend preflight tests | matched |
-| Correct identity, cancellation and lifecycle | Serial mismatch disconnect; abort/backoff; disconnect listener lifecycle regressions | matched |
-| OTA-editable verified reboot recovery | Old-native failure, fresh identity/version, pre-verification rejection, one deadline and cancellation ownership regressions | matched |
-| Frozen RN public API and recovery behavior | Semantic 80-export contract and existing compatibility/upload suites | matched |
-| Minimal native dependencies for the RN control plane | Separately versioned JS-only package; four JS dependencies; portable declaration and native-import rejection tests | matched |
-| Optional BLE-only replacement adapter | Default bundled adapter still uses full native engines; host may supply a conforming alternative | not implemented |
-| New app OTA on installed production binaries; physical BLE parity | Requires consuming-app deployment and physical acceptance | unverified |
+Default React Native XHR-backed fetch does not provide the required pre-redirect
+credential fence. `redirect: 'error'` is insufficient when an implementation
+ignores it. Supply a conforming installed HTTP transport. Initial unavailable
+WSS can use the qualified HTTP segment mode; established socket loss follows
+Rust's three-reconnect and fenced full-file recovery policy.
 
-Local React Native suite: 227 tests pass, including 13 portable-runtime and ten
-firmware recovery regressions. The separate JS-only package also passes four
-package/type/identity smoke checks. Type checking, package verification and license
-checks are separate from exact-source hosted native consumer checks. Keep hosted delivery evidence
-with the integration commit; no physical qualification follows from these tests.
+Construction checks API version and primitive shapes before OS effects. Optional
+feature absence fails before dependent device work. Method presence does not
+prove installed-host durability or cancellation. Each runtime captures its ports
+and scope; create a replacement after scope changes rather than mutating active
+methods or namespaces.
+
+## Shared decisions and resource ownership
+
+Generated Rust chooses wire framing, identity/capability admission, transfer
+windows, durable checkpoints, repair, backend recovery, retry policy and cleanup.
+JS translates the public API, executes effects and joins resources. Source paths
+cover discovery/connection, controls/diagnostics, provisioning/reset, recording
+and streaming transfers, managed v2/markers, BYO and firmware workflows.
+
+The executor retains one exact operation, cancellation and runtime generation.
+GATT uses one ordered lane; timers/persistence can settle independently of blocked
+GATT. Cancellation joins work, callbacks, subscriptions and cleanup before a new
+owner is admitted. Uncertain cleanup retains ownership. Confirmed retired
+connections close captured subscriptions without replaying old commands.
+
+Connection adoption preserves the retired RN setup behavior: a generated UTC
+clock write settles before publishing the connection, while settled legacy
+firmware rejection remains best effort. Cancellation, scope loss and uncertain
+cleanup still fail adoption. The generic BLE driver requests the canonical MTU
+and observes the current exact connection for up to ten attempts, 200 ms apart,
+using Rust-declared bounds. Stale disconnects and MTU observations cannot mutate
+a replacement connection.
+
+Optional `readBluetoothState` and `observeBluetoothState` ports expose the OS
+radio and permission state. Generated Rust normalizes those observations for
+`runtime.client`; the generic BLE adapter supplies both. A host without state
+observations remains `unknown` and cannot satisfy `waitForBluetooth`. Scope loss
+and destruction join state reads, observer setup and removal; retired callbacks
+cannot revive the client. Failed construction releases every created owner before
+disposing the generated core.
+
+Live BYO admits Stop Recording and its required nonce/state reads through Rust's
+exact allowlist. Other controls remain exclusive. Stream ACK releases RAM only.
+PUT, a legacy `uploaded` flag or reconnect cannot authorize deletion. Cloud
+commitment, verified receipt, durable save and device confirmation stay separate.
+See [BYO](byo-storage.md), [managed v2](v2-managed-backend.md) and
+[upload recovery](upload-recovery.md).
+
+Generated firmware update uses the canonical Rust OTA/reboot-recovery loop.
+`firmwareRecovery.timeoutMs` can shorten its shared post-verification budget;
+there is no second TypeScript recovery loop. `firmwareRecovery.delayMs` applies
+to the legacy full-adapter fallback only. Completion requires fresh exact serial
+and installed-version readback. Transfer or CRC failure cannot enter reboot
+recovery; an ACK does not prove the installed version.
+
+The shared workflow allows 30 seconds for the device's Ready and Verify responses
+after the corresponding write settles. An early valid response is retained; a
+write acknowledgement alone cannot advance verification. The shared reconnect
+budget remains two minutes unless the caller narrows it.
+
+Factory reset similarly preserves an exact successful result received before the
+opcode write callback. It saves that result, waits for the original write and
+the application's durable acknowledgement to settle, then sends the receipt.
+Late write failure cannot discard already proven physical success or authorize a
+second reset. Receipt-only recovery uses the retained result and sends no grant.
+
+## Internal transport material and custom providers
+
+Ciphertext and signed authorization/context/manifest/receipt documents can be
+bounded internal JS SDK transport values. Public APIs return metadata, progress
+and results. V2/BYO private signing/decryption keys remain on the device; host
+private-key operations stay behind installed secure handles. JS gains no signing
+or decryption authority. The historical caller-supplied private-PEM import API
+is a compatibility gap outside the modern non-exportable key target and must
+not define new admission or provisioning.
+
+`runtime.createEncryptedUploadV2Backend(options)` supplies managed scoped HTTP
+and material integration. Custom providers use an operation-scoped nonce and
+JS material registration:
+
+```ts
+await runtime.sdk.recordings.syncEncryptedRecordingV2(
+  device,
+  recording,
+  async request => {
+    const nonce = await runtime.readEncryptedUploadV2AuthNonce(request.operationId);
+    const prepared = await yourBackend.prepare(request, nonce);
+    const materialRegistrationId = runtime.registerEncryptedUploadV2Material(
+      request.operationId,
+      prepared.material,
+    );
+    return {
+      profile: 'encrypted_upload_v2',
+      uploadSessionId: prepared.uploadSessionId,
+      ownerRevision: prepared.ownerRevision,
+      securityPolicy: 'v2_required',
+      materialRegistrationId,
+    };
+  },
+);
+```
+
+`prepared.material` implements `JsEncryptedUploadV2Material`: authorization,
+physical context exchange, scoped staging/manifest/marker submission, verification
+and final receipt, plus cancellation/confirmation callbacks. It retains bounded
+documents or opaque file handles and calls the authenticated application backend.
+It supplies no native Bota workflow or local trust authority. Registrations belong
+to the pending operation and captured physical owner; late/foreign material is
+rejected. Release unused registrations with `releaseEncryptedUploadV2Material`
+and honor captured signals. Use `runtime.createUploadRecoveryProvider` for
+generated compatibility recovery policy; the legacy standalone helper retains
+older adapter behavior.
+
+## Verification and delivery gates
+
+| Requirement | Check mechanism | Current gate |
+| --- | --- | --- |
+| Rust produces ordinary executable JS | Exact regeneration; 91 native/generated RPCs across all 13 core commands; 224 core/65 bridge tests and strict Clippy | Matched source gate |
+| RN engine compatibility | Final Metro-style bundle passes normal optimized bytecode compilation/default parser and 447 Node checks | Compiler matched; pinned hosted Hermes VM pending; installed app unverified |
+| Primitive-only generated mode | Both real tarballs load/configure/destroy the generated client with native imports and WebAssembly rejected | Matched source/package gate |
+| Public API and feature/recovery parity | 475 RN tests including frozen contracts, BYO/managed/queue, RTC 4, BLE 22 and readiness/lifecycle 9 regressions | Matched source gate; documented maintenance/security gaps remain |
+| Scoped durable receipt cleanup | Requirement/evidence reviews and injected host failures | Installed durability and physical acceptance unverified |
+| Redistribution notices | Both real tarballs retain 47 notice files; RN/companion license gates scan 410/4 packages; companion four checks pass | Matched |
+| npm publication and application OTA | Separate publication, initial OS-port installation and app rollout | Pending |
+
+The exact generation provenance, compiler proof and source checks are recorded in
+[the migration review](../superpowers/plans/2026-10-12-react-native-generated-js.md).
+Source revision and hosted results must be recorded after direct delivery. The
+earlier TypeScript-adapter milestone's 227 RN tests remain historical evidence.
+Hardware, customer proxy/TLS,
+OS background behavior and deployed app OTA require separate acceptance evidence.

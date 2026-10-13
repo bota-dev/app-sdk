@@ -20,6 +20,7 @@ pub use encrypted_upload_v2::{
 };
 pub(crate) use factory_reset::FactoryResetWorkflow;
 pub(crate) use firmware_update::FirmwareUpdateWorkflow;
+pub use firmware_update::RECONNECT_TIMEOUT_MS;
 pub(crate) use provisioning::ProvisioningWorkflow;
 pub(crate) use recording_transfer::RecordingTransferWorkflow;
 pub(crate) use streaming_transfer::StreamingTransferWorkflow;

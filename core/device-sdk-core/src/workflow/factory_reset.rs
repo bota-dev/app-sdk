@@ -64,6 +64,7 @@ pub(crate) struct FactoryResetWorkflow {
     material_request_id: Option<RequestId>,
     subscription_request_id: Option<RequestId>,
     write_request_id: Option<RequestId>,
+    settling_opcode_request_id: Option<RequestId>,
     save_request_id: Option<RequestId>,
     delete_request_id: Option<RequestId>,
     timer_request_id: Option<RequestId>,
@@ -94,6 +95,7 @@ impl FactoryResetWorkflow {
             material_request_id: None,
             subscription_request_id: None,
             write_request_id: None,
+            settling_opcode_request_id: None,
             save_request_id: None,
             delete_request_id: None,
             timer_request_id: None,
@@ -124,6 +126,7 @@ impl FactoryResetWorkflow {
             material_request_id: None,
             subscription_request_id: None,
             write_request_id: None,
+            settling_opcode_request_id: None,
             save_request_id: None,
             delete_request_id: None,
             timer_request_id: None,
@@ -349,6 +352,23 @@ impl WorkflowReducer for FactoryResetWorkflow {
             return Ok(Vec::new());
         }
 
+        if Some(event.request_id) == self.settling_opcode_request_id
+            && matches!(
+                event.kind,
+                HostEventKind::Ble(BleEvent::WriteCompleted | BleEvent::Failed { .. })
+            )
+        {
+            // The exact device success already proves the command was applied.
+            // Join its OS callback before sending the receipt, while preserving
+            // the independently persisted result and application acknowledgment.
+            self.settling_opcode_request_id = None;
+            return if self.phase == Phase::PersistingResult && self.save_request_id.is_none() {
+                Ok(self.write_receipt(context))
+            } else {
+                Ok(Vec::new())
+            };
+        }
+
         let request_id = event.request_id;
         match (self.phase, event.kind) {
             (Phase::ReadingNonce, HostEventKind::Ble(BleEvent::ReadCompleted { value }))
@@ -472,7 +492,7 @@ impl WorkflowReducer for FactoryResetWorkflow {
                     ));
                 }
                 if phase == Phase::WritingOpcode {
-                    self.write_request_id = None;
+                    self.settling_opcode_request_id = self.write_request_id.take();
                 }
                 let result = parse_factory_reset_result(&value)?;
                 match self.mode.clone() {
@@ -503,7 +523,11 @@ impl WorkflowReducer for FactoryResetWorkflow {
                 if Some(request_id) == self.save_request_id =>
             {
                 self.save_request_id = None;
-                Ok(self.write_receipt(context))
+                if self.settling_opcode_request_id.is_some() {
+                    Ok(Vec::new())
+                } else {
+                    Ok(self.write_receipt(context))
+                }
             }
             (Phase::PersistingResult, HostEventKind::PersistenceFailed { platform_code })
                 if Some(request_id) == self.save_request_id =>

@@ -1,5 +1,9 @@
 # BYO customer storage integration
 
+The native descriptions below concern the installed Apple/Android path. The
+October 12 generated JavaScript source migration is reviewed in the final
+section; its package delivery and physical acceptance remain separate.
+
 October 10 unreleased source. Apple, Android and React Native connect both live
 and whole-file BYO uploads to the independent firmware protocol. New live entry
 points use qualified HTTP segments/WS and fenced Batch completion. Firmware,
@@ -245,3 +249,54 @@ The same helper builds on the local macOS host and its fresh libraries pass all
 stops at the missing Android SDK installation; the hosted Linux Gradle unit
 suite remains the required check. This setup supports the existing macOS/Linux
 POSIX host tests and does not assert Windows host-test support.
+
+## October 12 generated JavaScript migration
+
+The RN source now has a BYO action machine in
+`bindings/device-sdk-js/src/byo.rs`. It is Rust source compiled into the ordinary
+JavaScript artifact; it reuses the canonical `ByoRecoveryRequest` reducer and
+independent BYO BLE framing. `jsHost/byoEffects.ts` executes the returned BLE,
+HTTP, WebSocket, scoped journal, file and wait actions through installed OS
+ports. It does not invoke the native Apple/Android Bota workflow.
+
+Ciphertext ranges and signed context/authorization/receipt documents are bounded
+internal SDK transport values. The public BYO API still exposes recording
+metadata and the final recording/session IDs. Signature verification and source
+deletion remain on the device; authorization and immutable publication remain
+on the backend. No private-key export, signing authority or decryption moves
+into JS. This follows the owner's JS-first migration instruction and the
+retired RN implementation's internal byte-relay model.
+
+The host supplies a redirect-refusing HTTPS transport and optional WSS port,
+private scoped durable persistence, reopenable files with flush/readback and a
+captured physical-device reservation. A missing WSS port uses the qualified HTTP
+segment route on initial socket admission failure. Socket close must cancel and
+join submitted I/O. A timed-out or cancelled receive stays owned until that
+receive and one captured OS close settle; failed cleanup poisons the reservation.
+Changing the persistence namespace cannot redirect a cancelled operation's late
+CREATE save into another account/project scope.
+
+| Requirement | Source evidence and verification | Status |
+| --- | --- | --- |
+| Rust chooses whole-file/live route, retry, recovery and cleanup | `byo.rs` action machine, canonical core recovery reducer; 15 focused native Rust tests pass | Matched in source |
+| Shared framed BLE RPC, exact request ID/operation and bounded notification handling | Canonical `encode_byo_ble`/`decode_byo_ble`, generated request/reply planners; framing and cross-request Rust regressions pass | Matched in source; installed BLE unverified |
+| Full UUID/generation catalogue, increasing cursor and bounded entries | Rust catalogue branch deduplicates identities and rejects stalled cursors; focused Rust regression passes | Matched in source |
+| Durable device/customer selection before backend CREATE | Returned journal-save action precedes SELECT/CREATE; retained device or journal intent cannot adopt a new destination | Matched in source; host durability unverified |
+| Live HTTP segments, initial WS admission fallback, three established WS reconnects then fenced full-file recovery | Rust live branch uses 4 KiB reads and 16 KiB segments; HTTP assembled and 1/2/4-second WS recovery regressions pass | Matched in source; actual customer/WS transport unverified |
+| Exact successor and original handoff mode survive uncertain replies | Rust saves the handoff body before POST, checks successor scope/destination/session/owner revision and saves it before device RPC 13 | Matched in source; physical fence unverified |
+| PUT/ACK cannot authorize device deletion | Device receipt RPC must return the exact 32-byte digest, followed by durable `ReceiptVerified`/`CleanupPending` transitions before CONFIRM; failed receipt-save regression emits no cleanup | Matched in source; actual signature/receipt trust unverified |
+| Cancellation drains submitted mutations and joins resources | Freshly generated JS regressions pass for owner abort, dispatched CREATE drain, namespace changes, socket close/receive settlement and ABORT/subscription release | Matched in source; installed cancellation/durability unverified |
+| Stop remains the sole concurrent mutation during live upload | Rust `byoHostPolicy` admits Stop plus its required AuthNonce/state reads only while the captured owner is live; exact allowlist and full adapter suite pass | Matched source gate; installed behavior unverified |
+| No integer drift in opaque JSON | Rust rejects nested numbers outside the exact JS range and bounds the captured clock; focused regression passes | Matched in source |
+| Reject malformed input and missing durability before acquiring the physical owner | Generated initial rejection is checked before `withDevice`; transfer modes require installed file flush before BLE/backend work, while catalogue remains available | Two generated-JS preflight regressions pass |
+| OTA delivery, native OS-port compatibility and physical acceptance | Publication, app delivery, installed-host durability, BLE/radio/power loss and customer TLS remain distinct gates | Unverified |
+
+The 15 Rust checks exercise the production action machine with fake OS/backend
+responses. All 14 generated-JS checks in `jsHost/__tests__/byoEffects.test.mjs`
+pass against the freshly generated artifact, including execution with
+WebAssembly disabled. The standalone Node VM corpus also passes 447 checks,
+including the complete BYO batch action trace. These checks do not establish
+device cryptography, deployment, hardware or app OTA acceptance; final exact
+source differential (91 RPCs/13 commands), optimized Hermes compiler and both
+packed generated clients pass. Pinned Hermes VM/hosted native gates and installed
+transport acceptance remain separate; see the [migration review](react-native-runtime.md).

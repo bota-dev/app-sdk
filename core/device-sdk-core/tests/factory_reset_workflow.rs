@@ -93,7 +93,7 @@ fn host(request_id: RequestId, kind: HostEventKind) -> Event {
     Event::Host(HostEvent { request_id, kind })
 }
 
-fn start_reset(engine: &mut WorkflowEngine) -> (RequestId, RequestId) {
+fn start_reset_write(engine: &mut WorkflowEngine) -> (RequestId, RequestId) {
     let started = engine
         .start(
             Command::FactoryReset {
@@ -156,6 +156,11 @@ fn start_reset(engine: &mut WorkflowEngine) -> (RequestId, RequestId) {
         &opcode_write,
         |effect| matches!(effect, Effect::Ble(BleEffect::Write { payload, .. }) if payload == &[DEVICE_CMD_BLE_FACTORY_RESET, 0x44, 0x44, 0x44, 0x44]),
     );
+    (subscribe_request, opcode_request)
+}
+
+fn start_reset(engine: &mut WorkflowEngine) -> (RequestId, RequestId) {
+    let (subscribe_request, opcode_request) = start_reset_write(engine);
     engine
         .dispatch(host(
             opcode_request,
@@ -163,6 +168,116 @@ fn start_reset(engine: &mut WorkflowEngine) -> (RequestId, RequestId) {
         ))
         .unwrap();
     (subscribe_request, opcode_request)
+}
+
+#[test]
+fn early_device_success_persists_but_receipt_joins_the_exact_opcode_callback() {
+    for callback in [
+        BleEvent::WriteCompleted,
+        BleEvent::Failed {
+            platform_code: Some(7),
+        },
+    ] {
+        for saved_first in [false, true] {
+            let mut engine = WorkflowEngine::default();
+            let (subscription, opcode) = start_reset_write(&mut engine);
+            let persisting = engine
+                .dispatch(host(
+                    subscription,
+                    HostEventKind::Ble(BleEvent::Notification {
+                        characteristic_uuid: CHAR_PROVISIONING_RESULT.into(),
+                        value: vec![0, 3, 0],
+                    }),
+                ))
+                .unwrap();
+            let save = request_id(&persisting, |effect| {
+                matches!(effect,
+                    Effect::Persistence(PersistenceEffect::SaveFactoryResetResult { result })
+                        if result.command_id == command_id() && result.result.deleted_recording_count == 3)
+            });
+            assert!(
+                !persisting
+                    .iter()
+                    .any(|request| matches!(request.effect, Effect::Ble(BleEffect::Write { .. })))
+            );
+            let foreign = engine
+                .dispatch(host(
+                    RequestId::from_u64(u64::MAX),
+                    HostEventKind::Ble(callback.clone()),
+                ))
+                .unwrap_err();
+            assert_eq!(foreign.code, ErrorCode::UnexpectedEvent);
+
+            let first = if saved_first {
+                host(save, HostEventKind::FactoryResetResultSaved)
+            } else {
+                host(opcode, HostEventKind::Ble(callback.clone()))
+            };
+            assert!(engine.dispatch(first).unwrap().is_empty());
+            assert!(matches!(engine.status(), WorkflowStatus::Running { .. }));
+            let second = if saved_first {
+                host(opcode, HostEventKind::Ble(callback.clone()))
+            } else {
+                host(save, HostEventKind::FactoryResetResultSaved)
+            };
+            let receipting = engine.dispatch(second).unwrap();
+            let receipt = request_id(&receipting, |effect| {
+                matches!(effect,
+                    Effect::Ble(BleEffect::Write { payload, .. })
+                        if payload == &[DEVICE_CMD_BLE_FACTORY_RESET_RESULT_ACK])
+            });
+            assert_ne!(opcode, receipt);
+            let stale = engine
+                .dispatch(host(opcode, HostEventKind::Ble(callback.clone())))
+                .unwrap_err();
+            assert_eq!(stale.code, ErrorCode::UnexpectedEvent);
+            assert!(matches!(engine.status(), WorkflowStatus::Running { .. }));
+            let deleting = engine
+                .dispatch(host(receipt, HostEventKind::Ble(BleEvent::WriteCompleted)))
+                .unwrap();
+            assert!(deleting.iter().any(|request| matches!(
+                request.effect,
+                Effect::Persistence(PersistenceEffect::DeleteFactoryResetResult { .. })
+            )));
+        }
+    }
+}
+
+#[test]
+fn cancelled_early_result_opcode_callback_cannot_mutate_a_new_reset_owner() {
+    let mut engine = WorkflowEngine::default();
+    let (subscription, opcode) = start_reset_write(&mut engine);
+    engine
+        .dispatch(host(
+            subscription,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_PROVISIONING_RESULT.into(),
+                value: vec![0, 3, 0],
+            }),
+        ))
+        .unwrap();
+    engine
+        .dispatch(Event::Cancelled {
+            cancellation_id: CANCELLATION,
+        })
+        .unwrap();
+    let (new_subscription, new_opcode) = start_reset_write(&mut engine);
+    assert_ne!(subscription, new_subscription);
+    assert_ne!(opcode, new_opcode);
+    let stale = engine
+        .dispatch(host(opcode, HostEventKind::Ble(BleEvent::WriteCompleted)))
+        .unwrap_err();
+    assert_eq!(stale.code, ErrorCode::UnexpectedEvent);
+    assert!(matches!(engine.status(), WorkflowStatus::Running { .. }));
+    assert!(
+        engine
+            .dispatch(host(
+                new_opcode,
+                HostEventKind::Ble(BleEvent::WriteCompleted)
+            ))
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]

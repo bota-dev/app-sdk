@@ -9,7 +9,10 @@ const runtimeRoot = join(workspace, 'frameworks/react-native-runtime');
 const output = join(runtimeRoot, 'lib');
 const pkg = JSON.parse(readFileSync(join(runtimeRoot, 'package.json'), 'utf8'));
 
-// Build one authoritative TypeScript implementation; no Cargo, Gradle or Xcode.
+// Consumers use the committed executable JS; provenance checking needs no compiler.
+execFileSync(process.execPath, [join(workspace, 'tools/react-native/generate-js-core.mjs'), '--provenance-only'],
+  { cwd: workspace, stdio: 'inherit' });
+// Build one authoritative TypeScript facade; no Cargo, Gradle or Xcode.
 execFileSync(process.execPath, [join(nativeRoot, 'node_modules/react-native-builder-bob/bin/bob'), 'build'],
   { cwd: nativeRoot, stdio: 'inherit' });
 if (!resolve(output).startsWith(resolve(runtimeRoot) + sep) ||
@@ -58,4 +61,6 @@ for (const path of visit(output)) {
 writeFileSync(join(output, 'typescript/sdkIdentity.d.ts'),
   `export declare const SDK_PACKAGE: ${JSON.stringify(pkg.name)};\nexport declare const SDK_VERSION: ${JSON.stringify(pkg.version)};\n`);
 cpSync(join(workspace, 'LICENSE'), join(runtimeRoot, 'LICENSE'));
-console.log(`Built JavaScript-only ${pkg.name}@${pkg.version}; native adapters are supplied by the app.`);
+cpSync(join(nativeRoot, 'THIRD_PARTY_NOTICES.md'), join(runtimeRoot, 'THIRD_PARTY_NOTICES.md'));
+cpSync(join(nativeRoot, 'THIRD_PARTY_NOTICES'), join(runtimeRoot, 'THIRD_PARTY_NOTICES'), { recursive: true });
+console.log(`Built JavaScript-only ${pkg.name}@${pkg.version}; installed OS ports are supplied by the app.`);

@@ -269,6 +269,224 @@ fn reach_reconnect(engine: &mut WorkflowEngine) -> Vec<EffectRequest> {
         .unwrap()
 }
 
+fn reach_ready_wait(engine: &mut WorkflowEngine) -> (RequestId, RequestId) {
+    let (_, subscribing) = complete_download(engine, 500);
+    let subscription = request_id(&subscribing, |effect| {
+        matches!(effect, Effect::Ble(BleEffect::Subscribe { .. }))
+    });
+    let starting = engine
+        .dispatch(host(
+            subscription,
+            HostEventKind::Ble(BleEvent::Subscribed {
+                characteristic_uuid: CHAR_TRANSFER_STATUS.into(),
+            }),
+        ))
+        .unwrap();
+    let start = request_id(&starting, |effect| {
+        matches!(effect, Effect::Ble(BleEffect::Write { .. }))
+    });
+    let waiting = engine
+        .dispatch(host(start, HostEventKind::Ble(BleEvent::WriteCompleted)))
+        .unwrap();
+    (subscription, response_timer(&waiting))
+}
+
+fn response_timer(effects: &[EffectRequest]) -> RequestId {
+    request_id(effects, |effect| {
+        matches!(
+            effect,
+            Effect::Timer(TimerEffect::Schedule {
+                timer_id: 105,
+                delay_ms: 30_000,
+            })
+        )
+    })
+}
+
+fn assert_response_timeout(engine: &mut WorkflowEngine, timer: RequestId) {
+    let failed = engine
+        .dispatch(host(timer, HostEventKind::TimerFired { timer_id: 105 }))
+        .unwrap();
+    assert!(matches!(engine.status(), WorkflowStatus::Failed { error }
+        if error.code == ErrorCode::Timeout && error.retryable));
+    assert!(failed.iter().any(|request| matches!(
+        request.effect,
+        Effect::Timer(TimerEffect::Cancel { timer_id: 105 })
+    )));
+    assert!(
+        failed
+            .iter()
+            .any(|request| matches!(request.effect, Effect::Ble(BleEffect::Unsubscribe { .. })))
+    );
+    assert!(!failed.iter().any(|request| matches!(
+        request.effect,
+        Effect::FirmwareBlob(_)
+            | Effect::Network(_)
+            | Effect::Ble(BleEffect::Write { .. } | BleEffect::StartScan { .. })
+            | Effect::Notify(WorkflowNotification::Completed { .. })
+    )));
+    assert!(!failed.iter().any(|request| matches!(
+        request.effect,
+        Effect::Notify(WorkflowNotification::FirmwareProgress { progress })
+            if matches!(progress.phase, FirmwareUpdatePhase::Rebooting | FirmwareUpdatePhase::Complete)
+    )));
+}
+
+#[test]
+fn missing_readiness_times_out_without_reading_or_retransmitting_firmware() {
+    let mut engine = WorkflowEngine::default();
+    let (subscription, timer) = reach_ready_wait(&mut engine);
+    let ack = engine
+        .dispatch(host(
+            subscription,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_TRANSFER_STATUS.into(),
+                value: vec![FIRMWARE_ACK, 0, 0],
+            }),
+        ))
+        .unwrap();
+    assert!(ack.is_empty());
+    assert_response_timeout(&mut engine, timer);
+}
+
+#[test]
+fn missing_verification_times_out_even_after_successful_write_and_chunk_ack() {
+    let mut engine = WorkflowEngine::default();
+    let (subscription, verify, _) = reach_verify(&mut engine, 500);
+    let waiting = engine
+        .dispatch(host(verify, HostEventKind::Ble(BleEvent::WriteCompleted)))
+        .unwrap();
+    let timer = response_timer(&waiting);
+    let ack = engine
+        .dispatch(host(
+            subscription,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_TRANSFER_STATUS.into(),
+                value: vec![FIRMWARE_ACK, 0, 0],
+            }),
+        ))
+        .unwrap();
+    assert!(ack.is_empty());
+    assert_response_timeout(&mut engine, timer);
+}
+
+#[test]
+fn accepted_responses_disarm_deadlines_and_ignore_stale_timer_requests() {
+    let mut engine = WorkflowEngine::default();
+    let (subscription, ready_timer) = reach_ready_wait(&mut engine);
+    let reading = engine
+        .dispatch(host(
+            subscription,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_TRANSFER_STATUS.into(),
+                value: vec![FIRMWARE_UPLOAD_START, 0],
+            }),
+        ))
+        .unwrap();
+    assert!(reading.iter().any(|request| matches!(
+        request.effect,
+        Effect::Timer(TimerEffect::Cancel { timer_id: 105 })
+    )));
+    assert!(
+        engine
+            .dispatch(host(
+                ready_timer,
+                HostEventKind::TimerFired { timer_id: 105 }
+            ))
+            .unwrap()
+            .is_empty()
+    );
+    let (chunk, _) = write_chunk(&mut engine, &reading, 0, 0, vec![0x55; 500]);
+    let verifying = engine
+        .dispatch(host(chunk, HostEventKind::Ble(BleEvent::WriteCompleted)))
+        .unwrap();
+    let verify = request_id(&verifying, |effect| {
+        matches!(effect, Effect::Ble(BleEffect::Write { .. }))
+    });
+    let waiting = engine
+        .dispatch(host(verify, HostEventKind::Ble(BleEvent::WriteCompleted)))
+        .unwrap();
+    let verify_timer = response_timer(&waiting);
+    assert_ne!(ready_timer, verify_timer);
+    assert!(
+        engine
+            .dispatch(host(
+                ready_timer,
+                HostEventKind::TimerFired { timer_id: 105 }
+            ))
+            .unwrap()
+            .is_empty()
+    );
+    let rebooting = engine
+        .dispatch(host(
+            subscription,
+            HostEventKind::Ble(BleEvent::Notification {
+                characteristic_uuid: CHAR_TRANSFER_STATUS.into(),
+                value: vec![FIRMWARE_UPLOAD_VERIFY, 0],
+            }),
+        ))
+        .unwrap();
+    assert!(rebooting.iter().any(|request| matches!(
+        request.effect,
+        Effect::Timer(TimerEffect::Cancel { timer_id: 105 })
+    )));
+    let reboot_timer = request_id(&rebooting, |effect| {
+        matches!(
+            effect,
+            Effect::Timer(TimerEffect::Schedule { timer_id: 102, .. })
+        )
+    });
+    assert!(
+        engine
+            .dispatch(host(
+                verify_timer,
+                HostEventKind::TimerFired { timer_id: 105 }
+            ))
+            .unwrap()
+            .is_empty()
+    );
+    engine
+        .dispatch(host(
+            reboot_timer,
+            HostEventKind::TimerFired { timer_id: 102 },
+        ))
+        .unwrap();
+    assert!(matches!(engine.status(), WorkflowStatus::Failed { error }
+        if error.code == ErrorCode::Timeout));
+}
+
+#[test]
+fn cancellation_disarms_both_readiness_and_verification_deadlines() {
+    for waiting_for_verify in [false, true] {
+        let mut engine = WorkflowEngine::default();
+        if waiting_for_verify {
+            let (_, verify, _) = reach_verify(&mut engine, 500);
+            let waiting = engine
+                .dispatch(host(verify, HostEventKind::Ble(BleEvent::WriteCompleted)))
+                .unwrap();
+            response_timer(&waiting);
+        } else {
+            reach_ready_wait(&mut engine);
+        }
+        let cancelled = engine
+            .dispatch(Event::Cancelled {
+                cancellation_id: CANCELLATION,
+            })
+            .unwrap();
+        assert!(cancelled.iter().any(|request| matches!(
+            request.effect,
+            Effect::Timer(TimerEffect::Cancel { timer_id: 105 })
+        )));
+        assert!(
+            cancelled.iter().any(|request| matches!(
+                request.effect,
+                Effect::Ble(BleEffect::Unsubscribe { .. })
+            ))
+        );
+        assert!(matches!(engine.status(), WorkflowStatus::Cancelled { .. }));
+    }
+}
+
 #[test]
 fn http_rejection_fails_without_touching_ble() {
     let mut engine = WorkflowEngine::default();

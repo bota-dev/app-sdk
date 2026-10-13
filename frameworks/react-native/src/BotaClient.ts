@@ -3,6 +3,7 @@ import type { ClientPresence } from './clientPresence';
 
 import type { BotaDeviceSDKClient } from './client';
 import { getCompatibilityClient, withCompatibilityClient } from './compatibility/runtime';
+import { getCompatibilityBluetoothState } from './compatibility/bluetoothState';
 import { DeviceManager } from './managers/DeviceManager';
 import { OTAManager } from './managers/OTAManager';
 import { RecordingManager } from './managers/RecordingManager';
@@ -39,6 +40,7 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
   private _config: BotaConfig | null = null;
   private _state: SdkState = 'uninitialized';
   private _bluetoothState: BluetoothState = 'unknown';
+  private _bluetoothObserver: { remove(): void } | null = null;
   private _client: BotaDeviceSDKClient | null = null;
   private _deviceManager: DeviceManager | null = null;
   private _recordingManager: RecordingManager | null = null;
@@ -113,11 +115,14 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
     const deadline = Date.now() + timeoutMs;
     while (Date.now() < deadline) {
       await new Promise<void>((resolve) => setTimeout(() => resolve(), 50));
-      const capabilities = await this._client.getCapabilities();
-      const state: BluetoothState = capabilities.bluetooth
-        ? 'poweredOn'
-        : 'unsupported';
-      this.setBluetoothState(state);
+      const observed = getCompatibilityBluetoothState(this._client);
+      let state: BluetoothState;
+      if (observed) state = await observed.read();
+      else {
+        const capabilities = await this._client.getCapabilities();
+        state = capabilities.bluetooth ? 'poweredOn' : 'unsupported';
+        this.setBluetoothState(state);
+      }
       if (state === 'poweredOn') return;
       if (state === 'unsupported') {
         throw BluetoothError.unavailable();
@@ -179,9 +184,13 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
         throw SdkError.invalidState('ready', nativeState);
       }
       const capabilities = await client.getCapabilities();
-      this.setBluetoothState(
-        capabilities.bluetooth ? 'poweredOn' : 'unsupported'
-      );
+      const observed = getCompatibilityBluetoothState(client);
+      if (observed) {
+        this._bluetoothObserver = observed.watch(state => {
+          if (this._client === client && this._nativeOwned) this.setBluetoothState(state);
+        });
+        await observed.read();
+      } else this.setBluetoothState(capabilities.bluetooth ? 'poweredOn' : 'unsupported');
 
       deviceManager = withCompatibilityClient(client, () => new DeviceManager());
       await deviceManager.initialize();
@@ -198,6 +207,8 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
         bluetoothState: this._bluetoothState,
       });
     } catch (error) {
+      this._bluetoothObserver?.remove();
+      this._bluetoothObserver = null;
       deviceManager?.destroy();
       recordingManager?.destroy();
       otaManager?.destroy();
@@ -213,6 +224,11 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
   }
 
   private async releaseOwnerGraph(): Promise<void> {
+    if (this._bluetoothObserver) {
+      this._bluetoothObserver.remove();
+      this._bluetoothObserver = null;
+      this.setBluetoothState('unknown');
+    }
     this._deviceManager?.destroy();
     this._recordingManager?.destroy();
     this._otaManager?.destroy();

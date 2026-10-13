@@ -1,5 +1,6 @@
 import type { UploadInfo, UploadRecoveryContext, UploadRecoveryProvider } from './models/Recording';
 import { isUploadVerificationPending, UploadVerificationPendingError } from './managers/uploadVerificationPending';
+import type { CompatibilityUploadPolicyCodec } from './managers/NativeUploadQueue';
 
 const waitForCompletion = (milliseconds: number, signals: AbortSignal[]): Promise<void> =>
   new Promise((resolve, reject) => {
@@ -31,6 +32,7 @@ export interface UploadRecoveryBackend {
  */
 export function createUploadRecoveryProvider(
   openBackend: (task: UploadRecoveryContext) => Promise<UploadRecoveryBackend | null>,
+  policy?: CompatibilityUploadPolicyCodec,
 ): UploadRecoveryProvider {
   return async (task) => {
     if (!task.recoveryScope || task.signal.aborted) return null;
@@ -47,46 +49,66 @@ export function createUploadRecoveryProvider(
       check();
       const recording = await api.getRecording(task.recordingId, task.signal);
       check();
-      const wireSize = recording.file_size_bytes;
-      if (typeof wireSize === 'string' && !/^(0|[1-9][0-9]*)$/.test(wireSize)) throw new Error('Invalid upload recovery file size');
-      const fileSize = typeof wireSize === 'string' ? Number(wireSize) : wireSize;
-      if (fileSize != null && (typeof fileSize !== 'number' || !Number.isSafeInteger(fileSize) || fileSize < 0)) {
-        throw new Error('Invalid upload recovery file size');
-      }
-      if (recording.id !== task.recordingId || (!task.relayUpload && (
-        (task.contentSha256 && recording.content_sha256 && task.contentSha256 !== recording.content_sha256) ||
-        (task.fileSizeBytes !== undefined && fileSize != null && task.fileSizeBytes !== fileSize)
-      ))) throw new Error('Upload recovery identity or evidence changed');
-      if (!['pending', 'uploaded', 'integrity_failure'].includes(recording.status)) throw new Error('Recording unavailable for recovery');
       const start = Date.parse(String(recording.metadata?.started_at ?? ''));
       const end = Date.parse(String(recording.metadata?.ended_at ?? ''));
-      const duration = Number.isFinite(start) && Number.isFinite(end) && end >= start ? Math.floor((end - start) / 1000) : undefined;
-      const alreadyUploaded = recording.status === 'uploaded' || (task.completionPending === true && recording.status === 'pending');
+      let duration: number | undefined, alreadyUploaded: boolean, reuploadRequired: boolean;
+      if (policy) {
+        const admission = policy('planUploadRecoveryRecording', { taskRecordingId: task.recordingId, taskRelayUpload: task.relayUpload,
+          taskCompletionPending: task.completionPending === true, taskFileSizeBytes: task.fileSizeBytes ?? null,
+          taskContentSha256: task.contentSha256 ?? null, recordingId: recording.id, status: recording.status,
+          recordingFileSizeBytes: recording.file_size_bytes ?? null, recordingContentSha256: recording.content_sha256 ?? null,
+          startedAtMs: Number.isFinite(start) ? start : null, endedAtMs: Number.isFinite(end) ? end : null });
+        duration = admission.durationSeconds == null ? undefined : admission.durationSeconds as number;
+        alreadyUploaded = admission.alreadyUploaded === true;
+        reuploadRequired = admission.reuploadRequired === true;
+      } else {
+        const wireSize = recording.file_size_bytes;
+        if (typeof wireSize === 'string' && !/^(0|[1-9][0-9]*)$/.test(wireSize)) throw new Error('Invalid upload recovery file size');
+        const fileSize = typeof wireSize === 'string' ? Number(wireSize) : wireSize;
+        if (fileSize != null && (typeof fileSize !== 'number' || !Number.isSafeInteger(fileSize) || fileSize < 0)) {
+          throw new Error('Invalid upload recovery file size');
+        }
+        if (recording.id !== task.recordingId || (!task.relayUpload && (
+          (task.contentSha256 && recording.content_sha256 && task.contentSha256 !== recording.content_sha256) ||
+          (task.fileSizeBytes !== undefined && fileSize != null && task.fileSizeBytes !== fileSize)
+        ))) throw new Error('Upload recovery identity or evidence changed');
+        if (!['pending', 'uploaded', 'integrity_failure'].includes(recording.status)) throw new Error('Recording unavailable for recovery');
+        duration = Number.isFinite(start) && Number.isFinite(end) && end >= start ? Math.floor((end - start) / 1000) : undefined;
+        alreadyUploaded = recording.status === 'uploaded' || (task.completionPending === true && recording.status === 'pending');
+        reuploadRequired = recording.status === 'integrity_failure';
+      }
       const target = alreadyUploaded ? { uploadUrl: '' }
         : await api.getUploadInfo(task.recordingId, task.relayUpload, task.contentType, task.signal);
       check();
       return {
         ...target, recordingId: task.recordingId, recoveryScope: task.recoveryScope,
-        alreadyUploaded, reuploadRequired: recording.status === 'integrity_failure',
+        alreadyUploaded, reuploadRequired,
         signal: api.signal, dispose: () => api.dispose(),
         complete: async ({ fileSizeBytes, contentSha256, signal }) => {
           const data = {
             duration_seconds: duration, file_size_bytes: fileSizeBytes, content_sha256: contentSha256,
           };
-          const deadline = Date.now() + 120_000;
+          const startedAt = Date.now();
+          const deadline = policy ? 0 : startedAt + 120_000;
           for (let poll = 0; ; poll++) {
             check(signal);
-            if (poll > 0 && (Date.now() >= deadline || poll >= 120)) throw new UploadVerificationPendingError();
+            const before = policy?.('planUploadCompletionPoll', { stage: 'before', elapsedMs: Date.now() - startedAt,
+              poll, randomFraction: 0, status: 0, code: '' });
+            if (before ? before.exhausted === true : poll > 0 && (Date.now() >= deadline || poll >= 120)) throw new UploadVerificationPendingError();
             try {
               await api.completeRecording(task.recordingId, data, signal);
               check(signal);
               return;
             } catch (error) {
               check(signal);
-              if (!isUploadVerificationPending(error)) throw error;
-              const remaining = deadline - Date.now();
-              if (remaining <= 0) throw new UploadVerificationPendingError();
-              await waitForCompletion(Math.min(1_000 + Math.floor(Math.random() * 1_000), remaining),
+              const value = error as { status?: unknown; data?: { error?: { code?: unknown } } } | null;
+              const response = policy?.('planUploadCompletionPoll', { stage: 'response', elapsedMs: Date.now() - startedAt,
+                poll, randomFraction: Math.random(), status: typeof value?.status === 'number' ? value.status : 0,
+                code: typeof value?.data?.error?.code === 'string' ? value.data.error.code : '' });
+              if (response ? response.verificationPending !== true : !isUploadVerificationPending(error)) throw error;
+              const remaining = policy ? 0 : deadline - Date.now();
+              if (response ? response.exhausted === true : remaining <= 0) throw new UploadVerificationPendingError();
+              await waitForCompletion(response ? response.waitMs as number : Math.min(1_000 + Math.floor(Math.random() * 1_000), remaining),
                 [signal, task.signal, api.signal]);
             }
           }

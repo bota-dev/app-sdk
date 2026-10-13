@@ -175,9 +175,27 @@ jobs:
           npm ci --prefix frameworks/react-native
           npm ci --prefix frameworks/react-native-runtime
 
+      - name: Set up shared-core JavaScript compiler
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.98.0
+          targets: wasm32-unknown-unknown
+
+      - name: Rebuild executable JavaScript from exact shared Rust source
+        run: npm run react-native:generate-js-core -- --check
+
       - name: Build and verify JavaScript-only runtime
         working-directory: frameworks/react-native-runtime
         run: npm run verify
+
+      - name: Compare generated JavaScript with native Rust
+        run: npm run react-native:verify-js-core
+
+      - name: Build pinned React Native Hermes runtime
+        run: bash tools/hermes/build-runtime.sh
+
+      - name: Execute generated shared core in Hermes
+        run: node tools/hermes/conformance.mjs
 
       - name: Pack separately versioned runtime
         working-directory: frameworks/react-native-runtime

@@ -835,12 +835,18 @@ const parseUploadQueue = (serialized: string): UploadTask[] => {
 
 export const createBotaDeviceSDK = (
   nativeModule: BotaDeviceAdapter | null,
-  options: { reconnect?: BotaReconnectPolicy; firmwareRecovery?: BotaFirmwareRecoveryPolicy } = {},
+  options: { reconnect?: BotaReconnectPolicy; firmwareRecovery?: BotaFirmwareRecoveryPolicy;
+    /** Internal injection used by the generated JS runtime. */
+    generatedPolicy?: {
+      reconnect: Required<BotaReconnectPolicy>;
+      planReconnect(attempt: number, retryable: boolean): number | null;
+    } } = {},
 ): BotaDeviceSDKClient => {
   let presenceStopped = false;
   let presenceGeneration = 0;
   let reconnectCancellation = new AbortController();
-  const reconnectPolicy = normalizeReconnectPolicy(options.reconnect);
+  const reconnectPolicy = options.generatedPolicy?.reconnect ?? normalizeReconnectPolicy(options.reconnect);
+  const planReconnect = options.generatedPolicy?.planReconnect;
   const firmwareRecoveryPolicy = normalizeFirmwareRecoveryPolicy(options.firmwareRecovery);
   let firmwareOperation: (FirmwareRecoveryOwner & {
     controller: AbortController; promise: Promise<void>; cancelling: boolean; cancelPromise?: Promise<void>;
@@ -900,7 +906,7 @@ export const createBotaDeviceSDK = (
           throw new BotaRuntimeCompatibilityError('device_identity_mismatch', 'reconnect');
         }
         return mapConnectedDevice(connected);
-      }, reconnectPolicy, signal);
+      }, reconnectPolicy, signal, planReconnect);
     },
 
     async disconnect() {
@@ -1371,11 +1377,19 @@ export const createBotaDeviceSDK = (
       const operation = { controller, signal: controller.signal, recovering: false, cancelling: false,
         promise: Promise.resolve(), cancelPromise: undefined as Promise<void> | undefined };
       firmwareOperation = operation;
-      operation.promise = Promise.resolve().then(() => updateFirmwareWithRecovery(
-        module, toNativeConnectedDevice(device), {
-          version: image.version, sizeUnits: image.sizeBytes, crc32: image.crc32, url: image.url,
-        }, event => onProgress?.(mapFirmwareProgress(event)), operation, firmwareRecoveryPolicy,
-      ));
+      operation.promise = Promise.resolve().then(async () => {
+        const nativeImage = { version: image.version, sizeUnits: image.sizeBytes, crc32: image.crc32, url: image.url };
+        if (options.generatedPolicy) {
+          const subscription = module.onFirmwareUpdateProgress(event => {
+            if (!controller.signal.aborted) onProgress?.(mapFirmwareProgress(event));
+          });
+          try {
+            await module.updateFirmware(toNativeConnectedDevice(device), nativeImage);
+            if (controller.signal.aborted) throw new BotaRuntimeCompatibilityError('operation_cancelled', 'updateFirmware');
+          } finally { subscription.remove(); }
+        } else await updateFirmwareWithRecovery(module, toNativeConnectedDevice(device), nativeImage,
+          event => onProgress?.(mapFirmwareProgress(event)), operation, firmwareRecoveryPolicy);
+      });
       try {
         await operation.promise;
       } finally {

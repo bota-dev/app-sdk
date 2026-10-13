@@ -1,5 +1,17 @@
 # Architecture
 
+October 12 source adds a generated-JavaScript RN execution route:
+`createBotaReactNativeJsRuntime` compiles the Rust core through pinned
+Rust/Binaryen/Terser into ordinary JS, with no WebAssembly runtime or full Bota
+native workflow dependency. Version 1 installed ports perform BLE, scoped durable
+file/journal IO, HTTP and optional sockets. Rust owns wire formats, receivers,
+managed/BYO recovery and queue policy; handwritten JS maps APIs and executes IO.
+Bounded ciphertext and signed documents may enter internal JS transport buffers;
+signature trust and decryption remain on device/backend. Legacy PEM delivery and
+raw-token provisioning retain their documented compatibility limitations.
+The native-distribution descriptions below remain applicable to the existing
+factory. See [source review and separate release gates](docs/parity/react-native-runtime.md).
+
 Published beta.15 combines reviewed main OTA/marker/BYO integrations with
 Apple transfer/local ownership and RN reconnect quiescence corrections.
 Publication, app binary delivery and physical acceptance are distinct gates; see
@@ -13,7 +25,7 @@ BLE, HTTP and WS, private durable journals and receipt-gated cleanup. Native
 physical capture; explicit identities also work. Three WS reconnects precede a
 fenced full-file successor; initial WS failure stays on HTTP segments. Stop
 Recording can run during a live upload; unrelated device operations stay exclusive.
-Only metadata crosses JS. See [integration and review](docs/parity/byo-storage.md)
+Only metadata crosses JS in the published native distribution. See [integration and review](docs/parity/byo-storage.md)
 for source evidence and separate customer, package and hardware acceptance gates.
 
 Recording markers #201: [native BATCH integration and successor review](docs/parity/recording-markers.md) covers opaque transfers, authorization recovery, owner/channel fences and dual receipts. The [STREAMING scalar status provider](docs/parity/protected-streaming-status.md) is wired through native HTTPS; Demo uses its dashboard read API and existing BLE control for device-direct streaming. A new BLE audio relay is outside this scope. Published beta.15 includes the new marker/status native capabilities; consuming native App delivery and profile/hardware qualification remain separate. No marker profile is enabled; preserve UUID[16] and 280-byte authorization. See [publication evidence](release/evidence/2.0.0-beta.15-publication.md).

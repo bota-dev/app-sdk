@@ -5,6 +5,13 @@ SDK (`@bota.dev/react-native-app-sdk`, `BotaAppSDK`, and `dev.bota:bota-app-sdk`
 New SDK development belongs in this repository. The retired
 `bota-dev/react-native-sdk` repository is retained as migration history.
 
+Unreleased October 12 RN source adds generated Rust-to-JS execution over narrow
+OS ports. The SDK may relay bounded ciphertext and signed documents internally
+in JS; device/backend retain signature trust and decryption. This changes the
+SDK execution location, not these wire formats or cleanup requirements. The
+published native facade still uses opaque registrations. See
+[runtime source review](docs/parity/react-native-runtime.md).
+
 This edition covers recording control and the #201 recording-marker extension:
 marked BATCH transfer, the App boundary and the device HTTP contract of protected
 direct STREAMING. It retains the existing GATT allocations and ordinary v2 transport. It is not a

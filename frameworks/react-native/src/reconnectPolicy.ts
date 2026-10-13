@@ -18,8 +18,10 @@ export function normalizeReconnectPolicy(policy: BotaReconnectPolicy = {}): Requ
 
 export async function reconnectWithPolicy<T>(
   attempt: () => Promise<T>, policy: Required<BotaReconnectPolicy>, signal: AbortSignal,
+  plan?: (attempt: number, retryable: boolean) => number | null,
 ): Promise<T> {
   for (let index = 0; ; index++) {
+    let delayMs = policy.delayMs;
     if (signal.aborted) throw new BotaRuntimeCompatibilityError('operation_cancelled', 'reconnect');
     try {
       const result = await attempt();
@@ -27,8 +29,12 @@ export async function reconnectWithPolicy<T>(
       return result;
     } catch (error) {
       if (signal.aborted) throw new BotaRuntimeCompatibilityError('operation_cancelled', 'reconnect');
-      if (index + 1 >= policy.maxAttempts || !error ||
-        typeof error !== 'object' || !('retryable' in error) || error.retryable !== true) throw error;
+      const retryable = !!error && typeof error === 'object' && 'retryable' in error && error.retryable === true;
+      if (plan) {
+        const planned = plan(index + 1, retryable);
+        if (planned === null) throw error;
+        delayMs = planned;
+      } else if (index + 1 >= policy.maxAttempts || !retryable) throw error;
     }
     await new Promise<void>((resolve, reject) => {
       const cancel = () => {
@@ -39,7 +45,7 @@ export async function reconnectWithPolicy<T>(
       const timer = setTimeout(() => {
         signal.removeEventListener('abort', cancel);
         resolve();
-      }, policy.delayMs);
+      }, delayMs);
       signal.addEventListener('abort', cancel, { once: true });
       if (signal.aborted) cancel();
     });

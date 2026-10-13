@@ -1,7 +1,7 @@
 {
   "name": "@bota.dev/react-native-app-sdk-runtime",
   "version": "0.1.0-beta.0",
-  "description": "Portable JavaScript control plane for Bota React Native device adapters",
+  "description": "Rust-generated Bota React Native JavaScript runtime with installed OS ports",
   "license": "MIT",
   "author": "Bota",
   "packageManager": "npm@12.0.2",
@@ -12,7 +12,7 @@
     ".": { "types": "./lib/typescript/runtime.d.ts", "default": "./lib/commonjs/runtime.js" },
     "./package.json": "./package.json"
   },
-  "files": ["lib/", "README.md", "LICENSE"],
+  "files": ["lib/", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES/"],
   "engines": { "node": ">=22" },
   "publishConfig": { "access": "public" },
   "repository": { "type": "git", "url": "https://github.com/bota-dev/app-sdk.git", "directory": "frameworks/react-native-runtime" },

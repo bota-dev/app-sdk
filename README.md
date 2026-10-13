@@ -1,5 +1,10 @@
 # Bota App SDK
 
+Unreleased RN source now includes a separately packaged runtime that executes
+shared Rust behavior as generated JavaScript over installed Bluetooth, file and
+HTTP ports. Compatible shared-logic upgrades can travel in an app's OTA bundle.
+See [setup, current verification and release limits](frameworks/react-native-runtime/README.md).
+
 BYO live-upload source now connects encrypted capture, HTTP/WS and fenced Batch recovery. See [current implementation and validation](docs/parity/byo-storage.md); rollout and physical qualification remain separate.
 
 [![CI](https://github.com/bota-dev/app-sdk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bota-dev/app-sdk/actions/workflows/ci.yml)
@@ -23,7 +28,7 @@ update flows in React Native, Swift, Kotlin, Flutter, or a web application.
   WiFi configuration with your backend's authorization flow.
 - **Firmware updates:** download and transfer firmware through the SDK's OTA
   workflows.
-- **Native mobile integration:** shared Rust workflows with Apple and Android
+- **Native mobile integration:** the published distribution uses shared Rust workflows with Apple and Android
   adapters keep recording and firmware files outside JavaScript and Dart bridges.
 
 Capabilities vary by platform and device firmware. Use the platform guides below
