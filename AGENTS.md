@@ -2,8 +2,10 @@
 
 October 13 RN naming correction: publish generated JS through
 `@bota.dev/react-native-app-sdk/runtime` in synchronized beta.16 using the existing
-`release.yml`. Beta.15 remains published; fresh beta.16 source, canonical artifacts,
-exact main CI/License, protected publication and public consumers are pending.
+`release.yml`. Beta.15 remains published. Canonical JS/Apple/Flutter preparation,
+475 local RN tests and 447 actual Node VM checks pass. Exact final branch/main
+nine-job CI/License, full inventory, protected publication and public consumers
+remain pending.
 `frameworks/react-native-runtime` is a private source-verification fixture with no
 npm publication path. The original package retains native compatibility and
 autolinking; importing `/runtime` evaluates without native modules. See the

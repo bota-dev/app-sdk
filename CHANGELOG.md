@@ -10,7 +10,9 @@ tracked separately.
 - Prepare synchronized `2.0.0-beta.16` under the existing public package identities.
   React Native uses `@bota.dev/react-native-app-sdk/runtime`; the companion is a
   private verification fixture. The independent namespace/publication plan is
-  withdrawn. Beta.15 remains published while fresh beta.16 release gates are pending.
+  withdrawn. Canonical JS/Apple/Flutter preparation and local RN checks pass;
+  beta.15 remains published while final beta.16 CI/License, inventory, protected
+  publication and public consumers are pending.
 - Add a JavaScript runtime generated from the shared Rust core, with versioned
   installed OS ports and generic BLE integration. Device workflows, encrypted-v2
   receivers, managed/BYO uploads and queue policy execute in the OTA bundle.

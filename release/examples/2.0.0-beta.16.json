@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "sdkFamily": "bota-app-sdk",
   "sdkVersion": "2.0.0-beta.16",
-  "sourceRevision": "2e048c280077b977ec4cc8edbcac1e9feedb6394",
+  "sourceRevision": "2863b88971c83273106b8dbbe8d932cef2b3e5dd",
   "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.17",
@@ -16,7 +16,7 @@
       "name": "BotaDeviceSDKCore.xcframework.zip",
       "ecosystem": "swiftpm",
       "version": "2.0.0-beta.16",
-      "checksumSha256": "360cc6a842246a631fd1d15a0da534f54be8d7aa33121ccea8d0512b7e383dc5",
+      "checksumSha256": "dcfd12155891b2be1f826e1f1e032dcaf6665476ba0a269c600be56c28372231",
       "capabilities": [
         "connection_settings",
         "device_logs",
@@ -73,9 +73,9 @@
       "name": "bota_app_sdk-2.0.0-beta.16.tar.gz",
       "ecosystem": "pub",
       "version": "2.0.0-beta.16",
-      "checksumSha256": "d5b48e4ffeeb7c00c493d98f6cd20e253021a69b22dd94e794e13222c3e4bd73",
-      "sourceRevision": "2e048c280077b977ec4cc8edbcac1e9feedb6394",
-      "normalizedArchiveSha256": "195fa814ca4622c22c92feec4f7d50dddf50afeab06671e7bbad27637e714cfd",
+      "checksumSha256": "0297a2b39d8100f58540994d59ac42faa3d395db04c69b1a945abc68a47f4651",
+      "sourceRevision": "2863b88971c83273106b8dbbe8d932cef2b3e5dd",
+      "normalizedArchiveSha256": "54ea25e870fdb0b1724be5c508c9d6d1ca35ee50f4629240367e007895264b2e",
       "generator": {
         "name": "pigeon",
         "version": "28.0.0"
@@ -83,13 +83,13 @@
       "packageInventory": [
         {
           "path": "AGENTS.md",
-          "byteLength": 6412,
-          "sha256": "d6428ba5f3be25f9827bd82d06e70a630fdcd6fcdbe99964c286b760debc4a7a"
+          "byteLength": 6827,
+          "sha256": "6a847cfa5246a20c629b9eac94c0e70e1df5335b65ee2554de70dda12d6a9cb0"
         },
         {
           "path": "CHANGELOG.md",
-          "byteLength": 7623,
-          "sha256": "82427b348833cd44704149ac7e2001448d5c2d445df486fd88316d818f8b5843"
+          "byteLength": 8170,
+          "sha256": "431b9ade423913502232b40c25bef1891ca04a007c07f03132540635193cf6b4"
         },
         {
           "path": "LICENSE",
@@ -98,8 +98,8 @@
         },
         {
           "path": "README.md",
-          "byteLength": 12895,
-          "sha256": "098d8b1f99f8ce3fcc132e182d97101fb7a0b40fe95470c01e6de4b324cf400b"
+          "byteLength": 12946,
+          "sha256": "f55aad259ebb352e3680ad4f804d9ae48117cba52290ad9aebfb3ba2a92b0cac"
         },
         {
           "path": "analysis_options.yaml",

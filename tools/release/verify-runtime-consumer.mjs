@@ -3,9 +3,10 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import Module from 'node:module';
 import { join, resolve } from 'node:path';
+import { supportsGeneratedRuntime } from './runtime-release-support.mjs';
 
 const [directory, version] = process.argv.slice(2);
-assert.ok(directory && /^2\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)-beta\.(?:0|[1-9]\d*)$/.test(version),
+assert.ok(directory && supportsGeneratedRuntime(version),
   'usage: verify-runtime-consumer.mjs <consumer-directory> <app-sdk-version>');
 const name = '@bota.dev/react-native-app-sdk';
 const root = resolve(directory);

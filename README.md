@@ -3,7 +3,8 @@
 The next synchronized beta.16 candidate adds Rust-generated JavaScript through
 `@bota.dev/react-native-app-sdk/runtime`, using installed Bluetooth, file and HTTP
 ports. Compatible shared-logic upgrades can travel in an app's OTA bundle.
-Beta.15 remains published while fresh release gates are pending. See
+Beta.15 remains published. Canonical artifact preparation and local RN checks pass;
+final CI/License, inventory, protected publication and public consumers are pending. See
 [setup and runtime limits](frameworks/react-native/README.md) and
 [beta.16 preflight](release/evidence/2.0.0-beta.16-preflight.md).
 

@@ -11,9 +11,11 @@ and publication workflow are withdrawn; the
 is historical evidence only.
 
 Use the existing synchronized `release.yml` and immutable `v2.0.0-beta.16` tag
-procedure. Fresh source checks, canonical JS generation and Apple/Flutter
-artifacts, exact main CI/License Gate, complete five-platform inventory, protected
-approval/publication and all public consumers remain pending. The React Native
+procedure. Canonical JS generation and Apple/Flutter preparation pass, as do local
+complete RN and source/declaration checks. The temporary preparation workflow is
+removed. Exact final branch/main nine-job CI/License Gate, complete five-platform
+inventory, protected approval/publication and all public consumers remain pending.
+The React Native
 consumer must exercise the actual published `/runtime` entry with native imports,
 registry access and WebAssembly rejected. Preserve the existing npm `latest` and
 historical package channels; advance only the normal family `beta` channel.

@@ -7,7 +7,9 @@ native autolinking, CocoaPods/Maven dependencies or a Codegen module.
 
 Applications use `@bota.dev/react-native-app-sdk/runtime` from the original public
 package. Synchronized beta.16 prepares that generated-JS route; beta.15 remains
-published while fresh release gates are pending. The complete public package
+published. Canonical artifact preparation and local source checks pass; final
+CI/License, complete inventory, protected publication and public consumers remain
+pending. The complete public package
 retains native compatibility and autolinking, while `/runtime` evaluates without
 native modules or WebAssembly. See [application setup](../react-native/README.md)
 and [beta.16 preflight](../../release/evidence/2.0.0-beta.16-preflight.md).

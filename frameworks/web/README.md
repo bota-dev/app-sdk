@@ -3,8 +3,9 @@
 Source candidate `2.0.0-beta.16` synchronizes the five-platform SDK family and
 adds the React Native generated-JS route through the original package's `/runtime`
 entry. Web retains its Rust/Wasm implementation. Beta.15 remains the published
-baseline while fresh source, canonical artifacts, exact main CI, protected
-publication and public-consumer gates are pending. See the
+baseline. Canonical JS/Apple/Flutter preparation and local RN checks pass; final
+branch/main CI/License, complete inventory, protected publication and public
+consumers remain pending. See the
 [beta.16 preflight](../../release/evidence/2.0.0-beta.16-preflight.md).
 
 `@bota.dev/web-app-sdk` is the foreground browser distribution of the Bota App

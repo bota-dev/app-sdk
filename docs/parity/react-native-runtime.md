@@ -7,7 +7,9 @@ gates; this document does not claim those gates passed.
 
 October 13 naming decision: release this route through the existing
 `@bota.dev/react-native-app-sdk/runtime` entry in synchronized beta.16. Beta.15
-remains published while fresh candidate gates are pending. The companion is a
+remains published. Canonical JS/Apple/Flutter preparation and local RN checks
+pass; final branch/main CI/License, complete inventory, protected publication and
+public consumers remain pending. The companion is a
 private source fixture; the separate registry/publication plan is withdrawn.
 See the [beta.16 preflight](../../release/evidence/2.0.0-beta.16-preflight.md).
 
@@ -242,19 +244,22 @@ older adapter behavior.
 
 | Requirement | Check mechanism | Current gate |
 | --- | --- | --- |
-| Rust produces ordinary executable JS | Exact regeneration; 91 native/generated RPCs across all 13 core commands; 224 core/65 bridge tests and strict Clippy | Matched source gate |
-| RN engine compatibility | Prior migration source passed normal optimized compilation/default parser and 447 pinned hosted Hermes VM checks | Historical source proof matched; fresh beta.16 and installed-app gates pending |
-| Primitive-only generated mode | Both real tarballs load/configure/destroy the generated client with native imports and WebAssembly rejected | Matched source/package gate |
+| Rust produces ordinary executable JS | Canonical beta.16 regeneration and 106 matching inputs; prior migration passed 91 native/generated RPCs, 224 core/65 bridge tests and strict Clippy | Beta.16 generation matched; fresh Rust/differential final CI pending |
+| RN engine compatibility | Adopted beta.16 core executes all 447 actual Node VM checks without native imports/WebAssembly; prior migration source passed optimized compilation and pinned Hermes VM checks | Local beta.16 Node execution matched; final pinned Hermes and installed-app gates pending |
+| Primitive-only generated mode | Original `/runtime` source consumer configures/destroys with native imports, registry access and WebAssembly rejected | Local source matched; final candidate/public consumer pending |
 | Public API and feature/recovery parity | 475 RN tests including frozen contracts, BYO/managed/queue, RTC 4, BLE 22 and readiness/lifecycle 9 regressions | Matched source gate; documented maintenance/security gaps remain |
 | Scoped durable receipt cleanup | Requirement/evidence reviews and injected host failures | Installed durability and physical acceptance unverified |
-| Redistribution notices | Both real tarballs retain 47 notice files; RN/companion license gates scan 410/4 packages; companion four checks pass | Matched |
+| Redistribution notices | Prior tar checks retained 47 notices; fresh RN license gate scans 410 packages; private fixture four checks/license scan pass | Source checks matched; final public archive pending |
 | npm publication and application OTA | Separate publication, initial OS-port installation and app rollout | Pending |
 
 The exact generation provenance, compiler proof and source checks are recorded in
 [the migration review](../superpowers/plans/2026-10-12-react-native-generated-js.md).
-Those migration checks do not replace fresh beta.16 source checks, canonical
-Apple/Flutter preparation, exact main CI/License or protected/public-consumer
-gates. Record the final candidate revision and hosted results after delivery. The
+Beta.16 canonical generation and Apple/Flutter preparation are verified in the
+[preflight](../../release/evidence/2.0.0-beta.16-preflight.md), with 106 matching
+generator inputs, 475 fresh RN tests, 447 actual Node VM checks and strict source
+consumer/declaration checks. These do not replace final branch/main nine-job
+CI/License, complete inventory or protected/public-consumer gates. Record the final
+candidate revision and hosted results after delivery. The
 earlier TypeScript-adapter milestone's 227 RN tests remain historical evidence.
 Hardware, customer proxy/TLS,
 OS background behavior and deployed app OTA require separate acceptance evidence.

@@ -6,8 +6,9 @@ The synchronized beta.16 candidate adds `createBotaReactNativeJsRuntime` in the
 `@bota.dev/react-native-app-sdk/runtime` entry. Rust supplies the executable JS
 protocol/workflow implementation; no WebAssembly or native Rust engine runs in
 the application. These migration additions are not claimed in published beta.15.
-Fresh candidate source, canonical artifacts, exact main CI, protected publication
-and public consumers remain pending; see the
+Canonical JS/Apple/Flutter preparation and the complete local RN suite pass.
+Exact final branch/main CI/License, full inventory, protected publication and
+public consumers remain pending; see the
 [beta.16 preflight](../../release/evidence/2.0.0-beta.16-preflight.md).
 The ordinary package retains native adapters, Codegen, autolinking and its
 compatibility API. Importing `/runtime` evaluates without native module imports

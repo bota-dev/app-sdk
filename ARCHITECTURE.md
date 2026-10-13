@@ -2,9 +2,10 @@
 
 The generated React Native JavaScript runtime ships through the original
 `@bota.dev/react-native-app-sdk/runtime` entry in the synchronized SDK family.
-Beta.16 is the next candidate; beta.15 remains published. Exact fresh source and
-artifact checks, protected publication and public consumers are pending. The
-companion directory is a private verification fixture. See the
+Beta.16 is the next candidate; beta.15 remains published. Canonical JS/Apple/Flutter
+preparation and local RN source checks pass. Exact final branch/main nine-job
+CI/License, complete inventory, protected publication and public consumers remain
+pending. The companion directory is a private verification fixture. See the
 [beta.16 preflight](release/evidence/2.0.0-beta.16-preflight.md).
 
 October 12 source adds a generated-JavaScript RN execution route:

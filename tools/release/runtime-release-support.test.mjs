@@ -6,7 +6,7 @@ test('historical releases retain recovery without the newly introduced runtime e
   for (const version of ['1.1.0', '1.2.0-beta.12', '2.0.0-beta.0', '2.0.0-beta.15']) {
     assert.equal(supportsGeneratedRuntime(version), false, version);
   }
-  for (const version of ['2.0.0-beta.16', '2.0.0-beta.17', '2.0.1-beta.0', '2.1.0-beta.0']) {
+  for (const version of ['2.0.0-beta.16', '2.0.0-beta.17', '2.0.1-beta.0', '2.1.0-beta.0', '2.0.0', '2.1.0']) {
     assert.equal(supportsGeneratedRuntime(version), true, version);
   }
 });
