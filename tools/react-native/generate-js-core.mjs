@@ -12,6 +12,7 @@ const output = join(root, 'frameworks/react-native/src/jsHost/generated/core.ts'
 const scratch = join(root, 'target/react-native-js');
 const check = process.argv.includes('--check');
 const provenanceOnly = process.argv.includes('--provenance-only');
+if (check && provenanceOnly) throw new Error('Exact rebuild and compiler-free provenance modes are mutually exclusive.');
 const binaryen = JSON.parse(readFileSync(join(root, 'node_modules/binaryen/package.json'), 'utf8'));
 if (binaryen.version !== '132.0.0') throw new Error('Expected locked Binaryen 132.0.0');
 const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry =>
@@ -39,9 +40,11 @@ if (provenanceOnly) {
 }
 // Cargo's target crate identities also include build-host metadata. Generate on
 // one compiler host; consumers on every host use the committed ordinary JS.
-const compilerHost = execFileSync('rustc', ['--print', 'host-tuple'], { cwd: root, encoding: 'utf8' }).trim();
-if (compilerHost !== 'x86_64-unknown-linux-gnu') {
-  throw new Error(`Exact JS generation requires Rust 1.98.0 on x86_64-unknown-linux-gnu; found ${compilerHost}. Use committed JS and --provenance-only on other hosts.`);
+const compiler = execFileSync('rustc', ['-vV'], { cwd: root, encoding: 'utf8' });
+const compilerHost = compiler.match(/^host: (.+)$/m)?.[1].trim();
+const compilerRelease = compiler.match(/^release: (.+)$/m)?.[1].trim();
+if (compilerHost !== 'x86_64-unknown-linux-gnu' || compilerRelease !== '1.98.0') {
+  throw new Error(`Exact JS generation requires Rust 1.98.0 on x86_64-unknown-linux-gnu; found ${compilerRelease}/${compilerHost}. Use committed JS and --provenance-only on other hosts.`);
 }
 mkdirSync(scratch, { recursive: true });
 const env = {

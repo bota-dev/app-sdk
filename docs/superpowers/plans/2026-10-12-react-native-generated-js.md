@@ -33,7 +33,7 @@ TypeScript wrapper over complete Apple/Android workflows does not satisfy this.
 | Hermes | Exact generated artifact passes normal `-O`/default-parser bytecode compilation inside a Metro-style module; 447 Node checks match | Compiler matched; pinned VM hosted gate pending; installed iOS/Android unverified |
 | Protected data | Owner requested JS-first migration; retired RN already relays encrypted bytes and signed documents internally in JS | Preserve that transport model. Signature trust/decryption stay device/backend owned; private-key generation/export is not added |
 | Package and licenses | Both real tarballs include 47 notice files and construct/configure/destroy the generated client without native imports/WebAssembly; companion 4 checks; license gates 410/4 packages | Matched source gate |
-| Source delivery | Reviewed source prepared for direct main push, retaining all native CI and License Gate jobs | Hosted exact-revision gates pending |
+| Source delivery | Initial migration pushed directly to main; native/platform jobs and License Gate passed, while exact JS regeneration exposed a cross-host compiler difference | Canonical Linux candidate adopted; final exact-revision CI pending |
 | Publication/app OTA/hardware | No new artifact or app release performed | Not implemented by this source delivery |
 
 The retired `react-native-sdk` is a read-only migration input. It uses JS for
@@ -58,12 +58,22 @@ fetch is not selected implicitly. Supply a conforming generic HTTP transport.
 No full Bota native SDK backend is required by that transport contract.
 
 The final generated source provenance is
-`13e7ccdbbc7ff0cd9e7ece14ced3b371da0a6bfeb620e9cb377a15e6bb775c97`
-and the executable TypeScript artifact is 3,956,881 bytes. These checks establish
+`0b81ddad0fe950671153010902a96401eb52c83da107630b9b3d52490069e01c`
+and the executable TypeScript artifact is 3,956,534 bytes. These checks establish
 source behavior and package composition, not a released or installed application.
 Full local workspace tooling requires Unix/symlink support unavailable on this
 Windows checkout; unchanged hosted jobs remain required. The shared Rust rerun
 passed after a transient Windows application-control block, without security changes.
+
+Exact generation is pinned to Rust 1.98.0 on `x86_64-unknown-linux-gnu`.
+The first hosted check showed that Windows embeds different path strings and
+Cargo includes build-host metadata in target identities. Diagnostic run
+`38370392804` captured the canonical Linux candidate from commit `7627add`;
+its downloaded archive SHA-256 was checked before adoption. Later generator
+changes only tighten compiler/mode preflight; the candidate's provenance header
+was updated accordingly. Final Linux CI must rebuild and compare the complete
+artifact, then execute it in Hermes. Compiler-free provenance checks on other
+hosts continue to support package builds without Cargo.
 
 Normal Hermes optimization initially stalled in control-flow simplification.
 The generator now preserves numeric compiled function boundaries through
