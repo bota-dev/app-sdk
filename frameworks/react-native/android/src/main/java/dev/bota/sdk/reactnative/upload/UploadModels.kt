@@ -70,7 +70,7 @@ internal data class UploadScope(
       return UploadScope(origin.trimEnd('/'), identifier("accountId"), identifier("projectId"), json.optString("organizationId", "").also { demand(it.isEmpty() || it.matches(Regex("[A-Za-z0-9_-]{1,256}"))) },
         identifier("environment"), identifier("endUserId"), identifier("deviceId"), json.integer("bindingGeneration"),
         json.string("serialNumber"), json.string("nativeDeviceId"), json.string("scopeKey"),
-        json.optString("apiBasePath", "/v1").also { demand(it.matches(Regex("(/[A-Za-z0-9_-]+)+"))) })
+        json.optString("apiBasePath", "/v1").also { demand(it.isEmpty() || it.matches(Regex("(/[A-Za-z0-9_-]+)+"))) })
     }
   }
 }

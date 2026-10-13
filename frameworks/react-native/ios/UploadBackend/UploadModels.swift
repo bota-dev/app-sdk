@@ -157,7 +157,7 @@ struct UploadInput: Codable, Sendable {
           UploadValidation.hex(capability.rawValueHex, bytes: 24),
           UploadValidation.hex(journalKey, bytes: 32) else { throw UploadFailure.invalidInput }
     guard scope.organizationId.isEmpty || UploadValidation.matches(scope.organizationId, "^[A-Za-z0-9_-]{1,256}$"),
-          UploadValidation.matches(scope.apiBasePath ?? "/v1", "^(/[A-Za-z0-9_-]+)+$") else { throw UploadFailure.invalidInput }
+          scope.apiBasePath == "" || UploadValidation.matches(scope.apiBasePath ?? "/v1", "^(/[A-Za-z0-9_-]+)+$") else { throw UploadFailure.invalidInput }
     let length = try UploadValidation.integer(recording.ciphertextLength)
     let start = try UploadValidation.integer(recording.startedAtMs, maximum: 253_402_300_799_999)
     let duration = try UploadValidation.integer(recording.durationMs, maximum: 253_402_300_799_999)

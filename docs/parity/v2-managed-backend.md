@@ -9,6 +9,10 @@ recording/session routes. Existing nonempty prefixes remain strict slash-separat
 ASCII identifiers, and omission still selects `/v1`. This neither rewrites the
 host origin nor introduces a fake prefix or fallback transport. Authorization,
 scope identity, durable recovery and signed receipt cleanup remain unchanged.
+The compatibility Apple/Android validators admit the same explicit empty prefix;
+their existing native route fixtures cover exact root/prefixed paths and reject
+malformed prefixes. Those compatibility changes require rebuilt native apps;
+the generated-JS factory executes the Rust-generated fix in its JS bundle.
 
 The facade and native Rust regressions first fail against beta.16, then exercise
 root/prefixed routing, the omitted-prefix default and malformed path rejection.

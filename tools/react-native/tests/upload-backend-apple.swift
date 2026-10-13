@@ -324,6 +324,25 @@ private struct AppleUploadTests {
   }
 
   @MainActor private static func prepareAndResume() async throws {
+    for prefix in ["", "/v1", "/dashboard/projects/proj_a"] {
+      let (routeInput, routeJournal, routeRoot, routeHTTP, routeCredentials) = try fixture()
+      defer { try? FileManager.default.removeItem(at: routeRoot) }
+      var routed = routeInput
+      routed.scope.apiBasePath = prefix
+      try routed.validate()
+      routeHTTP.handler = { request in
+        if request.url!.path.hasSuffix("/recordings") { return try json(["id": "rec_one"]) }
+        return try json(session())
+      }
+      _ = try await operation(routed, routeJournal, routeHTTP, routeCredentials).prepare()
+      try expect(routeHTTP.requests.map { $0.url!.path } == ["\(prefix)/recordings",
+        "\(prefix)/recordings/rec_one/encrypted-upload-v2/sessions"], "Exact configured root or prefixed route")
+    }
+    for prefix in ["/", "//evil.example", "v1", "/v1/", "/v1//nested", "/v1/../nested", "/v1?x=1", "/v1#x", "/v%31"] {
+      var invalid = try input()
+      invalid.scope.apiBasePath = prefix
+      try await rejects(.invalidInput) { try invalid.validate() }
+    }
     let (input, journal, root, http, credentials) = try fixture()
     defer { try? FileManager.default.removeItem(at: root) }
     http.handler = { request in

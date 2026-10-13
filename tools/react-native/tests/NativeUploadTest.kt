@@ -741,6 +741,24 @@ class NativeUploadTest {
     } finally { h.directory.deleteRecursively() }
   }
 
+  @Test fun rootAndPrefixedProxyRoutesStayExactAndMalformedPrefixesReject() = runBlocking {
+    for (prefix in listOf("", "/v1", "/dashboard/projects/proj_a")) {
+      val h = harness()
+      try {
+        val supplied = input()
+        supplied.getJSONObject("scope").put("apiBasePath", prefix)
+        h.response = { if (it.path.endsWith("/recordings")) JSONObject().put("id", "rec_a") else session() }
+        h.adapter(now).prepare(supplied.toString())
+        assertEquals(listOf("$prefix/recordings", "$prefix/recordings/rec_a/encrypted-upload-v2/sessions"), h.requests.map { it.path })
+      } finally { h.directory.deleteRecursively() }
+    }
+    for (prefix in listOf("/", "//evil.example", "v1", "/v1/", "/v1//nested", "/v1/../nested", "/v1?x=1", "/v1#x", "/v%31")) {
+      val supplied = input()
+      supplied.getJSONObject("scope").put("apiBasePath", prefix)
+      expectFailure("BOTA_UPLOAD_INVALID_INPUT") { UploadInput.parse(supplied.toString()) }
+    }
+  }
+
   @Test fun stagedResumeSkipsPutButChecksManifestAndReceiptBeforeCleanup() = runBlocking {
     val h = harness()
     try {
