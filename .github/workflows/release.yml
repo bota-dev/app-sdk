@@ -437,6 +437,23 @@ jobs:
           test -n "$PACKAGE_PATH"
           node tools/release/publish-npm.mjs react-native "$RELEASE_VERSION" "$PACKAGE_PATH"
 
+      - name: Verify public generated React Native runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERIFY_GENERATED_RUNTIME="$(node tools/release/runtime-release-support.mjs "$RELEASE_VERSION")"
+          if test "$VERIFY_GENERATED_RUNTIME" = false; then
+            echo 'Historical package predates the generated runtime; existing public consumer checks remain active.'
+            exit 0
+          fi
+          npm install --ignore-scripts --no-audit --no-fund \
+            --prefix target/react-native-runtime-consumer \
+            "@bota.dev/react-native-app-sdk@$RELEASE_VERSION" \
+            react@19.2.3 react-native@0.86.3 @types/react@19.2.17
+          node tools/release/verify-runtime-consumer.mjs target/react-native-runtime-consumer "$RELEASE_VERSION"
+          cp tools/release/runtime-consumer/client.ts tools/release/runtime-consumer/tsconfig.json target/react-native-runtime-consumer/
+          node node_modules/typescript/bin/tsc -p target/react-native-runtime-consumer/tsconfig.json
+
       - name: Publish or verify exact Web npm artifact
         shell: bash
         run: |
@@ -723,6 +740,23 @@ jobs:
           PACKAGE_PATH="$(find target/recovered/react-native-release -maxdepth 1 -type f -name '*.tgz' -print -quit)"
           test -n "$PACKAGE_PATH"
           node tools/release/publish-npm.mjs react-native "$RELEASE_VERSION" "$PACKAGE_PATH"
+
+      - name: Verify public generated React Native runtime after recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERIFY_GENERATED_RUNTIME="$(node tools/release/runtime-release-support.mjs "$RELEASE_VERSION")"
+          if test "$VERIFY_GENERATED_RUNTIME" = false; then
+            echo 'Historical package predates the generated runtime; existing public consumer checks remain active.'
+            exit 0
+          fi
+          npm install --ignore-scripts --no-audit --no-fund \
+            --prefix target/react-native-runtime-consumer \
+            "@bota.dev/react-native-app-sdk@$RELEASE_VERSION" \
+            react@19.2.3 react-native@0.86.3 @types/react@19.2.17
+          node tools/release/verify-runtime-consumer.mjs target/react-native-runtime-consumer "$RELEASE_VERSION"
+          cp tools/release/runtime-consumer/client.ts tools/release/runtime-consumer/tsconfig.json target/react-native-runtime-consumer/
+          node node_modules/typescript/bin/tsc -p target/react-native-runtime-consumer/tsconfig.json
 
       - name: Publish or verify exact Web npm artifact after recovery
         shell: bash

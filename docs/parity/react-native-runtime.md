@@ -5,6 +5,12 @@ React Native runs generated executable JavaScript over versioned installed OS
 ports. Package publication, app OTA delivery and physical acceptance are separate
 gates; this document does not claim those gates passed.
 
+October 13 naming decision: release this route through the existing
+`@bota.dev/react-native-app-sdk/runtime` entry in synchronized beta.16. Beta.15
+remains published while fresh candidate gates are pending. The companion is a
+private source fixture; the separate registry/publication plan is withdrawn.
+See the [beta.16 preflight](../../release/evidence/2.0.0-beta.16-preflight.md).
+
 ## Source and distribution
 
 `core/device-sdk-core` supplies canonical codecs, reducers and workflows.
@@ -31,14 +37,35 @@ Other hosts use the committed portable JS and `--provenance-only`; they do not
 produce a competing artifact. CI always rebuilds and compares the complete
 artifact, rather than substituting a source-hash check.
 
-Two distributions compile the same RN facade and generated artifact:
+The public route is `@bota.dev/react-native-app-sdk/runtime`, a separately
+loadable subpath of the original package. The whole package retains native
+adapters, frozen compatibility exports, React Native peers, Codegen and
+autolinking. Importing the subpath evaluates without native module imports or
+registry access; it does not disable package autolinking.
 
-- `@bota.dev/react-native-app-sdk/runtime`: an independently loadable subpath.
-  Its root package retains native adapters and frozen compatibility exports.
-- `@bota.dev/react-native-app-sdk-runtime@0.1.0-beta.0`: an independently
-  versioned source candidate with Buffer and EventEmitter dependencies. It has
-  no React Native dependency, native folders, autolinking or Codegen module.
-  Registry publication remains pending.
+The private `frameworks/react-native-runtime` fixture compiles the same facade
+and generated artifact with structural declarations and Buffer/EventEmitter
+dependencies. Its internal identity/version supports source checks only; it is
+not an npm publication or application installation target.
+
+An app choosing generated mode can exclude the bundled Bota native adapters
+through its app-side `react-native.config.js` before the app build:
+
+```js
+module.exports = {
+  dependencies: {
+    '@bota.dev/react-native-app-sdk': {
+      platforms: { ios: null, android: null },
+    },
+  },
+};
+```
+
+Generic host libraries still supply the installed OS ports. The native
+compatibility factory requires linked adapters; importing `/runtime` alone does
+not disable linking. This is the
+[documented CLI option](https://github.com/react-native-community/cli/blob/main/docs/autolinking.md#how-can-i-disable-autolinking-for-unsupported-library),
+with installed-app and physical qualification still pending.
 
 Select the generated path with `createBotaReactNativeJsRuntime`. The legacy
 `createBotaReactNativeRuntime({ apiVersion: 1, device, ... })` still accepts
@@ -52,7 +79,7 @@ import {
   createBlePlxPort,
   createBotaReactNativeJsRuntime,
   type BotaJsHostPorts,
-} from '@bota.dev/react-native-app-sdk-runtime';
+} from '@bota.dev/react-native-app-sdk/runtime';
 
 const lifetime = new AbortController();
 const ports: BotaJsHostPorts = {
@@ -216,7 +243,7 @@ older adapter behavior.
 | Requirement | Check mechanism | Current gate |
 | --- | --- | --- |
 | Rust produces ordinary executable JS | Exact regeneration; 91 native/generated RPCs across all 13 core commands; 224 core/65 bridge tests and strict Clippy | Matched source gate |
-| RN engine compatibility | Final Metro-style bundle passes normal optimized bytecode compilation/default parser and 447 Node checks | Compiler matched; pinned hosted Hermes VM pending; installed app unverified |
+| RN engine compatibility | Prior migration source passed normal optimized compilation/default parser and 447 pinned hosted Hermes VM checks | Historical source proof matched; fresh beta.16 and installed-app gates pending |
 | Primitive-only generated mode | Both real tarballs load/configure/destroy the generated client with native imports and WebAssembly rejected | Matched source/package gate |
 | Public API and feature/recovery parity | 475 RN tests including frozen contracts, BYO/managed/queue, RTC 4, BLE 22 and readiness/lifecycle 9 regressions | Matched source gate; documented maintenance/security gaps remain |
 | Scoped durable receipt cleanup | Requirement/evidence reviews and injected host failures | Installed durability and physical acceptance unverified |
@@ -225,7 +252,9 @@ older adapter behavior.
 
 The exact generation provenance, compiler proof and source checks are recorded in
 [the migration review](../superpowers/plans/2026-10-12-react-native-generated-js.md).
-Source revision and hosted results must be recorded after direct delivery. The
+Those migration checks do not replace fresh beta.16 source checks, canonical
+Apple/Flutter preparation, exact main CI/License or protected/public-consumer
+gates. Record the final candidate revision and hosted results after delivery. The
 earlier TypeScript-adapter milestone's 227 RN tests remain historical evidence.
 Hardware, customer proxy/TLS,
 OS background behavior and deployed app OTA require separate acceptance evidence.

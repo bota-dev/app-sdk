@@ -5,16 +5,16 @@ import Module from 'node:module';
 import { join, resolve } from 'node:path';
 
 const [directory, version] = process.argv.slice(2);
-assert.ok(directory && /^0\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)-beta\.(?:0|[1-9]\d*)$/.test(version),
-  'usage: verify-runtime-consumer.mjs <consumer-directory> <runtime-version>');
-const name = '@bota.dev/react-native-app-sdk-runtime';
+assert.ok(directory && /^2\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)-beta\.(?:0|[1-9]\d*)$/.test(version),
+  'usage: verify-runtime-consumer.mjs <consumer-directory> <app-sdk-version>');
+const name = '@bota.dev/react-native-app-sdk';
 const root = resolve(directory);
 const pkg = JSON.parse(readFileSync(join(root, 'node_modules', name, 'package.json'), 'utf8'));
 assert.equal(pkg.name, name);
 assert.equal(pkg.version, version);
 assert.deepEqual(pkg.dependencies, { buffer: '6.0.3', eventemitter3: '5.0.1' });
-assert.equal(pkg.peerDependencies, undefined);
-assert.equal(pkg.codegenConfig, undefined);
+assert.equal(pkg.exports['./runtime'].default, './lib/commonjs/runtime.js');
+assert.equal(pkg.exports['./runtime'].types, './lib/typescript/runtime.d.ts');
 const require = createRequire(join(root, 'package.json'));
 const previousLoad = Module._load, previousWasm = globalThis.WebAssembly, previousNative = globalThis.NativeModules;
 Module._load = function(id, ...args) {
@@ -25,7 +25,7 @@ globalThis.WebAssembly = undefined;
 globalThis.NativeModules = new Proxy({}, { get() { throw Error('Native registry accessed'); } });
 let runtime;
 try {
-  const { createBotaReactNativeJsRuntime, createBlePlxPort } = require(name);
+  const { createBotaReactNativeJsRuntime, createBlePlxPort } = require(`${name}/runtime`);
   assert.equal(typeof createBlePlxPort, 'function');
   const journals = new Map();
   runtime = createBotaReactNativeJsRuntime({ apiVersion: 1, platform: 'ios',
@@ -41,7 +41,7 @@ try {
   await runtime.client.configure({ environment: 'production' });
   assert.equal(runtime.client.bluetoothState, 'poweredOn');
   await runtime.client.destroy(); runtime = undefined;
-  console.log(`Public ${name}@${version} constructs, configures and destroys its generated client without native imports or WebAssembly.`);
+  console.log(`${name}/runtime@${version} constructs, configures and destroys its generated client without native imports or WebAssembly.`);
 } finally {
   await runtime?.client.destroy();
   Module._load = previousLoad; globalThis.WebAssembly = previousWasm; globalThis.NativeModules = previousNative;

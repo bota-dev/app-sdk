@@ -1,5 +1,13 @@
 # React Native JavaScript runtime 0.1.0-beta.0 preflight
 
+> **Withdrawn October 13, 2026 (Pacific).** The owner selected the existing
+> `@bota.dev/react-native-app-sdk/runtime` entry in synchronized beta.16.
+> The companion is now private and its independent publication workflow is
+> removed. No separate runtime namespace publication is authorized. The body
+> below preserves the earlier preparation checkpoint; its planned authentication,
+> approval and bootstrap steps are inactive. Follow the
+> [beta.16 preflight](2.0.0-beta.16-preflight.md).
+
 The owner requested continuation after the Rust-generated RN migration was
 verified and pushed. This prepares publication of only
 `@bota.dev/react-native-app-sdk-runtime@0.1.0-beta.0`; the synchronized native

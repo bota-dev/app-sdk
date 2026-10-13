@@ -1,11 +1,11 @@
 # Bota SDK for Web
 
-Source candidate `2.0.0-beta.15` synchronizes the five-platform SDK family.
-It includes Apple single-ATT transfer bounds and local connection ownership,
-awaitable React Native reconnect pause, and the reviewed main OTA, recording
-marker, protected-status and BYO storage changes. Beta.14 remains the published
-baseline until this candidate completes its gates.
-Native applications require a new binary.
+Source candidate `2.0.0-beta.16` synchronizes the five-platform SDK family and
+adds the React Native generated-JS route through the original package's `/runtime`
+entry. Web retains its Rust/Wasm implementation. Beta.15 remains the published
+baseline while fresh source, canonical artifacts, exact main CI, protected
+publication and public-consumer gates are pending. See the
+[beta.16 preflight](../../release/evidence/2.0.0-beta.16-preflight.md).
 
 `@bota.dev/web-app-sdk` is the foreground browser distribution of the Bota App
 SDK. It combines Web Bluetooth and tenant-scoped browser storage with the shared
@@ -20,11 +20,11 @@ dependency before adding its replacement. Storage namespaces do not change.
 
 ## Install
 
-This source prepares synchronized `2.0.0-beta.15`; See the release preflight for source changes.
-Use the pin below after publication is verified; beta.14 remains published:
+This source prepares synchronized `2.0.0-beta.16`. Use the candidate pin below
+after publication is verified; beta.15 remains the current published version:
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.15
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.16
 ```
 
 Use a secure context in a desktop Chromium browser with Web Bluetooth. The

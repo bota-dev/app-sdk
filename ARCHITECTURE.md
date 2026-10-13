@@ -1,10 +1,11 @@
 # Architecture
 
-The independently versioned React Native JavaScript runtime has a separate
-main-only publication controller with exact successful-CI artifact promotion,
-the existing protected review and npm byte/public-consumer verification. It does
-not join the synchronized native family version matrix. See
-[runtime publication preflight](release/evidence/react-native-runtime-0.1.0-beta.0-preflight.md).
+The generated React Native JavaScript runtime ships through the original
+`@bota.dev/react-native-app-sdk/runtime` entry in the synchronized SDK family.
+Beta.16 is the next candidate; beta.15 remains published. Exact fresh source and
+artifact checks, protected publication and public consumers are pending. The
+companion directory is a private verification fixture. See the
+[beta.16 preflight](release/evidence/2.0.0-beta.16-preflight.md).
 
 October 12 source adds a generated-JavaScript RN execution route:
 `createBotaReactNativeJsRuntime` compiles the Rust core through pinned
@@ -191,9 +192,11 @@ firmware/release/hardware gates or enable v2 compatibility metadata. See
 - React Native owns its TypeScript control plane over a versioned adapter
   contract; its default device adapter delegates native protocol/file operations
   to the native facades. Flutter delegates to native facades.
-- The separately versioned `frameworks/react-native-runtime` package distributes
-  that same control plane without native autolinking, artifacts or OS type imports.
-  The consuming app supplies its installed conforming adapters.
+- The original package's `/runtime` entry executes Rust-generated JS over installed
+  OS ports without evaluating native modules. The complete package retains its
+  native compatibility entry, Codegen and autolinking. The private
+  `frameworks/react-native-runtime` fixture verifies the same source with structural
+  declarations; it is not an application installation or npm publication target.
 - The host application obtains backend grants, device tokens, and presigned
   upload targets. This repository does not provide a Bota API client.
 - Customer-facing package and module names follow the public matrix in

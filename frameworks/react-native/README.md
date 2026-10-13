@@ -2,18 +2,39 @@
 
 ## Generated JavaScript runtime and app OTA updates
 
-For independent JavaScript-only distribution, see
-[`@bota.dev/react-native-app-sdk-runtime`](../react-native-runtime/README.md).
-That independently versioned source candidate has no native autolinking or
-React Native dependency. It runs generated Rust SDK code over installed generic
-OS ports. Registry publication is pending.
-
-Current main adds `createBotaReactNativeJsRuntime` in the independently loadable
+The synchronized beta.16 candidate adds `createBotaReactNativeJsRuntime` in the
 `@bota.dev/react-native-app-sdk/runtime` entry. Rust supplies the executable JS
 protocol/workflow implementation; no WebAssembly or native Rust engine runs in
 the application. These migration additions are not claimed in published beta.15.
-The ordinary package entry retains its installed native adapters and existing
-compatibility API.
+Fresh candidate source, canonical artifacts, exact main CI, protected publication
+and public consumers remain pending; see the
+[beta.16 preflight](../../release/evidence/2.0.0-beta.16-preflight.md).
+The ordinary package retains native adapters, Codegen, autolinking and its
+compatibility API. Importing `/runtime` evaluates without native module imports
+or registry access; selecting it does not disable package autolinking. The
+companion directory is a private verification fixture with no npm publication.
+
+### Optional native autolinking exclusion
+
+An app using the generated factory and installed generic OS ports can exclude
+the bundled Bota native adapters in its app-side `react-native.config.js` before
+building:
+
+```js
+module.exports = {
+  dependencies: {
+    '@bota.dev/react-native-app-sdk': {
+      platforms: { ios: null, android: null },
+    },
+  },
+};
+```
+
+Generic BLE, files and other host libraries must still be installed. The native
+compatibility factory requires its adapters to remain linked. Importing `/runtime`
+alone does not change linking. This follows the
+[React Native CLI configuration](https://github.com/react-native-community/cli/blob/main/docs/autolinking.md#how-can-i-disable-autolinking-for-unsupported-library);
+installed-app and physical qualification remain pending.
 
 ```ts
 import { createBlePlxPort, createBotaReactNativeJsRuntime,

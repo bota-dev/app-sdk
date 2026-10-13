@@ -9,13 +9,15 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const require = createRequire(import.meta.url);
 const pkg = require('../package.json');
 
-test('package has only JavaScript dependencies and no native autolinking', () => {
+test('private source fixture has only JavaScript dependencies and no native autolinking', () => {
+  assert.equal(pkg.private, true);
+  assert.equal(pkg.publishConfig, undefined);
   assert.deepEqual(pkg.dependencies, { buffer: '6.0.3', eventemitter3: '5.0.1' });
   for (const key of ['peerDependencies', 'codegenConfig']) assert.equal(pkg[key], undefined);
   for (const name of ['ios', 'android', 'react-native.config.js']) assert.ok(!readdirSync(root).includes(name));
 });
 
-test('standalone distribution loads with native imports rejected', () => {
+test('internal source fixture loads with native imports rejected', () => {
   const entry = require.resolve('@bota.dev/react-native-app-sdk-runtime');
   const result = spawnSync(process.execPath, ['-e', `
     const Module = require('node:module'), load = Module._load;
@@ -37,7 +39,7 @@ test('portable declarations contain no React Native imports or TurboModule inher
   }
 });
 
-test('runtime presence identifies the actual independently versioned JS package', async () => {
+test('runtime presence identifies the internal JS fixture', async () => {
   const { createBotaReactNativeRuntime } = require('@bota.dev/react-native-app-sdk-runtime');
   const runtime = createBotaReactNativeRuntime({ apiVersion: 1, device: {
     nextClientPresence: async () => ({ schemaVersion: 1, sessionId: 'session', sequence: 1,

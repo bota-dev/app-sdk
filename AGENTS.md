@@ -1,11 +1,13 @@
 # AGENTS.md
 
-Independent RN runtime publication uses main-only
-`release-react-native-runtime.yml`, exact main-CI archive promotion and the
-existing `release-approval` then `release` environments. Preserve the standalone
-0.x beta version, occupied bytes and all current/retired RN/Web tags. Initial npm
-authentication/trusted-publisher setup, registry verification and app OTA are
-separate gates. See [runtime preflight](release/evidence/react-native-runtime-0.1.0-beta.0-preflight.md).
+October 13 RN naming correction: publish generated JS through
+`@bota.dev/react-native-app-sdk/runtime` in synchronized beta.16 using the existing
+`release.yml`. Beta.15 remains published; fresh beta.16 source, canonical artifacts,
+exact main CI/License, protected publication and public consumers are pending.
+`frameworks/react-native-runtime` is a private source-verification fixture with no
+npm publication path. The original package retains native compatibility and
+autolinking; importing `/runtime` evaluates without native modules. See the
+[beta.16 preflight](release/evidence/2.0.0-beta.16-preflight.md).
 
 October 12 generated-JS migration source: `createBotaReactNativeJsRuntime` runs
 shared Rust codecs/workflows as ordinary JS over version 1 OS ports. Generic host
@@ -25,12 +27,11 @@ package-version equality does not establish adapter compatibility. Default nativ
 protocol/file engines remain; native fixes still require an app binary. See the
 [runtime design review](docs/parity/react-native-runtime.md).
 
-The separate `frameworks/react-native-runtime` source package has no native or
-React Native dependency. Build it from the one authoritative RN TypeScript source,
-emit structural adapter declarations, and verify its independent JS identity,
-typecheck, package contents and license gate. Do not add native autolinking or
-couple its package version to the native family; publication/OTA acceptance are
-separate gates.
+The private `frameworks/react-native-runtime` fixture has no native or React Native
+dependency. Build it from the authoritative RN source, emit structural adapter
+declarations, and verify its internal identity, types and license gate. Keep it
+private and preserve its internal version; applications use the original package's
+`/runtime` entry. Do not add a separate registry identity or publication workflow.
 
 October 12 synchronized beta.15 publication passed, including
 reviewed remote-main OTA/marker/BYO changes and the Apple/RN corrections below.

@@ -1,23 +1,26 @@
-# Bota React Native JavaScript runtime
+# Private React Native JavaScript verification fixture
 
-Prerelease `@bota.dev/react-native-app-sdk-runtime@0.1.0-beta.0` runs
-generated Rust SDK behavior as ordinary JavaScript over installed OS ports.
-It is independently versioned. It has no React
-Native dependency, native autolinking, CocoaPods/Maven dependency or Codegen
-module. It needs neither WebAssembly nor a native Rust engine at runtime.
+This directory is a private source fixture, not an application dependency or npm
+publication target. It retains its internal identity/version and compiles the
+authoritative RN facade and generated Rust artifact without React Native imports,
+native autolinking, CocoaPods/Maven dependencies or a Codegen module.
 
-Use an exact prerelease pin when installing the published runtime:
+Applications use `@bota.dev/react-native-app-sdk/runtime` from the original public
+package. Synchronized beta.16 prepares that generated-JS route; beta.15 remains
+published while fresh release gates are pending. The complete public package
+retains native compatibility and autolinking, while `/runtime` evaluates without
+native modules or WebAssembly. See [application setup](../react-native/README.md)
+and [beta.16 preflight](../../release/evidence/2.0.0-beta.16-preflight.md).
 
-```sh
-npm install @bota.dev/react-native-app-sdk-runtime@0.1.0-beta.0
-```
+The following application source example uses the original package's runtime
+entry and requires the generated factory after beta.16 publication is verified:
 
 ```ts
 import {
   createBlePlxPort,
   createBotaReactNativeJsRuntime,
   type BotaJsHostPorts,
-} from '@bota.dev/react-native-app-sdk-runtime';
+} from '@bota.dev/react-native-app-sdk/runtime';
 
 const lifetime = new AbortController();
 const ports: BotaJsHostPorts = {
@@ -79,13 +82,15 @@ version-1 full SDK adapters, including installed native Bota modules.
 Compatible generated-code/facade fixes can travel in an app OTA bundle when its
 installed OS ports satisfy API version 1. Adding an OS capability, fixing an
 installed transport or changing that contract requires an app build. Fresh apps
-install generic host capabilities once. Registry publication, app OTA and physical
-acceptance remain separate from source validation.
+install generic host capabilities once. Publication of the original package,
+app OTA and physical acceptance remain separate from source validation.
 
-Both distributions compile one authoritative RN facade and committed Rust
-artifact. Maintainer/CI regeneration uses the locked compiler; consumers build
-from committed JS without Cargo, Gradle or Xcode. Runtime identity reports this
-package's independent version. Final migration-head checks are recorded in the
+The private fixture and public runtime entry compile one authoritative RN facade
+and committed Rust artifact. Maintainer/CI regeneration uses the locked compiler;
+consumers build from committed JS without Cargo, Gradle or Xcode. The public entry
+reports the original SDK package/version; the fixture reports its internal test
+identity. Maintainers run `npm run verify --prefix frameworks/react-native-runtime`
+from the repository root. Source checks are recorded in the
 [runtime review](../../docs/parity/react-native-runtime.md).
 
 The package is MIT-licensed. Retain [third-party notices](THIRD_PARTY_NOTICES.md)

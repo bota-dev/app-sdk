@@ -7,6 +7,10 @@ tracked separately.
 
 ## Unreleased
 
+- Prepare synchronized `2.0.0-beta.16` under the existing public package identities.
+  React Native uses `@bota.dev/react-native-app-sdk/runtime`; the companion is a
+  private verification fixture. The independent namespace/publication plan is
+  withdrawn. Beta.15 remains published while fresh beta.16 release gates are pending.
 - Add a JavaScript runtime generated from the shared Rust core, with versioned
   installed OS ports and generic BLE integration. Device workflows, encrypted-v2
   receivers, managed/BYO uploads and queue policy execute in the OTA bundle.

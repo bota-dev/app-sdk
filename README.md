@@ -1,9 +1,11 @@
 # Bota App SDK
 
-Unreleased RN source now includes a separately packaged runtime that executes
-shared Rust behavior as generated JavaScript over installed Bluetooth, file and
-HTTP ports. Compatible shared-logic upgrades can travel in an app's OTA bundle.
-See [setup, current verification and release limits](frameworks/react-native-runtime/README.md).
+The next synchronized beta.16 candidate adds Rust-generated JavaScript through
+`@bota.dev/react-native-app-sdk/runtime`, using installed Bluetooth, file and HTTP
+ports. Compatible shared-logic upgrades can travel in an app's OTA bundle.
+Beta.15 remains published while fresh release gates are pending. See
+[setup and runtime limits](frameworks/react-native/README.md) and
+[beta.16 preflight](release/evidence/2.0.0-beta.16-preflight.md).
 
 BYO live-upload source now connects encrypted capture, HTTP/WS and fenced Batch recovery. See [current implementation and validation](docs/parity/byo-storage.md); rollout and physical qualification remain separate.
 
@@ -61,16 +63,17 @@ Choose the package for your application. npm's `beta` tag tracks prereleases;
 
 ### React Native
 
-Current main source also provides a portable TypeScript `/runtime` entry with
-versioned device/backend adapters and OTA-editable foreground policy. This is
-not a published beta.15 addition. Native protocol/file engine changes still need
-an app binary. See the [runtime boundary and review](docs/parity/react-native-runtime.md).
+The beta.16 source candidate provides the generated-JS factory through
+`@bota.dev/react-native-app-sdk/runtime`. This entry evaluates without React Native
+module imports, native registry access or WebAssembly. Install compatible OS ports
+in the app binary once; compatible generated logic can then update through app
+OTA. New OS capabilities and installed transport fixes still require an app build.
+These additions are not in published beta.15. See the
+[runtime boundary and review](docs/parity/react-native-runtime.md).
 
-The separate [JavaScript-only runtime](frameworks/react-native-runtime/README.md)
-is source candidate `@bota.dev/react-native-app-sdk-runtime@0.1.0-beta.0`. It has
-no native autolinking and can use a conforming adapter already installed in an
-application. Its version/build are independent of the native SDK family. This
-candidate is not yet published to npm.
+The complete package retains native compatibility adapters and autolinking.
+Selecting `/runtime` does not disable package autolinking. The companion directory
+is a private verification fixture; applications install only the original package.
 
 Use Node.js 22+ to install and build your app:
 

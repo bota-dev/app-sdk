@@ -1,5 +1,11 @@
 # AGENTS.md
 
+Synchronized beta.16 is the next source candidate; beta.15 remains published.
+RN's generated JS stays under the original public package's `/runtime` entry;
+its companion is private. Flutter continues to use native facades. Fresh source,
+canonical Apple/Flutter artifacts, exact main CI, protected publication and public
+consumers are pending. See [preflight](../../../release/evidence/2.0.0-beta.16-preflight.md).
+
 ## Post-Implementation Design Review
 
 - Before reporting completion, use `bota-skills:compound-engineering` (1.2.5+) to compare results with the current authoritative design and acceptance criteria. Follow the [review requirements](../../../CONTRIBUTING.md#post-implementation-design-review).

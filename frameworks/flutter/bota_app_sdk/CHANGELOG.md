@@ -1,8 +1,18 @@
-## 2.0.0-beta.15 (candidate)
+## 2.0.0-beta.16 (candidate)
+
+- Synchronize with the React Native generated-JS runtime under the original
+  package identity; Flutter retains its native facade and current API.
+- Beta.15 remains published. Fresh source, canonical Apple/Flutter artifacts,
+  exact main CI, protected publication and public consumers are pending; see the
+  [preflight](../../../release/evidence/2.0.0-beta.16-preflight.md).
+
+## 2.0.0-beta.15 (published)
 
 - Synchronize the reviewed Apple/RN connection and transfer corrections with
   main OTA, recording-marker/protected-status and BYO storage source.
 - Rebuild native apps; package publication and physical acceptance remain separate.
+- Protected publication and public consumers passed; see the
+  [publication review](../../../release/evidence/2.0.0-beta.15-publication.md).
 
 ## 2.0.0-beta.14 (candidate)
 

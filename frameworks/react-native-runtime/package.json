@@ -1,6 +1,7 @@
 {
   "name": "@bota.dev/react-native-app-sdk-runtime",
   "version": "0.1.0-beta.0",
+  "private": true,
   "description": "Rust-generated Bota React Native JavaScript runtime with installed OS ports",
   "license": "MIT",
   "author": "Bota",
@@ -14,7 +15,6 @@
   },
   "files": ["lib/", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_NOTICES/"],
   "engines": { "node": ">=22" },
-  "publishConfig": { "access": "public" },
   "repository": { "type": "git", "url": "https://github.com/bota-dev/app-sdk.git", "directory": "frameworks/react-native-runtime" },
   "scripts": {
     "build": "node ../../tools/react-native/build-runtime-package.mjs",

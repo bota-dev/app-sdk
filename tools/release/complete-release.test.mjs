@@ -59,6 +59,26 @@ test('manual recovery has its own single approval', () => {
   assert.match(job(workflow, 'recover-central'), /environment: release\n/);
 });
 
+test('normal and recovery publication verify the original generated runtime after npm publication', async () => {
+  for (const name of ['publish', 'recover-central']) {
+    const publisher = job(workflow, name);
+    const upload = publisher.indexOf('node tools/release/publish-npm.mjs react-native');
+    const consumer = publisher.indexOf('node tools/release/verify-runtime-consumer.mjs');
+    assert.ok(upload >= 0 && consumer > upload, `${name} must test the public runtime after publication`);
+    assert.match(publisher, /@bota\.dev\/react-native-app-sdk@\$RELEASE_VERSION/);
+    assert.match(publisher, /npm install --ignore-scripts/);
+    assert.match(publisher, /VERIFY_GENERATED_RUNTIME="\$\(node tools\/release\/runtime-release-support.mjs "\$RELEASE_VERSION"\)"/);
+    assert.match(publisher, /typescript\/bin\/tsc -p target\/react-native-runtime-consumer\/tsconfig\.json/);
+    assert.doesNotMatch(publisher, /@bota\.dev\/react-native-app-sdk-runtime/);
+  }
+  const fixture = await readFile('tools/release/runtime-consumer/client.ts', 'utf8');
+  assert.match(fixture, /from '@bota\.dev\/react-native-app-sdk\/runtime'/);
+  const config = JSON.parse(await readFile('tools/release/runtime-consumer/tsconfig.json', 'utf8'));
+  assert.equal(config.compilerOptions.strict, true);
+  assert.equal(config.compilerOptions.skipLibCheck, false);
+  assert.deepEqual(config.compilerOptions.lib, ['ES2022']);
+});
+
 test('Flutter continues through the approved dependency graph without cross-workflow polling', () => {
   const flutter = job(workflow, 'flutter');
   assert.doesNotMatch(flutter, /environment:/);
