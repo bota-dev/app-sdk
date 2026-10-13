@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync, writeFileSync, openSync, closeSync, readSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync, openSync, closeSync, readSync, copyFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -36,6 +36,12 @@ if (provenanceOnly) {
   }
   console.log(`Generated RN core source verified: ${sourceHash}`);
   process.exit(0);
+}
+// Cargo's target crate identities also include build-host metadata. Generate on
+// one compiler host; consumers on every host use the committed ordinary JS.
+const compilerHost = execFileSync('rustc', ['--print', 'host-tuple'], { cwd: root, encoding: 'utf8' }).trim();
+if (compilerHost !== 'x86_64-unknown-linux-gnu') {
+  throw new Error(`Exact JS generation requires Rust 1.98.0 on x86_64-unknown-linux-gnu; found ${compilerHost}. Use committed JS and --provenance-only on other hosts.`);
 }
 mkdirSync(scratch, { recursive: true });
 const env = {
@@ -105,7 +111,19 @@ const result = `// @ts-nocheck\n// Generated from shared Rust by tools/react-nat
   `${compact.code}\nreturn instantiateCompiledCore();\n}\n`;
 mkdirSync(dirname(output), { recursive: true });
 if (check) {
-  if (readFileSync(output, 'utf8').replaceAll('\r\n', '\n') !== result) throw new Error('Committed generated RN core differs from exact-source rebuild');
+  const committed = readFileSync(output, 'utf8').replaceAll('\r\n', '\n');
+  if (committed !== result) {
+    let firstDifference = 0;
+    while (firstDifference < Math.min(committed.length, result.length) && committed[firstDifference] === result[firstDifference]) firstDifference++;
+    const report = { sourceHash, firstDifference, committedBytes: committed.length, generatedBytes: result.length,
+      committedSha256: createHash('sha256').update(committed).digest('hex'),
+      generatedSha256: createHash('sha256').update(result).digest('hex'),
+      committedPrefix: committed.slice(firstDifference, firstDifference + 80), generatedPrefix: result.slice(firstDifference, firstDifference + 80) };
+    writeFileSync(join(scratch, 'core.expected.ts'), result);
+    copyFileSync(wasm, join(scratch, 'core.raw.wasm'));
+    writeFileSync(join(scratch, 'comparison.json'), JSON.stringify(report, null, 2) + '\n');
+    throw new Error(`Committed generated RN core differs from exact-source rebuild: ${JSON.stringify(report)}`);
+  }
   console.log(`Generated RN core rebuilt and verified (${result.length} bytes).`);
 } else {
   writeFileSync(output, result);

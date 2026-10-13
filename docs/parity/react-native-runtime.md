@@ -24,6 +24,13 @@ artifact with source provenance. The generator's `--check` rebuilds exact source
 `--provenance-only` checks them without a compiler. Regeneration belongs to
 maintainers/CI. Consumers build from committed JS without Cargo, Gradle or Xcode.
 
+Exact generation uses the canonical Rust 1.98.0 compiler host
+`x86_64-unknown-linux-gnu`, matching CI. Cargo includes build-host metadata in
+target crate identities, and embedded source paths also differ across hosts.
+Other hosts use the committed portable JS and `--provenance-only`; they do not
+produce a competing artifact. CI always rebuilds and compares the complete
+artifact, rather than substituting a source-hash check.
+
 Two distributions compile the same RN facade and generated artifact:
 
 - `@bota.dev/react-native-app-sdk/runtime`: an independently loadable subpath.

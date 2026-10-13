@@ -184,6 +184,15 @@ jobs:
       - name: Rebuild executable JavaScript from exact shared Rust source
         run: npm run react-native:generate-js-core -- --check
 
+      - name: Retain generated-core failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: react-native-js-generation-diagnostics-${{ github.sha }}
+          path: target/react-native-js/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Build and verify JavaScript-only runtime
         working-directory: frameworks/react-native-runtime
         run: npm run verify
