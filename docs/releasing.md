@@ -25,9 +25,13 @@ WebAssembly rejected, and compile its public declarations.
 
 The new package must first exist before its npm trusted publisher can be added.
 Use the owner's interactive npm authentication to publish the approved exact CI
-tarball, then configure and read back only `bota-dev/app-sdk`, workflow
-`release-react-native-runtime.yml`, environment `release`, publish permission.
-Resume the same protected workflow; it verifies the occupied immutable version.
+tarball. Resume the same protected workflow; it verifies the occupied immutable
+version and public consumer without uploading it again. This bootstrap does not
+qualify an OIDC upload. Configure and read back only `bota-dev/app-sdk`, workflow
+`release-react-native-runtime.yml`, environment `release`, publish permission
+near the next authorized release of an absent version. npm requires the first
+successful trusted-publisher upload within two days of configuration; an
+unvalidated grant must be configured or refreshed before that real release.
 Do not copy temporary credentials into source or CI secrets. Current npm staging
 can create a new public package through a `0.0.0-stage` placeholder; this runtime
 procedure publishes the actual reviewed version and adds no placeholder.
