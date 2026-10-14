@@ -1,21 +1,20 @@
 # Bota SDK for Flutter
 
-Source candidate `2.0.0-beta.17` synchronizes managed root-proxy admission and
-generated-Rust React Native migration helpers through the original package's
-`/runtime` entry. Flutter retains its native facade. Beta.16 remains the published baseline
-while fresh source, canonical Apple/Flutter artifacts, exact main CI, protected
-publication and public-consumer gates are pending. Native applications require
-a new binary; physical acceptance remains separate.
+Source candidate `2.0.0-beta.18` synchronizes the React Native connected-MTU
+correction through the original package's `/runtime` entry. Flutter retains its
+native facade. Beta.17 remains the published baseline while canonical artifacts,
+exact main CI, protected publication and public-consumer gates are pending.
+Native applications require a new binary; physical acceptance remains separate.
 
 ## Package Name Migration
 
 The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
 `dev.bota:bota-app-sdk` on Android. Replace the old dependency and Dart imports;
 do not install both packages in the same application. Historical 1.x releases
-remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.17`.
-Published beta.16 remains the installation baseline until protected publication
-and public-consumer verification pass. Use the install pin below after those
-gates pass; see the [preflight](../../../release/evidence/2.0.0-beta.17-preflight.md).
+remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.18`.
+Published beta.17 remains the installation baseline until protected publication
+and public-consumer verification pass. See the
+[preflight](../../../release/evidence/2.0.0-beta.18-preflight.md).
 Rebuild native applications and reconnect explicitly after connection loss.
 Completed-resume and broader hardware acceptance remain separate.
 
@@ -52,7 +51,7 @@ Pin the exact prerelease version after its publication:
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.16
+  bota_app_sdk: 2.0.0-beta.17
 ```
 
 For source development, point at an exact checkout rather than a moving branch:
