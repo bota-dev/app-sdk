@@ -1,3 +1,9 @@
+## 2.0.0-beta.18 (candidate)
+
+- Synchronize the SDK family with the React Native connected BLE MTU correction.
+  Flutter API and installed platform contracts remain unchanged. Publication
+  requires the normal canonical artifacts, CI and protected release gates.
+
 ## 2.0.0-beta.17 (unreleased)
 
 - Synchronize the SDK family with the managed root-proxy admission correction,
