@@ -1,3 +1,13 @@
+# Candidate synchronized beta: 2.0.0-beta.18
+
+Beta.18 corrects the physical Android BLE PLX MTU scan-cache failure found during
+Demo/One generated-JS integration. The corrected JS executes on Demo's existing
+native host and reads exact identity, pairing, status and an empty catalog.
+Canonical version preparation, main CI/inventory and protected publication are
+pending; see [the preflight review](../release/evidence/2.0.0-beta.18-preflight.md).
+Beta.17 remains the published baseline. One sign-in, transfer/cleanup, app OTA
+and broader platform acceptance remain separate.
+
 # Published synchronized beta: 2.0.0-beta.17
 
 On October 14, 2026 (Pacific), protected [release 38519284564](https://github.com/bota-dev/app-sdk/actions/runs/38519284564)

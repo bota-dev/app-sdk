@@ -1,5 +1,10 @@
 # AGENTS.md
 
+Beta.18 is in canonical preparation for the connected BLE PLX MTU correction.
+Keep beta.17's occupied public artifacts unchanged. Review pinned Linux JS,
+Apple checksums and full Flutter inventory before main qualification/tagging.
+See [candidate review](release/evidence/2.0.0-beta.18-preflight.md).
+
 October 14 Android app acceptance found beta.17 reconnect rejecting an absent
 MTU in BLE PLX's scan-cache `devices()` result after successful negotiation.
 The source OS adapter now uses connected `requestMTUForDevice` observations,
