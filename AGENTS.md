@@ -5,10 +5,11 @@ integration: explicit root managed-v2 API prefixes and pure `/runtime` helpers.
 Root normalizes to `apiBasePath: ''`; omission still means `/v1`. Keep exact
 origin/scope, receipt-gated cleanup and shared Rust source ownership. Native
 Rust route regression first failed on beta.16, then all 13 managed-upload tests
-passed. The earlier root-route canonical JS passes 477 RN checks, 108 native
-Rust/JS RPCs and 549 Node VM checks. Required legacy-empty-catalog admission is
-now Rust-sourced (all 66 JS-binding Rust tests pass); its final canonical JS
-regeneration, extended checks, Apple/Flutter inventory, hosted CI/publication
+passed. Final canonical JS generation and repeat checking pass at source
+`9c03679`, followed by successful Apple pins and complete Flutter inventory.
+The final source passes 479 RN tests, strict types and 715 standalone Node VM
+checks. Required legacy-empty-catalog admission is Rust-sourced (all 66
+JS-binding Rust tests pass). Exact hosted CI/Hermes, License Gate, publication
 and physical acceptance remain gates. The real BLE PLX 3.5.1 manager satisfies
 the corrected nullable-disconnect port under strict types without casts. See
 [preflight](release/evidence/2.0.0-beta.17-preflight.md).

@@ -10,6 +10,11 @@ Rust to recognize the exact empty catalog left by successful native Android
 cleanup. An OS inventory may supply its complete file or a 13-byte prefix for
 longer files. Unknown, truncated, trailing or pending evidence remains blocked;
 this helper does not import legacy queues/files or authorize their removal.
+Use each generated runtime for one configured lifetime. Make repeated app-level
+configuration idempotent, and create a fresh runtime after destruction or a
+scope change. Reconfiguring the same `runtime.client` currently destroys its
+generated core and rejects with `runtime_destroyed`; the native compatibility
+client's reusable-instance behavior is not established for this factory.
 Managed encrypted-v2 `baseUrl` accepts HTTPS origin-root routes (for example
 `https://your-backend.example/`) and existing path prefixes. Root normalizes to
 an explicit empty API prefix; an omitted low-level prefix still defaults to

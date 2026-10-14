@@ -152,6 +152,16 @@ prove installed-host durability or cancellation. Each runtime captures its ports
 and scope; create a replacement after scope changes rather than mutating active
 methods or namespaces.
 
+The generated factory currently supports one configured lifetime. A second
+`runtime.client.configure()` releases its manager graph and destroys the core,
+then rejects with `runtime_destroyed`; a controlled generated-factory probe
+confirms this even for identical configuration. The compatibility facade's
+reusable-instance reconfiguration test does not prove generated parity. Apps
+must make same-scope configuration idempotent and construct a fresh runtime
+after retirement; this is the consuming integration's lifecycle contract for
+the current migration. Reusable generated-instance parity remains a separate
+SDK limitation rather than an acceptance claim.
+
 ## Shared decisions and resource ownership
 
 Generated Rust chooses wire framing, identity/capability admission, transfer
