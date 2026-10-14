@@ -87,6 +87,9 @@ The generic BLE port reports actual radio and permission state through optional
 `readBluetoothState`/`observeBluetoothState` ports, normalized by generated Rust.
 Without those observations the generated client remains `unknown`, and
 `waitForBluetooth` cannot report readiness. Teardown joins state observations.
+BLE PLX MTU observations use its connected `requestMTUForDevice` result; Android
+scan-cache `devices()` entries can omit the negotiated capacity. Cancellation
+joins the submitted transaction before releasing the captured connection.
 
 The named host values implement exported primitive interfaces. Hosts obtain
 Bluetooth permissions and own installed libraries. Files support scoped reopen,

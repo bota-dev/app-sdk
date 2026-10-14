@@ -21,7 +21,7 @@ export interface BlePlxManager {
   stopDeviceScan(): void | Promise<void>;
   connectToDevice(id: string, options?: { requestMTU?: number }): Promise<Peripheral>;
   cancelDeviceConnection(id: string): Promise<Peripheral>;
-  devices(ids: string[]): Promise<Peripheral[]>;
+  requestMTUForDevice(id: string, mtu: number, transactionId?: string): Promise<Peripheral>;
   readCharacteristicForDevice(id: string, service: string, characteristic: string,
     transactionId?: string): Promise<Characteristic>;
   writeCharacteristicWithResponseForDevice(id: string, service: string, characteristic: string,
@@ -215,12 +215,14 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
       if (!device) throw new Error('Peripheral has no local connection');
       const generation = connectionGenerations.get(peripheralId);
       for (let attempt = 0; attempt < policy.mtuObservationAttempts; attempt++) {
-        const devices = await manager.devices([peripheralId]);
+        // Android's devices() returns scan-cache entries, whose MTU can be null.
+        // The connected operation returns the negotiated capacity on both OSes.
+        const fresh = await oneShot(context, transactionId =>
+          manager.requestMTUForDevice(peripheralId, policy.MAX_MTU, transactionId));
         check(context);
         if (connectionGenerations.get(peripheralId) !== generation) throw Object.assign(
           new Error('Peripheral connection changed during MTU observation'), { code: 'identity_mismatch' });
-        const fresh = devices[0];
-        if (devices.length !== 1 || !fresh || fresh.id !== peripheralId) throw Object.assign(
+        if (!fresh || fresh.id !== peripheralId) throw Object.assign(
           new Error('MTU observation returned a foreign peripheral'), { code: 'identity_mismatch' });
         if (!Number.isInteger(fresh.mtu) || fresh.mtu < policy.DEFAULT_MTU) throw Object.assign(
           new Error('MTU observation returned an invalid value'), { code: 'invalid_mtu' });

@@ -304,7 +304,7 @@ test('a retired disconnect observer cannot clear a replacement using the same OS
     async discoverAllServicesAndCharacteristics() { discoveries++; return peripheral(mtu); } });
   const port = createBlePlxPort({
     async connectToDevice() { return current = peripheral(++connections === 1 ? 247 : 185); },
-    async devices(ids) { assert.deepEqual(ids, ['device']); return [current]; },
+    async requestMTUForDevice(id) { assert.equal(id, 'device'); return current; },
     onDeviceDisconnected(id, callback) {
       assert.equal(id, 'device'); observers.push(callback);
       return { remove() { removals++; } };
@@ -338,9 +338,9 @@ test('the real generated BLE policy requests canonical MTU and observes negotiat
   } };
   const port = createBlePlxPort({
     async connectToDevice(id, options) { assert.equal(id, 'device'); requested = options.requestMTU; return { id, mtu: 23 }; },
-    async devices(ids) {
-      assert.deepEqual(ids, ['device']);
-      return [++observations === 1 ? { id: 'device', mtu: 23 } : fresh];
+    async requestMTUForDevice(id) {
+      assert.equal(id, 'device');
+      return ++observations === 1 ? { id: 'device', mtu: 23 } : fresh;
     },
   });
   await port.connect('device', context());
@@ -353,38 +353,65 @@ test('the real generated BLE policy requests canonical MTU and observes negotiat
 
 test('MTU observation refuses a foreign peripheral before changing the captured connection', async () => {
   const port = createBlePlxPort({ async connectToDevice() { return { id: 'device', mtu: 23 }; },
-    async devices() { return [{ id: 'other', mtu: 512 }]; } });
+    async requestMTUForDevice() { return { id: 'other', mtu: 512 }; } });
   await port.connect('device', context());
   await assert.rejects(port.getMtu('device', context()), { code: 'identity_mismatch' });
+});
+
+test('Android MTU observation uses the connected request result rather than the scan cache', async () => {
+  let requests = 0;
+  const port = createBlePlxPort({
+    async connectToDevice() { return { id: 'device', mtu: 512 }; },
+    async devices() { return [{ id: 'device', mtu: null }]; },
+    async requestMTUForDevice(id, mtu, transactionId) {
+      assert.equal(id, 'device');
+      assert.equal(mtu, 512);
+      assert.match(transactionId, /^bota:/);
+      requests++;
+      return { id, mtu: 512 };
+    },
+  });
+  await port.connect('device', context());
+  assert.equal(await port.getMtu('device', context()), 512);
+  assert.equal(requests, 1);
 });
 
 test('a captured MTU observation cannot replace the same-ID connection after its physical generation changes', async () => {
   const observation = deferred();
   let connections = 0, observations = 0;
   const port = createBlePlxPort({ async connectToDevice() { return { id: 'device', mtu: ++connections === 1 ? 23 : 512 }; },
-    async devices() { return ++observations === 1 ? observation.promise : [{ id: 'device', mtu: 512 }]; } });
+    async requestMTUForDevice() { return ++observations === 1 ? observation.promise : { id: 'device', mtu: 512 }; } });
   await port.connect('device', context());
   const pending = port.getMtu('device', context());
   const rejected = assert.rejects(pending, { code: 'identity_mismatch' });
   await port.connect('device', context());
-  observation.resolve([{ id: 'device', mtu: 247 }]);
+  observation.resolve({ id: 'device', mtu: 247 });
   await rejected;
   assert.equal(await port.getMtu('device', context()), 512);
 });
 
 test('cancellation joins the already submitted MTU observation and performs no retry', async () => {
-  const observation = deferred();
+  const observation = deferred(), cancellation = deferred();
   const controller = new AbortController();
-  let observations = 0, settled = false;
+  let observations = 0, cancellations = 0, settled = false;
   const port = createBlePlxPort({ async connectToDevice() { return { id: 'device', mtu: 23 }; },
-    devices() { observations++; return observation.promise; } });
+    requestMTUForDevice(_id, _mtu, transactionId) {
+      assert.match(transactionId, /^bota:/); observations++; return observation.promise;
+    },
+    cancelTransaction(transactionId) {
+      assert.match(transactionId, /^bota:/); cancellations++; return cancellation.promise;
+    } });
   await port.connect('device', context());
   const pending = port.getMtu('device', { ...context(), signal: controller.signal });
   const rejected = assert.rejects(pending, { code: 'cancelled' }).then(() => { settled = true; });
   controller.abort();
   await tick();
   assert.equal(settled, false);
-  observation.resolve([{ id: 'device', mtu: 23 }]);
+  observation.resolve({ id: 'device', mtu: 23 });
+  await tick();
+  assert.equal(settled, false);
+  assert.equal(cancellations, 1);
+  cancellation.resolve();
   await rejected;
   assert.equal(observations, 1);
 });
@@ -393,7 +420,7 @@ test('abort during the Rust-declared MTU observation pause clears its timer with
   const controller = new AbortController();
   let observations = 0;
   const port = createBlePlxPort({ async connectToDevice() { return { id: 'device', mtu: 23 }; },
-    async devices() { observations++; return [{ id: 'device', mtu: 23 }]; } });
+    async requestMTUForDevice() { observations++; return { id: 'device', mtu: 23 }; } });
   await port.connect('device', context());
   const pending = port.getMtu('device', { ...context(), signal: controller.signal });
   const rejected = assert.rejects(pending, { code: 'cancelled' });
@@ -406,7 +433,7 @@ test('abort during the Rust-declared MTU observation pause clears its timer with
 test('MTU observations stop at the shared ten-attempt limit and return the last actual capacity', { timeout: 5000 }, async () => {
   let observations = 0;
   const port = createBlePlxPort({ async connectToDevice() { return { id: 'device', mtu: 512 }; },
-    async devices() { observations++; return [{ id: 'device', mtu: 23 }]; } });
+    async requestMTUForDevice() { observations++; return { id: 'device', mtu: 23 }; } });
   await port.connect('device', context());
   assert.equal(await port.getMtu('device', context()), 23);
   assert.equal(observations, 10);

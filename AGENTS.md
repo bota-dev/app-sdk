@@ -1,5 +1,12 @@
 # AGENTS.md
 
+October 14 Android app acceptance found beta.17 reconnect rejecting an absent
+MTU in BLE PLX's scan-cache `devices()` result after successful negotiation.
+The source OS adapter now uses connected `requestMTUForDevice` observations,
+joined transaction cancellation and the existing Rust policy/generation fences.
+The regression fails before the correction; 480 RN tests, strict types and
+package builds pass. Resumed physical acceptance and publication remain separate.
+
 Beta.17 is published across all five SDK platforms for generated-JS Demo/One
 integration: explicit root managed-v2 API prefixes and pure `/runtime` helpers.
 Root normalizes to `apiBasePath: ''`; omission still means `/v1`. Keep exact

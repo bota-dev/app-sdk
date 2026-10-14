@@ -187,6 +187,14 @@ and observes the current exact connection for up to ten attempts, 200 ms apart,
 using Rust-declared bounds. Stale disconnects and MTU observations cannot mutate
 a replacement connection.
 
+October 14 Android acceptance found that BLE PLX `devices()` reads its scan
+cache, where MTU can be null even after a successful 512-byte negotiation.
+The corrected OS adapter obtains capacity through the connected
+`requestMTUForDevice` result with a captured, cancellable transaction. Identity,
+physical-generation and Rust retry bounds remain enforced. The regression
+reproduces beta.17's `invalid_mtu` failure before this source correction; package
+publication and the resumed physical test remain separate gates.
+
 Optional `readBluetoothState` and `observeBluetoothState` ports expose the OS
 radio and permission state. Generated Rust normalizes those observations for
 `runtime.client`; the generic BLE adapter supplies both. A host without state
