@@ -5,6 +5,14 @@ from Rust, with installed dependencies limited to narrow OS capabilities.
 Authority: `internal-docs/App SDK Architecture.md` §§5.5 and 6.3. The existing
 TypeScript wrapper over complete Apple/Android workflows does not satisfy this.
 
+October 14 delivery update: beta.17 preserves the original package and adds
+production root-route admission, pure app helpers and exact legacy-empty
+catalog admission. Main `b8a31c5` passes all nine CI jobs/License, 136 Rust/JS
+RPCs and 715 pinned Hermes checks. Protected publication and all public
+consumer/archive gates pass; see the
+[beta.17 publication review](../../../release/evidence/2.0.0-beta.17-publication.md).
+App delivery and physical acceptance remain separate.
+
 October 13 delivery update: beta.16 publishes the generated factory through the
 original `@bota.dev/react-native-app-sdk/runtime` entry. Exact-main CI/License,
 public RN/Web bytes, the fresh runtime/declaration consumer and all native/Flutter

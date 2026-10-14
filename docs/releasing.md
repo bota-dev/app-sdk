@@ -1,4 +1,17 @@
-# Published synchronized beta: 2.0.0-beta.16
+# Published synchronized beta: 2.0.0-beta.17
+
+On October 14, 2026 (Pacific), protected [release 38519284564](https://github.com/bota-dev/app-sdk/actions/runs/38519284564)
+completed on attempt 1. Exact source `b8a31c5`, all nine main CI jobs, License
+Gate and the annotation-bound 49-file inventory pass. All five public packages,
+fresh native-free generated RN execution/strict declarations, public native
+consumers and the complete 59-file Flutter archive pass. RN/Web `beta` advances
+to beta.17; `latest` stays beta.0 and retired package tags stay unchanged.
+See the [publication review](../release/evidence/2.0.0-beta.17-publication.md)
+and historical [preflight](../release/evidence/2.0.0-beta.17-preflight.md).
+Retain the accepted tag/source/bytes. App integration, app OTA delivery and
+physical acceptance remain separate.
+
+# Previous published synchronized beta: 2.0.0-beta.16
 
 On October 13, 2026 (Pacific), the owner selected the original
 `@bota.dev/react-native-app-sdk` identity for the generated JavaScript runtime.
@@ -21,7 +34,7 @@ correctly skipped. See the
 [publication review and preserved retry](../release/evidence/2.0.0-beta.16-publication.md)
 and historical [preflight](../release/evidence/2.0.0-beta.16-preflight.md).
 
-Both current npm `beta` tags are beta.16; `latest` remains beta.0 and retired
+At beta.16 publication both npm `beta` tags became beta.16; `latest` remained beta.0 and retired
 package tags remain unchanged. Do not rebuild or repack accepted CI payloads
 after approval. Beta.15 remains the previous complete synchronized release.
 App OTA delivery, installed OS-port qualification and physical acceptance remain

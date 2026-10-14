@@ -2,7 +2,7 @@
 
 ## Generated JavaScript runtime and app OTA updates
 
-Beta.17 preparation adds `deriveSyncStatus`, `UPLOAD_RECOVERY_VERSION` and
+Published beta.17 adds `deriveSyncStatus`, `UPLOAD_RECOVERY_VERSION` and
 `readClientPresenceObservation` to `/runtime`. Use the generated runtime's
 `createUploadRecoveryProvider` method to retain shared Rust recovery policy.
 The pure `isEmptyLegacyAndroidV2CheckpointCatalog(bytes)` helper uses generated
@@ -18,9 +18,10 @@ client's reusable-instance behavior is not established for this factory.
 Managed encrypted-v2 `baseUrl` accepts HTTPS origin-root routes (for example
 `https://your-backend.example/`) and existing path prefixes. Root normalizes to
 an explicit empty API prefix; an omitted low-level prefix still defaults to
-`/v1`. Beta.17 is not yet published or qualified on physical devices.
+`/v1`. All beta.17 public package/consumer gates pass; installed-app and physical
+qualification remain separate.
 
-Published beta.16 adds `createBotaReactNativeJsRuntime` in the
+Published beta.17 includes `createBotaReactNativeJsRuntime` in the
 `@bota.dev/react-native-app-sdk/runtime` entry. Rust supplies the executable JS
 protocol/workflow implementation; no WebAssembly or native Rust engine runs in
 the application. Its exact public npm archive matches the approved main-CI
@@ -28,7 +29,7 @@ inventory. A fresh public install configures and destroys the generated client
 with native imports, registry access and WebAssembly rejected; strict declarations
 also compile. All five package/public-consumer gates pass; separate app/device
 acceptance is tracked in the
-[publication review](../../release/evidence/2.0.0-beta.16-publication.md).
+[publication review](../../release/evidence/2.0.0-beta.17-publication.md).
 The ordinary package retains native adapters, Codegen, autolinking and its
 compatibility API. Importing `/runtime` evaluates without native module imports
 or registry access; selecting it does not disable package autolinking. The
@@ -148,9 +149,9 @@ adopting changes to that native API.
 
 ## Install
 
-Published beta.16 includes the generated-JS factory through `/runtime` and retains
+Published beta.17 includes the generated-JS factory through `/runtime` and retains
 the native-adapter path. See the
-[publication review](../../release/evidence/2.0.0-beta.16-publication.md).
+[publication review](../../release/evidence/2.0.0-beta.17-publication.md).
 Rebuild native applications and reconnect explicitly after connection loss.
 Physical completed-resume acceptance and wider GATT recovery remain separate.
 Remove `@bota.dev/react-native-sdk` before adding the replacement; do not
@@ -158,7 +159,7 @@ co-install both. Standalone maintenance ended September 29, 2026; follow the
 [retirement and migration notice](../../docs/migrations/react-native-sdk-sunset.md).
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.16
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.17
 npx pod-install
 ```
 

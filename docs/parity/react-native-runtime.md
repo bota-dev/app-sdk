@@ -2,7 +2,7 @@
 
 October 12, 2026 source migration. Shared SDK behavior remains Rust-sourced.
 
-Beta.17 preparation adds `isEmptyLegacyAndroidV2CheckpointCatalog(bytes)` on
+Published beta.17 adds `isEmptyLegacyAndroidV2CheckpointCatalog(bytes)` on
 `/runtime`. Generated Rust admits only the exact 12-byte empty catalog left by
 the old Android SDK after successful cleanup. Hosts supply the complete short
 file or a complete 13-byte prefix for longer files; every other encoding remains
@@ -10,8 +10,11 @@ protected migration evidence. This neither imports pending native state nor
 authorizes deletion. Apple successful cleanup removes its sidecar/file; no
 empty Apple catalog exists. The BLE manager contract also admits a nullable
 disconnect device, matching pinned `react-native-ble-plx` 3.5.1; a strict real
-library assignment regression requires no cast. See the
-[beta.17 preflight](../../release/evidence/2.0.0-beta.17-preflight.md).
+library assignment regression requires no cast. Exact main `b8a31c5`, all nine
+CI jobs/License, 715 pinned Hermes checks and all five public package/consumer
+gates pass. See the
+[beta.17 publication review](../../release/evidence/2.0.0-beta.17-publication.md)
+and historical [preflight](../../release/evidence/2.0.0-beta.17-preflight.md).
 React Native runs generated executable JavaScript over versioned installed OS
 ports. Package publication, app OTA delivery and physical acceptance are separate
 gates; published npm execution does not establish installed-app or device acceptance.
@@ -268,22 +271,24 @@ older adapter behavior.
 
 | Requirement | Check mechanism | Current gate |
 | --- | --- | --- |
-| Rust produces ordinary executable JS | Canonical beta.16 regeneration, 106 matching inputs, 91 native/generated RPC comparisons and shared Rust tests | Matched in exact-main CI at `ed8b5d9` |
-| RN engine compatibility | 447 local Node VM checks and pinned Hermes execution with normal optimization in exact-main CI | Matched source/compiler/VM gates; installed-app acceptance unverified |
-| Primitive-only generated mode | Fresh public beta.16 install configures/destroys the original `/runtime` generated client with native imports, registry access and WebAssembly rejected; strict declarations compile | Matched public consumer in protected release attempt 2 |
-| Public API and feature/recovery parity | 475 RN tests including frozen contracts, BYO/managed/queue, RTC 4, BLE 22 and readiness/lifecycle 9 regressions | Matched source gate; documented maintenance/security gaps remain |
+| Rust produces ordinary executable JS | Canonical beta.17 regeneration, 106 matching inputs, 136 native/generated RPC comparisons and shared Rust tests | Matched in exact-main CI at `b8a31c5` |
+| RN engine compatibility | 715 Node VM checks and pinned Hermes execution with normal optimization in exact-main CI | Matched source/compiler/VM gates; installed-app acceptance separate |
+| Primitive-only generated mode | Fresh public beta.17 install configures/destroys the original `/runtime` generated client with native imports, registry access and WebAssembly rejected; strict declarations compile | Matched public consumer in protected release attempt 1 |
+| Public API and feature/recovery parity | 479 RN tests including frozen contracts, managed root routing, exact legacy-empty admission and real nullable BLE library types | Matched source gate; documented maintenance/security gaps remain |
+| Runtime lifetime across scope changes | Real generated A → B → A fresh-factory configure/recovery/destroy cycles; late callbacks remain fenced | Fresh-factory route matched; same-client reconfigure remains partial |
+| Preserve unresolved old native work | Exact 12-byte empty catalog classifier is generated Rust; pending/unknown artifacts stay protected | Classifier matched; automatic pending-state migration not implemented |
 | Scoped durable receipt cleanup | Requirement/evidence reviews and injected host failures | Installed durability and physical acceptance unverified |
 | Redistribution notices | Exact public RN archive contains all 47 notices and generated runtime/declarations; source license gates and private fixture checks pass | Matched public archive and source checks |
 | npm publication and application OTA | Exact approved RN/Web bytes are public; initial OS-port installation and app rollout remain separate | npm matched; app OTA and physical acceptance unverified |
 
 The exact generation provenance, compiler proof and source checks are recorded in
 [the migration review](../superpowers/plans/2026-10-12-react-native-generated-js.md).
-Beta.16 canonical generation and Apple/Flutter preparation are verified in the
-[preflight](../../release/evidence/2.0.0-beta.16-preflight.md), with 106 matching
-generator inputs, 475 fresh RN tests, 447 actual Node VM checks and strict source
+Beta.17 canonical generation and Apple/Flutter preparation are verified in the
+[preflight](../../release/evidence/2.0.0-beta.17-preflight.md), with 106 matching
+generator inputs, 479 fresh RN tests, 715 actual Node VM checks and strict source
 consumer/declaration checks. Exact-main nine-job CI/License, immutable source/tag,
 49-file inventory and public npm/runtime results are recorded in the
-[publication review](../../release/evidence/2.0.0-beta.16-publication.md).
+[publication review](../../release/evidence/2.0.0-beta.17-publication.md).
 Synchronized publication is complete; app and device acceptance remain separate. The
 earlier TypeScript-adapter milestone's 227 RN tests remain historical evidence.
 Hardware, customer proxy/TLS,

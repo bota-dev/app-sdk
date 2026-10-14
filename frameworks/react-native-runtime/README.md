@@ -6,15 +6,15 @@ authoritative RN facade and generated Rust artifact without React Native imports
 native autolinking, CocoaPods/Maven dependencies or a Codegen module.
 
 Applications use `@bota.dev/react-native-app-sdk/runtime` from the original public
-package. Published beta.16 supplies that generated-JS route; its exact public
+package. Published beta.17 supplies that generated-JS route; its exact public
 archive and fresh runtime/declaration consumer are verified. All five SDK
 publication/consumer gates pass; app/device acceptance remains separate. The complete public package
 retains native compatibility and autolinking, while `/runtime` evaluates without
 native modules or WebAssembly. See [application setup](../react-native/README.md)
-and [publication review](../../release/evidence/2.0.0-beta.16-publication.md).
+and [publication review](../../release/evidence/2.0.0-beta.17-publication.md).
 
 The following application source example uses the original package's runtime
-entry and its published beta.16 generated factory:
+entry and its published beta.17 generated factory:
 
 ```ts
 import {

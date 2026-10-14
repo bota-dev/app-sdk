@@ -7,6 +7,8 @@ tracked separately.
 
 ## Unreleased
 
+## 2.0.0-beta.17
+
 - Admit HTTPS managed encrypted-v2 proxies whose routes start at the origin root,
   as well as existing path-prefixed proxies. An explicit empty Rust API prefix
   selects root routes; omitting it preserves `/v1`. Scope, origin, authorization,
@@ -18,8 +20,10 @@ tracked separately.
   protected during app migration. Match the BLE port's disconnect nullability
   to the actual pinned `react-native-ble-plx` type without app casts.
 
-Synchronized beta.17 is a preparation candidate; beta.16 remains published until
-the normal exact-source and protected release gates pass.
+All five synchronized packages, exact main CI/License, protected publication,
+public consumers and complete archive verification pass. See the
+[publication review](release/evidence/2.0.0-beta.17-publication.md). App delivery,
+OTA and physical acceptance remain separate.
 
 ## 2.0.0-beta.16
 

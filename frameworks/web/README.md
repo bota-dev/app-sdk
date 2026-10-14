@@ -1,10 +1,10 @@
 # Bota SDK for Web
 
-Published `2.0.0-beta.16` retains Web's Rust/Wasm implementation and the existing
+Published `2.0.0-beta.17` retains Web's Rust/Wasm implementation and the existing
 public package identity. Exact public npm bytes match the approved main-CI
 inventory. React Native's generated-JS route uses its original `/runtime` entry.
 All five package/public-consumer gates pass; app/device acceptance remains
-separate. See the [publication review](../../release/evidence/2.0.0-beta.16-publication.md).
+separate. See the [publication review](../../release/evidence/2.0.0-beta.17-publication.md).
 
 `@bota.dev/web-app-sdk` is the foreground browser distribution of the Bota App
 SDK. It combines Web Bluetooth and tenant-scoped browser storage with the shared
@@ -19,11 +19,11 @@ dependency before adding its replacement. Storage namespaces do not change.
 
 ## Install
 
-Install the verified public beta.16 version explicitly; npm `latest` remains
+Install the verified public beta.17 version explicitly; npm `latest` remains
 beta.0:
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.16
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.17
 ```
 
 Use a secure context in a desktop Chromium browser with Web Bluetooth. The
@@ -68,7 +68,7 @@ to deliver commands. Do not include phone names, persistent installation IDs,
 URLs, full user agents, location, or credentials. Metadata is self-reported
 operational information, not proof of continuous physical connectivity.
 
-Published beta.16 includes `clientPresence.nextReport`; historical beta.1 lacks
+Published beta.17 includes `clientPresence.nextReport`; historical beta.1 lacks
 this additive API. Backend integration and fresh presence observations remain
 host-owned.
 

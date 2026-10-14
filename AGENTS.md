@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Beta.17 is an unpublished preparation candidate for generated-JS Demo/One
+Beta.17 is published across all five SDK platforms for generated-JS Demo/One
 integration: explicit root managed-v2 API prefixes and pure `/runtime` helpers.
 Root normalizes to `apiBasePath: ''`; omission still means `/v1`. Keep exact
 origin/scope, receipt-gated cleanup and shared Rust source ownership. Native
@@ -9,9 +9,12 @@ passed. Final canonical JS generation and repeat checking pass at source
 `9c03679`, followed by successful Apple pins and complete Flutter inventory.
 The final source passes 479 RN tests, strict types and 715 standalone Node VM
 checks. Required legacy-empty-catalog admission is Rust-sourced (all 66
-JS-binding Rust tests pass). Exact hosted CI/Hermes, License Gate, publication
-and physical acceptance remain gates. The real BLE PLX 3.5.1 manager satisfies
+JS-binding Rust tests pass). Exact main `b8a31c5` passes all nine CI jobs,
+License Gate, canonical regeneration, 136 Rust/JS RPCs and 715 pinned Hermes
+checks. Protected release `38519284564` passes all public consumers and exact
+archive gates; app OTA and physical acceptance remain separate. The real BLE PLX 3.5.1 manager satisfies
 the corrected nullable-disconnect port under strict types without casts. See
+[publication review](release/evidence/2.0.0-beta.17-publication.md) and historical
 [preflight](release/evidence/2.0.0-beta.17-preflight.md).
 
 - October 13 beta.16: `@bota.dev/react-native-app-sdk/runtime` is published under
@@ -209,14 +212,14 @@ before the cancellation check starts. This is test ordering, not a runtime chang
 
 ## Current Authority
 
-- Published synchronized beta `2.0.0-beta.16` has all five packages and public
+- Published synchronized beta `2.0.0-beta.17` has all five packages and public
   consumer/archive gates verified. The original
   RN `/runtime` executes generated Rust JavaScript; its companion remains private.
-  Exact-main nine-job CI/License and protected release attempt 2 pass, including
+  Exact-main nine-job CI/License and protected release attempt 1 pass, including
   generated JS/declarations, SwiftPM, clean CocoaPods, API 26/35 and Flutter.
-  npm `beta` is beta.16; `latest` remains beta.0 and retired package tags remain
+  npm `beta` is beta.17; `latest` remains beta.0 and retired package tags remain
   unchanged. App OTA, installed-host and physical acceptance remain separate.
-  See [publication evidence](release/evidence/2.0.0-beta.16-publication.md).
+  See [publication evidence](release/evidence/2.0.0-beta.17-publication.md).
 
 - Previously published synchronized beta `2.0.0-beta.15` includes Apple single-ATT
   sizing,

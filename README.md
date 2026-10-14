@@ -1,13 +1,13 @@
 # Bota App SDK
 
-Published React Native beta.16 adds Rust-generated JavaScript through
+Published React Native beta.17 provides Rust-generated JavaScript through
 `@bota.dev/react-native-app-sdk/runtime`, using installed Bluetooth, file and HTTP
 ports. Compatible shared-logic upgrades can travel in an app's OTA bundle.
 All five SDK packages, exact main CI/License, public JS/declaration/native
 consumers and complete Flutter archive verification pass. App OTA delivery,
 installed-host qualification and physical acceptance remain separate. See
 [setup and runtime limits](frameworks/react-native/README.md) and
-[publication review](release/evidence/2.0.0-beta.16-publication.md).
+[publication review](release/evidence/2.0.0-beta.17-publication.md).
 
 BYO live-upload source now connects encrypted capture, HTTP/WS and fenced Batch recovery. See [current implementation and validation](docs/parity/byo-storage.md); rollout and physical qualification remain separate.
 
@@ -54,9 +54,9 @@ not supported. Consult each platform guide for its capability limits.
 
 ## Installation
 
-**Published SDK version: `2.0.0-beta.16` (beta).** All five packages and public
+**Published SDK version: `2.0.0-beta.17` (beta).** All five packages and public
 consumer/archive checks pass; see the
-[publication review](release/evidence/2.0.0-beta.16-publication.md).
+[publication review](release/evidence/2.0.0-beta.17-publication.md).
 [GitHub Releases](https://github.com/bota-dev/app-sdk/releases) provides the
 publication status and verified artifacts; [CHANGELOG.md](CHANGELOG.md) records
 version changes.
@@ -66,7 +66,7 @@ Choose the package for your application. npm's `beta` tag tracks prereleases;
 
 ### React Native
 
-Published beta.16 provides the generated-JS factory through
+Published beta.17 provides the generated-JS factory through
 `@bota.dev/react-native-app-sdk/runtime`. This entry evaluates without React Native
 module imports, native registry access or WebAssembly. Install compatible OS ports
 in the app binary once; compatible generated logic can then update through app
@@ -81,7 +81,7 @@ is a private verification fixture; applications install only the original packag
 Use Node.js 22+ to install and build your app:
 
 ```bash
-npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.16
+npm install --save-exact @bota.dev/react-native-app-sdk@2.0.0-beta.17
 npx pod-install
 ```
 
@@ -93,10 +93,10 @@ for permissions and Expo configuration.
 ### Apple
 
 In Xcode, add `https://github.com/bota-dev/app-sdk.git` at exact version
-`2.0.0-beta.16` and select the **BotaAppSDK** product. With Swift Package Manager:
+`2.0.0-beta.17` and select the **BotaAppSDK** product. With Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.16")
+.package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.17")
 ```
 
 Add `NSBluetoothAlwaysUsageDescription` to your application. Sandboxed macOS
@@ -114,7 +114,7 @@ try await bota.configure()
 Add the dependency with `mavenCentral()` configured in your repositories:
 
 ```kotlin
-implementation("dev.bota:bota-app-sdk:2.0.0-beta.16")
+implementation("dev.bota:bota-app-sdk:2.0.0-beta.17")
 ```
 
 Your app requests Bluetooth runtime permissions. See the
@@ -125,7 +125,7 @@ requirements.
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.16
+  bota_app_sdk: 2.0.0-beta.17
 ```
 
 Follow the [Flutter guide](frameworks/flutter/bota_app_sdk/README.md) for native
@@ -134,7 +134,7 @@ setup and backend callbacks, then rebuild the iOS or Android app.
 ### Web
 
 ```bash
-npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.16
+npm install --save-exact @bota.dev/web-app-sdk@2.0.0-beta.17
 ```
 
 Start the Bluetooth picker from a user gesture. Web integration requires
