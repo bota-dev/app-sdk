@@ -1,8 +1,11 @@
 # AGENTS.md
 
-Beta.18 is in canonical preparation for the connected BLE PLX MTU correction.
-Keep beta.17's occupied public artifacts unchanged. Review pinned Linux JS,
-Apple checksums and full Flutter inventory before main qualification/tagging.
+Beta.18 canonical preparation 38624046539 passes at 1b859098 for the connected
+BLE PLX MTU correction. Exact Linux JS, generated identities, Apple checksums
+and all 59 Flutter package files are independently verified. All 480 RN tests,
+715 standalone VM checks, strict types, package builds and four private fixture
+checks pass. Keep beta.17's occupied public artifacts unchanged; exact main
+qualification, its complete release inventory and protected publication remain.
 See [candidate review](release/evidence/2.0.0-beta.18-preflight.md).
 
 October 14 Android app acceptance found beta.17 reconnect rejecting an absent

@@ -3,8 +3,10 @@
 Beta.18 corrects the physical Android BLE PLX MTU scan-cache failure found during
 Demo/One generated-JS integration. The corrected JS executes on Demo's existing
 native host and reads exact identity, pairing, status and an empty catalog.
-Canonical version preparation, main CI/inventory and protected publication are
-pending; see [the preflight review](../release/evidence/2.0.0-beta.18-preflight.md).
+Canonical preparation passes at 1b859098: Linux JS, Apple pins and the complete
+59-file Flutter inventory are verified, along with 480 RN and 715 standalone VM
+checks. Exact main CI/inventory and protected publication remain pending; see
+[the preflight review](../release/evidence/2.0.0-beta.18-preflight.md).
 Beta.17 remains the published baseline. One sign-in, transfer/cleanup, app OTA
 and broader platform acceptance remain separate.
 

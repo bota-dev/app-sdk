@@ -2,6 +2,11 @@
 
 ## Generated JavaScript runtime and app OTA updates
 
+Candidate beta.18 corrects Android MTU observation in the BLE PLX OS port.
+Its generated JS and all 480 RN tests pass; main qualification and protected
+publication remain required. This correction uses BLE PLX 3.5.1's existing
+installed API. See the [candidate review](../../release/evidence/2.0.0-beta.18-preflight.md).
+
 Published beta.17 adds `deriveSyncStatus`, `UPLOAD_RECOVERY_VERSION` and
 `readClientPresenceObservation` to `/runtime`. Use the generated runtime's
 `createUploadRecoveryProvider` method to retain shared Rust recovery policy.
