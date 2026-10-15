@@ -4,11 +4,14 @@ Beta.18 is published across all five SDK families at accepted source 0962c8c.
 All nine main CI jobs, License, protected release 38632018471 attempt 2 and public
 consumers/archives pass. Independent npm/Pod/Central/AAR and all 59 Flutter file
 checks match the approved 49-file inventory. The original RN `/runtime` remains
-the public route; the companion stays private. Same-host Android metadata passes
-at MTU 512, while One's earlier legacy integrity failure and later empty catalog
-with a pending cloud row leave physical completion unresolved. Preserve its
-failed queue/cloud pointer; app OTA, full Apple and background acceptance remain
-separate. See [publication review](release/evidence/2.0.0-beta.18-publication.md)
+the public route; the companion stays private. October 14 Android follow-up
+(October 15 UTC) passes fresh batch START/STOP in One's existing host, but legacy
+transfer fails at the 256-packet backlog bound before EOF/CRC. SDK teardown also
+reports `operation_in_progress`; actual retained OS ownership is unproven.
+Preserve the original failed queue/cloud pointer. Full sync is failing; app OTA,
+full Apple and background acceptance remain separate. See the
+[physical follow-up](docs/parity/react-native-runtime.md#october-14-android-physical-follow-up-october-15-utc),
+[publication review](release/evidence/2.0.0-beta.18-publication.md)
 and dated [preflight](release/evidence/2.0.0-beta.18-preflight.md).
 
 October 14 Android app acceptance found beta.17 reconnect rejecting an absent

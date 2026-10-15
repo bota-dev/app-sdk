@@ -6,9 +6,11 @@ Published beta.18 corrects connected BLE PLX MTU observation under the original
 package identity. Exact main CI/License, protected release attempt 2, public
 generated-runtime/native consumers and all 59 Flutter files pass. A normal
 public beta.18 bundle reads identity/status/catalog at MTU 512 in One's existing
-Android host. Its earlier legacy transfer integrity failure and later empty
-catalog with an unresolved pending cloud pointer do not establish commitment or
-cleanup. App OTA and full platform/background acceptance remain separate. See
+Android host. The later controlled capture passes START/STOP but demonstrates a
+legacy transfer backlog failure and uncertain SDK teardown; full sync is failing.
+The original pending cloud pointer and failed queue remain preserved. See the
+[physical follow-up](#october-14-android-physical-follow-up-october-15-utc).
+App OTA and full platform/background acceptance remain separate. See
 the [publication review](../../release/evidence/2.0.0-beta.18-publication.md).
 
 Published beta.17 adds `isEmptyLegacyAndroidV2CheckpointCatalog(bytes)` on
@@ -36,6 +38,35 @@ public JS/declaration/native consumers and complete Flutter verification. The co
 private source fixture; the separate registry/publication plan is withdrawn.
 See the [publication review](../../release/evidence/2.0.0-beta.16-publication.md)
 and historical [preflight](../../release/evidence/2.0.0-beta.16-preflight.md).
+
+## October 14 Android physical follow-up (October 15 UTC)
+
+Public beta.18's original `/runtime` runs in the unchanged One 1.0.10 Android
+host. Fresh scope/binding generation 4, the exact selected Pin, firmware 1.0.18
+and MTU 512 were verified. Fresh batch mode (`streaming_enabled=false`), WiFi
+unavailable and BLE before cellular admitted one continuous-connection capture;
+START and STOP were accepted and stopped state was verified. Its legacy catalog
+advertised 207,872 bytes (rounded to KiB) and 48 seconds. The known test clip was
+not played, so this provides no audio-quality acceptance.
+
+Standalone transfer received 400 consecutive DATA packets (500-byte payloads,
+no gaps, duplicates or length mismatches). 142 appends reported durable completion
+(71,000 bytes); one further append was submitted. The remaining 257 packets hit
+the Rust receiver's 256-packet backlog bound, below its 128 KiB byte bound,
+causing `integrity_failed` before EOF, CRC verification or finalization. This
+proves the backlog failure for this capture; the earlier uninstrumented failure
+does not establish the same cause. The original failed queue/cloud pointer
+remained unchanged, with no app recording create, PUT or device CONFIRM.
+
+Disconnect and destroy reported `operation_in_progress`. Source shows terminal
+discard can contend with its own submitted append, and cleanup failure retains
+the SDK operation owner. The append had settled by the terminal observation;
+retained OS GATT ownership was not observed. A phone Bluetooth cycle allowed one
+reconnect, while the next failed with `unexpected_event`; stable reconnection
+remains unverified. Full sync fails; cloud commitment and durable completion
+remain unverified. Source fixes are deferred: Rust-owned bounded append batching and JS same-sink cleanup
+ordering need delayed-sink/backlog, cancellation and joined-teardown regressions.
+See the [mobile migration review](https://github.com/bota-dev/internal-docs/blob/main/test/2026-10-13-generated-js-mobile-migration.md).
 
 ## Source and distribution
 
@@ -295,6 +326,7 @@ older adapter behavior.
 | Runtime lifetime across scope changes | Real generated A → B → A fresh-factory configure/recovery/destroy cycles; late callbacks remain fenced | Fresh-factory route matched; same-client reconfigure remains partial |
 | Preserve unresolved old native work | Exact 12-byte empty catalog classifier is generated Rust; pending/unknown artifacts stay protected | Classifier matched; automatic pending-state migration not implemented |
 | Scoped durable receipt cleanup | Requirement/evidence reviews and injected host failures | Installed durability and physical acceptance unverified |
+| Published beta.18 Android legacy transfer | Controlled capture and bounded packet/append metadata above | Failed at the 256-packet backlog bound; SDK teardown uncertain; source fix deferred |
 | Redistribution notices | Exact public RN archive contains all 47 notices and generated runtime/declarations; source license gates and private fixture checks pass | Matched public archive and source checks |
 | npm publication and application OTA | Exact approved RN/Web bytes are public; initial OS-port installation and app rollout remain separate | npm matched; app OTA and physical acceptance unverified |
 
