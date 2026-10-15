@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "sdkFamily": "bota-app-sdk",
   "sdkVersion": "2.0.0-beta.19",
-  "sourceRevision": "535c8be7e59d92c47976e5aae14f64e3503acb2c",
+  "sourceRevision": "878f469e1261b2bab71feac3f8affd58826552fe",
   "protocolFixtureDigest": "e3803e1e7774b9a7513d1c8059a7ea6ee30bf37d91a8b6662bf2f6fb06dd9639",
   "firmwareCompatibility": {
     "minimum": "1.0.17",
@@ -16,7 +16,7 @@
       "name": "BotaDeviceSDKCore.xcframework.zip",
       "ecosystem": "swiftpm",
       "version": "2.0.0-beta.19",
-      "checksumSha256": "57a9ac40cd928a63539b5f70219e1b4a0433325a994107ca90032c9a2fad2bbe",
+      "checksumSha256": "acb285bca52b584d1706929e3e2d8eba23f2cd9cf011be2fae3866115bfdfe30",
       "capabilities": [
         "connection_settings",
         "device_logs",
@@ -74,7 +74,7 @@
       "ecosystem": "pub",
       "version": "2.0.0-beta.19",
       "checksumSha256": "93ad6020e47dcf8a8596a0f662252d971b8f964dd589ebcd3ade709c2c0e8826",
-      "sourceRevision": "535c8be7e59d92c47976e5aae14f64e3503acb2c",
+      "sourceRevision": "878f469e1261b2bab71feac3f8affd58826552fe",
       "normalizedArchiveSha256": "0390b66ef0a780e3e896056c288c3ea5d9007f222a15637574d39536d74c55c8",
       "generator": {
         "name": "pigeon",

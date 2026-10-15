@@ -37,3 +37,22 @@ compatibility tests, strict TypeScript, Codegen, package metadata, the 33-packag
 license gate and unchanged generated-core provenance pass. The previous canonical source/Apple preparation and bounded
 round 6 evidence remain in [connection-attempt retirement](connection-attempt-retirement.md).
 No firmware, model identity or retained recording bytes are changed.
+
+## Exact-main packaging follow-up
+
+Exact main `878f469e` passes License and seven platform jobs in CI
+`38815573517`, including 510 RN tests, canonical generation, 146 Rust/JS RPCs
+and 768 pinned Hermes checks. Flutter passes 87 tests and both Android/iOS
+release consumers, then correctly rejects the checked release manifest: its
+Apple checksum projection still names the archive preceding the already-updated
+root Swift package pin. The inventory job is skipped, so this run does not
+qualify all nine jobs or the 49-file release candidate.
+
+The existing manifest generator now refreshes only that Apple checksum and the
+root/Flutter source provenance. All 59 Flutter files and their deterministic
+archive remain byte-identical; the corrected checksum matches the current
+`Package.swift` pin `acb285bc…`. The 17 publication tests, exact candidate
+verification and manifest/template comparison pass, with independent diff
+review. Runtime, framework archives, generation inputs and verification gates
+are unchanged. Fresh successor main CI/License and complete preserved candidate
+verification remain required; round 7 and publication remain separate.
