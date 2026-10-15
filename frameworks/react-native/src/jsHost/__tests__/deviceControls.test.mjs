@@ -488,3 +488,82 @@ test('generated Rust diagnostic adapter preserves the Native full report and exa
   assert.deepEqual(writes, ['10', '11efcdab8967452301']);
   await controls.close();
 });
+
+function modelSettingsFixture(model = 'BOTA_DEV', resolver) {
+  const { createGeneratedJsCore } = loadSource('core.ts');
+  const core = createGeneratedJsCore();
+  const connected = { ...device, serialNumber: '4KF6NOHWX0', deviceType: model };
+  const writes = [];
+  let current = { device: connected, generation: 'model-connection-1' };
+  const abort = new AbortController();
+  const context = { operation: 'WriteConnectionSettings', operationId: 'settings-1', requestId: '0',
+    generation: '1', cancellationId: '01'.repeat(16), signal: abort.signal };
+  const settings = core.codec('decodeConnectionSettings', { bytes: [2, 3, 1, 2, 3, 18, 18, 0, 60, 0x83, 0, 0] });
+  const controls = new JsDeviceControls({ core, connection: () => current,
+    resolveBoundDeviceModel: resolver, emit() {}, gatt: (_context, body) => body(),
+    ports: { persistence: { namespace: 'test/customer' }, ble: {
+      async read() { return Uint8Array.from(Buffer.from(connected.serialNumber)); },
+      async write(_address, bytes) { writes.push([...bytes]); },
+    } },
+  });
+  return { core, controls, connected, writes, settings, context, abort,
+    rebind() { current = { device: connected, generation: 'model-connection-2' }; } };
+}
+
+test('actual Rust settings codec resolves only exact authenticated generic-model hints and retains raw GATT identity', async () => {
+  for (const model of ['pin', 'note']) {
+    const f = modelSettingsFixture('BOTA_DEV', (serialNumber, context) => {
+      assert.equal(serialNumber, '4KF6NOHWX0');
+      assert.equal(context.operationId, 'settings-1');
+      return { serialNumber, model, bindingGeneration: 3 };
+    });
+    try {
+      await f.controls.execute('writeConnectionSettings', [{ ...f.connected, deviceType: 'note' }, f.settings], f.context);
+      assert.deepEqual(f.writes, [f.core.codec('encodeConnectionSettings', { settings: f.settings, model })]);
+      assert.equal(f.connected.deviceType, 'BOTA_DEV');
+    } finally { await f.controls.close(); f.core.dispose(); }
+  }
+});
+
+test('actual Rust settings admission rejects missing, malformed, conflicting or arbitrary model hints before writes', async () => {
+  const hint = { serialNumber: '4KF6NOHWX0', model: 'pin', bindingGeneration: 3 };
+  for (const [observed, supplied] of [
+    ['BOTA_DEV', null], ['unknown', hint], ['note', hint],
+    ['BOTA_DEV', { ...hint, serialNumber: 'OTHERDEVICE' }],
+    ['BOTA_DEV', { ...hint, bindingGeneration: 0 }],
+    ['BOTA_DEV', { ...hint, bindingGeneration: Number.MAX_SAFE_INTEGER + 1 }],
+    ['BOTA_DEV', { ...hint, model: 'BOTA_DEV' }],
+  ]) {
+    const f = modelSettingsFixture(observed, () => supplied);
+    try {
+      await assert.rejects(f.controls.execute('writeConnectionSettings', [f.connected, f.settings], f.context));
+      assert.deepEqual(f.writes, []);
+    } finally { await f.controls.close(); f.core.dispose(); }
+  }
+  const known = modelSettingsFixture('pin');
+  try {
+    await known.controls.execute('writeConnectionSettings', [known.connected, known.settings], known.context);
+    assert.equal(known.writes.length, 1);
+  } finally { await known.controls.close(); known.core.dispose(); }
+});
+
+test('pending model resolution keeps the operation joined and cannot write after cancellation or physical rebind', async () => {
+  for (const invalidation of ['cancel', 'rebind']) {
+    const entered = deferred();
+    const resolution = deferred();
+    const f = modelSettingsFixture('BOTA_DEV', () => { entered.resolve(); return resolution.promise; });
+    const pending = f.controls.execute('writeConnectionSettings', [f.connected, f.settings], f.context);
+    await entered.promise;
+    if (invalidation === 'cancel') f.abort.abort(); else f.rebind();
+    const closing = invalidation === 'cancel' ? f.controls.close() : null;
+    let settled = false;
+    pending.then(() => { settled = true; }, () => { settled = true; });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(settled, false);
+    resolution.resolve({ serialNumber: f.connected.serialNumber, model: 'pin', bindingGeneration: 3 });
+    await assert.rejects(pending, { code: invalidation === 'cancel' ? 'cancelled' : 'identity_mismatch' });
+    await (closing ?? f.controls.close());
+    assert.deepEqual(f.writes, []);
+    f.core.dispose();
+  }
+});

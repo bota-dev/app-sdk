@@ -8,6 +8,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import { runByoConformance } from '../react-native/byo-conformance.mjs';
 import { runManagedRouteConformance } from '../react-native/managed-route-conformance.mjs';
+import { runBoundModelConformance } from '../react-native/bound-model-conformance.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const expectedCommit = '829dcd74f5b774d19a86ab1dc47e3dee9e44d190';
@@ -55,6 +56,7 @@ const bundle = `'use strict';\nvar generatedModule = { exports: {} };\n` +
   `var fixtures = ${JSON.stringify(fixtures)};\n` +
   `var runByoConformance = ${runByoConformance.toString()};\n` +
   `var runManagedRouteConformance = ${runManagedRouteConformance.toString()};\n` +
+  `var runBoundModelConformance = ${runBoundModelConformance.toString()};\n` +
   `(${runConformance.toString()})(generated, fixtures);\n`;
 mkdirSync(output, { recursive: true });
 const bundlePath = join(output, 'core-conformance.js');
@@ -233,6 +235,7 @@ function runConformance(generated, fixtures) {
     same(success(codec('decodeText', { bytes: [0xe4, 0xb8, 0xad, 0xf0, 0x9f, 0x93, 0x8e], required: true }), 'Unicode device text'), '中\ud83d\udcce', 'UTF-8 RPC response');
     runByoConformance(codec, success, check, same, utf8Encode);
     runManagedRouteConformance(codec, success, check, same);
+    runBoundModelConformance(codec, success, check, same);
     fixtures.ota.cases.forEach(function (fixture) {
       var input = fixture.input;
       var name;

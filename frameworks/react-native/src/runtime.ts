@@ -68,6 +68,8 @@ export interface BotaReactNativeRuntime {
 }
 
 export interface BotaReactNativeJsRuntimeOptions {
+  /** Exact authenticated binding metadata; only BOTA_DEV may fall back to this Rust-validated model. */
+  resolveBoundDeviceModel?: JsDeviceAdapterOptions['resolveBoundDeviceModel'];
   reconnect?: BotaReconnectPolicy;
   firmwareRecovery?: BotaFirmwareRecoveryPolicy;
   backend?: Omit<JsUploadBackendOptions, 'fetch'> & { fetch?: JsV2Fetch };
@@ -109,6 +111,7 @@ export function createBotaReactNativeJsRuntime(
     let managedBackend: JsEncryptedUploadV2Backend | undefined;
     let byoBackend: JsByoEffects | undefined;
     const device = createJsDeviceAdapter(core, ports, { upload: options.upload,
+      resolveBoundDeviceModel: options.resolveBoundDeviceModel,
       fetch: backendOptions?.fetch, uploadFile: options.uploadFile,
       firmwareRecoveryTimeoutMs: options.firmwareRecovery?.timeoutMs,
       drainMaterial: operationId => managedBackend?.drain(operationId) ?? Promise.resolve() });

@@ -10,6 +10,15 @@ export interface JsControlConnection {
   readonly generation: string;
 }
 
+/** Authenticated host metadata for an exact current device binding, never an advertisement hint. */
+export interface BoundDeviceModelHint {
+  readonly serialNumber: string;
+  readonly model: string;
+  readonly bindingGeneration: number;
+}
+export type ResolveBoundDeviceModel = (serialNumber: string, context: JsHostContext) =>
+  BoundDeviceModelHint | null | Promise<BoundDeviceModelHint | null>;
+
 export interface JsDeviceControlsOptions {
   readonly ports: Pick<BotaJsHostPorts, 'ble' | 'persistence' | 'signal' | 'checkScope'>;
   readonly core: Pick<RawJsCoreFactory, 'codec'>;
@@ -19,6 +28,8 @@ export interface JsDeviceControlsOptions {
   readonly gatt: <T>(context: JsHostContext, body: () => Promise<T>) => Promise<T>;
   /** Retains the shared owner when a submitted STOP or unsubscribe cannot be confirmed. */
   readonly onCleanupFailure?: (error: unknown, context?: JsHostContext) => void;
+  /** The host verifies authenticated account/project/current-binding authority and scope. */
+  readonly resolveBoundDeviceModel?: ResolveBoundDeviceModel;
 }
 
 interface Observer {
@@ -146,9 +157,14 @@ export class JsDeviceControls {
           { timestampMs: Date.now() });
       case 'readConnectionSettings':
         return this.decodeRead('decodeConnectionSettings', 'SERVICE_BOTA_PROVISIONING', 'CHAR_DEVICE_SETTINGS', connection, context);
-      case 'writeConnectionSettings':
-        return this.writeEncoded('encodeConnectionSettings', { settings: json(args[1]), model: connection.device.deviceType },
+      case 'writeConnectionSettings': {
+        this.requireOwner(connection, context);
+        const boundModel = await this.options.resolveBoundDeviceModel?.(connection.device.serialNumber, context);
+        this.requireOwner(connection, context);
+        return this.writeEncoded('encodeConnectionSettings', { settings: json(args[1]), model: connection.device.deviceType,
+          serialNumber: connection.device.serialNumber, ...(boundModel == null ? {} : { boundModel: json(boundModel) }) },
           'SERVICE_BOTA_PROVISIONING', 'CHAR_DEVICE_SETTINGS', connection, context);
+      }
       case 'isProvisioned':
         return this.decodeRead('decodeProvisioningState', 'SERVICE_BOTA_PROVISIONING', 'CHAR_PAIRING_STATE', connection, context);
       case 'readPublicKey':

@@ -2,6 +2,14 @@
 
 ## Generated JavaScript runtime and app OTA updates
 
+The unpublished bound-model correction adds optional `resolveBoundDeviceModel`
+to `createBotaReactNativeJsRuntime`. Supply only an authenticated exact current
+binding record `{serialNumber, model, bindingGeneration}`; return `null` when
+unavailable and invalidate the runtime on account/project/binding/model changes.
+Rust permits this fallback only for legacy GATT model `BOTA_DEV`, rejects
+conflicts and preserves Note cellular normalization. See the
+[qualification boundary](../../docs/parity/bound-device-model.md).
+
 Candidate beta.18 corrects Android MTU observation in the BLE PLX OS port.
 Its generated JS and all 480 RN tests pass; main qualification and protected
 publication remain required. This correction uses BLE PLX 3.5.1's existing

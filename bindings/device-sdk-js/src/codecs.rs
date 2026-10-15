@@ -73,6 +73,47 @@ struct DecodeHex {
 struct Settings {
     settings: dto::WebConnectionSettings,
     model: String,
+    serial_number: Option<String>,
+    bound_model: Option<BoundDeviceModel>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BoundDeviceModel {
+    serial_number: String,
+    model: String,
+    binding_generation: u64,
+}
+
+fn settings_model(model: &str) -> Option<&'static str> {
+    match model {
+        "pin" | "bota_pin" | "Bota Pin" => Some("pin"),
+        "pin_4g" | "bota_pin_4g" | "Bota Pin 4G" => Some("pin_4g"),
+        "note" | "bota_note" | "Bota Note" => Some("note"),
+        _ => None,
+    }
+}
+
+fn connection_settings_model(request: &Settings) -> Result<&'static str, DeviceSdkError> {
+    let observed = settings_model(&request.model);
+    let Some(hint) = &request.bound_model else {
+        return observed.ok_or_else(|| invalid("unsupported device model"));
+    };
+    let serial = request.serial_number.as_deref().unwrap_or("");
+    if serial != hint.serial_number
+        || bota_device_sdk_core::model::DeviceSerialNumber::new(serial).is_err()
+        || hint.binding_generation == 0
+        || hint.binding_generation > 9_007_199_254_740_991
+    {
+        return Err(invalid("bound device model identity is invalid"));
+    }
+    let bound =
+        settings_model(&hint.model).ok_or_else(|| invalid("unsupported bound device model"))?;
+    match observed {
+        Some(known) if known == bound => Ok(known),
+        Some(_) => Err(invalid("bound device model conflicts with device identity")),
+        None if request.model == "BOTA_DEV" => Ok(bound),
+        None => Err(invalid("unsupported device model")),
+    }
 }
 #[derive(Deserialize)]
 struct Action {
@@ -359,12 +400,7 @@ impl CodecState {
             }
             "encodeConnectionSettings" => {
                 let request: Settings = input(value)?;
-                let model = match request.model.as_str() {
-                    "bota_pin" | "Bota Pin" => "pin",
-                    "bota_pin_4g" | "Bota Pin 4G" => "pin_4g",
-                    "bota_note" | "Bota Note" => "note",
-                    model => model,
-                };
+                let model = connection_settings_model(&request)?;
                 output(&dto::encode_connection_settings_dto(
                     request.settings,
                     model,
@@ -1117,6 +1153,109 @@ fn metadata() -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn settings_request(model: &str, bound_model: Value) -> Value {
+        let settings =
+            dto::decode_connection_settings_dto(&[2, 3, 1, 2, 3, 18, 18, 0, 60, 0x83, 0, 0])
+                .unwrap()
+                .settings;
+        object!({"settings":settings,"model":model,"serialNumber":"4KF6NOHWX0","boundModel":bound_model})
+    }
+
+    #[test]
+    fn generic_model_uses_only_exact_bound_identity_and_shared_normalization() {
+        let mut codecs = CodecState::default();
+        for (model, canonical) in [("bota_pin", "pin"), ("bota_note", "note")] {
+            let request = settings_request(
+                "BOTA_DEV",
+                object!({"serialNumber":"4KF6NOHWX0","model":model,"bindingGeneration":3}),
+            );
+            let actual = codecs.execute("encodeConnectionSettings", request).unwrap();
+            let expected = codecs
+                .execute(
+                    "encodeConnectionSettings",
+                    settings_request(canonical, Value::Null),
+                )
+                .unwrap();
+            assert_eq!(actual, expected);
+            if canonical == "note" {
+                let bytes: Vec<u8> = serde_json::from_slice(&actual).unwrap();
+                let decoded = parse_connection_settings(&bytes).unwrap().settings;
+                assert!(!decoded.enabled.cellular && !decoded.heartbeat.cellular);
+                assert!(
+                    !decoded
+                        .upload_priority
+                        .contains(&bota_device_sdk_core::model::ConnectionType::Cellular)
+                );
+            }
+        }
+        for model in [
+            "pin",
+            "bota_pin",
+            "Bota Pin",
+            "note",
+            "bota_note",
+            "Bota Note",
+            "pin_4g",
+            "bota_pin_4g",
+            "Bota Pin 4G",
+        ] {
+            assert!(
+                codecs
+                    .execute(
+                        "encodeConnectionSettings",
+                        settings_request(model, Value::Null)
+                    )
+                    .is_ok()
+            );
+        }
+    }
+
+    #[test]
+    fn model_hint_cannot_override_known_or_arbitrary_unknown_identity() {
+        let mut codecs = CodecState::default();
+        let valid = object!({"serialNumber":"4KF6NOHWX0","model":"pin","bindingGeneration":3});
+        for model in ["BOTA_DEV", "unknown", "", "Bota-Device"] {
+            assert!(
+                codecs
+                    .execute(
+                        "encodeConnectionSettings",
+                        settings_request(model, Value::Null)
+                    )
+                    .is_err()
+            );
+        }
+        for model in ["unknown", "", "Bota-Device", "bota_note"] {
+            assert!(
+                codecs
+                    .execute(
+                        "encodeConnectionSettings",
+                        settings_request(model, valid.clone())
+                    )
+                    .is_err()
+            );
+        }
+        for (field, value) in [
+            ("serialNumber", object!("OTHERDEVICE")),
+            ("model", object!("BOTA_DEV")),
+            ("bindingGeneration", object!(0)),
+            ("bindingGeneration", object!(-1)),
+            ("bindingGeneration", object!(1.5)),
+            ("bindingGeneration", object!(9_007_199_254_740_992_u64)),
+        ] {
+            let mut invalid_hint = valid.clone();
+            invalid_hint[field] = value;
+            assert!(
+                codecs
+                    .execute(
+                        "encodeConnectionSettings",
+                        settings_request("BOTA_DEV", invalid_hint)
+                    )
+                    .is_err()
+            );
+        }
+    }
+
     #[test]
     fn canonical_time_wifi_and_ota_codecs_match_core_bytes() {
         let mut codecs = CodecState::default();

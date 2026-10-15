@@ -1,5 +1,12 @@
 # AGENTS.md
 
+October 15 bound-model source correction: optional JS-runtime
+`resolveBoundDeviceModel` supplies exact authenticated serial/model/binding
+metadata for settings writes on legacy `BOTA_DEV` firmware. Rust validates the
+hint and preserves Note cellular normalization; raw GATT identity is unchanged.
+Canonical regeneration and fresh exact-source qualification are pending. See
+[scope and requirements](docs/parity/bound-device-model.md).
+
 October 15 unpublished beta.19 qualification: exact main `9e7c54d8` passes all
 nine CI jobs `38776953313` and License `38776953300`, including 490 RN tests,
 136 Rust/JS RPCs and 715 pinned Hermes checks. All 49 preserved files, five

@@ -7,7 +7,7 @@ import type { BotaDeviceAdapter } from '../runtimeAdapter';
 import type { BotaJsHostPorts, GattAddress, JsHostContext, JsHostSubscription, JsValue, RawJsCoreFactory } from './contracts';
 import { BotaJsHostExecutor, BotaJsHostError } from './executor';
 import { JsDeviceControls } from './deviceControls';
-import type { JsControlConnection } from './deviceControls';
+import type { JsControlConnection, ResolveBoundDeviceModel } from './deviceControls';
 import { JsFileEffects } from './fileEffects';
 import { JsEncryptedUploadV2Catalog, JsEncryptedUploadV2Host, JsUploadContextExchange } from './encryptedUploadV2';
 import type { JsEncryptedUploadV2Material } from './encryptedUploadV2';
@@ -23,6 +23,7 @@ import type { OpaqueHostHandle } from './contracts';
 declare const performance: { now(): number };
 
 export interface JsDeviceAdapterOptions {
+  resolveBoundDeviceModel?: ResolveBoundDeviceModel;
   fetch?: JsV2Fetch;
   uploadFile?(target: JsRecordingUploadTarget, file: OpaqueHostHandle, context: JsHostContext,
     progress?: (completedBytes: string, totalBytes: string) => void): Promise<void>;
@@ -106,6 +107,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
     for (const listener of listeners.get(event) ?? []) listener(value);
   };
   let deviceControls = new JsDeviceControls({ ports, core, connection: () => connection,
+    resolveBoundDeviceModel: options.resolveBoundDeviceModel,
     emit, gatt: (context, body) => executor.gatt(context, body),
     onCleanupFailure: error => executor.markCleanupFailed(error) });
   const fileEffects = ports.files ? new JsFileEffects(ports.files, ports.persistence.namespace,
@@ -158,6 +160,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
   const closeControls = async (context: JsHostContext) => {
     await deviceControls.close(context);
     deviceControls = new JsDeviceControls({ ports, core, connection: () => connection,
+      resolveBoundDeviceModel: options.resolveBoundDeviceModel,
       emit, gatt: (lease, body) => executor.gatt(lease, body),
       onCleanupFailure: error => executor.markCleanupFailed(error) });
   };
@@ -186,6 +189,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
         try { await disconnectObserver?.remove(); } catch (error) { executor.markCleanupFailed(error); throw error; }
         disconnectObserver = undefined;
         deviceControls = new JsDeviceControls({ ports, core, connection: () => connection,
+          resolveBoundDeviceModel: options.resolveBoundDeviceModel,
           emit, gatt: (lease, body) => executor.gatt(lease, body),
           onCleanupFailure: error => executor.markCleanupFailed(error) });
         connection = { device: initial, generation };
