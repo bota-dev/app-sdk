@@ -8,7 +8,7 @@ Pod::Spec.new do |spec|
   spec.author = "Bota"
   spec.source = {
     http: "https://github.com/bota-dev/app-sdk/releases/download/v2.0.0-beta.19/BotaAppSDK.cocoapods.zip",
-    sha256: "f8d4d70906d1b3022ecbe542c0b606d9d5cd0489c1dd07c4bf0152ada9883231",
+    sha256: "6efc09c0d3e835218e086747826ac16cc167264b4649553c8ed23728f10612f5",
   }
   spec.platforms = { ios: "15.0", osx: "13.0" }
   spec.cocoapods_version = ">= 1.13"

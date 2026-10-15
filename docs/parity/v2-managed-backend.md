@@ -70,6 +70,32 @@ Apple pins/checked manifest, complete exact-main CI/License/49-file preservation
 publication and physical acceptance remain separate pending gates. Native
 compatibility HTTP bodies described above are outside this planner correction.
 
+### Apple checksum and manifest preparation
+
+Canonical branch `37dcf521` passes Rust/tooling and all 511 RN tests in exact
+CI `38821729337`; its License Gate `38821851351` passes. The new pinned Hermes
+result is still pending at this preparation checkpoint.
+
+Source-only `11afdedd` Apple job `116716205790` passes. Its preserved artifact
+transport digest and manifest source/version verify, and its native inputs are
+identical to the canonical branch. Actual archive SHA-256 values are
+`ad00d21ee48249716b5592689df83e6d7f1846ad2cca313ad3976433543393a7`
+(Swift) and `6efc09c0d3e835218e086747826ac16cc167264b4649553c8ed23728f10612f5`
+(CocoaPods). Existing generators refresh only the two checksum pins. The
+Flutter manifest generator refreshes its Apple checksum projection and
+root/Flutter source provenance in the same preparation; all 59 Flutter files,
+their deterministic archive and other metadata remain unchanged. All 23
+Apple-metadata/Flutter-publication tests, generator checks, exact Flutter
+candidate verification and checked-template comparison pass.
+
+| Requirement | Evidence | Status / remaining gate |
+| --- | --- | --- |
+| Stable capture identity reaches creation before session setup | Exact Rust identity fixture; real generated-host existing-V2 conflict case; 511 hosted RN tests | Matched for Rust-generated route; native compatibility HTTP bodies remain separate |
+| Ambiguous ownership cannot create/reopen another V2 row | Existing 409 and `recording_create_unknown` preserved; no later HTTP in fixture | Matched bounded regression; lost-journal recovery remains unimplemented |
+| Shared semantics remain Rust-sourced and portable | Exact Linux artifact, 106 input hashes, canonical provenance and unchanged OS/Codegen contract | Source/canonical tests pass; new 777-check Hermes result pending |
+| Release archives match their checksums | Preserved exact-source Apple archives and generator-only pins/projection; 23 metadata tests | Prepared; all nine fresh main jobs/License/49 files and actual pin reproduction remain required |
+| Publication and real devices have separate acceptance | Private committed-source original RN package; public beta.18 remains baseline | No beta.19 publication, new phone acceptance or device cleanup claimed |
+
 ## October 13 generated-JS root proxy admission (beta.17 preparation)
 
 Some authenticated customer proxies expose `/recordings` directly at the HTTPS
