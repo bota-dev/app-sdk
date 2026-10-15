@@ -4,8 +4,9 @@ October 12, 2026 source migration. Shared SDK behavior remains Rust-sourced.
 
 The October 15 [bound-device-model source correction](bound-device-model.md)
 adds an optional authenticated host hint for legacy generic-model settings
-writes. It changes no installed OS/native contract; canonical regeneration,
-exact-source checks and physical settings acceptance remain separate.
+writes. It changes no installed OS/native contract. Canonical Linux regeneration,
+493 RN tests, 146 Rust/JS comparisons and 768 isolated Node checks pass; fresh
+hosted qualification and physical settings acceptance remain separate.
 
 Unpublished beta.19 targets the physical backlog and lifecycle failures below.
 Shared Rust batches buffered contiguous legacy DATA within 32 KiB; the JS
