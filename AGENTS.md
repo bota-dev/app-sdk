@@ -3,9 +3,9 @@
 October 15 managed-v2 source correction supplies the exact capture UUID and
 generation on Rust-planned recording creation. Existing V2 identity conflicts
 remain a safe refusal; lost app journals are not reconstructed. Exact Linux Rust
-execution/canonical JS, 511 RN tests, normal build/types and licenses pass.
-Source-bound Apple pins/checked manifest are prepared; new Hermes and full main
-qualification remain pending. See the
+execution/canonical JS, 511 RN tests, 146 Rust/JS RPCs, 777 pinned Hermes checks,
+normal build/types and licenses pass. Source-bound Apple pins/checked manifest
+are prepared; full main qualification remains pending. See the
 [scope and evidence](docs/parity/v2-managed-backend.md#october-15-managed-recording-create-identity-correction).
 
 October 15 current follow-up: exact retired-configure cancellation after an

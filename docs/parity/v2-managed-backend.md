@@ -29,7 +29,7 @@ generated-host fixture models the existing backend conflict: it fails against
 the preceding generated core because preparation incorrectly succeeds. Shared
 Node/native and Hermes conformance checks assert all three identity fields for
 root, v1 and dashboard prefixes. The preceding 768-check Hermes result is
-historical; the new canonical core and expanded count remain pending.
+historical; the canonical checkpoint below verifies the expanded 777 checks.
 
 The actual Bota One recording-create proxy preserves both fields and forces its
 authenticated EndUser after an owned-device read. Its existing 23 tests and
@@ -61,20 +61,22 @@ unchanged Codegen contract, package metadata, compiler-free provenance and the
 automatic CRLF checkout changes the unchanged raw JSON vector digest; restoring
 that fixture's exact committed LF bytes produces 511/511 with no tracked fixture
 or test change. The older 768-check result does not qualify this new core;
-new shared conformance adds nine identity checks, with 777 pinned Hermes checks
-still required from a fresh canonical run.
+nine added identity checks bring the new canonical run below to 777 checks.
 
 Reviewed against Upload Management §1.1: exact create identity and safe conflict
-refusal match source/host regressions. New canonical-branch execution, refreshed
-Apple pins/checked manifest, complete exact-main CI/License/49-file preservation,
-publication and physical acceptance remain separate pending gates. Native
+refusal match source/host regressions. Canonical-branch runtime execution passes
+below; actual Apple pin reproduction, complete exact-main CI/License/49-file
+preservation, publication and physical acceptance remain separate pending gates. Native
 compatibility HTTP bodies described above are outside this planner correction.
 
 ### Apple checksum and manifest preparation
 
-Canonical branch `37dcf521` passes Rust/tooling and all 511 RN tests in exact
-CI `38821729337`; its License Gate `38821851351` passes. The new pinned Hermes
-result is still pending at this preparation checkpoint.
+Canonical branch `37dcf521` passes Rust/tooling, all 511 RN tests and the
+JavaScript runtime job in exact CI `38821729337`; its License Gate
+`38821851351` passes. Its fresh logs verify the 3,971,776-byte canonical core,
+source digest `7015d6dc…`, 146 Rust/JS RPCs across all 13 commands and the complete
+BYO batch trace, plus 777 pinned Hermes 0.17 VM/Node checks at 23:17:05 UTC.
+These are exact branch runtime gates, not all-nine main qualification.
 
 Source-only `11afdedd` Apple job `116716205790` passes. Its preserved artifact
 transport digest and manifest source/version verify, and its native inputs are
@@ -92,7 +94,7 @@ candidate verification and checked-template comparison pass.
 | --- | --- | --- |
 | Stable capture identity reaches creation before session setup | Exact Rust identity fixture; real generated-host existing-V2 conflict case; 511 hosted RN tests | Matched for Rust-generated route; native compatibility HTTP bodies remain separate |
 | Ambiguous ownership cannot create/reopen another V2 row | Existing 409 and `recording_create_unknown` preserved; no later HTTP in fixture | Matched bounded regression; lost-journal recovery remains unimplemented |
-| Shared semantics remain Rust-sourced and portable | Exact Linux artifact, 106 input hashes, canonical provenance and unchanged OS/Codegen contract | Source/canonical tests pass; new 777-check Hermes result pending |
+| Shared semantics remain Rust-sourced and portable | Exact Linux artifact, 106 input hashes, canonical provenance, 146 RPCs/777 Hermes checks and unchanged OS/Codegen contract | Matched canonical branch; exact-main qualification remains required |
 | Release archives match their checksums | Preserved exact-source Apple archives and generator-only pins/projection; 23 metadata tests | Prepared; all nine fresh main jobs/License/49 files and actual pin reproduction remain required |
 | Publication and real devices have separate acceptance | Private committed-source original RN package; public beta.18 remains baseline | No beta.19 publication, new phone acceptance or device cleanup claimed |
 
