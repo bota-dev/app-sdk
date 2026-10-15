@@ -36,6 +36,7 @@ import type {
 } from '../models/Device';
 import type { DeviceManagerEvents } from '../models/Status';
 import { DeviceError, ProvisioningError } from '../utils/errors';
+import { logger } from '../utils/logger';
 
 type Subscription = { remove(): void };
 
@@ -494,7 +495,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     );
     await promise;
     return idempotentRemoval(() => {
-      void this.removeExpected(this.logSubscriptions, device.id, promise);
+      this.observeLogRemoval(this.removeExpected(this.logSubscriptions, device.id, promise));
     });
   }
 
@@ -661,7 +662,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
       void this.removeOwned(this.wifiStatusSubscriptions, deviceId);
     }
     for (const [deviceId] of this.logSubscriptions) {
-      void this.removeOwned(this.logSubscriptions, deviceId);
+      this.observeLogRemoval(this.removeOwned(this.logSubscriptions, deviceId));
     }
     for (const [deviceId] of this.recordingStateSubscriptions) {
       void this.removeOwned(this.recordingStateSubscriptions, deviceId);
@@ -707,8 +708,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
         .catch(() => undefined);
       void this.removeOwned(this.wifiStatusSubscriptions, device.id)
         .catch(() => undefined);
-      void this.removeOwned(this.logSubscriptions, device.id)
-        .catch(() => undefined);
+      this.observeLogRemoval(this.removeOwned(this.logSubscriptions, device.id));
       void this.removeOwned(this.recordingStateSubscriptions, device.id)
         .catch(() => undefined);
       this.emit('connectionStateChanged', device.id, 'disconnected');
@@ -835,7 +835,9 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     deviceId: string,
     next: Promise<BotaAsyncEventSubscription>
   ): Promise<BotaAsyncEventSubscription> {
-    void this.removeOwned(owner, deviceId);
+    const removal = this.removeOwned(owner, deviceId);
+    if (owner === this.logSubscriptions) this.observeLogRemoval(removal);
+    else void removal;
     owner.set(deviceId, next);
     void next.catch(() => {
       if (owner.get(deviceId) === next) owner.delete(deviceId);
@@ -861,6 +863,10 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     if (!subscription) return;
     owner.delete(deviceId);
     await (await subscription).remove();
+  }
+
+  private observeLogRemoval(removal: Promise<void>): void {
+    void removal.catch(error => logger.error('Failed to remove device log subscription', asError(error)));
   }
 
   private assertAlive(): void {

@@ -1,5 +1,11 @@
 # React Native generated JavaScript runtime and OTA boundary
 
+The unpublished [retired diagnostic cleanup correction](retired-log-cleanup.md)
+prevents stale log STOP writes and false cleanup uncertainty during scope
+retirement. Submitted IO and captured subscription removal stay joined; genuine
+cleanup failures remain visible. Fresh source and physical qualification remain
+separate from publication.
+
 October 12, 2026 source migration. Shared SDK behavior remains Rust-sourced.
 
 The current [configure-retirement diagnostic follow-up](configure-retirement.md)

@@ -53,6 +53,85 @@ function controlFixture(options = {}) {
   return { ...f, settings, gate };
 }
 
+test('actual runtime log unsubscribe joins scope-retired STOP and destruction without false cleanup failure', { timeout: 5000 }, async () => {
+  const scope = new AbortController(), f = controlFixture({ signal: scope.signal });
+  const submitted = f.gate(), removed = f.gate();
+  const write = f.ports.ble.write;
+  f.ports.ble.write = async (...args) => {
+    await write(...args);
+    if (args[0].characteristicUuid === f.metadata.CHAR_DEVICE_LOG_CONTROL && args[1][0] === 0) {
+      submitted.enter(); await submitted.pending;
+    }
+  };
+  f.ports.ble.subscribe = async address => ({ async remove() {
+    if (address.characteristicUuid === f.metadata.CHAR_DEVICE_LOG_DATA) {
+      removed.enter(); await removed.pending;
+    }
+  } });
+  const { createBotaReactNativeJsRuntime } = loadSource('../runtime.ts');
+  const runtime = createBotaReactNativeJsRuntime(f.ports);
+  let destruction;
+  try {
+    await runtime.client.configure({ logLevel: 'none' });
+    const device = await runtime.client.devices.connect({ id: 'selected', rssi: -50, discoveredAt: new Date(0) });
+    const subscription = await runtime.sdk.logs.subscribe(device, () => {});
+    const unsubscribing = subscription.remove();
+    const cancelled = assert.rejects(unsubscribing, error => ['scope_changed', 'operation_cancelled', 'stale_host_owner'].includes(error.code));
+    await submitted.entered;
+    scope.abort();
+    let settled = false;
+    destruction = runtime.client.destroy().finally(() => { settled = true; });
+    void destruction.catch(() => {});
+    submitted.release(); await removed.entered;
+    assert.equal(settled, false, 'destroy must join the captured monitor removal');
+    removed.release(); await cancelled; await destruction;
+    assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'disconnect').length, 1);
+  } finally {
+    submitted.release(); removed.release();
+    await destruction?.catch(() => {}); await runtime.client.destroy().catch(() => {});
+    await f.adapter.destroy(); f.core.dispose();
+  }
+});
+
+test('real DeviceManager observes retired log removals and preserves genuine cleanup failures', { timeout: 5000 }, async () => {
+  for (const mode of ['unsubscribe', 'destroy', 'remove-failure', 'remove-cancelled-failure', 'remove-scope_changed-failure', 'disconnect-failure']) {
+    const scope = new AbortController(), f = controlFixture({ signal: scope.signal }), submitted = f.gate();
+    const failure = Object.assign(new Error(`synthetic ${mode}`), {
+      code: mode === 'remove-cancelled-failure' ? 'cancelled' : mode === 'remove-scope_changed-failure' ? 'scope_changed' : 'cleanup_incomplete' });
+    const write = f.ports.ble.write;
+    f.ports.ble.write = async (...args) => {
+      await write(...args);
+      if (args[0].characteristicUuid === f.metadata.CHAR_DEVICE_LOG_CONTROL && args[1][0] === 0) {
+        submitted.enter(); await submitted.pending;
+      }
+    };
+    f.ports.ble.subscribe = async address => ({ async remove() {
+      if (mode.startsWith('remove-') && address.characteristicUuid === f.metadata.CHAR_DEVICE_LOG_DATA) throw failure;
+    } });
+    if (mode === 'disconnect-failure') f.ports.ble.disconnect = async () => { throw failure; };
+    const { createBotaReactNativeJsRuntime } = loadSource('../runtime.ts');
+    const runtime = createBotaReactNativeJsRuntime(f.ports), logs = [];
+    let destruction;
+    try {
+      await runtime.client.configure({ logLevel: 'debug' });
+      runtime.client.setLogHandler(entry => logs.push(entry));
+      const device = await runtime.client.devices.connect({ id: 'selected', rssi: -50, discoveredAt: new Date(0) });
+      const unsubscribe = await runtime.client.devices.subscribeToDeviceLogs(device, () => {});
+      if (mode !== 'destroy') { unsubscribe(); await submitted.entered; }
+      scope.abort();
+      destruction = runtime.client.destroy(); void destruction.catch(() => {});
+      submitted.release();
+      if (mode.endsWith('failure')) await assert.rejects(destruction, error => error === failure);
+      else await destruction;
+      await new Promise(resolve => setImmediate(resolve));
+      if (mode.startsWith('remove-')) assert(logs.some(entry => entry.level === 'error' && entry.message.includes('device log subscription')));
+    } finally {
+      submitted.release(); await destruction?.catch(() => {}); await runtime.client.destroy().catch(() => {});
+      runtime.client.setLogHandler(null); await f.adapter.destroy(); f.core.dispose();
+    }
+  }
+});
+
 test('reconnect joins timed-out late connection IO and exact disconnect before verifying the next candidate', { timeout: 5000 }, async () => {
   for (const holdDisconnect of [false, true]) {
   const f = controlFixture(), connecting = f.gate(), disconnecting = f.gate();

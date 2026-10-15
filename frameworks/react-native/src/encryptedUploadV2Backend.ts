@@ -4,6 +4,37 @@ import type { ConnectedDevice } from './models/Device';
 import { requireUploadBackend } from './runtimeAdapter';
 import type { BotaUploadBackendAdapter } from './runtimeAdapter';
 
+const PREPARE_ERROR_CODES = new Set([
+  'BOTA_UPLOAD_INVALID_INPUT', 'BOTA_UPLOAD_IDENTITY_CONFLICT', 'BOTA_UPLOAD_JOURNAL',
+  'BOTA_UPLOAD_INVALID_DOCUMENT', 'BOTA_UPLOAD_PENDING', 'BOTA_UPLOAD_EXPIRED',
+  'BOTA_UPLOAD_STATE', 'BOTA_UPLOAD_TRANSPORT',
+]);
+type PrepareDiagnostic = Error & { code: string; operation: string; status?: number };
+
+function prepareDiagnostic(error: unknown): PrepareDiagnostic | undefined {
+  try {
+    if (!error || typeof error !== 'object') return undefined;
+    const { code: rawCode, status, message } = error as { code?: unknown; status?: unknown; message?: unknown };
+    const code = typeof rawCode === 'string' && (PREPARE_ERROR_CODES.has(rawCode) || /^BOTA_UPLOAD_HTTP_[1-5][0-9]{2}$/.test(rawCode))
+      ? rawCode : typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 && message === `BOTA_UPLOAD_HTTP_${status}`
+        ? `BOTA_UPLOAD_HTTP_${status}` : undefined;
+    if (!code) return undefined;
+    return Object.assign(new Error(`Encrypted upload preparation failed (${code})`), {
+      code, operation: 'PrepareEncryptedUploadV2',
+      ...(/^BOTA_UPLOAD_HTTP_[1-5][0-9]{2}$/.test(code) ? { status: Number(code.slice(-3)) } : {}),
+    });
+  } catch { return undefined; }
+}
+
+function isMaterialRejection(error: unknown): boolean {
+  try {
+    if (!error || typeof error !== 'object') return false;
+    const { code, operation } = error as { code?: unknown; operation?: unknown };
+    return code === 'application_material_rejected' &&
+      ['EncryptedUploadV2', 'PrepareEncryptedUploadV2', 'TransferRecording'].includes(operation as string);
+  } catch { return false; }
+}
+
 export interface EncryptedUploadV2BackendOptions {
   /** Customer-authenticated HTTPS proxy exposing the v2 routes at its root or a path prefix. */
   baseUrl: string;
@@ -66,6 +97,8 @@ export function createManagedEncryptedUploadV2Backend(
       let selected: (BotaEncryptedUploadV2ProfileDecision & { recordingId: string }) | undefined;
       let cancelTask: Promise<void> | undefined;
       let completed = false;
+      let providerRevision = 0;
+      let preparationFailure: PrepareDiagnostic | undefined;
       const check = () => {
         if (disposed || signal.signal.aborted || config.signal.aborted || target.signal?.aborted) {
           throw new Error('Encrypted upload cancelled');
@@ -104,7 +137,10 @@ export function createManagedEncryptedUploadV2Backend(
             throw new Error('Encrypted upload operation changed');
           }
           operationId = context.operationId;
-          const value: unknown = JSON.parse(await native.prepare(JSON.stringify({
+          const revision = ++providerRevision;
+          preparationFailure = undefined;
+          let prepared: string;
+          try { prepared = await native.prepare(JSON.stringify({
             operationId,
             scope: { apiOrigin, apiBasePath: path, scopeKey: config.scopeKey,
               accountId: config.accountId, projectId: config.projectId, endUserId: config.endUserId,
@@ -128,7 +164,12 @@ export function createManagedEncryptedUploadV2Backend(
             ...(target.priorUpload === undefined ? {} : { priorJournalEntry: {
               recordingId: target.priorUpload.recordingId, sessionId: target.priorUpload.sessionId,
               ownerRevision: target.priorUpload.ownerRevision } }),
-          })));
+          })); }
+          catch (error) {
+            if (revision === providerRevision) preparationFailure = prepareDiagnostic(error);
+            throw error;
+          }
+          const value: unknown = JSON.parse(prepared);
           check();
           const result = value as NonNullable<typeof selected>;
           if (!result || result.profile !== 'encrypted_upload_v2' ||
@@ -149,6 +190,14 @@ export function createManagedEncryptedUploadV2Backend(
         await native.complete(operationId);
         completed = true;
         return { recordingId: selected.recordingId };
+      } catch (error) {
+        if (preparationFailure && isMaterialRejection(error)) {
+          // Reuse the existing joined cancellation; cleanup errors must stay visible.
+          await cancel();
+          if (disposed || config.signal.aborted || target.signal?.aborted) throw new Error('Encrypted upload cancelled');
+          throw preparationFailure;
+        }
+        throw error;
       } finally {
         // Native complete already releases the operation. A later bridge cancellation
         // failure must not turn confirmed device cleanup into a retryable sync failure.

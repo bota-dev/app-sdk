@@ -243,7 +243,7 @@ CI `37078793682` and License Gate `37078793554` pass at `344cd2e`; see the
 | Lost PUT response does not cause another upload | Native manifest replay tests and registry manifest/lease validation tests | Native host/registry CI passes; physical interruption checks remain unverified |
 | Account changes reject late work | Captured scope, AbortSignal, fresh credential requests, cancel/dispose tests | JS/native cancellation suites pass |
 | Cloud commitment and device cleanup are distinct | Native receipt validation/CONFIRM unchanged; journal completion delayed | Host suites pass; device power-loss qualification not run |
-| No opaque artifacts or audio in JS | Metadata projection and native material registry | Codegen/type checks and linked packaged consumers pass |
+| Historical native compatibility path keeps opaque artifacts and audio outside JS | Metadata projection and native material registry | Codegen/type checks and linked packaged consumers pass; generated-JS ciphertext handling has its separate runtime boundary |
 | Existing custom integrations remain valid | Optional native callback defaults to old decision provider | Existing suite and native CI pass |
 
 The first CI pass caught a file-check ordering regression: provider callbacks
@@ -255,3 +255,45 @@ The change does not claim cross-channel deduplication, a new async API, physical
 parity, streaming-v2, or release-gate enablement. The standalone Apple/Android
 facades keep their custom-provider integration; this packaged HTTP convenience
 entry point is currently React Native only.
+## October 15 managed-prepare diagnostic preservation
+
+The managed backend now retains an allowlisted, neutral diagnostic from its own
+prepare call when the public client subsequently rejects that profile as
+`application_material_rejected`. Only known managed-upload codes or an exact
+canonical HTTP status marker are retained, with the fixed operation
+`PrepareEncryptedUploadV2`. Provider messages, bodies, details, causes, tokens
+and signed material are excluded. An existing material rejection alone still
+does not establish an HTTP status or backend cause.
+
+The diagnostic belongs to one sync invocation and its latest profile request.
+An older provider completion cannot overwrite a later request. Substitution
+requires an exact structured material rejection at a known encrypted-upload
+operation; unrelated cancellation, protocol and cleanup failures remain intact.
+The wrapper joins its existing coalesced cancellation before substitution and
+rechecks external scope, caller and disposal state. No retry, journal, receipt,
+CONFIRM, identity or authorization rule changes.
+
+Seven composed host groups pass with the real public recording client and
+managed wrapper. They cover recognized/redacted errors, malformed/unknown and
+foreign-operation refusal, separate invocations, out-of-order profile requests,
+scope/caller cancellation during joined cleanup, and cleanup-failure precedence.
+The generated-core HTTP409 case makes one exact identity-bearing create POST,
+preserves `recording_create_unknown`, and performs no session create or PUT.
+The preceding implementation loses the useful diagnostic in the red fixtures.
+
+| Requirement | Evidence | Status |
+| --- | --- | --- |
+| Preserve bounded managed failure without exporting provider material | Real client/provider composed fixtures and canonical HTTP conflict | matched locally |
+| Diagnostic cannot cross invocation/request ownership | Separate-invocation and reordered profile-request fixtures | matched locally |
+| Keep cancellation, cleanup and commitment policy | Joined cancel, external abort and cleanup failure cases; existing confirmation gates unchanged | matched locally |
+| Explain the earlier phone's actual HTTP failure | Historical terminal code was already discarded | unverified; no inferred HTTP409 |
+| Published package and fresh normal-app success | Final exact-source qualification and phone run remain separate | open |
+
+This is a TypeScript host diagnostic correction. Rust/generated core and native
+contracts are unchanged. Local fixtures do not recover an uninstalled native
+journal or establish cloud commitment, device cleanup or physical acceptance.
+
+The frozen combined successor passes all 522 RN checks, normal module/CommonJS/
+declaration builds, strict types, Codegen, compiler-free core provenance, package
+metadata and the 33-package license gate. Exact main CI, preserved archives,
+publication and fresh normal-app acceptance remain separate gates.

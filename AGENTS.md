@@ -1,5 +1,20 @@
 # AGENTS.md
 
+Managed encrypted-upload preparation preserves only an allowlisted neutral
+diagnostic when its own latest provider request becomes an exact structured
+material rejection. Cancellation, cleanup failures and ownership stay fenced;
+no HTTP cause is inferred from the old material-rejection code. Seven composed
+host groups pass; final package/phone qualification remain separate. See
+[diagnostic scope](docs/parity/v2-managed-backend.md#october-15-managed-prepare-diagnostic-preservation).
+
+October 15 diagnostic cleanup source correction skips log STOP before submission
+when its exact scope or physical connection retires, while joining submitted
+STOP and captured monitor release. Real removal/disconnect failures remain
+visible and cached. Log-only void callbacks now observe rejections. All 522 RN
+checks, normal build/types, Codegen/provenance and licenses pass locally;
+successor qualification and normal diagnostic teardown
+remain separate. See [requirements and evidence](docs/parity/retired-log-cleanup.md).
+
 October 15 managed-v2 source correction supplies the exact capture UUID and
 generation on Rust-planned recording creation. Existing V2 identity conflicts
 remain a safe refusal; lost app journals are not reconstructed. Exact Linux Rust

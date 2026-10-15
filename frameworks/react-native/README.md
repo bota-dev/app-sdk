@@ -2,6 +2,11 @@
 
 ## Generated JavaScript runtime and app OTA updates
 
+The unpublished [diagnostic cleanup correction](../../docs/parity/retired-log-cleanup.md)
+skips unsubmitted log STOP after retirement, joins submitted writes and captured
+monitors, and observes void log-removal rejections. Genuine cleanup failures
+remain visible; fresh qualification and phone teardown remain separate.
+
 The unpublished configure-retirement follow-up logs debug only when exact
 cancelled initialization belongs to an admitted destroy and cleanup succeeds.
 Rejection/error events and genuine failures remain unchanged. See the
@@ -26,10 +31,11 @@ Rust permits this fallback only for legacy GATT model `BOTA_DEV`, rejects
 conflicts and preserves Note cellular normalization. See the
 [qualification boundary](../../docs/parity/bound-device-model.md).
 
-Candidate beta.18 corrects Android MTU observation in the BLE PLX OS port.
-Its generated JS and all 480 RN tests pass; main qualification and protected
-publication remain required. This correction uses BLE PLX 3.5.1's existing
-installed API. See the [candidate review](../../release/evidence/2.0.0-beta.18-preflight.md).
+Published beta.18 corrects Android MTU observation in the BLE PLX OS port using
+BLE PLX 3.5.1's existing installed API. Its accepted main qualification,
+protected publication and public consumer checks pass; see the
+[publication evidence](../../release/evidence/2.0.0-beta.18-publication.md)
+and dated [preflight](../../release/evidence/2.0.0-beta.18-preflight.md).
 
 Published beta.17 adds `deriveSyncStatus`, `UPLOAD_RECOVERY_VERSION` and
 `readClientPresenceObservation` to `/runtime`. Use the generated runtime's

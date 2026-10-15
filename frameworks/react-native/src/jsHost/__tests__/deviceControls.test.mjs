@@ -23,7 +23,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function fixture(overrides = {}, scope = {}) {
+function fixture(overrides = {}, scope = {}, gatt = (_context, body) => body()) {
   const calls = [];
   const codecCalls = [];
   const subscribers = new Map();
@@ -93,7 +93,7 @@ function fixture(overrides = {}, scope = {}) {
     },
   };
   const controls = new JsDeviceControls({ core, ports: { ble, persistence: { namespace: 'test/customer' }, ...scope }, connection: () => current,
-    emit: (event, value) => events.push({ event, value }), gatt: (_context, body) => body(),
+    emit: (event, value) => events.push({ event, value }), gatt,
     onCleanupFailure(error, context) { cleanupFailures.push({ error, context }); cleanupFailed.resolve(error); } });
   return { controls, core, ble, calls, codecCalls, context, controller, subscribers, events, cleanupFailures, cleanupFailed,
     setConnection(next) { current = next; } };
@@ -280,6 +280,51 @@ test('close uses its current lease for log STOP and never writes STOP to a repla
     assert.deepEqual(writes.map(call => call[2]), replace ? [[102]] : [[102], [103]]);
     assert.equal(f.calls.filter(call => call[0] === 'remove').length, 1);
   }
+});
+
+test('retired log cleanup skips a queued STOP and joins a previously submitted STOP without poisoning release', async () => {
+  for (const phase of ['queued', 'submitted']) {
+    const scope = new AbortController(), held = deferred(), entered = deferred();
+    let stopping = false;
+    const f = fixture({}, { signal: scope.signal }, async (_context, body) => {
+      if (stopping && phase === 'queued') { entered.resolve(); await held.promise; }
+      return body();
+    });
+    await f.controls.execute('startDeviceLogs', [device], f.context);
+    const write = f.ble.write;
+    f.ble.write = async (...args) => {
+      const result = await write(...args);
+      if (args[1][0] === 103 && phase === 'submitted') { entered.resolve(); await held.promise; }
+      return result;
+    };
+    stopping = true;
+    const stopped = f.controls.execute('stopDeviceLogs', [], { ...f.context, operation: 'stopDeviceLogs' });
+    void stopped.catch(() => {});
+    await entered.promise;
+    scope.abort();
+    const closing = f.controls.close();
+    held.resolve();
+    await Promise.all([stopped, closing]);
+    assert.deepEqual(f.calls.filter(call => call[0] === 'write').map(call => call[2]),
+      phase === 'queued' ? [[102]] : [[102], [103]]);
+    assert.equal(f.calls.filter(call => call[0] === 'remove').length, 1);
+    assert.equal(f.cleanupFailures.length, 0);
+  }
+});
+
+test('scope retirement retains a genuine submitted log STOP failure and still joins its exact monitor', async () => {
+  const scope = new AbortController(), entered = deferred(), held = deferred();
+  const f = fixture({}, { signal: scope.signal });
+  await f.controls.execute('startDeviceLogs', [device], f.context);
+  const failure = new Error('submitted log STOP failed');
+  f.ble.write = async () => { entered.resolve(); await held.promise; throw failure; };
+  const stopping = f.controls.execute('stopDeviceLogs', [], f.context);
+  const rejected = assert.rejects(stopping, error => error === failure);
+  await entered.promise; scope.abort();
+  const closed = f.controls.close();
+  held.resolve(); await Promise.all([rejected, closed]);
+  assert.equal(f.calls.filter(call => call[0] === 'remove').length, 1);
+  assert.equal(f.cleanupFailures[0].error, failure);
 });
 
 test('diagnostic LIST subscribes before command, waits for Rust completion, and resets the exact decoder', async () => {

@@ -478,12 +478,15 @@ export class JsDeviceControls {
       try {
         if (key === 'logs' && cleanupContext) {
           const context = { ...cleanupContext, signal: new AbortController().signal };
-          const current = this.options.connection();
-          if (current?.generation === owner.connection.generation
-            && current.device.id === owner.connection.device.id
-            && current.device.serialNumber === owner.connection.device.serialNumber) {
-            await this.writeEncoded('encodeDeviceLogControl', { enabled: false }, 'SERVICE_BOTA_DIAGNOSTICS', 'CHAR_DEVICE_LOG_CONTROL', owner.connection, context);
-          }
+          const command = bytes(this.codec('encodeDeviceLogControl', { enabled: false }));
+          try {
+            if (this.ownsLogStop(owner.connection)) await this.options.gatt(context, async () => {
+              // The scope or physical owner may retire while this cleanup waits
+              // for the shared GATT lane. Only a submitted write must settle.
+              if (this.ownsLogStop(owner.connection)) await this.options.ports.ble.write(
+                this.address('SERVICE_BOTA_DIAGNOSTICS', 'CHAR_DEVICE_LOG_CONTROL', owner.connection), command, true, context);
+            });
+          } finally { command.fill(0); }
         }
       } catch (error) {
         this.markCleanupFailure(error, cleanupContext ?? owner.context);
@@ -506,6 +509,16 @@ export class JsDeviceControls {
       }
     })();
     return owner.cleanup;
+  }
+
+  private ownsLogStop(connection: JsControlConnection): boolean {
+    if (this.scopeInvalidated || this.scopeSignal?.aborted || this.options.ports.persistence.namespace !== this.namespace) return false;
+    try { this.scopeCheck?.(); }
+    catch { this.invalidateScope(); return false; }
+    const current = this.options.connection();
+    return !this.scopeInvalidated && !this.scopeSignal?.aborted && this.options.ports.persistence.namespace === this.namespace
+      && current?.generation === connection.generation && current.device.id === connection.device.id
+      && current.device.serialNumber === connection.device.serialNumber;
   }
 
   private markCleanupFailure(error: unknown, context?: JsHostContext): void {
