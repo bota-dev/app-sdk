@@ -19,6 +19,7 @@ function fixture(options = {}) {
   ]);
   const unusedFile = async () => { throw new Error('Unexpected file IO'); };
   const ports = { apiVersion: 1, platform: 'ios', randomBytes: length => Uint8Array.from({ length }, (_, index) => index + 1),
+    ...(options.signal ? { signal: options.signal } : {}),
     ...(options.files ? { files: { open: unusedFile, metadata: unusedFile, append: unusedFile, truncate: unusedFile,
       read: unusedFile, finalize: unusedFile, remove: unusedFile, ...options.files } } : {}),
     ...(options.network ? { network: options.network } : {}),
@@ -38,6 +39,203 @@ function fixture(options = {}) {
 }
 const writesBeyondTimeSync = f => f.calls.filter(call => Array.isArray(call) && call[0] === 'write'
   && call[1].characteristicUuid !== f.metadata.CHAR_TIME_SYNC);
+
+function controlFixture(options = {}) {
+  const f = fixture(options);
+  f.values.set(f.metadata.CHAR_DEVICE_STATUS, Buffer.from('3200000200000000290004000163', 'hex'));
+  const settings = f.core.codec('decodeConnectionSettings', { bytes: [2, 3, 1, 2, 3, 18, 18, 0, 60, 131, 0, 0] });
+  const gate = () => {
+    let release, enter;
+    const entered = new Promise(resolve => { enter = resolve; });
+    const pending = new Promise(resolve => { release = resolve; });
+    return { entered, pending, release, enter };
+  };
+  return { ...f, settings, gate };
+}
+
+test('real DeviceManager watchdog startup orders initial reads and settings behind monitor readiness', { timeout: 5000 }, async () => {
+  const f = controlFixture();
+  const monitor = f.gate();
+  const subscribe = f.ports.ble.subscribe;
+  f.ports.ble.subscribe = async (...args) => {
+    if (args[0].characteristicUuid === f.metadata.CHAR_DEVICE_STATUS) { monitor.enter(); await monitor.pending; }
+    return subscribe(...args);
+  };
+  const { createBotaReactNativeJsRuntime } = loadSource('../runtime.ts');
+  const runtime = createBotaReactNativeJsRuntime(f.ports);
+  let reading, writing;
+  try {
+    await runtime.client.configure({ logLevel: 'none' });
+    const device = await runtime.client.devices.connect({ id: 'selected', rssi: -50, discoveredAt: new Date(0) });
+    runtime.client.devices.enableAutoReconnect(device.serialNumber);
+    await monitor.entered;
+    reading = runtime.client.devices.getStatus(device);
+    writing = runtime.client.devices.writeConnectionSettings(device, {
+      enabled_connections: { wifi: true, cellular: true },
+      heartbeat_enabled_connections: { wifi: true, cellular: true },
+      upload_network_preference: ['wifi', 'ble', 'cellular'],
+      power_management: { cellular_idle_timeout_seconds: 180, wifi_idle_timeout_seconds: 180 },
+      streaming_enabled: false, streaming_flush_interval_seconds: 60,
+    });
+    // Both failures are observed immediately on the preceding single-claim implementation.
+    void reading.catch(() => {}); void writing.catch(() => {});
+    monitor.release();
+    const [status] = await Promise.all([reading, writing]);
+    assert.equal(status.batteryLevel, 50);
+    assert.equal(writesBeyondTimeSync(f).filter(call => call[1].characteristicUuid === f.metadata.CHAR_DEVICE_SETTINGS).length, 1);
+  } finally {
+    monitor.release(); await Promise.allSettled([reading, writing]);
+    await runtime.client.destroy(); await f.adapter.destroy(); f.core.dispose();
+  }
+});
+
+test('ordinary control FIFO captures mutation arguments and orders read settings and subscription IO', { timeout: 5000 }, async () => {
+  const f = controlFixture();
+  const held = f.gate();
+  const read = f.ports.ble.read;
+  f.ports.ble.read = async (...args) => {
+    if (args[0].characteristicUuid === f.metadata.CHAR_DEVICE_STATUS) { held.enter(); await held.pending; }
+    return read(...args);
+  };
+  let reading, writing, watching;
+  try {
+    await f.adapter.configure({});
+    const device = await f.adapter.connectSelected({ id: 'selected', rssi: -50, discoveredAtMs: 0 });
+    reading = f.adapter.readStatus(); await held.entered;
+    const requested = { ...device }, settings = structuredClone(f.settings);
+    writing = f.adapter.writeConnectionSettings(requested, settings);
+    watching = f.adapter.startStatusUpdates();
+    void writing.catch(() => {}); void watching.catch(() => {});
+    requested.id = 'foreign'; requested.serialNumber = 'OTHERDEVICE'; settings.enabledConnections.wifi = false;
+    assert.equal(writesBeyondTimeSync(f).length, 0);
+    held.release(); await Promise.all([reading, writing, watching]);
+    const writes = writesBeyondTimeSync(f).filter(call => call[1].characteristicUuid === f.metadata.CHAR_DEVICE_SETTINGS);
+    assert.equal(writes.length, 1);
+    assert.deepEqual(writes[0][2], f.core.codec('encodeConnectionSettings', { settings: f.settings, model: 'note' }));
+    assert.equal(writes[0][1].peripheralId, 'selected');
+  } finally { held.release(); await Promise.allSettled([reading, writing, watching]); await f.adapter.destroy(); f.core.dispose(); }
+});
+
+test('ordinary controls refuse a workflow at submission even when it finishes before the next microtask', { timeout: 5000 }, async () => {
+  const f = controlFixture();
+  try {
+    await f.adapter.configure({});
+    const device = await f.adapter.connectSelected({ id: 'selected', rssi: -50, discoveredAtMs: 0 });
+    await f.adapter.startScan(10_000, false);
+    const rejected = assert.rejects(f.adapter.syncTime(device), { code: 'operation_in_progress' });
+    await f.adapter.stopScan(); await rejected;
+    assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'write').length, 1);
+  } finally { await f.adapter.destroy(); f.core.dispose(); }
+});
+
+test('ordinary controls cannot queue behind connection identity adoption', { timeout: 5000 }, async () => {
+  const f = controlFixture(); const held = f.gate(); const write = f.ports.ble.write;
+  f.ports.ble.write = async (...args) => {
+    if (args[0].characteristicUuid === f.metadata.CHAR_TIME_SYNC) { held.enter(); await held.pending; }
+    return write(...args);
+  };
+  let connecting;
+  try {
+    await f.adapter.configure({});
+    connecting = f.adapter.connectSelected({ id: 'selected', rssi: -50, discoveredAtMs: 0 });
+    await held.entered;
+    const rejected = assert.rejects(f.adapter.syncTime({ id: 'selected', serialNumber: 'C8SU2XXWHI' }), { code: 'operation_in_progress' });
+    held.release(); await connecting; await rejected;
+    assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'write').length, 1);
+  } finally { held.release(); await connecting?.catch(() => {}); await f.adapter.destroy(); f.core.dispose(); }
+});
+
+test('ordinary control admission bounds pending work while preserving every accepted call', { timeout: 5000 }, async () => {
+  const f = controlFixture(); const held = f.gate(); const read = f.ports.ble.read;
+  f.ports.ble.read = async (...args) => {
+    if (args[0].characteristicUuid === f.metadata.CHAR_DEVICE_STATUS) { held.enter(); await held.pending; }
+    return read(...args);
+  };
+  let reading; const queued = [];
+  try {
+    await f.adapter.configure({});
+    const device = await f.adapter.connectSelected({ id: 'selected', rssi: -50, discoveredAtMs: 0 });
+    reading = f.adapter.readStatus(); await held.entered;
+    for (let index = 0; index < 32; index++) queued.push(f.adapter.syncTime(device));
+    await assert.rejects(f.adapter.syncTime(device), { code: 'operation_in_progress' });
+    assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'write').length, 1);
+    held.release(); await Promise.all([reading, ...queued]);
+    assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'write').length, 33);
+  } finally { held.release(); await Promise.allSettled([reading, ...queued]); await f.adapter.destroy(); f.core.dispose(); }
+});
+
+test('disconnect destroy and logout reject queued writes and STOP before joining ignored active cancellation', { timeout: 5000 }, async () => {
+  for (const mode of ['disconnect', 'destroy', 'logout']) {
+    const scope = new AbortController();
+    const f = controlFixture({ signal: scope.signal }); const held = f.gate(); const read = f.ports.ble.read;
+    f.ports.ble.read = async (...args) => {
+      if (args[0].characteristicUuid === f.metadata.CHAR_DEVICE_STATUS) { held.enter(); await held.pending; }
+      return read(...args);
+    };
+    let reading, teardown;
+    try {
+      await f.adapter.configure({});
+      const device = await f.adapter.connectSelected({ id: 'selected', rssi: -50, discoveredAtMs: 0 });
+      await f.adapter.startStatusUpdates();
+      reading = f.adapter.readStatus(); const readRejected = assert.rejects(reading); await held.entered;
+      const code = mode === 'logout' ? 'scope_changed' : 'operation_cancelled';
+      const writeRejected = assert.rejects(f.adapter.writeConnectionSettings(device, f.settings), { code });
+      const stopRejected = assert.rejects(f.adapter.stopStatusUpdates(), { code });
+      let settled = false;
+      if (mode === 'logout') scope.abort();
+      teardown = (mode === 'disconnect' ? f.adapter.disconnect() : f.adapter.destroy()).then(() => { settled = true; });
+      await Promise.all([writeRejected, stopRejected]);
+      assert.equal(settled, false, `${mode} must still join the submitted read`);
+      assert.equal(writesBeyondTimeSync(f).length, 0);
+      held.release(); await teardown; await readRejected;
+      assert.equal(settled, true);
+    } finally { held.release(); await Promise.allSettled([reading, teardown]); await f.adapter.destroy(); f.core.dispose(); }
+  }
+});
+
+test('physical generation loss rejects queued mutations before a replacement can reuse the same peripheral', { timeout: 5000 }, async () => {
+  const f = controlFixture(); const held = f.gate(); const read = f.ports.ble.read;
+  let onDisconnect;
+  f.ports.ble.observeDisconnect = async (_id, callback) => { onDisconnect = callback; return { async remove() {} }; };
+  f.ports.ble.read = async (...args) => {
+    if (args[0].characteristicUuid === f.metadata.CHAR_DEVICE_STATUS) { held.enter(); await held.pending; }
+    return read(...args);
+  };
+  let reading;
+  try {
+    await f.adapter.configure({});
+    const device = await f.adapter.connectSelected({ id: 'selected', rssi: -50, discoveredAtMs: 0 });
+    const oldDisconnect = onDisconnect;
+    reading = f.adapter.readStatus(); const rejected = assert.rejects(reading); await held.entered;
+    const writeRejected = assert.rejects(f.adapter.writeConnectionSettings(device, f.settings), { code: 'operation_cancelled' });
+    oldDisconnect(); await writeRejected;
+    assert.equal(writesBeyondTimeSync(f).length, 0);
+    held.release(); await rejected;
+    const replacement = await f.adapter.connectSelected({ id: 'selected', rssi: -50, discoveredAtMs: 0 });
+    oldDisconnect(); await f.adapter.syncTime(replacement);
+    assert.equal(writesBeyondTimeSync(f).length, 0);
+  } finally { held.release(); await reading?.catch(() => {}); await f.adapter.destroy(); f.core.dispose(); }
+});
+
+test('uncertain ordinary cleanup poisons queued and future controls without replaying mutations', { timeout: 5000 }, async () => {
+  const f = controlFixture(); const held = f.gate(); const read = f.ports.ble.read;
+  const failure = Object.assign(new Error('Submitted read ownership uncertain'), { code: 'cleanup_incomplete' });
+  f.ports.ble.read = async (...args) => {
+    if (args[0].characteristicUuid === f.metadata.CHAR_DEVICE_STATUS) { held.enter(); await held.pending; throw failure; }
+    return read(...args);
+  };
+  let reading;
+  try {
+    await f.adapter.configure({});
+    const device = await f.adapter.connectSelected({ id: 'selected', rssi: -50, discoveredAtMs: 0 });
+    reading = f.adapter.readStatus(); const rejected = assert.rejects(reading, error => error === failure); await held.entered;
+    const queued = assert.rejects(f.adapter.writeConnectionSettings(device, f.settings), { code: 'cleanup_incomplete' });
+    held.release(); await Promise.all([rejected, queued]);
+    await assert.rejects(f.adapter.syncTime(device), { code: 'cleanup_incomplete' });
+    assert.equal(writesBeyondTimeSync(f).length, 0);
+    await assert.rejects(f.adapter.destroy(), error => error === failure);
+  } finally { held.release(); await reading?.catch(() => {}); await f.adapter.destroy().catch(() => {}); f.core.dispose(); }
+});
 
 test('restarted uploads reopen the original shared task/sink UUID and preserve older unmatched files', async () => {
   for (const sharedIdentity of [true, false]) {

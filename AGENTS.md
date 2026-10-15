@@ -1,12 +1,22 @@
 # AGENTS.md
 
+October 15 ordinary-control source correction orders the existing public JS
+controls before executor claim (one active, at most 32 pending). Exact scope,
+physical generation and immutable intent remain fenced; workflows/BYO stay
+exclusive and teardown rejects queued calls while joining submitted IO. The
+actual DeviceManager watchdog startup regression reproduces the preceding busy
+failure. Rust/generated/native contracts are unchanged. Fresh qualification and
+phone testing remain pending; see [requirements and evidence](docs/parity/ordinary-control-admission.md).
+
 October 15 bound-model source correction: optional JS-runtime
 `resolveBoundDeviceModel` supplies exact authenticated serial/model/binding
 metadata for settings writes on legacy `BOTA_DEV` firmware. Rust validates the
 hint and preserves Note cellular normalization; raw GATT identity is unchanged.
-Canonical Linux regeneration, 493 RN tests, 146 Rust/JS RPC comparisons and
-768 isolated Node checks pass. Fresh hosted qualification and physical settings
-acceptance remain pending. See
+Canonical candidate `d13b3aa5` passes all nine exact branch CI jobs
+`38803656173` and License `38803659389`, including 493 RN tests, 146 Rust/JS
+RPCs and 768 pinned Hermes checks. All 49 preserved files, five identities,
+500 RN package files and 59 Flutter files verify. Main qualification,
+publication and physical settings acceptance remain separate. See
 [scope and requirements](docs/parity/bound-device-model.md).
 
 October 15 unpublished beta.19 qualification: exact main `9e7c54d8` passes all

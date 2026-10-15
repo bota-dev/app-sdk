@@ -2,6 +2,12 @@
 
 ## Generated JavaScript runtime and app OTA updates
 
+The unpublished ordinary-control correction orders simultaneous status,
+subscription and settings calls before their executor leases. It accepts one
+active and up to 32 pending calls, retains exact scope/connection identity and
+rejects queued work on teardown. Workflow and BYO ownership remain exclusive.
+See [source qualification](../../docs/parity/ordinary-control-admission.md).
+
 The unpublished bound-model correction adds optional `resolveBoundDeviceModel`
 to `createBotaReactNativeJsRuntime`. Supply only an authenticated exact current
 binding record `{serialNumber, model, bindingGeneration}`; return `null` when

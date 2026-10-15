@@ -131,6 +131,18 @@ export class BotaJsHostExecutor {
   get connectedPeripheralId(): string | undefined { return this.peripheralId; }
   get activeOperationId(): string | undefined { return this.active?.operationId; }
 
+  /** Queue admission may wait for its exact ordinary owner; it never claims that owner. */
+  checkControlAdmission(operation: string, ordinaryOwnerId?: string): void {
+    if (this.destroyed) throw new BotaJsHostError('runtime_destroyed', operation);
+    this.requireScope(operation);
+    if (this.uncertainResourceFailure) throw new BotaJsHostError('cleanup_incomplete', operation);
+    const owner = this.active;
+    if (owner && (owner.kind !== 'direct' || owner.operationId !== ordinaryOwnerId ||
+        owner.cancelling || owner.finished)) {
+      throw new BotaJsHostError('operation_in_progress', operation);
+    }
+  }
+
   /** A direct/passive port failed teardown; no new owner may reuse its resources. */
   markCleanupFailed(error: unknown): void {
     this.uncertainResourceFailure ??= error;
@@ -322,10 +334,7 @@ export class BotaJsHostExecutor {
   }
 
   private claim(options: JsWorkflowOptions, kind: Owner['kind']): Owner {
-    if (this.destroyed) throw new BotaJsHostError('runtime_destroyed', options.operation);
-    this.requireScope(options.operation);
-    if (this.uncertainResourceFailure) throw new BotaJsHostError('cleanup_incomplete', options.operation);
-    if (this.active) throw new BotaJsHostError('operation_in_progress', options.operation);
+    this.checkControlAdmission(options.operation);
     const generation = (++this.generation).toString();
     let resolve!: (value: JsWorkflowResult) => void;
     let reject!: (error: unknown) => void;

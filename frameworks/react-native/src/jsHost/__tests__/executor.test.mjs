@@ -354,6 +354,40 @@ test('external cancellation remains live while direct completion joins borrowed 
   await executor.destroy();
 });
 
+test('ordinary admission can await exact settlement but cleanup failure still prevents the next write', async () => {
+  for (const cleanupFails of [false, true]) {
+    const host = fixture([]);
+    const executor = new BotaJsHostExecutor(host.factory, host.ports);
+    const entered = deferred(), releaseBody = deferred(), enteredTail = deferred(), releaseTail = deferred();
+    const failure = Object.assign(new Error('Uncertain cleanup'), { code: 'cleanup_incomplete' });
+    let writes = 0;
+    const direct = executor.direct('readStatus', async () => {
+      entered.resolve(); await releaseBody.promise;
+    }, { operationId: 'ordinary-control' });
+    void direct.catch(() => {});
+    await entered.promise;
+    const tail = executor.borrowDirect('ordinary-control', async () => {
+      enteredTail.resolve(); await releaseTail.promise;
+      if (cleanupFails) executor.markCleanupFailed(failure);
+    });
+    void tail.catch(() => {});
+    await enteredTail.promise;
+    releaseBody.resolve();
+    await new Promise(resolve => setImmediate(resolve));
+    // Admission does no IO and is allowed through this controlled finish window.
+    assert.doesNotThrow(() => executor.checkControlAdmission('writeConnectionSettings', 'ordinary-control'));
+    assert.throws(() => executor.checkControlAdmission('writeConnectionSettings', 'other-owner'), { code: 'operation_in_progress' });
+    await assert.rejects(executor.direct('writeConnectionSettings', async () => { writes++; }), { code: 'operation_in_progress' });
+    const next = direct.then(() => undefined, () => undefined).then(() => executor.direct('writeConnectionSettings', async () => { writes++; }));
+    const result = cleanupFails ? assert.rejects(next) : next;
+    releaseTail.resolve();
+    await Promise.allSettled([direct, tail]);
+    await result;
+    assert.equal(writes, cleanupFails ? 0 : 1);
+    await executor.destroy().catch(() => {});
+  }
+});
+
 test('a core deadline can fire while its primitive read is still blocked', async () => {
   const entered = deferred();
   const timerFired = deferred();

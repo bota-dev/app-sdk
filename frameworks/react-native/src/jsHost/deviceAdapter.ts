@@ -57,6 +57,16 @@ interface ProfileRequest {
   resolve(value: NativeEncryptedUploadV2ProfileDecision): void;
   reject(error: unknown): void;
 }
+interface QueuedControl {
+  name: string;
+  args: readonly unknown[];
+  owner: JsDeviceControls;
+  connection: JsControlConnection | null;
+  epoch: number;
+  namespace: string;
+  resolve(value: unknown): void;
+  reject(error: unknown): void;
+}
 
 const controls = [
   'readStatus', 'isProvisioned', 'readPublicKey', 'readAuthNonce', 'setApiEndpoint',
@@ -87,6 +97,10 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
   let configured = false;
   let destroyed = false;
   let closing = false;
+  let disconnecting = false;
+  let controlEpoch = 0;
+  const controlQueue: QueuedControl[] = [];
+  let activeControl: { operationId?: string; settled: Promise<void> } | undefined;
   let destroyPromise: Promise<void> | undefined;
   let scanPromise: Promise<unknown> | undefined;
   let disconnectObserver: JsHostSubscription | undefined;
@@ -153,6 +167,53 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
     ready();
     return executor.direct(operation, body);
   };
+  const cancelQueuedControls = (code = 'operation_cancelled') => {
+    controlEpoch++;
+    for (const queued of controlQueue.splice(0)) queued.reject(new BotaJsHostError(code, queued.name));
+  };
+  const scopeChanged = () => cancelQueuedControls('scope_changed');
+  ports.signal?.addEventListener('abort', scopeChanged, { once: true });
+  const checkQueuedControl = (queued: QueuedControl) => {
+    ready();
+    if (disconnecting || queued.epoch !== controlEpoch) throw new BotaJsHostError('operation_cancelled', queued.name);
+    if (queued.owner !== deviceControls || queued.namespace !== ports.persistence.namespace ||
+        queued.connection?.generation !== connection?.generation ||
+        queued.connection?.device.id !== connection?.device.id ||
+        queued.connection?.device.serialNumber !== connection?.device.serialNumber) {
+      throw new BotaJsHostError('identity_mismatch', queued.name);
+    }
+    executor.checkControlAdmission(queued.name);
+  };
+  const pumpControls = () => {
+    while (!activeControl && controlQueue.length) {
+      const queued = controlQueue.shift()!;
+      try { checkQueuedControl(queued); }
+      catch (error) { queued.reject(error); continue; }
+      const work = executor.direct(queued.name, context => queued.owner.execute(queued.name, queued.args, context));
+      const active = { operationId: executor.activeOperationId, settled: Promise.resolve() };
+      activeControl = active;
+      active.settled = work.then(queued.resolve, queued.reject).then(() => {
+        if (activeControl === active) activeControl = undefined;
+        pumpControls();
+      });
+    }
+  };
+  const queueControl = async (name: string, args: readonly unknown[]): Promise<unknown> => {
+    ready();
+    if (disconnecting) throw new BotaJsHostError('operation_cancelled', name);
+    executor.checkControlAdmission(name, activeControl?.operationId);
+    if (controlQueue.length >= 32) throw new BotaJsHostError('operation_in_progress', name);
+    const owner = deviceControls;
+    const physical = connection ? { device: { ...connection.device }, generation: connection.generation } : null;
+    if (!physical && !name.startsWith('stop')) throw new BotaJsHostError('not_connected', name);
+    // No caller-owned object may retarget a queued device, settings frame or grant.
+    const capturedArgs = args.map(value => value === undefined ? undefined : JSON.parse(JSON.stringify(value)) as unknown);
+    return new Promise((resolve, reject) => {
+      controlQueue.push({ name, args: capturedArgs, owner, connection: physical, epoch: controlEpoch,
+        namespace: ports.persistence.namespace, resolve, reject });
+      pumpControls();
+    });
+  };
   const metadata = object(core.codec('protocolMetadata', {}));
   const address = (device: NativeConnectedDevice, service: string, characteristic: string): GattAddress => ({
     peripheralId: device.id, serviceUuid: text(metadata[service]), characteristicUuid: text(metadata[characteristic]),
@@ -216,6 +277,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
         const session = Array.from(random, byte => byte.toString(16).padStart(2, '0')).join('');
         if (ports.ble.observeDisconnect) disconnectObserver = await ports.ble.observeDisconnect(device.id, error => {
           if (connection?.generation !== generation) return;
+          cancelQueuedControls();
           retiredPhysicalGenerations.add(generation);
           connection = null;
           presenceSession = '';
@@ -383,18 +445,25 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
       } } }, 'Reconnect');
     },
     async disconnect() {
-      const active = executor.activeOperationId;
-      if (active) await executor.cancel(active);
-      await direct('Disconnect', clearConnection);
-      emit('onDeviceDisconnected', {});
+      disconnecting = true;
+      cancelQueuedControls();
+      try {
+        const active = executor.activeOperationId;
+        if (active) await executor.cancel(active);
+        await activeControl?.settled;
+        await direct('Disconnect', clearConnection);
+        emit('onDeviceDisconnected', {});
+      } finally { disconnecting = false; }
     },
     destroy() {
       closing = true;
+      cancelQueuedControls();
       if (!destroyPromise) destroyPromise = (async () => {
         let failure: unknown;
         const active = executor.activeOperationId;
         const stopped = await Promise.allSettled([active ? executor.cancel(active) : Promise.resolve(), recordingUploads?.close()]);
         for (const result of stopped) if (result.status === 'rejected') failure ??= result.reason;
+        await activeControl?.settled;
         try { await deviceControls.close(); } catch (error) { failure ??= error; }
         try { await disconnectObserver?.remove(); } catch (error) { executor.markCleanupFailed(error); failure ??= error; }
         try { await executor.destroy(); } catch (error) { failure ??= error; }
@@ -403,6 +472,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
         destroyed = true;
         configured = false;
         listeners.clear();
+        ports.signal?.removeEventListener('abort', scopeChanged);
         if (failure) throw failure;
       })();
       return destroyPromise;
@@ -482,7 +552,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
       if (policy.allowControl === true) return executor.borrowDirect(reservation.operationId,
         context => deviceControls.execute(name, args, context));
     }
-    return direct(name, context => deviceControls.execute(name, args, context));
+    return queueControl(name, args);
   };
 
   adapter.listPendingRecordings = async device => {
