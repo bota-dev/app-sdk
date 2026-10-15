@@ -2,6 +2,11 @@
 
 ## Generated JavaScript runtime and app OTA updates
 
+The unpublished configure-retirement follow-up logs debug only when exact
+cancelled initialization belongs to an admitted destroy and cleanup succeeds.
+Rejection/error events and genuine failures remain unchanged. See the
+[current qualification boundary](../../docs/parity/configure-retirement.md).
+
 The unpublished Rust connection follow-up retires exact late attempt results
 while joining Disconnect after a deadline. See the [candidate boundary](../../docs/parity/connection-attempt-retirement.md);
 canonical adoption and 504 local RN tests pass; fresh main and normal reconnect

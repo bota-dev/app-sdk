@@ -1,5 +1,9 @@
 # Authenticated model hints for legacy generic settings
 
+Current successor readiness and bounded round 6 normal Demo/One settings and
+joined teardown are tracked in [configure retirement](configure-retirement.md).
+The earlier source/branch requirements and failure checkpoints below are retained.
+
 October 15 source correction. The normal Demo connection reports GATT Model
 Number `BOTA_DEV` while its authenticated paired-device record reports Pin,
 binding generation 3. A separate normal One read at 20:27:08 UTC confirms

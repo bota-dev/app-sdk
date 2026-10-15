@@ -22,6 +22,7 @@ const log = logger.tag('BotaClient');
 
 type NormalizedConfig = Required<Omit<BotaConfig, 'uploadRecoveryProvider' | 'recordingDataStore'>> &
   Pick<BotaConfig, 'uploadRecoveryProvider'>;
+type ConfigureAttempt = { destroyRequested: boolean };
 
 const normalizeConfig = (config: BotaConfig): NormalizedConfig => ({
   environment: config.environment ?? 'production',
@@ -48,6 +49,7 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
   private _nativeOwned = false;
   private _operation: Promise<void> = Promise.resolve();
   private _configurePromise: Promise<void> | null = null;
+  private _configureAttempt: ConfigureAttempt | null = null;
   private _destroyPromise: Promise<void> | null = null;
 
   get state(): SdkState {
@@ -95,11 +97,16 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
       return this._configurePromise;
     }
     const normalized = normalizeConfig(config);
-    const operation = this.enqueue(() => this.performConfigure(normalized));
+    const attempt = { destroyRequested: false };
+    const operation = this.enqueue(() => this.performConfigure(normalized, attempt));
     this._configurePromise = operation;
+    this._configureAttempt = attempt;
     void operation
       .finally(() => {
-        if (this._configurePromise === operation) this._configurePromise = null;
+        if (this._configurePromise === operation) {
+          this._configurePromise = null;
+          this._configureAttempt = null;
+        }
       })
       .catch(() => undefined);
     return operation;
@@ -142,6 +149,7 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
 
   destroy(): Promise<void> {
     if (this._destroyPromise) return this._destroyPromise;
+    if (this._configureAttempt) this._configureAttempt.destroyRequested = true;
     const operation = this.enqueue(async () => {
       await this.releaseOwnerGraph();
       this.removeAllListeners();
@@ -161,7 +169,7 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
     return queued;
   }
 
-  private async performConfigure(config: NormalizedConfig): Promise<void> {
+  private async performConfigure(config: NormalizedConfig, attempt: ConfigureAttempt): Promise<void> {
     if (this._state !== 'uninitialized' || this._nativeOwned) {
       log.warn('SDK already configured, reconfiguring');
       await this.releaseOwnerGraph();
@@ -207,17 +215,22 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
         bluetoothState: this._bluetoothState,
       });
     } catch (error) {
+      const retired = attempt.destroyRequested;
       this._bluetoothObserver?.remove();
       this._bluetoothObserver = null;
       deviceManager?.destroy();
       recordingManager?.destroy();
       otaManager?.destroy();
-      await client.destroy().catch(() => undefined);
+      let cleanupFailed = false;
+      await client.destroy().catch(() => { cleanupFailed = true; });
       this._nativeOwned = false;
       this._client = null;
       this.setState('error');
       const failure = error instanceof Error ? error : new Error(String(error));
-      log.error('Failed to configure SDK', failure);
+      if (retired && !cleanupFailed && error && typeof error === 'object' &&
+          'code' in error && error.code === 'cancelled') {
+        log.debug('Retired configure cancelled', { error: failure.message });
+      } else log.error('Failed to configure SDK', failure);
       this.emit('error', failure);
       throw error;
     }

@@ -2,6 +2,12 @@
 
 October 12, 2026 source migration. Shared SDK behavior remains Rust-sourced.
 
+The current [configure-retirement diagnostic follow-up](configure-retirement.md)
+keeps expected cancellation of an explicitly retired initialization out of
+ERROR while preserving genuine failures, cleanup failures, rejection and error
+events. Round 6 bounds normal Demo/One control/reconnect/destruction evidence;
+recording/cloud acceptance and fresh successor main qualification stay separate.
+
 The [connection-attempt retirement follow-up](connection-attempt-retirement.md)
 corrects a reproduced Rust deadline/late-result race after ordinary-control
 qualification. It retains exact identity and joined cleanup; canonical adoption

@@ -1,5 +1,12 @@
 # AGENTS.md
 
+October 15 current follow-up: exact retired-configure cancellation after an
+admitted destroy and successful cleanup logs debug; current/genuine failures
+and failed cleanup remain ERROR, with configure rejection/error event retained.
+Bounded round 6 Demo/One connections/settings and joined destruction pass;
+recording/cloud acceptance and fresh successor qualification remain separate.
+See [current requirements and evidence](docs/parity/configure-retirement.md).
+
 October 15 connection-deadline follow-up: a reproduced late host completion can
 reach Rust after a timed-out attempt enters Disconnecting. The narrow shared
 reducer correction retires only exact pending attempt IO, joins exact Disconnect

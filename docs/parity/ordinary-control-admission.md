@@ -1,5 +1,9 @@
 # Ordinary generated-runtime control admission
 
+Current successor readiness and bounded round 6 normal Demo/One settings and
+joined teardown are tracked in [configure retirement](configure-retirement.md).
+The earlier admission requirements and failure checkpoints below are retained.
+
 October 15 source correction. Normal One and Demo startup settings writes can
 fail with `operation_in_progress` before model encoding or GATT submission.
 The adapter claims an exclusive executor lease before reaching the controls'
