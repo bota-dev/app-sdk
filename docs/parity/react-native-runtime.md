@@ -2,6 +2,14 @@
 
 October 12, 2026 source migration. Shared SDK behavior remains Rust-sourced.
 
+Unpublished beta.19 targets the physical backlog and lifecycle failures below.
+Shared Rust batches buffered contiguous legacy DATA within 32 KiB; the JS
+executor joins submitted work before terminal cleanup and scan startup before
+subscription removal. Rust ignores only matching queued scan callbacks while
+awaiting StopScan. Existing OS ports, identity fences and confirmation rules
+remain unchanged. Candidate regeneration, complete tests and physical acceptance
+are pending; see the [preflight](../../release/evidence/2.0.0-beta.19-preflight.md).
+
 Published beta.18 corrects connected BLE PLX MTU observation under the original
 package identity. Exact main CI/License, protected release attempt 2, public
 generated-runtime/native consumers and all 59 Flutter files pass. A normal

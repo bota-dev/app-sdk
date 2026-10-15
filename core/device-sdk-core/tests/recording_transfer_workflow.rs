@@ -248,6 +248,10 @@ fn legacy_400_packet_cadence_batches_delayed_durable_appends() {
         "buffered DATA must amortize disk work"
     );
     assert_eq!(sink.append_count, sink.checkpoint_count);
+    println!(
+        "400 DATA / 200000 bytes: {} durable appends and checkpoints",
+        sink.append_count
+    );
 
     let effects = engine
         .dispatch(host(
@@ -277,13 +281,23 @@ fn buffered_legacy_batches_bound_bytes_and_checkpoint_only_durable_sequences() {
     let mut engine = WorkflowEngine::default();
     let (subscription, start) = start_with_write_completion(&mut engine, None, false);
     for sequence in 0..5 {
-        assert!(engine.dispatch(host(subscription, HostEventKind::Ble(BleEvent::Notification {
-            characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
-            value: data(sequence, &vec![sequence as u8; 8 * 1024]),
-        }))).unwrap().is_empty());
+        assert!(
+            engine
+                .dispatch(host(
+                    subscription,
+                    HostEventKind::Ble(BleEvent::Notification {
+                        characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                        value: data(sequence, &vec![sequence as u8; 8 * 1024]),
+                    })
+                ))
+                .unwrap()
+                .is_empty()
+        );
     }
     let mut sink = DelayedLegacySink::default();
-    let effects = engine.dispatch(host(start, HostEventKind::Ble(BleEvent::WriteCompleted))).unwrap();
+    let effects = engine
+        .dispatch(host(start, HostEventKind::Ble(BleEvent::WriteCompleted)))
+        .unwrap();
     sink.observe(&mut engine, effects);
     let (_, last_sequence, payload) = sink.pending.as_ref().unwrap();
     assert_eq!(*last_sequence, 3);
@@ -305,22 +319,50 @@ fn buffered_legacy_batches_leave_gap_malformed_and_mixed_boundaries_for_validati
     for boundary in [data(4, &[4]), vec![1], encrypted_data(3, &[7; 16])] {
         let mut engine = WorkflowEngine::default();
         let (subscription, start) = start_with_write_completion(&mut engine, None, false);
-        for value in [data(0, &[1]), data(1, &[2]), data(1, &[2]), data(2, &[3]), boundary] {
-            assert!(engine.dispatch(host(subscription, HostEventKind::Ble(BleEvent::Notification {
-                characteristic_uuid: CHAR_RECORDING_TRANSFER.into(), value,
-            }))).unwrap().is_empty());
+        for value in [
+            data(0, &[1]),
+            data(1, &[2]),
+            data(1, &[2]),
+            data(2, &[3]),
+            boundary,
+        ] {
+            assert!(
+                engine
+                    .dispatch(host(
+                        subscription,
+                        HostEventKind::Ble(BleEvent::Notification {
+                            characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                            value,
+                        })
+                    ))
+                    .unwrap()
+                    .is_empty()
+            );
         }
-        let appending = engine.dispatch(host(start, HostEventKind::Ble(BleEvent::WriteCompleted))).unwrap();
-        let append = request_id(&appending, |effect| matches!(effect,
-            Effect::RecordingSink(RecordingSinkEffect::Append { sequence: 2, payload, .. }) if payload == &[1, 2, 3]));
-        assert!(!appending.iter().any(|request| matches!(request.effect,
-            Effect::Persistence(PersistenceEffect::SaveCheckpoint { .. }))));
-        let failed = engine.dispatch(host(append, HostEventKind::RecordingSinkAppendCompleted { durable_units: 3 })).unwrap();
+        let appending = engine
+            .dispatch(host(start, HostEventKind::Ble(BleEvent::WriteCompleted)))
+            .unwrap();
+        let append = request_id(&appending, |effect| {
+            matches!(effect,
+            Effect::RecordingSink(RecordingSinkEffect::Append { sequence: 2, payload, .. }) if payload == &[1, 2, 3])
+        });
+        assert!(!appending.iter().any(|request| matches!(
+            request.effect,
+            Effect::Persistence(PersistenceEffect::SaveCheckpoint { .. })
+        )));
+        let failed = engine
+            .dispatch(host(
+                append,
+                HostEventKind::RecordingSinkAppendCompleted { durable_units: 3 },
+            ))
+            .unwrap();
         assert!(failed.iter().any(|request| matches!(&request.effect,
             Effect::Persistence(PersistenceEffect::SaveCheckpoint { checkpoint })
             if checkpoint.last_sequence == Some(2) && checkpoint.completed_units == 3)));
-        assert!(failed.iter().any(|request| matches!(request.effect,
-            Effect::Notify(WorkflowNotification::Failed { .. }))));
+        assert!(failed.iter().any(|request| matches!(
+            request.effect,
+            Effect::Notify(WorkflowNotification::Failed { .. })
+        )));
         assert!(!failed.iter().any(|request| matches!(&request.effect,
             Effect::Ble(BleEffect::Write { payload, .. }) if payload.first() == Some(&7))));
     }
@@ -331,20 +373,87 @@ fn non_durable_legacy_batch_never_advances_checkpoint_or_finalizes() {
     let mut engine = WorkflowEngine::default();
     let (subscription, start) = start_with_write_completion(&mut engine, None, false);
     for value in [data(0, &[1, 2]), data(1, &[3, 4]), eof(2, 0xb63cfbcd)] {
-        engine.dispatch(host(subscription, HostEventKind::Ble(BleEvent::Notification {
-            characteristic_uuid: CHAR_RECORDING_TRANSFER.into(), value,
-        }))).unwrap();
+        engine
+            .dispatch(host(
+                subscription,
+                HostEventKind::Ble(BleEvent::Notification {
+                    characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                    value,
+                }),
+            ))
+            .unwrap();
     }
-    let appending = engine.dispatch(host(start, HostEventKind::Ble(BleEvent::WriteCompleted))).unwrap();
-    let append = request_id(&appending, |effect| matches!(effect,
-        Effect::RecordingSink(RecordingSinkEffect::Append { sequence: 1, payload, .. }) if payload == &[1, 2, 3, 4]));
-    let failed = engine.dispatch(host(append, HostEventKind::RecordingSinkAppendCompleted { durable_units: 3 })).unwrap();
-    assert!(failed.iter().any(|request| matches!(request.effect,
-        Effect::Notify(WorkflowNotification::Failed { .. }))));
-    assert!(!failed.iter().any(|request| matches!(request.effect,
-        Effect::Persistence(PersistenceEffect::SaveCheckpoint { .. }) |
-        Effect::RecordingSink(RecordingSinkEffect::Finalize { .. }) |
-        Effect::Ble(BleEffect::Write { .. }))));
+    let appending = engine
+        .dispatch(host(start, HostEventKind::Ble(BleEvent::WriteCompleted)))
+        .unwrap();
+    let append = request_id(&appending, |effect| {
+        matches!(effect,
+        Effect::RecordingSink(RecordingSinkEffect::Append { sequence: 1, payload, .. }) if payload == &[1, 2, 3, 4])
+    });
+    let failed = engine
+        .dispatch(host(
+            append,
+            HostEventKind::RecordingSinkAppendCompleted { durable_units: 3 },
+        ))
+        .unwrap();
+    assert!(failed.iter().any(|request| matches!(
+        request.effect,
+        Effect::Notify(WorkflowNotification::Failed { .. })
+    )));
+    assert!(!failed.iter().any(|request| matches!(
+        request.effect,
+        Effect::Persistence(PersistenceEffect::SaveCheckpoint { .. })
+            | Effect::RecordingSink(RecordingSinkEffect::Finalize { .. })
+            | Effect::Ble(BleEffect::Write { .. })
+    )));
+}
+
+#[test]
+fn resumed_legacy_batch_skips_only_previously_durable_sequences() {
+    let mut engine = WorkflowEngine::default();
+    let checkpoint = WorkflowCheckpoint {
+        workflow: WorkflowKind::RecordingTransfer,
+        operation: Operation::TransferRecording,
+        device: device(),
+        recording: Some(recording()),
+        phase: CheckpointPhase::Transferring,
+        completed_units: 4,
+        retry_count: 1,
+        last_sequence: Some(1),
+        firmware_version: None,
+    };
+    let (subscription, start) = start_with_write_completion(&mut engine, Some(checkpoint), false);
+    for sequence in 0..4 {
+        engine
+            .dispatch(host(
+                subscription,
+                HostEventKind::Ble(BleEvent::Notification {
+                    characteristic_uuid: CHAR_RECORDING_TRANSFER.into(),
+                    value: data(sequence, &[sequence as u8; 2]),
+                }),
+            ))
+            .unwrap();
+    }
+    let appending = engine
+        .dispatch(host(start, HostEventKind::Ble(BleEvent::WriteCompleted)))
+        .unwrap();
+    let append = request_id(&appending, |effect| {
+        matches!(effect,
+        Effect::RecordingSink(RecordingSinkEffect::Append { sequence: 3, payload, .. }) if payload == &[2, 2, 3, 3])
+    });
+    assert!(!appending.iter().any(|request| matches!(
+        request.effect,
+        Effect::Persistence(PersistenceEffect::SaveCheckpoint { .. })
+    )));
+    let persisted = engine
+        .dispatch(host(
+            append,
+            HostEventKind::RecordingSinkAppendCompleted { durable_units: 8 },
+        ))
+        .unwrap();
+    assert!(persisted.iter().any(|request| matches!(&request.effect,
+        Effect::Persistence(PersistenceEffect::SaveCheckpoint { checkpoint })
+        if checkpoint.last_sequence == Some(3) && checkpoint.completed_units == 8 && checkpoint.retry_count == 2)));
 }
 
 #[test]

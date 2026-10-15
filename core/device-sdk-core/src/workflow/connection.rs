@@ -174,9 +174,6 @@ impl ConnectionWorkflow {
         if let Some(timer_id) = self.scan_timer_id {
             effects.push(context.request(Effect::Timer(TimerEffect::Cancel { timer_id })));
         }
-        self.scan_request_id = None;
-        self.scan_timer_request_id = None;
-        self.scan_timer_id = None;
         self.stop_scan_request_id = Some(stop.request_id);
         effects.push(stop);
         self.push_checkpoint(&mut effects, CheckpointPhase::Reconnecting, context);
@@ -465,9 +462,26 @@ impl WorkflowReducer for ConnectionWorkflow {
             {
                 Ok(self.stop_scan(context))
             }
+            // Removing the native scan subscription is asynchronous. Ignore
+            // only its exact already-queued callbacks until StopScan settles;
+            // they must not replace the selected candidate or start another IO.
+            (Phase::StoppingScan, HostEventKind::Ble(BleEvent::ScanResult { .. }))
+                if Some(request_id) == self.scan_request_id =>
+            {
+                Ok(Vec::new())
+            }
+            (Phase::StoppingScan, HostEventKind::TimerFired { timer_id })
+                if Some(request_id) == self.scan_timer_request_id
+                    && Some(timer_id) == self.scan_timer_id =>
+            {
+                Ok(Vec::new())
+            }
             (Phase::StoppingScan, HostEventKind::Ble(BleEvent::ScanStopped))
                 if Some(request_id) == self.stop_scan_request_id =>
             {
+                self.scan_request_id = None;
+                self.scan_timer_request_id = None;
+                self.scan_timer_id = None;
                 self.stop_scan_request_id = None;
                 if let Some(candidate) = self.active_candidate.clone() {
                     Ok(self.begin_connection(candidate, true, context))

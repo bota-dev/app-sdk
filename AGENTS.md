@@ -1,5 +1,13 @@
 # AGENTS.md
 
+Unpublished beta.19 source corrects the beta.18 physical transfer failure with
+Rust-owned bounded append batching, joined JS terminal cleanup and exact late
+scan callback retirement. Linux regressions reproduce both old Rust failures;
+focused JS cleanup/scan regressions and strict types pass. Canonical regeneration,
+full candidate CI, physical transfer/reconnect and publication are still pending.
+Keep beta.18 artifacts immutable and retain the original `/runtime` identity.
+See [beta.19 preparation](release/evidence/2.0.0-beta.19-preflight.md).
+
 Beta.18 is published across all five SDK families at accepted source 0962c8c.
 All nine main CI jobs, License, protected release 38632018471 attempt 2 and public
 consumers/archives pass. Independent npm/Pod/Central/AAR and all 59 Flutter file

@@ -1125,3 +1125,11 @@ React Native beta.11 includes an optional native encrypted-v2 backend adapter
 for a customer-authenticated proxy. Hosts still provide fresh app credentials,
 exact identity and lifecycle wiring; this is not the separate Bota API SDK.
 Other facades and custom providers retain host-managed backend integration.
+## Unpublished synchronized beta.19 preparation
+
+Beta.18 is published; its occupied artifacts remain immutable. Beta.19 prepares
+Rust transfer batching and RN cleanup/reconnect corrections over the existing
+version 1 OS ports. Canonical generation, exact CI/artifacts, physical candidate
+testing and protected publication remain separate. See the
+[candidate review](../release/evidence/2.0.0-beta.19-preflight.md).
+

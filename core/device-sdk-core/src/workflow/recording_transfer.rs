@@ -36,6 +36,7 @@ const SHA256_GRACE_TIMER_ID: u64 = 0x5245_435f_5348_4132;
 const SHA256_GRACE_DELAY_MS: u64 = 200;
 const MAX_PENDING_PACKETS: usize = 256;
 const MAX_PENDING_BYTES: usize = 128 * 1024;
+const MAX_APPEND_BATCH_BYTES: usize = 32 * 1024;
 
 pub(crate) struct RecordingTransferWorkflow {
     device: DeviceSerialNumber,
@@ -197,6 +198,40 @@ impl RecordingTransferWorkflow {
         }));
         self.sink_request_id = Some(request.request_id);
         vec![request]
+    }
+
+    fn append_legacy_batch(
+        &mut self,
+        mut sequence: u16,
+        mut payload: Vec<u8>,
+        context: &mut WorkflowContext<'_>,
+    ) -> Vec<EffectRequest> {
+        // Amortize durable file/checkpoint work across DATA already waiting in
+        // the bounded FIFO. Keep protocol boundaries queued for normal dispatch;
+        // no sequence becomes resumable until this whole append is durable.
+        while let Some(value) = self.pending_packets.front() {
+            let Ok(TransferPacket::Data {
+                sequence: next,
+                data,
+            }) = parse_transfer_packet(value)
+            else {
+                break;
+            };
+            if next > sequence
+                && (next != sequence.wrapping_add(1)
+                    || data.len() > MAX_APPEND_BATCH_BYTES.saturating_sub(payload.len()))
+            {
+                break;
+            }
+            self.pending_bytes -= value.len();
+            self.pending_packets.pop_front();
+            if next <= sequence {
+                continue;
+            }
+            payload.extend_from_slice(&data);
+            sequence = next;
+        }
+        self.append(Some(sequence), payload, context)
     }
 
     fn save_checkpoint(&mut self, context: &mut WorkflowContext<'_>) -> EffectRequest {
@@ -488,7 +523,7 @@ impl WorkflowReducer for RecordingTransferWorkflow {
                             return Ok(self.fail_mixed_transfer(context));
                         }
                         self.encrypted = Some(false);
-                        Ok(self.append(Some(sequence), data, context))
+                        Ok(self.append_legacy_batch(sequence, data, context))
                     }
                     TransferPacket::Eof { sequence, checksum } => {
                         if self.encrypted == Some(true) {

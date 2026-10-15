@@ -7,6 +7,18 @@ tracked separately.
 
 ## Unreleased
 
+- Batch contiguous buffered legacy recording DATA into bounded durable writes,
+  retaining receive limits, exact sequence validation, checkpoints and final
+  integrity/confirmation gates. This avoids the receive backlog failure observed
+  with small per-packet Android file writes in the generated RN runtime.
+- Join submitted file I/O before terminal discard and release the operation only
+  after successful cleanup. Preserve genuine cleanup failures and external file
+  ownership guards.
+- Join BLE scan startup before stopping its subscription, and accept only matching
+  queued scan/timer callbacks while the Rust reconnect workflow awaits scan stop.
+  Fresh serial verification remains required. These corrections use existing
+  version 1 OS ports; publication and physical acceptance are pending.
+
 ## 2.0.0-beta.17
 
 - Admit HTTPS managed encrypted-v2 proxies whose routes start at the origin root,

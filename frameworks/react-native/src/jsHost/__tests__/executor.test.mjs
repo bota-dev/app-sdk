@@ -3,13 +3,15 @@ import { test } from 'node:test';
 import { loadSource } from './loadSource.mjs';
 
 const { BotaJsHostExecutor } = loadSource('executor.ts');
+const { JsFileEffects } = loadSource('fileEffects.ts');
+const { JsRecordingUploads } = loadSource('recordingUploads.ts');
 
 const deferred = () => {
   let resolve;
   const promise = new Promise(yes => { resolve = yes; });
   return { promise, resolve };
 };
-function fixture(first, dispatch) {
+function fixture(first, dispatch, cancel) {
   const calls = [];
   let next = 9007199254740993n;
   let identity;
@@ -26,7 +28,7 @@ function fixture(first, dispatch) {
       if (input.action === 'start') return { ok: true, result: {
         effects: first.map(envelope), status: { Running: { operation: input.operation } },
       } };
-      if (input.action === 'cancel') return { ok: true, result: {
+      if (input.action === 'cancel') return { ok: true, result: cancel?.(input) ?? {
         effects: [envelope({ Notify: { Cancelled: { operation: input.operation } } })],
         status: { Cancelled: { operation: input.operation } },
       } };
@@ -389,6 +391,22 @@ test('terminal cleanup gets a live signal and never dispatches a callback into a
   await executor.destroy();
 });
 
+test('terminal core result drops ordinary effects that have not reached the port', async () => {
+  const host = fixture([{ HostMaterial: 'Ready' }, read]);
+  let reads = 0;
+  host.ports.ble.read = async () => { reads++; return Uint8Array.of(7); };
+  const executor = new BotaJsHostExecutor(host.factory, host.ports);
+  executor.registerHandler('HostMaterial', async (_effect, context) => {
+    await context.emit('HostMaterialReady');
+    return null;
+  });
+  await executor.run({}, options);
+  assert.equal(reads, 0);
+  assert.equal(host.calls.filter(call => call.action === 'dispatch').length, 1);
+  assert.equal(executor.activeOperationId, undefined);
+  await executor.destroy();
+});
+
 test('failed terminal OS cleanup retains the owner and surfaces the failure', async () => {
   const host = fixture([read], () => ({ effects: [host.envelope({ Ble: { Disconnect: { peripheral_id: 'device' } } })],
     status: { Completed: { operation: 'Reconnect' } } }));
@@ -397,6 +415,83 @@ test('failed terminal OS cleanup retains the owner and surfaces the failure', as
   await assert.rejects(executor.run({ Reconnect: {} }, options), /disconnect uncertain/);
   await assert.rejects(executor.direct('Connect', async () => {}), error => error.code === 'operation_in_progress');
   await assert.rejects(executor.destroy(), /disconnect uncertain/);
+});
+
+for (const [cancelled, discardFails] of [[false, false], [false, true], [true, false]]) test(`${cancelled ? 'cancelled' : 'failed'} discard joins its submitted append and ${discardFails ? 'retains genuine cleanup failure' : 'releases the owner'}`, { timeout: 5000 }, async () => {
+  const entered = deferred(), release = deferred(), terminal = deferred();
+  const removed = deferred(), releaseRemove = deferred();
+  const order = [];
+  const operation = { operation: 'TransferRecording', operationId: 'failed-transfer' };
+  const terminalResult = input => {
+    terminal.resolve();
+    return { effects: [host.envelope({ RecordingSink: { Discard: { sink_id: 'sink' } } }),
+      host.envelope({ Persistence: 'DeleteCheckpoint' }), host.envelope({ Notify: input.action === 'cancel'
+        ? { Cancelled: { operation: operation.operation } } : { Failed: {
+        error: { code: 'integrity_failed', operation: operation.operation, retryable: true },
+      } } })], status: { [input.action === 'cancel' ? 'Cancelled' : 'Failed']: { operation: operation.operation } } };
+  };
+  const append = { RecordingSink: { Append: { sink_id: 'sink', payload: [1, 2, 3] } } };
+  const host = fixture(cancelled ? [append] : [append, read], terminalResult, terminalResult);
+  const handle = { id: 'captured-sink', kind: 'file', scope: host.ports.persistence.namespace };
+  const files = {
+    async open() { return handle; },
+    async metadata() { return { durableUnits: '0' }; },
+    async append(_handle, _offset, _payload, context) {
+      order.push('append'); entered.resolve();
+      await release.promise;
+      assert.equal(context.signal.aborted, true);
+      order.push('append-settled');
+      return { durableUnits: '3' };
+    },
+    async remove(_handle, context) {
+      assert.equal(context.signal.aborted, false);
+      order.push('remove'); removed.resolve();
+      await releaseRemove.promise;
+      if (discardFails) throw new Error('discard uncertain');
+    },
+  };
+  const uploads = new JsRecordingUploads({ core: host.factory, files, persistence: host.ports.persistence,
+    fetch: async () => { throw new Error('not used'); }, uploadFile: async () => {},
+    lookup: async () => { throw new Error('not used'); }, checkOwner() {}, onProgress() {} });
+  const effects = new JsFileEffects(files, host.ports.persistence.namespace, value => uploads.acquireWritable(value));
+  host.ports.ble.read = async () => { await entered.promise; return Uint8Array.of(7); };
+  const executor = new BotaJsHostExecutor(host.factory, host.ports);
+  executor.registerHandler('RecordingSink', effects.recordingSink);
+  let settled = false;
+  const running = executor.run({}, operation);
+  const rejected = assert.rejects(running, { code: cancelled ? 'operation_cancelled' : 'integrity_failed' })
+    .then(() => { settled = true; });
+  let cancellation;
+  try {
+    if (cancelled) { await entered.promise; cancellation = executor.cancel(operation.operationId); }
+    await terminal.promise;
+    await assert.rejects(executor.direct('Replacement', async () => {}), { code: 'operation_in_progress' });
+    assert.equal(settled, false);
+    assert.throws(() => uploads.acquireWritable(handle), { code: 'operation_in_progress' });
+    release.resolve();
+    await Promise.race([removed.promise, running.then(
+      () => assert.fail('transfer settled before discard entered'),
+      () => assert.fail('transfer failed before its same-sink discard could enter'),
+    )]);
+    assert.deepEqual(order, ['append', 'append-settled', 'remove']);
+    assert.equal(settled, false);
+    await assert.rejects(executor.direct('Replacement', async () => {}), { code: 'operation_in_progress' });
+    releaseRemove.resolve();
+    await rejected;
+    await cancellation;
+    assert.equal(host.calls.filter(call => call.action === 'dispatch').length, cancelled ? 0 : 1);
+    if (discardFails) {
+      await assert.rejects(executor.direct('Replacement', async () => {}), { code: 'operation_in_progress' });
+      await assert.rejects(executor.destroy(), /discard uncertain/);
+    } else {
+      assert.equal(executor.activeOperationId, undefined);
+      await executor.cancel(operation.operationId);
+      await executor.direct('Replacement', async () => {});
+      await executor.destroy();
+    }
+  } finally {
+    release.resolve(); releaseRemove.resolve();
+  }
 });
 
 test('reset receipt is gated on durable SDK and application result persistence', async () => {

@@ -31,6 +31,7 @@ interface Owner {
   requests: Map<string, RawCoreEffect>;
   queue: RawCoreEffect[];
   subscriptions: Map<string, JsHostSubscription>;
+  scanStartup?: Promise<void>;
   bleSubscriptions: Map<string, { effect: RawCoreEffect; peripheralId?: string }>;
   timers: Map<string, ReturnType<typeof setTimeout>>;
   cleanups: Array<() => Promise<void>>;
@@ -51,6 +52,7 @@ interface Owner {
   started: boolean;
   failure?: unknown;
   cleanupFailure?: unknown;
+  cleanupBarrier?: Promise<void>;
   cancelPromise?: Promise<void>;
   removeExternalAbort?: () => void;
 }
@@ -392,6 +394,7 @@ export class BotaJsHostExecutor {
     const status = tag(result.status)[0];
     if (['Completed', 'Cancelled', 'Failed'].includes(status)) {
       owner.requests.clear();
+      owner.queue.length = 0;
       owner.controller.abort();
     }
     for (const effect of result.effects) {
@@ -412,16 +415,20 @@ export class BotaJsHostExecutor {
     while (owner.queue.length) {
       const effect = owner.queue.shift()!;
       const cleanup = owner.cancelling || owner.controller.signal.aborted;
+      // Aborting a submitted port call does not prove its IO has settled. Keep
+      // its leases until settlement before terminal effects reuse the resources.
+      if (cleanup) owner.cleanupBarrier ??= Promise.allSettled([...owner.pending]).then(() => {});
       // Core effects encode dependencies. Start unrelated timers/persistence now;
       // the GATT lane orders only physical I/O, never a timer behind a blocked read.
-      void this.track(owner, this.execute(owner, effect)).catch(error => {
+      const work = (cleanup ? owner.cleanupBarrier!.then(() => this.execute(owner, effect)) : this.execute(owner, effect)).catch(error => {
         if (owner.cancelling || owner.controller.signal.aborted) {
           if (cleanup) owner.cleanupFailure ??= error;
           return;
         }
         owner.failure ??= error;
         void this.cancel(owner.operationId).catch(() => {});
-      }).finally(() => { this.pump(owner); });
+      });
+      void this.track(owner, work).finally(() => { this.pump(owner); });
     }
     owner.pumping = false;
     const status = tag(owner.status)[0];
@@ -568,20 +575,29 @@ export class BotaJsHostExecutor {
     };
     switch (kind) {
       case 'StartScan': {
-        const subscription = await this.ports.ble.scan(fields.allow_duplicates === true, candidate => {
-          void event({ ScanResult: { candidate: candidate as unknown as JsValue } }).catch(error => {
+        // Register the startup join before a port can synchronously report a
+        // candidate whose shared-core response immediately requests StopScan.
+        owner.scanStartup = Promise.resolve().then(async () => {
+          this.check(context);
+          const subscription = await this.ports.ble.scan(fields.allow_duplicates === true, candidate => {
+            void event({ ScanResult: { candidate: candidate as unknown as JsValue } }).catch(error => {
+              owner.failure ??= error;
+              void this.cancel(owner.operationId).catch(() => {});
+            });
+          }, context, error => {
+            if (owner.finished || owner.controller.signal.aborted) return;
             owner.failure ??= error;
             void this.cancel(owner.operationId).catch(() => {});
           });
-        }, context, error => {
-          if (owner.finished || owner.controller.signal.aborted) return;
-          owner.failure ??= error;
-          void this.cancel(owner.operationId).catch(() => {});
+          owner.subscriptions.set('scan', subscription);
         });
-        owner.subscriptions.set('scan', subscription);
+        await owner.scanStartup;
         return;
       }
       case 'StopScan': {
+        // StartScan reports its own failure through shared policy. A failed
+        // startup has no returned subscription for this StopScan to remove.
+        await owner.scanStartup?.catch(() => {});
         const subscription = owner.subscriptions.get('scan');
         if (subscription) { await subscription.remove(); owner.subscriptions.delete('scan'); }
         await event('ScanStopped'); return;
