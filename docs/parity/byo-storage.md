@@ -1,5 +1,12 @@
 # BYO customer storage integration
 
+October 15: the [customer-envelope implementation](byo-upload-encryption.md)
+retains original ciphertext and opaque SDK relay. Backend getUploadUrl now supplies
+the customer recipient in existing signed device authorization; completion delivers
+the envelope for independent customer decryption. The unused BYO Bota-custody
+path is removed. Production SDK codecs are unchanged; release and physical
+acceptance remain separate.
+
 The native descriptions below concern the installed Apple/Android path. The
 October 12 generated JavaScript source migration is reviewed in the final
 section; its package delivery and physical acceptance remain separate.
