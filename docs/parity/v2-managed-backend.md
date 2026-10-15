@@ -18,6 +18,11 @@ creation; it does not recover an uninstalled application's journals, reconstruct
 its cloud pointer or authorize resuming an otherwise unowned V2 session. Legacy
 four-byte file IDs must not be expanded into guessed full capture identities.
 
+Backend source review also preserves the first legitimate session: matching
+non-null UUID/generation pass `encrypted-upload-v2-session.service.ts` admission,
+and `recording.repository.ts` retains them through its guarded `COALESCE` update.
+This requires no backend change and is not deployed or physical acceptance.
+
 The Rust regression checks stable capture identity across operation/peripheral
 changes and distinguishes different devices, UUIDs and generations. A real
 generated-host fixture models the existing backend conflict: it fails against
@@ -35,13 +40,35 @@ proxy attestation. The compatibility Android `NativeUpload.kt` and Apple
 paths and still omit these fields; this Rust planner change does not claim
 their correction. Installed OS ports and native contracts remain unchanged.
 
-Reviewed against Upload Management §1.1: exact identity emission is corrected
-in source; canonical Linux Rust/JS execution, complete cross-platform
-qualification, publication and physical acceptance remain unverified.
-Local formatting passes. Offline MSVC compilation currently stops at the
-unavailable `link.exe`; no downloaded toolchain or execution-policy bypass is
-used. The generated-host conflict fixture remains red until canonical
-regeneration and must pass before integration or publication.
+At isolated source `11afdedd`, formatting passes and the new generated-host
+fixture is red against the preceding committed core. Offline MSVC compilation
+stops at unavailable `link.exe`; no downloaded toolchain or execution-policy
+bypass is used.
+
+### Canonical execution checkpoint
+
+Exact build-only branch CI `38820667717` passes Linux Rust/tooling, including
+`recording_create_preserves_capture_identity_across_transport_and_operation_changes`.
+Its stale committed-core comparison intentionally fails and supplies canonical
+diagnostics. The retained artifact's transport digest, all 106 exact source
+inputs, Linux Rust 1.98.0 and Binaryen 132 provenance verify before adoption.
+The generated core is 3,971,776 bytes, SHA-256 `46760f5c…`, with source digest
+`7015d6dc…`; the actual fresh-namespace conflict fixture then passes independently.
+
+All 511 local RN tests, normal module/CommonJS/types build, strict TypeScript,
+unchanged Codegen contract, package metadata, compiler-free provenance and the
+33-package license gate pass. The first full Windows run passes 510/511 because
+automatic CRLF checkout changes the unchanged raw JSON vector digest; restoring
+that fixture's exact committed LF bytes produces 511/511 with no tracked fixture
+or test change. The older 768-check result does not qualify this new core;
+new shared conformance adds nine identity checks, with 777 pinned Hermes checks
+still required from a fresh canonical run.
+
+Reviewed against Upload Management §1.1: exact create identity and safe conflict
+refusal match source/host regressions. New canonical-branch execution, refreshed
+Apple pins/checked manifest, complete exact-main CI/License/49-file preservation,
+publication and physical acceptance remain separate pending gates. Native
+compatibility HTTP bodies described above are outside this planner correction.
 
 ## October 13 generated-JS root proxy admission (beta.17 preparation)
 
