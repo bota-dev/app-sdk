@@ -54,6 +54,7 @@ function controlFixture(options = {}) {
 }
 
 test('reconnect joins timed-out late connection IO and exact disconnect before verifying the next candidate', { timeout: 5000 }, async () => {
+  for (const holdDisconnect of [false, true]) {
   const f = controlFixture(), connecting = f.gate(), disconnecting = f.gate();
   const submitted = [];
   f.ports.ble.scan = async (_duplicates, candidate) => {
@@ -68,7 +69,7 @@ test('reconnect joins timed-out late connection IO and exact disconnect before v
   };
   f.ports.ble.disconnect = async (...args) => {
     submitted.push(['disconnect', args[0]]);
-    if (args[0] === 'timed-out') { disconnecting.enter(); await disconnecting.pending; }
+    if (args[0] === 'timed-out') { disconnecting.enter(); if (holdDisconnect) await disconnecting.pending; }
     await disconnect(...args);
   };
   let running;
@@ -80,8 +81,10 @@ test('reconnect joins timed-out late connection IO and exact disconnect before v
     await new Promise(resolve => setTimeout(resolve, 30));
     connecting.release();
     await Promise.race([disconnecting.entered, running]);
-    assert.deepEqual(submitted, [['connect', 'timed-out'], ['disconnect', 'timed-out']]);
-    assert.equal(f.saved.has('connection/C8SU2XXWHI'), false);
+    if (holdDisconnect) {
+      assert.deepEqual(submitted, [['connect', 'timed-out'], ['disconnect', 'timed-out']]);
+      assert.equal(f.saved.has('connection/C8SU2XXWHI'), false);
+    }
     disconnecting.release();
     const device = await running;
     assert.equal(device.id, 'next-probe'); assert.equal(device.serialNumber, 'C8SU2XXWHI');
@@ -89,6 +92,7 @@ test('reconnect joins timed-out late connection IO and exact disconnect before v
   } finally {
     connecting.release(); disconnecting.release(); await running?.catch(() => {});
     await f.adapter.destroy(); f.core.dispose();
+  }
   }
 });
 

@@ -4,7 +4,8 @@
 
 The unpublished Rust connection follow-up retires exact late attempt results
 while joining Disconnect after a deadline. See the [candidate boundary](../../docs/parity/connection-attempt-retirement.md);
-canonical generation and normal reconnect acceptance remain pending.
+canonical adoption and 504 local RN tests pass; fresh main and normal reconnect
+acceptance remain pending.
 
 The unpublished ordinary-control correction orders simultaneous status,
 subscription and settings calls before their executor leases. It accepts one

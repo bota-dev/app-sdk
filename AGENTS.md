@@ -3,8 +3,9 @@
 October 15 connection-deadline follow-up: a reproduced late host completion can
 reach Rust after a timed-out attempt enters Disconnecting. The narrow shared
 reducer correction retires only exact pending attempt IO, joins exact Disconnect
-acknowledgement and preserves foreign-event/uncertain-cleanup refusal. Canonical
-generation and new qualification remain pending. See [requirements and evidence](docs/parity/connection-attempt-retirement.md).
+effect settlement and preserves foreign-event/uncertain-cleanup refusal. Exact
+Linux Rust checks, canonical adoption and 504 local RN tests pass; new main,
+Apple pins and phone qualification remain pending. See [requirements and evidence](docs/parity/connection-attempt-retirement.md).
 
 October 15 ordinary-control source correction orders the existing public JS
 controls before executor claim (one active, at most 32 pending). Exact scope,

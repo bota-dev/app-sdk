@@ -49,3 +49,21 @@ build, package metadata, unchanged native Codegen and the 33-package license
 gate also pass. Exact-main CI/License, preserved
 release archive qualification and normal phone round 5 remain separate gates.
 Public beta.18 remains the published baseline; beta.19 remains unpublished.
+
+The exact ordinary-control main candidate `fd409a91f5e8e6e30b5ad0a73a42a42c6917b6ad`
+then passes all nine [CI jobs](https://github.com/bota-dev/app-sdk/actions/runs/38810326922)
+and [License](https://github.com/bota-dev/app-sdk/actions/runs/38810327025).
+All 49 files, five original SDK identities, 500 RN package files and all 59
+Flutter files verify against inventory SHA-256
+`497b5f987fc3506f7804520969756d443511da98531df558823e06a9f32ba438`.
+Logs verify 502 RN tests, 146 Rust/JS comparisons, 768 pinned Hermes checks,
+282 Apple tests with nine skips, 47 RN Apple lifecycle tests, Android upload
+97/API 26+35 consumers and 87 Flutter tests. These checks preserve this exact
+checkpoint and do not qualify its later changed Rust core.
+
+Normal round 5 One initial settings writes and four heartbeat cycles pass with
+one settings write; normal disconnect succeeds. Demo instead fails reconnect
+without a verified connection and later reports uncertain destruction. The
+[connection-attempt follow-up](connection-attempt-retirement.md) reproduces a
+separate Rust deadline/late-result defect. No full normal-app or recording
+acceptance is established by the ordinary-control source correction.
