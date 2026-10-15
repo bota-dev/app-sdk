@@ -6,15 +6,19 @@ Unpublished beta.19 targets the physical backlog and lifecycle failures below.
 Shared Rust batches buffered contiguous legacy DATA within 32 KiB; the JS
 executor joins submitted work before terminal cleanup and scan startup before
 subscription removal. Rust ignores only matching queued scan callbacks while
-awaiting StopScan. Existing OS ports, identity fences and confirmation rules
-remain unchanged. Canonical generation and all nine exact candidate branch CI
-jobs/License pass, including 486 RN tests, 136 Rust/JS RPC comparisons and 715
-pinned Hermes checks. All 49 preserved files, five identities and 59 Flutter
-files verify. Two candidate Android connections and joined teardown pass without
-a Bluetooth reset,
-but a newly observed receive gap still prevents full transfer. One's local busy
-read/disconnect guard fix awaits UI retest; normal Demo sync is running. Full app
-acceptance, final-main CI and publication remain pending. See the
+awaiting StopScan. New managed transfers also share one opaque queue/sink UUID,
+and joined upload cancellation preserves its earlier progress-policy failure.
+Existing OS ports, identity fences and confirmation rules remain unchanged.
+Exact main `9e7c54d8` passes all nine
+[CI jobs](https://github.com/bota-dev/app-sdk/actions/runs/38776953313) and
+[License](https://github.com/bota-dev/app-sdk/actions/runs/38776953300), including
+490 RN tests, 136 Rust/JS RPC comparisons and 715 pinned Hermes checks. All 49
+preserved files, five original identities, 500 RN package files and 59 Flutter
+files verify. The latest short normal One transfer passes with 128,603 finalized
+bytes, EOF1 and ACK1/NACK0; upload then fails on an app OS-port progress
+regression that the SDK strictly rejects. Normal Demo controls pass but its fresh
+catalog remains empty. Full cloud/device/app acceptance and beta.19 publication
+remain unverified. See the
 [preflight](../../release/evidence/2.0.0-beta.19-preflight.md).
 
 Published beta.18 corrects connected BLE PLX MTU observation under the original
@@ -113,13 +117,63 @@ Private capture correlation is retained; legacy aliasing does not prove exact
 cross-channel identity. New source presence and autonomous cloud outcome after
 disconnect remain unknown. Normal One home/auth/list/device navigation opens,
 but a false disconnect under its busy read loop is identified. Its local guard
-fix passes focused tests and strict types; normal UI retesting remains pending.
+fix passes focused tests and strict types; normal UI retesting is pending at
+that checkpoint.
 Normal Demo's fresh session/cloud list and selected-test-device BLE connection
 pass, and normal Start/Stop buttons plus two known input playbacks succeed.
-Manual Pending recordings Sync is running; transfer, captured content/codec and
-cloud commitment are not yet verified. These observations do not establish the
-requested complete normal-app recording acceptance. See the
+Manual Pending recordings Sync is running at that checkpoint; transfer, captured
+content/codec and cloud commitment are not yet verified. These observations do
+not establish the requested complete normal-app recording acceptance. See the
 [candidate evidence and remaining gates](../../release/evidence/2.0.0-beta.19-preflight.md).
+
+## October 15 exact-main and normal-app checkpoint
+
+The current software qualification is source
+`9e7c54d8ea8829f8e569b8ba240555a6e013ef7a`. Its 49-file preserved inventory has
+SHA-256 `ea0562e515d80c2269a3c3455b9de4026104ccda15b63f88a94162263b039703`.
+This candidate includes the forward shared queue/sink identity correction;
+preceding branch and main candidates remain historical evidence. The normal app
+manifest and installed SDK remain beta.18, with an explicit local beta.19 archive
+override. No native host rebuild, public beta.19 installation or signed app OTA
+is established by these checks.
+
+Normal One accepts START at 17:29 UTC and the known input plays twice. At
+17:30:37, the first Stop is rejected as busy while the UI misleadingly dismisses.
+A second explicit Stop at 17:32:02 is accepted, followed by a fresh device Idle
+observation. At 17:32:23, recording transfer fails integrity before it returns a
+localPath or starts upload-file HTTP. Normal disconnect succeeds. Captured
+microphone content, cloud commitment and device cleanup remain unverified.
+The earlier 228,989-byte retained file and its task remain protected, now
+pending/retry 4; the forward source fix does not migrate that mismatched task.
+The original failed/retry-0 task and cloud pointer remain unchanged.
+
+At that physical checkpoint, both apps' Stop UI corrections have local regression
+coverage only. A subsequent updated-UI attempt freezes; Metro is restarted.
+The retained 17:41 source-graph proof lists 3,301 sources and bundle SHA-256
+`2953b3e30ff1035d15713e6c111a26edb2256cd7899a963aa8af480b2cbca651`.
+Compiled Stop markers and a matching served bundle prove code presence. Normal
+One's execution marker is then verified at 17:43. No START or transfer is
+attempted while fresh Syncing/4G-uploading observations through 17:46 indicate
+firmware ownership. Graceful disconnect succeeds and One is force-stopped. The
+hotfix's physical Stop behavior and complete recording flow remain unverified at
+that checkpoint.
+
+The later normal One attempt at 17:58 executes the actual `9e7c54d8` core and
+accepts START/STOP. Fresh Idle at 17:59:39 reports streaming=false, WiFi > BLE >
+cellular, no WiFi credentials, LTE connected, syncing=false and pending 1.
+Traced transfer receives 258 DATA packets, sequences 0–257, with 128,603 payload
+bytes and no gaps, duplicates or length errors. EOF arrives once; all nine
+appends complete for 128,603 bytes, finalization returns that size, ACK1/NACK0
+and disconnect succeeds. This verifies bounded transfer for this short fresh
+capture. Upload then reports app OS-port progress 65,535 → 128,603 → 65,535.
+The SDK rejects the regression as `invalid_input` and joins HTTP abort; its
+validation is unchanged. The app correction, cloud commitment, device cleanup
+and full recording acceptance remain unverified.
+
+Normal Demo's selected device reports firmware 1.0.19 and fresh Idle at 17:54
+with BLE > WiFi > cellular, streaming=false, no WiFi credentials and LTE off.
+Start/Stop and one known input playback pass. Fresh LIST remains empty through
+17:56:50; neither a new cloud recording nor the absence cause is established.
 
 ## Source and distribution
 
@@ -380,8 +434,8 @@ older adapter behavior.
 | Preserve unresolved old native work | Exact 12-byte empty catalog classifier is generated Rust; pending/unknown artifacts stay protected | Classifier matched; automatic pending-state migration not implemented |
 | Scoped durable receipt cleanup | Requirement/evidence reviews and injected host failures | Installed durability and physical acceptance unverified |
 | Published beta.18 Android legacy transfer | Controlled capture and bounded packet/append metadata above | Failed at the 256-packet backlog bound; occupied public artifacts unchanged |
-| Unpublished beta.19 source/runtime | Canonical generation; all nine exact branch CI jobs/License; 486 RN tests, 136 RPC comparisons, 715 pinned Hermes checks; 49 preserved files/five identities/59 Flutter files | Matched branch candidate gates; final-main CI/publication pending |
-| Unpublished beta.19 Android transfer/lifecycle | Two connections without radio reset; joined failure teardown; normal One controls and retained file size/SHA pass; new tasks share their file-sink UUID for restart lookup | Partial: earlier distinct-ID task remains pending/retry 3; first same-runtime cancellation unresolved; Demo has no verified new cloud result; complete sync/device cleanup remain open |
+| Unpublished beta.19 source/runtime | Exact main `9e7c54d8`: canonical generation; all nine CI jobs/License; 490 RN tests, 136 RPC comparisons, 715 pinned Hermes checks; 49 preserved files/five identities/500 RN package files/59 Flutter files | Matched exact-main candidate gates; publication and app delivery separate |
+| Unpublished beta.19 Android transfer/lifecycle | Earlier receive-gap failures are preserved above; latest actual-core normal One short transfer finalizes 128,603 bytes from 258 consecutive DATA packets, EOF1/ACK1/NACK0; disconnect succeeds; new tasks share their file-sink UUID | Bounded short transfer matched; app OS-port progress regression strictly rejected; older distinct-ID task remains unmigrated at pending/retry 4; Demo fresh LIST remains empty; full cloud commitment/device cleanup and app acceptance remain open |
 | Redistribution notices | Exact public RN archive contains all 47 notices and generated runtime/declarations; source license gates and private fixture checks pass | Matched public archive and source checks |
 | npm publication and application OTA | Exact approved RN/Web bytes are public; initial OS-port installation and app rollout remain separate | npm matched; app OTA and physical acceptance unverified |
 

@@ -1,19 +1,59 @@
 # AGENTS.md
 
-October 15 restart correction: new managed transfers use the same opaque UUID for
-their upload task and file sink. Restart lookup can therefore reopen the exact
-logical file from its admitted queue task. Previously those IDs differed; One's
-normal restart creates an empty task-derived file at the failed retry checkpoint
-while the original 228,989-byte file remains intact. The retained older task is
-now pending/retry 3 and is not migrated by this forward correction. Do not infer
-its missing sink identity from an arbitrary OS path or rewrite its cloud pointer.
+October 15 unpublished beta.19 qualification: exact main `9e7c54d8` passes all
+nine CI jobs `38776953313` and License `38776953300`, including 490 RN tests,
+136 Rust/JS RPCs and 715 pinned Hermes checks. All 49 preserved files, five
+original identities, 500 RN package files and 59 Flutter files verify. Publication,
+app delivery and complete physical acceptance remain separate; beta.18 stays
+the public baseline. See the [exact-source preflight](release/evidence/2.0.0-beta.19-preflight.md).
+
+Normal One using the actual `9e7c54d8` core at 17:58 UTC accepts START/STOP.
+Fresh Idle at 17:59:39 reports streaming=false, WiFi > BLE > cellular, no WiFi
+credentials, LTE connected, syncing=false and pending 1. Its short transfer
+passes: 258 DATA packets, sequences 0–257, 128,603 payload bytes, no gaps,
+duplicates or length errors, EOF1, nine completed appends and finalized size
+128,603, ACK1/NACK0. Disconnect succeeds. Upload then fails on an app OS-port
+progress regression, 65,535 → 128,603 → 65,535; the SDK preserves strict
+`invalid_input` evidence and joins the HTTP abort. The app correction and full
+cloud commitment/device cleanup remain unverified. Normal Demo on firmware
+1.0.19 accepts Start/Stop and one known input playback after fresh Idle with
+BLE > WiFi > cellular, streaming=false, no WiFi credentials and LTE off. Fresh
+LIST stays empty through 17:56:50; no new cloud recording is verified.
+
+At the earlier 17:29 UTC One checkpoint, START and two known input playbacks
+pass. The first Stop at 17:30:37 is rejected as busy, but the UI misleadingly
+dismisses. A second
+explicit Stop at 17:32:02 is accepted and fresh device Idle is verified. Transfer
+then fails integrity at 17:32:23 before returning a localPath or invoking
+upload-file HTTP; normal disconnect succeeds. The earlier retained 228,989-byte
+task is now pending/retry 4 and remains unmigrated; the original failed/retry-0
+task and its cloud pointer remain unchanged. Stop UI corrections in both apps
+have local regressions only at that physical checkpoint. After a subsequent
+Stop UI freeze, Metro is restarted and compiled-source/bundle markers verify. Normal One's
+execution marker is verified at 17:43. No START or transfer is attempted while
+fresh Syncing/4G-uploading observations through 17:46 indicate firmware ownership.
+Graceful disconnect succeeds, then One is force-stopped. These observations do
+not establish cloud commitment, device cleanup or complete normal-app acceptance.
+The later short-transfer result above supersedes the pending capture gate;
+broader physical and app acceptance remain open.
+
+October 15 restart correction (initial checkpoint): new managed transfers use
+the same opaque UUID for their upload task and file sink. Restart lookup can
+therefore reopen the exact logical file from its admitted queue task. Previously
+those IDs differed; One's normal restart creates an empty task-derived file at
+the failed retry checkpoint while the original 228,989-byte file remains intact.
+The retained older task is
+pending/retry 3 at the 17:16 UTC checkpoint and is not migrated by this forward
+correction. Do not infer its missing sink identity from an arbitrary OS path or
+rewrite its cloud pointer.
 The earlier same-runtime upload cancellation remains a separate open cause.
 
-October 15 normal-app testing: the busy-read guard now keeps One connected through
-normal Start/Stop. Its resulting local file is 228,989 bytes and its on-phone SHA
-matches the retained queue. Upload fails with `cancelled`, leaving that new task
-pending/retry 2; the original failed/retry-0 task remains unchanged. Demo normal
-Start/Stop and disconnect pass, but no new synced cloud file is verified.
+October 15 initial normal-app testing: the busy-read guard keeps One connected
+through normal Start/Stop. Its resulting local file is 228,989 bytes and its
+on-phone SHA matches the retained queue. Upload fails with `cancelled`, leaving
+that new task pending/retry 2 at that checkpoint; the original failed/retry-0 task remains
+unchanged. Demo normal Start/Stop and disconnect pass, but no new synced cloud
+file is verified.
 `JsRecordingUploads` now preserves a progress-policy/callback error when the
 resulting child abort also rejects the joined HTTP port. Two permanent regressions
 cover that masking bug and independent cancellation. This restores diagnostics;
@@ -25,9 +65,10 @@ scan callback retirement. Linux regressions reproduce both old Rust failures;
 canonical regeneration and strict types pass. Candidate `ce087f88` passes all
 nine exact branch CI jobs and License, including 486 RN tests, 136 Rust/JS RPCs
 and 715 pinned Hermes checks. All 49 preserved files, five identities and 59
-Flutter files verify; final-main CI and publication remain separate. Its exact
-packed original `/runtime` runs in One's unchanged Android host while the app manifest and
-installed package remain beta.18. Two fresh exact-device connections and joined
+Flutter files verify; these branch results precede the main qualification above.
+Publication remains separate. Its exact packed original `/runtime` runs in
+One's unchanged Android host while the app manifest and installed package remain
+beta.18. Two fresh exact-device connections and joined
 teardown pass without a Bluetooth reset. A new synthetic START/STOP and two known
 input playbacks pass, but microphone content is unverified. Transfer rejects a
 missing DATA sequence 28 observed before Rust dispatch: 29 packets/14,500 received
@@ -35,9 +76,10 @@ bytes, 14,000 durable bytes, no EOF/CRC, NACK1/ACK0/CONFIRM0. Cleanup now passes
 full recording acceptance remains failing. Preserve the old failed queue/cloud
 pointer; the new source's post-disconnect state is unknown. Normal One navigation
 opens; its busy-read disconnect guard fix passes local tests/types and awaits UI
-retest. Normal Demo session/cloud list and selected-test-device connection pass;
-normal Start/Stop and two known input playbacks succeed. Its manual pending-file
-sync is running; transfer, captured content and cloud completion remain unverified.
+retest at that checkpoint. Normal Demo session/cloud list and selected-test-device
+connection pass; normal Start/Stop and two known input playbacks succeed. Its
+manual pending-file sync is running at that checkpoint; transfer, captured content
+and cloud completion remain unverified.
 Isolated candidate checks do not establish normal-app acceptance.
 Keep beta.18 artifacts immutable and retain the original package identity.
 See [beta.19 preparation](release/evidence/2.0.0-beta.19-preflight.md).
