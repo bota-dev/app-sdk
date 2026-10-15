@@ -60,6 +60,33 @@ source SHA-256
 Compiler-free provenance passes. The actual adapter regressions now both pass,
 including immediate and held Disconnect return; all 504 full RN tests pass.
 Strict TypeScript, normal build, Codegen, package metadata and license
-checks pass. Apple public checksum regeneration, fresh exact-main
-CI/License/archive qualification and normal phone testing remain required.
+checks pass. The resulting isolated functional commit is `f5b3edb777f225b2db939611a6efeb7704464a3d`.
+Its original beta.19 RN pack contains 500 hashed files; its SHA-256 is
+`fe28ac203ccef8a90a1660549b3befcb6fd10224678257cb6813bfa6b41b9c69`.
+This local Windows phone candidate is separate from the future main-CI archive.
+Fresh exact-main CI/License/archive qualification and normal phone testing remain
+required.
 Beta.19 remains unpublished; preceding d13/fd409 qualification is separate.
+
+Exact source-branch Apple job 116688885682 then passes, including its normal
+Swift callers, device/simulator builds, binary slices and exact CocoaPods
+archive lint. Artifact 12010190969 has independently verified transport digest
+`e58e5252595fcb02b5103fc3d732db6b0d9d0770f50f4c4776cc0facaa52a2c3`.
+The exact source/version manifest, both archive hashes and sidecars verify.
+Existing public metadata generators update SwiftPM to archive SHA-256
+`acb285bca52b584d1706929e3e2d8eba23f2cd9cf011be2fae3866115bfdfe30`
+and CocoaPods to
+`f8d4d70906d1b3022ecbe542c0b606d9d5cd0489c1dd07c4bf0152ada9883231`.
+These are package preparation checks; final main artifacts must reproduce the
+pins before any release tag or publication.
+
+Normal round 6 Demo uses the exact packed f5b3/a75 core on firmware 1.0.19.
+An initial auto attempt reports `device_not_found`; the normal device-page retry
+then verifies the exact serial at MTU 512, raw model BOTA_DEV and binding
+generation 3. Normal settings writes pass. Fresh supported reads show Idle,
+pending 0, streaming=false and BLE > WiFi > cellular. Explicit UI disconnect,
+normal reconnect and another settings write pass without a Bluetooth cycle.
+Final SDK destruction joins successfully before force-stop. This bounded round
+has no observed `unexpected_event` or busy settings failure; it does not prove
+that the exact timed-out callback branch executed. No recording, model write
+or firmware update occurs; broader recording/cloud acceptance remains open.
