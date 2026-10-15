@@ -1,3 +1,10 @@
+## 2.0.0-beta.19 (candidate)
+
+- Synchronize bounded shared-Rust recording transfer batching, joined RN file
+  cleanup and scan-stop lifecycle corrections. Flutter retains its existing
+  native facade and adapter contracts. Canonical artifacts, publication and
+  device acceptance remain separate gates.
+
 ## 2.0.0-beta.18 (candidate)
 
 - Synchronize the SDK family with the React Native connected BLE MTU correction.
@@ -174,10 +181,3 @@
 
 The synchronized `1.1.0` release did not publish a Flutter package. Preparing
 this changelog entry does not claim that `1.2.0-beta.0` exists on pub.dev.
-## 2.0.0-beta.19 (candidate)
-
-- Synchronize bounded shared-Rust recording transfer batching, joined RN file
-  cleanup and scan-stop lifecycle corrections. Flutter retains its existing
-  native facade and adapter contracts. Canonical artifacts, publication and
-  device acceptance remain separate gates.
-
