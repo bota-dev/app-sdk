@@ -1,5 +1,11 @@
 # AGENTS.md
 
+October 15 managed-v2 source correction supplies the exact capture UUID and
+generation on Rust-planned recording creation. Existing V2 identity conflicts
+remain a safe refusal; lost app journals are not reconstructed. Canonical JS,
+Linux execution and fresh qualification remain pending. See the
+[scope and evidence](docs/parity/v2-managed-backend.md#october-15-managed-recording-create-identity-correction).
+
 October 15 current follow-up: exact retired-configure cancellation after an
 admitted destroy and successful cleanup logs debug; current/genuine failures
 and failed cleanup remain ERROR, with configure rejection/error event retained.

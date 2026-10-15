@@ -116,6 +116,36 @@ fn generated_create_body_preserves_strict_ten_keys_and_real_dates() {
     assert_eq!(body["ciphertext_length"], 900);
 }
 #[test]
+fn recording_create_preserves_capture_identity_across_transport_and_operation_changes() {
+    let body = |value: &Value| {
+        let plan = run(value, json!({"type":"CreateRecording"})).unwrap();
+        serde_json::from_str::<Value>(plan["bodyJSON"].as_str().unwrap()).unwrap()
+    };
+    let first = body(&input());
+    assert_eq!(first["device_id"], "dev_1");
+    assert_eq!(first["recording_uuid"], UUID);
+    assert_eq!(first["recording_generation"], 3);
+    let mut retry = input();
+    retry["operationId"] = json!("upload-after-restart");
+    retry["scope"]["nativeDeviceId"] = json!("replacement-ble-id");
+    assert_eq!(body(&retry), first);
+    for (section, field, value) in [
+        ("scope", "deviceId", json!("dev_2")),
+        ("recording", "uuid", json!(SESSION)),
+        ("recording", "generation", json!(4)),
+    ] {
+        let mut distinct = input();
+        distinct[section][field] = value.clone();
+        let expected_field = match field {
+            "deviceId" => "device_id",
+            "uuid" => "recording_uuid",
+            _ => "recording_generation",
+        };
+        assert_eq!(body(&distinct)[expected_field], value);
+        assert_ne!(body(&distinct), first);
+    }
+}
+#[test]
 fn root_and_prefixed_routes_preserve_exact_origin_and_path() {
     for prefix in ["", "/v1", "/dashboard/projects/proj_a"] {
         let mut i = input();

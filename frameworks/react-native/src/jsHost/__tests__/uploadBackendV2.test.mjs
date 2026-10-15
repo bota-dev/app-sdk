@@ -137,6 +137,33 @@ test('lost create response remains durably unknown and a later operation cannot 
   } finally { await f.backend.dispose(); f.core.dispose?.(); }
 });
 
+test('a retained V2 capture in a fresh namespace conflicts without creating another cloud recording', async () => {
+  let duplicateCreates = 0;
+  const f = fixture((url, request) => {
+    if (url.endsWith('/recordings')) {
+      const body = JSON.parse(request.body);
+      // The existing backend's exact identity conflict is deliberately not a resume API.
+      if (body.device_id === 'dev_1' && body.recording_uuid === UUID && body.recording_generation === 3) {
+        return response(url, 409, { error: { code: 'conflict', message: 'Recording identity already exists with a different upload format' } });
+      }
+      duplicateCreates++;
+      return response(url, 201, { id: 'rec_duplicate' });
+    }
+    return baseHandler(url, request);
+  });
+  try {
+    assert.equal(f.journal.size, 0);
+    await assert.rejects(f.backend.prepare(JSON.stringify(input())), /BOTA_UPLOAD_HTTP_409/);
+    assert.equal(duplicateCreates, 0);
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.uploads.length, 0);
+    assert.equal(f.materials.size, 0);
+    assert.equal([...f.journal.values()][0].phase, 'recording_create_unknown');
+    await assert.rejects(f.backend.prepare(JSON.stringify(input('upload-after-restart'))), /BOTA_UPLOAD_PENDING/);
+    assert.equal(f.calls.length, 1);
+  } finally { await f.backend.dispose(); f.core.dispose?.(); }
+});
+
 test('cancellation joins an ignored create abort and commits returned identity before the operation releases', async () => {
   const held = deferred(), dispatched = deferred();
   const f = fixture(async (url) => { dispatched.resolve(); return held.promise; });

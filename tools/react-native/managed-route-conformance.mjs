@@ -22,7 +22,12 @@ export function runManagedRouteConformance(codec, success, check, same) {
   }
   ['', '/v1', '/dashboard/projects/proj_a'].forEach(function (prefix) {
     input.scope.apiBasePath = prefix;
-    same(reduce({ type: 'CreateRecording' }).value.path, prefix + '/recordings', 'Exact managed recording route');
+    var plan = reduce({ type: 'CreateRecording' }).value;
+    same(plan.path, prefix + '/recordings', 'Exact managed recording route');
+    var body = JSON.parse(plan.bodyJSON);
+    same(body.device_id, input.scope.deviceId, 'Exact managed recording device');
+    same(body.recording_uuid, input.recording.uuid, 'Exact managed recording UUID');
+    same(body.recording_generation, input.recording.generation, 'Exact managed recording generation');
     same(reduce({ type: 'CreateSession', entry: { recordingId: 'rec_1' }, nonce: Array(16).fill(1) }).value.path,
       prefix + '/recordings/rec_1/encrypted-upload-v2/sessions', 'Exact managed session route');
   });

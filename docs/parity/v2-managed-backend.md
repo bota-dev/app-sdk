@@ -1,5 +1,48 @@
 # Managed encrypted-v2 backend adapter
 
+## October 15 managed recording-create identity correction
+
+The shared Rust `ManagedUploadEvent::CreateRecording` plan now supplies
+`recording_uuid` and `recording_generation` alongside the exact backend
+`device_id`. Previously its create body omitted those fields even though its
+session body supplied them. A fresh application namespace could consequently
+create another cloud row for a retained physical capture before session setup.
+The existing managed input already rejects generation zero and noncanonical
+UUIDs; this correction adds no identity inference or validation restriction.
+
+The current Bota API creates idempotently by device/UUID/generation when those
+fields are supplied. Its existing HTTP 409 for a previously encrypted-v2 row
+remains unchanged. Such a conflict preserves `recording_create_unknown` and
+permits neither another create POST for that journal nor session/PUT. This prevents blank-identity
+creation; it does not recover an uninstalled application's journals, reconstruct
+its cloud pointer or authorize resuming an otherwise unowned V2 session. Legacy
+four-byte file IDs must not be expanded into guessed full capture identities.
+
+The Rust regression checks stable capture identity across operation/peripheral
+changes and distinguishes different devices, UUIDs and generations. A real
+generated-host fixture models the existing backend conflict: it fails against
+the preceding generated core because preparation incorrectly succeeds. Shared
+Node/native and Hermes conformance checks assert all three identity fields for
+root, v1 and dashboard prefixes. The preceding 768-check Hermes result is
+historical; the new canonical core and expanded count remain pending.
+
+The actual Bota One recording-create proxy preserves both fields and forces its
+authenticated EndUser after an owned-device read. Its existing 23 tests and
+three supplementary actual-handler fixtures pass (exact forwarding, unchanged
+409 and foreign-device refusal); this is source verification, not deployed
+proxy attestation. The compatibility Android `NativeUpload.kt` and Apple
+`UploadOperation.swift` recording-create HTTP bodies are separate handwritten
+paths and still omit these fields; this Rust planner change does not claim
+their correction. Installed OS ports and native contracts remain unchanged.
+
+Reviewed against Upload Management §1.1: exact identity emission is corrected
+in source; canonical Linux Rust/JS execution, complete cross-platform
+qualification, publication and physical acceptance remain unverified.
+Local formatting passes. Offline MSVC compilation currently stops at the
+unavailable `link.exe`; no downloaded toolchain or execution-policy bypass is
+used. The generated-host conflict fixture remains red until canonical
+regeneration and must pass before integration or publication.
+
 ## October 13 generated-JS root proxy admission (beta.17 preparation)
 
 Some authenticated customer proxies expose `/recordings` directly at the HTTPS

@@ -648,6 +648,7 @@ impl ManagedUploadRequest {
                 plan(
                     format!("{}/recordings", input.base()),
                     json!({"device_id":input.scope.device_id,
+                    "recording_uuid":input.recording.uuid,"recording_generation":input.recording.generation,
                     "end_user_id":input.scope.end_user_id,"upload_method":"ble","streaming":false,
                     "metadata":{"started_at":iso_date(start),"ended_at":iso_date(end)}}),
                 )?
