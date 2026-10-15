@@ -1,11 +1,26 @@
 # AGENTS.md
 
-Unpublished beta.19 source corrects the beta.18 physical transfer failure with
+Unpublished beta.19 source addresses the beta.18 physical transfer failure with
 Rust-owned bounded append batching, joined JS terminal cleanup and exact late
 scan callback retirement. Linux regressions reproduce both old Rust failures;
-focused JS cleanup/scan regressions and strict types pass. Canonical regeneration,
-full candidate CI, physical transfer/reconnect and publication are still pending.
-Keep beta.18 artifacts immutable and retain the original `/runtime` identity.
+canonical regeneration and strict types pass. Candidate `ce087f88` passes all
+nine exact branch CI jobs and License, including 486 RN tests, 136 Rust/JS RPCs
+and 715 pinned Hermes checks. All 49 preserved files, five identities and 59
+Flutter files verify; final-main CI and publication remain separate. Its exact
+packed original `/runtime` runs in One's unchanged Android host while the app manifest and
+installed package remain beta.18. Two fresh exact-device connections and joined
+teardown pass without a Bluetooth reset. A new synthetic START/STOP and two known
+input playbacks pass, but microphone content is unverified. Transfer rejects a
+missing DATA sequence 28 observed before Rust dispatch: 29 packets/14,500 received
+bytes, 14,000 durable bytes, no EOF/CRC, NACK1/ACK0/CONFIRM0. Cleanup now passes;
+full recording acceptance remains failing. Preserve the old failed queue/cloud
+pointer; the new source's post-disconnect state is unknown. Normal One navigation
+opens; its busy-read disconnect guard fix passes local tests/types and awaits UI
+retest. Normal Demo session/cloud list and selected-test-device connection pass;
+normal Start/Stop and two known input playbacks succeed. Its manual pending-file
+sync is running; transfer, captured content and cloud completion remain unverified.
+Isolated candidate checks do not establish normal-app acceptance.
+Keep beta.18 artifacts immutable and retain the original package identity.
 See [beta.19 preparation](release/evidence/2.0.0-beta.19-preflight.md).
 
 Beta.18 is published across all five SDK families at accepted source 0962c8c.

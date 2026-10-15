@@ -7,8 +7,15 @@ Shared Rust batches buffered contiguous legacy DATA within 32 KiB; the JS
 executor joins submitted work before terminal cleanup and scan startup before
 subscription removal. Rust ignores only matching queued scan callbacks while
 awaiting StopScan. Existing OS ports, identity fences and confirmation rules
-remain unchanged. Candidate regeneration, complete tests and physical acceptance
-are pending; see the [preflight](../../release/evidence/2.0.0-beta.19-preflight.md).
+remain unchanged. Canonical generation and all nine exact candidate branch CI
+jobs/License pass, including 486 RN tests, 136 Rust/JS RPC comparisons and 715
+pinned Hermes checks. All 49 preserved files, five identities and 59 Flutter
+files verify. Two candidate Android connections and joined teardown pass without
+a Bluetooth reset,
+but a newly observed receive gap still prevents full transfer. One's local busy
+read/disconnect guard fix awaits UI retest; normal Demo sync is running. Full app
+acceptance, final-main CI and publication remain pending. See the
+[preflight](../../release/evidence/2.0.0-beta.19-preflight.md).
 
 Published beta.18 corrects connected BLE PLX MTU observation under the original
 package identity. Exact main CI/License, protected release attempt 2, public
@@ -71,10 +78,48 @@ discard can contend with its own submitted append, and cleanup failure retains
 the SDK operation owner. The append had settled by the terminal observation;
 retained OS GATT ownership was not observed. A phone Bluetooth cycle allowed one
 reconnect, while the next failed with `unexpected_event`; stable reconnection
-remains unverified. Full sync fails; cloud commitment and durable completion
-remain unverified. Source fixes are deferred: Rust-owned bounded append batching and JS same-sink cleanup
-ordering need delayed-sink/backlog, cancellation and joined-teardown regressions.
+remains unverified at that published baseline. Full sync fails; cloud commitment
+and durable completion remain unverified. The unpublished beta.19 source adds
+the bounded batching, same-sink cleanup and scan corrections, with candidate
+results below; beta.18's occupied artifacts remain unchanged.
 See the [mobile migration review](https://github.com/bota-dev/internal-docs/blob/main/test/2026-10-13-generated-js-mobile-migration.md).
+
+## October 15 unpublished beta.19 Android candidate
+
+The exact packed candidate at `ce087f88` uses the original `/runtime` entry in
+One 1.0.10's existing Android host. The app manifest and installed SDK package
+remain beta.18; a temporary explicit override selects the reviewed beta.19
+archive. No native host rebuild, public beta.19 installation or app OTA is implied.
+Two fresh exact-serial connections complete, first for metadata and then capture,
+without a phone Bluetooth reset. Both verify current scope/binding generation,
+firmware-reported 1.0.18 and MTU 512, and join disconnect/destruction successfully.
+
+Fresh batch/connection policy permits one START and one STOP with fresh nonce
+grants; stopped state is verified. A known synthetic input plays twice during
+capture, while recorded microphone content and quality remain unverified.
+The new post-STOP legacy catalog advertises one 208,896-byte/49-second file.
+Transfer receives 29 DATA packets totaling 14,500 payload bytes, with sequences
+0–27 followed by 29. The diagnostic port observes the missing sequence 28 before
+Rust dispatch, so this is an upstream delivery gap, not evidence that Rust
+batching dropped a received packet. Firmware versus Android/native attribution
+remains unproven. Seven appends report 14,000 durable bytes and last sequence 27;
+no EOF, finalization or CRC verification occurs. Integrity rejection sends
+NACK1/ACK0/CONFIRM0. Diagnostic sink discard and checkpoint removal each complete
+once; disconnect and destroy now both pass after the failed transfer.
+
+The original failed queue/retry 0 and exact pending cloud pointer remain unchanged
+without size/hash. No app recording create, PUT, upload or device CONFIRM occurs.
+Private capture correlation is retained; legacy aliasing does not prove exact
+cross-channel identity. New source presence and autonomous cloud outcome after
+disconnect remain unknown. Normal One home/auth/list/device navigation opens,
+but a false disconnect under its busy read loop is identified. Its local guard
+fix passes focused tests and strict types; normal UI retesting remains pending.
+Normal Demo's fresh session/cloud list and selected-test-device BLE connection
+pass, and normal Start/Stop buttons plus two known input playbacks succeed.
+Manual Pending recordings Sync is running; transfer, captured content/codec and
+cloud commitment are not yet verified. These observations do not establish the
+requested complete normal-app recording acceptance. See the
+[candidate evidence and remaining gates](../../release/evidence/2.0.0-beta.19-preflight.md).
 
 ## Source and distribution
 
@@ -334,7 +379,9 @@ older adapter behavior.
 | Runtime lifetime across scope changes | Real generated A → B → A fresh-factory configure/recovery/destroy cycles; late callbacks remain fenced | Fresh-factory route matched; same-client reconfigure remains partial |
 | Preserve unresolved old native work | Exact 12-byte empty catalog classifier is generated Rust; pending/unknown artifacts stay protected | Classifier matched; automatic pending-state migration not implemented |
 | Scoped durable receipt cleanup | Requirement/evidence reviews and injected host failures | Installed durability and physical acceptance unverified |
-| Published beta.18 Android legacy transfer | Controlled capture and bounded packet/append metadata above | Failed at the 256-packet backlog bound; SDK teardown uncertain; source fix deferred |
+| Published beta.18 Android legacy transfer | Controlled capture and bounded packet/append metadata above | Failed at the 256-packet backlog bound; occupied public artifacts unchanged |
+| Unpublished beta.19 source/runtime | Canonical generation; all nine exact branch CI jobs/License; 486 RN tests, 136 RPC comparisons, 715 pinned Hermes checks; 49 preserved files/five identities/59 Flutter files | Matched branch candidate gates; final-main CI/publication pending |
+| Unpublished beta.19 Android transfer/lifecycle | Two connections without radio reset; missing sequence rejected; joined failure teardown passes | Partial: full transfer fails before EOF/CRC; One guard UI retest and normal Demo sync outcomes pending |
 | Redistribution notices | Exact public RN archive contains all 47 notices and generated runtime/declarations; source license gates and private fixture checks pass | Matched public archive and source checks |
 | npm publication and application OTA | Exact approved RN/Web bytes are public; initial OS-port installation and app rollout remain separate | npm matched; app OTA and physical acceptance unverified |
 
