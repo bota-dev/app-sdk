@@ -39,6 +39,53 @@ function fixture(options = {}) {
 const writesBeyondTimeSync = f => f.calls.filter(call => Array.isArray(call) && call[0] === 'write'
   && call[1].characteristicUuid !== f.metadata.CHAR_TIME_SYNC);
 
+test('restarted uploads reopen the original shared task/sink UUID and preserve older unmatched files', async () => {
+  for (const sharedIdentity of [true, false]) {
+    const durableFiles = new Map(), opened = [], uploads = [];
+    const sinkId = '11111111-2222-4333-8444-555555555555';
+    const taskId = sharedIdentity ? sinkId : 'older-independent-task';
+    const options = { fetch: async () => { throw new Error('No cloud completion belongs to this file-only fixture'); },
+      uploadFile: async (_target, handle, _context, progress) => { uploads.push(handle.id); progress?.('4', '4'); } };
+    const f = fixture({ adapterOptions: options, files: {
+      async open(logicalId, kind) {
+        opened.push(logicalId);
+        if (!durableFiles.has(logicalId)) durableFiles.set(logicalId, new Uint8Array());
+        return { id: logicalId, kind, scope: 'account/project/user' };
+      },
+      async metadata(handle) { return { localPath: `owned-opaque-file:${handle.id}`, durableUnits: String(durableFiles.get(handle.id).length) }; },
+      async append(handle, _offset, bytes) { durableFiles.set(handle.id, bytes.slice()); return { durableUnits: String(bytes.length) }; },
+      async remove() { throw new Error('Retained files must not be deleted by upload admission'); },
+    } });
+    let restarted;
+    try {
+      await f.adapter.configure({ logLevel: 'none' });
+      const file = await f.ports.files.open(`recording/${sinkId}`, 'file');
+      await f.ports.files.append(file, '0', Uint8Array.of(1, 2, 3, 4));
+      const localPath = (await f.ports.files.metadata(file)).localPath;
+      await f.adapter.saveCompatibilityUploadQueue(JSON.stringify([{ id: taskId, recordingId: 'rec_existing', deviceId: 'ble-selected',
+        recordingUuid: '11111111-0000-0000-0000-000000000000', localPath, fileSizeBytes: 4, status: 'pending', retryCount: 0,
+        createdAt: '2026-10-15T17:00:00Z', updatedAt: '2026-10-15T17:00:00Z' }]));
+      const queueBefore = await f.adapter.loadCompatibilityUploadQueue();
+      await f.adapter.destroy();
+      restarted = createJsDeviceAdapter(f.core, f.ports, options);
+      await restarted.configure({ logLevel: 'none' });
+      const request = { taskId: `${taskId}_attempt`, recordingId: 'rec_existing', deviceId: 'ble-selected', localPath,
+        fileSizeBytes: 4, uploadUrl: 'https://storage.example.test/owned-file' };
+      if (sharedIdentity) {
+        await restarted.uploadRecordingFile(request);
+        assert.deepEqual(uploads, [`recording/${sinkId}`]);
+        assert.deepEqual(opened, [`recording/${sinkId}`, `recording/${sinkId}`]);
+      } else {
+        await assert.rejects(restarted.uploadRecordingFile(request), error => error.code === 'foreign_file_handle');
+        assert.equal(uploads.length, 0);
+        assert.equal(durableFiles.get(`recording/${taskId}`).length, 0);
+      }
+      assert.deepEqual(durableFiles.get(`recording/${sinkId}`), Uint8Array.of(1, 2, 3, 4));
+      assert.equal(await restarted.loadCompatibilityUploadQueue(), queueBefore);
+    } finally { await restarted?.destroy(); await f.adapter.destroy(); f.core.dispose(); }
+  }
+});
+
 test('generated adoption joins automatic UTC time sync before publishing the public connection', { timeout: 5000 }, async () => {
   const f = fixture();
   const { createBotaReactNativeJsRuntime } = loadSource('../runtime.ts');

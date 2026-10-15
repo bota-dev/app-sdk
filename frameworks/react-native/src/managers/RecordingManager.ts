@@ -36,9 +36,6 @@ type ProgressiveOperation<T> = {
   next(): Promise<IteratorResult<BotaRecordingTransferProgress, T>>;
 };
 
-const createTaskId = (): string =>
-  `task_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
 const createOpaqueId = (): string =>
   'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (value) => {
     const random = Math.floor(Math.random() * 16);
@@ -158,7 +155,7 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
     const sinkId = createOpaqueId();
     const now = new Date();
     const task: UploadTask = {
-      id: createTaskId(),
+      id: sinkId,
       recordingId: uploadInfo.recordingId,
       deviceId: device.id,
       recordingUuid: recording.uuid,

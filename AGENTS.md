@@ -1,5 +1,14 @@
 # AGENTS.md
 
+October 15 restart correction: new managed transfers use the same opaque UUID for
+their upload task and file sink. Restart lookup can therefore reopen the exact
+logical file from its admitted queue task. Previously those IDs differed; One's
+normal restart creates an empty task-derived file at the failed retry checkpoint
+while the original 228,989-byte file remains intact. The retained older task is
+now pending/retry 3 and is not migrated by this forward correction. Do not infer
+its missing sink identity from an arbitrary OS path or rewrite its cloud pointer.
+The earlier same-runtime upload cancellation remains a separate open cause.
+
 October 15 normal-app testing: the busy-read guard now keeps One connected through
 normal Start/Stop. Its resulting local file is 228,989 bytes and its on-phone SHA
 matches the retained queue. Upload fails with `cancelled`, leaving that new task

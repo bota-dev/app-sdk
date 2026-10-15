@@ -21,6 +21,10 @@ core-requested checkpoint, and returns append evidence only after durable host
 completion. The host verifies final CRC32 before acknowledging finalization.
 Firmware reads are bounded and preserve decimal 64-bit offsets. No file effect
 authorizes deletion of the recording on the physical device.
+Managed recording transfers use one opaque UUID for the durable queue task and
+file sink, so admitted restart lookup reopens `recording/<task.id>`. Older tasks
+whose sink used a different, unrecorded ID remain protected; this does not permit
+reconstructing an opaque handle from an arbitrary local path.
 
 Protected packet/material references stay opaque. The ordinary raw-byte core
 event boundary does not yet represent an opaque provisioning/reset envelope or
