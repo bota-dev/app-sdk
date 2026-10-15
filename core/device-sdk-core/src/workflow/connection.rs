@@ -570,8 +570,61 @@ impl WorkflowReducer for ConnectionWorkflow {
                     }
                 }
             }
-            (Phase::Disconnecting, HostEventKind::Ble(BleEvent::Disconnected { .. }))
-                if Some(request_id) == self.disconnect_request_id =>
+            // A deadline cannot cancel an already-submitted host IO instantly.
+            // Retire only that exact attempt's late result while its Disconnect
+            // is joined; never verify identity or probe again before the ack.
+            (Phase::Disconnecting, HostEventKind::Ble(BleEvent::Connected { peripheral_id }))
+                if Some(request_id) == self.connect_request_id
+                    && self
+                        .active_candidate
+                        .as_ref()
+                        .is_some_and(|candidate| candidate.peripheral_id == peripheral_id) =>
+            {
+                self.connect_request_id = None;
+                Ok(Vec::new())
+            }
+            (
+                Phase::Disconnecting,
+                HostEventKind::Ble(BleEvent::ServicesDiscovered { peripheral_id }),
+            ) if Some(request_id) == self.discover_request_id
+                && self
+                    .active_candidate
+                    .as_ref()
+                    .is_some_and(|candidate| candidate.peripheral_id == peripheral_id) =>
+            {
+                self.discover_request_id = None;
+                Ok(Vec::new())
+            }
+            (Phase::Disconnecting, HostEventKind::Ble(BleEvent::ReadCompleted { .. }))
+                if Some(request_id) == self.read_request_id =>
+            {
+                self.read_request_id = None;
+                Ok(Vec::new())
+            }
+            (Phase::Disconnecting, HostEventKind::Ble(BleEvent::Failed { .. }))
+                if Some(request_id) == self.connect_request_id
+                    || Some(request_id) == self.discover_request_id
+                    || Some(request_id) == self.read_request_id =>
+            {
+                if Some(request_id) == self.connect_request_id {
+                    self.connect_request_id = None;
+                }
+                if Some(request_id) == self.discover_request_id {
+                    self.discover_request_id = None;
+                }
+                if Some(request_id) == self.read_request_id {
+                    self.read_request_id = None;
+                }
+                Ok(Vec::new())
+            }
+            (
+                Phase::Disconnecting,
+                HostEventKind::Ble(BleEvent::Disconnected { peripheral_id, .. }),
+            ) if Some(request_id) == self.disconnect_request_id
+                && self
+                    .active_candidate
+                    .as_ref()
+                    .is_some_and(|candidate| candidate.peripheral_id == peripheral_id) =>
             {
                 self.disconnect_request_id = None;
                 Ok(self.finish_disconnect(context))

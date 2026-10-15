@@ -405,6 +405,226 @@ fn reconnect_stopping_scan_rejects_unrelated_callbacks() {
 }
 
 #[test]
+fn timed_out_connection_attempt_retires_only_its_late_io_before_disconnect_ack() {
+    for manual in [false, true] {
+        for phase in 0..3 {
+            for fails in [false, true] {
+                let mut engine = WorkflowEngine::default();
+                let selected = candidate("timed-out", None, -40);
+                let connecting = if manual {
+                    engine
+                        .start(
+                            Command::Connect {
+                                device: serial("EVFXXW67KP"),
+                                candidate: selected.clone(),
+                            },
+                            &capabilities(),
+                            MANUAL_CANCELLATION,
+                        )
+                        .unwrap()
+                } else {
+                    let started = start_reconnect(&mut engine, ReconnectHint::default());
+                    let scan = request_id(&started, |effect| {
+                        matches!(effect, Effect::Ble(BleEffect::StartScan { .. }))
+                    });
+                    for found in [selected.clone(), candidate("next-probe", None, -55)] {
+                        engine
+                            .dispatch(host(
+                                scan,
+                                HostEventKind::Ble(BleEvent::ScanResult { candidate: found }),
+                            ))
+                            .unwrap();
+                    }
+                    finish_scan(&mut engine, &started)
+                };
+                let timer = connecting
+                    .iter()
+                    .find(|request| {
+                        matches!(request.effect, Effect::Timer(TimerEffect::Schedule { .. }))
+                    })
+                    .unwrap();
+                let Effect::Timer(TimerEffect::Schedule { timer_id, .. }) = timer.effect else {
+                    unreachable!()
+                };
+                let connect = request_id(&connecting, |effect| {
+                    matches!(effect, Effect::Ble(BleEffect::Connect { .. }))
+                });
+                let mut pending = connect;
+                let mut completion = BleEvent::Connected {
+                    peripheral_id: selected.peripheral_id.clone(),
+                };
+                if phase > 0 {
+                    let discovering = engine
+                        .dispatch(host(connect, HostEventKind::Ble(completion)))
+                        .unwrap();
+                    pending = request_id(&discovering, |effect| {
+                        matches!(effect, Effect::Ble(BleEffect::DiscoverServices { .. }))
+                    });
+                    completion = BleEvent::ServicesDiscovered {
+                        peripheral_id: selected.peripheral_id.clone(),
+                    };
+                    if phase > 1 {
+                        let reading = engine
+                            .dispatch(host(pending, HostEventKind::Ble(completion)))
+                            .unwrap();
+                        pending = request_id(&reading, |effect| {
+                            matches!(effect, Effect::Ble(BleEffect::Read { .. }))
+                        });
+                        completion = BleEvent::ReadCompleted {
+                            value: b"EVFXXW67KP".to_vec(),
+                        };
+                    }
+                }
+                let disconnecting = engine
+                    .dispatch(host(
+                        timer.request_id,
+                        HostEventKind::TimerFired { timer_id },
+                    ))
+                    .unwrap();
+                let disconnect = request_id(&disconnecting, |effect| {
+                    matches!(effect, Effect::Ble(BleEffect::Disconnect { .. }))
+                });
+                let late = if fails {
+                    BleEvent::Failed {
+                        platform_code: Some(8),
+                    }
+                } else {
+                    completion
+                };
+                assert!(
+                    engine
+                        .dispatch(host(pending, HostEventKind::Ble(late.clone())))
+                        .unwrap()
+                        .is_empty(),
+                    "manual={manual}, phase={phase}, fails={fails}"
+                );
+                assert_eq!(
+                    engine
+                        .dispatch(host(pending, HostEventKind::Ble(late)))
+                        .unwrap_err()
+                        .code,
+                    ErrorCode::UnexpectedEvent
+                );
+                // Neither a late success nor failure may verify identity or begin another probe.
+                assert!(matches!(engine.status(), WorkflowStatus::Running { .. }));
+                let after_ack = engine
+                    .dispatch(host(
+                        disconnect,
+                        HostEventKind::Ble(BleEvent::Disconnected {
+                            peripheral_id: selected.peripheral_id,
+                            reason_code: None,
+                        }),
+                    ))
+                    .unwrap();
+                if manual {
+                    assert!(
+                        matches!(engine.status(), WorkflowStatus::Failed { error } if error.code == ErrorCode::Timeout)
+                    );
+                } else {
+                    assert!(after_ack.iter().any(|request| matches!(&request.effect, Effect::Ble(BleEffect::Connect { peripheral_id }) if peripheral_id == "next-probe")));
+                    assert_identity_not_trusted(&after_ack);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn disconnecting_connection_rejects_foreign_request_class_and_peripheral_callbacks() {
+    let mut engine = WorkflowEngine::default();
+    let connecting = engine
+        .start(
+            Command::Connect {
+                device: serial("EVFXXW67KP"),
+                candidate: candidate("selected", None, -40),
+            },
+            &capabilities(),
+            MANUAL_CANCELLATION,
+        )
+        .unwrap();
+    let connect = request_id(&connecting, |effect| {
+        matches!(effect, Effect::Ble(BleEffect::Connect { .. }))
+    });
+    let timer = connecting
+        .iter()
+        .find(|request| matches!(request.effect, Effect::Timer(TimerEffect::Schedule { .. })))
+        .unwrap();
+    let Effect::Timer(TimerEffect::Schedule { timer_id, .. }) = timer.effect else {
+        unreachable!()
+    };
+    let disconnecting = engine
+        .dispatch(host(
+            timer.request_id,
+            HostEventKind::TimerFired { timer_id },
+        ))
+        .unwrap();
+    let disconnect = request_id(&disconnecting, |effect| {
+        matches!(effect, Effect::Ble(BleEffect::Disconnect { .. }))
+    });
+    for foreign in [
+        host(
+            connect,
+            HostEventKind::Ble(BleEvent::Connected {
+                peripheral_id: "foreign".into(),
+            }),
+        ),
+        host(
+            connect,
+            HostEventKind::Ble(BleEvent::ServicesDiscovered {
+                peripheral_id: "selected".into(),
+            }),
+        ),
+        host(
+            connect,
+            HostEventKind::Ble(BleEvent::ReadCompleted {
+                value: b"EVFXXW67KP".to_vec(),
+            }),
+        ),
+        host(
+            disconnect,
+            HostEventKind::Ble(BleEvent::Connected {
+                peripheral_id: "selected".into(),
+            }),
+        ),
+        host(
+            disconnect,
+            HostEventKind::Ble(BleEvent::Disconnected {
+                peripheral_id: "foreign".into(),
+                reason_code: None,
+            }),
+        ),
+    ] {
+        assert_eq!(
+            engine.dispatch(foreign).unwrap_err().code,
+            ErrorCode::UnexpectedEvent
+        );
+    }
+    assert!(
+        engine
+            .dispatch(host(
+                connect,
+                HostEventKind::Ble(BleEvent::Connected {
+                    peripheral_id: "selected".into()
+                })
+            ))
+            .unwrap()
+            .is_empty()
+    );
+    engine
+        .dispatch(host(
+            disconnect,
+            HostEventKind::Ble(BleEvent::Disconnected {
+                peripheral_id: "selected".into(),
+                reason_code: None,
+            }),
+        ))
+        .unwrap();
+    assert!(
+        matches!(engine.status(), WorkflowStatus::Failed { error } if error.code == ErrorCode::Timeout)
+    );
+}
+
+#[test]
 fn reconnect_waits_for_an_exact_address_without_probing_same_name_early() {
     let mut engine = WorkflowEngine::default();
     let started = start_reconnect(

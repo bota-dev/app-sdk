@@ -53,6 +53,69 @@ function controlFixture(options = {}) {
   return { ...f, settings, gate };
 }
 
+test('reconnect joins timed-out late connection IO and exact disconnect before verifying the next candidate', { timeout: 5000 }, async () => {
+  const f = controlFixture(), connecting = f.gate(), disconnecting = f.gate();
+  const submitted = [];
+  f.ports.ble.scan = async (_duplicates, candidate) => {
+    for (const id of ['timed-out', 'next-probe']) candidate({ peripheral_id: id, name: 'Bota Note', advertised_address: null, rssi: id === 'timed-out' ? -40 : -50 });
+    return { async remove() {} };
+  };
+  const connect = f.ports.ble.connect, disconnect = f.ports.ble.disconnect;
+  f.ports.ble.connect = async (...args) => {
+    submitted.push(['connect', args[0]]);
+    if (args[0] === 'timed-out') { connecting.enter(); await connecting.pending; }
+    await connect(...args);
+  };
+  f.ports.ble.disconnect = async (...args) => {
+    submitted.push(['disconnect', args[0]]);
+    if (args[0] === 'timed-out') { disconnecting.enter(); await disconnecting.pending; }
+    await disconnect(...args);
+  };
+  let running;
+  try {
+    await f.adapter.configure({});
+    running = f.adapter.reconnect('C8SU2XXWHI', { scanTimeoutMs: 1, connectionTimeoutMs: 10 });
+    void running.catch(() => {});
+    await connecting.entered;
+    await new Promise(resolve => setTimeout(resolve, 30));
+    connecting.release();
+    await Promise.race([disconnecting.entered, running]);
+    assert.deepEqual(submitted, [['connect', 'timed-out'], ['disconnect', 'timed-out']]);
+    assert.equal(f.saved.has('connection/C8SU2XXWHI'), false);
+    disconnecting.release();
+    const device = await running;
+    assert.equal(device.id, 'next-probe'); assert.equal(device.serialNumber, 'C8SU2XXWHI');
+    assert.deepEqual(submitted, [['connect', 'timed-out'], ['disconnect', 'timed-out'], ['connect', 'next-probe']]);
+  } finally {
+    connecting.release(); disconnecting.release(); await running?.catch(() => {});
+    await f.adapter.destroy(); f.core.dispose();
+  }
+});
+
+test('timed-out reconnect cleanup failure prevents another candidate and retains uncertain teardown', { timeout: 5000 }, async () => {
+  const f = controlFixture(), connecting = f.gate(); const submitted = [];
+  const failure = Object.assign(new Error('Exact timed-out link cleanup failed'), { code: 'cleanup_incomplete' });
+  f.ports.ble.scan = async (_duplicates, candidate) => {
+    for (const id of ['timed-out', 'next-probe']) candidate({ peripheral_id: id, name: 'Bota Note', advertised_address: null, rssi: id === 'timed-out' ? -40 : -50 });
+    return { async remove() {} };
+  };
+  f.ports.ble.connect = async id => { submitted.push(id); connecting.enter(); await connecting.pending; };
+  f.ports.ble.disconnect = async () => { throw failure; };
+  let running;
+  try {
+    await f.adapter.configure({});
+    running = f.adapter.reconnect('C8SU2XXWHI', { scanTimeoutMs: 1, connectionTimeoutMs: 10 });
+    const rejected = assert.rejects(running, error => error === failure);
+    await connecting.entered;
+    await new Promise(resolve => setTimeout(resolve, 30));
+    connecting.release(); await rejected;
+    assert.deepEqual(submitted, ['timed-out']);
+    assert.equal(f.saved.has('connection/C8SU2XXWHI'), false);
+    await assert.rejects(f.adapter.syncTime({ id: 'next-probe', serialNumber: 'C8SU2XXWHI' }), { code: 'cleanup_incomplete' });
+    await assert.rejects(f.adapter.destroy(), error => error === failure);
+  } finally { connecting.release(); await running?.catch(() => {}); await f.adapter.destroy().catch(() => {}); f.core.dispose(); }
+});
+
 test('real DeviceManager watchdog startup orders initial reads and settings behind monitor readiness', { timeout: 5000 }, async () => {
   const f = controlFixture();
   const monitor = f.gate();

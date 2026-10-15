@@ -1,5 +1,11 @@
 # AGENTS.md
 
+October 15 connection-deadline follow-up: a reproduced late host completion can
+reach Rust after a timed-out attempt enters Disconnecting. The narrow shared
+reducer correction retires only exact pending attempt IO, joins exact Disconnect
+acknowledgement and preserves foreign-event/uncertain-cleanup refusal. Canonical
+generation and new qualification remain pending. See [requirements and evidence](docs/parity/connection-attempt-retirement.md).
+
 October 15 ordinary-control source correction orders the existing public JS
 controls before executor claim (one active, at most 32 pending). Exact scope,
 physical generation and immutable intent remain fenced; workflows/BYO stay

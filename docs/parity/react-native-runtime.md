@@ -2,6 +2,11 @@
 
 October 12, 2026 source migration. Shared SDK behavior remains Rust-sourced.
 
+The [connection-attempt retirement follow-up](connection-attempt-retirement.md)
+corrects a reproduced Rust deadline/late-result race after ordinary-control
+qualification. It retains exact identity and joined cleanup; canonical
+generation, fresh candidate checks and normal reconnect testing remain pending.
+
 The October 15 [ordinary-control admission correction](ordinary-control-admission.md)
 orders existing public controls before executor claim, with one active and at
 most 32 pending calls. Workflow/BYO exclusivity, exact connection/scope fences

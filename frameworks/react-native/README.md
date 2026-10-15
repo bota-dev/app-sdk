@@ -2,6 +2,10 @@
 
 ## Generated JavaScript runtime and app OTA updates
 
+The unpublished Rust connection follow-up retires exact late attempt results
+while joining Disconnect after a deadline. See the [candidate boundary](../../docs/parity/connection-attempt-retirement.md);
+canonical generation and normal reconnect acceptance remain pending.
+
 The unpublished ordinary-control correction orders simultaneous status,
 subscription and settings calls before their executor leases. It accepts one
 active and up to 32 pending calls, retains exact scope/connection identity and
