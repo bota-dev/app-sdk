@@ -1,5 +1,15 @@
 # AGENTS.md
 
+October 15 normal-app testing: the busy-read guard now keeps One connected through
+normal Start/Stop. Its resulting local file is 228,989 bytes and its on-phone SHA
+matches the retained queue. Upload fails with `cancelled`, leaving that new task
+pending/retry 2; the original failed/retry-0 task remains unchanged. Demo normal
+Start/Stop and disconnect pass, but no new synced cloud file is verified.
+`JsRecordingUploads` now preserves a progress-policy/callback error when the
+resulting child abort also rejects the joined HTTP port. Two permanent regressions
+cover that masking bug and independent cancellation. This restores diagnostics;
+the physical upload cause and complete acceptance of both apps remain open.
+
 Unpublished beta.19 source addresses the beta.18 physical transfer failure with
 Rust-owned bounded append batching, joined JS terminal cleanup and exact late
 scan callback retirement. Linux regressions reproduce both old Rust failures;

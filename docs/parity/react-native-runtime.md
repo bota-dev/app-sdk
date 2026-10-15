@@ -381,7 +381,7 @@ older adapter behavior.
 | Scoped durable receipt cleanup | Requirement/evidence reviews and injected host failures | Installed durability and physical acceptance unverified |
 | Published beta.18 Android legacy transfer | Controlled capture and bounded packet/append metadata above | Failed at the 256-packet backlog bound; occupied public artifacts unchanged |
 | Unpublished beta.19 source/runtime | Canonical generation; all nine exact branch CI jobs/License; 486 RN tests, 136 RPC comparisons, 715 pinned Hermes checks; 49 preserved files/five identities/59 Flutter files | Matched branch candidate gates; final-main CI/publication pending |
-| Unpublished beta.19 Android transfer/lifecycle | Two connections without radio reset; missing sequence rejected; joined failure teardown passes | Partial: full transfer fails before EOF/CRC; One guard UI retest and normal Demo sync outcomes pending |
+| Unpublished beta.19 Android transfer/lifecycle | Two connections without radio reset; missing sequence rejected; joined failure teardown passes; normal One guard/Start/Stop pass and new local size/SHA match retained queue | Partial: normal One upload fails with cancellation; Demo has no verified new cloud result; complete sync/device cleanup remain open |
 | Redistribution notices | Exact public RN archive contains all 47 notices and generated runtime/declarations; source license gates and private fixture checks pass | Matched public archive and source checks |
 | npm publication and application OTA | Exact approved RN/Web bytes are public; initial OS-port installation and app rollout remain separate | npm matched; app OTA and physical acceptance unverified |
 

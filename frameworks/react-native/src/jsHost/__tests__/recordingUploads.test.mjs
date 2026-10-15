@@ -54,6 +54,49 @@ test('relay POST uses octet stream and suppresses a separate completion request'
   } finally { await f.host.close(); f.core.dispose(); }
 });
 
+test('a joined upload port abort cannot mask the progress policy failure that caused it', async () => {
+  const submitted = deferred(), closed = deferred();
+  const cancelled = Object.assign(new Error('SDK OS port: cancelled'), { code: 'cancelled' });
+  let signal, settled = false;
+  const f = fixture({ uploadFile: async (_target, _file, progress, context) => {
+    signal = context.signal;
+    progress('3', '4');
+    progress('2', '4'); // Invalid under the generated monotonic-progress policy.
+    submitted.resolve();
+    await closed.promise;
+    if (context.signal.aborted) throw cancelled;
+  } });
+  try {
+    const work = f.host.upload(request(), f.context());
+    const proof = assert.rejects(work, error => error.code === 'invalid_input'
+      && error.message === 'invalid recording upload progress evidence').then(() => { settled = true; });
+    await submitted.promise;
+    assert.equal(signal.aborted, true);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(settled, false, 'the upload IO must still settle before reporting its original failure');
+    closed.resolve(); await proof;
+    assert.equal(f.http.length, 0);
+    assert.deepEqual(f.progress.map(value => value.completedBytes), [0, 3]);
+  } finally { closed.resolve(); await f.host.close(); f.core.dispose(); }
+});
+
+test('an independent upload cancellation still propagates its original port failure', async () => {
+  const submitted = deferred(), closed = deferred();
+  const cancelled = Object.assign(new Error('SDK OS port: cancelled'), { code: 'cancelled' });
+  const scope = new AbortController();
+  const f = fixture({ uploadFile: async (_target, _file, progress, context) => {
+    progress('2', '4'); submitted.resolve(); await closed.promise;
+    if (context.signal.aborted) throw cancelled;
+  } });
+  try {
+    const work = f.host.upload(request(), f.context(scope.signal));
+    const proof = assert.rejects(work, error => error === cancelled);
+    await submitted.promise;
+    scope.abort(); closed.resolve(); await proof;
+    assert.equal(f.http.length, 0);
+  } finally { closed.resolve(); await f.host.close(); f.core.dispose(); }
+});
+
 test('changed file size and foreign handles reject before HTTP or reading foreign metadata', async () => {
   const f = fixture();
   try {

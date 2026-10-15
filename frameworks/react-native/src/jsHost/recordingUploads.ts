@@ -206,7 +206,8 @@ export class JsRecordingUploads {
     };
     progress('0', plan.totalBytes as string);
     if (progressFailure) throw progressFailure;
-    await this.options.uploadFile(target, file.handle, progress, context);
+    try { await this.options.uploadFile(target, file.handle, progress, context); }
+    catch (error) { throw progressFailure ?? error; }
     if (progressFailure) throw progressFailure;
     this.check(context);
     if (plan.completion !== null) {
