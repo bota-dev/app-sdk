@@ -2,6 +2,15 @@
 
 October 12, 2026 source migration. Shared SDK behavior remains Rust-sourced.
 
+Published beta.18 corrects connected BLE PLX MTU observation under the original
+package identity. Exact main CI/License, protected release attempt 2, public
+generated-runtime/native consumers and all 59 Flutter files pass. A normal
+public beta.18 bundle reads identity/status/catalog at MTU 512 in One's existing
+Android host. Its earlier legacy transfer integrity failure and later empty
+catalog with an unresolved pending cloud pointer do not establish commitment or
+cleanup. App OTA and full platform/background acceptance remain separate. See
+the [publication review](../../release/evidence/2.0.0-beta.18-publication.md).
+
 Published beta.17 adds `isEmptyLegacyAndroidV2CheckpointCatalog(bytes)` on
 `/runtime`. Generated Rust admits only the exact 12-byte empty catalog left by
 the old Android SDK after successful cleanup. Hosts supply the complete short

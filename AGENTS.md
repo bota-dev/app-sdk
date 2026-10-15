@@ -1,12 +1,15 @@
 # AGENTS.md
 
-Beta.18 canonical preparation 38624046539 passes at 1b859098 for the connected
-BLE PLX MTU correction. Exact Linux JS, generated identities, Apple checksums
-and all 59 Flutter package files are independently verified. All 480 RN tests,
-715 standalone VM checks, strict types, package builds and four private fixture
-checks pass. Keep beta.17's occupied public artifacts unchanged; exact main
-qualification, its complete release inventory and protected publication remain.
-See [candidate review](release/evidence/2.0.0-beta.18-preflight.md).
+Beta.18 is published across all five SDK families at accepted source 0962c8c.
+All nine main CI jobs, License, protected release 38632018471 attempt 2 and public
+consumers/archives pass. Independent npm/Pod/Central/AAR and all 59 Flutter file
+checks match the approved 49-file inventory. The original RN `/runtime` remains
+the public route; the companion stays private. Same-host Android metadata passes
+at MTU 512, while One's earlier legacy integrity failure and later empty catalog
+with a pending cloud row leave physical completion unresolved. Preserve its
+failed queue/cloud pointer; app OTA, full Apple and background acceptance remain
+separate. See [publication review](release/evidence/2.0.0-beta.18-publication.md)
+and dated [preflight](release/evidence/2.0.0-beta.18-preflight.md).
 
 October 14 Android app acceptance found beta.17 reconnect rejecting an absent
 MTU in BLE PLX's scan-cache `devices()` result after successful negotiation.

@@ -2,13 +2,13 @@
 
 The generated React Native JavaScript runtime ships through the original
 `@bota.dev/react-native-app-sdk/runtime` entry in the synchronized SDK family.
-Beta.17 is published across all five platform packages. Source `b8a31c5` passes all
-nine main CI jobs and License Gate; protected release attempt 1 passes fresh
+Beta.18 is published across all five platform packages. Source `0962c8c` passes all
+nine main CI jobs and License Gate; protected release attempt 2 passes fresh
 public JS/declaration/native consumers and complete Flutter archive verification.
 App OTA, installed-host qualification and physical acceptance remain separate.
 The companion directory is a private verification fixture. See the
-[publication review](release/evidence/2.0.0-beta.17-publication.md) and historical
-[preflight](release/evidence/2.0.0-beta.17-preflight.md).
+[publication review](release/evidence/2.0.0-beta.18-publication.md) and historical
+[preflight](release/evidence/2.0.0-beta.18-preflight.md).
 
 October 12 source adds a generated-JavaScript RN execution route:
 `createBotaReactNativeJsRuntime` compiles the Rust core through pinned
