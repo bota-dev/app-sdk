@@ -274,6 +274,137 @@ fn manual_connect_rejects_a_serial_mismatch_after_releasing_the_candidate() {
 }
 
 #[test]
+fn reconnect_joins_scan_stop_before_retiring_queued_advertisements_and_timer() {
+    for stop_on_match in [true, false] {
+        let mut engine = WorkflowEngine::default();
+        let exact = candidate("exact-peripheral", None, -42);
+        let started = start_reconnect(
+            &mut engine,
+            ReconnectHint {
+                stored_peripheral_id: Some(exact.peripheral_id.clone()),
+                scan_timeout_ms: 1_000,
+                ..ReconnectHint::default()
+            },
+        );
+        let scan_request = request_id(&started, |effect| {
+            matches!(effect, Effect::Ble(BleEffect::StartScan { .. }))
+        });
+        let timer_request = request_id(&started, |effect| {
+            matches!(effect, Effect::Timer(TimerEffect::Schedule { .. }))
+        });
+        if !stop_on_match {
+            engine
+                .dispatch(host(
+                    scan_request,
+                    HostEventKind::Ble(BleEvent::ScanResult {
+                        candidate: candidate("same-name-probe", None, -55),
+                    }),
+                ))
+                .unwrap();
+        }
+        let stopping = engine
+            .dispatch(if stop_on_match {
+                host(
+                    scan_request,
+                    HostEventKind::Ble(BleEvent::ScanResult {
+                        candidate: exact.clone(),
+                    }),
+                )
+            } else {
+                host(timer_request, HostEventKind::TimerFired { timer_id: 1 })
+            })
+            .unwrap();
+        let stop_request = request_id(&stopping, |effect| {
+            matches!(effect, Effect::Ble(BleEffect::StopScan))
+        });
+
+        // Both callbacks may already be queued when the host begins removing
+        // its scan subscription. Neither may start another connection or
+        // replace the candidate selected before StopScan was submitted.
+        for late in [
+            host(
+                scan_request,
+                HostEventKind::Ble(BleEvent::ScanResult {
+                    candidate: candidate("late-peripheral", None, -5),
+                }),
+            ),
+            host(timer_request, HostEventKind::TimerFired { timer_id: 1 }),
+        ] {
+            assert!(engine.dispatch(late).unwrap().is_empty());
+        }
+        let connecting = engine
+            .dispatch(host(
+                stop_request,
+                HostEventKind::Ble(BleEvent::ScanStopped),
+            ))
+            .unwrap();
+        let expected_id = if stop_on_match {
+            "exact-peripheral"
+        } else {
+            "same-name-probe"
+        };
+        assert!(connecting.iter().any(|request| matches!(
+            &request.effect,
+            Effect::Ble(BleEffect::Connect { peripheral_id }) if peripheral_id == expected_id
+        )));
+        assert_identity_not_trusted(&connecting);
+        let read = reach_serial_read(&mut engine, &connecting, expected_id);
+        let persisting = engine
+            .dispatch(host(
+                read,
+                HostEventKind::Ble(BleEvent::ReadCompleted {
+                    value: b"EVFXXW67KP".to_vec(),
+                }),
+            ))
+            .unwrap();
+        assert!(persisting.iter().any(|request| matches!(
+            request.effect,
+            Effect::Persistence(PersistenceEffect::SaveConnectionIdentity { .. })
+        )));
+    }
+}
+
+#[test]
+fn reconnect_stopping_scan_rejects_unrelated_callbacks() {
+    let mut engine = WorkflowEngine::default();
+    let exact = candidate("exact-peripheral", None, -42);
+    let started = start_reconnect(
+        &mut engine,
+        ReconnectHint {
+            stored_peripheral_id: Some(exact.peripheral_id.clone()),
+            ..ReconnectHint::default()
+        },
+    );
+    let scan_request = request_id(&started, |effect| {
+        matches!(effect, Effect::Ble(BleEffect::StartScan { .. }))
+    });
+    let timer_request = request_id(&started, |effect| {
+        matches!(effect, Effect::Timer(TimerEffect::Schedule { .. }))
+    });
+    engine
+        .dispatch(host(
+            scan_request,
+            HostEventKind::Ble(BleEvent::ScanResult {
+                candidate: exact.clone(),
+            }),
+        ))
+        .unwrap();
+    for foreign in [
+        host(
+            timer_request,
+            HostEventKind::Ble(BleEvent::ScanResult { candidate: exact }),
+        ),
+        host(scan_request, HostEventKind::TimerFired { timer_id: 1 }),
+        host(timer_request, HostEventKind::TimerFired { timer_id: 999 }),
+    ] {
+        assert_eq!(
+            engine.dispatch(foreign).unwrap_err().code,
+            ErrorCode::UnexpectedEvent
+        );
+    }
+}
+
+#[test]
 fn reconnect_waits_for_an_exact_address_without_probing_same_name_early() {
     let mut engine = WorkflowEngine::default();
     let started = start_reconnect(

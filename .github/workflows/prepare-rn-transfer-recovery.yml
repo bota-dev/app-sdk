@@ -1,0 +1,57 @@
+name: Prepare RN transfer recovery
+
+on:
+  push:
+    branches: [codex/rn-transfer-recovery-20261014]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rn-transfer-recovery-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.98.0
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          cache-on-failure: true
+      - name: Run physical-failure regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/rn-transfer-recovery
+          recording=0
+          connection=0
+          cargo test --locked -p bota-device-sdk-core --test recording_transfer_workflow 2>&1 | tee target/rn-transfer-recovery/recording.log || recording=$?
+          cargo test --locked -p bota-device-sdk-core --test connection_workflow 2>&1 | tee target/rn-transfer-recovery/connection.log || connection=$?
+          printf '{"sourceRevision":"%s","recordingExit":%s,"connectionExit":%s}\n' "$GITHUB_SHA" "$recording" "$connection" > target/rn-transfer-recovery/regressions.json
+          test "$recording" -eq 0
+          test "$connection" -eq 0
+      - run: npm ci
+      - name: Generate canonical JavaScript from tested Rust
+        run: |
+          npm run react-native:generate-js-core
+          cp frameworks/react-native/src/jsHost/generated/core.ts target/rn-transfer-recovery/core.ts
+          node --input-type=module -e 'import fs from "node:fs"; import crypto from "node:crypto"; const p="target/rn-transfer-recovery/core.ts"; const b=fs.readFileSync(p); fs.writeFileSync("target/rn-transfer-recovery/generation.json",JSON.stringify({sourceRevision:process.env.GITHUB_SHA,bytes:b.length,sha256:crypto.createHash("sha256").update(b).digest("hex")})+"\n");'
+      - name: Retain regressions and canonical output
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: rn-transfer-recovery-${{ github.sha }}
+          path: target/rn-transfer-recovery/
+          if-no-files-found: error
+          retention-days: 7
