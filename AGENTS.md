@@ -1,5 +1,17 @@
 # AGENTS.md
 
+## October 16 beta.19 release candidate
+
+- Exact main `7a4ff009` passes all nine CI jobs `38829562105`, License
+  `38829561900`, 526 RN tests, 146 Rust/JS RPCs and 777 pinned Hermes checks.
+  All 49 preserved files, five original identities, 500 RN files, 59 Flutter
+  files and both public Apple checksums verify. See the
+  [release checkpoint](release/evidence/2.0.0-beta.19-preflight.md#exact-main-qualification-at-7a4ff009).
+- Normal One verifies disabled automatic recovery with its retained queue
+  unchanged, followed by exact-device metadata and joined destruction.
+  Complete recording/cloud cleanup and app OTA acceptance remain partial;
+  beta.19 is unpublished pending the normal protected release.
+
 The existing React Native `backgroundSyncEnabled: false` now gates automatic
 retained-upload scheduling and restored-completed release before initialization.
 Explicit sync/cleanup and default true remain available; restore/save and Rust

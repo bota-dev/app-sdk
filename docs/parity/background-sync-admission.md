@@ -49,3 +49,31 @@ This does not disable a host app's own explicit auto-sync calls after a fresh
 device catalog, create a metadata-only test mode, repair media, reconstruct lost
 native journals or authorize release. Public beta.18 is unchanged. Fresh exact-
 source package/CI and normal-app physical qualification remain separate gates.
+
+## October 16 qualified source checkpoint
+
+Exact main `7a4ff0093629c030416f80113c585e10d0177e68` passes all nine
+[CI jobs](https://github.com/bota-dev/app-sdk/actions/runs/38829562105),
+[License Gate](https://github.com/bota-dev/app-sdk/actions/runs/38829561900)
+and CodeQL `38829560828`. Exact logs confirm 526 RN tests, 146 Rust/JS RPCs
+and 777 pinned Hermes checks. At 00:48:41.7966910 UTC, all 49 preserved release
+files, five original identities, all 500 RN package files, all 59 Flutter source
+files and both actual Apple archive checksums verify. The generated core and
+version 1 OS contract are unchanged. See the
+[complete release evidence](../../release/evidence/2.0.0-beta.19-preflight.md#exact-main-qualification-at-7a4ff009).
+
+The normal One app loads this exact private candidate. Its four due retained
+tasks and canonical queue hash remain unchanged after configure and elapsed
+retry timing. Following the owner's Bluetooth master toggle, fresh metadata at
+00:39:50 verifies the selected Pin, firmware 1.0.18, MTU 512, generation 4,
+Idle, pending 0 and LIST 0; SDK destruction joins at 00:40:12. This is bounded
+normal-host evidence for false admission, connection and teardown. The host's
+own explicit auto-sync trigger remains separate. Demo loads the exact candidate
+and returns Idle/pending 1/LIST 1 with its prior unknown journal retained;
+controlled recording investigation is ongoing.
+
+The previous local-only and unverified rows above record the source checkpoint,
+not the final qualification state. Full recording/media/cloud commitment/device
+cleanup, unattended behavior and signed app/OTA delivery remain partial or
+unverified. Beta.19 is still unpublished; the original synchronized protected
+release is a separate gate, and no firmware installation is implied.
