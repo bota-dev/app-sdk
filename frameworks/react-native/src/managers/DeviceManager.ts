@@ -1,3 +1,4 @@
+import type { FindDeviceCapabilities, FindDeviceStatus } from '../findDevice';
 import EventEmitter from 'eventemitter3';
 import type { ClientPresence } from '../clientPresence';
 
@@ -404,6 +405,51 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
       throw new Error('Factory reset resume completed without a persisted result');
     }
     return persisted;
+  }
+
+  async getFindCapabilities(device: ConnectedDevice): Promise<FindDeviceCapabilities> {
+    this.requireConnected(device.id);
+    return this.client.controls.readFindCapabilities(device);
+  }
+
+  async getFindStatus(device: ConnectedDevice): Promise<FindDeviceStatus> {
+    this.requireConnected(device.id);
+    return this.client.controls.readFindStatus(device);
+  }
+
+  private findQueue: Promise<unknown> = Promise.resolve();
+
+  async requestFindDevice(device: ConnectedDevice, requestId: string,
+    fetchGrant: (nonce: string) => Promise<string>, durationSeconds = 10): Promise<FindDeviceStatus> {
+    return this.queueFindControl(device, requestId, 'start', durationSeconds, fetchGrant);
+  }
+
+  async requestStopFindDevice(device: ConnectedDevice, requestId: string,
+    fetchGrant: (nonce: string) => Promise<string>): Promise<FindDeviceStatus> {
+    return this.queueFindControl(device, requestId, 'stop', 0, fetchGrant);
+  }
+
+  private queueFindControl(device: ConnectedDevice, requestId: string, action: 'start' | 'stop',
+    durationSeconds: number, fetchGrant: (nonce: string) => Promise<string>): Promise<FindDeviceStatus> {
+    const owner = this.requireConnected(device.id);
+    const pending = this.findQueue.catch(() => undefined).then(() => {
+      if (this.requireConnected(device.id) !== owner) throw new Error('find_device: connection_changed');
+      return this.findControl(device, requestId, action, durationSeconds, fetchGrant);
+    });
+    this.findQueue = pending;
+    return pending;
+  }
+
+  private async findControl(device: ConnectedDevice, requestId: string, action: 'start' | 'stop',
+    durationSeconds: number, fetchGrant: (nonce: string) => Promise<string>): Promise<FindDeviceStatus> {
+    const owner = this.requireConnected(device.id);
+    const capabilities = await this.client.controls.readFindCapabilities(device);
+    if (!capabilities.supported) throw new Error('find_device: unsupported_capability');
+    const nonce = await this.client.controls.readAuthNonce(device);
+    if (!nonce || !/^[a-fA-F0-9]{32}$/.test(nonce)) throw new Error('find_device: invalid_nonce');
+    const grantBlob = await fetchGrant(nonce);
+    if (this.requireConnected(device.id) !== owner) throw new Error('find_device: connection_changed');
+    return this.client.controls.requestFindDevice(device, { requestId, action, durationSeconds, grantBlob });
   }
 
   async requestStartRecording(

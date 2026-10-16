@@ -286,3 +286,63 @@ Remaining delivery: target firmware/mobile builds and joint runtime validation;
 WRGB board driver requires LED part, pins, polarity/control and calibration
 facts. The logical marker feedback and protocol do not establish physical LED
 operation. No deployment or feature activation is authorized by this document.
+
+## Nearby Find over BLE (development contract, October 16)
+
+BRD51-22 / SD51-22 confirms App-initiated start and stop over BLE. This additive
+profile requires matching SDK, grant issuer and firmware; existing published
+packages and boards without both qualified actuators remain unsupported.
+
+Service `B07A0009-0000-1000-8000-00805F9B34FB` appends to the current GATT table:
+
+| Characteristic suffix | Name | Properties | Size |
+| --- | --- | --- | --- |
+| 0001 | FIND_CAPABILITIES | Read | 8 |
+| 0002 | FIND_CONTROL | Write with response | 20 |
+| 0003 | FIND_STATUS | Read, Notify | 24 |
+| 0004 | FIND_GRANT | Write with response | 193 |
+
+Capabilities bytes: version=1 at0, flags at1 (bit0 start, bit1 stop; both required),
+maximum seconds=30 at2, default seconds=10 at3, reserved zero at4..7. Advertising
+support requires both qualified LED and haptic adapters. Service presence alone
+is not capability. Grant writes require ATT MTU >=196; no silent fragmentation.
+
+Control bytes: version=1 at0, action at1 (1 start, 2 stop), duration seconds at2
+(start1..30, stop0), reserved=0 at3, random nonzero request ID[16] at4..19. No
+recording opcode or transfer capability is reused. Generate a fresh ID for each
+explicit action; never replay start after uncertain delivery/reconnect.
+
+Status bytes: version=1 at0, active0/1 at1, result at2, reserved=0 at3,
+request ID[16] at4..19, remaining milliseconds u32LE at20..23 (0 when inactive).
+Result: 0 success, 1 unsupported, 2 busy, 3 invalid authorization, 4 expired,
+5 invalid request, 6 actuator failure, 7 interrupted. Start success means both
+actuators have begun, not that the full duration completed; timeout later reports
+inactive with the start ID. Stop success means inactive, including a no-op, and
+uses the stop ID. Subscribe before writing and match the exact request ID.
+Reads reconcile the current indication; disconnected or lost reports are unknown.
+
+`POST /v1/devices/:id/find-grant` (or the project Dashboard equivalent) takes
+`nonce_d` (32 hex), `request_id` (32 nonzero hex), `action` (start/stop) and
+`duration_seconds` (start1..30/default10; stop0). It requires a currently bound,
+enrolled device and project write authority, but no recent cloud heartbeat.
+The application backend additionally enforces its end-user ownership.
+
+The returned 193-byte blob is HPKE enc65 + ciphertext112 + tag16 using the
+existing P-256/HKDF-SHA256/ChaCha20-Poly1305 grant cipher suite. Signed plaintext
+is48 bytes: version3@0, find-only scope0x20@1, AUTH_NONCE[16]@2, iat u32BE@18,
+exp u32BE@22, current backend binding generation u32BE@26, request ID[16]@30,
+action@46 and duration@47. ECDSA-P256/SHA256 raw r||s64 follows plaintext inside
+the encryption. TTL is60 seconds; signature covers all48 bytes. It is distinct
+from recording/reset/OTA grants. Devices require valid time and the exact fresh
+connection nonce, retire authority on credential changes, and consume an accepted
+grant for only the exact action/ID/duration. Firmware fences queued execution to
+the local credential revision; backend generation is signed issuer context, not
+an independently stored firmware generation. Stop also requires authorization.
+
+One nonblocking device controller owns both channels. Start rejects recording,
+upload, reset, OTA and unsafe power states; stop is admitted during recording.
+A local timer stops after the bounded duration despite disconnect/background.
+Stop cancels already-queued starts and only removes find feedback. Recording and
+safety preemption stop finding before higher-priority effects. LED white200/200ms
+and haptic300/700ms follow Device Feedback Design; absent board mapping must
+return unsupported instead of synthesizing success. No new sound is introduced.

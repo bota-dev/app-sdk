@@ -72,6 +72,7 @@ const controls = [
   'readStatus', 'isProvisioned', 'readPublicKey', 'readAuthNonce', 'setApiEndpoint',
   'deliverCertificate', 'deliverBackendPublicKey', 'writeGrant', 'syncTime',
   'requestStartRecording', 'requestStopRecording', 'readRecordingState',
+  'readFindCapabilities', 'readFindStatus', 'requestFindDevice',
   'startRecordingStateUpdates', 'stopRecordingStateUpdates', 'configureWiFi', 'disconnectWiFi',
   'readConnectionSettings', 'writeConnectionSettings', 'readWiFiStatus', 'scanWiFiNetworks',
   'startStatusUpdates', 'stopStatusUpdates', 'startWiFiStatusUpdates', 'stopWiFiStatusUpdates',

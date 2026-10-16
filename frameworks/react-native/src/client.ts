@@ -1,3 +1,5 @@
+import type { FindDeviceCapabilities, FindDeviceStatus, FindDeviceRequest } from './findDevice';
+import type { BotaRuntimeSpec } from './runtimeAdapter';
 import { Buffer } from 'buffer';
 import type {
   NativeClientContext,
@@ -138,6 +140,9 @@ export type BotaDeprovisionResult = {
 };
 
 export type BotaDeviceSDKControlClient = {
+  readFindCapabilities(device: ConnectedDevice): Promise<FindDeviceCapabilities>;
+  readFindStatus(device: ConnectedDevice): Promise<FindDeviceStatus>;
+  requestFindDevice(device: ConnectedDevice, request: FindDeviceRequest): Promise<FindDeviceStatus>;
   isProvisioned(device: ConnectedDevice): Promise<boolean>;
   readPublicKey(device: ConnectedDevice): Promise<string | null>;
   readAuthNonce(device: ConnectedDevice): Promise<string | null>;
@@ -852,7 +857,7 @@ export const createBotaDeviceSDK = (
     controller: AbortController; promise: Promise<void>; cancelling: boolean; cancelPromise?: Promise<void>;
   }) | undefined;
   const guarded = nativeModule && guardDeviceAdapter(nativeModule);
-  const requireNativeModule = (operation?: BotaNativeOperation): Spec => {
+  const requireNativeModule = (operation?: BotaNativeOperation): BotaRuntimeSpec => {
     if (!nativeModule) throw new BotaNativeModuleError();
     if (operation) requireNativeOperation(nativeModule, operation);
     return guarded!;
@@ -1040,6 +1045,15 @@ export const createBotaDeviceSDK = (
       await requireNativeModule().syncTime(toNativeConnectedDevice(device));
     },
 
+    async readFindCapabilities(device) {
+      return requireNativeModule('readFindCapabilities').readFindCapabilities(toNativeConnectedDevice(device));
+    },
+    async readFindStatus(device) {
+      return requireNativeModule('readFindStatus').readFindStatus(toNativeConnectedDevice(device));
+    },
+    async requestFindDevice(device, request) {
+      return requireNativeModule('requestFindDevice').requestFindDevice(toNativeConnectedDevice(device), request);
+    },
     async requestStartRecording(device, grantBlob) {
       return mapRecordingControlResult(
         await requireNativeModule().requestStartRecording(

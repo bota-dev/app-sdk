@@ -1,9 +1,11 @@
+import type { FindDeviceAdapter } from './findDevice';
 import type { Spec } from './specs/NativeBotaDeviceSDK';
 import type { Spec as BackendSpec } from './specs/NativeBotaUploadV2Backend';
 
 /** The bridge contract is independent of npm, SwiftPM and Maven package versions. */
 export const BOTA_RUNTIME_API_VERSION = 1 as const;
-export type BotaDeviceAdapter = Partial<Omit<Spec, 'getConstants'>>;
+export type BotaRuntimeSpec = Spec & FindDeviceAdapter;
+export type BotaDeviceAdapter = Partial<Omit<BotaRuntimeSpec, 'getConstants'>>;
 export type BotaNativeOperation = keyof BotaDeviceAdapter;
 export type BotaUploadBackendAdapter = Partial<Omit<BackendSpec, 'getConstants'>>;
 
@@ -61,12 +63,12 @@ export function requireNativeOperation(adapter: BotaDeviceAdapter, operation: Bo
 }
 
 /** Normalize method availability and `this` binding without importing React Native. */
-export function guardDeviceAdapter(adapter: BotaDeviceAdapter): Spec {
+export function guardDeviceAdapter(adapter: BotaDeviceAdapter): BotaRuntimeSpec {
   return new Proxy(adapter, {
     get(target, property) {
       const operation = property as BotaNativeOperation;
       requireNativeOperation(target, operation);
       return (target[operation] as (...args: unknown[]) => unknown).bind(target);
     },
-  }) as Spec;
+  }) as BotaRuntimeSpec;
 }

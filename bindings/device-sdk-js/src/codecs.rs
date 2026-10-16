@@ -248,6 +248,9 @@ struct ReceiverEvent {
 impl CodecState {
     #[inline(never)]
     pub(crate) fn execute(&mut self, name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> {
+        if crate::find_device::supports(name) {
+            return crate::find_device::call(name, value);
+        }
         if crate::host_policy::supports(name) {
             return crate::host_policy::call(name, value);
         }
@@ -1082,7 +1085,8 @@ fn native_status(status: DeviceStatus) -> Value {
 }
 
 fn metadata() -> Value {
-    let mut result = object!({"recordingStopDelayMs":50,"operationTimeoutMs":30000,"contextTimeoutMs":30000,"contextPollIntervalMs":150,"protocolRevision":wire::PROTOCOL_REVISION,"firmwareRecoveryTimeoutMs":bota_device_sdk_core::workflow::RECONNECT_TIMEOUT_MS,"mtuObservationAttempts":crate::host_policy::BLE_MTU_OBSERVATION_ATTEMPTS,"mtuObservationDelayMs":crate::host_policy::BLE_MTU_OBSERVATION_DELAY_MS});
+    let mut result = object!({"recordingStopDelayMs":50,"findAckTimeoutMs": 3000,
+        "operationTimeoutMs":30000,"contextTimeoutMs":30000,"contextPollIntervalMs":150,"protocolRevision":wire::PROTOCOL_REVISION,"firmwareRecoveryTimeoutMs":bota_device_sdk_core::workflow::RECONNECT_TIMEOUT_MS,"mtuObservationAttempts":crate::host_policy::BLE_MTU_OBSERVATION_ATTEMPTS,"mtuObservationDelayMs":crate::host_policy::BLE_MTU_OBSERVATION_DELAY_MS});
     macro_rules! constants { ($($name:ident),* $(,)?) => { $(result[stringify!($name)]=object!(wire::$name);)* }; }
     constants!(
         DEFAULT_MTU,
@@ -1105,6 +1109,11 @@ fn metadata() -> Value {
         CHAR_RECORDING_STATUS,
         CHAR_TIME_SYNC,
         CHAR_DEVICE_COMMAND,
+        SERVICE_BOTA_FIND,
+        CHAR_FIND_CAPABILITIES,
+        CHAR_FIND_CONTROL,
+        CHAR_FIND_STATUS,
+        CHAR_FIND_GRANT,
         SERVICE_BOTA_PROVISIONING,
         CHAR_PAIRING_STATE,
         CHAR_DEVICE_TOKEN,

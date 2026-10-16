@@ -203,6 +203,28 @@ export class JsDeviceControls {
       }
       case 'readRecordingState':
         return this.decodeRead('decodeRecordingState', 'SERVICE_BOTA_CONTROL', 'CHAR_RECORDING_STATUS', connection, context);
+      case 'readFindCapabilities':
+        return this.decodeRead('decodeFindCapabilities', 'SERVICE_BOTA_FIND', 'CHAR_FIND_CAPABILITIES', connection, context);
+      case 'readFindStatus':
+        return this.decodeRead('decodeFindStatus', 'SERVICE_BOTA_FIND', 'CHAR_FIND_STATUS', connection, context);
+      case 'requestFindDevice': {
+        const request = record(json(args[1]));
+        const command = bytes(this.codec('encodeFindControl', { action: request.action!,
+          durationSeconds: request.durationSeconds!, requestId: request.requestId! }));
+        const grant = bytes(this.codec('encodeFindGrant', { grantBlob: request.grantBlob!, capacity: this.capacity(connection) }));
+        try {
+          const capability = record(await this.decodeRead('decodeFindCapabilities', 'SERVICE_BOTA_FIND',
+            'CHAR_FIND_CAPABILITIES', connection, context));
+          if (capability.supported !== true) throw controlError('unsupported_capability', context.operation);
+          return await this.withResult('SERVICE_BOTA_FIND', 'CHAR_FIND_STATUS', connection, context,
+            value => this.codec('decodeFindStatus', { bytes: publicBytes(value), requestId: request.requestId! }),
+            async beginResults => {
+              await this.writeBytes(grant, 'SERVICE_BOTA_FIND', 'CHAR_FIND_GRANT', connection, context);
+              beginResults();
+              await this.writeBytes(command, 'SERVICE_BOTA_FIND', 'CHAR_FIND_CONTROL', connection, context);
+            }, this.numberMetadata('findAckTimeoutMs'));
+        } finally { command.fill(0); grant.fill(0); }
+      }
       case 'requestStartRecording':
       case 'requestStopRecording':
         return this.recordingControl(operation === 'requestStartRecording' ? 'start' : 'stop', args[1], connection, context);
@@ -379,7 +401,7 @@ export class JsDeviceControls {
   }
 
   private async withResult(service: string, characteristic: string, connection: JsControlConnection,
-    context: JsHostContext, decode: (value: JsGattValue) => JsValue | null, command: (beginResults: () => void) => Promise<void>): Promise<JsValue> {
+    context: JsHostContext, decode: (value: JsGattValue) => JsValue | null, command: (beginResults: () => void) => Promise<void>, timeoutMs = this.numberMetadata('operationTimeoutMs')): Promise<JsValue> {
     let accepting = false;
     let resolve!: (value: JsValue) => void;
     let reject!: (error: unknown) => void;
@@ -399,7 +421,7 @@ export class JsDeviceControls {
     try {
       this.requireOwner(connection, context);
       await command(() => { accepting = true; });
-      return await waitResult(result, this.numberMetadata('operationTimeoutMs'), context);
+      return await waitResult(result, timeoutMs, context);
     } finally {
       accepting = false;
       await this.removeSubscription(subscription, context);
