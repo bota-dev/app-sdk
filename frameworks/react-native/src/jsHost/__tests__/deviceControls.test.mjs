@@ -639,3 +639,27 @@ test('missing or mismatched find receipt times out and removes its subscription'
   assert.equal(f.subscribers.size,0);
   await f.controls.close();
 });
+
+test('generated Rust find codecs execute real service bytes and discard a foreign request receipt', async () => {
+  const { createGeneratedJsCore } = loadSource('core.ts');
+  const core=createGeneratedJsCore(), metadata=core.codec('protocolMetadata', {});
+  const f=fixture();let notify;const writes=[];
+  const connected={...device,serialNumber:'SERIAL'};
+  const controls=new JsDeviceControls({core,connection:()=>({device:connected,generation:'1'}),emit(){},gatt:(_c,fn)=>fn(),
+    ports:{persistence:{namespace:'test/current'},ble:{
+      async read(address){return address.characteristicUuid===metadata.CHAR_FIND_CAPABILITIES?Uint8Array.of(1,3,30,10,0,0,0,0):Uint8Array.from(Buffer.from('SERIAL'));},
+      async subscribe(address,callback){assert.equal(address.characteristicUuid,metadata.CHAR_FIND_STATUS);notify=callback;return {async remove(){notify=undefined;}};},
+      async write(address,bytes,response){assert.equal(response,true);writes.push([address.characteristicUuid,[...bytes]]);
+        if(address.characteristicUuid===metadata.CHAR_FIND_CONTROL){
+          const status=new Uint8Array(24);status[0]=1;status.fill(2,4,20);notify(status);
+          status.set(bytes.slice(4),4);notify(status);
+        }
+      },
+    }}});
+  const grant=new Uint8Array(193);grant[0]=4;
+  const result=await controls.execute('requestFindDevice',[connected,{...findRequest,grantBlob:Buffer.from(grant).toString('base64')}],f.context);
+  assert.equal(result.requestId,findRequest.requestId);assert.equal(result.active,false);
+  assert.equal(writes[0][0],metadata.CHAR_FIND_GRANT);assert.equal(writes[0][1].length,193);
+  assert.deepEqual(writes[1][1],[1,2,0,0,...new Array(16).fill(1)]);
+  await controls.close();await f.controls.close();
+});

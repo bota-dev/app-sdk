@@ -250,3 +250,11 @@ and documentation conventions. Maintainers use the [release procedure](docs/rele
 [MIT](LICENSE)
 
 See [BYO native/RN source preview](docs/parity/byo-storage.md) for integration, recovery and unreleased capability limits.
+
+### Nearby find (unreleased source)
+
+The generated-JS runtime candidate exposes `devices.getFindCapabilities`,
+`getFindStatus`, `requestFindDevice` and `requestStopFindDevice`. It requires the
+dedicated BLE service and a customer-backend grant fetcher; public beta.18 and
+native-only adapters do not provide this capability. See
+[the integration and delivery review](docs/parity/ble-find-device.md).

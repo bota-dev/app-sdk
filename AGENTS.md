@@ -1,5 +1,12 @@
 # AGENTS.md
 
+Unreleased BLE find/stop lives in Rust protocol codecs and the generated-JS host.
+The compatibility manager serializes nonce/grant/control and fences reconnects;
+App callbacks own account/binding scope. The exact generated artifact and 533
+RN regressions pass locally. Native-only adapters, public beta.18 and unqualified
+actuator boards remain unavailable. See `docs/parity/ble-find-device.md`.
+
+
 ## October 16 beta.19 release candidate
 
 - Exact main `7a4ff009` passes all nine CI jobs `38829562105`, License

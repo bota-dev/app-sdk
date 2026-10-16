@@ -20,8 +20,9 @@ methods; there is no silent fallback to recording commands or cloud delivery.
 Direct design review: the optional compound-engineering skill is unavailable.
 The implementation preserves existing handles and exported recording behavior,
 fails closed on old firmware, matches exact request IDs and keeps physical
-success distinct from a successful write. Initial targeted evidence: Rust core
-find tests 3, JS binding tests 69, host controls tests 30, RN strict types passed.
-The exact Linux generated-JS artifact, broader runtime suite and physical board
-qualification are pending. No package publication or installed-device result is
+success distinct from a successful write. Verification: Rust core find tests 3, JS binding tests 69, full RN facade/host
+regression tests 533 and RN strict types passed. The committed generated core
+comes from Linux CI run 38854313911; compiler-free provenance matches current
+Rust source hash b6190463d4b13442952f6b35eaa21c43eba2776b184c821a1e5a0b8f989cc8a0.
+Exact final CI rebuild and physical board qualification remain release gates. No package publication or installed-device result is
 claimed. The existing public beta.18 cannot execute the new methods.

@@ -325,7 +325,9 @@ Reads reconcile the current indication; disconnected or lost reports are unknown
 `nonce_d` (32 hex), `request_id` (32 nonzero hex), `action` (start/stop) and
 `duration_seconds` (start1..30/default10; stop0). It requires a currently bound,
 enrolled device and project write authority, but no recent cloud heartbeat.
-The application backend additionally enforces its end-user ownership.
+The application backend supplies its authenticated `expected_end_user_id`; the
+issuer compares it and optional `expected_binding_generation` under the device
+lock. Never trust a client-supplied owner.
 
 The returned 193-byte blob is HPKE enc65 + ciphertext112 + tag16 using the
 existing P-256/HKDF-SHA256/ChaCha20-Poly1305 grant cipher suite. Signed plaintext
