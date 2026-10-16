@@ -73,10 +73,10 @@ pub(crate) fn call(name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> 
         "decodeFindStatus" => {
             let r: Status = input(value)?;
             let status = parse_find_status(&r.bytes)?;
-            if let Some(expected) = r.request_id {
-                if status.request_id != id(&expected)? {
-                    return output(&Value::Null);
-                }
+            if let Some(expected) = r.request_id
+                && status.request_id != id(&expected)?
+            {
+                return output(&Value::Null);
             }
             let request_id: String = status
                 .request_id
