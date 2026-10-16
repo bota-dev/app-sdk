@@ -20,7 +20,7 @@ export interface BotaConfig {
   recordingDataStore?: RecordingDataStore;
   /** Environment for API endpoint (development, gamma, or production) */
   environment?: 'development' | 'gamma' | 'production';
-  /** Enable background sync (default: true) */
+  /** Enable automatic retained-upload recovery and completed-file release (default: true). Manual sync remains available. */
   backgroundSyncEnabled?: boolean;
   /** Only upload on WiFi (default: false) */
   wifiOnlyUpload?: boolean;

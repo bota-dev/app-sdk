@@ -412,3 +412,12 @@ Native implementation fixes require matching rebuilt adapters. Generated-mode
 consumers use `runtime.createUploadRecoveryProvider` with Rust policy and scoped
 file/HTTP effects. Timers require a live JS runtime; encrypted-v2 receipt recovery
 is unchanged. See `docs/parity/upload-recovery.md` for evidence and limits.
+
+## Automatic retained uploads
+
+Configure `backgroundSyncEnabled: false` to disable automatic retained-upload
+recovery and restored-completed-file release before initialization. Explicit sync
+and cleanup remain available. `resumeUploads()` only unpauses operations and does
+not override that configuration; omitted/true retains automatic recovery.
+Host-owned explicit auto-sync calls remain separate. See the
+[admission scope and evidence](../../docs/parity/background-sync-admission.md).

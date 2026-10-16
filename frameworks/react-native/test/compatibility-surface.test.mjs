@@ -35,6 +35,7 @@ test('preserves all 80 frozen exports plus exact maintenance and completion-reco
   additions.members.UploadInfo.push(optionalBoolean('reuploadRequired'));
   additions.members.UploadTask.push(optionalBoolean('completionPending'));
   additions.exports.find(value => value.name === 'UploadRecoveryContext').members.push(optionalBoolean('completionPending'));
+  additions.exports.find(value => value.name === 'RecordingManagerOptions').members.push(optionalBoolean('backgroundSyncEnabled'));
   assert.deepEqual(validateCompatibleReactNativeSurface({
     frozen: baseline.surface,
     surface: extractReactNativeApi(packageRoot),

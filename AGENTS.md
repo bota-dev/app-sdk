@@ -1,5 +1,13 @@
 # AGENTS.md
 
+The existing React Native `backgroundSyncEnabled: false` now gates automatic
+retained-upload scheduling and restored-completed release before initialization.
+Explicit sync/cleanup and default true remain available; restore/save and Rust
+retry/receipt policy are unchanged. `resumeUploads()` only unpauses and does not
+override false configuration. Four real public-configure groups, all 526 RN
+checks, normal build/types, Codegen/provenance and licenses pass locally; fresh
+qualification remains separate. See [admission evidence](docs/parity/background-sync-admission.md).
+
 Managed encrypted-upload preparation preserves only an allowlisted neutral
 diagnostic when its own latest provider request becomes an exact structured
 material rejection. Cancellation, cleanup failures and ownership stay fenced;

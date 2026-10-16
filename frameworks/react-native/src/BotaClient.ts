@@ -202,7 +202,9 @@ class BotaClientImpl extends EventEmitter<BotaClientEvents> {
 
       deviceManager = withCompatibilityClient(client, () => new DeviceManager());
       await deviceManager.initialize();
-      recordingManager = withCompatibilityClient(client, () => new RecordingManager({ uploadRecoveryProvider: config.uploadRecoveryProvider }));
+      recordingManager = withCompatibilityClient(client, () => new RecordingManager({
+        uploadRecoveryProvider: config.uploadRecoveryProvider, backgroundSyncEnabled: config.backgroundSyncEnabled,
+      }));
       await recordingManager.initialize();
       otaManager = withCompatibilityClient(client, () => new OTAManager(deviceManager!));
 

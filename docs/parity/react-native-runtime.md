@@ -1,5 +1,10 @@
 # React Native generated JavaScript runtime and OTA boundary
 
+The existing [`backgroundSyncEnabled: false` admission](background-sync-admission.md)
+now prevents automatic retained-upload attempts and completed-file release before
+initialization. Explicit sync and default true retain their behavior; app-owned
+explicit auto-sync calls remain separate. Rust/native contracts are unchanged.
+
 The unpublished [retired diagnostic cleanup correction](retired-log-cleanup.md)
 prevents stale log STOP writes and false cleanup uncertainty during scope
 retirement. Submitted IO and captured subscription removal stay joined; genuine

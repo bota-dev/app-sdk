@@ -2,6 +2,8 @@ import type { DeviceRecording, RecordingDataStore, UploadInfo, UploadRecoveryPro
 
 export interface RecordingManagerOptions {
   uploadRecoveryProvider?: UploadRecoveryProvider;
+  /** Allow automatic retained-upload recovery and completed-file release; manual operations remain available. */
+  backgroundSyncEnabled?: boolean;
   /** Unsupported: recording bytes remain native-owned. Configuration throws. */
   recordingDataStore?: RecordingDataStore;
 }

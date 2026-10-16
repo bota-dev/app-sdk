@@ -57,7 +57,8 @@ export class NativeUploadQueue extends EventEmitter<RecordingManagerEvents> {
 
   constructor(
     private readonly client: BotaDeviceSDKRecordingClient,
-    private readonly provider?: UploadRecoveryProvider
+    private readonly provider?: UploadRecoveryProvider,
+    private readonly automaticSyncEnabled = true
   ) { super(); }
 
   initialize(): Promise<void> {
@@ -76,8 +77,10 @@ export class NativeUploadQueue extends EventEmitter<RecordingManagerEvents> {
       this.tasks = restored;
       this.initialized = true;
     }).then(() => {
-      for (const task of this.tasks.filter(value => value.status === 'completed')) {
-        void this.release(task).catch(() => undefined);
+      if (this.automaticSyncEnabled) {
+        for (const task of this.tasks.filter(value => value.status === 'completed')) {
+          void this.release(task).catch(() => undefined);
+        }
       }
       this.schedule();
     }).catch(error => {
@@ -341,7 +344,7 @@ export class NativeUploadQueue extends EventEmitter<RecordingManagerEvents> {
   }
 
   private schedule(): void {
-    if (!this.initialized || this.destroyed || this.paused) return;
+    if (!this.initialized || this.destroyed || this.paused || !this.automaticSyncEnabled) return;
     if (this.timer) clearTimeout(this.timer);
     let wake = Infinity;
     for (const task of this.tasks) {

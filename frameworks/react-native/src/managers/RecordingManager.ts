@@ -97,7 +97,7 @@ export class RecordingManager extends EventEmitter<RecordingManagerEvents> {
     super();
     rejectRecordingDataStore(options.recordingDataStore);
     this.client = getCompatibilityClient();
-    this.queue = new NativeUploadQueue(this.client.recordings, options.uploadRecoveryProvider);
+    this.queue = new NativeUploadQueue(this.client.recordings, options.uploadRecoveryProvider, options.backgroundSyncEnabled ?? true);
     this.queue.on('queueUpdated', tasks => this.emit('queueUpdated', tasks));
     this.queue.on('uploadStarted', id => this.emit('uploadStarted', id));
     this.queue.on('uploadProgress', (id, progress) => this.emit('uploadProgress', id, progress));
