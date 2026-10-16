@@ -145,3 +145,34 @@ qualify Apple hardware, arbitrary OS scheduling or physical partial-resume
 failure injection. Protected release `37112341485` attempt 2 subsequently
 passed all five publications, public native consumers and the complete Flutter
 archive check; see the [release evidence](../../release/evidence/2.0.0-beta.12-publication.md).
+
+## October 16 accepted-resume fixture settlement
+
+Exact main `dc68abe70e4eef8bc280f92c2c6d88731634676d` failed Android
+[CI 38858483638](https://github.com/bota-dev/app-sdk/actions/runs/38858483638)
+with two failures among 316 tests. Its retained JUnit XML identifies the marked
+accepted-resume case's five-second **virtual-time** timeout while waiting for
+normal START-stream closure. The completed-resume case instead surfaces the
+host's cancellation exception from final cleanup. This report does not establish
+the cause of the earlier `cc3e301b` Android failure, whose XML was unavailable.
+
+The shared full/partial/marked accepted-resume fixture now uses the same bounded
+real-clock settlement pattern as the adjacent recovery tests:
+`withContext(Dispatchers.Default)` around the existing five-second watchdog.
+It asserts both channel closure and absence of a terminal failure before
+`host.close()`. The actual host pump runs on `Dispatchers.IO`; receiving its final
+event alone does not join its producer, and a virtual deadline need not allow
+that producer five seconds of wall time. No production host, Find behavior,
+Rust/generated core, receipt, checkpoint, or cleanup policy changes.
+
+| Requirement | Evidence | Status |
+| --- | --- | --- |
+| Join normal completion before fixture cleanup | All three accepted-resume modes share the real-clock terminal check; genuine channel failures still fail the assertion | Matched in source; fresh hosted execution pending |
+| Keep the settlement deadline bounded | Existing 5,000-ms deadline retained; no timeout increase or skipped assertion | Matched |
+| Preserve production behavior and owner Find work | Test and documentation changes only; production source/core unchanged from `dc68abe7` | Matched in source; final main qualification pending |
+
+The original failure artifacts remain preserved. This Windows host has no
+configured Java executable, so local Android execution is unavailable; fresh
+hosted Android execution and the complete source-bound CI gates remain required.
+Physical recording/cloud acceptance and the immutable public beta.19 release
+are separate from this newer unpublished Find-source candidate.

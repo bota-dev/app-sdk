@@ -369,7 +369,8 @@ CI uses the pinned `actions/checkout` 7 and `actions/setup-node` 7 lines. Keep `
 Android transfer-host success tests must await normal START-stream closure after
 `TransferCompleted` before closing the host. Receiving the final event does not
 settle its producer; assert a closed channel with no failure under the existing
-five-second settlement watchdog. See
+five-second real-clock settlement watchdog (`withContext(Dispatchers.Default)`);
+the host pump uses `Dispatchers.IO`, so a `runTest` virtual deadline can race it. See
 `docs/parity/android-lost-ack-recovery.md` for the controlled teardown regression.
 
 Apple `FakeCoreHost` discovery tests defer their timer until the collector sees

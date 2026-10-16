@@ -134,9 +134,12 @@ class EncryptedUploadV2TransferHostTest {
                 host.execute(effect(CoreEffectKind.EncryptedUploadV2AcknowledgeWindow, CoreField.Bytes(28, byteArrayOf(100)))).toList()
             }
             assertEquals(HostEventKind.EncryptedUploadV2TransferCompleted, events.receive().kind)
-            withTimeout(AsyncSettlementTimeoutMilliseconds) {
-                assertTrue(events.receiveCatching().isClosed)
+            // The IO pump must settle before close; runTest's virtual clock cannot time its work.
+            val terminal = withContext(Dispatchers.Default) {
+                withTimeout(AsyncSettlementTimeoutMilliseconds) { events.receiveCatching() }
             }
+            assertTrue(terminal.isClosed)
+            assertEquals(null, terminal.exceptionOrNull())
             val saved = services.checkpointStore.load(UploadSession)!!
             assertEquals(if (offset == ciphertext.size) 339u else 1u, saved.highestContiguousSequence)
             assertEquals(if (offset == ciphertext.size) 34u else 35u, saved.revision)
