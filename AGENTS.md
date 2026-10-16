@@ -7,6 +7,14 @@ RN regressions pass locally. Native-only adapters, public beta.18 and unqualifie
 actuator boards remain unavailable. See `docs/parity/ble-find-device.md`.
 
 
+Synchronized beta.19 is published at accepted source `7a4ff009`; protected
+release `38832459672` attempt 3, public native/JS consumers and the complete
+500-file RN/59-file Flutter readback pass. Later Find source is unpublished;
+physical recording/cloud cleanup and app OTA remain separate. See the
+[publication review](release/evidence/2.0.0-beta.19-publication.md).
+
+The dated preparation checkpoints below retain their historical status.
+
 ## October 16 beta.19 release candidate
 
 - Exact main `7a4ff009` passes all nine CI jobs `38829562105`, License

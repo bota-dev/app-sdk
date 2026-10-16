@@ -1,5 +1,14 @@
 # React Native generated JavaScript runtime and OTA boundary
 
+Published beta.19 includes the dated lifecycle/control/model/admission and
+managed-v2 corrections below at accepted source `7a4ff009`. All five package
+publications, public generated-runtime/strict-type/native consumers and complete
+archives pass; see the [publication review](../../release/evidence/2.0.0-beta.19-publication.md).
+Later Find source is unpublished and is not added to occupied beta.19 artifacts.
+The dated pending statements below are historical source-development checkpoints;
+complete physical recording/cloud cleanup, app OTA and unattended background
+acceptance remain separate.
+
 The existing [`backgroundSyncEnabled: false` admission](background-sync-admission.md)
 now prevents automatic retained-upload attempts and completed-file release before
 initialization. Explicit sync and default true retain their behavior; app-owned

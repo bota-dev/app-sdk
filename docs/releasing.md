@@ -1,3 +1,14 @@
+# Published synchronized beta: 2.0.0-beta.19
+
+Protected [release 38832459672](https://github.com/bota-dev/app-sdk/actions/runs/38832459672)
+at accepted source `7a4ff009` completes on attempt 3. All five original public
+packages, generated-RN/strict-type consumers, normal SwiftPM/CocoaPods, Android
+API 26/35 and all 59 Flutter files pass. See the
+[publication and recovery review](../release/evidence/2.0.0-beta.19-publication.md).
+Newer Find source in main is unpublished. App OTA and full physical acceptance
+remain separate; the following dated preparation sections retain their original
+prepublication status.
+
 ## Unpublished synchronized beta.19 preparation
 
 Beta.18 is published; its occupied artifacts remain immutable. Beta.19 prepares
