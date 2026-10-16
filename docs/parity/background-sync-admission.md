@@ -62,10 +62,11 @@ files and both actual Apple archive checksums verify. The generated core and
 version 1 OS contract are unchanged. See the
 [complete release evidence](../../release/evidence/2.0.0-beta.19-preflight.md#exact-main-qualification-at-7a4ff009).
 
-The normal One app loads this exact private candidate. Its four due retained
-tasks and canonical queue hash remain unchanged after configure and elapsed
-retry timing. Following the owner's Bluetooth master toggle, fresh metadata at
-00:39:50 verifies the selected Pin, firmware 1.0.18, MTU 512, generation 4,
+The normal One app loads this exact private candidate. Its four retained tasks,
+including overdue pending work, and canonical queue hash remain unchanged after
+configure and elapsed retry timing. Following the owner's Bluetooth master
+toggle, fresh metadata at 00:39:50 verifies the selected Pin, firmware 1.0.18,
+MTU 512, generation 4,
 Idle, pending 0 and LIST 0; SDK destruction joins at 00:40:12. This is bounded
 normal-host evidence for false admission, connection and teardown. The host's
 own explicit auto-sync trigger remains separate. Demo loads the exact candidate
