@@ -7,6 +7,11 @@ tracked separately.
 
 ## Unreleased
 
+- Add direct BLE find/stop to the generated-JS runtime and compatibility device
+  manager, using Rust-owned action/grant/status codecs and exact request receipts.
+  Requires the dedicated service and qualified light/haptic firmware; native-only
+  adapters and published beta.18 remain unavailable. See `docs/parity/ble-find-device.md`.
+
 - Batch contiguous buffered legacy recording DATA into bounded durable writes,
   retaining receive limits, exact sequence validation, checkpoints and final
   integrity/confirmation gates. This avoids the receive backlog failure observed

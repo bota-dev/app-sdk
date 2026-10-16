@@ -8,6 +8,7 @@ mod byo;
 mod codecs;
 mod dto;
 mod engine;
+mod find_device;
 mod host_policy;
 mod json;
 mod native_v2;

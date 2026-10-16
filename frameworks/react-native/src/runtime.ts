@@ -198,3 +198,5 @@ export function createBotaReactNativeRuntime(
       createManagedProtectedStreamingStatusBackend(backend, configuration),
   };
 }
+
+export type { FindDeviceCapabilities, FindDeviceStatus, FindDeviceRequest } from './findDevice';

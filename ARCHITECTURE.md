@@ -1405,3 +1405,13 @@ supervised production-device test; physical acceptance remains open.
   closes the backend command.
 - Recording content stays encrypted according to the selected product security
   mode; the App SDK does not receive backend decryption private keys.
+
+## Nearby find capability
+
+Rust owns find control/grant/status encoding, bounded inputs and exact receipt
+interpretation. The generated-JS transport uses its existing exclusive GATT
+owner; the compatibility manager sequences fresh nonce acquisition through
+completion. The App supplies scoped HTTP authorization and renders observed
+state. Active transfers may reject competing controls as busy; no authority
+bypass or automatic fallback is introduced. Native-only adapters remain
+unavailable. See [review](docs/parity/ble-find-device.md).

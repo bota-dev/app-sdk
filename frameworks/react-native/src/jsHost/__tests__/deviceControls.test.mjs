@@ -8,11 +8,11 @@ const characteristics = ['SERIAL_NUMBER', 'MODEL_NUMBER', 'FIRMWARE_REVISION', '
   'DEVICE_STATUS', 'DEVICE_COMMAND', 'RECORDING_CONTROL', 'RECORDING_STATUS', 'TIME_SYNC',
   'PAIRING_STATE', 'API_ENDPOINT', 'DEVICE_SETTINGS', 'PK_D', 'AUTH_NONCE', 'DEVICE_CERT',
   'BACKEND_PUBKEY', 'WIFI_GRANT', 'WIFI_CREDENTIAL', 'WIFI_STATUS', 'WIFI_SCAN',
-  'DEVICE_LOG_CONTROL', 'DEVICE_LOG_DATA'];
+  'DEVICE_LOG_CONTROL', 'DEVICE_LOG_DATA', 'FIND_CAPABILITIES', 'FIND_CONTROL', 'FIND_GRANT', 'FIND_STATUS'];
 const services = ['DEVICE_INFO', 'BOTA_CONTROL', 'BOTA_PROVISIONING', 'BOTA_AUTH',
-  'BOTA_WIFI_CONFIG', 'BOTA_DIAGNOSTICS'];
+  'BOTA_WIFI_CONFIG', 'BOTA_DIAGNOSTICS', 'BOTA_FIND'];
 const metadata = Object.fromEntries([...characteristics.map(name => [`CHAR_${name}`, name]),
-  ...services.map(name => [`SERVICE_${name}`, name]), ['recordingStopDelayMs', 0], ['operationTimeoutMs', 1000]]);
+  ...services.map(name => [`SERVICE_${name}`, name]), ['recordingStopDelayMs', 0], ['operationTimeoutMs', 1000], ['findAckTimeoutMs', 50]]);
 const device = { id: 'peripheral-1', serialNumber: 'BOTA-001', deviceType: 'pin',
   firmwareVersion: '1.0.19', mtu: 247, isProvisioned: true, connectionState: 'connected' };
 
@@ -38,6 +38,8 @@ function fixture(overrides = {}, scope = {}, gatt = (_context, body) => body()) 
     codecCalls.push({ name, input });
     switch (name) {
       case 'protocolMetadata': return { ...metadata, ...overrides };
+      case 'decodeFindCapabilities': return { supported: input.bytes[0] !== 9 };
+      case 'decodeFindStatus': return input.bytes[0] === 1 ? null : { active: false, success: true, requestId: input.requestId, remainingMs: 0 };
       case 'decodeText': return input.bytes[0] === 255 ? 'OTHER-DEVICE' : device.serialNumber;
       case 'decodeDeviceStatus': return { batteryLevel: 91, timestamp: input.timestampMs };
       case 'decodeProvisioningState': return true;
@@ -83,6 +85,7 @@ function fixture(overrides = {}, scope = {}, gatt = (_context, body) => body()) 
       if (['RECORDING_CONTROL', 'WIFI_CREDENTIAL'].includes(address.characteristicUuid)) {
         subscribers.get(address.characteristicUuid === 'RECORDING_CONTROL' ? 'RECORDING_STATUS' : 'WIFI_CREDENTIAL')?.(Uint8Array.of(0));
       }
+      if (address.characteristicUuid === 'FIND_CONTROL') subscribers.get('FIND_STATUS')?.(Uint8Array.of(0));
       if (address.characteristicUuid === 'WIFI_SCAN') subscribers.get('WIFI_SCAN')?.(Uint8Array.of(0));
     },
     async subscribe(address, onValue) {
@@ -611,4 +614,52 @@ test('pending model resolution keeps the operation joined and cannot write after
     assert.deepEqual(f.writes, []);
     f.core.dispose();
   }
+});
+
+const findRequest = { action: 'stop', durationSeconds: 0, requestId: '01'.repeat(16), grantBlob: 'opaque' };
+test('find subscribes before grant/control and returns only a correlated device receipt', async () => {
+  const f = fixture();
+  const result = await f.controls.execute('requestFindDevice', [device, findRequest], f.context);
+  assert.equal(result.success, true);
+  const effects = f.calls.filter(c => ['write','subscribe','remove'].includes(c[0]));
+  assert.deepEqual(effects.map(c=>c.slice(0,2)), [['subscribe','FIND_STATUS'],['write','FIND_GRANT'],['write','FIND_CONTROL'],['remove','FIND_STATUS']]);
+  assert.equal(effects[1][3], true); assert.equal(effects[2][3], true);
+  assert.equal(f.codecCalls.find(c=>c.name==='decodeFindStatus').input.requestId, findRequest.requestId);
+  await f.controls.close();
+});
+test('unsupported find has zero authority/control writes', async () => {
+  const f=fixture(); f.ble.read=async address => Uint8Array.of(address.characteristicUuid==='FIND_CAPABILITIES'?9:0);
+  await assert.rejects(f.controls.execute('requestFindDevice',[device,findRequest],f.context),/unsupported_capability/);
+  assert.equal(f.calls.filter(c=>c[0]==='write').length,0);
+  await f.controls.close();
+});
+test('missing or mismatched find receipt times out and removes its subscription', async () => {
+  const f=fixture(); f.ble.write=async address => { if(address.characteristicUuid==='FIND_CONTROL') f.subscribers.get('FIND_STATUS')?.(Uint8Array.of(1)); };
+  await assert.rejects(f.controls.execute('requestFindDevice',[device,findRequest],f.context),/timeout/);
+  assert.equal(f.subscribers.size,0);
+  await f.controls.close();
+});
+
+test('generated Rust find codecs execute real service bytes and discard a foreign request receipt', async () => {
+  const { createGeneratedJsCore } = loadSource('core.ts');
+  const core=createGeneratedJsCore(), metadata=core.codec('protocolMetadata', {});
+  const f=fixture();let notify;const writes=[];
+  const connected={...device,serialNumber:'SERIAL'};
+  const controls=new JsDeviceControls({core,connection:()=>({device:connected,generation:'1'}),emit(){},gatt:(_c,fn)=>fn(),
+    ports:{persistence:{namespace:'test/current'},ble:{
+      async read(address){return address.characteristicUuid===metadata.CHAR_FIND_CAPABILITIES?Uint8Array.of(1,3,30,10,0,0,0,0):Uint8Array.from(Buffer.from('SERIAL'));},
+      async subscribe(address,callback){assert.equal(address.characteristicUuid,metadata.CHAR_FIND_STATUS);notify=callback;return {async remove(){notify=undefined;}};},
+      async write(address,bytes,response){assert.equal(response,true);writes.push([address.characteristicUuid,[...bytes]]);
+        if(address.characteristicUuid===metadata.CHAR_FIND_CONTROL){
+          const status=new Uint8Array(24);status[0]=1;status.fill(2,4,20);notify(status);
+          status.set(bytes.slice(4),4);notify(status);
+        }
+      },
+    }}});
+  const grant=new Uint8Array(193);grant[0]=4;
+  const result=await controls.execute('requestFindDevice',[connected,{...findRequest,grantBlob:Buffer.from(grant).toString('base64')}],f.context);
+  assert.equal(result.requestId,findRequest.requestId);assert.equal(result.active,false);
+  assert.equal(writes[0][0],metadata.CHAR_FIND_GRANT);assert.equal(writes[0][1].length,193);
+  assert.deepEqual(writes[1][1],[1,2,0,0,...new Array(16).fill(1)]);
+  await controls.close();await f.controls.close();
 });

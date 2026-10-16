@@ -1,3 +1,5 @@
+mod find_device;
+pub use find_device::*;
 mod byo_ble;
 mod cursor;
 mod diagnostics;
