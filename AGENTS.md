@@ -1,5 +1,12 @@
 # AGENTS.md
 
+Unpublished managed completion detaches operation-context abort listeners only
+after the validated receipt/CONFIRM handoff. Explicit cancellation, configured
+scope and disposal still refuse completion; executor retirement is unchanged.
+All 563 local RN checks/build/types/license pass; exact archive, hosted and new
+physical gates remain separate. See
+[requirements and evidence](docs/parity/managed-completion-retirement.md).
+
 Unpublished pending-catalog admission now reserves the existing bounded FIFO
 before its one direct lease, preserving captured scope/physical retirement and
 catalog cleanup. Rust/protocol/durable state remain unchanged; qualification is

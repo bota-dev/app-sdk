@@ -1,5 +1,9 @@
 # React Native generated JavaScript runtime and OTA boundary
 
+The unpublished [managed completion handoff](managed-completion-retirement.md)
+preserves confirmed journal completion across normal transport retirement.
+Cancellation and scoped durable cleanup remain separate gates.
+
 The unpublished [pending-catalog admission correction](catalog-admission.md)
 orders the normal app's pre-Sync query in the existing bounded FIFO, retaining
 one catalog lease and joined cleanup. Protocol and durable upload policy remain

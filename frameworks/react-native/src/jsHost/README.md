@@ -19,6 +19,9 @@ joined cleanup. It adds no network retry; see the
 Pending-catalog reads reserve the same FIFO and hold one direct lease through
 their existing legacy/V2 body and subscription cleanup; see the
 [catalog review](../../../../docs/parity/catalog-admission.md).
+Managed material detaches transport-owner abort listeners after its validated
+receipt/CONFIRM handoff; explicit cancellation and scoped journal completion
+remain separate. See the [handoff review](../../../../docs/parity/managed-completion-retirement.md).
 For reset, `beforeFactoryResetReceipt` joins the application's durable result
 and binding-generation journal before the core receives `FactoryResetResultSaved`
 and can request the receipt write. A failed callback never acknowledges that save.

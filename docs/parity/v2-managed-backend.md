@@ -1,5 +1,10 @@
 # Managed encrypted-v2 backend adapter
 
+The unpublished [managed completion handoff](managed-completion-retirement.md)
+separates normal terminal owner retirement from cancellation after the final
+validated receipt/CONFIRM callback. Explicit cancellation, scope/disposal and
+durable completion checks remain active.
+
 The unpublished [V2 workflow admission correction](v2-workflow-admission.md)
 reserves the existing control FIFO and holds one owner through identity/profile
 preparation, generated transfer and cleanup. It adds no retry or network replay;

@@ -358,6 +358,9 @@ export function createJsEncryptedUploadV2Backend(options: JsEncryptedUploadV2Bac
       check(slot, context);
       if (!slot.receiptProvided) throw failure('BOTA_UPLOAD_STATE');
       slot.receiptDelivered = true;
+      // The verified CONFIRM handoff outlives the transport owner's terminal signal.
+      for (const [signal, listener] of slot.ownerSignals) signal.removeEventListener('abort', listener);
+      slot.ownerSignals.clear();
     },
     uploadContext: {
       async challenge(attemptId, bytes, context) {

@@ -2,6 +2,10 @@
 
 ## Generated JavaScript runtime and app OTA updates
 
+The unpublished [managed completion handoff](../../docs/parity/managed-completion-retirement.md)
+retains confirmed journal completion across normal transport retirement, while
+preserving explicit cancellation and scoped durable cleanup checks.
+
 The unpublished [diagnostic cleanup correction](../../docs/parity/retired-log-cleanup.md)
 skips unsubmitted log STOP after retirement, joins submitted writes and captured
 monitors, and observes void log-removal rejections. Genuine cleanup failures
