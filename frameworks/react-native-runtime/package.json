@@ -23,5 +23,5 @@
     "license-check": "node ../../scripts/check-licenses.mjs",
     "verify": "npm run build && npm run typecheck && npm test && npm run license-check"
   },
-  "dependencies": { "buffer": "6.0.3", "eventemitter3": "5.0.1" }
+  "dependencies": { "buffer": "6.0.3", "eventemitter3": "5.0.4" }
 }
