@@ -1,5 +1,13 @@
 # AGENTS.md
 
+Unpublished explicit V2 sync now reserves the existing bounded control FIFO and
+one executor owner through preparation, generated transfer and joined cleanup.
+Queued cancellation and exact scope/physical retirement remain fenced; shared
+Rust policy, native ports and durable state are unchanged. See
+[requirements, durable boundaries and limits](docs/parity/v2-workflow-admission.md).
+All 550 local RN checks, build/types, Codegen/provenance, metadata and licenses
+pass; fresh exact-source hosted/archive and physical qualification remain open.
+
 Unpublished current-connection bookkeeping correction retires the departed
 device after successful generated-runtime replacement. Compatibility status and
 disconnect reject stale ID/serial targets, including replacement during awaited

@@ -1,5 +1,10 @@
 # Managed encrypted-v2 backend adapter
 
+The unpublished [V2 workflow admission correction](v2-workflow-admission.md)
+reserves the existing control FIFO and holds one owner through identity/profile
+preparation, generated transfer and cleanup. It adds no retry or network replay;
+the durable Create boundary and exact physical retry gates remain explicit.
+
 ## October 15 managed recording-create identity correction
 
 The shared Rust `ManagedUploadEvent::CreateRecording` plan now supplies

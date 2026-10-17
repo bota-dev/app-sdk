@@ -64,6 +64,7 @@ interface QueuedControl {
   connection: JsControlConnection | null;
   epoch: number;
   namespace: string;
+  workflow?: { operationId: string; start(): Promise<void> };
   resolve(value: unknown): void;
   reject(error: unknown): void;
 }
@@ -101,7 +102,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
   let disconnecting = false;
   let controlEpoch = 0;
   const controlQueue: QueuedControl[] = [];
-  let activeControl: { operationId?: string; settled: Promise<void> } | undefined;
+  let activeControl: { operationId?: string; workflow?: boolean; settled: Promise<void> } | undefined;
   let destroyPromise: Promise<void> | undefined;
   let scanPromise: Promise<unknown> | undefined;
   let disconnectObserver: JsHostSubscription | undefined;
@@ -190,8 +191,9 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
       const queued = controlQueue.shift()!;
       try { checkQueuedControl(queued); }
       catch (error) { queued.reject(error); continue; }
-      const work = executor.direct(queued.name, context => queued.owner.execute(queued.name, queued.args, context));
-      const active = { operationId: executor.activeOperationId, settled: Promise.resolve() };
+      const work = queued.workflow ? queued.workflow.start()
+        : executor.direct(queued.name, context => queued.owner.execute(queued.name, queued.args, context));
+      const active = { operationId: executor.activeOperationId, workflow: queued.workflow !== undefined, settled: Promise.resolve() };
       activeControl = active;
       active.settled = work.then(queued.resolve, queued.reject).then(() => {
         if (activeControl === active) activeControl = undefined;
@@ -212,6 +214,21 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
     return new Promise((resolve, reject) => {
       controlQueue.push({ name, args: capturedArgs, owner, connection: physical, epoch: controlEpoch,
         namespace: ports.persistence.namespace, resolve, reject });
+      pumpControls();
+    });
+  };
+  const queueWorkflow = (operationId: string, start: () => Promise<void>): Promise<void> => {
+    ready();
+    if (disconnecting) throw new BotaJsHostError('operation_cancelled', 'TransferRecording');
+    executor.checkControlAdmission('TransferRecording', activeControl?.operationId);
+    if (activeControl?.workflow || controlQueue.some(queued => queued.workflow) || controlQueue.length >= 32) {
+      throw new BotaJsHostError('operation_in_progress', 'TransferRecording');
+    }
+    return new Promise((resolve, reject) => {
+      controlQueue.push({ name: 'TransferRecording', args: [], owner: deviceControls,
+        connection: connection ? { device: { ...connection.device }, generation: connection.generation } : null,
+        epoch: controlEpoch, namespace: ports.persistence.namespace,
+        workflow: { operationId, start }, resolve() { resolve(); }, reject });
       pumpControls();
     });
   };
@@ -678,84 +695,94 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
     const lease = operationLeases.get(operationId);
     if (!lease) return;
     lease.cancelled = true;
+    const queued = controlQueue.findIndex(value => value.workflow?.operationId === operationId);
+    if (queued !== -1) controlQueue.splice(queued, 1)[0]!.reject(new BotaJsHostError('operation_cancelled', 'TransferRecording'));
     for (const request of profiles.values()) if (request.operationId === operationId) request.reject(new BotaJsHostError('operation_cancelled', 'TransferRecording'));
     await executor.cancel(lease.context?.operationId ?? operationId);
   };
   if (ports.files?.flush) {
     adapter.syncEncryptedRecordingV2 = async (device, recording, operationId) => {
       if (!operationId || operationId.length > 256 || operationLeases.has(operationId)) throw new BotaJsHostError('invalid_operation_id', 'TransferRecording');
-      const lease = await prepareLease(device, operationId, 'VerifyEncryptedTransferIdentity');
+      device = { ...captured(device) };
+      recording = { ...recording };
+      const lease: OperationLease = { device, physicalGeneration: connection!.generation,
+        scope: ports.persistence.namespace, cancelled: false };
+      operationLeases.set(operationId, lease);
       let journalKey = '';
       let host: JsEncryptedUploadV2Host | undefined;
+      let cleanupPromise: Promise<void> | undefined;
+      const cleanup = () => cleanupPromise ??= (async () => {
+        let cleanupError: unknown;
+        try { await host?.close(); } catch (error) { cleanupError = error; }
+        if (lease.context) {
+          const context = { ...lease.context, signal: new AbortController().signal };
+          if (!host) for (const value of materials.values()) if (value.operationId === operationId) {
+            try { await value.material.cancel?.(context); } catch (error) { cleanupError ??= error; }
+          }
+          if (!lease.providerDrained) {
+            try { await options.drainMaterial?.(operationId, context); } catch (error) { cleanupError ??= error; }
+          }
+        }
+        if (cleanupError) throw cleanupError;
+      })();
       try {
-        const prepared = await direct('PrepareEncryptedUploadV2', async context => {
-          lease.context = context;
-          try {
-          checkLease(lease, context.operation);
-          const localIdentity = object(core.codec('encryptedUploadV2LocalIdentity', {
-            scope: lease.scope, serialNumber: device.serialNumber, recording: recording as unknown as JsValue,
-          }));
-          journalKey = text(localIdentity.journalKey);
-          const capability = await executor.gatt(context, () => ports.ble.read(
-            address(device, 'SERVICE_BOTA_STORAGE', 'CHAR_STORAGE_TRANSFER_CAPABILITIES_V2'), context));
-          if (!(capability instanceof Uint8Array)) throw new BotaJsHostError('invalid_capability_value', context.operation);
-          const nativeCapability = core.codec('nativeEncryptedUploadV2Capability', { bytes: Array.from(capability) });
-          const journal = await ports.persistence.load(`encrypted-upload-v2/${journalKey}`, context);
-          const checkpoint = core.codec('nativeEncryptedUploadV2Checkpoint', {
-            journal, scope: lease.scope,
-            serialNumber: device.serialNumber, recording: recording as unknown as JsValue,
-          });
-          const decision = await requestProfile(operationId, lease, recording, nativeCapability, checkpoint, context);
-          if (lease.cancelled) throw new BotaJsHostError('operation_cancelled', context.operation);
-          const selected = materials.get(decision.materialRegistrationId);
-          if (!selected || selected.operationId !== operationId) throw new BotaJsHostError('material_identity_mismatch', context.operation);
-          const request = core.codec('planEncryptedUploadV2Request', { serialNumber: device.serialNumber,
-            recording: recording as unknown as JsValue, capabilityBytes: Array.from(capability),
-            decision: decision as unknown as JsValue, transportSessionId: (++registration).toString(),
-            sinkId: text(localIdentity.sinkId), maximumWriteBytes: device.mtu - 3, checkpoint,
-          });
-          const sink = await ports.files!.open(text(object(request).sink_id), 'file', context);
-          checkLease(lease, context.operation);
-          return { request, sink, material: selected.material,
-            priorCheckpoint: journal === null ? null : object(journal).checkpoint! };
-          } catch (error) {
-            if (options.drainMaterial) {
-              await options.drainMaterial(operationId, { ...context, signal: new AbortController().signal });
-              lease.providerDrained = true;
+        await queueWorkflow(operationId, async () => {
+          await executor.run(async context => {
+            lease.context = context;
+            try {
+              checkLease(lease, context.operation);
+              await deviceControls.execute('readIdentity', [device], context);
+              checkLease(lease, context.operation);
+              const localIdentity = object(core.codec('encryptedUploadV2LocalIdentity', {
+                scope: lease.scope, serialNumber: device.serialNumber, recording: recording as unknown as JsValue,
+              }));
+              journalKey = text(localIdentity.journalKey);
+              const capability = await executor.gatt(context, () => ports.ble.read(
+                address(device, 'SERVICE_BOTA_STORAGE', 'CHAR_STORAGE_TRANSFER_CAPABILITIES_V2'), context));
+              if (!(capability instanceof Uint8Array)) throw new BotaJsHostError('invalid_capability_value', context.operation);
+              const nativeCapability = core.codec('nativeEncryptedUploadV2Capability', { bytes: Array.from(capability) });
+              const journal = await ports.persistence.load(`encrypted-upload-v2/${journalKey}`, context);
+              const checkpoint = core.codec('nativeEncryptedUploadV2Checkpoint', {
+                journal, scope: lease.scope,
+                serialNumber: device.serialNumber, recording: recording as unknown as JsValue,
+              });
+              const decision = await requestProfile(operationId, lease, recording, nativeCapability, checkpoint, context);
+              if (lease.cancelled) throw new BotaJsHostError('operation_cancelled', context.operation);
+              const selected = materials.get(decision.materialRegistrationId);
+              if (!selected || selected.operationId !== operationId) throw new BotaJsHostError('material_identity_mismatch', context.operation);
+              const request = core.codec('planEncryptedUploadV2Request', { serialNumber: device.serialNumber,
+                recording: recording as unknown as JsValue, capabilityBytes: Array.from(capability),
+                decision: decision as unknown as JsValue, transportSessionId: (++registration).toString(),
+                sinkId: text(localIdentity.sinkId), maximumWriteBytes: device.mtu - 3, checkpoint,
+              });
+              const sink = await ports.files!.open(text(object(request).sink_id), 'file', context);
+              checkLease(lease, context.operation);
+              host = new JsEncryptedUploadV2Host({ core, ports, request, journalKey, sink,
+                peripheralId: device.id, maximumWriteBytes: device.mtu - 3, material: selected.material,
+                priorCheckpoint: journal === null ? null : object(journal).checkpoint!,
+                expectedMarkersRequired: recording.markersRequired === true,
+                checkOwner: owner => checkWorkflowOwner(owner, device.serialNumber),
+                gatt: (owner, body) => executor.gatt(owner, body), onCleanupFailure: error => executor.markCleanupFailed(error) });
+              v2Hosts.set(operationId, host);
+              return { TransferEncryptedRecording: { request } };
+            } catch (error) {
+              if (options.drainMaterial) {
+                await options.drainMaterial(operationId, { ...context, signal: new AbortController().signal });
+                lease.providerDrained = true;
+              }
+              throw error;
             }
-            throw error;
-          }
+          }, {
+            operation: 'TransferRecording', operationId,
+            capabilities: ['Ble', 'Persistence', 'Progress', 'HostMaterial', 'RecordingSink', 'NetworkTransfer'],
+            onProgress(completed, total) { emit('onEncryptedUploadV2Progress', { operationId, recordingUuid: recording.uuid,
+              phase: 'transfer', completedBytes: completed, totalBytes: total }); },
+          }, cleanup);
+          emit('onEncryptedUploadV2Progress', { operationId, recordingUuid: recording.uuid, phase: 'completed',
+            completedBytes: recording.ciphertextLength, totalBytes: recording.ciphertextLength });
         });
-        if (lease.cancelled) throw new BotaJsHostError('operation_cancelled', 'TransferRecording');
-        host = new JsEncryptedUploadV2Host({ core, ports, request: prepared.request, journalKey, sink: prepared.sink,
-          peripheralId: device.id, maximumWriteBytes: device.mtu - 3, material: prepared.material,
-          priorCheckpoint: prepared.priorCheckpoint, expectedMarkersRequired: recording.markersRequired === true,
-          checkOwner: context => checkWorkflowOwner(context, device.serialNumber),
-          gatt: (context, body) => executor.gatt(context, body), onCleanupFailure: error => executor.markCleanupFailed(error) });
-        v2Hosts.set(operationId, host);
-        await executor.run({ TransferEncryptedRecording: { request: prepared.request } }, {
-          operation: 'TransferRecording', operationId,
-          capabilities: ['Ble', 'Persistence', 'Progress', 'HostMaterial', 'RecordingSink', 'NetworkTransfer'],
-          onProgress(completed, total) { emit('onEncryptedUploadV2Progress', { operationId, recordingUuid: recording.uuid,
-            phase: 'transfer', completedBytes: completed, totalBytes: total }); },
-        });
-        emit('onEncryptedUploadV2Progress', { operationId, recordingUuid: recording.uuid, phase: 'completed',
-          completedBytes: recording.ciphertextLength, totalBytes: recording.ciphertextLength });
       } finally {
-        try {
-          let cleanupError: unknown;
-          try { await host?.close(); } catch (error) { cleanupError = error; }
-          if (lease.context) {
-            const cleanup = { ...lease.context, signal: new AbortController().signal };
-            if (!host) for (const value of materials.values()) if (value.operationId === operationId) {
-              try { await value.material.cancel?.(cleanup); } catch (error) { cleanupError ??= error; }
-            }
-            if (!lease.providerDrained) {
-              try { await options.drainMaterial?.(operationId, cleanup); } catch (error) { cleanupError ??= error; }
-            }
-          }
-          if (cleanupError) throw cleanupError;
-        } finally {
+        try { await cleanup(); } finally {
           v2Hosts.delete(operationId);
           operationLeases.delete(operationId);
           for (const [id, material] of materials) if (material.operationId === operationId) materials.delete(id);

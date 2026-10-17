@@ -1,5 +1,9 @@
 # Ordinary generated-runtime control admission
 
+The October 17 [explicit encrypted V2 successor](v2-workflow-admission.md)
+reserves this same FIFO before its single workflow claim. The dated ordinary
+control correction below remains the preceding checkpoint.
+
 Current successor readiness and bounded round 6 normal Demo/One settings and
 joined teardown are tracked in [configure retirement](configure-retirement.md).
 The earlier admission requirements and failure checkpoints below are retained.

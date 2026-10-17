@@ -1,5 +1,11 @@
 # React Native generated JavaScript runtime and OTA boundary
 
+The unpublished [V2 workflow admission follow-up](v2-workflow-admission.md)
+orders explicit encrypted sync behind admitted controls and retains one owner
+through preparation and generated transfer. Existing workflow/BYO refusal,
+scope fences and joined cleanup remain; no automatic replay or native change is
+introduced. New qualification and physical acceptance remain separate.
+
 The unpublished [current-connection ownership correction](current-connection-ownership.md)
 retires the old compatibility-manager entry when the single-current generated
 runtime replaces its device. Stale status/disconnect targets refuse before IO;

@@ -191,17 +191,24 @@ export class BotaJsHostExecutor {
     this.handlers.set(family, handler);
   }
 
-  async run(command: JsValue, options: JsWorkflowOptions,
+  async run(command: JsValue | ((context: JsHostContext) => Promise<JsValue>), options: JsWorkflowOptions,
     cleanup?: (context: JsHostContext) => Promise<void>): Promise<JsWorkflowResult> {
     const owner = this.claim(options, 'workflow');
     if (cleanup) owner.cleanups.push(() => cleanup(this.context(owner, '0')));
-    owner.command = command;
+    if (typeof command !== 'function') owner.command = command;
     try {
       await this.initializeCancellation(owner);
       if (owner.controller.signal.aborted) throw new BotaJsHostError('operation_cancelled', owner.operation);
+      const prepared = typeof command === 'function'
+        ? await this.track(owner, command(this.context(owner, '0'))) : command;
+      if (typeof command === 'function') {
+        if (owner.controller.signal.aborted) throw new BotaJsHostError('operation_cancelled', owner.operation);
+        this.check(this.context(owner, '0'));
+      }
+      owner.command = prepared;
       owner.started = true;
       this.accept(owner, this.request(owner, {
-        action: 'start', command, capabilities: options.capabilities ?? this.capabilities(),
+        action: 'start', command: prepared, capabilities: options.capabilities ?? this.capabilities(),
       }));
       this.pump(owner);
     } catch (error) {

@@ -12,6 +12,10 @@ one lane; timers and persistence are started independently so a blocked read
 cannot postpone a core deadline. Cancellation and terminal completion join
 submitted work and subscription teardown before replacement work is admitted.
 Uncertain teardown retains ownership until destruction.
+Explicit encrypted V2 sync reserves the existing bounded control FIFO, then
+holds one executor owner through verified preparation, generated transfer and
+joined cleanup. It adds no network retry; see the
+[admission review](../../../../docs/parity/v2-workflow-admission.md).
 For reset, `beforeFactoryResetReceipt` joins the application's durable result
 and binding-generation journal before the core receives `FactoryResetResultSaved`
 and can request the receipt write. A failed callback never acknowledges that save.
