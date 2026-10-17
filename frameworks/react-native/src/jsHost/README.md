@@ -16,6 +16,9 @@ Explicit encrypted V2 sync reserves the existing bounded control FIFO, then
 holds one executor owner through verified preparation, generated transfer and
 joined cleanup. It adds no network retry; see the
 [admission review](../../../../docs/parity/v2-workflow-admission.md).
+Pending-catalog reads reserve the same FIFO and hold one direct lease through
+their existing legacy/V2 body and subscription cleanup; see the
+[catalog review](../../../../docs/parity/catalog-admission.md).
 For reset, `beforeFactoryResetReceipt` joins the application's durable result
 and binding-generation journal before the core receives `FactoryResetResultSaved`
 and can request the receipt write. A failed callback never acknowledges that save.

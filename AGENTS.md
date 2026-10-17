@@ -1,5 +1,12 @@
 # AGENTS.md
 
+Unpublished pending-catalog admission now reserves the existing bounded FIFO
+before its one direct lease, preserving captured scope/physical retirement and
+catalog cleanup. Rust/protocol/durable state remain unchanged; qualification is
+separate. All 557 local RN checks/build/types/license pass; exact hosted,
+private-archive and physical checks remain separate. See
+[requirements and evidence](docs/parity/catalog-admission.md).
+
 Unpublished explicit V2 sync now reserves the existing bounded control FIFO and
 one executor owner through preparation, generated transfer and joined cleanup.
 Queued cancellation and exact scope/physical retirement remain fenced; shared

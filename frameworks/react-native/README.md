@@ -298,6 +298,10 @@ release verification. The frozen public compatibility surface remains `0.0.65`.
 
 ### Native App Integration
 
+This section describes the native-workflow compatibility route. The generated
+`/runtime` catalog uses narrow OS ports; its unpublished ordered-admission
+follow-up is tracked in [the catalog review](../../docs/parity/catalog-admission.md).
+
 Current source adds `BotaDeviceSDK.recordings.listPendingRecordings(device)`.
 It returns legacy recordings and v2 entries tagged by `storageFormat: 3`, with
 the full UUID/generation, ciphertext length/hash and catalog metadata. Catalog

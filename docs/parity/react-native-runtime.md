@@ -1,5 +1,10 @@
 # React Native generated JavaScript runtime and OTA boundary
 
+The unpublished [pending-catalog admission correction](catalog-admission.md)
+orders the normal app's pre-Sync query in the existing bounded FIFO, retaining
+one catalog lease and joined cleanup. Protocol and durable upload policy remain
+unchanged.
+
 The unpublished [V2 workflow admission follow-up](v2-workflow-admission.md)
 orders explicit encrypted sync behind admitted controls and retains one owner
 through preparation and generated transfer. Existing workflow/BYO refusal,

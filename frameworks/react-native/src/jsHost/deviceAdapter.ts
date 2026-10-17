@@ -64,6 +64,7 @@ interface QueuedControl {
   connection: JsControlConnection | null;
   epoch: number;
   namespace: string;
+  body?: (context: JsHostContext) => Promise<unknown>;
   workflow?: { operationId: string; start(): Promise<void> };
   resolve(value: unknown): void;
   reject(error: unknown): void;
@@ -192,7 +193,8 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
       try { checkQueuedControl(queued); }
       catch (error) { queued.reject(error); continue; }
       const work = queued.workflow ? queued.workflow.start()
-        : executor.direct(queued.name, context => queued.owner.execute(queued.name, queued.args, context));
+        : executor.direct(queued.name, context => queued.body ? queued.body(context)
+          : queued.owner.execute(queued.name, queued.args, context));
       const active = { operationId: executor.activeOperationId, workflow: queued.workflow !== undefined, settled: Promise.resolve() };
       activeControl = active;
       active.settled = work.then(queued.resolve, queued.reject).then(() => {
@@ -201,7 +203,8 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
       });
     }
   };
-  const queueControl = async (name: string, args: readonly unknown[]): Promise<unknown> => {
+  const queueControl = async (name: string, args: readonly unknown[],
+    body?: (context: JsHostContext) => Promise<unknown>): Promise<unknown> => {
     ready();
     if (disconnecting) throw new BotaJsHostError('operation_cancelled', name);
     executor.checkControlAdmission(name, activeControl?.operationId);
@@ -212,7 +215,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
     // No caller-owned object may retarget a queued device, settings frame or grant.
     const capturedArgs = args.map(value => value === undefined ? undefined : JSON.parse(JSON.stringify(value)) as unknown);
     return new Promise((resolve, reject) => {
-      controlQueue.push({ name, args: capturedArgs, owner, connection: physical, epoch: controlEpoch,
+      controlQueue.push({ name, args: capturedArgs, body, owner, connection: physical, epoch: controlEpoch,
         namespace: ports.persistence.namespace, resolve, reject });
       pumpControls();
     });
@@ -578,8 +581,8 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
   };
 
   adapter.listPendingRecordings = async device => {
-    captured(device);
-    return direct('ListPendingRecordings', async context => {
+    device = { ...captured(device) };
+    return queueControl('ListPendingRecordings', [], async context => {
       await deviceControls.execute('readIdentity', [device], context);
       const legacyValue = await response(context, address(device, 'SERVICE_BOTA_STORAGE', 'CHAR_RECORDING_LIST'),
         () => executor.gatt(context, () => ports.ble.write(address(device, 'SERVICE_BOTA_STORAGE', 'CHAR_TRANSFER_CONTROL'),
@@ -608,7 +611,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
       if (!Array.isArray(result.entries)) throw new BotaJsHostError('invalid_catalog_result', context.operation);
       return core.codec('mergePendingRecordings', { legacy, encrypted: result.entries }) as unknown as
         Awaited<ReturnType<NonNullable<BotaDeviceAdapter['listPendingRecordings']>>>;
-    });
+    }) as ReturnType<NonNullable<BotaDeviceAdapter['listPendingRecordings']>>;
   };
   adapter.resolveProvisioningMaterial = (requestId, value) => materialEffects.resolveProvisioningMaterial(requestId, value);
   adapter.resolveFactoryResetGrant = (requestId, value) => materialEffects.resolveFactoryResetGrant(requestId, value);

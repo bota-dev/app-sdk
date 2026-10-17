@@ -1,5 +1,9 @@
 # Generated-runtime encrypted V2 workflow admission
 
+The later [pending-catalog admission correction](catalog-admission.md) covers
+the normal app query before Sync. The `95635437` physical query still refuses
+busy before entering Sync; the V2 workflow checkpoint below remains distinct.
+
 October 17, 2026 — unpublished source follow-up to current-connection ownership
 `e4a526ee`. Public beta.19 at `7a4ff009` and the qualified private Find package
 at `c4a20f38` remain unchanged.
