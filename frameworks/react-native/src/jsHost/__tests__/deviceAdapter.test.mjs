@@ -53,6 +53,144 @@ function controlFixture(options = {}) {
   return { ...f, settings, gate };
 }
 
+async function connectionOwnershipFixture(t, { samePeripheral = false } = {}) {
+  const f = controlFixture(), observers = new Map(), removed = [], statusReads = [];
+  const oldSerial = 'PIN0000001', nextSerial = 'NOTE000001';
+  const oldId = 'pin', nextId = samePeripheral ? oldId : 'note';
+  let selectedSerial = oldSerial;
+  const read = f.ports.ble.read;
+  f.ports.ble.read = async (address, ...args) => {
+    const serial = address.peripheralId === nextId && (!samePeripheral || selectedSerial === nextSerial) ? nextSerial : oldSerial;
+    if (address.characteristicUuid === f.metadata.CHAR_SERIAL_NUMBER) return Buffer.from(serial);
+    if (address.characteristicUuid === f.metadata.CHAR_MODEL_NUMBER) return Buffer.from(serial === oldSerial ? 'bota_pin' : 'bota_note');
+    if (address.characteristicUuid === f.metadata.CHAR_DEVICE_STATUS) {
+      const bytes = Buffer.from(f.values.get(f.metadata.CHAR_DEVICE_STATUS));
+      bytes[0] = serial === oldSerial ? 23 : 91;
+      statusReads.push(address.peripheralId);
+      return bytes;
+    }
+    return read(address, ...args);
+  };
+  f.ports.ble.observeDisconnect = async (id, listener) => {
+    observers.set(id, listener);
+    return { async remove() { if (observers.get(id) === listener) observers.delete(id); } };
+  };
+  f.ports.ble.disconnect = async id => { f.calls.push(['disconnect', id]); observers.get(id)?.(); };
+  f.ports.ble.scan = async (_duplicates, candidate) => {
+    candidate({ peripheral_id: nextId, name: 'Bota Note', advertised_address: null, rssi: -50 });
+    return { async remove() {} };
+  };
+  const { createBotaReactNativeJsRuntime } = loadSource('../runtime.ts');
+  const runtime = createBotaReactNativeJsRuntime(f.ports);
+  await runtime.client.configure({ logLevel: 'none', backgroundSyncEnabled: false });
+  const manager = runtime.client.devices;
+  manager.on('deviceDisconnected', id => removed.push(id));
+  t.after(async () => {
+    await manager.pauseAutoReconnect().catch(() => {});
+    for (const device of manager.getConnectedDevices()) await manager.disconnect(device).catch(() => {});
+    await runtime.client.destroy().catch(() => {});
+    await f.adapter.destroy().catch(() => {});
+    f.core.dispose();
+  });
+  return { ...f, runtime, manager, observers, removed, statusReads, oldId, nextId, oldSerial, nextSerial,
+    connectOld: () => manager.connect({ id: oldId, rssi: -50, discoveredAt: new Date(0) }),
+    connectNext: method => {
+      selectedSerial = nextSerial;
+      return method === 'reconnect' ? manager.reconnect(nextSerial, { scanTimeout: 1_000 })
+        : manager.connect({ id: nextId, rssi: -50, discoveredAt: new Date(0) });
+    } };
+}
+
+for (const method of ['connect', 'reconnect']) {
+  test(`real manager ${method} replacement retires the previous link before publishing the new owner`, { timeout: 5000 }, async t => {
+    const f = await connectionOwnershipFixture(t), old = await f.connectOld();
+    const lateDisconnect = f.observers.get(old.id);
+    const current = await f.connectNext(method);
+    assert.deepEqual(f.manager.getConnectedDevices(), [current]);
+    assert.equal(f.manager.isConnected(old.id), false);
+    assert.deepEqual(f.removed, [old.id]);
+    const before = f.calls.length;
+    await assert.rejects(f.manager.getStatus(old), error => error.code === 'NOT_CONNECTED');
+    await assert.rejects(f.manager.disconnect(old), error => error.code === 'NOT_CONNECTED');
+    assert.equal(f.calls.length, before, 'stale handles must not read or disconnect the replacement');
+    lateDisconnect();
+    assert.deepEqual(f.manager.getConnectedDevices(), [current], 'a late old callback cannot retire the replacement');
+    assert.equal((await f.manager.getStatus(current)).batteryLevel, 91);
+    assert.deepEqual(f.statusReads, [current.id]);
+    await f.manager.disconnect(current);
+    assert.deepEqual(f.manager.getConnectedDevices(), []);
+  });
+}
+
+test('real manager rejects a stale serial when a replacement reuses the peripheral ID', { timeout: 5000 }, async t => {
+  const f = await connectionOwnershipFixture(t, { samePeripheral: true }), old = await f.connectOld();
+  const current = await f.connectNext('connect'), before = f.calls.length;
+  await assert.rejects(f.manager.getStatus(old), error => error.code === 'NOT_CONNECTED');
+  await assert.rejects(f.manager.disconnect(old), error => error.code === 'NOT_CONNECTED');
+  assert.equal(f.calls.length, before);
+  assert.deepEqual(f.manager.getConnectedDevices(), [current]);
+});
+
+test('failed new adoption leaves the already released previous device retired', { timeout: 5000 }, async t => {
+  const f = await connectionOwnershipFixture(t), old = await f.connectOld();
+  const connect = f.ports.ble.connect;
+  f.ports.ble.connect = async (id, context) => { if (id === f.nextId) throw new Error('synthetic new connection failure'); await connect(id, context); };
+  await assert.rejects(f.connectNext('connect'));
+  assert.deepEqual(f.manager.getConnectedDevices(), []);
+  assert.deepEqual(f.removed, [old.id]);
+  await assert.rejects(f.manager.getStatus(old), error => error.code === 'NOT_CONNECTED');
+});
+
+test('intentional replacement does not enqueue an automatic reconnect to the departed serial', { timeout: 5000 }, async t => {
+  const f = await connectionOwnershipFixture(t);
+  await f.connectOld();
+  f.manager.enableAutoReconnect(f.oldSerial);
+  // An ordinary read joins the actual watchdog setup before replacement starts.
+  await f.manager.getStatus(f.manager.getConnectedDevices()[0]);
+  const current = await f.connectNext('connect');
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.deepEqual(f.manager.getConnectedDevices(), [current]);
+  assert.deepEqual(f.calls.filter(value => Array.isArray(value) && value[0] === 'connect').map(value => value[1]), [f.oldId, f.nextId]);
+  assert.deepEqual(f.removed, [f.oldId]);
+});
+
+test('failed replacement cleanup never publishes a new connection or pretends the previous disconnect succeeded', { timeout: 5000 }, async t => {
+  const f = await connectionOwnershipFixture(t), old = await f.connectOld();
+  const failure = new Error('synthetic old disconnect failure');
+  f.ports.ble.disconnect = async () => { throw failure; };
+  await assert.rejects(f.connectNext('connect'));
+  assert.deepEqual(f.removed, []);
+  assert.deepEqual(f.manager.getConnectedDevices(), [old]);
+  assert.equal(f.calls.some(value => Array.isArray(value) && value[0] === 'connect' && value[1] === f.nextId), false);
+});
+
+test('manager disconnect rechecks its captured owner after asynchronous subscription removal', async () => {
+  const { DeviceManager } = loadSource('../managers/DeviceManager.ts');
+  const { withCompatibilityClient, reportCompatibilityDisconnection } = loadSource('../compatibility/runtime.ts');
+  const old = { id: 'old', serialNumber: 'OLD0000001', connectionState: 'connected' };
+  const next = { id: 'next', serialNumber: 'NEXT000001', connectionState: 'connected' };
+  let release, entered, current, disconnects = 0;
+  const blocked = new Promise(resolve => { release = resolve; });
+  const removing = new Promise(resolve => { entered = resolve; });
+  const client = { devices: {
+    async connect(device) { if (current) reportCompatibilityDisconnection(client); current = device; return device; },
+    async disconnect() { disconnects++; current = undefined; },
+    async subscribeToStatus() { return { async remove() { entered(); await blocked; } }; },
+  } };
+  const manager = withCompatibilityClient(client, () => new DeviceManager());
+  try {
+    await manager.connect(old);
+    manager.subscribeToStatus(old, () => {});
+    const disconnecting = manager.disconnect(old);
+    const rejected = assert.rejects(disconnecting, error => error.code === 'NOT_CONNECTED');
+    await removing;
+    await manager.connect(next);
+    release(); await rejected;
+    assert.equal(disconnects, 0);
+    assert.deepEqual(manager.getConnectedDevices(), [next]);
+  } finally { release(); manager.destroy(); }
+});
+
 test('actual runtime log unsubscribe joins scope-retired STOP and destruction without false cleanup failure', { timeout: 5000 }, async () => {
   const scope = new AbortController(), f = controlFixture({ signal: scope.signal });
   const submitted = f.gate(), removed = f.gate();

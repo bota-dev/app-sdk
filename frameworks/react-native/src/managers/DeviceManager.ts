@@ -105,6 +105,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     Promise<ConnectedDevice>
   >();
   private reconnectChain: Promise<unknown> = Promise.resolve();
+  private connectionAttempts = 0;
   private scanSubscription: BotaEventSubscription | null = null;
   private scanActive = false;
   private autoReconnectEnabled = false;
@@ -176,6 +177,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     this.assertAlive();
     this.userDisconnected = false;
     this.emit('connectionStateChanged', device.id, 'connecting');
+    this.connectionAttempts++;
     try {
       const connected = await this.client.devices.connect(device);
       this.rememberConnected(connected);
@@ -186,6 +188,8 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     } catch (error) {
       this.emit('connectionStateChanged', device.id, 'disconnected');
       throw error;
+    } finally {
+      this.connectionAttempts--;
     }
   }
 
@@ -202,15 +206,20 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     const run = this.reconnectChain
       .catch(() => undefined)
       .then(async () => {
-        const connected = await this.client.devices.reconnect(
-          serialNumber,
-          options
-        );
-        this.rememberConnected(connected);
-        if (this.autoReconnectEnabled) this.ensureStatusWatchdog(connected);
-        this.emit('connectionStateChanged', connected.id, 'connected');
-        this.emit('deviceConnected', connected);
-        return connected;
+        this.connectionAttempts++;
+        try {
+          const connected = await this.client.devices.reconnect(
+            serialNumber,
+            options
+          );
+          this.rememberConnected(connected);
+          if (this.autoReconnectEnabled) this.ensureStatusWatchdog(connected);
+          this.emit('connectionStateChanged', connected.id, 'connected');
+          this.emit('deviceConnected', connected);
+          return connected;
+        } finally {
+          this.connectionAttempts--;
+        }
       });
     this.reconnectChain = run.catch(() => undefined);
     this.reconnectInFlight.set(serialNumber, run);
@@ -224,6 +233,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
 
   async disconnect(device: ConnectedDevice): Promise<void> {
     this.assertAlive();
+    const connected = this.requireConnected(device.id, device.serialNumber);
     this.userDisconnected = true;
     this.stopAutoReconnectLoop();
     this.emit('connectionStateChanged', device.id, 'disconnecting');
@@ -232,6 +242,9 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     await this.removeOwned(this.wifiStatusSubscriptions, device.id);
     await this.removeOwned(this.logSubscriptions, device.id);
     await this.removeOwned(this.recordingStateSubscriptions, device.id);
+    if (this.requireConnected(device.id, device.serialNumber) !== connected) {
+      throw DeviceError.notConnected(device.id);
+    }
     await this.client.devices.disconnect();
     this.connectedDevices.delete(device.id);
     this.recordingStateCache.delete(device.id);
@@ -245,7 +258,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   }
 
   async getStatus(device: ConnectedDevice): Promise<DeviceStatus> {
-    this.requireConnected(device.id);
+    this.requireConnected(device.id, device.serialNumber);
     return this.client.devices.readStatus();
   }
 
@@ -761,6 +774,7 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
       this.emit('deviceDisconnected', device.id, error);
       if (
         this.autoReconnectEnabled &&
+        this.connectionAttempts === 0 &&
         this.autoReconnectSerial === device.serialNumber
       ) {
         this.startAutoReconnectLoop();
@@ -818,9 +832,10 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     return null;
   }
 
-  private requireConnected(deviceId: string): ConnectedDevice {
+  private requireConnected(deviceId: string, serialNumber?: string): ConnectedDevice {
     const device = this.connectedDevices.get(deviceId);
-    if (!device || device.connectionState !== 'connected') {
+    if (!device || device.connectionState !== 'connected' ||
+        (serialNumber !== undefined && device.serialNumber !== serialNumber)) {
       throw DeviceError.notConnected(deviceId);
     }
     return device;

@@ -1,5 +1,11 @@
 # Architecture
 
+The unpublished RN [current-connection correction](docs/parity/current-connection-ownership.md)
+publishes the existing disconnect event after successful old-link replacement
+and fences stale compatibility status/disconnect targets. It changes adapter and
+manager bookkeeping only; Rust workflows, generated core, native OS ports and
+durable upload state are unchanged. Fresh qualification remains separate.
+
 The generated React Native JavaScript runtime ships through the original
 `@bota.dev/react-native-app-sdk/runtime` entry in the synchronized SDK family.
 Beta.18 is published across all five platform packages. Source `0962c8c` passes all

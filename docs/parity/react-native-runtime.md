@@ -1,5 +1,11 @@
 # React Native generated JavaScript runtime and OTA boundary
 
+The unpublished [current-connection ownership correction](current-connection-ownership.md)
+retires the old compatibility-manager entry when the single-current generated
+runtime replaces its device. Stale status/disconnect targets refuse before IO;
+Rust/core and installed native contracts remain unchanged. New source and
+physical qualification are separate from occupied beta.19 artifacts.
+
 Published beta.19 includes the dated lifecycle/control/model/admission and
 managed-v2 corrections below at accepted source `7a4ff009`. All five package
 publications, public generated-runtime/strict-type/native consumers and complete

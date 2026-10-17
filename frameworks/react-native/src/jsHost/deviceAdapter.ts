@@ -239,6 +239,7 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
     connection = null;
     presenceSession = '';
     connectionGeneration++;
+    return device !== undefined;
   };
   const adoptConnection = (initial: NativeConnectedDevice, operation: string,
     expectedVersion?: string, signal?: AbortSignal): Promise<NativeConnectedDevice> =>
@@ -313,7 +314,10 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
     }, { ...(signal ? { signal } : {}) });
   const establish = async (command: JsValue, operation: 'Connect' | 'Reconnect'): Promise<NativeConnectedDevice> => {
     ready();
-    if (connection) await direct('Disconnect', clearConnection);
+    if (connection) {
+      const retired = await direct('Disconnect', clearConnection);
+      if (retired) emit('onDeviceDisconnected', {});
+    }
     const result = await executor.run(command, { operation });
     const notification = result.notifications.map(value => object(value).ConnectionEstablished).find(value => value !== undefined);
     if (!notification) throw new BotaJsHostError('connection_not_verified', operation);

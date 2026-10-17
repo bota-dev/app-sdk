@@ -1,5 +1,12 @@
 # AGENTS.md
 
+Unpublished current-connection bookkeeping correction retires the departed
+device after successful generated-runtime replacement. Compatibility status and
+disconnect reject stale ID/serial targets, including replacement during awaited
+subscription removal. Rust/core, native ports and durable uploads are unchanged;
+new hosted and physical qualification remain separate. See
+[requirements and evidence](docs/parity/current-connection-ownership.md).
+
 Unreleased BLE find/stop lives in Rust protocol codecs and the generated-JS host.
 The compatibility manager serializes nonce/grant/control and fences reconnects;
 App callbacks own account/binding scope. The exact generated artifact and 533
