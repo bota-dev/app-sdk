@@ -52,9 +52,9 @@ previously agreed customer-envelope BYO completion flow.
 - [x] Firmware resolver uses canonical model plus stored serial tail and retains full GATT identity.
 - [x] C regression fails before the change and passes after it; current-model regression remains green.
 - [x] SDK reconnect regression fails before the change and passes after it, including a suffix collision and full-serial rejection.
-- [ ] Canonical Linux generated-JS artifact and SDK verification.
+- [x] Canonical Linux generated-JS artifact and SDK verification.
 - [x] Repository and Notion protocol synchronization/readback.
-- [ ] Review and source delivery.
+- [x] Review and source delivery through SDK #42, firmware #51 and internal design #33.
 - [ ] Target firmware build/installation and physical advertising, reconnect and recording-transfer acceptance.
 - [ ] SDK package publication and consuming App qualification.
 
@@ -64,14 +64,31 @@ The compound-engineering skill is unavailable; this direct review records the
 requirements and evidence. Firmware uses the actual production resolver with
 bounded serial validation, not a second implementation in the test. SDK tests
 exercise the real workflow, including old/new names, same-suffix devices and
-disconnect-before-next-probe ordering. Generated JS must be rebuilt from this
-Rust source before delivery. Missing physical/release evidence is separate from
+disconnect-before-next-probe ordering. Generated JS is rebuilt from this
+Rust source and separately exercises the rename/collision trace. Missing physical/release evidence is separate from
 source completion; no device was provisioned, reset, flashed or deleted here.
 
 Local verification passes all 239 core Rust tests (14 connection workflow
-tests), strict core Clippy, React Native types, Codegen, package metadata and
-dependency licenses. The generated-JS rename/collision regression reproduces
-the old artifact's missing probe. Canonical regeneration is pending: the local
-emulated Linux build reached optimized Rust, then Node/V8 failed in Binaryen;
-the retry was interrupted by the local container service stopping. Use the
-standard Linux CI generator, without hand-editing the artifact or its provenance.
+tests), strict core Clippy, 564 React Native tests, normal package build, types,
+Codegen, metadata and dependency licenses, including the full RN verification
+under Node 22.23.2. Native Rust and generated JS agree
+on 146 RPCs across all 13 commands and the BYO batch trace. The actual generated
+JS rename/collision regression fails against the preceding artifact and passes
+after regeneration.
+
+Canonical Rust 1.98.0/x86_64 Linux generation comes from
+[CI 39249070325](https://github.com/bota-dev/app-sdk/actions/runs/39249070325),
+artifact `12183879672`, with input fingerprint
+`6be481c47fd5d7e6966f9310af4a437a8779794ff6fcf4b6df01b69821427be2`.
+The initial comparison intentionally detects stale committed JS; its generated
+replacement is adopted unchanged, SHA-256
+`cc460e110e4c47f94f15abaeb9364d340bcb8f42094c11a3752d26a053e1ebc3`.
+Local provenance verification confirms the same inputs. No hash or generated
+code is hand-edited. Fresh successor CI remains distinct from this source-bound
+generation evidence. Local emulated Node/V8 could not complete generation;
+the standard Linux CI result resolves that environment limitation.
+
+Firmware functional commit `496895c` passes all five hosted checks: control,
+marker-crypto, verify-gatt, resume and recovery. Target image compilation,
+installation, physical tests, package publication and App qualification remain
+open; this change performs no device operation or release.
