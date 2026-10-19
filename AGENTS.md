@@ -1507,3 +1507,10 @@ Linux toolchain before consuming it. Both apps remain on the published package
 until a qualified release is adopted. Source checks, deployment, board integration,
 cloud controller/ACK and physical acceptance are separate; the shared completion
 checklist is `bota/docs/reviews/find-device-command.md`.
+
+
+October 19 Find/main integration preserves canonical model/SN-suffix reconnect
+migration and the complete protocol reference. The combined generated runtime
+comes from Linux CI 39260313375; 239 Rust core, 69 binding and 570 RN checks pass,
+with 146-RPC native/JS parity. Release and physical Find remain unqualified.
+See docs/parity/ble-find-device.md and the shared Bota completion checklist.
