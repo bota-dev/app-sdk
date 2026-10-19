@@ -1,5 +1,10 @@
 # AGENTS.md
 
+Unreleased BLE naming uses canonical model + one space + the final four
+manufacturing SN characters. Rust reconnect discovery bridges model-only names
+and retired overrides, then requires full GATT serial verification. See the
+[single cross-repository checklist](docs/parity/ble-advertising-name.md).
+
 Unpublished managed completion detaches operation-context abort listeners only
 after the validated receipt/CONFIRM handoff. Explicit cancellation, configured
 scope and disposal still refuse completion; executor retirement is unchanged.

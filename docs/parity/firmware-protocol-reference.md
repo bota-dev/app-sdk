@@ -1,6 +1,7 @@
 # Firmware Protocol Reference Coverage Review
 
-Date: October 19, 2026. SDK source baseline: `78c85c0` on `main`.
+Date: October 19, 2026. Initial SDK source baseline: `78c85c0` on `main`;
+the documentation branch also incorporates merged naming revision `3cdb474`.
 Scope: complete the App-facing firmware reference using the retired React Native
 SDK document as a topic checklist and current App SDK source as authority.
 No production code, protocol manifest, generated artifact or package changed.
@@ -32,7 +33,7 @@ design/conformance comparison is recorded directly below.
   namespace. Customer recipient selection does not require a new content cipher
   or SDK decryption implementation.
 
-## Verification
+## Initial Verification
 
 - Protocol generation freshness passed: `cargo run --offline --quiet -p xtask
   -- protocol generate --check` reports `protocol constants are current`.
@@ -46,7 +47,22 @@ design/conformance comparison is recorded directly below.
 - Checked 117 local links/anchors across the four changed documents, English
   text, balanced code fences and `git diff --check`.
 - Existing detailed marker, direct-streaming and find sections remain
-  byte-for-byte unchanged below the root `Recording Markers` heading.
+  byte-for-byte unchanged. The merged `BLE Advertising Name` section is retained
+  after them without alteration.
+
+## Main-Branch Integration
+
+Merged `main` revision `3cdb474` into this documentation branch after SDK #42.
+The only textual conflict was two independent additions under `Unreleased` in
+`CHANGELOG.md`; both the protocol-reference entry and the BLE naming entry are
+retained. The standard `<model> <last four SN characters>` contract, reconnect
+implementation, regressions and canonical generated core match `main` exactly.
+The PR remains documentation-only relative to the current base.
+The contents list and README include BLE naming. Merge verification checks local
+links, contents anchors, balanced fences, conflict-marker absence and unchanged
+marker/find/naming sections against `main`. The existing vector audit passes
+again (five fixtures and 13 signed documents); runtime suites are not repeated
+for a documentation-only conflict resolution.
 
 No target device, mobile package build, publication or live customer upload is
 part of this documentation change. The settings-model and SHA256 binding gaps

@@ -32,6 +32,7 @@ specification or proof that every firmware build or SDK package enables them.
 - [Firmware upload](#firmware-upload)
 - [Recording markers](#recording-markers)
 - [Nearby find](#nearby-find-over-ble-development-contract-october-16)
+- [BLE advertising name](#ble-advertising-name)
 
 ## Protocol Authority and Notation
 
@@ -759,3 +760,33 @@ Stop cancels already-queued starts and only removes find feedback. Recording and
 safety preemption stop finding before higher-priority effects. LED white200/200ms
 and haptic300/700ms follow Device Feedback Design; absent board mapping must
 return unsupported instead of synthesizing success. No new sound is introduced.
+
+## BLE Advertising Name
+
+The approved Complete Local Name is `<model name> <SN suffix>`: the canonical
+model name, one ASCII space (`0x20`), then the last four characters of the stored
+manufacturing serial, preserving case. For serial `EVFXXW67KP`:
+
+| Manufacturing model | Complete Local Name |
+| --- | --- |
+| Bota Pin | `Bota Pin 67KP` |
+| Bota Note | `Bota Note 67KP` |
+| Bota Pin Pro | `Bota Pin Pro 67KP` |
+
+Missing, fewer-than-four-character, invalid or unterminated manufacturing serials
+use the model name only. The optional stored display-name override is no longer
+used for this standard name. Names are resolved during BLE initialization;
+manufacturing changes require the existing restart/reinitialization path.
+These names fit the normal scan response alongside existing manufacturer data.
+No GATT UUID, manufacturer-data layout, full serial value or wire version changes.
+
+The SDK exposes the advertised name as display metadata. It can probe a cached
+model-only name after a suffix is added, or the corresponding unsuffixed name
+after rollback. An old custom display name can probe a canonical name carrying
+the expected suffix. Candidates with colliding suffixes must still be rejected
+unless a fresh GATT read matches the **entire** expected serial. The suffix is
+never a binding identifier or authorization proof.
+
+This is an unreleased source contract. See the
+[cross-repository checklist and evidence](docs/parity/ble-advertising-name.md)
+for generated-runtime, firmware and physical qualification status.

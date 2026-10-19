@@ -1,5 +1,10 @@
 # Bota App SDK
 
+Unreleased BLE naming uses `<model> <last four SN characters>`, for example
+`Bota Pin 67KP`. SDK reconnect discovery handles the rename and still checks
+the complete SN. See the [protocol](FIRMWARE_PROTOCOL.md#ble-advertising-name)
+and [source/physical qualification checklist](docs/parity/ble-advertising-name.md).
+
 Published React Native beta.19 provides Rust-generated JavaScript through
 `@bota.dev/react-native-app-sdk/runtime`, using installed Bluetooth, file and HTTP
 ports. Compatible shared-logic upgrades can travel in an app's OTA bundle.
@@ -231,7 +236,7 @@ for field mapping and lifecycle rules; the getter does not send heartbeats.
 | Add encrypted recording uploads | [Managed backend adapter](docs/parity/v2-managed-backend.md) |
 | Explore example applications | [Bota examples](https://github.com/bota-dev/examples) |
 | Migrate an existing integration | [Package migration](docs/migrations/app-sdk-package-names.md) and [standalone SDK retirement](docs/migrations/react-native-sdk-sunset.md) |
-| Integrate device firmware | [Firmware protocol](FIRMWARE_PROTOCOL.md) — GATT, provisioning/settings, status, recording transfer, customer BYO encryption, reset, diagnostics, OTA, markers and find |
+| Integrate device firmware | [Firmware protocol](FIRMWARE_PROTOCOL.md) — BLE naming, GATT, provisioning/settings, status, recording transfer, customer BYO encryption, reset, diagnostics, OTA, markers and find |
 | Understand the SDK's design | [Architecture](ARCHITECTURE.md) |
 | See what changed between versions | [Changelog](CHANGELOG.md) |
 
