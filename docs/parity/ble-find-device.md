@@ -53,3 +53,26 @@ comes from Linux CI run 38854313911; compiler-free provenance matches current
 Rust source hash b6190463d4b13442952f6b35eaa21c43eba2776b184c821a1e5a0b8f989cc8a0.
 Exact final CI rebuild and physical board qualification remain release gates. No package publication or installed-device result is
 claimed. The existing public beta.18 cannot execute the new methods.
+
+
+## October 19 revision 2 source update (unreleased)
+
+Revision 1 above is historical. The current target is Find capability/control/status
+version 2 and signed Grant version 4, retaining 193/20-byte sizes and result 0–7.
+The active byte contract is `app-sdk/FIRMWARE_PROTOCOL.md`, section "Nearby Find
+revision 2". Find challenge/authorization is isolated from recording, Reset, OTA
+and upload. A separate backend-signed binding confirmation is durably installed
+and device-acknowledged before revision-2 authority is issued. Missing legacy token
+commitment requires rebind. Protocol fallback must not bypass current binding checks.
+
+START requires a valid battery sample younger than 60 seconds and more than 20%
+power, charging included. STOP bypasses START busy/power admission. Version-2
+Status byte 3 reports a precise reason; version 1 retains reserved zero. Original
+challenge age is checked both before queueing and at execution; no TTL reset.
+
+The candidate adds backend confirmation/ACK routes, VM slot +11 (separate from
+existing provisioning), four appended GATT characteristics, Rust codecs, RN
+handshake and app reason display. Publication, actual package adoption, physical
+power-loss durability and dual-actuator validation remain separate acceptance.
+Existing board hooks still return unsupported and the cloud controller/ACK adapter
+remains open; this revision does not turn those gaps into successful execution.

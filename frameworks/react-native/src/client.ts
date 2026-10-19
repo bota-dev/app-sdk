@@ -140,6 +140,9 @@ export type BotaDeprovisionResult = {
 };
 
 export type BotaDeviceSDKControlClient = {
+  readFindChallenge(device: ConnectedDevice): Promise<string>;
+  readFindBindingChallenge(device: ConnectedDevice): Promise<string>;
+  confirmFindBinding(device: ConnectedDevice, confirmation: string): Promise<string>;
   readFindCapabilities(device: ConnectedDevice): Promise<FindDeviceCapabilities>;
   readFindStatus(device: ConnectedDevice): Promise<FindDeviceStatus>;
   requestFindDevice(device: ConnectedDevice, request: FindDeviceRequest): Promise<FindDeviceStatus>;
@@ -1045,6 +1048,15 @@ export const createBotaDeviceSDK = (
       await requireNativeModule().syncTime(toNativeConnectedDevice(device));
     },
 
+    async readFindChallenge(device) {
+      return requireNativeModule('readFindChallenge').readFindChallenge(toNativeConnectedDevice(device));
+    },
+    async readFindBindingChallenge(device) {
+      return requireNativeModule('readFindBindingChallenge').readFindBindingChallenge(toNativeConnectedDevice(device));
+    },
+    async confirmFindBinding(device, confirmation) {
+      return requireNativeModule('confirmFindBinding').confirmFindBinding(toNativeConnectedDevice(device), confirmation);
+    },
     async readFindCapabilities(device) {
       return requireNativeModule('readFindCapabilities').readFindCapabilities(toNativeConnectedDevice(device));
     },

@@ -110,3 +110,29 @@ test('factory destruction retires live engines and codec state without double fr
   assert.throws(() => factory.createEngine(), /disposed/);
   assert.throws(() => factory.codec('hasherSnapshot', { decoderId: 'retained' }), /disposed/);
 });
+
+test('Find revision 2 keeps wire sizes and reports explicit reasons without changing legacy results', () => {
+  const metadata=core.codec('protocolMetadata',{});
+  assert.equal(metadata.CHAR_FIND_CHALLENGE,'B07A0009-0005-1000-8000-00805F9B34FB');
+  const caps=core.codec('decodeFindCapabilities',{bytes:[2,31,30,10,1,0,0,0]});
+  assert.equal(caps.protocolVersion,2);assert.equal(caps.bindingReady,true);assert.equal(caps.supported,true);
+  const id='01'.repeat(16);
+  const bytes=core.codec('encodeFindControl',{protocolVersion:2,action:'stop',durationSeconds:0,requestId:id});
+  assert.deepEqual(bytes,[2,2,0,0,...Array(16).fill(1)]);
+  const status=[2,0,2,1,...Array(16).fill(1),0,0,0,0];
+  const decoded=core.codec('decodeFindStatus',{bytes:status,requestId:id});
+  assert.equal(decoded.error,'device_busy');assert.equal(decoded.reason,'low_battery');
+  status[3]=2;assert.equal(core.codec('decodeFindStatus',{bytes:status}).reason,'battery_unavailable');
+  status[0]=1;status[3]=0;assert.equal(core.codec('decodeFindStatus',{bytes:status}).reason,null);
+  const confirmation=Buffer.alloc(184);confirmation.write('BOTABND1');confirmation[8]=1;
+  assert.equal(core.codec('encodeFindBinding',{grantBlob:confirmation.toString('base64'),capacity:193}).length,184);
+  const ack=Buffer.alloc(104);ack.write('BOTABAK1');
+  assert.equal(core.codec('decodeFindBindingAck',{bytes:[...ack]}),ack.toString('base64'));
+});
+
+test('Find revision 2 control agrees with the shared fixed server/firmware vector', () => {
+  const v=JSON.parse(readFileSync(new URL('../../../../../protocol/fixtures/find-revision-2.json',import.meta.url),'utf8'));
+  const control=core.codec('encodeFindControl',{protocolVersion:2,action:'start',durationSeconds:10,requestId:v.requestIdHex});
+  assert.equal(Buffer.from(control).toString('hex'),v.controlHex);
+  assert.equal(core.codec('encodeFindGrant',{grantBlob:v.grantBlob,capacity:193}).length,193);
+});

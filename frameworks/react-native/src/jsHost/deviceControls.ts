@@ -203,6 +203,17 @@ export class JsDeviceControls {
       }
       case 'readRecordingState':
         return this.decodeRead('decodeRecordingState', 'SERVICE_BOTA_CONTROL', 'CHAR_RECORDING_STATUS', connection, context);
+      case 'readFindChallenge':
+        return this.decodeRead('decodeHex', 'SERVICE_BOTA_FIND', 'CHAR_FIND_CHALLENGE', connection, context, { length: 16 });
+      case 'readFindBindingChallenge':
+        return this.decodeRead('decodeHex', 'SERVICE_BOTA_FIND', 'CHAR_FIND_BINDING_CHALLENGE', connection, context, { length: 16 });
+      case 'confirmFindBinding': {
+        const confirmation = bytes(this.codec('encodeFindBinding', { grantBlob: json(args[1]), capacity: this.capacity(connection) }));
+        try {
+          await this.writeBytes(confirmation, 'SERVICE_BOTA_FIND', 'CHAR_FIND_BINDING_CONFIRM', connection, context);
+          return await this.decodeRead('decodeFindBindingAck', 'SERVICE_BOTA_FIND', 'CHAR_FIND_BINDING_ACK', connection, context);
+        } finally { confirmation.fill(0); }
+      }
       case 'readFindCapabilities':
         return this.decodeRead('decodeFindCapabilities', 'SERVICE_BOTA_FIND', 'CHAR_FIND_CAPABILITIES', connection, context);
       case 'readFindStatus':
@@ -210,12 +221,12 @@ export class JsDeviceControls {
       case 'requestFindDevice': {
         const request = record(json(args[1]));
         const command = bytes(this.codec('encodeFindControl', { action: request.action!,
-          durationSeconds: request.durationSeconds!, requestId: request.requestId! }));
+          durationSeconds: request.durationSeconds!, requestId: request.requestId!, protocolVersion: request.protocolVersion ?? 1 }));
         const grant = bytes(this.codec('encodeFindGrant', { grantBlob: request.grantBlob!, capacity: this.capacity(connection) }));
         try {
           const capability = record(await this.decodeRead('decodeFindCapabilities', 'SERVICE_BOTA_FIND',
             'CHAR_FIND_CAPABILITIES', connection, context));
-          if (capability.supported !== true) throw controlError('unsupported_capability', context.operation);
+          if (capability.supported !== true || (capability.protocolVersion === 2 && request.protocolVersion !== 2)) throw controlError('unsupported_capability', context.operation);
           return await this.withResult('SERVICE_BOTA_FIND', 'CHAR_FIND_STATUS', connection, context,
             value => this.codec('decodeFindStatus', { bytes: publicBytes(value), requestId: request.requestId! }),
             async beginResults => {

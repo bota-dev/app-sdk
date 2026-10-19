@@ -1,3 +1,4 @@
+import type { FindBindingProvider } from '../findDevice';
 import type { FindDeviceCapabilities, FindDeviceStatus } from '../findDevice';
 import EventEmitter from 'eventemitter3';
 import type { ClientPresence } from '../clientPresence';
@@ -431,38 +432,58 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
   }
 
   private findQueue: Promise<unknown> = Promise.resolve();
+  private findIntent = 0;
 
   async requestFindDevice(device: ConnectedDevice, requestId: string,
-    fetchGrant: (nonce: string) => Promise<string>, durationSeconds = 10): Promise<FindDeviceStatus> {
-    return this.queueFindControl(device, requestId, 'start', durationSeconds, fetchGrant);
+    fetchGrant: (nonce: string) => Promise<string>, durationSeconds = 10,
+    binding?: FindBindingProvider): Promise<FindDeviceStatus> {
+    return this.queueFindControl(device, requestId, 'start', durationSeconds, fetchGrant, binding);
   }
 
   async requestStopFindDevice(device: ConnectedDevice, requestId: string,
-    fetchGrant: (nonce: string) => Promise<string>): Promise<FindDeviceStatus> {
-    return this.queueFindControl(device, requestId, 'stop', 0, fetchGrant);
+    fetchGrant: (nonce: string) => Promise<string>, binding?: FindBindingProvider): Promise<FindDeviceStatus> {
+    ++this.findIntent; // Invalidate a START waiting on HTTP; never replay a submitted START.
+    return this.queueFindControl(device, requestId, 'stop', 0, fetchGrant, binding);
   }
 
   private queueFindControl(device: ConnectedDevice, requestId: string, action: 'start' | 'stop',
-    durationSeconds: number, fetchGrant: (nonce: string) => Promise<string>): Promise<FindDeviceStatus> {
+    durationSeconds: number, fetchGrant: (nonce: string) => Promise<string>, binding?: FindBindingProvider): Promise<FindDeviceStatus> {
     const owner = this.requireConnected(device.id);
-    const pending = this.findQueue.catch(() => undefined).then(() => {
+    const intent = this.findIntent;
+    const check = () => {
       if (this.requireConnected(device.id) !== owner) throw new Error('find_device: connection_changed');
-      return this.findControl(device, requestId, action, durationSeconds, fetchGrant);
+      if (action === 'start' && intent !== this.findIntent) throw new Error('find_device: cancelled');
+    };
+    const bounded = async <T>(operation: () => Promise<T>): Promise<T> => {
+      check();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const result = await Promise.race([operation(), new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('find_device: authorization_timeout')), 15000);
+        })]);
+        check(); return result;
+      } finally { if (timer !== undefined) clearTimeout(timer); }
+    };
+    const pending = this.findQueue.catch(() => undefined).then(async () => {
+      check();
+      const capabilities = await this.client.controls.readFindCapabilities(device);
+      if (!capabilities.supported || capabilities.protocolVersion !== 2) throw new Error('find_device: unsupported_capability');
+      // Always refresh/re-ACK current authority: the server may have lost the ACK.
+      if (!binding) throw new Error('find_device: binding_confirmation_required');
+      const bindingNonce = await this.client.controls.readFindBindingChallenge(device);
+      const confirmation = await bounded(() => binding.issue(bindingNonce));
+      check();
+      const ack = await this.client.controls.confirmFindBinding(device, confirmation);
+      await bounded(() => binding.acknowledge(ack));
+      check();
+      const nonce = await this.client.controls.readFindChallenge(device);
+      if (!nonce || !/^[a-fA-F0-9]{32}$/.test(nonce)) throw new Error('find_device: invalid_nonce');
+      const grantBlob = await bounded(() => fetchGrant(nonce));
+      check();
+      return this.client.controls.requestFindDevice(device, { requestId, action, durationSeconds, grantBlob, protocolVersion: 2 });
     });
     this.findQueue = pending;
     return pending;
-  }
-
-  private async findControl(device: ConnectedDevice, requestId: string, action: 'start' | 'stop',
-    durationSeconds: number, fetchGrant: (nonce: string) => Promise<string>): Promise<FindDeviceStatus> {
-    const owner = this.requireConnected(device.id);
-    const capabilities = await this.client.controls.readFindCapabilities(device);
-    if (!capabilities.supported) throw new Error('find_device: unsupported_capability');
-    const nonce = await this.client.controls.readAuthNonce(device);
-    if (!nonce || !/^[a-fA-F0-9]{32}$/.test(nonce)) throw new Error('find_device: invalid_nonce');
-    const grantBlob = await fetchGrant(nonce);
-    if (this.requireConnected(device.id) !== owner) throw new Error('find_device: connection_changed');
-    return this.client.controls.requestFindDevice(device, { requestId, action, durationSeconds, grantBlob });
   }
 
   async requestStartRecording(

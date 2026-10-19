@@ -177,4 +177,4 @@ export type {
 export type { ByoStorageBackendOptions, ByoStorageBackend, ByoRecording, ByoSyncTarget, ByoUploadResult } from './byoStorageBackend';
 export const createByoStorageBackend = defaultRuntime.createByoStorageBackend;
 
-export type { FindDeviceCapabilities, FindDeviceStatus, FindDeviceRequest } from './findDevice';
+export type { FindDeviceCapabilities, FindDeviceStatus, FindDeviceRequest, FindBindingProvider } from './findDevice';

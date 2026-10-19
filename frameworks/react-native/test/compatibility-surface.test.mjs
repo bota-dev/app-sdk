@@ -33,8 +33,8 @@ test('preserves all 80 frozen exports plus exact maintenance and completion-reco
   for (const [name, type] of [
     ['getFindCapabilities', '(device: ConnectedDevice) => Promise<FindDeviceCapabilities>'],
     ['getFindStatus', '(device: ConnectedDevice) => Promise<FindDeviceStatus>'],
-    ['requestFindDevice', '(device: ConnectedDevice, requestId: string, fetchGrant: (nonce: string) => Promise<string>, durationSeconds?: number) => Promise<FindDeviceStatus>'],
-    ['requestStopFindDevice', '(device: ConnectedDevice, requestId: string, fetchGrant: (nonce: string) => Promise<string>) => Promise<FindDeviceStatus>'],
+    ['requestFindDevice', '(device: ConnectedDevice, requestId: string, fetchGrant: (nonce: string) => Promise<string>, durationSeconds?: number, binding?: FindBindingProvider) => Promise<FindDeviceStatus>'],
+    ['requestStopFindDevice', '(device: ConnectedDevice, requestId: string, fetchGrant: (nonce: string) => Promise<string>, binding?: FindBindingProvider) => Promise<FindDeviceStatus>'],
   ]) additions.members.DeviceManager.push({name, type, optional: false, readonly: false, declarationKinds: ['MethodDeclaration']});
   const optionalBoolean = name => ({ name, optional: true, readonly: false,
     declarationKinds: ['PropertySignature'], type: 'boolean | undefined' });
