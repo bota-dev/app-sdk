@@ -231,7 +231,7 @@ for field mapping and lifecycle rules; the getter does not send heartbeats.
 | Add encrypted recording uploads | [Managed backend adapter](docs/parity/v2-managed-backend.md) |
 | Explore example applications | [Bota examples](https://github.com/bota-dev/examples) |
 | Migrate an existing integration | [Package migration](docs/migrations/app-sdk-package-names.md) and [standalone SDK retirement](docs/migrations/react-native-sdk-sunset.md) |
-| Integrate device firmware | [Firmware protocol](FIRMWARE_PROTOCOL.md) — recording control, marked BATCH and protected STREAMING boundaries |
+| Integrate device firmware | [Firmware protocol](FIRMWARE_PROTOCOL.md) — GATT, provisioning/settings, status, recording transfer, customer BYO encryption, reset, diagnostics, OTA, markers and find |
 | Understand the SDK's design | [Architecture](ARCHITECTURE.md) |
 | See what changed between versions | [Changelog](CHANGELOG.md) |
 

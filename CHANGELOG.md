@@ -7,6 +7,12 @@ tracked separately.
 
 ## Unreleased
 
+- Expand the firmware protocol reference with the current GATT map, provisioning
+  and settings, status, legacy/v2 transfer, BYO customer-envelope flow, dedicated
+  reset authorization, diagnostics and BLE OTA. Retain marker/find contracts and
+  distinguish source support from package and physical-device qualification.
+  This documentation update changes no SDK runtime or wire format.
+
 - Add direct BLE find/stop to the generated-JS runtime and compatibility device
   manager, using Rust-owned action/grant/status codecs and exact request receipts.
   Requires the dedicated service and qualified light/haptic firmware; native-only
