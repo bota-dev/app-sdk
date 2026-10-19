@@ -23,25 +23,33 @@ pub fn encode_find_control(
 }
 pub fn parse_find_capabilities(bytes: &[u8]) -> Result<bool, DeviceSdkError> {
     if bytes.len() != 8
-        || bytes[0] != 1
-        || !matches!(bytes[1], 0 | 3)
+        || !matches!(bytes[0], 1 | 2)
+        || (bytes[0] == 1 && (!matches!(bytes[1], 0 | 3) || bytes[4..] != [0; 4]))
+        || (bytes[0] == 2 && (!matches!(bytes[1], 28 | 31) || bytes[4] > 1 || bytes[5..] != [0; 3]))
         || bytes[2] != 30
         || bytes[3] != 10
-        || bytes[4..] != [0; 4]
     {
         return Err(invalid());
     }
-    Ok(bytes[1] == 3)
+    Ok(bytes[1] & 3 == 3)
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct FindDeviceStatus {
     pub active: bool,
+    pub protocol_version: u8,
+    pub reason: u8,
     pub result: u8,
     pub request_id: [u8; 16],
     pub remaining_ms: u32,
 }
 pub fn parse_find_status(bytes: &[u8]) -> Result<FindDeviceStatus, DeviceSdkError> {
-    if bytes.len() != 24 || bytes[0] != 1 || bytes[1] > 1 || bytes[2] > 7 || bytes[3] != 0 {
+    if bytes.len() != 24
+        || !matches!(bytes[0], 1 | 2)
+        || bytes[1] > 1
+        || bytes[2] > 7
+        || (bytes[0] == 1 && bytes[3] != 0)
+        || (bytes[0] == 2 && bytes[3] > 8)
+    {
         return Err(invalid());
     }
     let mut id = [0; 16];
@@ -52,6 +60,8 @@ pub fn parse_find_status(bytes: &[u8]) -> Result<FindDeviceStatus, DeviceSdkErro
     }
     Ok(FindDeviceStatus {
         active: bytes[1] == 1,
+        protocol_version: bytes[0],
+        reason: bytes[3],
         result: bytes[2],
         request_id: id,
         remaining_ms: remaining,

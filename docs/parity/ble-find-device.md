@@ -53,3 +53,52 @@ comes from Linux CI run 38854313911; compiler-free provenance matches current
 Rust source hash b6190463d4b13442952f6b35eaa21c43eba2776b184c821a1e5a0b8f989cc8a0.
 Exact final CI rebuild and physical board qualification remain release gates. No package publication or installed-device result is
 claimed. The existing public beta.18 cannot execute the new methods.
+
+
+## October 19 revision 2 source update (unreleased)
+
+Revision 1 above is historical. The current target is Find capability/control/status
+version 2 and signed Grant version 4, retaining 193/20-byte sizes and result 0–7.
+The active byte contract is `app-sdk/FIRMWARE_PROTOCOL.md`, section "Nearby Find
+revision 2". Find challenge/authorization is isolated from recording, Reset, OTA
+and upload. A separate backend-signed binding confirmation is durably installed
+and device-acknowledged before revision-2 authority is issued. Missing legacy token
+commitment requires rebind. Protocol fallback must not bypass current binding checks.
+
+START requires a valid battery sample younger than 60 seconds and more than 20%
+power, charging included. STOP bypasses START busy/power admission. Version-2
+Status byte 3 reports a precise reason; version 1 retains reserved zero. Original
+challenge age is checked both before queueing and at execution; no TTL reset.
+
+The candidate adds backend confirmation/ACK routes, VM slot +11 (separate from
+existing provisioning), four appended GATT characteristics, Rust codecs, RN
+handshake and app reason display. Publication, actual package adoption, physical
+power-loss durability and dual-actuator validation remain separate acceptance.
+Existing board hooks still return unsupported. The companion firmware/backend
+source now connects the signed direct-cloud controller/ACK path; publication and
+physical outputs remain unqualified. See the shared Bota Find review.
+
+
+### Main integration with BLE naming and protocol reference
+
+Merged main `f6a6dc3`, retaining canonical advertising-name reconnect migration
+and the complete firmware reference alongside Find revision 2, trusted binding
+and direct-cloud behavior. The generated runtime is rebuilt from combined Rust
+inputs, not selected from either side of the merge.
+
+Canonical Linux/Rust 1.98.0 output comes from
+[CI 39260313375](https://github.com/bota-dev/app-sdk/actions/runs/39260313375),
+source `d19431817fb2fd6b5c4da7321e273f97f233d574`, artifact `12189956858`.
+The intermediate check intentionally reports the prior runtime as stale; its
+`core.expected.ts` is adopted unchanged. Source fingerprint:
+`791496e0b355cdef71b2e65bd8ac5892c3d39b8124d35497b69605d5c0e70543`.
+File SHA-256:
+`a20182635c1043c9ac2d7dcb3cd7353aa5f5a4078491cf8ea1ae9dd7501edaba`.
+
+Verification: 239 core Rust tests (including 14 connection and 3 Find), 69 JS
+binding tests, protocol generation freshness, 5 protocol fixtures/13 signed
+documents, full React Native verification under Node 22.23.2 (570 tests, build,
+types, Codegen, metadata and 411-package license check), and generated-JS/native
+Rust equality on 146 RPCs across 13 commands and the complete BYO batch trace.
+Local source provenance matches the Linux output. Successor hosted CI is separate
+from this local verification. No package, App adoption or device install occurs.

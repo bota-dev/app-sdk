@@ -1,5 +1,5 @@
 use crate::{
-    codecs::{input, output},
+    codecs::{input, output, public_output},
     engine::invalid,
 };
 use bota_device_sdk_core::{
@@ -17,6 +17,7 @@ struct Bytes {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Command {
     action: String,
+    protocol_version: Option<u8>,
     duration_seconds: u8,
     request_id: String,
 }
@@ -49,7 +50,12 @@ fn id(hex: &str) -> Result<[u8; 16], DeviceSdkError> {
 pub(crate) fn supports(name: &str) -> bool {
     matches!(
         name,
-        "encodeFindControl" | "decodeFindCapabilities" | "decodeFindStatus" | "encodeFindGrant"
+        "encodeFindControl"
+            | "decodeFindCapabilities"
+            | "decodeFindStatus"
+            | "encodeFindGrant"
+            | "encodeFindBinding"
+            | "decodeFindBindingAck"
     )
 }
 pub(crate) fn call(name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> {
@@ -61,15 +67,22 @@ pub(crate) fn call(name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> 
                 "stop" => 2,
                 _ => return Err(invalid("invalid find action")),
             };
-            output(&encode_find_control(
-                action,
-                r.duration_seconds,
-                id(&r.request_id)?,
-            )?)
+            let mut bytes = encode_find_control(action, r.duration_seconds, id(&r.request_id)?)?;
+            let version = r.protocol_version.unwrap_or(1);
+            if !matches!(version, 1 | 2) {
+                return Err(invalid("unsupported find version"));
+            }
+            bytes[0] = version;
+            output(&bytes)
         }
-        "decodeFindCapabilities" => output(
-            &json!({"supported":parse_find_capabilities(&input::<Bytes>(value)?.bytes)?,"defaultDurationSeconds":10,"maxDurationSeconds":30}),
-        ),
+        "decodeFindCapabilities" => {
+            let b = input::<Bytes>(value)?.bytes;
+            let supported = parse_find_capabilities(&b)?;
+            public_output(
+                json!({"supported":supported,"protocolVersion":b[0],"bindingReady":b[0]==2 && b[4]==1,
+                "defaultDurationSeconds":10,"maxDurationSeconds":30}),
+            )
+        }
         "decodeFindStatus" => {
             let r: Status = input(value)?;
             let status = parse_find_status(&r.bytes)?;
@@ -93,18 +106,43 @@ pub(crate) fn call(name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> 
                 6 => Some("indication_failed"),
                 _ => Some("interrupted"),
             };
-            output(
-                &json!({"active":status.active,"success":status.result==0,"error":error,"requestId":request_id,"remainingMs":status.remaining_ms}),
+            let reason = match status.reason {
+                1 => Some("low_battery"),
+                2 => Some("battery_unavailable"),
+                3 => Some("recording"),
+                4 => Some("upload"),
+                5 => Some("reset"),
+                6 => Some("ota"),
+                7 => Some("binding_changed"),
+                8 => Some("authorization_expired"),
+                _ => None,
+            };
+            public_output(
+                json!({"protocolVersion":status.protocol_version,"reason":reason,"active":status.active,"success":status.result==0,"error":error,"requestId":request_id,"remainingMs":status.remaining_ms}),
             )
         }
-        "encodeFindGrant" => {
+        "decodeFindBindingAck" => {
+            use base64::Engine;
+            let b = input::<Bytes>(value)?.bytes;
+            if b.len() != 104 || &b[..8] != b"BOTABAK1" {
+                return Err(invalid("invalid binding ACK"));
+            }
+            output(&base64::engine::general_purpose::STANDARD.encode(b))
+        }
+        "encodeFindGrant" | "encodeFindBinding" => {
             use base64::Engine;
             let r: Grant = input(value)?;
             let bytes = base64::engine::general_purpose::STANDARD
                 .decode(&r.grant_blob)
                 .map_err(|_| invalid("invalid find grant"))?;
-            if bytes.len() != 193 || bytes[0] != 4 || r.capacity < 193 {
-                return Err(invalid("find grant requires 193 bytes and MTU196"));
+            let binding = name == "encodeFindBinding";
+            let length = if binding { 184 } else { 193 };
+            if bytes.len() != length
+                || r.capacity < (length as u32)
+                || (binding && (&bytes[..8] != b"BOTABND1" || bytes[8] != 1))
+                || (!binding && bytes[0] != 4)
+            {
+                return Err(invalid("invalid Find authority or insufficient MTU"));
             }
             output(&bytes)
         }
@@ -144,6 +182,19 @@ mod tests {
         .unwrap();
         assert_eq!(decoded["success"], true);
         assert_eq!(decoded["active"], false);
+        assert_eq!(decoded["protocolVersion"], 1);
+        assert_eq!(decoded["remainingMs"], 0);
+        let caps: Value = serde_json::from_slice(
+            &call(
+                "decodeFindCapabilities",
+                json!({"bytes":[2,31,30,10,1,0,0,0]}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(caps["protocolVersion"], 2);
+        assert_eq!(caps["defaultDurationSeconds"], 10);
+        assert_eq!(caps["maxDurationSeconds"], 30);
         let stale: Value = serde_json::from_slice(
             &call(
                 "decodeFindStatus",

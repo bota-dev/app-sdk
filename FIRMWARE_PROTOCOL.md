@@ -31,7 +31,9 @@ specification or proof that every firmware build or SDK package enables them.
 - [Device diagnostics](#device-diagnostics)
 - [Firmware upload](#firmware-upload)
 - [Recording markers](#recording-markers)
-- [Nearby find](#nearby-find-over-ble-development-contract-october-16)
+- [Nearby find (historical revision 1)](#nearby-find-over-ble-development-contract-october-16)
+- [Nearby Find revision 2](#nearby-find-revision-2-unreleased-october-19)
+- [Direct-cloud Find revision 2](#direct-cloud-use-of-find-revision-2-unreleased)
 - [BLE advertising name](#ble-advertising-name)
 
 ## Protocol Authority and Notation
@@ -77,8 +79,9 @@ physical device. Marker/status capability history is recorded in the
 development contract below. Integrators need matching qualified firmware,
 backend and SDK/App builds; service discovery alone must not enable a transfer.
 
-This documentation change publishes no SDK package, changes no wire format,
-enables no firmware profile and establishes no new hardware qualification.
+Reference coverage does not publish a package, enable a firmware profile or
+establish hardware qualification. Feature-specific unreleased protocol revisions
+are identified below and require coordinated implementation and release.
 
 Ordinary unmarked v2 messages remain unchanged. Protected STREAMING is disabled
 by default and has no new BLE audio relay in this scope. A device can perform
@@ -104,7 +107,7 @@ Characteristic shorthand `xxxx/yyyy` expands to
 | WIFI_CONFIG | `0006` | Grant `0001`, credential `0002`, status `0003`, scan `0004` |
 | DIAGNOSTICS | `0007` | Control `0001`, data `0002` |
 | IDENTITY | `0008` | Manufacturing serial alias `0001` for Web Bluetooth, which blocks standard `2A25`; native clients retain standard identity reads |
-| FIND | `0009` | Capabilities `0001`, control `0002`, status `0003`, grant `0004`; see the dedicated contract below |
+| FIND | `0009` | Capabilities `0001`, control `0002`, status `0003`, grant `0004`; revision 2 appends Find challenge `0005`, binding challenge `0006`, confirmation `0007` and ACK `0008` |
 
 An advertised name is not authenticated device identity. Discover the required
 characteristics and read the actual capability before choosing an upload path.
@@ -701,6 +704,10 @@ operation. No deployment or feature activation is authorized by this document.
 
 ## Nearby Find over BLE (development contract, October 16)
 
+Historical revision 1: the unreleased revision-2 section below supersedes its
+shared nonce, generation baseline and version bytes. Keep this section for
+explicit legacy compatibility only.
+
 BRD51-22 / SD51-22 confirms App-initiated start and stop over BLE. This additive
 profile requires matching SDK, grant issuer and firmware; existing published
 packages and boards without both qualified actuators remain unsupported.
@@ -760,6 +767,112 @@ Stop cancels already-queued starts and only removes find feedback. Recording and
 safety preemption stop finding before higher-priority effects. LED white200/200ms
 and haptic300/700ms follow Device Feedback Design; absent board mapping must
 return unsupported instead of synthesizing success. No new sound is introduced.
+
+
+## Nearby Find revision 2 (unreleased, October 19)
+
+
+Keep the 193-byte encrypted Grant and 20-byte Control layouts. Revision 2 uses
+signed Grant version 4, Control/Status version 2 and capability version 2.
+Legacy version 3 Grants are issued only for explicit legacy clients; revision 2
+firmware rejects them. No fallback from revision 2 to legacy authorization.
+Status result values 0–7 retain their meanings. Only version 2 uses byte 3 for
+reason: 0 none, 1 low_battery, 2 battery_unavailable, 3 recording,
+4 upload, 5 reset, 6 ota, 7 binding_changed, 8 authorization_expired.
+
+Append B07A0009 characteristic suffixes 0005 (Find challenge, read 16),
+0006 (binding challenge, read 16), 0007 (binding confirmation, write 184),
+0008 (binding ACK, read 104). Existing handles remain unchanged.
+Capabilities: byte 0 = 2; byte 1 bits 0/1 START/STOP require both real actuators,
+bits 2/3/4 isolated challenge/trusted binding/reasons; byte 2 = 30, byte 3 = 10,
+byte 4 = binding ready (0/1); bytes 5–7 zero.
+
+Each challenge has an original 60-second monotonic lifetime. Reading an unexpired
+challenge returns the same value. Reading after consumption or expiry obtains a
+new challenge and invalidates the previous Find slot. Every Grant attempt consumes
+its challenge, including rejection. Control consumes its exact-action slot before
+queueing. Execution must still precede both original monotonic deadline and signed
+expiry. Disconnect and credential changes invalidate Find state; other authorization
+flows neither consume nor clear it. START is never replayed after uncertain delivery.
+
+## Trusted current binding
+
+After existing binding commit, the server signs a separate confirmation against
+the current active token and binding transaction. New tokens store the existing
+domain-separated SHA-256 credential commitment, never a recoverable token.
+Legacy tokens without that commitment require rebind; absence never means generation 0.
+
+Confirmation bytes: magic `BOTABND1` at 0–7; version 1 at 8; environment at 9
+(0 dev, 1 gamma, 2 prod); reserved zero 10–11; generation u32BE at 12;
+issued/expiry u32BE at 16/20; device binding challenge 16 bytes at 24;
+credential commitment 32 bytes at 40; SHA-256(raw PK_D x||y) at 72;
+first 16 bytes of SHA-256(UTF-8 binding-attempt ID) at 104; backend ECDSA-P256
+raw r||s signature over bytes 0–119 at 120. Expiry = issued + 60 seconds.
+The commitment uses `bota/enc-v2/credential/v1\0` + u16LE token length + token.
+
+Device verifies signature, device/environment/challenge/time and current credential
+commitment, then saves the complete signed confirmation in a separate VM record,
+reads it back and compares it before acknowledging. Existing provisioning storage
+is unchanged. Repeated exact confirmation produces the same acknowledgement body;
+failed/partial writes fail closed. Reboot revalidates signature and current credential
+commitment; install expiry does not revoke an already durably accepted binding.
+ACK: `BOTABAK1` (8), SHA-256(confirmation) (32), device ECDSA-P256 signature (64)
+over the first 40 bytes. The backend verifies ACK against the current locked binding
+and token. Retry ACK without replaying Control; an expired delivery starts a fresh
+binding challenge/confirmation. A newer generation cannot be overwritten by an older
+one for the same credential. Find acceptance and execution compare confirmed
+generation, current credential commitment and local credential epoch.
+
+Offline devices cannot instantly detect cloud unbind. Authorization expires within
+60 seconds and active indication is bounded to 30 seconds. No claim of immediate
+offline revocation is made.
+
+## Safety and compatibility
+
+START requires a valid battery sample younger than 60 seconds and battery >20%,
+including while charging. Low/unknown battery stops active indication. Valid STOP
+bypasses all START-only busy/power checks. Recording, uploads, Reset and OTA retain
+priority. Unsupported actuator hooks remain unsupported until board integration is
+verified; no fake success and no invented GPIO allocation.
+
+SDK serializes Find transactions per connection, bounds authorization waiting,
+rejects connection replacement, negotiates revision 2 and transports confirmation
+and ACK after normal bind or before first Find. Failure of this additional handshake
+does not roll back a successful normal binding. Old firmware remains on the explicit
+legacy path; old SDKs reject revision 2 without writes. Apps use real SDK capability
+and reasons, with no result-8 guessing or unverified package-version upgrade.
+
+## Required evidence
+
+- Fixed 193/20-byte vectors across server, Rust SDK and firmware.
+- Challenge ages 59/60/61 and 90 seconds, delayed HTTP/queue, interleaved recording,
+  Reset and upload authorization, wrong action, duplicate and failed attempts.
+- Battery 19/20/21, charging, invalid/stale samples, and STOP under each START block.
+- Rebinding, stale generation, repeated confirmation, lost ACK, interrupted save,
+  reboot and legacy storage; no execution using an unconfirmed baseline.
+- Compatibility, actual published SDK installation, target build, physical light
+  and vibration start/stop/preemption, and cloud command controller/ACK delivery.
+### Direct-cloud use of Find revision 2 (unreleased)
+
+Direct firmware may offer `find_authorization: {protocol_version: 2, nonce_d}`
+in an authenticated heartbeat only when both actuators and current binding are
+available. The server returns at most one atomically claimed Find command with
+`find_grant_blob` (Base64, 193 bytes), retaining the same Grant/Control layout.
+Its request ID is SHA-256(ASCII `bota/find/cloud/v1` + NUL + UTF-8 command ID)[0:16].
+The Grant expires at the earlier of command expiry and issuance +60 seconds.
+STOP has priority and cancels still-pending START; delivered START is not replayed.
+
+The device verifies that authority then queues the same controller, fenced by
+credential epoch, trusted binding and original deadline. An additional eight-second
+queue deadline prevents late activation after the heartbeat worker gives up.
+Cloud processing leases the Find transaction against BLE replacement; a connected
+BLE session suppresses cloud offers. Normal recording/Reset/upload slots remain
+independent. START ACK confirms dual-actuator activation, like BLE active status;
+STOP confirms inactive. Neither HTTP delivery nor idle heartbeat proves success.
+Nearby SDK BLE Find remains a separate user action; do not use cloud as automatic
+fallback after an uncertain BLE START. Legacy relay-pending clients do not consume
+these cloud Find commands. Physical board support and coordinated release remain
+required; the weak unsupported adapter does not advertise cloud Find.
 
 ## BLE Advertising Name
 

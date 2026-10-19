@@ -1,0 +1,13 @@
+{
+  "description": "Test-only P-256 scalar 1; never a production identity.",
+  "privateScalarHex": "0000000000000000000000000000000000000000000000000000000000000001",
+  "devicePublicKeyHex": "6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c2964fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5",
+  "backendPublicKeyDer": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEYkDYJ7rulVKxYCl+qDExpp9CSevKbtre/DPS2qQua5ECVyi/P9B7SiMetX5HbsHJ1i7E3DDmmtal5s2RonjCXA==",
+  "grantBlob": "BF0/8rXL/9jP7HRVkAowMDoZk2SwDFqTJc2YgMieay5krVGigK01rtDscD5jYoYX+/oazZobdhuR+opVWS7P2tiOYXWVOT1CLX8shE4v2j7jRrU1Wlhn972wtNOlCTtl0cNggQ0KpDg/JT4UGjROAuYNCKma3zglO5qYigEZesoymMyL4U1VInDa2dGl4PpCAZrbUhIQm6gr8V62uOfCx5BmM9zzYPEu9kByhOqx+oczhtuIxVw3KzhZsYrK9G9T0Q==",
+  "controlHex": "02010a0002020202020202020202020202020202",
+  "nonceHex": "01010101010101010101010101010101",
+  "requestIdHex": "02020202020202020202020202020202",
+  "bindingGeneration": 7,
+  "issuedAt": 100,
+  "expiresAt": 160
+}
