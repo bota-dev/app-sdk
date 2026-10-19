@@ -1,5 +1,10 @@
 # Architecture
 
+The unreleased [BLE naming amendment](docs/parity/ble-advertising-name.md) keeps
+candidate matching in Rust: model-only names and retired custom names can find
+the standardized model/SN-tail advertisement, while full GATT serial validation
+still owns connection identity. No new host-port or public identity field is added.
+
 The unpublished RN [current-connection correction](docs/parity/current-connection-ownership.md)
 publishes the existing disconnect event after successful old-link replacement
 and fences stale compatibility status/disconnect targets. It changes adapter and

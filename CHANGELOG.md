@@ -7,6 +7,11 @@ tracked separately.
 
 ## Unreleased
 
+- Support reconnect discovery across canonical model-only and SN-suffixed BLE
+  names, including migration from stored display overrides. Firmware names use
+  `<model> <last four SN characters>`; exact full-SN GATT verification remains
+  required. See `docs/parity/ble-advertising-name.md` for qualification status.
+
 - Add direct BLE find/stop to the generated-JS runtime and compatibility device
   manager, using Rust-owned action/grant/status codecs and exact request receipts.
   Requires the dedicated service and qualified light/haptic firmware; native-only

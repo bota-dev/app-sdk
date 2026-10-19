@@ -326,6 +326,10 @@ impl ConnectionWorkflow {
 
     fn prepare_probe_candidates(&mut self) {
         let stored_name = self.hint.stored_name.as_deref();
+        let serial_suffix = self.device.as_ref().and_then(|device| {
+            let serial = device.as_str();
+            serial.get(serial.len().checked_sub(4)?..)
+        });
         let active_id = self
             .active_candidate
             .as_ref()
@@ -340,7 +344,29 @@ impl ConnectionWorkflow {
                     .contains(&candidate.peripheral_id)
             })
             .filter(|candidate| match stored_name {
-                Some(name) => candidate.name.as_deref() == Some(name),
+                Some(name) => candidate.name.as_deref().is_some_and(|advertised| {
+                    if advertised == name {
+                        return true;
+                    }
+                    let Some(suffix) = serial_suffix else {
+                        return false;
+                    };
+                    // Bridge canonical names and retired display overrides.
+                    // A suffix only selects probes; GATT must confirm identity.
+                    let suffix = format!(" {suffix}");
+                    let model = name.strip_suffix(&suffix).unwrap_or(name);
+                    let is_model = |value| {
+                        matches!(
+                            value,
+                            "Bota Pin" | "Bota Note" | "Bota Pin Pro" | "Bota Pin 4G"
+                        )
+                    };
+                    if is_model(model) {
+                        advertised == model || advertised.strip_suffix(&suffix) == Some(model)
+                    } else {
+                        advertised.strip_suffix(&suffix).is_some_and(is_model)
+                    }
+                }),
                 None => candidate
                     .name
                     .as_deref()

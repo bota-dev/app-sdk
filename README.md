@@ -1,5 +1,10 @@
 # Bota App SDK
 
+Unreleased BLE naming uses `<model> <last four SN characters>`, for example
+`Bota Pin 67KP`. SDK reconnect discovery handles the rename and still checks
+the complete SN. See the [protocol](FIRMWARE_PROTOCOL.md#ble-advertising-name)
+and [source/physical qualification checklist](docs/parity/ble-advertising-name.md).
+
 Published React Native beta.19 provides Rust-generated JavaScript through
 `@bota.dev/react-native-app-sdk/runtime`, using installed Bluetooth, file and HTTP
 ports. Compatible shared-logic upgrades can travel in an app's OTA bundle.
