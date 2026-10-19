@@ -1,5 +1,5 @@
 use crate::{
-    codecs::{input, output},
+    codecs::{input, output, public_output},
     engine::invalid,
 };
 use bota_device_sdk_core::{
@@ -78,8 +78,8 @@ pub(crate) fn call(name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> 
         "decodeFindCapabilities" => {
             let b = input::<Bytes>(value)?.bytes;
             let supported = parse_find_capabilities(&b)?;
-            output(
-                &json!({"supported":supported,"protocolVersion":b[0],"bindingReady":b[0]==2 && b[4]==1,
+            public_output(
+                json!({"supported":supported,"protocolVersion":b[0],"bindingReady":b[0]==2 && b[4]==1,
                 "defaultDurationSeconds":10,"maxDurationSeconds":30}),
             )
         }
@@ -117,8 +117,8 @@ pub(crate) fn call(name: &str, value: Value) -> Result<Vec<u8>, DeviceSdkError> 
                 8 => Some("authorization_expired"),
                 _ => None,
             };
-            output(
-                &json!({"protocolVersion":status.protocol_version,"reason":reason,"active":status.active,"success":status.result==0,"error":error,"requestId":request_id,"remainingMs":status.remaining_ms}),
+            public_output(
+                json!({"protocolVersion":status.protocol_version,"reason":reason,"active":status.active,"success":status.result==0,"error":error,"requestId":request_id,"remainingMs":status.remaining_ms}),
             )
         }
         "decodeFindBindingAck" => {
@@ -182,6 +182,19 @@ mod tests {
         .unwrap();
         assert_eq!(decoded["success"], true);
         assert_eq!(decoded["active"], false);
+        assert_eq!(decoded["protocolVersion"], 1);
+        assert_eq!(decoded["remainingMs"], 0);
+        let caps: Value = serde_json::from_slice(
+            &call(
+                "decodeFindCapabilities",
+                json!({"bytes":[2,31,30,10,1,0,0,0]}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(caps["protocolVersion"], 2);
+        assert_eq!(caps["defaultDurationSeconds"], 10);
+        assert_eq!(caps["maxDurationSeconds"], 30);
         let stale: Value = serde_json::from_slice(
             &call(
                 "decodeFindStatus",

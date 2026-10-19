@@ -702,6 +702,9 @@ test('generated revision 2 codecs route isolated challenges, binding ACK and con
       },
     } } });
   try {
+    const capabilities = await controls.execute('readFindCapabilities', [device], f.context);
+    assert.equal(capabilities.protocolVersion, 2);
+    assert.equal(capabilities.defaultDurationSeconds, 10);
     assert.equal(await controls.execute('readFindBindingChallenge', [device], f.context), '03'.repeat(16));
     assert.equal(await controls.execute('confirmFindBinding', [device, confirmation.toString('base64')], f.context), ack.toString('base64'));
     assert.equal(await controls.execute('readFindChallenge', [device], f.context), '02'.repeat(16));
@@ -713,5 +716,8 @@ test('generated revision 2 codecs route isolated challenges, binding ACK and con
     ]);
     assert.deepEqual(writes[2][1], [2, 2, 0, 0, ...Array(16).fill(1)]);
     assert.equal(reads.includes(metadata.CHAR_AUTH_NONCE), false);
+    const beforeRejected = writes.length;
+    await assert.rejects(controls.execute('requestFindDevice', [device, { ...findRequest, grantBlob: grant.toString('base64') }], f.context), /unsupported_capability/);
+    assert.equal(writes.length, beforeRejected);
   } finally { await controls.close(); await f.controls.close(); core.dispose(); }
 });
