@@ -7,6 +7,12 @@ tracked separately.
 
 ## Unreleased
 
+- Expand the firmware protocol reference with the current GATT map, provisioning
+  and settings, status, legacy/v2 transfer, BYO customer-envelope flow, dedicated
+  reset authorization, diagnostics and BLE OTA. Retain marker/find contracts and
+  distinguish source support from package and physical-device qualification.
+  This documentation update changes no SDK runtime or wire format.
+
 - Support reconnect discovery across canonical model-only and SN-suffixed BLE
   names, including migration from stored display overrides. Firmware names use
   `<model> <last four SN characters>`; exact full-SN GATT verification remains
