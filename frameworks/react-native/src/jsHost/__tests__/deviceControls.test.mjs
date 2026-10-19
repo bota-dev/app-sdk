@@ -657,6 +657,8 @@ test('generated Rust find codecs execute real service bytes and discard a foreig
       },
     }}});
   const grant=new Uint8Array(193);grant[0]=4;
+  await assert.rejects(controls.execute('requestFindDevice', [connected, { ...findRequest, protocolVersion: 2, grantBlob: Buffer.from(grant).toString('base64') }], f.context), /unsupported_capability/);
+  assert.equal(writes.length, 0);
   const result=await controls.execute('requestFindDevice',[connected,{...findRequest,grantBlob:Buffer.from(grant).toString('base64')}],f.context);
   assert.equal(result.requestId,findRequest.requestId);assert.equal(result.active,false);
   assert.equal(writes[0][0],metadata.CHAR_FIND_GRANT);assert.equal(writes[0][1].length,193);

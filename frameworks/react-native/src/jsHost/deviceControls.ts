@@ -226,7 +226,7 @@ export class JsDeviceControls {
         try {
           const capability = record(await this.decodeRead('decodeFindCapabilities', 'SERVICE_BOTA_FIND',
             'CHAR_FIND_CAPABILITIES', connection, context));
-          if (capability.supported !== true || (capability.protocolVersion === 2 && request.protocolVersion !== 2)) throw controlError('unsupported_capability', context.operation);
+          if (capability.supported !== true || (capability.protocolVersion !== undefined && capability.protocolVersion !== (request.protocolVersion ?? 1))) throw controlError('unsupported_capability', context.operation);
           return await this.withResult('SERVICE_BOTA_FIND', 'CHAR_FIND_STATUS', connection, context,
             value => this.codec('decodeFindStatus', { bytes: publicBytes(value), requestId: request.requestId! }),
             async beginResults => {
