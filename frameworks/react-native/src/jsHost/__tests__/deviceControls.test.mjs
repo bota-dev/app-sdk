@@ -663,3 +663,55 @@ test('generated Rust find codecs execute real service bytes and discard a foreig
   assert.deepEqual(writes[1][1],[1,2,0,0,...new Array(16).fill(1)]);
   await controls.close();await f.controls.close();
 });
+
+test('generated revision 2 codecs route isolated challenges, binding ACK and control through the allocated characteristics', async () => {
+  const { createGeneratedJsCore } = loadSource('core.ts');
+  const core = createGeneratedJsCore();
+  const metadata = core.codec('protocolMetadata', {});
+  const f = fixture();
+  const writes = [];
+  const reads = [];
+  let notify;
+  const ack = Buffer.alloc(104); ack.write('BOTABAK1');
+  const confirmation = Buffer.alloc(184); confirmation.write('BOTABND1'); confirmation[8] = 1;
+  const controls = new JsDeviceControls({ core, connection: () => ({ device, generation: '1' }),
+    emit() {}, gatt: (_context, body) => body(), ports: { persistence: { namespace: 'test/revision2' }, ble: {
+      async read(address) {
+        const characteristic = address.characteristicUuid;
+        assert.equal(typeof characteristic, 'string');
+        reads.push(characteristic);
+        if (characteristic === metadata.CHAR_SERIAL_NUMBER) return Buffer.from(device.serialNumber);
+        assert.equal(address.serviceUuid, metadata.SERVICE_BOTA_FIND);
+        if (characteristic === metadata.CHAR_FIND_CAPABILITIES) return Uint8Array.of(2, 31, 30, 10, 1, 0, 0, 0);
+        if (characteristic === metadata.CHAR_FIND_CHALLENGE) return new Uint8Array(16).fill(2);
+        if (characteristic === metadata.CHAR_FIND_BINDING_CHALLENGE) return new Uint8Array(16).fill(3);
+        if (characteristic === metadata.CHAR_FIND_BINDING_ACK) return ack;
+        assert.fail(`Unexpected characteristic ${characteristic}`);
+      },
+      async write(address, bytes, withResponse) {
+        assert.equal(address.serviceUuid, metadata.SERVICE_BOTA_FIND);
+        assert.equal(withResponse, true);
+        writes.push([address.characteristicUuid, [...bytes]]);
+        if (address.characteristicUuid === metadata.CHAR_FIND_CONTROL) {
+          const status = new Uint8Array(24); status[0] = 2; status.set(bytes.slice(4), 4); notify(status);
+        }
+      },
+      async subscribe(address, callback) {
+        assert.equal(address.characteristicUuid, metadata.CHAR_FIND_STATUS);
+        notify = callback; return { async remove() { notify = undefined; } };
+      },
+    } } });
+  try {
+    assert.equal(await controls.execute('readFindBindingChallenge', [device], f.context), '03'.repeat(16));
+    assert.equal(await controls.execute('confirmFindBinding', [device, confirmation.toString('base64')], f.context), ack.toString('base64'));
+    assert.equal(await controls.execute('readFindChallenge', [device], f.context), '02'.repeat(16));
+    const grant = Buffer.alloc(193); grant[0] = 4;
+    const result = await controls.execute('requestFindDevice', [device, { ...findRequest, protocolVersion: 2, grantBlob: grant.toString('base64') }], f.context);
+    assert.equal(result.success, true);
+    assert.deepEqual(writes.map(([uuid, bytes]) => [uuid, bytes.length]), [
+      [metadata.CHAR_FIND_BINDING_CONFIRM, 184], [metadata.CHAR_FIND_GRANT, 193], [metadata.CHAR_FIND_CONTROL, 20],
+    ]);
+    assert.deepEqual(writes[2][1], [2, 2, 0, 0, ...Array(16).fill(1)]);
+    assert.equal(reads.includes(metadata.CHAR_AUTH_NONCE), false);
+  } finally { await controls.close(); await f.controls.close(); core.dispose(); }
+});

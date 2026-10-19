@@ -131,7 +131,7 @@ test('Find revision 2 keeps wire sizes and reports explicit reasons without chan
 });
 
 test('Find revision 2 control agrees with the shared fixed server/firmware vector', () => {
-  const v=JSON.parse(readFileSync(new URL('../../../../../protocol/fixtures/find-revision-2.json',import.meta.url),'utf8'));
+  const v=JSON.parse(readFileSync(new URL('../../../../../protocol/find-authorization/find-revision-2.json',import.meta.url),'utf8'));
   const control=core.codec('encodeFindControl',{protocolVersion:2,action:'start',durationSeconds:10,requestId:v.requestIdHex});
   assert.equal(Buffer.from(control).toString('hex'),v.controlHex);
   assert.equal(core.codec('encodeFindGrant',{grantBlob:v.grantBlob,capacity:193}).length,193);

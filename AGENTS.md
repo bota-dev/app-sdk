@@ -1502,18 +1502,3 @@ Linux toolchain before consuming it. Both apps remain on the published package
 until a qualified release is adopted. Source checks, deployment, board integration,
 cloud controller/ACK and physical acceptance are separate; the shared completion
 checklist is `bota/docs/reviews/find-device-command.md`.
-
-
-## October 19 Find authorization revision
-
-The local `find-authorization-isolation` candidate follows BRD51-22 / SD51-22
-and `internal-docs/device/Find-Authorization-Revision-2.md`. Keep normal
-bind/confirm and recording/Reset/upload authorization independent. Revision-2
-Find uses a dedicated challenge/slot, original monotonic expiry, signed current
-binding confirmation plus device ACK, and versioned battery reasons. Legacy
-bytes/result codes are not silently reinterpreted. Migration 116 precedes backend
-writers; the actual SDK runtime must be regenerated from Rust on the required
-Linux toolchain before consuming it. Both apps remain on the published package
-until a qualified release is adopted. Source checks, deployment, board integration,
-cloud controller/ACK and physical acceptance are separate; the shared completion
-checklist is `bota/docs/reviews/find-device-command.md`.
