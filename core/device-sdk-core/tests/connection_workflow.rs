@@ -171,6 +171,86 @@ fn manual_connect_reads_serial_fresh_before_persisting_identity() {
 }
 
 #[test]
+fn reconnect_probes_old_and_suffixed_names_but_requires_full_serial() {
+    for (stored, advertised) in [
+        ("Bota Pin", "Bota Pin 67KP"),
+        ("Bota Pin 67KP", "Bota Pin"),
+        ("Bota Note", "Bota Note 67KP"),
+        ("Bota Pin Pro", "Bota Pin Pro 67KP"),
+        ("Customer Name", "Bota Pin 67KP"),
+    ] {
+        let mut engine = WorkflowEngine::default();
+        let started = start_reconnect(
+            &mut engine,
+            ReconnectHint {
+                stored_name: Some(stored.into()),
+                ..ReconnectHint::default()
+            },
+        );
+        let scan = request_id(&started, |effect| {
+            matches!(effect, Effect::Ble(BleEffect::StartScan { .. }))
+        });
+        for (id, name, rssi) in [
+            ("other-model", "Bota Other 67KP", -5),
+            ("wrong-tail", "Bota Pin 0000", -10),
+            ("collision", advertised, -20),
+            ("target", advertised, -30),
+        ] {
+            let mut found = candidate(id, None, rssi);
+            found.name = Some(name.into());
+            engine
+                .dispatch(host(
+                    scan,
+                    HostEventKind::Ble(BleEvent::ScanResult { candidate: found }),
+                ))
+                .unwrap();
+        }
+        let connecting = finish_scan(&mut engine, &started);
+        assert_identity_not_trusted(&connecting);
+        assert!(
+            connecting.iter().any(|r| matches!(&r.effect,
+            Effect::Ble(BleEffect::Connect { peripheral_id }) if peripheral_id == "collision")),
+            "{stored} -> {advertised}"
+        );
+        let read = reach_serial_read(&mut engine, &connecting, "collision");
+        let rejected = engine
+            .dispatch(host(
+                read,
+                HostEventKind::Ble(BleEvent::ReadCompleted {
+                    value: b"OTHERX67KP".to_vec(),
+                }),
+            ))
+            .unwrap();
+        assert_identity_not_trusted(&rejected);
+        let disconnect = request_id(&rejected, |effect| {
+            matches!(effect, Effect::Ble(BleEffect::Disconnect { .. }))
+        });
+        let next = engine
+            .dispatch(host(
+                disconnect,
+                HostEventKind::Ble(BleEvent::Disconnected {
+                    peripheral_id: "collision".into(),
+                    reason_code: None,
+                }),
+            ))
+            .unwrap();
+        let read = reach_serial_read(&mut engine, &next, "target");
+        let accepted = engine
+            .dispatch(host(
+                read,
+                HostEventKind::Ble(BleEvent::ReadCompleted {
+                    value: b"EVFXXW67KP".to_vec(),
+                }),
+            ))
+            .unwrap();
+        assert!(accepted.iter().any(|r| matches!(
+            &r.effect,
+            Effect::Persistence(PersistenceEffect::SaveConnectionIdentity { .. })
+        )));
+    }
+}
+
+#[test]
 fn selected_device_connect_learns_serial_before_persisting_identity() {
     let mut engine = WorkflowEngine::default();
     let selected = candidate("ios-peripheral-id", None, -50);

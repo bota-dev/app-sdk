@@ -74,5 +74,18 @@ The candidate adds backend confirmation/ACK routes, VM slot +11 (separate from
 existing provisioning), four appended GATT characteristics, Rust codecs, RN
 handshake and app reason display. Publication, actual package adoption, physical
 power-loss durability and dual-actuator validation remain separate acceptance.
-Existing board hooks still return unsupported and the cloud controller/ACK adapter
-remains open; this revision does not turn those gaps into successful execution.
+Existing board hooks still return unsupported. The companion firmware/backend
+source now connects the signed direct-cloud controller/ACK path; publication and
+physical outputs remain unqualified. See the shared Bota Find review.
+
+
+### Main integration generation checkpoint
+
+Merge main `f6a6dc3` to retain canonical advertising-name reconnect migration and
+the complete firmware reference alongside Find revision 2. Core Rust (239),
+connection/Find (14/3) and protocol-generation checks pass. The expanded reference
+now includes both Find revisions, trusted binding and direct-cloud behavior.
+The prior generated runtime is temporarily retained only to let canonical Linux
+CI rebuild the combined inputs and emit the exact replacement. This checkpoint
+is not a consumer-ready artifact; adopt and verify the generated replacement
+before using it. No package publication or App dependency update is authorized.
