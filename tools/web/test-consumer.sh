@@ -30,10 +30,15 @@ INVENTORY="$RELEASE_DIR/web-package-files.json"
 node "$ROOT_DIR/tools/web/verify-package.mjs" "$TARBALL" \
   --inventory "$INVENTORY"
 npm_config_cache="$NPM_CACHE_DIR" \
-  npx --yes "npm@$NPM_CLI_VERSION" ci --prefix "$CONSUMER_DIR"
+  npx --yes "npm@$NPM_CLI_VERSION" ci --prefix "$CONSUMER_DIR" \
+    --min-release-age=7 --strict-allow-scripts
+(
+  cd "$CONSUMER_DIR"
+  node "$ROOT_DIR/scripts/check-licenses.mjs"
+)
 npm_config_cache="$NPM_CACHE_DIR" \
   npx --yes "npm@$NPM_CLI_VERSION" install --prefix "$CONSUMER_DIR" \
-    --no-save --package-lock=false "$TARBALL"
+    --no-save --package-lock=false --min-release-age=7 --strict-allow-scripts "$TARBALL"
 npm run build --prefix "$CONSUMER_DIR"
 "$ROOT_DIR/tools/web/test-browser.sh" \
   "$TARBALL" \

@@ -28,6 +28,7 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             frameworks/react-native/package-lock.json
+            tests/consumers/web-vite/package-lock.json
 
       - name: Set up JDK 17
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -53,6 +54,14 @@ jobs:
 
       - name: Check npm dependency licenses
         run: npm run check:licenses
+
+      - name: Install Web consumer dependencies
+        working-directory: tests/consumers/web-vite
+        run: npx --yes npm@12.0.2 ci --min-release-age=7 --strict-allow-scripts
+
+      - name: Check Web consumer dependency licenses
+        working-directory: tests/consumers/web-vite
+        run: node ../../../scripts/check-licenses.mjs
 
       - name: Install React Native package dependencies
         working-directory: frameworks/react-native
