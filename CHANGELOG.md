@@ -35,6 +35,18 @@ tracked separately.
   Fresh serial verification remains required. These corrections use existing
   version 1 OS ports; publication and physical acceptance are pending.
 
+## 2.0.0-beta.20 (candidate)
+
+- Preserve confirmed encrypted-v2 upload completion across runtime retirement,
+  serialize pending-catalog admission and reserve one scoped sync owner.
+- Negotiate Find authorization revision 2 and isolate its grant/status identity.
+  Find still requires qualified device firmware; physical Find is not accepted.
+- Decode structured BLE device models and reconnect across model/serial-suffix
+  advertising names while retaining exact full-serial verification.
+- Retain the five original package identities and React Native `/runtime` entry.
+  Publication requires canonical generated artifacts, exact main CI and protected
+  approval; application delivery and device acceptance remain separate.
+
 ## 2.0.0-beta.17
 
 - Admit HTTPS managed encrypted-v2 proxies whose routes start at the origin root,

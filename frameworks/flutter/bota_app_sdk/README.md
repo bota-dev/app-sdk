@@ -1,20 +1,19 @@
 # Bota SDK for Flutter
 
-Source candidate `2.0.0-beta.19` synchronizes bounded shared-Rust recording
-transfer writes and RN cleanup/scan lifecycle corrections. Flutter retains its
-native facade. Beta.18 remains the published baseline while canonical artifacts,
-exact main CI, protected publication and public-consumer gates are pending.
-Native applications require a new binary; physical acceptance remains separate.
+Source candidate `2.0.0-beta.20` synchronizes encrypted-v2 completion and
+scoped ownership, Find authorization revision 2 and BLE naming/model corrections.
+Flutter retains its native facade and installed adapter contracts. Published
+beta.19 remains the installation baseline while canonical artifacts, exact main
+CI, protected publication and public-consumer gates are pending. Native apps
+require a new binary; app delivery and device acceptance remain separate.
 
 ## Package Name Migration
 
 The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
 `dev.bota:bota-app-sdk` on Android. Replace the old dependency and Dart imports;
 do not install both packages in the same application. Historical 1.x releases
-remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.19`.
-Published beta.18 remains the installation baseline until protected publication
-and public-consumer verification pass. See the
-[preflight](../../../release/evidence/2.0.0-beta.19-preflight.md).
+remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.20`.
+See the [candidate preflight](../../../release/evidence/2.0.0-beta.20-preflight.md).
 Rebuild native applications and reconnect explicitly after connection loss.
 Completed-resume and broader hardware acceptance remain separate.
 
@@ -51,7 +50,7 @@ Pin the exact prerelease version after its publication:
 
 ```yaml
 dependencies:
-  bota_app_sdk: 2.0.0-beta.18
+  bota_app_sdk: 2.0.0-beta.19
 ```
 
 For source development, point at an exact checkout rather than a moving branch:

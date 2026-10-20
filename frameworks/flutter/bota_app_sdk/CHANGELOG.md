@@ -1,3 +1,11 @@
+## 2.0.0-beta.20 (candidate)
+
+- Synchronize the SDK family with scoped encrypted-v2 completion/ownership,
+  Find revision-2 authorization and BLE naming/model corrections. Flutter
+  retains its native facade, Pigeon channels and installed adapter contracts.
+  Canonical archives, exact CI, protected publication and device acceptance
+  remain separate gates.
+
 ## 2.0.0-beta.19 (candidate)
 
 - Synchronize bounded shared-Rust recording transfer batching, joined RN file
