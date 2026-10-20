@@ -1,5 +1,15 @@
 # Bota SDK for React Native
 
+Source candidate `2.0.0-beta.20` includes the scoped encrypted-v2 completion,
+Find revision-2 authorization and BLE naming/model corrections. It retains
+`@bota.dev/react-native-app-sdk/runtime` and version 1 installed OS ports.
+Published beta.19 remains the installation baseline until protected publication
+and public-consumer checks pass. Earlier qualification notes below are dated
+snapshots; see the [current preflight](../../release/evidence/2.0.0-beta.20-preflight.md).
+Find requires qualified device firmware. Native-only Find adapters are not
+available, and physical Find remains unverified. App delivery and OTA remain
+separate gates.
+
 ## Generated JavaScript runtime and app OTA updates
 
 The unpublished [managed completion handoff](../../docs/parity/managed-completion-retirement.md)
