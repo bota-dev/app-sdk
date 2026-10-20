@@ -13,6 +13,54 @@ const deferred = () => {
 };
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test('scan merges Android advertisement and scan-response fields by peripheral ID', async () => {
+  let scanListener;
+  let scanOptions;
+  const manager = {
+    startDeviceScan(_uuids, options, listener) { scanOptions = options; scanListener = listener; },
+    stopDeviceScan() {},
+  };
+  const candidates = [];
+  const port = createBlePlxPort(manager);
+  const scan = await port.scan(false, candidate => candidates.push(candidate), context());
+
+  scanListener(null, {
+    id: 'note-1', name: null, localName: null, rssi: -51, mtu: 23,
+    manufacturerData: Buffer.from([0x7a, 0xb0, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
+      1, 2, 0x36, 0x37, 0x4b, 0x50]).toString('base64'),
+  });
+  scanListener(null, {
+    id: 'note-1', name: 'Bota Note', localName: 'Bota Note', rssi: -49, mtu: 23,
+    manufacturerData: null,
+  });
+
+  assert.deepEqual(scanOptions, { allowDuplicates: true });
+  assert.deepEqual(candidates.at(-1), {
+    peripheral_id: 'note-1',
+    name: 'Bota Note 67KP',
+    advertised_address: 'AA:BB:CC:DD:EE:FF',
+    rssi: -51,
+  });
+  assert.deepEqual(port.advertisementMetadata('note-1'), {
+    deviceType: 'bota_note', serialSuffix: '67KP',
+  });
+  await scan.remove();
+});
+
+test('unknown and future manufacturer metadata never infer a device model', async () => {
+  let scanListener;
+  const port = createBlePlxPort({
+    startDeviceScan(_uuids, _options, listener) { scanListener = listener; }, stopDeviceScan() {},
+  });
+  const candidates = [];
+  const scan = await port.scan(false, candidate => candidates.push(candidate), context());
+  scanListener(null, { id: 'future', name: 'Bota Note FAKE', localName: 'Bota Note FAKE', rssi: -60, mtu: 23,
+    manufacturerData: Buffer.from([0x7a, 0xb0, 1, 2, 3, 4, 5, 6, 2, 2, 0x41, 0x42, 0x43, 0x44]).toString('base64') });
+  assert.equal(port.advertisementMetadata('future'), undefined);
+  assert.equal(candidates[0].name, 'Bota Note FAKE');
+  await scan.remove();
+});
+
 test('scan and monitor failures reach the exact primitive owner', async () => {
   let scanListener;
   let monitorListener;

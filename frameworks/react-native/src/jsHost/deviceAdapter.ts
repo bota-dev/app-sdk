@@ -2,6 +2,7 @@ import type {
   NativeConnectedDevice, NativeDiscoveredDevice, NativeDeviceRecording, NativeReconnectOptions,
   NativeEncryptedUploadV2ProfileDecision, NativeEncryptedUploadV2Recording, NativeStreamingUploadDestination,
 } from '../specs/NativeBotaDeviceSDK';
+import { publicDeviceType } from '../deviceModel';
 import { SDK_PACKAGE, SDK_VERSION } from '../sdkIdentity';
 import type { BotaDeviceAdapter } from '../runtimeAdapter';
 import type { BotaJsHostPorts, GattAddress, JsHostContext, JsHostSubscription, JsValue, RawJsCoreFactory } from './contracts';
@@ -447,7 +448,10 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
           const discovered = object(value).DeviceDiscovered;
           if (!discovered) return;
           const candidate = object(object(discovered).candidate!);
-          emit('onDeviceDiscovered', { id: text(candidate.peripheral_id), name: candidate.name ?? undefined,
+          const name = candidate.name ?? undefined;
+          const advertised = ports.ble?.advertisementMetadata?.(text(candidate.peripheral_id));
+          emit('onDeviceDiscovered', { id: text(candidate.peripheral_id), name,
+            deviceType: publicDeviceType(advertised?.deviceType),
             rssi: candidate.rssi, macAddress: candidate.advertised_address ?? undefined, discoveredAtMs: Date.now() });
         },
       });

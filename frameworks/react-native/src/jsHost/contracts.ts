@@ -57,6 +57,10 @@ export interface JsHostCandidate {
   advertised_address: string | null;
   rssi: number;
 }
+export interface JsAdvertisementMetadata {
+  readonly deviceType?: 'bota_pin' | 'bota_pin_4g' | 'bota_note' | 'bota_pin_pro';
+  readonly serialSuffix?: string;
+}
 /** Scoped OS handle. Private keys remain opaque; bounded transport bytes may be internal JS values. */
 export interface OpaqueHostHandle {
   readonly id: string;
@@ -67,6 +71,8 @@ export interface OpaqueHostHandle {
 }
 export type JsGattValue = Uint8Array | OpaqueHostHandle;
 export interface JsBlePort {
+  /** Metadata decoded directly from the most recent manufacturer advertisement. */
+  advertisementMetadata?(peripheralId: string): JsAdvertisementMetadata | undefined;
   /** Actual OS radio/permission state; absence remains unknown. */
   readBluetoothState?(context: JsHostContext): Promise<string>;
   observeBluetoothState?(onState: (state: string) => void, context: JsHostContext,

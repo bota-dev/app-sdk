@@ -483,6 +483,7 @@ const mapDiscoveredDevice = (
 ): DiscoveredDevice => ({
   id: device.id,
   name: device.name ?? '',
+  // Legacy advertisements have no structured model and retain the historical Pin fallback.
   deviceType: (device.deviceType ?? 'bota_pin') as DeviceType,
   firmwareVersion: device.firmwareVersion ?? '',
   macAddress: formatAdvertisedMac(device.macAddress),
