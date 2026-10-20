@@ -1,6 +1,7 @@
 import { Buffer } from 'buffer';
 import type { JsBlePort, JsHostCandidate, JsHostContext, JsHostSubscription } from './contracts';
 import { createGeneratedJsCore } from './core';
+import { decodeBotaAdvertisement, formatAdvertisedDeviceName } from '../deviceModel';
 
 interface Subscription { remove(): void | Promise<void> }
 interface Characteristic { value?: string | null }
@@ -8,6 +9,7 @@ interface Peripheral {
   id: string;
   name: string | null;
   localName?: string | null;
+  manufacturerData?: string | null;
   rssi: number | null;
   mtu: number;
   discoverAllServicesAndCharacteristics(): Promise<Peripheral>;
@@ -49,6 +51,7 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
   const connectionGenerations = new Map<string, bigint>();
   let connectionGeneration = 0n;
   const uncertainConnections = new Set<string>();
+  const advertisementMetadata = new Map<string, ReturnType<typeof decodeBotaAdvertisement>>();
   const id = (value: string | undefined): string => {
     if (!value) throw new Error('GATT call requires a captured peripheral ID');
     return value;
@@ -83,6 +86,11 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
     }
   };
   return {
+    advertisementMetadata(peripheralId) {
+      const metadata = advertisementMetadata.get(peripheralId);
+      return metadata?.deviceType ? { deviceType: metadata.deviceType,
+        ...(metadata.serialSuffix ? { serialSuffix: metadata.serialSuffix } : {}) } : undefined;
+    },
     ...(manager.state ? { async readBluetoothState(context: JsHostContext) {
       check(context); const value = await manager.state!(); check(context); return value;
     } } : {}),
@@ -109,10 +117,12 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
     async scan(allowDuplicates, onCandidate, context, onError) {
       check(context);
       if (scan) throw new Error('A BLE scan already owns this port');
+      advertisementMetadata.clear();
       let active = true;
       let removed = false;
       let startup: Promise<void> | undefined;
       let removal: Promise<void> | undefined;
+      const observations = new Map<string, JsHostCandidate>();
       const subscription: JsHostSubscription = { remove() {
         if (removed) return Promise.resolve();
         active = false;
@@ -129,15 +139,31 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
       scan = subscription;
       context.signal.addEventListener('abort', abort, { once: true });
       try {
-        startup = Promise.resolve().then(() => manager.startDeviceScan(null, { allowDuplicates }, (error, device) => {
+        // Android may deliver ADV_DATA and SCAN_RSP in separate callbacks. OS
+        // duplicates must stay enabled so the local name can enrich the first
+        // observation; this port restores the caller's duplicate policy below.
+        startup = Promise.resolve().then(() => manager.startDeviceScan(null, { allowDuplicates: true }, (error, device) => {
           if (!active || context.signal.aborted) return;
           if (error) { onError?.(error); return; }
           if (!device) return;
+          const previous = observations.get(device.id);
+          const observedMetadata = decodeBotaAdvertisement(device.manufacturerData);
+          if (observedMetadata?.deviceType) advertisementMetadata.set(device.id, observedMetadata);
+          const metadata = observedMetadata?.deviceType
+            ? observedMetadata : advertisementMetadata.get(device.id) ?? observedMetadata;
+          const observedName = metadata?.deviceType
+            ? formatAdvertisedDeviceName(metadata.deviceType, metadata.serialSuffix)
+            : device.localName ?? device.name;
           const candidate: JsHostCandidate = {
-            peripheral_id: device.id, name: device.localName ?? device.name,
-            advertised_address: null, rssi: device.rssi ?? -127,
+            peripheral_id: device.id,
+            name: observedName || previous?.name || null,
+            advertised_address: metadata?.macAddress ?? previous?.advertised_address ?? null,
+            rssi: device.rssi ?? previous?.rssi ?? -127,
           };
-          onCandidate(candidate);
+          observations.set(device.id, candidate);
+          const enriched = !previous || candidate.name !== previous.name ||
+            candidate.advertised_address !== previous.advertised_address;
+          if (allowDuplicates || enriched) onCandidate(candidate);
         }));
         await startup;
         check(context);

@@ -82,9 +82,9 @@ export type WifiStatus =
 export interface DiscoveredDevice {
   /** Bluetooth device identifier (platform-specific UUID) */
   id: string;
-  /** Device name from advertisement (e.g., "Bota-Pin-A1B2C3") */
+  /** SDK-formatted scan label (e.g., "Bota Note 67KP") */
   name: string;
-  /** Device type parsed from advertisement */
+  /** Device type decoded from structured manufacturer data */
   deviceType: DeviceType;
   /** Firmware version from manufacturer data */
   firmwareVersion: string;

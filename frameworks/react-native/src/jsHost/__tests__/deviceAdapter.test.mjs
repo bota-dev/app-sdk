@@ -412,6 +412,30 @@ test('ordinary controls refuse a workflow at submission even when it finishes be
   } finally { await f.adapter.destroy(); f.core.dispose(); }
 });
 
+test('discovery publishes only the structured manufacturer model, never a local-name inference', async () => {
+  const f = fixture();
+  const devices = [];
+  f.ports.ble.advertisementMetadata = id => id === 'note' ? { deviceType: 'bota_note', serialSuffix: '67KP' } : undefined;
+  f.ports.ble.scan = async (_duplicates, candidate) => {
+    candidate({ peripheral_id: 'note', name: 'Bota Note 67KP', advertised_address: null, rssi: -40 });
+    candidate({ peripheral_id: 'legacy-name', name: 'Bota Note FAKE', advertised_address: null, rssi: -50 });
+    return { async remove() {} };
+  };
+  const subscription = f.adapter.onDeviceDiscovered(value => devices.push(value));
+  try {
+    await f.adapter.configure({});
+    await f.adapter.startScan(1_000, false);
+    assert.equal(devices[0].deviceType, 'bota_note');
+    assert.equal(devices[0].name, 'Bota Note 67KP');
+    assert.equal(devices[1].deviceType, undefined);
+  } finally {
+    await f.adapter.stopScan().catch(() => {});
+    subscription.remove();
+    await f.adapter.destroy();
+    f.core.dispose();
+  }
+});
+
 test('ordinary controls cannot queue behind connection identity adoption', { timeout: 5000 }, async () => {
   const f = controlFixture(); const held = f.gate(); const write = f.ports.ble.write;
   f.ports.ble.write = async (...args) => {

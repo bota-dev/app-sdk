@@ -640,6 +640,41 @@ test('device scan maps native discovery and owns its subscription', async () => 
   assert.equal(fixture.removed, true);
 });
 
+test('device scan trusts only an explicit model from structured advertisement metadata', async () => {
+  const fixture = nativeFixture();
+  const client = createBotaDeviceSDK(fixture.module);
+  const devices = [];
+
+  await client.devices.startScan({}, (device) => devices.push(device));
+  fixture.emitDiscovery({
+    ...discovered,
+    name: 'Bota Note 67KP',
+    deviceType: undefined,
+  });
+  fixture.emitDiscovery({
+    ...discovered,
+    id: 'explicit-pin',
+    name: 'Bota Note 67KP',
+    deviceType: 'bota_pin',
+  });
+  fixture.emitDiscovery({
+    ...discovered,
+    id: 'note-without-suffix',
+    name: 'Bota Note',
+    deviceType: undefined,
+  });
+  fixture.emitDiscovery({
+    ...discovered,
+    id: 'unknown-name',
+    name: 'Bota Notebook 67KP',
+    deviceType: undefined,
+  });
+  assert.equal(devices[0].deviceType, 'bota_pin');
+  assert.equal(devices[1].deviceType, 'bota_pin');
+  assert.equal(devices[2].deviceType, 'bota_pin');
+  assert.equal(devices[3].deviceType, 'bota_pin');
+});
+
 test('device scan preserves the frozen JavaScript filters', async () => {
   const fixture = nativeFixture();
   const client = createBotaDeviceSDK(fixture.module);
