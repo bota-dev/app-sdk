@@ -170,3 +170,14 @@ client holds a system link, or whether a system-connected result was returned.
 No new recording, transfer, receipt or cleanup was attempted. Physical recovery
 and end-to-end acceptance remain unverified; the modeled source regression does
 not prove this phone's remaining cause.
+
+The subsequent private Demo build-4 trace observes powered-on Bluetooth and
+successful scans, but eight control-service retrievals return zero peripherals.
+A read-only comparison using the native Apple facade's existing eight Bota
+services also returns zero. Ten sampled SDK-port candidates are outside the
+canonical/legacy Bota name prefixes; no native connect call starts. The owner
+confirms the nearby Note is on and no other phone reports it connected. See
+[the consuming-app boundary record](https://github.com/bota-dev/demo/blob/main/docs/generated-js-runtime.md#se-discovery-boundary-follow-up).
+This observes a current discovery boundary, not a demonstrated held system link,
+firmware cause, physical recovery or complete upload/cleanup. The diagnostic
+overlay remains local and does not change this SDK source or release status.
