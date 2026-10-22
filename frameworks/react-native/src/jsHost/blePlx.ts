@@ -21,6 +21,7 @@ export interface BlePlxManager {
   startDeviceScan(uuids: string[] | null, options: { allowDuplicates: boolean },
     listener: (error: Error | null, device: Peripheral | null) => void): void | Promise<void>;
   stopDeviceScan(): void | Promise<void>;
+  connectedDevices?(serviceUUIDs: string[]): Promise<Peripheral[]>;
   connectToDevice(id: string, options?: { requestMTU?: number }): Promise<Peripheral>;
   cancelDeviceConnection(id: string): Promise<Peripheral>;
   requestMTUForDevice(id: string, mtu: number, transactionId?: string): Promise<Peripheral>;
@@ -43,7 +44,7 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
     const core = createGeneratedJsCore();
     try {
       return core.codec('protocolMetadata', {}) as { DEFAULT_MTU: number; MAX_MTU: number;
-        mtuObservationAttempts: number; mtuObservationDelayMs: number };
+        mtuObservationAttempts: number; mtuObservationDelayMs: number; SERVICE_BOTA_CONTROL: string };
     } finally { core.dispose(); }
   })();
   let scan: JsHostSubscription | undefined;
@@ -121,6 +122,7 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
       let active = true;
       let removed = false;
       let startup: Promise<void> | undefined;
+      let retrieval: Promise<void> | undefined;
       let removal: Promise<void> | undefined;
       const observations = new Map<string, JsHostCandidate>();
       const subscription: JsHostSubscription = { remove() {
@@ -130,6 +132,7 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
         removal ??= (async () => {
           await startup?.catch(() => {});
           try { await manager.stopDeviceScan(); } catch (error) { throw cleanupFailure(error); }
+          await retrieval;
           removed = true;
           if (scan === subscription) scan = undefined;
         })().catch(error => { removal = undefined; throw error; });
@@ -167,6 +170,25 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
         }));
         await startup;
         check(context);
+        if (manager.connectedDevices) {
+          // iOS may retain a system link after the previous app owner retires.
+          // Retrieve candidates only; normal connect and Rust serial verification
+          // must still acquire and identify this port's own connection.
+          retrieval = Promise.resolve().then(() => {
+            if (!active || context.signal.aborted) return [];
+            return manager.connectedDevices!([policy.SERVICE_BOTA_CONTROL]);
+          }).then(devices => {
+            if (!active || context.signal.aborted) return;
+            for (const device of devices) {
+              if (!active || context.signal.aborted) return;
+              if (observations.has(device.id)) continue;
+              const candidate: JsHostCandidate = { peripheral_id: device.id,
+                name: device.name || device.localName || null, advertised_address: null, rssi: -127 };
+              observations.set(device.id, candidate);
+              onCandidate(candidate);
+            }
+          }, error => { if (active && !context.signal.aborted) onError?.(error); });
+        }
         return subscription;
       } catch (error) { await subscription.remove(); throw error; }
     },

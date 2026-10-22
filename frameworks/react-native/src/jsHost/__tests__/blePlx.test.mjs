@@ -47,6 +47,106 @@ test('scan merges Android advertisement and scan-response fields by peripheral I
   await scan.remove();
 });
 
+test('scan includes a service-filtered system connection without claiming local ownership', async () => {
+  const queries = [], candidates = [];
+  let connects = 0;
+  const port = createBlePlxPort({
+    startDeviceScan() {}, stopDeviceScan() {},
+    async connectedDevices(services) {
+      queries.push(services);
+      return [{ id: 'system-note', name: 'Bota Note', rssi: null, mtu: 23 }];
+    },
+    async connectToDevice(id) { connects++; return { id }; },
+  });
+  const scan = await port.scan(false, candidate => candidates.push(candidate), context());
+  await tick();
+  const { createGeneratedJsCore } = loadSource('core.ts');
+  const core = createGeneratedJsCore();
+  const metadata = core.codec('protocolMetadata', {});
+  core.dispose();
+  assert.deepEqual(queries, [[metadata.SERVICE_BOTA_CONTROL]]);
+  assert.deepEqual(candidates, [{ peripheral_id: 'system-note', name: 'Bota Note',
+    advertised_address: null, rssi: -127 }]);
+  assert.equal(connects, 0, 'retrieval alone does not acquire a local connection');
+  await assert.rejects(port.discoverServices('system-note', context()), /no local connection/);
+  await port.connect('system-note', context());
+  assert.equal(connects, 1, 'normal connect still acquires this manager’s connection');
+  await scan.remove();
+});
+
+test('system retrieval merges with scan observations and cannot erase advertising identity', async () => {
+  const system = deferred(), candidates = [];
+  let listener;
+  const port = createBlePlxPort({
+    startDeviceScan(_services, _options, callback) { listener = callback; }, stopDeviceScan() {},
+    connectedDevices() { return system.promise; },
+  });
+  const scan = await port.scan(false, candidate => candidates.push(candidate), context());
+  listener(null, { id: 'note', name: 'Bota Note', rssi: -49, mtu: 23,
+    manufacturerData: Buffer.from([0x7a, 0xb0, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff,
+      1, 2, 0x36, 0x37, 0x4b, 0x50]).toString('base64') });
+  system.resolve([{ id: 'note', name: 'Bota Note', rssi: null, mtu: 23 }]);
+  await tick();
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].name, 'Bota Note 67KP');
+  assert.equal(candidates[0].advertised_address, 'AA:BB:CC:DD:EE:FF');
+  await scan.remove();
+});
+
+test('late system retrieval cannot deliver candidates into a stopped or aborted scan', async () => {
+  for (const abort of [false, true]) {
+    const system = deferred(), controller = new AbortController();
+    const port = createBlePlxPort({
+      startDeviceScan() {}, stopDeviceScan() {}, connectedDevices() { return system.promise; },
+    });
+    const candidates = [];
+    const scan = await port.scan(false, value => candidates.push(value), {
+      ...context(), signal: controller.signal,
+    });
+    let removed = false;
+    if (abort) controller.abort();
+    const removal = scan.remove().then(() => { removed = true; });
+    await tick();
+    assert.equal(removed, false, 'retirement joins the submitted system query');
+    system.resolve([{ id: 'late', name: 'Bota Note', rssi: null, mtu: 23 }]);
+    await tick();
+    await removal;
+    assert.deepEqual(candidates, []);
+    await scan.remove();
+  }
+});
+
+test('system candidate delivery stops when its exact scan retires during a returned batch', async () => {
+  const controller = new AbortController(), candidates = [];
+  const port = createBlePlxPort({
+    startDeviceScan() {}, stopDeviceScan() {},
+    async connectedDevices() {
+      return ['selected', 'late'].map(id => ({ id, name: 'Bota Note', rssi: null, mtu: 23 }));
+    },
+  });
+  const scan = await port.scan(false, candidate => {
+    candidates.push(candidate.peripheral_id);
+    controller.abort();
+  }, { ...context(), signal: controller.signal });
+  await tick();
+  await scan.remove();
+  assert.deepEqual(candidates, ['selected']);
+});
+
+test('system retrieval failure reaches the scan owner while radio scanning remains removable', async () => {
+  const failure = new Error('system query failed'), failures = [];
+  let stops = 0;
+  const port = createBlePlxPort({
+    startDeviceScan() {}, stopDeviceScan() { stops++; },
+    async connectedDevices() { throw failure; },
+  });
+  const scan = await port.scan(false, () => {}, context(), error => failures.push(error));
+  await tick();
+  assert.deepEqual(failures, [failure]);
+  await scan.remove();
+  assert.equal(stops, 1);
+});
+
 test('unknown and future manufacturer metadata never infer a device model', async () => {
   let scanListener;
   const port = createBlePlxPort({

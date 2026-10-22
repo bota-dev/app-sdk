@@ -37,6 +37,48 @@ function fixture(options = {}) {
   };
   return { core, calls, saved, values, metadata, ports, adapter: createJsDeviceAdapter(core, ports, options.adapterOptions) };
 }
+for (const serialMatches of [true, false]) {
+  test(`system-connected nonadvertising candidate ${serialMatches ? 'reconnects after' : 'is rejected by'} Rust serial verification`,
+    { timeout: 5000 }, async () => {
+      const f = fixture(), expected = 'C8SU2XXWHI', connects = [], reads = [], disconnects = [];
+      if (!serialMatches) f.values.set(f.metadata.CHAR_SERIAL_NUMBER, Buffer.from('OTHER00001'));
+      const { createBlePlxPort } = loadSource('blePlx.ts');
+      const peripheral = { id: 'system-note', name: 'Bota Note', rssi: null, mtu: 247,
+        async discoverAllServicesAndCharacteristics() { return this; } };
+      f.ports.ble = createBlePlxPort({
+        startDeviceScan() {}, stopDeviceScan() {},
+        async connectedDevices() { return [peripheral]; },
+        async connectToDevice(id) { connects.push(id); return peripheral; },
+        async cancelDeviceConnection(id) { disconnects.push(id); return peripheral; },
+        async requestMTUForDevice() { return peripheral; },
+        async readCharacteristicForDevice(_id, _service, characteristic) {
+          reads.push(characteristic);
+          const value = f.values.get(characteristic);
+          if (!value) throw new Error(`No fixture for ${characteristic}`);
+          return { value: Buffer.from(value).toString('base64') };
+        },
+        async writeCharacteristicWithResponseForDevice() { return {}; },
+        onDeviceDisconnected() { return { remove() {} }; },
+        monitorCharacteristicForDevice() { return { remove() {} }; },
+        cancelTransaction() {},
+      });
+      try {
+        await f.adapter.configure({});
+        const reconnecting = f.adapter.reconnect(expected, { scanTimeoutMs: 10, connectionTimeoutMs: 1000 });
+        if (serialMatches) {
+          const device = await reconnecting;
+          assert.equal(device.serialNumber, expected);
+          assert.equal(device.id, peripheral.id);
+        } else {
+          await assert.rejects(reconnecting, error => error.code === 'device_not_found');
+          assert.deepEqual(disconnects, [peripheral.id]);
+        }
+        assert.deepEqual(connects, [peripheral.id]);
+        assert.equal(reads[0], f.metadata.CHAR_SERIAL_NUMBER);
+      } finally { await f.adapter.destroy(); f.core.dispose(); }
+    });
+}
+
 const writesBeyondTimeSync = f => f.calls.filter(call => Array.isArray(call) && call[0] === 'write'
   && call[1].characteristicUuid !== f.metadata.CHAR_TIME_SYNC);
 

@@ -102,3 +102,42 @@ the persisted/returned 336-byte receipt. Earlier expired-session reads were
 historical. See [the upload review](v2-demo-apple.md). Fresh physical source
 cleanup and acquisition of a pre-existing system connection remain unverified;
 the current reconnect and scan cannot find the selected wearable.
+
+## React Native generated-runtime system retrieval
+
+The unpublished BLE PLX port correction addresses a separate path from the
+published Swift driver fix above. The generated-JavaScript app runtime uses
+`createBlePlxPort`, which previously depended only on advertising callbacks.
+Its exact public beta.20 port source made zero `connectedDevices` calls and
+returned no candidate when a modeled system-connected peripheral stopped
+advertising. This reproduces the discovery gap in a host test; it does not
+identify the physical link's owner on a phone.
+
+When the installed manager exposes `connectedDevices`, scan startup now queries
+the generated Bota control-service UUID and merges returned peripherals into
+that scan's candidates. Retrieval does not populate local connection ownership,
+infer a model, fabricate an advertising address or bypass Rust identity checks.
+Normal connection and full GATT serial verification remain required. A live
+advertisement takes precedence over a retrieved duplicate. Scan retirement
+stops the radio scan, joins the submitted retrieval and suppresses late results.
+Managers without the optional method retain advertising-only behavior.
+
+| Requirement | Implementation and verification | Status |
+| --- | --- | --- |
+| Discover a nonadvertising system-connected Bota peripheral | BLE PLX regression queries the generated control service and emits the returned candidate without acquiring ownership | matched in source tests |
+| Acquire a local connection and verify the full serial | Composed BLE PLX / generated Rust adapter regressions connect the matching serial and release a mismatched serial | matched in source tests |
+| Preserve live advertisement identity | A delayed retrieved duplicate cannot erase the observed model/SN suffix or advertised address | matched in source tests |
+| Retire the exact scan and propagate retrieval failure | Stop/abort joins the pending query, suppresses late candidates and reports a current query error to its owner | matched in source tests |
+| Recover the SE's physical system connection and complete recording/upload/cleanup | The installed production Demo remains on public beta.20; the new port is not installed or published | unverified |
+
+Local `npm run verify --prefix frameworks/react-native` passes all 586 checks,
+including the real pinned BLE manager type assignment, package validation,
+Codegen/provenance, build, strict types and the 411-package license gate. The
+original system-query regressions failed before the correction; a separate
+returned-batch regression also failed before per-candidate retirement fencing.
+These are source/host results, not a physical iPhone connection or publication.
+
+A system Bluetooth link and an SDK-owned verified connection are separate.
+This correction does not forcibly release another app's or phone's connection,
+change the device binding, or authorize recording deletion. Package publication,
+consuming app delivery and fresh physical reconnect remain separate gates.

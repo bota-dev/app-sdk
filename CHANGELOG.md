@@ -12,6 +12,12 @@ tracked separately.
   Secure firmware requires the new credential service. See
   `docs/parity/device-token-envelope.md` for contract and qualification limits.
 
+- Include peripherals already connected to the system in generated React Native
+  BLE discovery when the installed BLE PLX manager supports retrieval. A local
+  connection and full GATT serial verification remain required. This fixes the
+  advertising-only discovery gap; published-package and iPhone recovery checks
+  remain separate. See `docs/parity/apple-connection-ownership.md`.
+
 - Expand the firmware protocol reference with the current GATT map, provisioning
   and settings, status, legacy/v2 transfer, BYO customer-envelope flow, dedicated
   reset authorization, diagnostics and BLE OTA. Retain marker/find contracts and

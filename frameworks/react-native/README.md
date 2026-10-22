@@ -12,6 +12,12 @@ separate gates.
 
 ## Generated JavaScript runtime and app OTA updates
 
+The unpublished [system-connection discovery correction](../../docs/parity/apple-connection-ownership.md#react-native-generated-runtime-system-retrieval)
+lets `createBlePlxPort` query an installed manager's optional `connectedDevices`
+API during scanning. Retrieved candidates still require a normal local connect
+and full serial verification. This source change is not in public beta.20;
+publication and physical iPhone recovery remain separate.
+
 The unpublished [managed completion handoff](../../docs/parity/managed-completion-retirement.md)
 retains confirmed journal completion across normal transport retirement, while
 preserving explicit cancellation and scoped durable cleanup checks.
