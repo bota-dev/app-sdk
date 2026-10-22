@@ -712,7 +712,9 @@ fn flutter_candidate_tooling_refuses_the_occupied_beta_zero_identity() {
         "Flutter release version 1.2.0-beta.0 is occupied by an immutable tag and must not be reused\n"
     );
     assert!(contents.contains("OCCUPIED_VERSION=\"1.2.0-beta.0\""));
-    assert!(contents.contains("release/examples/$sdk_version.json"));
+    assert!(
+        contents.contains("select-manifest-template.mjs\" \"$ROOT\" \"$sdk_version\" \"$MODE\"")
+    );
     assert!(contents.contains("is occupied by an immutable tag"));
     assert!(!contents.contains("EXAMPLE_MANIFEST=\"$ROOT/release/examples/1.2.0-beta.0.json\""));
     assert!(!contents.contains("$sdk_version\" != \"1.2.0-beta.0"));

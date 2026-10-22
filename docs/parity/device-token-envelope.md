@@ -209,3 +209,10 @@ All 152 release tooling tests pass, including CI/release template selection and
 changed-byte rejection. Canonical archive verification and exact template matching
 pass locally. The complete hosted candidate rerun remains the final build gate;
 physical device acceptance remains separate.
+
+The complete hosted Flutter candidate and candidate inventory passed at
+`1a2ea977`. The remaining Rust readiness failure was a source-layout assertion
+that still expected the release-example path inline in the shell script. It now
+checks the version/mode-aware selector invocation; the executable occupied-version
+rejection remains intact, and 19 local template/publication checks pass. Full Rust
+workspace and hosted readiness verification are repeated for this test-only fix.
