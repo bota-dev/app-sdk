@@ -1113,12 +1113,12 @@ test('generated provisioning waits for exact application material and subscribes
   const write = f.ports.ble.write;
   f.ports.ble.write = async (address, bytes, response, context) => {
     await write(address, bytes, response, context);
-    if (address.characteristicUuid === f.metadata.CHAR_DEVICE_TOKEN) notify(Uint8Array.of(0));
+    if (address.characteristicUuid === 'B07A000A-0001-1000-8000-00805F9B34FB') notify(Uint8Array.of(0));
   };
   const requests = [];
   f.adapter.onProvisioningMaterialRequested(value => {
     requests.push(value);
-    void f.adapter.resolveProvisioningMaterial(value.requestId, { apiEndpoint: String.fromCharCode(1), deviceToken: 'token', mtu: 247 });
+    void f.adapter.resolveProvisioningMaterial(value.requestId, { apiEndpoint: String.fromCharCode(1), deviceToken: '', credentialEnvelope: Buffer.concat([Buffer.from('BOTATOK1'), Buffer.alloc(222)]).toString('base64url'), mtu: 247 });
   });
   await f.adapter.configure({ logLevel: 'none' });
   const device = await f.adapter.connectSelected({ id: 'selected', rssi: -50, discoveredAtMs: 0 });

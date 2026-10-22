@@ -18,6 +18,7 @@ export interface ProvisioningMaterial {
   materialId: string
   apiEndpoint: Uint8Array
   deviceToken: Uint8Array
+      credentialEnvelope?: Uint8Array
   mtu: number
 }
 

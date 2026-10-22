@@ -158,12 +158,14 @@ function v2Evidence(
   }
 }
 
+// Host calls bind with credential_delivery: hpke_v1 and relays only the envelope.
+// credentialEnvelopeBase64 is the host adapter encoding of credential_envelope.data.
 const provisioning: ProvisioningProvider = {
   async prepare(context) {
     const response = await postHost<{
       materialId: string
       apiEndpointBase64: string
-      deviceTokenBase64: string
+      credentialEnvelopeBase64: string
       mtu: number
     }>('/sdk/provisioning/prepare', {
       attemptId: context.attemptId,
@@ -175,7 +177,8 @@ const provisioning: ProvisioningProvider = {
     return {
       materialId: response.materialId,
       apiEndpoint: decodeBytes(response.apiEndpointBase64),
-      deviceToken: decodeBytes(response.deviceTokenBase64),
+      deviceToken: new Uint8Array(),
+      credentialEnvelope: decodeBytes(response.credentialEnvelopeBase64),
       mtu: response.mtu,
     }
   },

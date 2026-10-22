@@ -354,6 +354,7 @@ export type CoreHostEvent =
       kind: 'provisioning_material_prepared'
       apiEndpoint: Uint8Array
       deviceToken: Uint8Array
+      credentialEnvelope?: Uint8Array
       mtu: number
     })
   | (CoreRequest & { kind: 'host_material_failed'; platformCode: bigint | null })

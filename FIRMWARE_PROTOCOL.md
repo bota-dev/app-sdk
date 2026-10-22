@@ -35,6 +35,7 @@ specification or proof that every firmware build or SDK package enables them.
 - [Nearby Find revision 2](#nearby-find-revision-2-unreleased-october-19)
 - [Direct-cloud Find revision 2](#direct-cloud-use-of-find-revision-2-unreleased)
 - [BLE advertising name](#ble-advertising-name)
+- [Device credential envelope](#unreleased-device-credential-envelope)
 
 ## Protocol Authority and Notation
 
@@ -101,13 +102,14 @@ Characteristic shorthand `xxxx/yyyy` expands to
 | Battery | Standard `180F` / `2A19` | Battery level |
 | AUDIO | `0001` | Data `0001`, codec `0002`, control `0003`; allocation alone does not enable a recording relay |
 | CONTROL | `0002` | Device status `0001`, recording control `0002`, recording status `0003`, time sync `0004`, device command `0005` |
-| PROVISIONING | `0003` | Pairing state `0001`, token `0002`, API endpoint `0003`, WiFi config `0004`, result `0005`, settings `0006` |
+| PROVISIONING | `0003` | Pairing state `0001`, retired token UUID `0002` (always rejects), API endpoint `0003`, WiFi config `0004`, result `0005`, settings `0006` |
 | STORAGE | `0004` | Storage info `0001`, legacy list `0002`, legacy transfer `0003`, legacy control `0004`, legacy status `0005`; v2 allocation `0006` through `000C` below |
 | AUTH | `0005` | Device public key `0001`, nonce `0002`, historical backend public key `0003`, device certificate `0004` |
 | WIFI_CONFIG | `0006` | Grant `0001`, credential `0002`, status `0003`, scan `0004` |
 | DIAGNOSTICS | `0007` | Control `0001`, data `0002` |
 | IDENTITY | `0008` | Manufacturing serial alias `0001` for Web Bluetooth, which blocks standard `2A25`; native clients retain standard identity reads |
 | FIND | `0009` | Capabilities `0001`, control `0002`, status `0003`, grant `0004`; revision 2 appends Find challenge `0005`, binding challenge `0006`, confirmation `0007` and ACK `0008` |
+| CREDENTIAL (unreleased) | `000A` | Encrypted token envelope `0001`, write with response; existing provisioning result is reused |
 
 An advertised name is not authenticated device identity. Discover the required
 characteristics and read the actual capability before choosing an upload path.
@@ -118,12 +120,35 @@ a retired connection cannot complete a replacement operation.
 ## Provisioning, WiFi and Device Settings
 
 Provisioning reads `AUTH_NONCE` and `PK_D` (the workflow requires a 64-byte
-device public key), obtains authorized host material, subscribes to
-`PROVISIONING_RESULT`, writes the one-byte API endpoint selector and delivers
-token chunks to `DEVICE_TOKEN`. This endpoint field is not a URL string.
-Each token chunk is `index:u8 || count:u8 || data`,
-with zero-based index; the core limits each data portion to `MTU - 7` and the
-chunk count to 255. A write acknowledgement alone is not provisioning success.
+device public key), obtains authorized host material and subscribes to
+`PROVISIONING_RESULT` before writes. The one-byte API endpoint selector is a
+compatibility field, not a URL or proof that firmware switched environment.
+
+**Encrypted delivery (unreleased candidate):** the existing bind request adds
+`credential_delivery: "hpke_v1"`; its response carries `credential_envelope`
+and omits `device_token`. The backend selects an independently enrolled `PK_D`;
+the observed BLE key only checks identity consistency. The App/SDK forwards the
+opaque envelope to `000A/0001` without decrypting it. RN uses
+`DeviceManager.provisionEnvelope` with canonical unpadded base64url; native,
+Web and Flutter provisioning material carries bytes. Supply the encrypted envelope and leave the reserved raw-token slot empty. See [device token envelope v1](protocol/device-token-v1.md)
+for the complete crypto, payload, SDK and rollout contract.
+
+Encrypted writes use `index:u8 || count:u8 || data`, zero-based, ordered,
+with at most 64 fragments and 768 reassembled bytes. Data capacity is `MTU - 7`
+(minimum MTU23). Only the immediately repeated identical fragment is idempotent;
+index0 starts a new assembly. Disconnect clears partial state; a partial assembly
+older than 30 seconds is cleared on the next write. Initial BLE installation
+accepts purpose1; purpose2 belongs to a refresh consumer and cannot be relayed
+through this initial-bind path. Firmware verifies/decrypts, persists and reads
+back the token before reporting the existing result. All backend and firmware paths reject plaintext; missing support or validation failure
+must never trigger a fallback to `DEVICE_TOKEN`.
+
+**Retired:** `0003/0002` `DEVICE_TOKEN` always returns invalid-token. No
+plaintext assembler, installer, SDK write branch or build opt-out remains.
+
+Encrypted delivery retains bind → provision → confirm/abort and existing result values;
+no additional user action or application request round trip is introduced.
+A write acknowledgement alone is not provisioning success.
 Pairing states are 0 unpaired, 1 pairing, 2 paired and 3 error; provisioning
 results are 0 success, 1 invalid token, 2 storage error, 3 chunk error and
 4 already paired. See the [provisioning workflow](core/device-sdk-core/src/workflow/provisioning.rs).
@@ -903,3 +928,10 @@ never a binding identifier or authorization proof.
 This is an unreleased source contract. See the
 [cross-repository checklist and evidence](docs/parity/ble-advertising-name.md)
 for generated-runtime, firmware and physical qualification status.
+
+## Unreleased device credential envelope
+
+The encrypted-token candidate uses the append-only B07A000A service and existing
+provisioning result notification. See [the canonical v1 wire contract](protocol/device-token-v1.md)
+for cryptography, bounds, trusted enrollment and rollout prerequisites. This is
+source documentation, not a published-runtime or physical-device qualification.

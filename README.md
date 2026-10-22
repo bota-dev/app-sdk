@@ -1,5 +1,11 @@
 # Bota App SDK
 
+Unreleased encrypted token delivery adds an opaque HPKE envelope to existing
+provisioning material and a dedicated credential characteristic. Apps retain the
+same bind/provision/confirm flow. See [contract and evidence](docs/parity/device-token-envelope.md).
+Published package pins and physical qualification remain separate.
+
+
 Unreleased BLE naming uses `<model> <last four SN characters>`, for example
 `Bota Pin 67KP`. SDK reconnect discovery handles the rename and still checks
 the complete SN. See the [protocol](FIRMWARE_PROTOCOL.md#ble-advertising-name)

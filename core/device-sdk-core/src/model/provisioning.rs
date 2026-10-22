@@ -55,7 +55,11 @@ impl FactoryResetCommandId {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ProvisioningMaterial {
     pub api_endpoint: Vec<u8>,
+    /// Reserved ABI slot; must be empty. Plaintext delivery is rejected.
+    #[serde(default)]
     pub device_token: Vec<u8>,
+    #[serde(default)]
+    pub credential_envelope: Option<Vec<u8>>,
     pub mtu: usize,
 }
 

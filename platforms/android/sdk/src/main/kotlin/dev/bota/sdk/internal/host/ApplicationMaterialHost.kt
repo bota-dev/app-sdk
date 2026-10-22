@@ -20,9 +20,10 @@ internal class FactoryResetMaterialRequest(val serialNumber: String, nonce: Byte
     val nonce: ByteArray = nonce.copyOf()
 }
 
-internal class ProvisioningMaterial(apiEndpoint: ByteArray, deviceToken: ByteArray, val mtu: ULong) {
+internal class ProvisioningMaterial(apiEndpoint: ByteArray, deviceToken: ByteArray, val mtu: ULong, credentialEnvelope: ByteArray? = null) {
     val apiEndpoint: ByteArray = apiEndpoint.copyOf()
     val deviceToken: ByteArray = deviceToken.copyOf()
+    val credentialEnvelope: ByteArray? = credentialEnvelope?.copyOf()
 }
 
 internal class ApplicationMaterialHost : MaterialHost, AutoCloseable {
@@ -68,7 +69,7 @@ internal class ApplicationMaterialHost : MaterialHost, AutoCloseable {
                             CoreField.Bytes(HostFieldId.ApiEndpoint, material.apiEndpoint),
                             CoreField.Bytes(HostFieldId.DeviceToken, material.deviceToken),
                             CoreField.Unsigned(HostFieldId.Mtu, material.mtu),
-                        ),
+                        ) + (material.credentialEnvelope?.let { listOf(CoreField.Bytes(HostFieldId.CredentialEnvelope, it)) } ?: emptyList()),
                     ),
                 )
             }

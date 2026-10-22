@@ -362,14 +362,25 @@ internal class BotaDeviceSDKAndroidSecurity(
         apiEndpoint: String,
         deviceToken: String,
         mtu: ULong,
+        credentialEnvelope: String? = null,
     ) {
-        pendingRequest(requestId).complete(
-            ProvisioningMaterial(
+        val pending = pendingRequest(requestId)
+        try {
+            pending.complete(ProvisioningMaterial(
                 apiEndpoint = apiEndpoint.encodeToByteArray(),
                 deviceToken = deviceToken.encodeToByteArray(),
+                credentialEnvelope = credentialEnvelope?.let { encoded ->
+                    require(encoded.length in 307..1024 && encoded.matches(Regex("[A-Za-z0-9_-]+")))
+                    val bytes = java.util.Base64.getUrlDecoder().decode(encoded)
+                    require(bytes.size in 230..768 && java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(bytes) == encoded)
+                    bytes
+                },
                 mtu = mtu,
-            ),
-        )
+            ))
+        } catch (error: Throwable) {
+            pending.completeExceptionally(error)
+            throw error
+        }
     }
 
     fun rejectApplicationMaterial(requestId: String, message: String) {

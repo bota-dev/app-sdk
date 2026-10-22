@@ -2288,7 +2288,8 @@ data class BotaProvisioningMaterialResponseMessage (
   val requestId: String,
   val apiEndpoint: ByteArray,
   val deviceToken: ByteArray,
-  val mtu: Long
+  val mtu: Long,
+  val credentialEnvelope: ByteArray? = null
 ) : BotaMaterialResponseMessage()
  {
   companion object {
@@ -2297,7 +2298,8 @@ data class BotaProvisioningMaterialResponseMessage (
       val apiEndpoint = pigeonVar_list[1] as ByteArray
       val deviceToken = pigeonVar_list[2] as ByteArray
       val mtu = pigeonVar_list[3] as Long
-      return BotaProvisioningMaterialResponseMessage(requestId, apiEndpoint, deviceToken, mtu)
+      val credentialEnvelope = pigeonVar_list[4] as ByteArray?
+      return BotaProvisioningMaterialResponseMessage(requestId, apiEndpoint, deviceToken, mtu, credentialEnvelope)
     }
   }
   fun toList(): List<Any?> {
@@ -2306,6 +2308,7 @@ data class BotaProvisioningMaterialResponseMessage (
       apiEndpoint,
       deviceToken,
       mtu,
+      credentialEnvelope,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -2316,7 +2319,7 @@ data class BotaProvisioningMaterialResponseMessage (
       return true
     }
     val other = other as BotaProvisioningMaterialResponseMessage
-    return BotaApiPigeonUtils.deepEquals(this.requestId, other.requestId) && BotaApiPigeonUtils.deepEquals(this.apiEndpoint, other.apiEndpoint) && BotaApiPigeonUtils.deepEquals(this.deviceToken, other.deviceToken) && BotaApiPigeonUtils.deepEquals(this.mtu, other.mtu)
+    return BotaApiPigeonUtils.deepEquals(this.requestId, other.requestId) && BotaApiPigeonUtils.deepEquals(this.apiEndpoint, other.apiEndpoint) && BotaApiPigeonUtils.deepEquals(this.deviceToken, other.deviceToken) && BotaApiPigeonUtils.deepEquals(this.mtu, other.mtu) && BotaApiPigeonUtils.deepEquals(this.credentialEnvelope, other.credentialEnvelope)
   }
 
   override fun hashCode(): Int {
@@ -2325,10 +2328,11 @@ data class BotaProvisioningMaterialResponseMessage (
     result = 31 * result + BotaApiPigeonUtils.deepHash(this.apiEndpoint)
     result = 31 * result + BotaApiPigeonUtils.deepHash(this.deviceToken)
     result = 31 * result + BotaApiPigeonUtils.deepHash(this.mtu)
+    result = 31 * result + BotaApiPigeonUtils.deepHash(this.credentialEnvelope)
     return result
   }
   override fun toString(): String {
-    return "BotaProvisioningMaterialResponseMessage(requestId=$requestId, apiEndpoint=${apiEndpoint.contentToString()}, deviceToken=${deviceToken.contentToString()}, mtu=$mtu)"
+    return "BotaProvisioningMaterialResponseMessage(requestId=$requestId, apiEndpoint=${apiEndpoint.contentToString()}, deviceToken=${deviceToken.contentToString()}, mtu=$mtu, credentialEnvelope=${credentialEnvelope?.contentToString()})"
   }
 }
 

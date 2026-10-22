@@ -11,6 +11,7 @@ actor FakeCentralDriver: CentralDriver {
     var maximumWriteWithoutResponse = 512
     private(set) var log: [String] = []
     private(set) var characteristicLog: [String] = []
+    private(set) var requestedServices: [String] = []
     private(set) var maximumConcurrentByPeripheral: [String: Int] = [:]
     private(set) var maximumGlobalConcurrency = 0
     private(set) var disconnectCount = 0
@@ -52,6 +53,7 @@ actor FakeCentralDriver: CentralDriver {
     }
 
     func discoverServices(peripheralID: String, serviceUUIDs: [String]) async throws -> [String] {
+        requestedServices = serviceUUIDs
         log.append("services:\(peripheralID)")
         if discoveryDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: discoveryDelayNanoseconds)

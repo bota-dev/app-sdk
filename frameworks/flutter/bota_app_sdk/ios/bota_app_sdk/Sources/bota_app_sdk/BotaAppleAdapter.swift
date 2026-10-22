@@ -1508,7 +1508,8 @@ final class BotaAppleAdapter: @preconcurrency BotaHostApi {
     return ProvisioningMaterial(
       apiEndpoint: response.apiEndpoint.data,
       deviceToken: response.deviceToken.data,
-      mtu: try BotaAppleMapper.uint64(response.mtu)
+      mtu: try BotaAppleMapper.uint64(response.mtu),
+      credentialEnvelope: response.credentialEnvelope?.data
     )
   }
 

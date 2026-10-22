@@ -741,6 +741,7 @@ class ProvisioningMaterialHost implements WorkflowEffectHost {
         kind: 'provisioning_material_prepared',
         apiEndpoint: material.apiEndpoint,
         deviceToken: material.deviceToken,
+        ...(material.credentialEnvelope === undefined ? {} : { credentialEnvelope: material.credentialEnvelope }),
         mtu: material.mtu,
       })
       return null
@@ -809,7 +810,9 @@ function validMaterial(
     && material.apiEndpoint instanceof Uint8Array
     && material.apiEndpoint.byteLength > 0
     && material.deviceToken instanceof Uint8Array
-    && material.deviceToken.byteLength > 0
+    && material.deviceToken.byteLength === 0
+    && material.credentialEnvelope instanceof Uint8Array
+    && material.credentialEnvelope.byteLength >= 230 && material.credentialEnvelope.byteLength <= 768
     && Number.isSafeInteger(material.mtu)
     && material.mtu > 0
 }
@@ -825,10 +828,12 @@ function scrubMaterial(material: unknown): void {
     const candidate = material as {
       apiEndpoint?: unknown
       deviceToken?: unknown
+      credentialEnvelope?: unknown
     }
     if (candidate.apiEndpoint instanceof Uint8Array) {
       candidate.apiEndpoint.fill(0)
     }
+    if (candidate.credentialEnvelope instanceof Uint8Array) candidate.credentialEnvelope.fill(0)
     if (candidate.deviceToken instanceof Uint8Array) {
       candidate.deviceToken.fill(0)
     }

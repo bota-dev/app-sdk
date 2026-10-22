@@ -7,6 +7,11 @@ tracked separately.
 
 ## Unreleased
 
+- Add opaque encrypted device-token provisioning through `credentialEnvelope` and
+  React Native `devices.provisionEnvelope`, using the existing confirmation flow.
+  Secure firmware requires the new credential service. See
+  `docs/parity/device-token-envelope.md` for contract and qualification limits.
+
 - Expand the firmware protocol reference with the current GATT map, provisioning
   and settings, status, legacy/v2 transfer, BYO customer-envelope flow, dedicated
   reset authorization, diagnostics and BLE OTA. Retain marker/find contracts and

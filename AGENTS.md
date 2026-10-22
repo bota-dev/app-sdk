@@ -1,5 +1,11 @@
 # AGENTS.md
 
+Unreleased encrypted token delivery adds an opaque HPKE envelope to existing
+provisioning material and a dedicated credential characteristic. Apps retain the
+same bind/provision/confirm flow. See [contract and evidence](docs/parity/device-token-envelope.md).
+Published package pins and physical qualification remain separate.
+
+
 Unreleased BLE naming uses canonical model + one space + the final four
 manufacturing SN characters. Rust reconnect discovery bridges model-only names
 and retired overrides, then requires full GATT serial verification. See the
@@ -1514,3 +1520,17 @@ migration and the complete protocol reference. The combined generated runtime
 comes from Linux CI 39260313375; 239 Rust core, 69 binding and 570 RN checks pass,
 with 146-RPC native/JS parity. Release and physical Find remain unqualified.
 See docs/parity/ble-find-device.md and the shared Bota completion checklist.
+
+
+October22 token delivery cutover removes plaintext issuers/installers and firmware
+opt-outs for every device. Only credential_envelope is delivered; decrypted
+device_token storage/HTTPS auth is unchanged. Retired UUID/ABI slots reject old
+callers. See ../internal-docs/device/Device-Token-Envelope.md for the contract,
+verification and separate release/physical gates.
+
+
+Encrypted refresh recovery now retains one ciphertext successor for 15 minutes
+on the exact same-device refresh route; the predecessor never regains ordinary
+access. Migration125 precedes backend rollout; firmware HTTP retry/durable
+replacement and local encrypted storage remain separate. See
+[the recovery contract and verification](../internal-docs/device/Device-Token-Envelope.md).

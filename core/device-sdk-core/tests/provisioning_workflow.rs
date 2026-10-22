@@ -5,9 +5,15 @@ use bota_device_sdk_core::{
         WorkflowEngine, WorkflowStatus,
     },
     error::{ErrorCode, Operation},
-    generated::protocol::{CHAR_DEVICE_TOKEN, CHAR_PROVISIONING_RESULT},
+    generated::protocol::{CHAR_CREDENTIAL_ENVELOPE, CHAR_DEVICE_TOKEN, CHAR_PROVISIONING_RESULT},
     model::{DeviceSerialNumber, HostMaterialId, ProvisioningMaterial, ProvisioningNonce},
 };
+
+fn envelope() -> Vec<u8> {
+    let mut bytes = vec![0; 230];
+    bytes[..8].copy_from_slice(b"BOTATOK1");
+    bytes
+}
 
 const CANCELLATION: CancellationId = CancellationId::from_bytes([3; 16]);
 
@@ -98,9 +104,10 @@ fn provisioning_reads_nonce_and_key_then_writes_bounded_chunks_after_subscribing
     let (subscribe_request, _) = reach_subscription(
         &mut engine,
         ProvisioningMaterial {
+            credential_envelope: Some(envelope()),
             api_endpoint: vec![2],
-            device_token: b"token123".to_vec(),
-            mtu: 12,
+            device_token: vec![],
+            mtu: 185,
         },
     );
 
@@ -124,7 +131,7 @@ fn provisioning_reads_nonce_and_key_then_writes_bounded_chunks_after_subscribing
         .unwrap();
     let first_chunk_request = request_id(
         &first_chunk,
-        |effect| matches!(effect, Effect::Ble(BleEffect::Write { characteristic_uuid, payload, .. }) if characteristic_uuid == CHAR_DEVICE_TOKEN && payload == &[0, 2, b't', b'o', b'k', b'e', b'n']),
+        |effect| matches!(effect, Effect::Ble(BleEffect::Write { characteristic_uuid, payload, .. }) if characteristic_uuid == CHAR_CREDENTIAL_ENVELOPE && payload[..2] == [0, 2] && payload[2..] == envelope()[..178]),
     );
     let second_chunk = engine
         .dispatch(host(
@@ -134,7 +141,7 @@ fn provisioning_reads_nonce_and_key_then_writes_bounded_chunks_after_subscribing
         .unwrap();
     let second_chunk_request = request_id(
         &second_chunk,
-        |effect| matches!(effect, Effect::Ble(BleEffect::Write { characteristic_uuid, payload, .. }) if characteristic_uuid == CHAR_DEVICE_TOKEN && payload == &[1, 2, b'1', b'2', b'3']),
+        |effect| matches!(effect, Effect::Ble(BleEffect::Write { characteristic_uuid, payload, .. }) if characteristic_uuid == CHAR_CREDENTIAL_ENVELOPE && payload[..2] == [1, 2] && payload[2..] == envelope()[178..]),
     );
     let waiting = engine
         .dispatch(host(
@@ -170,7 +177,7 @@ fn provisioning_reads_nonce_and_key_then_writes_bounded_chunks_after_subscribing
 }
 
 #[test]
-fn provisioning_rejects_too_many_chunks_before_any_material_write() {
+fn provisioning_rejects_oversized_plaintext_before_any_material_write() {
     let mut engine = WorkflowEngine::default();
     let (material_request, _) = reach_material_request(&mut engine);
     let failed = engine
@@ -178,6 +185,7 @@ fn provisioning_rejects_too_many_chunks_before_any_material_write() {
             material_request,
             HostEventKind::ProvisioningMaterialPrepared {
                 material: ProvisioningMaterial {
+                    credential_envelope: None,
                     api_endpoint: vec![2],
                     device_token: vec![0x55; 256],
                     mtu: 8,
@@ -193,19 +201,21 @@ fn provisioning_rejects_too_many_chunks_before_any_material_write() {
     );
     assert!(matches!(
         engine.status(),
-        WorkflowStatus::Failed { error } if error.code == ErrorCode::PayloadTooLarge
+        WorkflowStatus::Failed { error } if error.code == ErrorCode::InvalidInput
     ));
 }
 
 #[test]
 fn provisioning_disconnect_fails_without_exposing_material_in_notifications() {
     let mut engine = WorkflowEngine::default();
-    let secret = b"dtok_secret_value".to_vec();
+    let mut secret = envelope();
+    secret[8..25].copy_from_slice(b"dtok_secret_value");
     let (subscribe_request, effects) = reach_subscription(
         &mut engine,
         ProvisioningMaterial {
+            credential_envelope: Some(secret.clone()),
             api_endpoint: vec![1],
-            device_token: secret.clone(),
+            device_token: vec![],
             mtu: 185,
         },
     );
@@ -263,4 +273,66 @@ fn provisioning_disconnect_releases_owner_for_a_fresh_retry() {
             .any(|request| matches!(request.effect, Effect::Ble(BleEffect::Read { .. })))
     );
     assert!(matches!(engine.status(), WorkflowStatus::Running { .. }));
+}
+
+#[test]
+fn encrypted_token_uses_dedicated_characteristic_without_plaintext_fallback() {
+    use bota_device_sdk_core::generated::protocol::{
+        CHAR_CREDENTIAL_ENVELOPE, SERVICE_BOTA_CREDENTIAL,
+    };
+    let mut envelope = vec![0; 230];
+    envelope[..8].copy_from_slice(b"BOTATOK1");
+    let mut engine = WorkflowEngine::default();
+    let (subscription, _) = reach_subscription(
+        &mut engine,
+        ProvisioningMaterial {
+            api_endpoint: vec![0],
+            device_token: vec![],
+            credential_envelope: Some(envelope),
+            mtu: 23,
+        },
+    );
+    let effects = engine
+        .dispatch(host(
+            subscription,
+            HostEventKind::Ble(BleEvent::Subscribed {
+                characteristic_uuid: CHAR_PROVISIONING_RESULT.into(),
+            }),
+        ))
+        .unwrap();
+    let endpoint = request_id(&effects, |e| {
+        matches!(e, Effect::Ble(BleEffect::Write { .. }))
+    });
+    let effects = engine
+        .dispatch(host(endpoint, HostEventKind::Ble(BleEvent::WriteCompleted)))
+        .unwrap();
+    assert!(effects.iter().any(|e| matches!(&e.effect, Effect::Ble(BleEffect::Write {service_uuid, characteristic_uuid, payload, ..})
+        if service_uuid == SERVICE_BOTA_CREDENTIAL && characteristic_uuid == CHAR_CREDENTIAL_ENVELOPE && payload[0] == 0 && payload[1] == 15)));
+    assert!(!effects.iter().any(|e| matches!(&e.effect, Effect::Ble(BleEffect::Write {characteristic_uuid, ..}) if characteristic_uuid == CHAR_DEVICE_TOKEN)));
+}
+
+#[test]
+fn plaintext_material_is_rejected_before_subscribing_or_writing() {
+    let mut engine = WorkflowEngine::default();
+    let (request, _) = reach_material_request(&mut engine);
+    let effects = engine
+        .dispatch(host(
+            request,
+            HostEventKind::ProvisioningMaterialPrepared {
+                material: ProvisioningMaterial {
+                    api_endpoint: vec![0],
+                    device_token: b"dtok_legacy".to_vec(),
+                    credential_envelope: None,
+                    mtu: 185,
+                },
+            },
+        ))
+        .unwrap();
+    assert!(
+        matches!(engine.status(), WorkflowStatus::Failed { error } if error.code == ErrorCode::InvalidInput)
+    );
+    assert!(!effects.iter().any(|e| matches!(
+        e.effect,
+        Effect::Ble(BleEffect::Write { .. } | BleEffect::Subscribe { .. })
+    )));
 }

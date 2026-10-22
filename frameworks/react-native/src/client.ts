@@ -111,6 +111,8 @@ export type BotaProvisioningMaterialRequest = Omit<
 export type BotaProvisioningMaterial = {
   apiEndpoint: string;
   deviceToken: string;
+  /** Canonical unpadded base64url. Use an empty deviceToken when set. */
+  credentialEnvelope?: string;
   mtu: number;
 };
 
@@ -961,6 +963,9 @@ export const createBotaDeviceSDK = (
               nonce: request.nonce,
               devicePublicKey: request.devicePublicKey,
             });
+            if (material.deviceToken !== '' || !material.credentialEnvelope) {
+              throw new Error('Encrypted provisioning material is required');
+            }
             await module.resolveProvisioningMaterial(request.requestId, material);
           } catch (error) {
             await module.rejectApplicationMaterial(

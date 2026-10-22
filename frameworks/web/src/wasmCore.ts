@@ -1348,6 +1348,7 @@ function rawHostEvent(event: CoreHostEvent): UnknownRecord {
       return { request_id, kind: { ProvisioningMaterialPrepared: { material: {
         api_endpoint: rawBytes(event.apiEndpoint),
         device_token: rawBytes(event.deviceToken),
+        credential_envelope: event.credentialEnvelope === undefined ? null : rawBytes(event.credentialEnvelope),
         mtu: event.mtu,
       } } } }
     case 'host_material_failed':

@@ -444,15 +444,31 @@ actor BotaDeviceSDKAppleSecurity {
         requestID: String,
         apiEndpoint: String,
         deviceToken: String,
+        credentialEnvelope: String? = nil,
         mtu: UInt64
     ) throws {
         guard let continuation = provisioningRequests.removeValue(forKey: requestID) else {
             throw MaterialError.unknownRequest
         }
+        var envelope: Data? = nil
+        if let encoded = credentialEnvelope {
+            guard (307...1024).contains(encoded.utf8.count) else {
+                continuation.resume(throwing: MaterialError.rejected("Invalid credential envelope"))
+                return
+            }
+            let padded = encoded.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/") + String(repeating: "=", count: (4 - encoded.count % 4) % 4)
+            guard let bytes = Data(base64Encoded: padded),
+                  bytes.count >= 230, bytes.count <= 768,
+                  bytes.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "") == encoded else {
+                continuation.resume(throwing: MaterialError.rejected("Invalid credential envelope"))
+                return
+            }
+            envelope = bytes
+        }
         continuation.resume(returning: ProvisioningMaterial(
             apiEndpoint: Data(apiEndpoint.utf8),
             deviceToken: Data(deviceToken.utf8),
-            mtu: mtu
+            mtu: mtu, credentialEnvelope: envelope
         ))
     }
 

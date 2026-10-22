@@ -131,12 +131,16 @@ pub(crate) unsafe fn host_event_from_packet(
             fields.validate_allowed(&[
                 field_id::API_ENDPOINT,
                 field_id::DEVICE_TOKEN,
+                field_id::CREDENTIAL_ENVELOPE,
                 field_id::MTU,
             ])?;
             HostEventKind::ProvisioningMaterialPrepared {
                 material: ProvisioningMaterial {
                     api_endpoint: fields.required_bytes(field_id::API_ENDPOINT)?,
-                    device_token: fields.required_bytes(field_id::DEVICE_TOKEN)?,
+                    device_token: fields
+                        .optional_bytes(field_id::DEVICE_TOKEN)?
+                        .unwrap_or_default(),
+                    credential_envelope: fields.optional_bytes(field_id::CREDENTIAL_ENVELOPE)?,
                     mtu: fields
                         .required_u64(field_id::MTU)?
                         .try_into()

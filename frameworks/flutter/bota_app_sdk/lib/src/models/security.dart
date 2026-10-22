@@ -39,13 +39,20 @@ final class BotaProvisioningMaterial {
     required List<int> apiEndpoint,
     required List<int> deviceToken,
     required this.mtu,
+    List<int>? credentialEnvelope,
   }) : _apiEndpoint = List<int>.of(apiEndpoint),
-       _deviceToken = List<int>.of(deviceToken);
+       _deviceToken = List<int>.of(deviceToken),
+       _credentialEnvelope = credentialEnvelope == null
+           ? null
+           : List<int>.of(credentialEnvelope);
 
   final String requestId;
   final List<int> _apiEndpoint;
   final List<int> _deviceToken;
   final int mtu;
+  final List<int>? _credentialEnvelope;
+  List<int>? get credentialEnvelope =>
+      _credentialEnvelope == null ? null : List<int>.of(_credentialEnvelope);
 
   List<int> get apiEndpoint => List<int>.of(_apiEndpoint);
   List<int> get deviceToken => List<int>.of(_deviceToken);
@@ -56,12 +63,14 @@ final class BotaProvisioningMaterial {
       requestId == other.requestId &&
       listEquals(_apiEndpoint, other._apiEndpoint) &&
       listEquals(_deviceToken, other._deviceToken) &&
+      listEquals(_credentialEnvelope, other._credentialEnvelope) &&
       mtu == other.mtu;
   @override
   int get hashCode => Object.hash(
     requestId,
     Object.hashAll(_apiEndpoint),
     Object.hashAll(_deviceToken),
+    _credentialEnvelope == null ? null : Object.hashAll(_credentialEnvelope),
     mtu,
   );
 }
@@ -293,16 +302,16 @@ typedef BotaProvisioningMaterialCallback =
     Future<BotaProvisioningMaterial> Function(
       BotaProvisioningMaterialRequest request,
     );
-typedef BotaFactoryResetGrantCallback =
-    Future<BotaFactoryResetGrant> Function(
-      BotaFactoryResetGrantRequest request,
-    );
+typedef BotaFactoryResetGrantCallback = Future<BotaFactoryResetGrant> Function(
+  BotaFactoryResetGrantRequest request,
+);
 typedef BotaFactoryResetResultCallback =
     Future<BotaFactoryResetResultAcknowledgement> Function(
       BotaFactoryResetResultRequest request,
     );
-typedef BotaFirmwareCallback =
-    Future<BotaFirmwareSource> Function(BotaFirmwareRequest request);
+typedef BotaFirmwareCallback = Future<BotaFirmwareSource> Function(
+  BotaFirmwareRequest request,
+);
 
 final class BotaApplicationCallbacks {
   const BotaApplicationCallbacks({

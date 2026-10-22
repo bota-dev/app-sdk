@@ -631,6 +631,7 @@ internal class BotaDeviceSDKModule(
                 deviceToken = material.getString("deviceToken")
                     ?: error("provisioning device token is required"),
                 mtu = material.getDouble("mtu").toUnsignedInteger(),
+                credentialEnvelope = if (material.hasKey("credentialEnvelope")) material.getString("credentialEnvelope") else null,
             )
         }
     }

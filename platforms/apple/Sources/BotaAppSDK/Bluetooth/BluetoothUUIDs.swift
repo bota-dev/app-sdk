@@ -9,6 +9,7 @@ enum BotaBluetoothUUIDs {
     static let authService = "B07A0005-0000-1000-8000-00805F9B34FB"
     static let wifiService = "B07A0006-0000-1000-8000-00805F9B34FB"
     static let diagnosticsService = "B07A0007-0000-1000-8000-00805F9B34FB"
+    static let credentialService = "B07A000A-0000-1000-8000-00805F9B34FB"
 
     static let deviceStatus = "B07A0002-0001-1000-8000-00805F9B34FB"
     static let recordingControl = "B07A0002-0002-1000-8000-00805F9B34FB"
@@ -45,5 +46,6 @@ enum BotaBluetoothUUIDs {
         authService,
         wifiService,
         diagnosticsService,
+        credentialService,
     ]
 }

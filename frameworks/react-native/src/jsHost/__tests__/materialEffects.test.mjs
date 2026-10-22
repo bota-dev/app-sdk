@@ -34,10 +34,11 @@ test('provisioning broker emits native-compatible hex metadata and waits for the
   assert.equal(event.requestId, 'material:op:9007199254740994:9007199254740993');
   await assert.rejects(f.effects.resolveProvisioningMaterial('foreign', { apiEndpoint: 'https://example.test',
     deviceToken: 'token', mtu: 23 }), error => error.code === 'stale_material_request');
-  await f.effects.resolveProvisioningMaterial(event.requestId, { apiEndpoint: String.fromCharCode(1), deviceToken: 'token', mtu: 23 });
+  await f.effects.resolveProvisioningMaterial(event.requestId, { apiEndpoint: String.fromCharCode(1), deviceToken: '', credentialEnvelope: Buffer.concat([Buffer.from('BOTATOK1'), Buffer.alloc(222)]).toString('base64url'), mtu: 23 });
   const result = await waiting;
   assert.deepEqual(result.ProvisioningMaterialPrepared.material.api_endpoint, [1]);
-  assert.equal(Buffer.from(result.ProvisioningMaterialPrepared.material.device_token).toString(), 'token');
+  assert.deepEqual(result.ProvisioningMaterialPrepared.material.device_token, []);
+  assert.equal(result.ProvisioningMaterialPrepared.material.credential_envelope.length, 230);
   assert.equal(result.ProvisioningMaterialPrepared.material.mtu, 23);
   await assert.rejects(f.effects.resolveProvisioningMaterial(event.requestId, {}), error => error.code === 'stale_material_request');
 });
@@ -104,4 +105,36 @@ test('material rejection uses stable redacted errors and operation release settl
   const cancelled = assert.rejects(second, error => error.code === 'operation_cancelled');
   f.effects.release('op');
   await cancelled;
+});
+
+test('credential envelopes stay opaque and mixed plaintext delivery fails closed', async () => {
+  const f = fixture();
+  f.effects.registerProvisioning('op', { serialNumber: 'SERIAL' });
+  const pending = f.effects.handler(f.provisioning, f.context);
+  const bytes = Buffer.alloc(230); bytes.write('BOTATOK1');
+  await f.effects.resolveProvisioningMaterial(f.events[0][1].requestId, {
+    apiEndpoint: '\0', deviceToken: '', credentialEnvelope: bytes.toString('base64url'), mtu: 23,
+  });
+  const material = (await pending).ProvisioningMaterialPrepared.material;
+  assert.deepEqual(material.credential_envelope, Array.from(bytes));
+  assert.deepEqual(material.device_token, []);
+  const invalid = fixture();
+  invalid.effects.registerProvisioning('op', { serialNumber: 'SERIAL' });
+  const waiting = invalid.effects.handler(invalid.provisioning, invalid.context);
+  const rejection = assert.rejects(waiting, error => error.code === 'invalid_provisioning_material');
+  await assert.rejects(invalid.effects.resolveProvisioningMaterial(invalid.events[0][1].requestId, {
+    apiEndpoint: '\0', deviceToken: 'raw', credentialEnvelope: bytes.toString('base64url'), mtu: 23,
+  }));
+  await rejection;
+});
+
+test('raw-only material is rejected and settles the waiting provider', async () => {
+  const f = fixture();
+  f.effects.registerProvisioning('op', { serialNumber: 'SERIAL' });
+  const pending = f.effects.handler(f.provisioning, f.context);
+  const rejected = assert.rejects(pending, { code: 'invalid_provisioning_material' });
+  await assert.rejects(f.effects.resolveProvisioningMaterial(f.events[0][1].requestId, {
+    apiEndpoint: '\0', deviceToken: 'dtok_legacy', mtu: 23,
+  }), { code: 'invalid_provisioning_material' });
+  await rejected;
 });

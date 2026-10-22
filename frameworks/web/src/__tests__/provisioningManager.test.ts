@@ -263,6 +263,27 @@ async function createHarness(options: {
   }
 }
 
+test('generated WASM provisioning writes only opaque envelope fragments and keeps confirmation unchanged', async () => {
+  const harness = await createHarness()
+  const envelope = new Uint8Array(230)
+  envelope.set(new TextEncoder().encode('BOTATOK1'))
+  harness.provider.prepareHandler = async context => ({
+    ...materialFor(context.materialId), deviceToken: new Uint8Array(),
+    credentialEnvelope: envelope.slice(), mtu: 23,
+  })
+  const provision = harness.manager.provision({ attemptId: 'encrypted-attempt' })
+  const characteristic = canonicalGattUuid('B07A000A-0001-1000-8000-00805F9B34FB')
+  await eventually(() => harness.transport.writes.filter(write => canonicalGattUuid(write.characteristicUuid) === characteristic).length === 15)
+  await settleReducer()
+  const fragments = harness.transport.writes.filter(write => canonicalGattUuid(write.characteristicUuid) === characteristic)
+  assert.deepEqual(Uint8Array.from(fragments.flatMap(write => [...write.value.slice(2)])), envelope)
+  assert.equal(harness.transport.writes.some(write => canonicalGattUuid(write.characteristicUuid) === canonicalGattUuid(DEVICE_TOKEN_CHARACTERISTIC)), false)
+  harness.transport.emitNotification(harness.transport.device, BOTA_PROVISIONING_SERVICE, PROVISIONING_RESULT_CHARACTERISTIC, Uint8Array.of(0))
+  await provision
+  assert.deepEqual(harness.provider.confirms, [{ attemptId: 'encrypted-attempt', serialNumber: SERIAL }])
+  assert.ok(harness.provider.materials[0]?.credentialEnvelope?.every(byte => byte === 0))
+})
+
 test('provision passes fresh exact context, scrubs material, and closes the backend loop in order', async () => {
   const harness = await createHarness()
   const attemptId = 'caller attempt/1+opaque'
@@ -342,13 +363,13 @@ test('provision passes fresh exact context, scrubs material, and closes the back
     'provider API endpoint',
   )
   assertBufferWasScrubbed(
-    harness.provider.materials[0]?.deviceToken,
-    'provider device token',
+    harness.provider.materials[0]?.credentialEnvelope,
+    'provider credential envelope',
   )
   const sensitiveWrites = transientWrites.filter((entry) => {
     const characteristic = canonicalGattUuid(entry.characteristicUuid)
     return characteristic === canonicalGattUuid(API_ENDPOINT_CHARACTERISTIC)
-      || characteristic === canonicalGattUuid(DEVICE_TOKEN_CHARACTERISTIC)
+      || characteristic === canonicalGattUuid('B07A000A-0001-1000-8000-00805F9B34FB')
   })
   assert.ok(sensitiveWrites.length > 0)
   assert.ok(sensitiveWrites.every((entry) => allZero(entry.value)))
@@ -389,7 +410,7 @@ test('provision rejects a cross-material prepare result before any sensitive dev
   for (let attempt = 0; attempt < 200 && !operationSettled; attempt += 1) {
     if (harness.transport.writes.some((write) =>
       canonicalGattUuid(write.characteristicUuid)
-        === canonicalGattUuid(DEVICE_TOKEN_CHARACTERISTIC)
+        === canonicalGattUuid('B07A000A-0001-1000-8000-00805F9B34FB')
     )) {
       await completePhysicalProvisioning(harness)
       break
@@ -404,7 +425,7 @@ test('provision rejects a cross-material prepare result before any sensitive dev
   assert.equal(harness.transport.writes.some((write) => {
     const characteristic = canonicalGattUuid(write.characteristicUuid)
     return characteristic === canonicalGattUuid(API_ENDPOINT_CHARACTERISTIC)
-      || characteristic === canonicalGattUuid(DEVICE_TOKEN_CHARACTERISTIC)
+      || characteristic === canonicalGattUuid('B07A000A-0001-1000-8000-00805F9B34FB')
   }), false)
   assert.equal(
     harness.storage.provisioningJournals.has('material-mismatch-attempt'),
@@ -502,7 +523,7 @@ test('cancel and destroy join a blocked provisioning write before releasing owne
   ) => {
     if (
       canonicalGattUuid(characteristicUuid)
-        === canonicalGattUuid(DEVICE_TOKEN_CHARACTERISTIC)
+        === canonicalGattUuid('B07A000A-0001-1000-8000-00805F9B34FB')
     ) {
       inFlightToken = value
       harness.transport.writeGate = writeGate.promise
@@ -1387,7 +1408,8 @@ function materialFor(
   return {
     materialId,
     apiEndpoint: Uint8Array.of(endpoint),
-    deviceToken: Uint8Array.of(token, token + 1, token + 2, token + 3),
+    deviceToken: new Uint8Array(),
+    credentialEnvelope: Uint8Array.from([...new TextEncoder().encode('BOTATOK1'), ...new Array(222).fill(token)]),
     mtu: 64,
   }
 }
@@ -1398,7 +1420,7 @@ async function completePhysicalProvisioning(
 ): Promise<void> {
   await eventually(() => harness.transport.writes.some((write) =>
     canonicalGattUuid(write.characteristicUuid)
-      === canonicalGattUuid(DEVICE_TOKEN_CHARACTERISTIC)
+      === canonicalGattUuid('B07A000A-0001-1000-8000-00805F9B34FB')
   ))
   await settleReducer()
   harness.transport.emitNotification(
@@ -1505,3 +1527,16 @@ async function settleWithWatchdog<T>(
     if (timer) clearTimeout(timer)
   }
 }
+
+test('plaintext-only provisioning material is rejected without a device write', async () => {
+  const harness = await createHarness()
+  harness.provider.prepareHandler = async context => ({
+    materialId: context.materialId, apiEndpoint: Uint8Array.of(0),
+    deviceToken: new TextEncoder().encode('dtok_retired'), mtu: 185,
+  })
+  await assert.rejects(harness.manager.provision({ attemptId: 'retired-raw' }))
+  assert.equal(harness.transport.writes.some(write =>
+    [API_ENDPOINT_CHARACTERISTIC, DEVICE_TOKEN_CHARACTERISTIC, 'B07A000A-0001-1000-8000-00805F9B34FB']
+      .some(uuid => canonicalGattUuid(uuid) === canonicalGattUuid(write.characteristicUuid))), false)
+  assert.equal(harness.provider.confirms.length, 0)
+})

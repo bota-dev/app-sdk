@@ -1517,6 +1517,13 @@
                 }
               },
               {
+                "name": "credentialEnvelope",
+                "optional": true,
+                "typeAnnotation": {
+                  "type": "StringTypeAnnotation"
+                }
+              },
+              {
                 "name": "mtu",
                 "optional": false,
                 "typeAnnotation": {
@@ -4392,7 +4399,7 @@
       },
       {
         "path": "jni/react/renderer/components/BotaDeviceSDKSpec/BotaDeviceSDKSpecJSI.h",
-        "sha256": "6c3ab34b33b2e18b2237e389bbca5f813aa679c3ec66e61441ac8fea4a1904a5"
+        "sha256": "aabb87b1696c40aa84df2305be4804dcb4b21f5b8e7fc9dcce2b98e9a94d2715"
       }
     ],
     "ios": [
@@ -4402,13 +4409,13 @@
       },
       {
         "path": "BotaDeviceSDKSpec/BotaDeviceSDKSpec.h",
-        "sha256": "221da1ba25df2b6c8bac02a90fccdb701dc3644c0bfd9df31c75c117a2f9b47c"
+        "sha256": "e903d4050cf521802d28dfedd6b0d9b3c690e1cb2f11284536ba491ded7eac96"
       },
       {
         "path": "BotaDeviceSDKSpecJSI.h",
-        "sha256": "6c3ab34b33b2e18b2237e389bbca5f813aa679c3ec66e61441ac8fea4a1904a5"
+        "sha256": "aabb87b1696c40aa84df2305be4804dcb4b21f5b8e7fc9dcce2b98e9a94d2715"
       }
     ]
   },
-  "contractDigest": "01c47db44fcb3ef9d8f9221612c1978040043b5fd111898c597c1b7d65dd06f1"
+  "contractDigest": "2be7dda7ea09a4780c1a689d41b762a755a6b9d1593c11bde0430e8e5f9a0ede"
 }

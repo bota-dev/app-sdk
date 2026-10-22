@@ -247,6 +247,7 @@ pub mod field_id {
     pub const DURABLE_UNITS: u32 = 54;
     pub const API_ENDPOINT: u32 = 55;
     pub const DEVICE_TOKEN: u32 = 56;
+    pub const CREDENTIAL_ENVELOPE: u32 = 223;
     pub const MTU: u32 = 57;
     pub const GRANT: u32 = 58;
     pub const TRANSFER_ID: u32 = 59;

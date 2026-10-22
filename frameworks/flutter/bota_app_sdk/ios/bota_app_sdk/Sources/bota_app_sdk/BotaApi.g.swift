@@ -2293,6 +2293,7 @@ struct BotaProvisioningMaterialResponseMessage: BotaMaterialResponseMessage {
   var apiEndpoint: FlutterStandardTypedData
   var deviceToken: FlutterStandardTypedData
   var mtu: Int64
+  var credentialEnvelope: FlutterStandardTypedData? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -2301,12 +2302,14 @@ struct BotaProvisioningMaterialResponseMessage: BotaMaterialResponseMessage {
     let apiEndpoint = pigeonVar_list[1] as! FlutterStandardTypedData
     let deviceToken = pigeonVar_list[2] as! FlutterStandardTypedData
     let mtu = pigeonVar_list[3] as! Int64
+    let credentialEnvelope: FlutterStandardTypedData? = nilOrValue(pigeonVar_list[4])
 
     return BotaProvisioningMaterialResponseMessage(
       requestId: requestId,
       apiEndpoint: apiEndpoint,
       deviceToken: deviceToken,
-      mtu: mtu
+      mtu: mtu,
+      credentialEnvelope: credentialEnvelope
     )
   }
   func toList() -> [Any?] {
@@ -2315,13 +2318,14 @@ struct BotaProvisioningMaterialResponseMessage: BotaMaterialResponseMessage {
       apiEndpoint,
       deviceToken,
       mtu,
+      credentialEnvelope,
     ]
   }
   static func == (lhs: BotaProvisioningMaterialResponseMessage, rhs: BotaProvisioningMaterialResponseMessage) -> Bool {
     if Swift.type(of: lhs) != Swift.type(of: rhs) {
       return false
     }
-    return BotaApiPigeonInternal.deepEquals(lhs.requestId, rhs.requestId) && BotaApiPigeonInternal.deepEquals(lhs.apiEndpoint, rhs.apiEndpoint) && BotaApiPigeonInternal.deepEquals(lhs.deviceToken, rhs.deviceToken) && BotaApiPigeonInternal.deepEquals(lhs.mtu, rhs.mtu)
+    return BotaApiPigeonInternal.deepEquals(lhs.requestId, rhs.requestId) && BotaApiPigeonInternal.deepEquals(lhs.apiEndpoint, rhs.apiEndpoint) && BotaApiPigeonInternal.deepEquals(lhs.deviceToken, rhs.deviceToken) && BotaApiPigeonInternal.deepEquals(lhs.mtu, rhs.mtu) && BotaApiPigeonInternal.deepEquals(lhs.credentialEnvelope, rhs.credentialEnvelope)
   }
 
   func hash(into hasher: inout Hasher) {
@@ -2330,10 +2334,11 @@ struct BotaProvisioningMaterialResponseMessage: BotaMaterialResponseMessage {
     BotaApiPigeonInternal.deepHash(value: apiEndpoint, hasher: &hasher)
     BotaApiPigeonInternal.deepHash(value: deviceToken, hasher: &hasher)
     BotaApiPigeonInternal.deepHash(value: mtu, hasher: &hasher)
+    BotaApiPigeonInternal.deepHash(value: credentialEnvelope, hasher: &hasher)
   }
 
   public var description: String {
-    return "BotaProvisioningMaterialResponseMessage(requestId: \(String(describing: requestId)), apiEndpoint: \(String(describing: apiEndpoint)), deviceToken: \(String(describing: deviceToken)), mtu: \(String(describing: mtu)))"
+    return "BotaProvisioningMaterialResponseMessage(requestId: \(String(describing: requestId)), apiEndpoint: \(String(describing: apiEndpoint)), deviceToken: \(String(describing: deviceToken)), mtu: \(String(describing: mtu)), credentialEnvelope: \(String(describing: credentialEnvelope)))"
   }
 }
 

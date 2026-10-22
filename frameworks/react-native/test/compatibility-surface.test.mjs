@@ -31,6 +31,7 @@ test('preserves all 80 frozen exports plus exact maintenance and completion-reco
   additions.members.DeviceManager.push({ name: 'pauseAutoReconnect', optional: false,
     readonly: false, declarationKinds: ['MethodDeclaration'], type: '() => Promise<void>' });
   for (const [name, type] of [
+    ['provisionEnvelope', '(device: ConnectedDevice, credentialEnvelope: string, environment?: Environment, options?: ProvisionOptions) => Promise<void>'],
     ['getFindCapabilities', '(device: ConnectedDevice) => Promise<FindDeviceCapabilities>'],
     ['getFindStatus', '(device: ConnectedDevice) => Promise<FindDeviceStatus>'],
     ['requestFindDevice', '(device: ConnectedDevice, requestId: string, fetchGrant: (nonce: string) => Promise<string>, durationSeconds?: number, binding?: FindBindingProvider) => Promise<FindDeviceStatus>'],

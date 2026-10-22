@@ -829,7 +829,8 @@ test('provisioning resolves nonce-bound native material and supports remove-only
     });
     return {
       apiEndpoint: 'https://api.bota.dev',
-      deviceToken: 'dtok_example',
+      deviceToken: '',
+      credentialEnvelope: Buffer.concat([Buffer.from('BOTATOK1'), Buffer.alloc(222)]).toString('base64url'),
       mtu: 247,
     };
   });
@@ -843,7 +844,8 @@ test('provisioning resolves nonce-bound native material and supports remove-only
       'material-request',
       {
         apiEndpoint: 'https://api.bota.dev',
-        deviceToken: 'dtok_example',
+        deviceToken: '',
+      credentialEnvelope: Buffer.concat([Buffer.from('BOTATOK1'), Buffer.alloc(222)]).toString('base64url'),
         mtu: 247,
       },
     ],

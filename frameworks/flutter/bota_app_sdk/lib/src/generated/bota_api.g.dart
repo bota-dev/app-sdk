@@ -2636,6 +2636,7 @@ class BotaProvisioningMaterialResponseMessage extends BotaMaterialResponseMessag
     required this.apiEndpoint,
     required this.deviceToken,
     required this.mtu,
+    this.credentialEnvelope,
   });
 
   String requestId;
@@ -2646,12 +2647,15 @@ class BotaProvisioningMaterialResponseMessage extends BotaMaterialResponseMessag
 
   int mtu;
 
+  Uint8List? credentialEnvelope;
+
   List<Object?> _toList() {
     return <Object?>[
       requestId,
       apiEndpoint,
       deviceToken,
       mtu,
+      credentialEnvelope,
     ];
   }
 
@@ -2665,6 +2669,7 @@ class BotaProvisioningMaterialResponseMessage extends BotaMaterialResponseMessag
       apiEndpoint: result[1]! as Uint8List,
       deviceToken: result[2]! as Uint8List,
       mtu: result[3]! as int,
+      credentialEnvelope: result[4] as Uint8List?,
     );
   }
 
@@ -2677,7 +2682,7 @@ class BotaProvisioningMaterialResponseMessage extends BotaMaterialResponseMessag
     if (identical(this, other)) {
       return true;
     }
-    return _deepEquals(requestId, other.requestId) && _deepEquals(apiEndpoint, other.apiEndpoint) && _deepEquals(deviceToken, other.deviceToken) && _deepEquals(mtu, other.mtu);
+    return _deepEquals(requestId, other.requestId) && _deepEquals(apiEndpoint, other.apiEndpoint) && _deepEquals(deviceToken, other.deviceToken) && _deepEquals(mtu, other.mtu) && _deepEquals(credentialEnvelope, other.credentialEnvelope);
   }
 
   @override
@@ -2686,7 +2691,7 @@ class BotaProvisioningMaterialResponseMessage extends BotaMaterialResponseMessag
 
   @override
   String toString() {
-    return 'BotaProvisioningMaterialResponseMessage(requestId: $requestId, apiEndpoint: $apiEndpoint, deviceToken: $deviceToken, mtu: $mtu)';
+    return 'BotaProvisioningMaterialResponseMessage(requestId: $requestId, apiEndpoint: $apiEndpoint, deviceToken: $deviceToken, mtu: $mtu, credentialEnvelope: $credentialEnvelope)';
   }
 }
 

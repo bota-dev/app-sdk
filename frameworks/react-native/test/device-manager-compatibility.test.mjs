@@ -131,7 +131,7 @@ test('internal DeviceManager delegates frozen provisioning and control commands'
   await manager.deliverBackendPubkey(connectedDevice, publicKey);
   await manager.writeGrant(connectedDevice, 'AQID');
   await manager.syncTime(connectedDevice.id);
-  await manager.provision(connectedDevice, 'dtok_example', 'gamma');
+  await manager.provisionEnvelope(connectedDevice, 'opaque-envelope', 'gamma');
   assert.deepEqual(
     await manager.deprovision(connectedDevice, 'AQID'),
     { success: true }
@@ -153,7 +153,8 @@ test('internal DeviceManager delegates frozen provisioning and control commands'
       connectedDevice,
       {
         apiEndpointCode: 2,
-        deviceToken: 'dtok_example',
+        deviceToken: '',
+        credentialEnvelope: 'opaque-envelope',
         mtu: connectedDevice.mtu,
       },
     ],
@@ -224,7 +225,7 @@ test('internal DeviceManager recovers ALREADY_PAIRED with nonce-bound deprovisio
   await manager.connect(discoveredDevice);
   const nonces = [];
 
-  await manager.provision(connectedDevice, 'dtok_retry', 'production', {
+  await manager.provisionEnvelope(connectedDevice, 'opaque-envelope', 'production', {
     fetchDeprovisionGrant: async (nonce) => {
       nonces.push(nonce);
       return 'retry-grant';
@@ -236,13 +237,13 @@ test('internal DeviceManager recovers ALREADY_PAIRED with nonce-bound deprovisio
     [
       'provision',
       connectedDevice,
-      { apiEndpointCode: 1, deviceToken: 'dtok_retry', mtu: connectedDevice.mtu },
+      { apiEndpointCode: 1, deviceToken: '', credentialEnvelope: 'opaque-envelope', mtu: connectedDevice.mtu },
     ],
     ['deprovision', connectedDevice, 'retry-grant'],
     [
       'provision',
       connectedDevice,
-      { apiEndpointCode: 1, deviceToken: 'dtok_retry', mtu: connectedDevice.mtu },
+      { apiEndpointCode: 1, deviceToken: '', credentialEnvelope: 'opaque-envelope', mtu: connectedDevice.mtu },
     ],
   ]);
 });
@@ -654,6 +655,7 @@ function createFakeClient() {
           {
             apiEndpointCode: material.apiEndpoint.charCodeAt(0),
             deviceToken: material.deviceToken,
+            credentialEnvelope: material.credentialEnvelope,
             mtu: material.mtu,
           },
         ]);
@@ -749,3 +751,13 @@ function createFakeClient() {
   };
   return fake;
 }
+
+test('retired plaintext provisioning rejects without dispatching a provider or BLE operation', async () => {
+  const fake = createFakeClient();
+  setCompatibilityClientForTesting(fake.client);
+  const manager = new DeviceManager();
+  await manager.connect(discoveredDevice);
+  await assert.rejects(manager.provision(connectedDevice, 'dtok_retired', 'production'));
+  assert.deepEqual(fake.provisioningCalls, []);
+  manager.destroy();
+});

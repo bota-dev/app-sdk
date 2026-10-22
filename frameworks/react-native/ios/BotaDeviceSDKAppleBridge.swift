@@ -1840,11 +1840,12 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
         }
     }
 
-    @objc(resolveProvisioningMaterialWithRequestID:apiEndpoint:deviceToken:mtu:completion:)
+    @objc(resolveProvisioningMaterialWithRequestID:apiEndpoint:deviceToken:credentialEnvelope:mtu:completion:)
     public func resolveProvisioningMaterial(
         requestID: String,
         apiEndpoint: String,
         deviceToken: String,
+        credentialEnvelope: String?,
         mtu: Double,
         completion: @escaping @Sendable (NSError?) -> Void
     ) {
@@ -1854,6 +1855,7 @@ public final class BotaDeviceSDKAppleBridge: NSObject, @unchecked Sendable {
                     requestID: requestID,
                     apiEndpoint: apiEndpoint,
                     deviceToken: deviceToken,
+                    credentialEnvelope: credentialEnvelope,
                     mtu: try Self.unsignedInteger(mtu)
                 )
                 completion(nil)

@@ -526,12 +526,14 @@ class BotaProvisioningMaterialResponseMessage
     required this.apiEndpoint,
     required this.deviceToken,
     required this.mtu,
+    this.credentialEnvelope,
   });
 
   String requestId;
   Uint8List apiEndpoint;
   Uint8List deviceToken;
   int mtu;
+  Uint8List? credentialEnvelope;
 }
 
 class BotaFactoryResetGrantResponseMessage extends BotaMaterialResponseMessage {
