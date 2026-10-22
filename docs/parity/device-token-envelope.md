@@ -180,3 +180,9 @@ qualified release adoption; incompatible old clients cannot bind after cutover.
 
 
 CI preparation follow-up: the workflow evidence now points to the existing plaintext-rejection test and its InvalidInput result; no production crypto or generated runtime changes. The Dart file is formatted with the package language version 3.11. All 16 workflow tooling tests and references against the exact frozen maintenance source pass; full hosted rerun remains separate.
+
+Workflow fixture follow-up: regenerated Apple and Android resources from the
+canonical encrypted-only provisioning scenario; Flutter's typed trace now expects
+`invalidInput` for rejected plaintext material. Both 33-scenario freshness checks
+and Dart 3.11-language formatting pass. Hosted native/Flutter reruns qualify the
+updated fixture resources; no core runtime or generated RN artifact changed.
