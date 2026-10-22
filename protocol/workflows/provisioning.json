@@ -25,15 +25,15 @@
       "name": "provisioning-payload-rejection",
       "classification": "rejection",
       "sourceTest": "src/managers/DeviceManager.ts#async provision(",
-      "rustTest": "provisioning_workflow::provisioning_rejects_too_many_chunks_before_any_material_write",
+      "rustTest": "provisioning_workflow::provisioning_rejects_oversized_plaintext_before_any_material_write",
       "command": "provision",
       "capabilities": ["ble", "timer", "persistence", "host_material"],
-      "inputs": ["nonce_read", "public_key_read", "oversized_material"],
+      "inputs": ["nonce_read", "public_key_read", "oversized_plaintext_material"],
       "expected": {
         "effects": ["read_nonce", "read_public_key", "prepare_material"],
         "notifications": ["started", "failed"],
         "terminalStatus": "failed",
-        "errorCode": "payload_too_large"
+        "errorCode": "invalid_input"
       }
     },
     {

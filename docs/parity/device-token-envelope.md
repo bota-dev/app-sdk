@@ -177,3 +177,6 @@ The final link includes preserved RESET_PENDING/resume behavior in the encrypted
 entry. No package publication, device flashing, production migration/enrollment
 or deployment was performed. Both Apps retain published dependency pins until
 qualified release adoption; incompatible old clients cannot bind after cutover.
+
+
+CI preparation follow-up: the workflow evidence now points to the existing plaintext-rejection test and its InvalidInput result; no production crypto or generated runtime changes. The Dart file is formatted with the package language version 3.11. All 16 workflow tooling tests and references against the exact frozen maintenance source pass; full hosted rerun remains separate.

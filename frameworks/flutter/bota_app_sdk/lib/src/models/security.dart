@@ -302,16 +302,16 @@ typedef BotaProvisioningMaterialCallback =
     Future<BotaProvisioningMaterial> Function(
       BotaProvisioningMaterialRequest request,
     );
-typedef BotaFactoryResetGrantCallback = Future<BotaFactoryResetGrant> Function(
-  BotaFactoryResetGrantRequest request,
-);
+typedef BotaFactoryResetGrantCallback =
+    Future<BotaFactoryResetGrant> Function(
+      BotaFactoryResetGrantRequest request,
+    );
 typedef BotaFactoryResetResultCallback =
     Future<BotaFactoryResetResultAcknowledgement> Function(
       BotaFactoryResetResultRequest request,
     );
-typedef BotaFirmwareCallback = Future<BotaFirmwareSource> Function(
-  BotaFirmwareRequest request,
-);
+typedef BotaFirmwareCallback =
+    Future<BotaFirmwareSource> Function(BotaFirmwareRequest request);
 
 final class BotaApplicationCallbacks {
   const BotaApplicationCallbacks({
