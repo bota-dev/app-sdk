@@ -8,8 +8,9 @@ use crate::{
     },
     error::{DeviceSdkError, ErrorCode, Operation},
     generated::protocol::{
-        CHAR_API_ENDPOINT, CHAR_AUTH_NONCE, CHAR_DEVICE_TOKEN, CHAR_PK_D, CHAR_PROVISIONING_RESULT,
-        PROVISIONING_SUCCESS, SERVICE_BOTA_AUTH, SERVICE_BOTA_PROVISIONING,
+        CHAR_API_ENDPOINT, CHAR_AUTH_NONCE, CHAR_CREDENTIAL_ENVELOPE, CHAR_PK_D,
+        CHAR_PROVISIONING_RESULT, PROVISIONING_SUCCESS, SERVICE_BOTA_AUTH, SERVICE_BOTA_CREDENTIAL,
+        SERVICE_BOTA_PROVISIONING,
     },
     model::{
         DevicePublicKey, DeviceSerialNumber, HostMaterialId, ProvisioningMaterial,
@@ -120,8 +121,8 @@ impl ProvisioningWorkflow {
         };
         self.phase = Phase::WritingToken;
         let write = context.request(Effect::Ble(BleEffect::Write {
-            service_uuid: SERVICE_BOTA_PROVISIONING.into(),
-            characteristic_uuid: CHAR_DEVICE_TOKEN.into(),
+            service_uuid: SERVICE_BOTA_CREDENTIAL.into(),
+            characteristic_uuid: CHAR_CREDENTIAL_ENVELOPE.into(),
             payload,
             with_response: true,
         }));
@@ -289,6 +290,7 @@ impl WorkflowReducer for ProvisioningWorkflow {
                 let ProvisioningMaterial {
                     api_endpoint,
                     device_token,
+                    credential_envelope,
                     mtu,
                 } = material;
                 let endpoint = match encode_bounded_payload(&api_endpoint, 1) {
@@ -306,7 +308,30 @@ impl WorkflowReducer for ProvisioningWorkflow {
                     }
                     Err(error) => return Ok(self.fail(error, context)),
                 };
-                let chunks = match encode_provisioning_chunks(&device_token, mtu) {
+                let token_bytes = match credential_envelope {
+                    Some(bytes)
+                        if device_token.is_empty()
+                            && (230..=768).contains(&bytes.len())
+                            && bytes.starts_with(b"BOTATOK1")
+                            && (23..=517).contains(&mtu) =>
+                    {
+                        bytes
+                    }
+                    _ => {
+                        return Ok(self.fail(
+                            DeviceSdkError::new(
+                                ErrorCode::InvalidInput,
+                                Operation::Provision,
+                                false,
+                            )
+                            .with_detail(
+                                "encrypted credential envelope is required; plaintext is rejected",
+                            ),
+                            context,
+                        ));
+                    }
+                };
+                let chunks = match encode_provisioning_chunks(&token_bytes, mtu) {
                     Ok(chunks) if !chunks.is_empty() => chunks,
                     Ok(_) => {
                         return Ok(self.fail(

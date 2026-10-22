@@ -16,9 +16,15 @@ public class ProvisioningMaterial(
     apiEndpoint: ByteArray,
     deviceToken: ByteArray,
     public val mtu: ULong,
+    credentialEnvelope: ByteArray?,
 ) {
+    public constructor(apiEndpoint: ByteArray, deviceToken: ByteArray, mtu: ULong) :
+        this(apiEndpoint, deviceToken, mtu, null)
+
     private val storedApiEndpoint: ByteArray = apiEndpoint.copyOf()
     private val storedDeviceToken: ByteArray = deviceToken.copyOf()
+    private val storedCredentialEnvelope = credentialEnvelope?.copyOf()
+    public val credentialEnvelope: ByteArray? get() = storedCredentialEnvelope?.copyOf()
 
     public val apiEndpoint: ByteArray get() = storedApiEndpoint.copyOf()
     public val deviceToken: ByteArray get() = storedDeviceToken.copyOf()

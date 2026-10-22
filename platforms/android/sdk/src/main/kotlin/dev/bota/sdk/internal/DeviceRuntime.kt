@@ -434,6 +434,7 @@ internal class DeviceRuntime(
                                 resolved.apiEndpoint,
                                 resolved.deviceToken,
                                 resolved.mtu,
+                                resolved.credentialEnvelope,
                             )
                         }
                     },

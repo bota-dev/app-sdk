@@ -71,6 +71,8 @@ final class CoreBluetoothHostTests: XCTestCase {
         )
 
         let log = await driver.log
+        let services = await driver.requestedServices
+        XCTAssertTrue(services.contains("B07A000A-0000-1000-8000-00805F9B34FB"))
         XCTAssertLessThan(
             try XCTUnwrap(log.firstIndex(of: "services:device")),
             try XCTUnwrap(log.firstIndex(of: "characteristics:device"))

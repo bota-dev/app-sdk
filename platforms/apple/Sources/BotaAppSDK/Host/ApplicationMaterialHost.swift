@@ -20,11 +20,17 @@ struct FactoryResetMaterialRequest: Sendable {
 
 public struct ProvisioningMaterial: Sendable {
     public let apiEndpoint: Data
+    public let credentialEnvelope: Data?
     public let deviceToken: Data
     public let mtu: UInt64
 
     public init(apiEndpoint: Data, deviceToken: Data, mtu: UInt64) {
+        self.init(apiEndpoint: apiEndpoint, deviceToken: deviceToken, mtu: mtu, credentialEnvelope: nil)
+    }
+
+    public init(apiEndpoint: Data, deviceToken: Data = Data(), mtu: UInt64, credentialEnvelope: Data?) {
         self.apiEndpoint = apiEndpoint
+        self.credentialEnvelope = credentialEnvelope
         self.deviceToken = deviceToken
         self.mtu = mtu
     }
@@ -75,7 +81,7 @@ actor ApplicationMaterialHost: MaterialHost {
                             .bytes(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_API_ENDPOINT), value: material.apiEndpoint),
                             .bytes(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_DEVICE_TOKEN), value: material.deviceToken),
                             .unsigned(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_MTU), value: material.mtu),
-                        ]
+                        ] + (material.credentialEnvelope.map { [.bytes(id: UInt32(BOTA_DEVICE_SDK_V1_FIELD_CREDENTIAL_ENVELOPE), value: $0)] } ?? [])
                     ))
                 case .prepareFactoryResetGrant:
                     let id = try requiredText(effect, UInt32(BOTA_DEVICE_SDK_V1_FIELD_GRANT_ID))

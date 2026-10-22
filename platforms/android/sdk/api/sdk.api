@@ -1844,7 +1844,9 @@ public final class dev/bota/sdk/model/ProvisioningFailure : java/lang/Enum {
 
 public final class dev/bota/sdk/model/ProvisioningMaterial {
 	public synthetic fun <init> ([B[BJLkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> ([B[BJ[BLkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getApiEndpoint ()[B
+	public final fun getCredentialEnvelope ()[B
 	public final fun getDeviceToken ()[B
 	public final fun getMtu-s-VKNKU ()J
 }

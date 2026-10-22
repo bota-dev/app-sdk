@@ -1338,6 +1338,7 @@ requiresApplicationPersistence:requiresApplicationPersistence
       resolveProvisioningMaterialWithRequestID:requestId
                                     apiEndpoint:material.apiEndpoint()
                                     deviceToken:material.deviceToken()
+                             credentialEnvelope:material.credentialEnvelope()
                                             mtu:material.mtu()
                                      completion:^(NSError *_Nullable error) {
                                        if (error != nil) {

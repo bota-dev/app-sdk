@@ -11,6 +11,49 @@ const start = generation => ({ version: 1, action: 'start', generation,
   operation: 'Discover', cancellation_id: cancellation, capabilities: ['Ble', 'Timer'],
   command: { DiscoverDevices: { timeout_ms: '100', allow_duplicates: false } } });
 
+test('generated provisioning relays an opaque envelope only through the credential characteristic', () => {
+  const engine = core.createEngine();
+  const context = { version: 1, generation: '1', operation: 'Provision', cancellation_id: cancellation };
+  const step = input => {
+    const response = engine.request({ ...context, ...input });
+    assert.equal(response.ok, true, JSON.stringify(response));
+    return response.result.effects;
+  };
+  const complete = (request, kind) => step({ action: 'dispatch', event: { request_id: request.request_id, kind } });
+  const ble = (effects, name) => {
+    const request = effects.find(item => item.effect.Ble?.[name]);
+    assert.ok(request, `expected ${name}`);
+    return request;
+  };
+  try {
+    let effects = step({ action: 'start', capabilities: ['Ble', 'Timer', 'Persistence', 'HostMaterial'],
+      command: { Provision: { device: 'EVFXXW67KP', material_id: 'encrypted-bind' } } });
+    effects = complete(ble(effects, 'Read'), { Ble: { ReadCompleted: { value: Array(16).fill(17) } } });
+    effects = complete(ble(effects, 'Read'), { Ble: { ReadCompleted: { value: Array(64).fill(34) } } });
+    const material = effects.find(item => item.effect.HostMaterial?.PrepareProvisioning);
+    assert.ok(material);
+    const envelope = Buffer.alloc(230); envelope.write('BOTATOK1');
+    effects = complete(material, { ProvisioningMaterialPrepared: { material: {
+      api_endpoint: [0], device_token: [], credential_envelope: [...envelope], mtu: 23,
+    } } });
+    const subscribe = ble(effects, 'Subscribe');
+    effects = complete(subscribe, { Ble: { Subscribed: { characteristic_uuid: subscribe.effect.Ble.Subscribe.characteristic_uuid } } });
+    effects = complete(ble(effects, 'Write'), { Ble: 'WriteCompleted' });
+    const received = [];
+    for (let index = 0; index < 15; index++) {
+      const request = ble(effects, 'Write');
+      const write = request.effect.Ble.Write;
+      assert.equal(write.service_uuid, 'B07A000A-0000-1000-8000-00805F9B34FB');
+      assert.equal(write.characteristic_uuid, 'B07A000A-0001-1000-8000-00805F9B34FB');
+      assert.deepEqual(write.payload.slice(0, 2), [index, 15]);
+      received.push(...write.payload.slice(2));
+      effects = complete(request, { Ble: 'WriteCompleted' });
+    }
+    assert.deepEqual(Buffer.from(received), envelope);
+    assert.equal(effects.some(item => item.effect.Ble?.Write), false);
+  } finally { engine.dispose(); }
+});
+
 test('shared Rust executes as JS when WebAssembly is unavailable', () => {
   const previous = globalThis.WebAssembly;
   try {
@@ -135,4 +178,26 @@ test('Find revision 2 control agrees with the shared fixed server/firmware vecto
   const control=core.codec('encodeFindControl',{protocolVersion:2,action:'start',durationSeconds:10,requestId:v.requestIdHex});
   assert.equal(Buffer.from(control).toString('hex'),v.controlHex);
   assert.equal(core.codec('encodeFindGrant',{grantBlob:v.grantBlob,capacity:193}).length,193);
+});
+
+test('actual generated Rust core refuses plaintext material before subscribing or writing', () => {
+  const engine = core.createEngine();
+  const context = { version: 1, generation: '1', operation: 'Provision', cancellation_id: cancellation };
+  const step = input => {
+    const response = engine.request({ ...context, ...input });
+    assert.equal(response.ok, true, JSON.stringify(response));
+    return response.result.effects;
+  };
+  const complete = (request, kind) => step({ action: 'dispatch', event: { request_id: request.request_id, kind } });
+  try {
+    let effects = step({ action: 'start', capabilities: ['Ble', 'Timer', 'Persistence', 'HostMaterial'],
+      command: { Provision: { device: 'EVFXXW67KP', material_id: 'retired-bind' } } });
+    effects = complete(effects.find(e => e.effect.Ble?.Read), { Ble: { ReadCompleted: { value: Array(16).fill(17) } } });
+    effects = complete(effects.find(e => e.effect.Ble?.Read), { Ble: { ReadCompleted: { value: Array(64).fill(34) } } });
+    effects = complete(effects.find(e => e.effect.HostMaterial?.PrepareProvisioning), { ProvisioningMaterialPrepared: { material: {
+      api_endpoint: [0], device_token: [...Buffer.from('dtok_retired')], credential_envelope: null, mtu: 185,
+    } } });
+    assert.ok(effects.some(e => e.effect.Notify?.Failed), 'plaintext must fail in the generated core');
+    assert.equal(effects.some(e => e.effect.Ble?.Subscribe || e.effect.Ble?.Write), false);
+  } finally { engine.dispose(); }
 });

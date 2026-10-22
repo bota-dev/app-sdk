@@ -407,6 +407,9 @@ abstract final class BridgeMapper {
     requestId: material.requestId,
     apiEndpoint: Uint8List.fromList(material.apiEndpoint),
     deviceToken: Uint8List.fromList(material.deviceToken),
+    credentialEnvelope: material.credentialEnvelope == null
+        ? null
+        : Uint8List.fromList(material.credentialEnvelope!),
     mtu: material.mtu,
   );
 

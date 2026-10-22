@@ -35,6 +35,7 @@ internal object HostFieldId {
     const val DurableUnits: Int = 54
     const val ApiEndpoint: Int = 55
     const val DeviceToken: Int = 56
+    const val CredentialEnvelope: Int = 223
     const val Mtu: Int = 57
     const val Encrypted: Int = 90
     const val EphemeralPublicKey: Int = 93

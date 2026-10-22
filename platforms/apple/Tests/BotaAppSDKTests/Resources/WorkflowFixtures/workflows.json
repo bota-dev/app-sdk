@@ -640,7 +640,7 @@
       "inputs": [
         "nonce_read",
         "public_key_read",
-        "oversized_material"
+        "oversized_plaintext_material"
       ],
       "effects": [
         "read_nonce",
@@ -652,7 +652,7 @@
         "failed"
       ],
       "terminalStatus": "failed",
-      "errorCode": "payload_too_large"
+      "errorCode": "invalid_input"
     },
     {
       "workflow": "provisioning",

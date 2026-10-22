@@ -276,7 +276,7 @@ final Map<String, List<String>> _expectedTypedTraces = <String, List<String>>{
   'provisioning-success': <String>['operation:provision', 'complete:void'],
   'provisioning-payload-rejection': <String>[
     'operation:provision',
-    'error:payloadTooLarge:provision',
+    'error:invalidInput:provision',
   ],
   'provisioning-cancellation': <String>[
     'operation:provision',

@@ -1,5 +1,18 @@
 # Firmware Protocol Reference Coverage Review
 
+## October 21 token-envelope reconciliation
+
+The main reference now includes CREDENTIAL `000A/0001`, the encrypted bind
+request/response, ordered 64-fragment/768-byte framing, purpose separation and
+fail-closed compatibility. The legacy `0003/0002` section is explicitly scoped
+to raw-token compatibility. Exact bytes remain owned by
+[device-token-v1](../../protocol/device-token-v1.md), with implementation and
+qualification evidence in [the token review](device-token-envelope.md).
+This follow-up changes documentation only; no runtime regeneration or release
+is implied. Local link/fence checks and `git diff --check` pass. The October 19 record below describes its original scope.
+
+## Historical October 19 review
+
 Date: October 19, 2026. Initial SDK source baseline: `78c85c0` on `main`;
 the documentation branch also incorporates merged naming revision `3cdb474`.
 Scope: complete the App-facing firmware reference using the retired React Native

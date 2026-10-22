@@ -1,5 +1,11 @@
 # Architecture
 
+Unreleased encrypted token delivery adds an opaque HPKE envelope to existing
+provisioning material and a dedicated credential characteristic. Apps retain the
+same bind/provision/confirm flow. See [contract and evidence](docs/parity/device-token-envelope.md).
+Published package pins and physical qualification remain separate.
+
+
 The unreleased [BLE naming amendment](docs/parity/ble-advertising-name.md) keeps
 candidate matching in Rust: model-only names and retired custom names can find
 the standardized model/SN-tail advertisement, while full GATT serial validation

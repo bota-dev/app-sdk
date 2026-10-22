@@ -1066,6 +1066,7 @@ internal class BotaAndroidAdapter(
             response.apiEndpoint,
             response.deviceToken,
             BotaAndroidMapper.unsignedLong(response.mtu),
+            response.credentialEnvelope,
         )
     }
 

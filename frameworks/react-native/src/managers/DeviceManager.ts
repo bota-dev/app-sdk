@@ -49,6 +49,7 @@ export type RecordingGrantFetcher = (
 export type RadioPriority = 'user' | 'background';
 
 export interface ProvisionOptions {
+  credentialEnvelope?: string;
   fetchDeprovisionGrant?: RecordingGrantFetcher;
 }
 
@@ -316,6 +317,13 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     await this.client.controls.syncTime(this.requireConnected(deviceId));
   }
 
+  async provisionEnvelope(
+    device: ConnectedDevice, credentialEnvelope: string,
+    environment: Environment = 'production', options?: ProvisionOptions
+  ): Promise<void> {
+    return this.provision(device, '', environment, { ...options, credentialEnvelope });
+  }
+
   async provision(
     device: ConnectedDevice,
     deviceToken: string,
@@ -323,11 +331,15 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     options?: ProvisionOptions
   ): Promise<void> {
     this.requireConnected(device.id);
+    if (deviceToken !== '' || !options?.credentialEnvelope) {
+      throw ProvisioningError.invalidToken(device.id);
+    }
     const provision = () => this.client.provisioning.provision(
       device,
       async () => ({
         apiEndpoint: String.fromCharCode(environmentCode(environment)),
         deviceToken,
+        credentialEnvelope: options?.credentialEnvelope,
         mtu: device.mtu,
       })
     );

@@ -97,6 +97,8 @@ export type NativeProvisioningMaterialRequest = {
 export type NativeProvisioningMaterial = {
   apiEndpoint: string;
   deviceToken: string;
+  /** Opaque credential envelope (at most 1024 characters); deviceToken must be empty. */
+  credentialEnvelope?: string;
   mtu: number;
 };
 
