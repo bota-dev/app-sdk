@@ -177,4 +177,3 @@ The final link includes preserved RESET_PENDING/resume behavior in the encrypted
 entry. No package publication, device flashing, production migration/enrollment
 or deployment was performed. Both Apps retain published dependency pins until
 qualified release adoption; incompatible old clients cannot bind after cutover.
-
