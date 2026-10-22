@@ -128,7 +128,7 @@ Managers without the optional method retain advertising-only behavior.
 | Acquire a local connection and verify the full serial | Composed BLE PLX / generated Rust adapter regressions connect the matching serial and release a mismatched serial | matched in source tests |
 | Preserve live advertisement identity | A delayed retrieved duplicate cannot erase the observed model/SN suffix or advertised address | matched in source tests |
 | Retire the exact scan and propagate retrieval failure | Stop/abort joins the pending query, suppresses late candidates and reports a current query error to its owner | matched in source tests |
-| Recover the SE's physical system connection and complete recording/upload/cleanup | The installed production Demo remains on public beta.20; the new port is not installed or published | unverified |
+| Recover the SE's physical system connection and complete recording/upload/cleanup | The private local Release candidate below is installed; a verified physical system-link recovery and publication remain separate | unverified |
 
 Local `npm run verify --prefix frameworks/react-native` passes all 586 checks,
 including the real pinned BLE manager type assignment, package validation,
@@ -141,3 +141,32 @@ A system Bluetooth link and an SDK-owned verified connection are separate.
 This correction does not forcibly release another app's or phone's connection,
 change the device binding, or authorize recording deletion. Package publication,
 consuming app delivery and fresh physical reconnect remain separate gates.
+
+### Local Release candidate on iPhone
+
+A local packed candidate from `8a9130f8` was installed over the existing Demo
+1.0.17 app as build 2, preserving its account and application data. The source
+app remains `d8925ea0`, with production environment/bundle identity. The staging
+workspace selects the packed SDK explicitly; the repository's published SDK pin
+and normal resolver are unchanged. This is a private candidate, not a registry
+release or a production rollout. OTA loading is disabled only in this local
+binary to keep the tested embedded candidate fixed.
+
+The npm 12.0.2 archive SHA-256 is
+`66c79ce13ff7508b9ed9deaab2b582e46adf2e5fbd49587b7922bf67454fe940`.
+The app's normal npm 11 frozen install and all mandatory hooks pass with that
+archive selected in the staging lock. Its installed BLE port matches source;
+the packed compiled `/runtime` also passes a nonadvertising system-candidate
+check. Demo typecheck, 106 migration checks and Release iOS/Android exports pass.
+The native iOS build, existing-profile signing, strict signature verification
+and selected-phone installed build-2 metadata pass. The embedded JavaScript bundle SHA-256
+is `d3e8d2dddc4f0c02d96142f1d5515695831c7edeeac4c317665089ed2d5b76d9`.
+
+The first normal UI attempt selects the intended known Note and remains
+Offline/Connecting. A fresh explicit 30-second discovery finishes with no Bota
+candidate shown. No fresh GATT identity, pairing/catalog or connection ownership
+is established. These observations do not establish whether another phone or
+client holds a system link, or whether a system-connected result was returned.
+No new recording, transfer, receipt or cleanup was attempted. Physical recovery
+and end-to-end acceptance remain unverified; the modeled source regression does
+not prove this phone's remaining cause.
