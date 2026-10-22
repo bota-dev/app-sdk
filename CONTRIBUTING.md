@@ -106,8 +106,16 @@ capabilities through the shipping Rust decoder to catch stale rejection
 expectations. Regenerate Apple/Android vector resources and update their
 digest assertions together; historical release evidence remains immutable.
 
-Flutter source changes also invalidate the unpublished synchronized release
-example's exact package inventory. Regenerate that template from the committed
+Flutter source changes invalidate the current source candidate's exact package
+inventory. After a version is published, keep its `release/examples/VERSION.json`
+immutable and use `release/candidates/VERSION.json` for PR/main CI. CI compares
+that checked template with the freshly built archive using the same strict
+file/hash rules; release `--check` and `--write-example` continue to use the
+release example. Before publication, prepare a new unoccupied version and its
+release example through the normal release procedure.
+
+For an unpublished synchronized version, source changes also invalidate the
+release example's exact package inventory. Regenerate that template from the committed
 package source (excluding unrelated working-tree edits), review changed paths
 and hashes, and rerun the complete CI candidate gate. Do not loosen template
 comparison, reuse an older candidate, or alter a published version's example.

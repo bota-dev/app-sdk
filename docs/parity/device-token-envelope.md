@@ -186,3 +186,26 @@ canonical encrypted-only provisioning scenario; Flutter's typed trace now expect
 `invalidInput` for rejected plaintext material. Both 33-scenario freshness checks
 and Dart 3.11-language formatting pass. Hosted native/Flutter reruns qualify the
 updated fixture resources; no core runtime or generated RN artifact changed.
+
+### Flutter post-publication candidate qualification
+
+Hosted CI at `92b5c12` passed all 87 Flutter tests and built both Android release
+APK and iOS release App. It then correctly rejected the changed package against
+the published beta.20 release example. That example remains byte-identical to
+`v2.0.0-beta.20`; source work must not rewrite a published inventory.
+
+PR/main CI now selects a separately checked `release/candidates/2.0.0-beta.20.json`.
+It is generated from the committed package source through the canonical archive
+and manifest tools. The inventory still contains 59 files; only the nine encrypted
+credential adapter/generated/model/test files differ from the published package.
+The same strict archive and file hash comparison applies. Release `--check` and
+`--write-example` continue to select the historical release example, and occupied
+registry versions still reject changed bytes. No version bump or publication is
+part of this repair; changed source requires a new version before release.
+
+Direct design review: encrypted-only delivery and wire behavior are unchanged;
+source-candidate integrity and published-history immutability remain enforced.
+All 152 release tooling tests pass, including CI/release template selection and
+changed-byte rejection. Canonical archive verification and exact template matching
+pass locally. The complete hosted candidate rerun remains the final build gate;
+physical device acceptance remains separate.

@@ -28,7 +28,10 @@ elif [[ "$sdk_version" == "$OCCUPIED_VERSION" ]]; then
   echo "Flutter release version $sdk_version is occupied by an immutable tag and must not be reused" >&2
   exit 1
 fi
-EXAMPLE_MANIFEST="$ROOT/release/examples/$sdk_version.json"
+# Source candidates can evolve after this version has been published. Keep the
+# immutable release example for --check; CI still requires an exact checked
+# inventory for the current source, including every packaged file's hash.
+EXAMPLE_MANIFEST="$(node "$ROOT/tools/flutter/select-manifest-template.mjs" "$ROOT" "$sdk_version" "$MODE")"
 if [[ "$candidate_ready" == true && ! -f "$EXAMPLE_MANIFEST" ]]; then
   echo "Flutter release example is missing for synchronized version $sdk_version" >&2
   exit 1

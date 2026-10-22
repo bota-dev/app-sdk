@@ -679,6 +679,25 @@ bytes must match. When preparing through the canonical Node archive/manifest
 tools on Windows, export Git source with `-c core.autocrlf=false` to retain the
 LF bytes used by hosted builders. Final CI must reproduce the inventory.
 
+### Source candidates after publication
+
+PR/main Flutter CI prefers `release/candidates/VERSION.json` when present and
+otherwise uses the release example. Both paths require the same exact archive
+and per-file hashes. This permits source development after publication without
+rewriting the published version's historical example. Normal `--check` and
+`--write-example` never select the CI template; a new version and normal release
+preparation are required before publishing changed bytes.
+
+To refresh the CI template, use the CI-pinned Node.js version (22.23.2) and
+export only the committed Flutter package files
+with LF bytes into a temporary directory. Use the same non-hidden tracked-file
+list as `package-release.sh`, then run `verify-publication.mjs create-candidate`,
+`verify-candidate` and `write-release-manifest` with the current release example
+and root Apple manifest. Save only the generated manifest to
+`release/candidates/VERSION.json`. Review the inventory diff and run the complete
+CI candidate gate. The temporary archive is inventory evidence, not evidence
+that Flutter tests or native consumers have run.
+
 ## Local Release Gate
 
 Use Node.js 22 or newer and the Rust toolchain pinned by the repository:
