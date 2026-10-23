@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.0-beta.21 (release candidate)
+
+- Deliver device tokens only as opaque `hpke_v1` credential envelopes through
+  the dedicated encrypted provisioning characteristic; reject plaintext paths.
+- Include the reviewed React Native system-connected peripheral discovery fix.
+- Preserve bind/provision/confirm ordering, trusted device-key enrollment, and
+  environment/signing trust requirements. Publication and hardware acceptance
+  remain separate gates.
+
 User-facing changes to the Bota App SDK. Entries under **Unreleased** describe
 source changes that are not in the published packages. Published versions and
 tags are immutable; package publication and application/device acceptance are

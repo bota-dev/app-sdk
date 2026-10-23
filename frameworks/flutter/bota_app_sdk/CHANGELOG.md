@@ -1,5 +1,14 @@
 ## 2.0.0-beta.20 (candidate)
 
+## 2.0.0-beta.21 (release candidate)
+
+- Deliver device tokens only as opaque `hpke_v1` credential envelopes through
+  the dedicated encrypted provisioning characteristic; reject plaintext paths.
+- Include the reviewed React Native system-connected peripheral discovery fix.
+- Preserve bind/provision/confirm ordering, trusted device-key enrollment, and
+  environment/signing trust requirements. Publication and hardware acceptance
+  remain separate gates.
+
 - Synchronize the SDK family with scoped encrypted-v2 completion/ownership,
   Find revision-2 authorization and BLE naming/model corrections. Flutter
   retains its native facade, Pigeon channels and installed adapter contracts.
