@@ -862,8 +862,9 @@ must:
    Android API 26-35 Bluetooth permissions.
 2. Rebuild the local Apple XCFramework and Android Maven candidate after
    removing the prior exact-version Android directory.
-3. Generate a complete disposable Flutter iOS/Android application and use an
-   isolated Gradle home.
+3. Generate disposable Flutter iOS/Android hosts with separate project and plugin
+   copies. Build the two release consumers concurrently, retain the isolated
+   Gradle home, and join both builds before reporting failure or cleaning up.
 4. Resolve `BotaAppSDK` from the exact local package and reserve the
    `dev.bota` group for the exact local Android repository.
 5. Produce a new Android release APK and unsigned iOS release application.
