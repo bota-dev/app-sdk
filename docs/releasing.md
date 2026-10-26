@@ -1,9 +1,3 @@
-# Candidate synchronized beta: 2.0.0-beta.22
-
-This candidate includes merged PR #51 at main `64a61ea552083e829c21f3b45ea4f8626b136332`. It preserves exact-one credential validation and never retries encrypted failure through plaintext. Beta.21 is already published; the dated checkpoints below retain their historical status.
-
-Canonical generation, Apple checksums and the complete Flutter inventory pass in preparation40334355007. Final exact main CI and protected publication remain required. Demo consumption is limited to development OTA for this request; Preview and production publication are outside scope. See [preflight](../release/evidence/2.0.0-beta.22-preflight.md).
-
 # Unpublished synchronized beta: 2.0.0-beta.21
 
 Beta.21 prepares the current main source with opaque encrypted device-token
