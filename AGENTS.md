@@ -1,7 +1,5 @@
 # AGENTS.md
 
-Beta.22 preparation includes merged PR #51 and targets the existing synchronized release. Beta.21 is already published; prior preparation paragraphs are historical. Require canonical generated inputs, exact main CI/inventory, independent PR approval and protected release approval. Demo rollout for this request is development OTA only. See [preflight](release/evidence/2.0.0-beta.22-preflight.md).
-
 Unpublished synchronized beta.21 has canonical Linux/Apple/Flutter preparation
 and all release-tool checks passing in run `40261663660`. Final PR/main CI,
 the required approving review, annotated tag and protected publication remain
