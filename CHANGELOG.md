@@ -7,6 +7,11 @@ tracked separately.
 
 ## Unreleased
 
+- Fix the React Native public client's leftover encrypted-only provisioning
+  check. A valid plaintext token now reaches the compatible adapter instead of
+  failing with `provision: internal`; mixed credentials still fail and encrypted
+  errors never fall back to plaintext.
+
 ## 2.0.0-beta.22 (candidate)
 
 - Include reviewed PR #51: accept exactly one plaintext or encrypted provisioning credential, preserving the backend-selected representation.
