@@ -32,6 +32,78 @@ test('Flutter consumer verification uses tools available on macOS runners', () =
   assert.match(script, /\|\s*grep\s+-Eq/);
 });
 
+for (const failingPlatform of ['', 'android', 'ios']) {
+  test(`Flutter consumers overlap and join both builds (${failingPlatform || 'success'})`, () => {
+    const root = mkdtempSync(join(tmpdir(), 'bota-flutter-parallel-'));
+    try {
+      const script = readFileSync(join(workspaceRoot, 'tools/flutter/test-consumers.sh'), 'utf8');
+      const builds = script.slice(script.indexOf('\nbuild_android() ('));
+      assert.match(builds, /^\nbuild_android\(\) \(/);
+      const fakeFlutter = `#!/usr/bin/env bash
+set -eu
+platform=android
+other=ios
+if [[ "$2" == ios ]]; then platform=ios; other=android; fi
+touch "$FIXTURE_ROOT/$platform.started"
+for ((attempt=0; attempt<100; attempt++)); do
+  [[ ! -f "$FIXTURE_ROOT/$other.started" ]] || break
+  sleep 0.05
+done
+[[ -f "$FIXTURE_ROOT/$other.started" ]] || exit 91
+if [[ "$platform" == android ]]; then
+  mkdir -p build/app/outputs/flutter-apk
+  touch build/app/outputs/flutter-apk/app-release.apk
+else
+  mkdir -p build/ios/iphoneos/Runner.app
+fi
+touch "$FIXTURE_ROOT/$platform.finished"
+[[ "$platform" != "$FAILING_PLATFORM" ]]
+`;
+      for (const path of ['sdk/bin/flutter', 'tools/flutter/run-flutter.sh']) {
+        mkdirSync(dirname(join(root, path)), { recursive: true });
+        writeFileSync(join(root, path), fakeFlutter);
+        chmodSync(join(root, path), 0o755);
+      }
+      mkdirSync(join(root, 'android/example/android'), { recursive: true });
+      mkdirSync(join(root, 'ios/example'), { recursive: true });
+      const gradle = join(root, 'android/example/android/gradlew');
+      writeFileSync(gradle, '#!/usr/bin/env bash\necho dev.bota:bota-app-sdk:2.0.0-beta.20\n');
+      chmodSync(gradle, 0o755);
+      const runner = join(root, 'run.sh');
+      writeFileSync(runner, `#!/usr/bin/env bash
+set -euo pipefail
+consumer_root="$(cd "$1" && pwd)"
+export FIXTURE_ROOT="$consumer_root"
+workspace_root="$consumer_root"
+consumer="$consumer_root/android/example"
+ios_consumer="$consumer_root/ios/example"
+consumer_gradle_home="$consumer_root/gradle-home"
+flutter_home="$consumer_root/sdk"
+sdk_version=2.0.0-beta.20
+require_file() { test -f "$1"; }
+${builds}`);
+      const result = spawnSync('bash', [runner, root], {
+        encoding: 'utf8',
+        timeout: 15_000,
+        env: { ...process.env, FAILING_PLATFORM: failingPlatform },
+      });
+      assert.equal(result.error, undefined, String(result.error));
+      assert.equal(existsSync(join(root, 'android.finished')), true, result.stderr);
+      assert.equal(existsSync(join(root, 'ios.finished')), true, result.stderr);
+      assert.equal(result.status, failingPlatform ? 1 : 0, result.stdout + result.stderr);
+      if (failingPlatform) {
+        assert.match(result.stderr, /Flutter release consumer build failed/);
+        assert.doesNotMatch(result.stdout, /release consumer built:/);
+      } else {
+        assert.match(result.stdout, /Flutter Android release consumer built:/);
+        assert.match(result.stdout, /Flutter iOS release consumer built:/);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
 const packageFiles = [
   '.pubignore',
   'LICENSE',
