@@ -1066,7 +1066,13 @@ The single tag-triggered release workflow then:
    only `beta`, checks exact occupied bytes, and preserves `latest`.
 5. Publishes or verifies CocoaPods, waits for CDN readiness, and runs the public
    SwiftPM, CocoaPods and API 26/35 Maven consumer gates. Registry acceptance
-   alone does not establish customer install readiness.
+   alone does not establish customer install readiness. The CocoaPods consumer
+   uses isolated specs/cache directories and requires its normal CDN-backed
+   `pod install --repo-update` to succeed within the readiness wait. CDN index
+   and podspec reads alone can disagree with CocoaPods during propagation.
+   Only missing-spec exit 31 retries within the existing 61-check budget;
+   other install failures stop immediately. Exact lockfile identity, refusal
+   of external sources and the Release build remain required afterward.
 6. Verifies the already preserved Flutter payload against the tag inventory;
    it does not rebuild the package, native libraries or local Flutter examples.
 7. Publishes Flutter in the same dependency graph, respecting workflow
