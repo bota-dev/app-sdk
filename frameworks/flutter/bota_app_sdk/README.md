@@ -1,6 +1,6 @@
 # Bota SDK for Flutter
 
-Source candidate `2.0.0-beta.20` synchronizes encrypted-v2 completion and
+Source candidate `2.0.0-beta.21` synchronizes encrypted-v2 completion and
 scoped ownership, Find authorization revision 2 and BLE naming/model corrections.
 Flutter retains its native facade and installed adapter contracts. Published
 beta.19 remains the installation baseline while canonical artifacts, exact main
@@ -12,8 +12,8 @@ require a new binary; app delivery and device acceptance remain separate.
 The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
 `dev.bota:bota-app-sdk` on Android. Replace the old dependency and Dart imports;
 do not install both packages in the same application. Historical 1.x releases
-remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.20`.
-See the [candidate preflight](../../../release/evidence/2.0.0-beta.20-preflight.md).
+remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.21`.
+See the [candidate preflight](../../../release/evidence/2.0.0-beta.21-preflight.md).
 Rebuild native applications and reconnect explicitly after connection loss.
 Completed-resume and broader hardware acceptance remain separate.
 

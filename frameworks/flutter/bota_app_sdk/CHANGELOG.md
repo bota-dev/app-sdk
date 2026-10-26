@@ -1,5 +1,10 @@
 ## 2.0.0-beta.20 (candidate)
 
+## 2.0.0-beta.21 (candidate)
+
+- Include current main changes for opaque encrypted device-token provisioning and system-connected BLE discovery.
+- Synchronize the five SDK package versions; publication and hardware acceptance remain pending.
+
 - Synchronize the SDK family with scoped encrypted-v2 completion/ownership,
   Find revision-2 authorization and BLE naming/model corrections. Flutter
   retains its native facade, Pigeon channels and installed adapter contracts.
