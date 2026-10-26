@@ -810,9 +810,11 @@ function validMaterial(
     && material.apiEndpoint instanceof Uint8Array
     && material.apiEndpoint.byteLength > 0
     && material.deviceToken instanceof Uint8Array
-    && material.deviceToken.byteLength === 0
-    && material.credentialEnvelope instanceof Uint8Array
-    && material.credentialEnvelope.byteLength >= 230 && material.credentialEnvelope.byteLength <= 768
+    && (material.credentialEnvelope === undefined
+      ? material.deviceToken.byteLength > 0 && material.deviceToken.byteLength <= 255
+        && material.deviceToken.every(byte => byte >= 0x21 && byte <= 0x7e)
+      : material.deviceToken.byteLength === 0 && material.credentialEnvelope instanceof Uint8Array
+        && material.credentialEnvelope.byteLength >= 230 && material.credentialEnvelope.byteLength <= 768)
     && Number.isSafeInteger(material.mtu)
     && material.mtu > 0
 }

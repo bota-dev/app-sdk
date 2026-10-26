@@ -102,7 +102,7 @@ Characteristic shorthand `xxxx/yyyy` expands to
 | Battery | Standard `180F` / `2A19` | Battery level |
 | AUDIO | `0001` | Data `0001`, codec `0002`, control `0003`; allocation alone does not enable a recording relay |
 | CONTROL | `0002` | Device status `0001`, recording control `0002`, recording status `0003`, time sync `0004`, device command `0005` |
-| PROVISIONING | `0003` | Pairing state `0001`, retired token UUID `0002` (always rejects), API endpoint `0003`, WiFi config `0004`, result `0005`, settings `0006` |
+| PROVISIONING | `0003` | Pairing state `0001`, plaintext Token `0002` (compatibility mode), API endpoint `0003`, WiFi config `0004`, result `0005`, settings `0006` |
 | STORAGE | `0004` | Storage info `0001`, legacy list `0002`, legacy transfer `0003`, legacy control `0004`, legacy status `0005`; v2 allocation `0006` through `000C` below |
 | AUTH | `0005` | Device public key `0001`, nonce `0002`, historical backend public key `0003`, device certificate `0004` |
 | WIFI_CONFIG | `0006` | Grant `0001`, credential `0002`, status `0003`, scan `0004` |
@@ -130,7 +130,7 @@ and omits `device_token`. The backend selects an independently enrolled `PK_D`;
 the observed BLE key only checks identity consistency. The App/SDK forwards the
 opaque envelope to `000A/0001` without decrypting it. RN uses
 `DeviceManager.provisionEnvelope` with canonical unpadded base64url; native,
-Web and Flutter provisioning material carries bytes. Supply the encrypted envelope and leave the reserved raw-token slot empty. See [device token envelope v1](protocol/device-token-v1.md)
+Web and Flutter provisioning material carries bytes. For encrypted delivery, supply the envelope and leave the raw-token slot empty. See [device token envelope v1](protocol/device-token-v1.md)
 for the complete crypto, payload, SDK and rollout contract.
 
 Encrypted writes use `index:u8 || count:u8 || data`, zero-based, ordered,
@@ -140,11 +140,17 @@ index0 starts a new assembly. Disconnect clears partial state; a partial assembl
 older than 30 seconds is cleared on the next write. Initial BLE installation
 accepts purpose1; purpose2 belongs to a refresh consumer and cannot be relayed
 through this initial-bind path. Firmware verifies/decrypts, persists and reads
-back the token before reporting the existing result. All backend and firmware paths reject plaintext; missing support or validation failure
-must never trigger a fallback to `DEVICE_TOKEN`.
+back the token before reporting the existing result. Missing encrypted support or validation failure must never trigger a fallback
+to `DEVICE_TOKEN`.
 
-**Retired:** `0003/0002` `DEVICE_TOKEN` always returns invalid-token. No
-plaintext assembler, installer, SDK write branch or build opt-out remains.
+**Plaintext compatibility (unreleased):** server configuration
+`DEVICE_TOKEN_ENCRYPTION_ENABLED=false` is the default and returns raw
+`device_token` without trusted-key enrollment. SDK material uses a nonempty token
+and no envelope; `0003/0002` carries 1–255 printable ASCII bytes with the same
+ordered framing. It shares deferred persistence, read-back, paired/reset and
+connection fencing. Interleaved formats cannot combine fragments. Compatible
+clients accept either server response; only the explicit server policy selects
+plaintext, never a failed encrypted operation.
 
 Encrypted delivery retains bind → provision → confirm/abort and existing result values;
 no additional user action or application request round trip is introduced.
