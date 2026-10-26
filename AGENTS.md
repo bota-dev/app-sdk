@@ -1,5 +1,10 @@
 # AGENTS.md
 
+Unpublished synchronized beta.21 has canonical Linux/Apple/Flutter preparation
+and all release-tool checks passing in run `40261663660`. Final PR/main CI,
+the required approving review, annotated tag and protected publication remain
+pending. See [preflight evidence](release/evidence/2.0.0-beta.21-preflight.md).
+
 Unreleased encrypted token delivery adds an opaque HPKE envelope to existing
 provisioning material and a dedicated credential characteristic. Apps retain the
 same bind/provision/confirm flow. See [contract and evidence](docs/parity/device-token-envelope.md).

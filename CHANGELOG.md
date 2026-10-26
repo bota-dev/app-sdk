@@ -7,13 +7,6 @@ tracked separately.
 
 ## Unreleased
 
-## 2.0.0-beta.21 (candidate)
-
-- Include opaque encrypted device-token provisioning from the latest main source.
-- Include system-connected BLE discovery in the generated React Native runtime.
-- Synchronize the five SDK packages. Publication and device acceptance are pending.
-
-
 - Add opaque encrypted device-token provisioning through `credentialEnvelope` and
   React Native `devices.provisionEnvelope`, using the existing confirmation flow.
   Secure firmware requires the new credential service. See
@@ -52,6 +45,12 @@ tracked separately.
   queued scan/timer callbacks while the Rust reconnect workflow awaits scan stop.
   Fresh serial verification remains required. These corrections use existing
   version 1 OS ports; publication and physical acceptance are pending.
+
+## 2.0.0-beta.21 (candidate)
+
+- Include opaque encrypted device-token provisioning from the latest main source.
+- Include system-connected BLE discovery in the generated React Native runtime.
+- Synchronize the five SDK packages. Publication and device acceptance are pending.
 
 ## 2.0.0-beta.20 (candidate)
 
