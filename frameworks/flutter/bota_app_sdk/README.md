@@ -1,11 +1,10 @@
 # Bota SDK for Flutter
 
-Source candidate `2.0.0-beta.21` synchronizes encrypted-v2 completion and
-scoped ownership, Find authorization revision 2 and BLE naming/model corrections.
-Flutter retains its native facade and installed adapter contracts. Published
-beta.19 remains the installation baseline while canonical artifacts, exact main
-CI, protected publication and public-consumer gates are pending. Native apps
-require a new binary; app delivery and device acceptance remain separate.
+Source candidate `2.0.0-beta.21` carries opaque encrypted device-token
+provisioning through the existing native adapters and confirmation flow.
+Flutter retains its native facade and installed adapter contracts. Canonical
+artifacts, exact main CI, protected publication and public consumer checks
+remain required. Device acceptance and application delivery remain separate.
 
 ## Package Name Migration
 

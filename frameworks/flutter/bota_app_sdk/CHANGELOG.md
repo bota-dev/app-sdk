@@ -1,9 +1,11 @@
-## 2.0.0-beta.20 (candidate)
-
 ## 2.0.0-beta.21 (candidate)
 
-- Include current main changes for opaque encrypted device-token provisioning and system-connected BLE discovery.
-- Synchronize the five SDK package versions; publication and hardware acceptance remain pending.
+- Carry opaque encrypted device-token provisioning through the existing native
+  adapters and confirmation flow.
+- Synchronize native package pins and archive evidence with the SDK family.
+  Publication and device acceptance are pending.
+
+## 2.0.0-beta.20 (candidate)
 
 - Synchronize the SDK family with scoped encrypted-v2 completion/ownership,
   Find revision-2 authorization and BLE naming/model corrections. Flutter

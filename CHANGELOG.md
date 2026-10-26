@@ -1,16 +1,18 @@
 # Changelog
 
-## 2.0.0-beta.21 (candidate)
-
-- Include current main changes for opaque encrypted device-token provisioning and system-connected BLE discovery.
-- Synchronize the five SDK package versions; publication and hardware acceptance remain pending.
-
 User-facing changes to the Bota App SDK. Entries under **Unreleased** describe
 source changes that are not in the published packages. Published versions and
 tags are immutable; package publication and application/device acceptance are
 tracked separately.
 
 ## Unreleased
+
+## 2.0.0-beta.21 (candidate)
+
+- Include opaque encrypted device-token provisioning from the latest main source.
+- Include system-connected BLE discovery in the generated React Native runtime.
+- Synchronize the five SDK packages. Publication and device acceptance are pending.
+
 
 - Add opaque encrypted device-token provisioning through `credentialEnvelope` and
   React Native `devices.provisionEnvelope`, using the existing confirmation flow.
