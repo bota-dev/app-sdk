@@ -180,7 +180,7 @@ test('Find revision 2 control agrees with the shared fixed server/firmware vecto
   assert.equal(core.codec('encodeFindGrant',{grantBlob:v.grantBlob,capacity:193}).length,193);
 });
 
-test('actual generated Rust core refuses plaintext material before subscribing or writing', () => {
+test('actual generated Rust core provisions plaintext only through the legacy characteristic', () => {
   const engine = core.createEngine();
   const context = { version: 1, generation: '1', operation: 'Provision', cancellation_id: cancellation };
   const step = input => {
@@ -191,13 +191,18 @@ test('actual generated Rust core refuses plaintext material before subscribing o
   const complete = (request, kind) => step({ action: 'dispatch', event: { request_id: request.request_id, kind } });
   try {
     let effects = step({ action: 'start', capabilities: ['Ble', 'Timer', 'Persistence', 'HostMaterial'],
-      command: { Provision: { device: 'EVFXXW67KP', material_id: 'retired-bind' } } });
+      command: { Provision: { device: 'EVFXXW67KP', material_id: 'compat-bind' } } });
     effects = complete(effects.find(e => e.effect.Ble?.Read), { Ble: { ReadCompleted: { value: Array(16).fill(17) } } });
     effects = complete(effects.find(e => e.effect.Ble?.Read), { Ble: { ReadCompleted: { value: Array(64).fill(34) } } });
     effects = complete(effects.find(e => e.effect.HostMaterial?.PrepareProvisioning), { ProvisioningMaterialPrepared: { material: {
-      api_endpoint: [0], device_token: [...Buffer.from('dtok_retired')], credential_envelope: null, mtu: 185,
+      api_endpoint: [0], device_token: [...Buffer.from('dtok_compat')], credential_envelope: null, mtu: 185,
     } } });
-    assert.ok(effects.some(e => e.effect.Notify?.Failed), 'plaintext must fail in the generated core');
-    assert.equal(effects.some(e => e.effect.Ble?.Subscribe || e.effect.Ble?.Write), false);
+    const subscription = effects.find(e => e.effect.Ble?.Subscribe);
+    assert.ok(subscription, 'plaintext must reach subscription in the regenerated core');
+    effects = complete(subscription, { Ble: { Subscribed: { characteristic_uuid: subscription.effect.Ble.Subscribe.characteristic_uuid } } });
+    effects = complete(effects.find(e => e.effect.Ble?.Write), { Ble: 'WriteCompleted' });
+    const write = effects.find(e => e.effect.Ble?.Write)?.effect.Ble.Write;
+    assert.equal(write.characteristic_uuid, 'B07A0003-0002-1000-8000-00805F9B34FB');
+    assert.deepEqual(write.payload, [0, 1, ...Buffer.from('dtok_compat')]);
   } finally { engine.dispose(); }
 });

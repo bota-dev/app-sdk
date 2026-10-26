@@ -1,5 +1,21 @@
 # Encrypted device token provisioning
 
+## Plaintext/encrypted compatibility (unreleased)
+
+The current byte and API contract is [device-token-v1](../../protocol/device-token-v1.md).
+Rust accepts exactly one raw token or envelope and selects the corresponding
+characteristic before writing. RN's material broker and compatibility manager,
+and the Web provider, enforce the same exclusive choice. No failed encrypted
+operation falls back to plaintext. Apple/Android/Flutter retain their existing
+optional envelope and raw-token fields; no ABI renumbering is needed.
+
+The RN runtime is regenerated from this Rust source on the required Linux
+1.98.0 toolchain. Compatible Apps and firmware must accompany the qualified SDK
+release before a running backend switches to default plaintext. Published
+package pins and physical acceptance remain separate.
+
+## Historical implementation checkpoints
+
 ## Mandatory encrypted delivery — 2026-10-22
 
 The user approved a direct cutover with no legacy compatibility. Bind and refresh

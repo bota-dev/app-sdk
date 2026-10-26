@@ -312,7 +312,7 @@ fn encrypted_token_uses_dedicated_characteristic_without_plaintext_fallback() {
 }
 
 #[test]
-fn plaintext_material_is_rejected_before_subscribing_or_writing() {
+fn mixed_material_is_rejected_before_subscribing_or_writing() {
     let mut engine = WorkflowEngine::default();
     let (request, _) = reach_material_request(&mut engine);
     let effects = engine
@@ -322,7 +322,7 @@ fn plaintext_material_is_rejected_before_subscribing_or_writing() {
                 material: ProvisioningMaterial {
                     api_endpoint: vec![0],
                     device_token: b"dtok_legacy".to_vec(),
-                    credential_envelope: None,
+                    credential_envelope: Some(envelope()),
                     mtu: 185,
                 },
             },
@@ -335,4 +335,40 @@ fn plaintext_material_is_rejected_before_subscribing_or_writing() {
         e.effect,
         Effect::Ble(BleEffect::Write { .. } | BleEffect::Subscribe { .. })
     )));
+}
+
+#[test]
+fn plaintext_token_uses_legacy_characteristic_only() {
+    let mut engine = WorkflowEngine::default();
+    let (subscription, _) = reach_subscription(
+        &mut engine,
+        ProvisioningMaterial {
+            api_endpoint: vec![0],
+            device_token: b"dtok_legacy".to_vec(),
+            credential_envelope: None,
+            mtu: 23,
+        },
+    );
+    let effects = engine
+        .dispatch(host(
+            subscription,
+            HostEventKind::Ble(BleEvent::Subscribed {
+                characteristic_uuid: CHAR_PROVISIONING_RESULT.into(),
+            }),
+        ))
+        .unwrap();
+    let endpoint = request_id(&effects, |e| {
+        matches!(e, Effect::Ble(BleEffect::Write { .. }))
+    });
+    let effects = engine
+        .dispatch(host(endpoint, HostEventKind::Ble(BleEvent::WriteCompleted)))
+        .unwrap();
+    assert!(effects.iter().any(|e| matches!(&e.effect,
+        Effect::Ble(BleEffect::Write { service_uuid, characteristic_uuid, payload, .. })
+        if service_uuid == bota_device_sdk_core::generated::protocol::SERVICE_BOTA_PROVISIONING
+        && characteristic_uuid == CHAR_DEVICE_TOKEN && payload == b"\x00\x01dtok_legacy")));
+    assert!(!effects.iter().any(
+        |e| matches!(&e.effect, Effect::Ble(BleEffect::Write {characteristic_uuid, ..})
+        if characteristic_uuid == CHAR_CREDENTIAL_ENVELOPE)
+    ));
 }
