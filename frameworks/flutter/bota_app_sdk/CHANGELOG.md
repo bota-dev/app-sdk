@@ -1,3 +1,10 @@
+## 2.0.0-beta.21 (candidate)
+
+- Carry opaque encrypted device-token provisioning through the existing native
+  adapters and confirmation flow.
+- Synchronize native package pins and archive evidence with the SDK family.
+  Publication and device acceptance are pending.
+
 ## 2.0.0-beta.20 (candidate)
 
 - Synchronize the SDK family with scoped encrypted-v2 completion/ownership,

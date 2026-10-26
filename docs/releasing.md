@@ -1,3 +1,14 @@
+# Unpublished synchronized beta: 2.0.0-beta.21
+
+Beta.21 prepares the current main source with opaque encrypted device-token
+provisioning and system-connected BLE discovery. Canonical Linux generation,
+Apple archives, full Flutter candidates and release-tool checks pass in
+[preparation 40261663660](https://github.com/bota-dev/app-sdk/actions/runs/40261663660).
+See the [candidate evidence](../release/evidence/2.0.0-beta.21-preflight.md).
+Final PR/main CI, the required approving review, tag creation and protected
+publication remain pending. Earlier dated checkpoints below retain their
+historical scope.
+
 # Published synchronized beta: 2.0.0-beta.19
 
 Protected [release 38832459672](https://github.com/bota-dev/app-sdk/actions/runs/38832459672)

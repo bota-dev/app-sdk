@@ -46,6 +46,12 @@ tracked separately.
   Fresh serial verification remains required. These corrections use existing
   version 1 OS ports; publication and physical acceptance are pending.
 
+## 2.0.0-beta.21 (candidate)
+
+- Include opaque encrypted device-token provisioning from the latest main source.
+- Include system-connected BLE discovery in the generated React Native runtime.
+- Synchronize the five SDK packages. Publication and device acceptance are pending.
+
 ## 2.0.0-beta.20 (candidate)
 
 - Preserve confirmed encrypted-v2 upload completion across runtime retirement,
