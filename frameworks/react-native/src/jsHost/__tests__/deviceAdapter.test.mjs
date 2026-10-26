@@ -1175,6 +1175,49 @@ test('generated provisioning waits for exact application material and subscribes
   await f.adapter.destroy();
 });
 
+for (const encrypted of [false, true]) {
+  test(`public RN runtime provisions ${encrypted ? 'encrypted' : 'plaintext'} credentials through the client bridge`,
+    { timeout: 5000 }, async () => {
+      const f = fixture();
+      f.values.set(f.metadata.CHAR_AUTH_NONCE, new Uint8Array(16).fill(2));
+      f.values.set(f.metadata.CHAR_PK_D, new Uint8Array(64).fill(3));
+      const credential = encrypted
+        ? Buffer.concat([Buffer.from('BOTATOK1'), Buffer.alloc(222)])
+        : Buffer.from('dtok_synthetic_bridge_regression');
+      const characteristic = encrypted ? 'B07A000A-0001-1000-8000-00805F9B34FB'
+        : f.metadata.CHAR_DEVICE_TOKEN;
+      let notify;
+      f.ports.ble.subscribe = async (address, callback) => {
+        if (address.characteristicUuid === f.metadata.CHAR_PROVISIONING_RESULT) notify = callback;
+        return { async remove() { notify = undefined; } };
+      };
+      const write = f.ports.ble.write;
+      f.ports.ble.write = async (address, bytes, response, context) => {
+        await write(address, bytes, response, context);
+        if (address.characteristicUuid === characteristic && bytes[0] + 1 === bytes[1]) {
+          notify(Uint8Array.of(0));
+        }
+      };
+      const { createBotaReactNativeJsRuntime } = loadSource('../runtime.ts');
+      const runtime = createBotaReactNativeJsRuntime(f.ports);
+      try {
+        await runtime.client.configure({ logLevel: 'none', backgroundSyncEnabled: false });
+        const manager = runtime.client.devices;
+        const device = await manager.connect({ id: 'selected', rssi: -50, discoveredAt: new Date(0) });
+        if (encrypted) await manager.provisionEnvelope(device, credential.toString('base64url'), 'development');
+        else await manager.provision(device, credential.toString('ascii'), 'development');
+        const writes = writesBeyondTimeSync(f);
+        assert.deepEqual(writes.map(call => call[1].characteristicUuid), [f.metadata.CHAR_API_ENDPOINT, characteristic]);
+        assert.deepEqual(writes[0][2], [0]);
+        assert.deepEqual(writes[1][2], [0, 1, ...credential]);
+      } finally {
+        await runtime.client.destroy();
+        await f.adapter.destroy();
+        f.core.dispose();
+      }
+    });
+}
+
 test('cancelling a provisioning callback rejects its late response and emits no protected command', async () => {
   const f = fixture();
   f.values.set(f.metadata.CHAR_AUTH_NONCE, new Uint8Array(16).fill(2));

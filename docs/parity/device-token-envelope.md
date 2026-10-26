@@ -9,6 +9,25 @@ and the Web provider, enforce the same exclusive choice. No failed encrypted
 operation falls back to plaintext. Apple/Android/Flutter retain their existing
 optional envelope and raw-token fields; no ABI renumbering is needed.
 
+The public RN client material callback must enforce that same exclusive choice,
+not the superseded encrypted-only rule. Rejecting raw material in `client.ts`
+prevents any credential write and surfaces as `provision: internal` from the
+shared workflow. The public-runtime regression exercises DeviceManager, the
+client callback, material broker and generated core together for both delivery
+forms; testing the App parser and core separately does not cover this boundary.
+
+### RN client compatibility review
+
+| Requirement | Evidence | Status / remaining check |
+| --- | --- | --- |
+| Both delivery forms traverse the public RN API | The new public-runtime regression reproduced `provision: internal` for plaintext before the fix; both paths pass after it | Source verified |
+| Exactly one bounded credential; no crypto fallback | Public-client tests cover 1/255-byte raw tokens and reject empty, mixed, control-character and oversized inputs; the installed-package test rejects encrypted device failure without a raw write | Locally verified |
+| Qualified application artifact | 595 RN tests, type checks, five installed public-runtime cases, App binding/parser checks and license checks pass; the local beta.22 patch APK embeds the corrected client source | Local APK only; no registry publication or device acceptance |
+| Existing lifecycle and ownership | The correction only changes callback admission; generated Rust, nonce/key reads, BLE framing, result handling and confirm/abort stay unchanged | Physical pairing remains to be tested |
+
+The local APK uses a beta.22 package plus this source patch. Its package version
+alone does not identify the fix; verify the artifact receipt and embedded client.
+
 The RN runtime is regenerated from this Rust source on the required Linux
 1.98.0 toolchain. Compatible Apps and firmware must accompany the qualified SDK
 release before a running backend switches to default plaintext. Published

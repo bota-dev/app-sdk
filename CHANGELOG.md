@@ -7,6 +7,11 @@ tracked separately.
 
 ## Unreleased
 
+- Fix the React Native public client's leftover encrypted-only provisioning
+  check. A valid plaintext token now reaches the compatible adapter instead of
+  failing with `provision: internal`; mixed credentials still fail and encrypted
+  errors never fall back to plaintext.
+
 - Add opaque encrypted device-token provisioning through `credentialEnvelope` and
   React Native `devices.provisionEnvelope`, using the existing confirmation flow.
   Secure firmware requires the new credential service. See

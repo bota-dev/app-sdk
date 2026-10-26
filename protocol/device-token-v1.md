@@ -124,6 +124,9 @@ Rust `ProvisioningMaterial` accepts exactly one nonempty raw `device_token`
 before any write. Apple, Android, Web and Flutter carry bytes; RN exposes raw
 `DeviceManager.provision` and canonical-base64url `provisionEnvelope`. It never
 decrypts envelopes and never retries an encrypted failure via the raw path.
+The public RN client's material callback must accept the same exclusive raw/envelope
+choice before forwarding to the adapter; an encrypted-only callback would reject
+plaintext before any credential write even when the generated core supports it.
 Bota One/Demo keep published dependency pins until the compatible runtime and
 release are qualified. Deploy compatible firmware/SDK/Apps before changing a
 running encrypted-only backend to plaintext. Missing configuration selects
