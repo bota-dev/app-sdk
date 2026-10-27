@@ -74,10 +74,12 @@ target 'PublicPodConsumer' do
 end
 EOF
 
-node "$ROOT/tools/release/wait-cocoapods.mjs" "$VERSION"
 (
   cd "$temporary"
-  "${pod_command[@]}" install --repo-update
+  export CP_HOME_DIR="$temporary/cocoapods-home"
+  export CP_REPOS_DIR="$temporary/cocoapods-repos"
+  export CP_CACHE_DIR="$temporary/cocoapods-cache"
+  node "$ROOT/tools/release/wait-cocoapods.mjs" "$VERSION" -- "${pod_command[@]}"
 )
 if grep -q '^EXTERNAL SOURCES:' "$temporary/Podfile.lock"; then
   echo "Public CocoaPods consumer resolved a local source" >&2
