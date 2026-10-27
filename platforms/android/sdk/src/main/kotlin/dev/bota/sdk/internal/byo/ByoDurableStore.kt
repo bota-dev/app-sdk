@@ -28,7 +28,7 @@ internal class ByoDurableStore(val root: File): AutoCloseable {
     }
     override fun close() {try {owner.release()} finally {lease.close()}}
     private fun path(name: String): File {
-        require(name in setOf("documents","state","ciphertext"));return File(root,name)
+        require(name in setOf("documents","state","ciphertext","segment"));return File(root,name)
     }
     fun load(name: String): ByteArray? {
         val path=path(name).toPath()
@@ -49,11 +49,11 @@ internal class ByoDurableStore(val root: File): AutoCloseable {
         } finally {Files.deleteIfExists(tmp)}
     }
     fun ciphertext(): File=path("ciphertext")
-    fun createCiphertext(): FileChannel {
-        val path=ciphertext().toPath()
+    fun createCiphertext(name: String="ciphertext"): FileChannel {
+        val path=path(name).toPath()
         val channel=FileChannel.open(path,CREATE,WRITE,TRUNCATE_EXISTING,NOFOLLOW_LINKS)
         Files.setPosixFilePermissions(path,PosixFilePermissions.fromString("rw-------"));return channel
     }
-    fun removeCiphertext() {Files.deleteIfExists(ciphertext().toPath());flushDirectory(root)}
+    fun removeCiphertext() {Files.deleteIfExists(ciphertext().toPath());Files.deleteIfExists(path("segment").toPath());flushDirectory(root)}
     private fun flushDirectory(directory: File) {FileChannel.open(directory.toPath(),READ,NOFOLLOW_LINKS).use {it.force(true)}}
 }

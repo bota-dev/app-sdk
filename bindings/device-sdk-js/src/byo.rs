@@ -5,6 +5,7 @@ use crate::{
     engine::invalid,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use bota_device_sdk_core::model::byo_customer::{self, CUSTOMER_HOOKS, PACKAGE_PROFILE};
 use bota_device_sdk_core::{
     error::DeviceSdkError, generated::protocol as wire, model::*, protocol::*,
 };
@@ -395,7 +396,42 @@ impl Machine {
         self.reply(action)
     }
     fn run(mut self) -> Result<Vec<u8>, DeviceSdkError> {
+        if self.stage == "package_plan" {
+            return self.package_plan();
+        }
         let action = match self.stage.as_str() {
+            "package_append" => {
+                json!({"kind":"file_append","offset":self.source_length.to_string(),"bytes":self.trailer()?})
+            }
+            "package_finish" => {
+                json!({"kind":"file_finish","length":(self.source_length as usize+self.trailer()?.len()).to_string()})
+            }
+            "package_range" => {
+                json!({"kind":"file_range","key":format!("byo/{}/ciphertext",self.identity_key),"offset":number(&self.segment,"offset")?.to_string(),"length":number(&self.segment,"length")?})
+            }
+            "package_grant" => self.http(
+                "batch",
+                format!("{}/upload", self.endpoint()?),
+                Some(json!({"segment":self.segment})),
+                false,
+            ),
+            "package_whole_grant" => self.http(
+                "batch",
+                format!("{}/upload", self.endpoint()?),
+                Some(json!({})),
+                false,
+            ),
+            "package_file" => {
+                json!({"kind":"file_start","key":format!("byo/{}/segment",self.identity_key)})
+            }
+            "package_segment_append" => {
+                json!({"kind":"file_append","offset":"0","bytes":self.bytes})
+            }
+            "package_segment_flush" => {
+                json!({"kind":"file_finish","length":self.bytes.len().to_string(),"sha256":sha(&self.bytes)})
+            }
+            "package_put" => json!({"kind":"put","target":self.upload}),
+            "stream_checkpoint" => self.http("stream", self.endpoint()?, None, false),
             "refresh_initial" | "refresh_periodic" | "refresh_open" | "refresh_receipt" => {
                 self.action("refresh")
             }
@@ -411,6 +447,13 @@ impl Machine {
                 };
                 caps["durable_source"] = json!(true);
                 caps["durable_receipt"] = json!(true);
+                caps["customer_hooks"] = json!(CUSTOMER_HOOKS);
+                caps["max_ciphertext_bytes"] = json!(
+                    caps["max_ciphertext_bytes"]
+                        .as_u64()
+                        .unwrap_or(134201332)
+                        .min(134201332)
+                );
                 self.http("batch", "/capabilities".into(), Some(caps), false)
             }
             "select_source" => {
@@ -502,7 +545,11 @@ impl Machine {
             "complete" => self.http(
                 "batch",
                 format!("{}/complete", self.endpoint()?),
-                Some(json!({"manifest":self.manifest})),
+                Some(if self.customer() {
+                    json!({"manifest":self.manifest,"upload_package":self.docs["upload_package"]})
+                } else {
+                    json!({"manifest":self.manifest})
+                }),
                 true,
             ),
             "complete_wait" => json!({"kind":"wait","milliseconds":5000}),
@@ -516,7 +563,7 @@ impl Machine {
             "confirm" => self.ble(wire::BYO_BLE_CONFIRM, self.bytes.clone()),
             "missing_status" => self.http("batch", self.endpoint()?, None, false),
             "remove_file" => {
-                json!({"kind":"file_remove","key":format!("byo/{}/ciphertext",self.identity_key)})
+                json!({"kind":"file_remove","key":format!("byo/{}/ciphertext",self.identity_key),"temporaryKey":format!("byo/{}/segment",self.identity_key)})
             }
             "result" => {
                 json!({"kind":"result","value":{"recordingId":text(&self.context,"recording_id")?,"uploadSessionId":text(&self.context,"upload_session_id")?}})
@@ -595,6 +642,54 @@ impl Machine {
         };
         self.reply(action)
     }
+    fn customer(&self) -> bool {
+        self.docs["customer_package"] == true
+    }
+    fn trailer(&self) -> Result<Vec<u8>, DeviceSdkError> {
+        STANDARD
+            .decode(text(&self.docs, "package_trailer")?)
+            .map_err(|_| fail("invalid package trailer"))
+    }
+    fn package_plan(mut self) -> Result<Vec<u8>, DeviceSdkError> {
+        let body = self.source_length.div_ceil(16384);
+        if self.docs["package_sent"] == true {
+            return self.goto("complete");
+        }
+        if self.docs["assembled"] != true {
+            return self.goto("package_whole_grant");
+        }
+        if body >= 8192 {
+            return Err(fail("too many package segments"));
+        }
+        let next = self
+            .docs
+            .get("package_next")
+            .map(|_| number(&self.docs, "package_next"))
+            .transpose()?
+            .unwrap_or(body);
+        if next > body + 1 {
+            return Err(fail("invalid package cursor"));
+        }
+        if next == body + 1 {
+            self.docs["package_sent"] = json!(true);
+            if self.phase() == Some(ByoPhase::HttpWholeFile) {
+                self.advance_recovery(ByoRecoveryEvent::VerificationPending)?;
+            }
+            return self.save("complete");
+        }
+        let offset = if next == body {
+            self.source_length
+        } else {
+            next * 16384
+        };
+        let length = if next == body {
+            self.trailer()?.len() as u32
+        } else {
+            (self.source_length - offset).min(16384)
+        };
+        self.segment = json!({"index":next,"offset":offset,"length":length});
+        self.goto("package_range")
+    }
     fn goto(mut self, stage: &str) -> Result<Vec<u8>, DeviceSdkError> {
         self.stage = stage.into();
         self.run()
@@ -633,7 +728,7 @@ impl Machine {
             self.advance_recovery(ByoRecoveryEvent::Restart)?;
         }
         if self.phase() == Some(ByoPhase::Complete) {
-            return self.goto("result");
+            return self.goto("remove_file");
         }
         self.advance_recovery(ByoRecoveryEvent::SourceFinalized {
             bytes: u64::from(self.source_length),
@@ -727,6 +822,18 @@ impl Machine {
             {
                 return self.fallback();
             }
+            if self.customer() && ["put", "package_put"].contains(&self.stage.as_str()) {
+                let attempts = self.docs["package_attempts"].as_u64().unwrap_or(0);
+                if attempts < 2 {
+                    self.docs["package_attempts"] = json!(attempts + 1);
+                    let next = if self.stage == "package_put" {
+                        "package_grant"
+                    } else {
+                        "package_whole_grant"
+                    };
+                    return self.goto(next);
+                }
+            }
             if code == "context_expired" && self.stage != "refresh_initial" {
                 self.next = self.stage.clone();
                 return self.goto("refresh_periodic");
@@ -737,8 +844,11 @@ impl Machine {
             {
                 return self.start_load(false);
             }
-            if code == "expired" && self.stage == "upload" {
-                return self.renewable("upload", random);
+            if code == "expired"
+                && ["upload", "package_grant", "package_whole_grant"].contains(&self.stage.as_str())
+            {
+                let after = self.stage.clone();
+                return self.renewable(&after, random);
             }
             if code == "device_rejected"
                 && self.stage == "open"
@@ -947,6 +1057,28 @@ impl Machine {
                 object(&self.authorization)?;
                 self.status = self.upload["status"].clone();
                 object(&self.status)?;
+                let customer = self.status["hook_contract"] == json!(CUSTOMER_HOOKS);
+                if customer && self.status["package_profile"] != json!(PACKAGE_PROFILE)
+                    || self
+                        .docs
+                        .get("customer_package")
+                        .is_some_and(|v| v != &json!(customer))
+                    || self
+                        .docs
+                        .get("authorization")
+                        .is_some_and(|v| v != &self.authorization)
+                {
+                    return Err(fail("BYO package contract changed"));
+                }
+                self.docs["customer_package"] = json!(customer);
+                self.docs["package_attempts"] = json!(0);
+                if customer
+                    && [json!("upload_incomplete"), json!("upload_not_found")]
+                        .contains(&self.status["error"])
+                {
+                    self.docs["package_sent"] = json!(false);
+                    self.docs["package_next"] = json!(0);
+                }
                 self.docs["authorization"] = self.authorization.clone();
                 if self.phase() == Some(ByoPhase::New) {
                     let route = self.route(&self.context, &self.authorization)?;
@@ -997,6 +1129,25 @@ impl Machine {
                     return Err(fail("BYO accepted manifest changed"));
                 }
                 self.docs["manifest"] = self.manifest.clone();
+                if self.customer() && !self.status["receipt"].is_object() {
+                    let trailer = byo_customer::package_trailer(
+                        &self.context,
+                        &self.authorization,
+                        &self.manifest,
+                    )
+                    .map_err(|_| fail("invalid BYO package"))?;
+                    let encoded = json!(STANDARD.encode(&trailer));
+                    if self
+                        .docs
+                        .get("package_trailer")
+                        .is_some_and(|v| v != &encoded)
+                    {
+                        return Err(fail("BYO package changed"));
+                    }
+                    self.docs["package_trailer"] = encoded;
+                    self.offset = 0;
+                    return self.save("file_start");
+                }
                 if self.phase() == Some(ByoPhase::HttpWholeFile) {
                     if self.status["receipt"].is_object()
                         || self.docs.get("assembled") == Some(&json!(true))
@@ -1038,9 +1189,75 @@ impl Machine {
                     self.goto("download")
                 }
             }
-            "file_finish" => self.goto("put"),
+            "file_finish" => {
+                if self.customer() {
+                    self.goto("package_append")
+                } else {
+                    self.goto("put")
+                }
+            }
+            "package_append" => {
+                let total = self.source_length as usize + self.trailer()?.len();
+                if value.as_str() != Some(&total.to_string()) {
+                    return Err(fail("BYO package not durable"));
+                }
+                self.goto("package_finish")
+            }
+            "package_finish" => {
+                let hash = value
+                    .as_str()
+                    .filter(|s| digest(s))
+                    .ok_or_else(|| fail("invalid BYO package digest"))?;
+                let trailer = self.trailer()?;
+                let mut facts = json!({"file_size_bytes":self.source_length as usize+trailer.len(),"content_sha256":hash,"metadata_sha256":sha(&trailer)});
+                if self.docs["assembled"] == true {
+                    facts["segment_count"] = json!(self.source_length.div_ceil(16384) + 1);
+                }
+                if self.docs.get("upload_package").is_some_and(|v| v != &facts) {
+                    return Err(fail("BYO package facts changed"));
+                }
+                self.docs["upload_package"] = facts;
+                self.save("package_plan")
+            }
+            "package_range" => {
+                self.bytes = bytes(&value)?;
+                if self.bytes.len() != number(&self.segment, "length")? as usize {
+                    return Err(fail("BYO package range mismatch"));
+                }
+                self.segment["sha256"] = json!(sha(&self.bytes));
+                self.goto("package_grant")
+            }
+            "package_grant" => {
+                let reply = data(&value)?;
+                self.upload = reply["upload"].clone();
+                object(&self.upload)?;
+                self.goto("package_file")
+            }
+            "package_file" => self.goto("package_segment_append"),
+            "package_segment_append" => {
+                if value.as_str() != Some(&self.bytes.len().to_string()) {
+                    return Err(fail("BYO package segment not durable"));
+                }
+                self.goto("package_segment_flush")
+            }
+            "package_segment_flush" => self.goto("package_put"),
+            "package_put" => {
+                self.docs["package_attempts"] = json!(0);
+                self.docs["package_next"] = json!(number(&self.segment, "index")? + 1);
+                self.save("package_plan")
+            }
+            "package_whole_grant" => {
+                self.upload = data(&value)?;
+                object(&self.upload["upload"])?;
+                self.goto("put")
+            }
             "put" => {
-                self.advance_recovery(ByoRecoveryEvent::VerificationPending)?;
+                if self.phase() == Some(ByoPhase::HttpWholeFile) {
+                    self.advance_recovery(ByoRecoveryEvent::VerificationPending)?;
+                }
+                if self.customer() {
+                    self.docs["package_sent"] = json!(true);
+                }
                 self.save("complete")
             }
             "complete" => {
@@ -1123,9 +1340,29 @@ impl Machine {
                     self.goto("catalog")
                 }
             }
-            "live_context" => {
+            "live_context" => self.goto("stream_checkpoint"),
+            "stream_checkpoint" => {
+                let checkpoint = data(&value)?;
+                let customer = checkpoint["hook_contract"] == json!(CUSTOMER_HOOKS);
+                if self
+                    .docs
+                    .get("customer_package")
+                    .is_some_and(|v| v != &json!(customer))
+                {
+                    return Err(fail("BYO stream contract changed"));
+                }
+                self.docs["customer_package"] = json!(customer);
+                if customer {
+                    self.offset = number(&checkpoint, "contiguous_offset")?;
+                    if self.offset > 134_201_332 {
+                        return Err(fail("BYO package limit exceeded"));
+                    }
+                    self.index = self.offset.div_ceil(16384);
+                    self.fallback =
+                        self.docs["fallback"] == true || checkpoint["phase"] == "handed_off";
+                }
                 self.fallback |= self.docs.get("fallback") == Some(&json!(true))
-                    || self.docs.get("transport").is_some();
+                    || (!customer && self.docs.get("transport").is_some());
                 if self.fallback {
                     return self.goto("stream_snapshot");
                 }
@@ -1210,6 +1447,8 @@ impl Machine {
                 if ack["type"] != json!("ack")
                     || ack["session_id"] != self.context["upload_session_id"]
                     || ack["segment"] != self.segment
+                    || (self.customer()
+                        && !byo_customer::transfer_ack(&ack["proof"], &self.segment, true))
                 {
                     return self.fallback();
                 }
@@ -1221,7 +1460,7 @@ impl Machine {
                 if proof["segment"] != self.segment {
                     return self.fallback();
                 }
-                if proof["state"] == json!("confirmed") {
+                if byo_customer::transfer_ack(&result, &self.segment, self.customer()) {
                     return self.segment_accepted();
                 }
                 if proof["state"] != json!("write_authorized") || !proof["grant"].is_object() {
@@ -1241,9 +1480,7 @@ impl Machine {
             "segment_put" => self.goto("segment_confirm"),
             "segment_confirm" => {
                 let result = data(&value)?;
-                if result["result"]["state"] != json!("confirmed")
-                    || result["result"]["segment"] != self.segment
-                {
+                if !byo_customer::transfer_ack(&result, &self.segment, self.customer()) {
                     return self.fallback();
                 }
                 self.segment_accepted()
@@ -1667,19 +1904,8 @@ fn validate_put(value: Value) -> Result<Vec<u8>, DeviceSdkError> {
     {
         return Err(fail("invalid BYO PUT target"));
     }
-    let headers = object(&target["headers"])?;
-    for (name, v) in headers {
-        let v = v.as_str().ok_or_else(|| fail("invalid BYO PUT header"))?;
-        if v.len() > 256 || v.contains(['\r', '\n']) {
-            return Err(fail("invalid BYO PUT header"));
-        }
-        match name.as_str() {
-            "content-type" if v == "application/octet-stream" => (),
-            "x-ms-blob-type" if v == "BlockBlob" => (),
-            "x-amz-checksum-sha256" if STANDARD.decode(v).is_ok_and(|d| d.len() == 32) => (),
-            _ => return Err(fail("unapproved BYO PUT header")),
-        }
-    }
+    byo_customer::upload_headers(&target["headers"])
+        .map_err(|_| fail("invalid BYO PUT headers"))?;
     public_output(target.clone())
 }
 fn http_policy(value: Value) -> Result<Vec<u8>, DeviceSdkError> {
@@ -1920,6 +2146,9 @@ mod tests {
             ),
             "socket_exchange" => return json!({"error":{"code":"transport_failed"}}),
             "stream_status" => encoded(json!({"data":{"phase":"open"}})),
+            "stream_checkpoint" => {
+                encoded(json!({"data":{"contiguous_offset":0,"phase":"receiving"}}))
+            }
             "handoff" => {
                 let mut successor = context();
                 successor["upload_session_id"] = json!("22222222-3333-4444-5555-666666666666");
@@ -2076,5 +2305,151 @@ mod tests {
         assert!(json_bytes(&json!({"nested":[{"revision":9_007_199_254_740_993_u64}]})).is_err());
         let step = start(input_value());
         assert!(execute("advanceByoMachine",json!({"state":step["state"],"event":{"ok":null},"nowMs":"9007199254740993","randomUuid":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"})).is_err());
+    }
+    #[test]
+    fn customer_whole_and_segmented_packages_match_backend_and_gate_cleanup() {
+        let f: Value = serde_json::from_str(include_str!(
+            "../../../protocol/vectors/byo-customer-hooks/package.json"
+        ))
+        .unwrap();
+        let unhex = |s: &str| {
+            (0..s.len())
+                .step_by(2)
+                .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+                .collect::<Vec<_>>()
+        };
+        let source = unhex(f["ciphertext_hex"].as_str().unwrap());
+        let trailer = unhex(f["trailer_hex"].as_str().unwrap());
+        for assembled in [false, true] {
+            let mut input = input_value();
+            for (k, ck) in [
+                ("organizationId", "organization_id"),
+                ("projectId", "project_id"),
+                ("deviceId", "device_id"),
+                ("environment", "environment"),
+            ] {
+                input["scope"][k] = f["context"][ck].clone();
+            }
+            input["recording"] = json!({"uuid":f["context"]["recording_uuid"],"generation":f["context"]["recording_generation"]});
+            let mut step = start(input);
+            let mut file = Vec::new();
+            let mut package = Vec::new();
+            let mut put_count = 0;
+            let mut completed = false;
+            let mut confirmed = false;
+            for _ in 0..150 {
+                let action = &step["action"];
+                let stage = step["state"]["stage"].as_str().unwrap();
+                if action["kind"] == "result" {
+                    break;
+                }
+                let value = match action["kind"].as_str().unwrap() {
+                    "refresh" | "save" | "wait" => Value::Null,
+                    "load" => {
+                        if assembled {
+                            json!({"context":f["context"],"assembled":true})
+                        } else {
+                            Value::Null
+                        }
+                    }
+                    "ble" => match stage {
+                        "capabilities" => encoded(json!({"upload_modes":["whole_file"]})),
+                        "select_source" => encoded(
+                            json!({"recording_uuid":f["context"]["recording_uuid"],"recording_generation":f["context"]["recording_generation"],"ciphertext_length":source.len(),"ciphertext_sha256":f["context"]["ciphertext_sha256"]}),
+                        ),
+                        "open" => encoded(json!({"manifest":f["manifest"]})),
+                        "download" => {
+                            let offset = step["state"]["offset"].as_u64().unwrap() as usize;
+                            let n = step["state"]["chunk_count"].as_u64().unwrap() as usize;
+                            json!(&source[offset..offset + n])
+                        }
+                        "receipt" => {
+                            assert!(completed);
+                            json!(vec![0x42; 32])
+                        }
+                        "confirm" => {
+                            assert!(completed);
+                            confirmed = true;
+                            json!([])
+                        }
+                        _ => panic!("unexpected BLE {stage}"),
+                    },
+                    "http" => match stage {
+                        "selection" => encoded(
+                            json!({"data":{"destination":{"kind":"customer"},"upload_modes":["whole_file"]}}),
+                        ),
+                        "create_context" => encoded(json!({"data":{"context":f["context"]}})),
+                        "prepare" | "upload" | "package_whole_grant" | "package_grant" => encoded(
+                            json!({"data":{"authorization":f["authorization"],"status":{"hook_contract":CUSTOMER_HOOKS,"package_profile":PACKAGE_PROFILE},"upload":{"method":"PUT","url":"https://customer.example/object","headers":{"authorization":"Bearer upload-jwt"}}}}),
+                        ),
+                        "complete" => {
+                            let mut expected = f["upload_package"].clone();
+                            if assembled {
+                                expected["segment_count"] = json!(2)
+                            }
+                            assert_eq!(action["body"]["upload_package"], expected);
+                            assert_eq!(action["body"]["manifest"], f["manifest"]);
+                            completed = true;
+                            encoded(json!({"data":{"receipt":{"signature":"device-verified"}}}))
+                        }
+                        _ => panic!("unexpected HTTP {stage}"),
+                    },
+                    "file_start" => {
+                        file.clear();
+                        Value::Null
+                    }
+                    "file_append" => {
+                        assert_eq!(action["offset"], file.len().to_string());
+                        file.extend(bytes(&action["bytes"]).unwrap());
+                        json!(file.len().to_string())
+                    }
+                    "file_finish" => {
+                        assert_eq!(action["length"], file.len().to_string());
+                        if let Some(expected) = action.get("sha256") {
+                            assert_eq!(expected, &json!(sha(&file)));
+                        }
+                        if stage == "package_finish" {
+                            package = file.clone();
+                            assert_eq!(package, [source.clone(), trailer.clone()].concat());
+                        }
+                        json!(sha(&file))
+                    }
+                    "file_range" => {
+                        let offset = action["offset"].as_str().unwrap().parse::<usize>().unwrap();
+                        let n = action["length"].as_u64().unwrap() as usize;
+                        json!(&package[offset..offset + n])
+                    }
+                    "put" => {
+                        put_count += 1;
+                        assert_eq!(
+                            file,
+                            if assembled {
+                                trailer.clone()
+                            } else {
+                                [source.clone(), trailer.clone()].concat()
+                            }
+                        );
+                        Value::Null
+                    }
+                    "file_remove" => {
+                        assert!(confirmed);
+                        Value::Null
+                    }
+                    other => panic!("unexpected {other}"),
+                };
+                let failed_put = action["kind"] == "put" && put_count == 1;
+                step = next(
+                    step,
+                    if failed_put {
+                        json!({"error":{"code":"transport_failed"}})
+                    } else {
+                        json!({"ok":value})
+                    },
+                )
+                .unwrap();
+            }
+            assert!(confirmed);
+            assert_eq!(put_count, 2);
+        }
     }
 }

@@ -1,5 +1,108 @@
 # BYO customer storage integration
 
+## Customer hooks v2: source implementation
+
+The uploader advertises `customer_hooks: "customer-hooks-v2"`. Backend Batch
+status (including prepare) and stream status expose the pinned `hook_contract`
+and `package_profile: "bota-byo-package-v1"`. Missing contract fields select the
+legacy signed flow; a restored upload cannot switch contracts or recipients.
+The two customer hooks remain server-to-server calls. Apps and firmware consume
+Bota control APIs; no customer service credential is sent to a device or app.
+
+The uploaded object is the original BOTAENC2 bytes followed by canonical UTF-8
+JSON `{version, context, authorization, manifest}`, the JSON length as uint32BE,
+and `BOTABYO1`. JSON is at most 16 KiB; total package size is at most 128 MiB.
+The footer contains the existing customer-key HPKE envelope. It never contains a
+plaintext key. Bota neither decrypts nor transcodes the audio. Context and signed
+receipt hashes still bind the original ciphertext, while `upload_package` in
+internal complete binds the complete uploaded object and appended trailer.
+
+Live chunks use fixed 16 KiB ranges. Admission reserves 16,396 bytes for the
+footer (original ciphertext maximum 134,201,332 bytes); at most 8,191 body
+segments plus one metadata segment fit the 8,192-segment limit. Each descriptor
+contains `index`, `offset`, `length`, and lowercase `sha256`. After stream handoff,
+the Batch successor appends its finalized metadata as the last segment. Customer
+Service merges and checks the package at complete. Whole-file fallback sends the
+entire same package from offset zero under the fenced Batch successor.
+If no stream grant ever supplied an accepted recipient, whole-file handoff still
+creates one successor; its first Batch grant obtains the key with `operation:
+create`. An already pinned key cannot change, and assembled handoff requires it.
+
+For v2, HTTP transfer results and WS ACK proofs require the exact descriptor,
+`contract_version: "customer-hooks-v2"`, `state: "transferred"`, and
+`cleanup_allowed: false`. The WS outer session and segment must also match.
+These acknowledgements release relay RAM only. Resume starts at the backend's
+contiguous transferred offset; missing parts reported at complete replay original
+ranges and the immutable footer on the next recovery attempt. Source deletion
+requires the existing signed receipt, device verification and durable readback.
+
+In Batch delivery, a failed customer PUT obtains a fresh grant and retries
+identical bytes, up to three attempts per range in one run. A live HTTP transfer
+failure retains the existing fenced whole-file fallback; it never deletes source. URL renewal cannot rotate the pinned key,
+change package metadata or clear the final receipt requirement. Customer upload
+JWT and provider headers pass through the shared bounded validator: at most 32
+headers / 8 KiB total; framing, cookies, proxy and connection headers are rejected.
+Control-plane credentials are never inherited by the customer PUT.
+All host transports default a missing `Content-Type` to `application/octet-stream`;
+customer headers override the default case-insensitively, without duplicating it.
+
+Rust `model/byo_customer.rs` owns canonical packaging, transfer-proof matching and
+header validation. Native Apple/Android call ABI packet `0x0530`; the generated
+JavaScript state machine uses the same Rust implementation. Native adapters own
+file/network IO and persist the exact footer and package facts before complete.
+The generated host flushes and rereads files before hashing and upload.
+
+### Requirement / evidence / conformance review
+
+| Requirement | Source and executable evidence | Conformance boundary |
+| --- | --- | --- |
+| One exact customer package | Shared backend fixture; Rust core, C codec, Android JNI, Swift host and generated-JS host compare complete bytes | Source adapters; customer deployment remains separate |
+| URL renewal and interrupted delivery | Whole/segmented state-machine tests, native lost-PUT and lost-complete recovery, firmware coordinator retries | Original bytes and recipient retained |
+| Transfer-only ACK and resume | Core proof negatives, native HTTP/WS tests, production C live worker scenarios | ACK cannot delete retained source |
+| Missing segments and final merge | Batch repair tests replay original ranges plus footer | Customer merges and validates ciphertext at complete |
+| Legacy and cleanup behavior | Workspace tests and native receipt-before-confirm regressions | Existing signed legacy flow retained |
+
+The canonical cross-repository completion checklist remains
+`internal-docs/device/BYO-Upload-Encryption.md`. Local host checks do not establish
+an iOS XCFramework, Android release archive, firmware image, real-radio/power-loss
+acceptance or installed package. No release or deployment was performed.
+
+### Local verification (2026-10-27)
+
+- Rust workspace: 449 tests passed; the affected generated-workflow crate's 70
+  tests were rerun after the final retry/cleanup changes. Clippy and rustfmt pass.
+- Android: 28 real Rust/JNI BYO tests; full SDK, RN BYO driver and test sources
+  compile with strict API/warnings checks against Android 36.
+- Apple: all SDK Swift sources compile against the host macOS SDK; executable
+  tests cover exact packages, URL retry, missing-part repair, lost completion,
+  transfer-only HTTP/WS ACKs, resumed offsets and default/provider PUT headers.
+  This is not an iOS archive build.
+- React Native: normal build/types, 597 tests, package/Codegen and license checks
+  pass. Native Rust and generated JS match on 146 RPCs. Hermes bytecode compiles
+  and 777 Node conformance checks pass; Hermes VM execution was not performed.
+- The unmodified generator and exact `--check` agree on 4,064,948 output bytes,
+  source SHA-256 `246c09bf44476d82d3eae927d066df49ba1268db50400cb7d48e34b1d637293e`.
+  Actual Rust 1.98 compilation ran in the fixed x86_64 Linux container. Node
+  22.23.2 ran Binaryen 132/Terser on the native host through the same generator,
+  with compiler calls forwarded to Linux and source paths remapped identically.
+  This avoids a V8 Wasm-tiering crash in emulated x86 Node; generated code was
+  never hand-edited. Source provenance and the exact second rebuild pass.
+- Firmware: the production-source host suites cover WiFi/4G HTTP/WS, including
+  44 live transport/resume scenarios. Reproducible commands and hardware limits
+  are owned by `firmware/docs/byo-storage.md`. Backend pinned-session protocol
+  discovery and TypeScript/OpenAPI checks pass; the public BYO schema matches
+  the backend-generated schema.
+
+Cleanup-failure replay now removes both package and segment cache files after
+verified completion, without resending PUT or complete. The generated-host
+package tests exercise this restart boundary for whole and segmented uploads.
+Full release artifacts, supported JieLi image/link, exact installed app/firmware,
+real Customer Service, Hermes VM and physical power-loss qualification remain
+separate. The source changes stay local and deployment remains disabled.
+
+## Historical signed-contract evidence
+
+
 October 15: the [customer-envelope implementation](byo-upload-encryption.md)
 retains original ciphertext and opaque SDK relay. Backend getUploadUrl now supplies
 the customer recipient in existing signed device authorization; completion delivers

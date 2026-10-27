@@ -1541,3 +1541,10 @@ on the exact same-device refresh route; the predecessor never regains ordinary
 access. Migration125 precedes backend rollout; firmware HTTP retry/durable
 replacement and local encrypted storage remain separate. See
 [the recovery contract and verification](../internal-docs/device/Device-Token-Envelope.md).
+
+
+Customer-hooks-v2 package order, header bounds and transfer-only ACK validation
+belong in `core/device-sdk-core/src/model/byo_customer.rs`; native ABI and generated
+JS consume that implementation. Preserve the fixed backend/C/Rust package vector,
+BLE v3 original-ciphertext reads and receipt-only cleanup. See
+[the owning review](docs/parity/byo-storage.md#customer-hooks-v2-source-implementation).

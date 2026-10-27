@@ -330,6 +330,18 @@ STREAMING below is a separate device HTTP contract, not an implicit BLE relay.
 
 ## BYO Customer Storage
 
+Customer-hooks-v2 source keeps the BLE v3 framing and original ciphertext READ
+bytes unchanged. The SDK packages finalized context/authorization/manifest after
+BOTAENC2, using a uint32BE metadata length and `BOTABYO1` trailer. A transfer ACK
+may release relay RAM but never authorize source cleanup; final signed receipt
+verification/readback remains mandatory. Capability admission and contract pinning,
+16 KiB segments, metadata reserve and recovery are specified in
+[the uploader contract](docs/parity/byo-storage.md#customer-hooks-v2-source-implementation).
+The native SDK ABI adds encode packet `0x0530`: COMMAND (field 97) is 1 for the
+canonical trailer, 2 for exact transfer-proof validation, or 3 for PUT headers;
+VALUE (field 30) contains bounded JSON (at most 32 KiB), and returns bytes. This
+is a host ABI allocation, not a firmware opcode or a change to BLE v3.
+
 BYO uses independent version-3 RPC frames on STORAGE CONTROL_V2 (`0008`) and
 TRANSFER_V2 (`0009`). It shares the characteristics, not the ordinary v2 command
 namespace. Serialize ownership and subscribe before writing.

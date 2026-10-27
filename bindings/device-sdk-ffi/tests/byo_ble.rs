@@ -46,3 +46,34 @@ fn native_frame_codec_uses_typed_fields_and_rejects_oversized_input() {
     );
     unsafe { bota_device_sdk_v1_engine_free(engine) };
 }
+
+#[test]
+fn customer_adapter_validates_headers_and_bounds_native_input() {
+    let engine = bota_device_sdk_v1_engine_new();
+    let input = BotaDeviceSdkPacketV1::new(0x0530)
+        .with_u64(COMMAND, 3)
+        .with_bytes(VALUE, br#"{"Authorization":"Bearer upload-jwt"}"#.to_vec());
+    let mut output = ptr::null_mut();
+    assert_eq!(
+        unsafe { bota_device_sdk_v1_protocol_encode(engine, &input.view(), &mut output) },
+        BotaDeviceSdkStatusV1::Ok
+    );
+    unsafe { bota_device_sdk_v1_packet_free(output) };
+    for command in [1, 2, 3, 4] {
+        let input = BotaDeviceSdkPacketV1::new(0x0530)
+            .with_u64(COMMAND, command)
+            .with_bytes(VALUE, vec![0; 32769]);
+        assert_ne!(
+            unsafe { bota_device_sdk_v1_protocol_encode(engine, &input.view(), &mut output) },
+            BotaDeviceSdkStatusV1::Ok
+        );
+    }
+    let input = BotaDeviceSdkPacketV1::new(0x0530)
+        .with_u64(COMMAND, 3)
+        .with_bytes(VALUE, br#"{"Host":"attacker.example"}"#.to_vec());
+    assert_ne!(
+        unsafe { bota_device_sdk_v1_protocol_encode(engine, &input.view(), &mut output) },
+        BotaDeviceSdkStatusV1::Ok
+    );
+    unsafe { bota_device_sdk_v1_engine_free(engine) };
+}

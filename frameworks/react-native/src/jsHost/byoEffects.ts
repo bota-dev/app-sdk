@@ -214,20 +214,32 @@ export function createJsByoEffects(options: JsByoEffectsOptions): JsByoEffects {
           }
           const proof = object(codec('hasherSnapshot', { decoderId: hashId }));
           const actual = Buffer.from(wireBytes(proof.sha256)).toString('hex');
-          if (actual !== action.sha256) throw failure('identity_conflict');
+          if (action.sha256 !== undefined && actual !== action.sha256) throw failure('identity_conflict');
+          return actual;
         } finally { codec('hasherFree', { decoderId: hashId }); }
-        return null;
+      }
+      case 'file_range': {
+        const file = await options.files.open(string(action.key), 'file', ctx);
+        if (file.scope !== namespace || file.kind !== 'file') throw failure('persistence_failed');
+        const bytes = await options.files.read(file, string(action.offset), integer(action.length), ctx);
+        if (!(bytes instanceof Uint8Array) || bytes.length !== integer(action.length)) throw failure('persistence_failed');
+        return Array.from(bytes);
       }
       case 'put': {
         if (!slot.file) throw failure('persistence_failed');
         const target = object(codec('validateByoPut', { target: action.target! }));
         const url = exactHttps(string(target.url));
-        await options.uploadFile({ url, method: 'PUT', headers: object(target.headers) as Record<string, string> }, slot.file, ctx); check(slot); return null;
+        const headers = { ...object(target.headers) } as Record<string, string>;
+        if (!Object.keys(headers).some(name => name.toLowerCase() === 'content-type')) headers['Content-Type'] = 'application/octet-stream';
+        await options.uploadFile({ url, method: 'PUT', headers }, slot.file, ctx); check(slot); return null;
       }
       case 'file_remove': {
-        const file = await options.files.open(string(action.key), 'file', ctx);
-        if (file.scope !== namespace) throw failure('persistence_failed');
-        await options.files.remove(file, ctx); slot.file = undefined; return null;
+        for (const key of [action.key, action.temporaryKey].filter(value => value !== undefined)) {
+          const file = await options.files.open(string(key), 'file', ctx);
+          if (file.scope !== namespace || file.kind !== 'file') throw failure('persistence_failed');
+          await options.files.remove(file, ctx);
+        }
+        slot.file = undefined; return null;
       }
       case 'socket_open': {
         if (!options.openSocket) throw failure('unsupported_capability');

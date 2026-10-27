@@ -57,6 +57,8 @@ actor ByoStreamSession {
             }
             var capability = try byoObject(await rpc(1, Data()))
             guard (capability["upload_modes"] as? [String])?.contains("http_segments") == true else { throw ByoFailure.protocolViolation }
+            capability["customer_hooks"] = "customer-hooks-v2"
+            capability["max_ciphertext_bytes"] = min((capability["max_ciphertext_bytes"] as? NSNumber)?.uint64Value ?? 134201332, 134201332)
             capability["upload_modes"] = ["whole_file", "http_segments", "ws_relay"]; capability["durable_source"] = true; capability["durable_receipt"] = true
             let selection = try byoDataObject(await http.control("/capabilities", body: byoJSON(capability)))
             var facts = try byoObject(await rpc(9))
@@ -74,8 +76,14 @@ actor ByoStreamSession {
             }
             try validate(context); docs["context"] = context; try persist(); _ = try await rpc(12, identity + byoJSON(context))
             let session = context["upload_session_id"] as! String; let endpoint = "/" + session
-            var fallback = resumed || docs["fallback"] as? Bool == true
-            var offset: UInt32 = 0; var index: UInt32 = 0
+            let checkpoint = try byoDataObject(await http.streamControl(endpoint, body: nil))
+            let customer = checkpoint["hook_contract"] as? String == "customer-hooks-v2"
+            if let old = docs["customer_package"] as? Bool, old != customer { throw ByoFailure.identityConflict }
+            docs["customer_package"] = customer; try persist()
+            var fallback = (!customer && resumed) || docs["fallback"] as? Bool == true || checkpoint["phase"] as? String == "handed_off"
+            var offset: UInt32 = customer ? try number(checkpoint, "contiguous_offset") : 0
+            guard offset <= 134201332 else { throw ByoFailure.protocolViolation }
+            var index: UInt32 = (offset + 16383) / 16384
             let started = ByoContinuousInstant.now; var refreshed = started
             if !fallback {
                 do { if allowed.contains("ws_relay") { socket = try await http.streamSocket(session) } }
@@ -90,7 +98,7 @@ actor ByoStreamSession {
                 guard facts["recording_uuid"] as? String == recording.uuid, try number(facts, "recording_generation") == recording.generation,
                       facts["failed"] as? Bool == false else { throw ByoFailure.identityConflict }
                 let length = try number(facts, "ciphertext_length")
-                guard length >= offset, length <= 134217728, let closed = facts["closed"] as? Bool else { throw ByoFailure.protocolViolation }
+                guard length >= offset, length <= (customer ? 134201332 : 134217728), let closed = facts["closed"] as? Bool else { throw ByoFailure.protocolViolation }
                 if facts["overflow"] as? Bool == true {
                     fallback = true
                 } else if try number(facts, "retained_offset") > offset {
@@ -108,7 +116,13 @@ actor ByoStreamSession {
                         let segment = try byoJSON(["index": index, "offset": offset, "length": count, "sha256": Self.hash(bytes)])
                         if docs["transport"] as? String == "ws" {
                             while true {
-                                do { guard let socket else { throw ByoFailure.pending }; _ = try await socket.exchange(segment, bytes: bytes); break }
+                                do { guard let socket else { throw ByoFailure.pending }; let ackBytes = try await socket.exchange(segment, bytes: bytes)
+                                    if customer {
+                                        let ack = try byoObject(ackBytes)
+                                        guard let proof = ack["proof"] as? [String: Any] else { throw ByoFailure.protocolViolation }
+                                        try byoTransferAck(proof, segment: byoObject(segment), customer: true)
+                                    }
+                                    break }
                                 catch {
                                     try Task.checkCancellation(); await socket?.close(); socket = nil
                                     let retries = docs["reconnects"] as? Int ?? 0
@@ -119,18 +133,17 @@ actor ByoStreamSession {
                                 }
                             }
                         } else {
-                            let granted = try byoDataObject(await http.streamControl(endpoint + "/grants", body: segment))
+                            var granted = try byoDataObject(await http.streamControl(endpoint + "/grants", body: segment))
                             guard var proof = granted["result"] as? [String: Any], let descriptor = proof["segment"] as? [String: Any],
                                   try byoJSON(descriptor) == segment else { throw ByoFailure.protocolViolation }
-                            if proof["state"] as? String != "confirmed" {
+                            if proof["state"] as? String != (customer ? "transferred" : "confirmed") {
                                 guard proof["state"] as? String == "write_authorized", let grant = proof["grant"] as? [String: Any] else { throw ByoFailure.protocolViolation }
                                 let file = try store.createCiphertext(); do { try file.write(contentsOf: bytes); try file.synchronize(); try file.close() } catch { try? file.close(); throw error }
                                 try await http.put(byoJSON(grant), file: store.root.appendingPathComponent("ciphertext"))
-                                let confirmed = try byoDataObject(await http.streamControl(endpoint + "/confirm", body: segment))
+                                let confirmed = try byoDataObject(await http.streamControl(endpoint + "/confirm", body: segment)); granted = confirmed
                                 guard let value = confirmed["result"] as? [String: Any] else { throw ByoFailure.protocolViolation }; proof = value
                             }
-                            guard proof["state"] as? String == "confirmed", let confirmed = proof["segment"] as? [String: Any],
-                                  try byoJSON(confirmed) == segment else { throw ByoFailure.protocolViolation }
+                            try byoTransferAck(granted, segment: byoObject(segment), customer: customer)
                         }
                         offset += count; index += 1; _ = try await rpc(11, identity + le32(offset))
                     } catch {

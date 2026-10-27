@@ -451,6 +451,22 @@ pub(crate) unsafe fn encode(
     validate_packet(packet)?;
     let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
     let bytes = match packet.kind {
+        packet_kind::PROTOCOL_BYO_CUSTOMER => {
+            fields.validate_allowed(&[field_id::COMMAND, field_id::VALUE])?;
+            let command = fields.required_u64(field_id::COMMAND)?;
+            let views =
+                unsafe { std::slice::from_raw_parts(packet.fields, packet.field_count as usize) };
+            if views
+                .iter()
+                .any(|field| field.field_id == field_id::VALUE && field.data.len > 32768)
+            {
+                return Err(invalid("BYO customer input exceeds 32768 bytes"));
+            }
+            let input = fields.required_bytes(field_id::VALUE)?;
+            let bytes = bota_device_sdk_core::model::byo_customer::adapter(command, &input)
+                .map_err(|_| invalid("invalid BYO customer adapter input"))?;
+            return Ok(BotaDeviceSdkPacketV1::new(packet.kind).with_bytes(field_id::VALUE, bytes));
+        }
         packet_kind::PROTOCOL_ENCODE_BYO_BLE => {
             return unsafe { byo_ble::process(packet, false) };
         }
