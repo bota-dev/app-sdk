@@ -69,6 +69,30 @@ the exact root Swift package checksum gate.
 
 ## Required Checks
 
+The `Semgrep` workflow's `Scan` check analyzes the full repository on pull
+requests for every target branch, including forks and drafts, and in merge
+queues. It uses a pinned OSS scanner without a Semgrep token and retains the
+exact commit, scanner identity, rule snapshots, findings and analysis errors.
+Findings, analysis errors and zero scanned files fail the check. CodeQL default
+setup continues to provide its existing analysis.
+
+Source-specific audit annotations are bound to the exact source hashes in the
+inline workflow policy and `.github/sast-reviewed-findings.json`. Changed
+annotated source or a missing review ledger fails the guard. Historical source
+without these annotations receives an ordinary scan without applying current
+audit dispositions.
+
+The canonical `platforms/android/gradlew` uses POSIX syntax the Semgrep parser
+does not support. Only that exact file is routed to pinned ShellCheck static
+analysis in the same check. Its original SHA-256 is enforced before and after
+analysis, and all ShellCheck findings and errors fail. A wrapper update requires
+reviewing this exception and its recorded hash; the wrapper is never executed
+by either analyzer.
+
+Manual scans may select an immutable 40-character `revision`. Such a scan is
+retrospective evidence using the recorded current scanner and rules; it does
+not establish that the original pull request passed SAST before merge.
+
 ```bash
 npm ci
 npm run check

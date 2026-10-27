@@ -9,9 +9,13 @@ pub(super) unsafe fn process(
     packet: &BotaDeviceSdkPacketViewV1,
     decode: bool,
 ) -> Result<BotaDeviceSdkPacketV1, DeviceSdkError> {
+    // The C ABI requires live fields; PacketFields checks count, nulls, duplicates and types.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
     if packet.field_count > 0 {
         for field in
+            // PacketFields checked the nonempty live list; every BYO field is bounded before copying.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             unsafe { std::slice::from_raw_parts(packet.fields, packet.field_count as usize) }
         {
             if field.data.len > 512 {

@@ -16,6 +16,8 @@ use bota_device_sdk_core::{
 pub(super) unsafe fn decode(
     packet: &BotaDeviceSdkPacketViewV1,
 ) -> Result<BotaDeviceSdkPacketV1, DeviceSdkError> {
+    // The C ABI requires live fields; PacketFields checks count, nulls, duplicates and types.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
     let (allowed, maximum): (&[u32], usize) = match packet.kind {
         k::PROTOCOL_DECODE_UPLOAD_CONTEXT_SNAPSHOT => (
@@ -36,6 +38,8 @@ pub(super) unsafe fn decode(
         _ => return Err(invalid("unsupported v2 codec")),
     };
     fields.validate_allowed(allowed)?;
+    // PacketFields validated the live list before bound_value checks its exact v2 size limit.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     unsafe {
         bound_value(packet, maximum)?;
     }
@@ -96,8 +100,12 @@ pub(crate) unsafe fn decode_catalog(
 ) -> Result<BotaDeviceSdkPacketV1, DeviceSdkError> {
     let result = (|| {
         validate_packet(packet)?;
+        // The caller-live packet passed header checks; PacketFields validates all field shapes.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
         fields.validate_allowed(&[f::VALUE, f::TRANSPORT_SESSION_ID])?;
+        // PacketFields validated the live list before bound_value checks the fixed catalog entry limit.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         unsafe {
             bound_value(
                 packet,
@@ -132,6 +140,8 @@ unsafe fn bound_value(
 ) -> Result<(), DeviceSdkError> {
     if packet.field_count != 0 {
         for field in
+            // Callers first validate PacketFields; only a nonempty live list is read to enforce VALUE bounds.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             unsafe { std::slice::from_raw_parts(packet.fields, packet.field_count as usize) }
         {
             if field.field_id == f::VALUE && field.data.len > maximum as u64 {

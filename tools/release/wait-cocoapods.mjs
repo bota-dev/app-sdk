@@ -50,6 +50,8 @@ export async function waitForCocoaPodsVersion({
 export function runCocoaPodsInstall(podCommand) {
   return new Promise((resolve, reject) => {
     const [command, ...args] = podCommand;
+    // The CLI deliberately selects a local CocoaPods executable; arguments stay literal without a shell.
+    // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
     const child = spawn(command, [...args, 'install', '--repo-update'], { stdio: 'inherit' });
     child.once('error', reject);
     child.once('close', (code, signal) => {
