@@ -205,8 +205,21 @@ bundle _2.6.9_ exec npm run test:apple:remote-resolution
 ```
 
 Android changes require JDK 17, Android SDK 36, build-tools 35.0.0, NDK
-28.2.13676358, and CMake 3.22.1. Run the unpublished package gate with signing
-credentials absent:
+28.2.13676358, and CMake 3.22.1.
+
+CI provisions that exact NDK through `tools/android/provision_ndk.py`, records
+its revision and resolved compiler, and compiles a small AArch64 object before
+using it. A different inherited `ANDROID_NDK_HOME` cannot substitute the runner's
+default revision. Normal installation uses `sdkmanager`; its Linux ZipFile
+failure alone permits one fresh official r28c download, verified against its exact
+size and pinned SHA-256 before CRC validation and unpacking. The SHA-256 pin was
+derived from the full official archive after verifying Google's published size,
+SHA-1 and every ZIP member CRC. Other installation,
+license, checksum and compiler failures remain failures. The original failed
+runner archive was not retained, so its specific transport/cache cause is
+unproved. Setup logs and identity receipts are retained as CI artifacts.
+
+Run the unpublished package gate with signing credentials absent:
 
 ```bash
 JAVA_HOME=/path/to/jdk-17 ANDROID_HOME="$HOME/Library/Android/sdk" \
