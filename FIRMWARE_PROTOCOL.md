@@ -372,7 +372,7 @@ payload. Correlate request ID/operation and reject conflicting fragments.
 | 6 | CONFIRM | 13 | LIVE_SUCCESSOR |
 | 7 | ABORT | | |
 
-The customer-storage flow is:
+The customer-hooks-v2 App relay flow is:
 
 ```mermaid
 sequenceDiagram
@@ -388,15 +388,16 @@ sequenceDiagram
     S->>D: Relay authorization with pinned recipient
     D->>D: Seal recording data key to customer public key
     D-->>S: Original ciphertext and customer envelope/manifest
-    S->>O: Upload ciphertext
-    S->>B: Complete with original manifest/envelope
-    B->>C: Completion hook
-    C->>O: Read ciphertext
-    C->>C: Open envelope with own private key, decrypt and verify
-    C-->>B: Signed completion evidence
+    S->>S: Persist canonical ciphertext-plus-metadata package
+    S->>O: PUT package or immutable segments
+    S->>B: Complete with manifest and upload_package facts
+    B->>C: upload-complete with final ciphertext size/hash/count
+    C->>O: Merge parts and verify actual stored ciphertext
+    C-->>B: uploaded and persisted verification result
     B-->>S: Signed completion receipt
     S->>D: Receipt, then exact confirmation
     D->>D: Verify and persist completion before source cleanup
+    Note over C,O: Private-key decryption is independent of complete
 ```
 
 The diagram shows the App relay path; device-direct radio ownership is not
