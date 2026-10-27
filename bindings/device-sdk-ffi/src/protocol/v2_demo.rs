@@ -142,7 +142,9 @@ unsafe fn bound_value(
         for field in
             // Callers first validate PacketFields; only a nonempty live list is read to enforce VALUE bounds.
             // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
-            unsafe { std::slice::from_raw_parts(packet.fields, packet.field_count as usize) }
+            unsafe {
+                std::slice::from_raw_parts(packet.fields, packet.field_count as usize)
+            }
         {
             if field.field_id == f::VALUE && field.data.len > maximum as u64 {
                 return Err(invalid("v2 codec input exceeds bound"));

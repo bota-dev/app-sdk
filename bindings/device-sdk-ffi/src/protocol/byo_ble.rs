@@ -16,7 +16,9 @@ pub(super) unsafe fn process(
         for field in
             // PacketFields checked the nonempty live list; every BYO field is bounded before copying.
             // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
-            unsafe { std::slice::from_raw_parts(packet.fields, packet.field_count as usize) }
+            unsafe {
+                std::slice::from_raw_parts(packet.fields, packet.field_count as usize)
+            }
         {
             if field.data.len > 512 {
                 return Err(invalid("BYO frame field exceeds 512 bytes"));
