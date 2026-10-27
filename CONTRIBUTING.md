@@ -86,6 +86,14 @@ with a 5,000,000-byte bound and finite 300-second rule timeout. Its exact
 source bytes and SHA-256 are recorded, and omission from the analyzed paths or
 source drift fails `Scan`. Exceeding that bound requires another scope review;
 the generated code is not rewritten to satisfy the analyzer.
+One expensive three-positive-clause rule can complete through a same-engine
+necessary-clause proof. The exact original rule hash and shape are guarded.
+Its mandatory positive clause runs unfiltered with suppression comments disabled
+on the complete unchanged runtime. Zero matches prove that conjunction cannot
+match; any match retains the original full rule. Errors, skips, missing input,
+byte drift or an unrecognized rule block completion. Original/derived/effective
+rule bytes, execution profiling and the decision remain in the artifact.
+Prerequisite matches are applicability evidence, not vulnerability findings.
 
 Source-specific audit annotations are bound to the exact source hashes in the
 inline workflow policy and `.github/sast-reviewed-findings.json`. Changed

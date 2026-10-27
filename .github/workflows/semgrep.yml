@@ -79,13 +79,23 @@ jobs:
           if requested and actual.lower() != requested.lower():
               raise SystemExit('Checked-out commit does not match requested immutable revision')
           generated = pathlib.Path('frameworks/react-native/src/jsHost/generated/core.ts')
-          if generated.is_symlink() or not generated.is_file():
+          if any(item.is_symlink() for item in (generated, *generated.parents)) or not generated.is_file() or not generated.resolve().is_relative_to(pathlib.Path.cwd().resolve()):
               raise SystemExit('Generated production runtime absent; scan applicability requires review')
-          generated_bytes = generated.read_bytes()
-          if not generated_bytes or len(generated_bytes) > 5_000_000:
+          entry = subprocess.check_output(['git', 'ls-tree', '-z', 'HEAD', '--', generated.as_posix()], text=True).strip('\0')
+          metadata, name = entry.split('\t')
+          mode, kind, blob = metadata.split()
+          if mode != '100644' or kind != 'blob' or name != generated.as_posix():
+              raise SystemExit('Generated production runtime is not the reviewed ordinary Git input')
+          size = int(subprocess.check_output(['git', 'cat-file', '-s', blob], text=True))
+          if not 0 < size <= 5_000_000 or generated.stat().st_size != size:
               raise SystemExit('Generated production runtime exceeds the reviewed finite scan bound')
+          with generated.open('rb') as stream:
+              generated_bytes = stream.read(size + 1)
+          canonical_bytes = subprocess.check_output(['git', 'cat-file', 'blob', blob])
+          if generated_bytes != canonical_bytes:
+              raise SystemExit('Generated runtime working bytes differ from the exact committed Git blob')
           required_sources = [{'path': generated.as_posix(), 'bytes': len(generated_bytes),
-                               'sha256': hashlib.sha256(generated_bytes).hexdigest()}]
+                               'sha256': hashlib.sha256(generated_bytes).hexdigest(), 'git_blob': blob}]
           snapshots = []
           for pack in json.loads(os.environ['RULE_PACKS']):
               url = 'https://semgrep.dev/c/p/' + pack
@@ -112,7 +122,7 @@ jobs:
               'rule_snapshots': snapshots,
               'required_sources': required_sources,
               'analysis_profiles': {'eligible_tree': {'max_target_bytes': 1_000_000, 'rule_timeout_seconds': 30, 'rules': 'original snapshots'},
-                                    'generated_runtime': {'max_target_bytes': 5_000_000, 'rule_timeout_seconds': 300, 'rules': 'original snapshots'}},
+                                    'generated_runtime': {'max_target_bytes': 5_000_000, 'rule_timeout_seconds': 300, 'rules': 'original snapshots with exact necessary-conjunct completion proof'}},
           }
           (root / 'identity.json').write_text(json.dumps(identity, indent=2) + '\n', encoding='utf-8')
           print(json.dumps({'scanned_sha': actual, 'retrospective': bool(requested), 'rule_packs': len(snapshots)}))
@@ -244,16 +254,148 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          configs=()
-          for config in "$RUNNER_TEMP/sast-evidence/policy/"*; do
-            configs+=(--config="$config")
-          done
-          semgrep scan \
-            --oss-only --strict --error --metrics=off --disable-version-check --no-rewrite-rule-ids \
-            --jobs=2 --timeout=300 --max-target-bytes=5000000 \
-            --json-output "$RUNNER_TEMP/sast-evidence/generated-results.json" \
-            --sarif-output "$RUNNER_TEMP/sast-evidence/generated-results.sarif" \
-            "${configs[@]}" frameworks/react-native/src/jsHost/generated/core.ts
+          python3 -I - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          from ruamel.yaml import YAML
+
+          TARGET = 'javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag'
+          SOURCE_RULE_SHA = 'e5a3d09543237d599d216ef07e938071d063b1f3f8491f472c6aa4d1f9f2c054'
+          PROOF_ID = TARGET + '.mandatory-positive-clause'
+          CORE = 'frameworks/react-native/src/jsHost/generated/core.ts'
+
+          def digest(body):
+              return hashlib.sha256(body).hexdigest()
+
+          def canonical(value):
+              return json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
+
+          def fail(message):
+              raise SystemExit(message)
+
+          def checked_source(source):
+              path = pathlib.Path(source['path'])
+              workspace = pathlib.Path.cwd().resolve()
+              if path.is_absolute() or not path.resolve().is_relative_to(workspace) or any(item.is_symlink() for item in (path, *path.parents)):
+                  fail('Required generated source is not an ordinary workspace input')
+              if not 0 < source['bytes'] <= 5_000_000 or path.stat().st_size != source['bytes']:
+                  fail('Required generated source size changed or exceeds finite bound')
+              with path.open('rb') as stream:
+                  body = stream.read(5_000_001)
+              if len(body) != source['bytes'] or digest(body) != source['sha256']:
+                  fail('Required generated source bytes changed between analysis phases')
+              return body
+
+          def make_proof_rule(original):
+              if original.get('id') != TARGET or digest(canonical(original)) != SOURCE_RULE_SHA:
+                  fail('Original conjunction changed; review completion-proof applicability')
+              if len(original['patterns']) != 3 or [list(item) for item in original['patterns']] != [['pattern-inside'], ['pattern'], ['pattern']]:
+                  fail('Expected exactly the reviewed three positive AND clauses')
+              proof = json.loads(json.dumps(original))
+              del proof['patterns']
+              proof.update(original['patterns'][1])
+              proof['id'] = PROOF_ID
+              proof['message'] = 'Necessary positive-clause applicability match; not a complete security finding.'
+              proof['severity'] = 'INFO'
+              return proof
+
+          def normalized(name):
+              return name.replace('\\', '/').removeprefix('./')
+
+          def validate_proof(report, sources, outcome):
+              expected = {source['path']: source for source in sources}
+              timing = report.get('time', {})
+              targets = timing.get('targets', [])
+              if not all(isinstance(report.get(key), list) for key in ('results', 'errors', 'skipped_rules')):
+                  fail('Prerequisite report lacks explicit unfiltered result/error/skip arrays')
+              if outcome != 'success' or report.get('version') != '1.168.0' or report.get('engine_requested') != 'OSS':
+                  fail('Prerequisite scanner did not fully succeed with the reviewed OSS engine')
+              if report['errors'] or report['skipped_rules'] or timing.get('fixpoint_timeouts') != []:
+                  fail('Prerequisite errors, skips or partial analysis cannot prove zero matches')
+              if timing.get('rules') != [PROOF_ID]:
+                  fail('Exactly the mandatory positive-clause rule must execute')
+              scanned = report.get('paths', {}).get('scanned', [])
+              if not isinstance(scanned, list) or len(scanned) != len(expected) or {normalized(name) for name in scanned} != set(expected):
+                  fail('Prerequisite did not analyze every exact required source')
+              if len(targets) != len(expected) or {normalized(item['path']) for item in targets} != set(expected):
+                  fail('Prerequisite profiling omits a required input')
+              if timing.get('total_bytes') != sum(item['bytes'] for item in sources):
+                  fail('Prerequisite did not admit the complete source byte extent')
+              for item in targets:
+                  source = expected[normalized(item['path'])]
+                  if item.get('num_bytes') != source['bytes'] or len(item.get('match_times', [])) != 1 or len(item.get('parse_times', [])) != 1:
+                      fail('Prerequisite profiling does not cover the exact file and rule')
+              for item in report.get('results', []):
+                  if item.get('check_id') != PROOF_ID or normalized(item['path']) not in expected or item.get('extra', {}).get('is_ignored'):
+                      fail('Prerequisite results must be raw and unfiltered')
+              return len(report.get('results', [])) == 0
+
+          def write_effective_policy(documents, root, empty):
+              effective_root = root / 'generated-policy'
+              effective_root.mkdir(exist_ok=False)
+              effective_snapshots, removed = [], 0
+              for path, body, document in documents:
+                  original_body, original_count = body, len(document['rules'])
+                  has_target = any(rule.get('id') == TARGET for rule in document['rules'])
+                  if empty and has_target:
+                      for rule in document['rules']:
+                          if rule.get('id') == TARGET:
+                              make_proof_rule(rule)
+                      document['rules'] = [rule for rule in document['rules'] if rule.get('id') != TARGET]
+                      body = (json.dumps(document, indent=2) + '\n').encode()
+                      destination = effective_root / (path.stem + '.json')
+                      removed += 1
+                  else:
+                      destination = effective_root / path.name
+                  destination.write_bytes(body)
+                  effective_snapshots.append({'file': destination.name, 'sha256': digest(body), 'rules': len(document['rules']), 'source_file': path.name, 'source_sha256': digest(original_body), 'source_rules': original_count})
+              if removed != (1 if empty else 0):
+                  fail('Effective profile changed more than the exactly proven conjunction')
+              return effective_root, effective_snapshots
+
+          def main():
+              root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'sast-evidence'
+              identity = json.loads((root / 'identity.json').read_text(encoding='utf-8'))
+              sources = identity['required_sources']
+              if len(sources) != 1 or sources[0]['path'] != CORE or identity['scanner_version'] != '1.168.0':
+                  fail('Generated completion profile requires the exact reviewed source identity')
+              checked_source(sources[0])
+              documents, selected = [], []
+              for path in sorted((root / 'policy').iterdir()):
+                  body = path.read_bytes()
+                  document = YAML(typ='safe').load(body)
+                  documents.append((path, body, document))
+                  selected.extend(rule for rule in document['rules'] if rule.get('id') == TARGET)
+              if len(selected) != 1:
+                  fail('Original conjunction is missing or duplicated')
+              original = selected[0]
+              proof = make_proof_rule(original)
+              original_path = root / 'generated-original-rule.json'
+              proof_path = root / 'generated-prerequisite-rule.json'
+              original_path.write_text(json.dumps({'rules': [original]}, indent=2) + '\n', encoding='utf-8')
+              proof_path.write_text(json.dumps({'rules': [proof]}, indent=2) + '\n', encoding='utf-8')
+              common = ['semgrep', 'scan', '--oss-only', '--strict', '--metrics=off', '--disable-version-check', '--no-rewrite-rule-ids', '--jobs=2', '--timeout=300', '--max-target-bytes=5000000']
+              # No baseline, severity, result or rule filters. Suppression comments must
+              # not hide the call-range prerequisite while leaving the focused UNK live.
+              process = subprocess.run(common + ['--disable-nosem', '--time', '--config=' + str(proof_path), '--json-output=' + str(root / 'generated-prerequisite-results.json'), '--sarif-output=' + str(root / 'generated-prerequisite-results.sarif'), CORE])
+              checked_source(sources[0])
+              report = json.loads((root / 'generated-prerequisite-results.json').read_text(encoding='utf-8'))
+              empty = validate_proof(report, sources, 'success' if process.returncode == 0 else 'failure')
+              effective_root, effective_snapshots = write_effective_policy(documents, root, empty)
+              certificate = {'source_rule_id': TARGET, 'source_rule_sha256': SOURCE_RULE_SHA, 'original_rule_file_sha256': digest(original_path.read_bytes()), 'proof_rule_id': PROOF_ID, 'proof_rule_sha256': digest(canonical(proof)), 'proof_rule_file_sha256': digest(proof_path.read_bytes()), 'proof_result_file_sha256': digest((root / 'generated-prerequisite-results.json').read_bytes()), 'mandatory_positive_clause': original['patterns'][1], 'proof_outcome': 'success', 'proof_matches': len(report['results']), 'proof_errors': 0, 'proof_nosem_disabled': True, 'proof_unfiltered': True, 'proof_cli_options': common[2:] + ['--disable-nosem', '--time'], 'proof_full_input_and_rule_verified': True, 'conjunction_certified_empty': empty, 'original_rule_retained': not empty, 'required_sources': sources, 'effective_rule_snapshots': effective_snapshots, 'rationale': 'An empty independently evaluated mandatory positive clause makes this exact three-positive-clause AND unsatisfiable. Any prerequisite match retains the original conjunction and is not itself a finding.'}
+              (root / 'generated-completion-proof.json').write_text(json.dumps(certificate, indent=2) + '\n', encoding='utf-8')
+              checked_source(sources[0])
+              configs = ['--config=' + str(path) for path in sorted(effective_root.iterdir())]
+              process = subprocess.run(common + ['--error', '--json-output=' + str(root / 'generated-results.json'), '--sarif-output=' + str(root / 'generated-results.sarif'), *configs, CORE])
+              checked_source(sources[0])
+              certificate['generated_analysis_exit_code'] = process.returncode
+              certificate['source_bytes_unchanged'] = True
+              (root / 'generated-completion-proof.json').write_text(json.dumps(certificate, indent=2) + '\n', encoding='utf-8')
+              print(json.dumps({'proof_matches': len(report['results']), 'conjunction_certified_empty': empty, 'original_rule_retained': not empty, 'generated_exit_code': process.returncode, 'source_bytes_unchanged': True}))
+              raise SystemExit(process.returncode)
+
+          if __name__ == '__main__':
+              main()
+          PY
 
       - name: Record findings, errors and scanned file count
         if: ${{ always() && steps.identity.outcome == 'success' }}
@@ -268,6 +410,7 @@ jobs:
           report = json.loads((root / 'results.json').read_text(encoding='utf-8'))
           generated = json.loads((root / 'generated-results.json').read_text(encoding='utf-8'))
           identity = json.loads((root / 'identity.json').read_text(encoding='utf-8'))
+          completion = json.loads((root / 'generated-completion-proof.json').read_text(encoding='utf-8'))
           required = identity['required_sources']
           if len(required) != 1 or required[0]['path'] != 'frameworks/react-native/src/jsHost/generated/core.ts':
               raise SystemExit('Generated runtime scan identity is missing or invalid')
@@ -276,6 +419,7 @@ jobs:
           outcomes = [os.environ['ANALYSIS_OUTCOME'], os.environ['GENERATED_ANALYSIS_OUTCOME']]
           summary = {'analysis_outcome': 'success' if outcomes == ['success', 'success'] else 'failure', 'findings': sum(len(part.get('results', [])) for part in [report, generated]), 'errors': sum(len(part.get('errors', [])) for part in [report, generated]), 'scanned_files': len(scanned), 'semgrep_version': report.get('version')}
           summary['component_outcomes'] = {'eligible_tree': outcomes[0], 'generated_runtime': outcomes[1]}
+          summary['generated_completion'] = completion
           summary['required_sources'] = required
           summary['required_sources_verified'] = False
           (root / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n', encoding='utf-8')
@@ -294,6 +438,8 @@ jobs:
               raise SystemExit('SAST reported analysis errors; evidence is incomplete')
           if summary['analysis_outcome'] != 'success' or summary['findings']:
               raise SystemExit('A required security analysis component failed or reported findings')
+          if completion.get('required_sources') != required or completion.get('source_bytes_unchanged') is not True or completion.get('generated_analysis_exit_code') != 0 or completion.get('proof_full_input_and_rule_verified') is not True:
+              raise SystemExit('Generated completion proof did not fully qualify the exact source')
           summary['required_sources_verified'] = True
           (root / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n', encoding='utf-8')
           print(json.dumps(summary))
