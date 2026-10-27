@@ -69,12 +69,23 @@ the exact root Swift package checksum gate.
 
 ## Required Checks
 
-The `Semgrep` workflow's `Scan` check analyzes the full repository on pull
+The `Semgrep` workflow's `Scan` check analyzes the eligible repository tree on pull
 requests for every target branch, including forks and drafts, and in merge
 queues. It uses a pinned OSS scanner without a Semgrep token and retains the
 exact commit, scanner identity, rule snapshots, findings and analysis errors.
 Findings, analysis errors and zero scanned files fail the check. CodeQL default
 setup continues to provide its existing analysis.
+
+This is a tree scan rather than a diff scan; it is not exhaustive all-file or
+all-language coverage. Semgrep retains its standard path, Git-ignore, binary
+and applicable-language/rule limits, including test/vendor/build/dist defaults
+([scope reference](https://docs.semgrep.dev/ignoring-files-folders-code/)).
+Ordinary analysis retains a 1,000,000-byte target bound and 30-second rule timeout.
+The generated production JavaScript runtime has a separate required component
+with a 5,000,000-byte bound and finite 300-second rule timeout. Its exact
+source bytes and SHA-256 are recorded, and omission from the analyzed paths or
+source drift fails `Scan`. Exceeding that bound requires another scope review;
+the generated code is not rewritten to satisfy the analyzer.
 
 Source-specific audit annotations are bound to the exact source hashes in the
 inline workflow policy and `.github/sast-reviewed-findings.json`. Changed
@@ -92,6 +103,7 @@ by either analyzer.
 Manual scans may select an immutable 40-character `revision`. Such a scan is
 retrospective evidence using the recorded current scanner and rules; it does
 not establish that the original pull request passed SAST before merge.
+Revisions without the required generated runtime fail scan applicability.
 
 ```bash
 npm ci
