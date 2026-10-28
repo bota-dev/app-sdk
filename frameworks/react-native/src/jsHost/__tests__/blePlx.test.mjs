@@ -13,6 +13,34 @@ const deferred = () => {
 };
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+test('service inspection uses the captured discovered connection and normalizes OS UUID formats', async () => {
+  const device = { id: 'note', mtu: 247, async discoverAllServicesAndCharacteristics() { return this; } };
+  let services = [{ uuid: 'B07A0006-0000-1000-8000-00805F9B34FB' }, { uuid: '180A' }];
+  let inspect = async () => services;
+  const port = createBlePlxPort({
+    async connectToDevice() { return device; }, async cancelDeviceConnection() { return device; },
+    servicesForDevice(id) { assert.equal(id, 'note'); return inspect(); },
+  });
+  const ctx = context();
+  await assert.rejects(port.hasService('note', '180a', ctx), /no local connection/);
+  await port.connect('note', ctx);
+  await port.discoverServices('note', ctx);
+  assert.equal(await port.hasService('note', 'b07a0006-0000-1000-8000-00805f9b34fb', ctx), true);
+  assert.equal(await port.hasService('note', 'B07A0006', ctx), true);
+  assert.equal(await port.hasService('note', '0000180a-0000-1000-8000-00805f9b34fb', ctx), true);
+  assert.equal(await port.hasService('note', 'ffff', ctx), false);
+  services = []; assert.equal(await port.hasService('note', '180a', ctx), false);
+  const gate = deferred(); inspect = () => gate.promise;
+  const pending = port.hasService('note', '180a', ctx);
+  const rejected = assert.rejects(pending, /connection changed/);
+  await port.disconnect('note', ctx);
+  await port.connect('note', ctx);
+  gate.resolve([{ uuid: '180a' }]); await rejected;
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(port.hasService('note', '180a', { ...ctx, signal: controller.signal }), { code: 'cancelled' });
+  await port.disconnect('note', ctx);
+});
+
 test('scan merges Android advertisement and scan-response fields by peripheral ID', async () => {
   let scanListener;
   let scanOptions;
