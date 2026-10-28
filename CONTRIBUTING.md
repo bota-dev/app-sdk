@@ -69,6 +69,56 @@ the exact root Swift package checksum gate.
 
 ## Required Checks
 
+The `Semgrep` workflow's `Scan` check analyzes the eligible repository tree on pull
+requests for every target branch, including forks and drafts, and in merge
+queues. It uses a pinned OSS scanner without a Semgrep token and retains the
+exact commit, scanner identity, rule snapshots, findings and analysis errors.
+Findings, analysis errors and zero scanned files fail the check. CodeQL default
+setup continues to provide its existing analysis.
+
+This is a tree scan rather than a diff scan; it is not exhaustive all-file or
+all-language coverage. Semgrep retains its standard path, Git-ignore, binary
+and applicable-language/rule limits, including test/vendor/build/dist defaults
+([scope reference](https://docs.semgrep.dev/ignoring-files-folders-code/)).
+Ordinary analysis retains a 1,000,000-byte target bound and 30-second rule timeout.
+The generated production JavaScript runtime has a separate required component
+with a 5,000,000-byte bound and finite 300-second rule timeout. Its exact
+source bytes and SHA-256 are recorded, and omission from the analyzed paths or
+source drift fails `Scan`. Exceeding that bound requires another scope review;
+the generated code is not rewritten to satisfy the analyzer.
+One expensive three-positive-clause rule can complete through a same-engine
+necessary-clause proof. The exact original rule hash and shape are guarded.
+Its mandatory positive clause runs unfiltered with suppression comments disabled
+on the complete unchanged runtime. Zero matches prove that conjunction cannot
+match; any match retains the original full rule. Errors, skips, missing input,
+byte drift or an unrecognized rule block completion. Original/derived/effective
+rule bytes, execution profiling and the decision remain in the artifact.
+Prerequisite matches are applicability evidence, not vulnerability findings.
+
+Source-specific audit annotations are bound to the exact source hashes in the
+inline workflow policy and `.github/sast-reviewed-findings.json`. Changed
+annotated source or a missing review ledger fails the guard. Historical source
+without these annotations receives an ordinary scan without applying current
+audit dispositions.
+
+When an annotated file changes, review the affected native/tool boundary and
+refresh its hash in both the workflow policy and review ledger. A hash refresh
+alone is not a safety review. Prefer the validated `PacketFields` accessors for
+FFI field metadata rather than reconstructing a second raw pointer view; byte
+length limits must still be checked before allocating an input copy.
+
+The canonical `platforms/android/gradlew` uses POSIX syntax the Semgrep parser
+does not support. Only that exact file is routed to pinned ShellCheck static
+analysis in the same check. Its original SHA-256 is enforced before and after
+analysis, and all ShellCheck findings and errors fail. A wrapper update requires
+reviewing this exception and its recorded hash; the wrapper is never executed
+by either analyzer.
+
+Manual scans may select an immutable 40-character `revision`. Such a scan is
+retrospective evidence using the recorded current scanner and rules; it does
+not establish that the original pull request passed SAST before merge.
+Revisions without the required generated runtime fail scan applicability.
+
 ```bash
 npm ci
 npm run check
@@ -161,8 +211,21 @@ bundle _2.6.9_ exec npm run test:apple:remote-resolution
 ```
 
 Android changes require JDK 17, Android SDK 36, build-tools 35.0.0, NDK
-28.2.13676358, and CMake 3.22.1. Run the unpublished package gate with signing
-credentials absent:
+28.2.13676358, and CMake 3.22.1.
+
+CI provisions that exact NDK through `tools/android/provision_ndk.py`, records
+its revision and resolved compiler, and compiles a small AArch64 object before
+using it. A different inherited `ANDROID_NDK_HOME` cannot substitute the runner's
+default revision. Normal installation uses `sdkmanager`; its Linux ZipFile
+failure alone permits one fresh official r28c download, verified against its exact
+size and pinned SHA-256 before CRC validation and unpacking. The SHA-256 pin was
+derived from the full official archive after verifying Google's published size,
+SHA-1 and every ZIP member CRC. Other installation,
+license, checksum and compiler failures remain failures. The original failed
+runner archive was not retained, so its specific transport/cache cause is
+unproved. Setup logs and identity receipts are retained as CI artifacts.
+
+Run the unpublished package gate with signing credentials absent:
 
 ```bash
 JAVA_HOME=/path/to/jdk-17 ANDROID_HOME="$HOME/Library/Android/sdk" \

@@ -79,6 +79,8 @@ pub(crate) unsafe fn command_from_packet(
         ));
     }
 
+    // The live typed C packet is borrowed only through the checked PacketFields constructor.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
     let serial = || {
         fields
@@ -443,6 +445,8 @@ impl<'a> PacketFields<'a> {
         let fields = if field_count == 0 {
             &[]
         } else {
+            // The C ABI requires live aligned fields; count <= 64 and non-null checks precede this borrow.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             unsafe { std::slice::from_raw_parts(fields, field_count) }
         };
         let mut ids = BTreeSet::new();
@@ -509,6 +513,8 @@ impl<'a> PacketFields<'a> {
         let Some(field) = self.optional_field(id, field_type::UTF8)? else {
             return Ok(None);
         };
+        // PacketFields checked the field shape; the caller keeps bytes live and UTF-8 is validated below.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let bytes = unsafe { borrowed_data(field)? };
         let value = std::str::from_utf8(bytes)
             .map_err(|_| invalid(format!("field {id} is not valid UTF-8")))?;
@@ -517,6 +523,12 @@ impl<'a> PacketFields<'a> {
 
     pub(crate) fn required_bytes(&self, id: u32) -> Result<Vec<u8>, DeviceSdkError> {
         self.optional_bytes(id)?
+            .ok_or_else(|| missing(id, field_type::BYTES))
+    }
+
+    pub(crate) fn required_bytes_len(&self, id: u32) -> Result<u64, DeviceSdkError> {
+        self.field(id, field_type::BYTES)
+            .map(|field| field.data.len)
             .ok_or_else(|| missing(id, field_type::BYTES))
     }
 
@@ -538,6 +550,8 @@ impl<'a> PacketFields<'a> {
         let Some(field) = self.optional_field(id, field_type::BYTES)? else {
             return Ok(None);
         };
+        // PacketFields checked the field shape; caller-live bytes are copied into an owned Vec.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         Ok(Some(unsafe { borrowed_data(field)? }.to_vec()))
     }
 
@@ -612,6 +626,8 @@ unsafe fn borrowed_data(field: &BotaDeviceSdkFieldViewV1) -> Result<&[u8], Devic
     if len == 0 {
         Ok(&[])
     } else {
+        // Only validated field shapes reach this caller-live C slice; length conversion and zero are checked.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         Ok(unsafe { std::slice::from_raw_parts(field.data.data, len) })
     }
 }

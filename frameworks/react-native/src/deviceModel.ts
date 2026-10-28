@@ -17,6 +17,16 @@ const DISPLAY_BY_TYPE: Readonly<Record<AdvertisedDeviceType, string>> = {
   bota_pin: 'Bota Pin', bota_pin_4g: 'Bota Pin 4G', bota_note: 'Bota Note', bota_pin_pro: 'Bota Pin Pro',
 };
 
+/** Normalize known GATT model aliases without deriving identity from a display name. */
+export function normalizeConnectedDeviceType(model: string): string {
+  switch (model.trim()) {
+    case 'pin': case 'Bota Pin': case 'bota-pin': case 'bota_pin': return 'bota_pin';
+    case 'pin_4g': case 'Bota Pin 4G': case 'bota-pin-4g': case 'bota_pin_4g': return 'bota_pin_4g';
+    case 'note': case 'Bota Note': case 'bota-note': case 'bota_note': return 'bota_note';
+    default: return model;
+  }
+}
+
 /** Decode versioned manufacturer data. Legacy eight-byte payloads expose MAC only. */
 export function decodeBotaAdvertisement(base64: string | null | undefined): BotaAdvertisementMetadata | undefined {
   if (!base64) return undefined;
