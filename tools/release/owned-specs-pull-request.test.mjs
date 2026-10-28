@@ -65,7 +65,7 @@ test('creates one source-bound PR, waits for external merge and verifies retaine
   assert.equal(result.mergeCommit, mergedCommit);
   assert.equal(result.specPath, file);
   assert.equal(result.blob, blob);
-  assert.match(run.messages[0], /https:\/\/github.com\/bota-dev\/app-sdk\/pull\/7/);
+  assert.match(run.messages[0], /https:\/\/github\.com\/bota-dev\/app-sdk\/pull\/7/);
   assert.equal(run.calls.filter(call => call.method === 'POST').length, 1);
   assert.ok(run.calls.every(call => call.method === 'GET' || call.path.endsWith('/pulls')),
     'publisher attempted to approve or merge a PR');

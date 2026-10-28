@@ -82,14 +82,14 @@ test('same-repository Specs retain protected approval, immutable inputs and buil
   assert.match(workflow, /slack-approved:\n        type: boolean/);
   assert.ok(workflow.indexOf('node tools/release/slack-sdk-release.mjs refresh')
     < workflow.indexOf('tools/release/publish-owned-cocoapods.sh'));
-  assert.doesNotMatch(workflow, /pod trunk push|COCOAPODS_TRUNK_TOKEN|trunk.cocoapods.org|BOTA_COCOAPODS_SPECS_TOKEN/);
+  assert.doesNotMatch(workflow, /pod trunk push|COCOAPODS_TRUNK_TOKEN|trunk\.cocoapods\.org|BOTA_COCOAPODS_SPECS_TOKEN/);
   const publisher = (await readFile(new URL('./publish-owned-cocoapods.sh', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
   assert.match(publisher, /http.followRedirects=false/);
   assert.match(publisher, /credential.helper=!gh auth git-credential/);
-  assert.match(publisher, /https:\/\/github.com\/bota-dev\/app-sdk.git/);
+  assert.match(publisher, /https:\/\/github\.com\/bota-dev\/app-sdk\.git/);
   assert.match(publisher, /owned-specs-pull-request.mjs/);
   assert.match(publisher, /test -n "\$\{GH_TOKEN:-\}"/);
-  assert.doesNotMatch(publisher, /BOTA_COCOAPODS_SPECS_TOKEN|github.com\/bota-dev\/cocoapods-specs/);
+  assert.doesNotMatch(publisher, /BOTA_COCOAPODS_SPECS_TOKEN|github\.com\/bota-dev\/cocoapods-specs/);
   const push = publisher.indexOf('publish_push "HEAD:$publication_ref"');
   const dispatch = publisher.indexOf('dispatch-owned-spec-checks.mjs');
   const checks = publisher.indexOf('wait-owned-spec-checks.mjs');
