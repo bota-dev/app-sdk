@@ -752,12 +752,12 @@ function createFakeClient() {
   return fake;
 }
 
-test('retired plaintext provisioning rejects without dispatching a provider or BLE operation', async () => {
+test('invalid plaintext provisioning rejects without dispatching a provider or BLE operation', async () => {
   const fake = createFakeClient();
   setCompatibilityClientForTesting(fake.client);
   const manager = new DeviceManager();
   await manager.connect(discoveredDevice);
-  await assert.rejects(manager.provision(connectedDevice, 'dtok_retired', 'production'));
+  await assert.rejects(manager.provision(connectedDevice, 'dtok_\ninvalid', 'production'));
   assert.deepEqual(fake.provisioningCalls, []);
   manager.destroy();
 });

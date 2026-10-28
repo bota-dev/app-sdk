@@ -36,7 +36,7 @@ jobs:
           path: .ci/react-native-workflow-baseline
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -51,7 +51,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           cache-on-failure: true
 
@@ -68,6 +68,9 @@ jobs:
       - name: Test release approval and publication tooling
         run: npm run test:release
 
+      - name: Test pinned NDK provisioning failure paths
+        run: python3 -I tools/android/test_provision_ndk.py
+
       - name: Verify cross-SDK workflow evidence
         run: npm run test:workflows -- --sdk-path .ci/react-native-workflow-baseline
 
@@ -75,7 +78,7 @@ jobs:
         run: node tools/baseline/react-native-api-contract.mjs validate --contract protocol/baseline/react-native-public-api-0.0.65.json --baseline-metadata protocol/baseline/react-native-sdk-0.0.65.json
 
       - name: Validate release manifest
-        run: cargo xtask release validate release/examples/2.0.0-beta.20.json
+        run: cargo xtask release validate release/examples/2.0.0-beta.23.json
 
       - name: Verify synchronized release version
         run: cargo xtask release verify-tag "v$(node -p 'require("./package.json").version')"
@@ -109,7 +112,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -123,7 +126,7 @@ jobs:
           toolchain: 1.98.0
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           cache-on-failure: true
 
@@ -145,7 +148,7 @@ jobs:
           npx --yes "npm@$NPM_CLI_VERSION" pack --pack-destination ../../target/react-native-release
 
       - name: Upload React Native candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: react-native-ci-${{ github.sha }}
           path: target/react-native-release/
@@ -160,7 +163,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -186,7 +189,7 @@ jobs:
 
       - name: Retain generated-core failure diagnostics
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: react-native-js-generation-diagnostics-${{ github.sha }}
           path: target/react-native-js/
@@ -213,7 +216,7 @@ jobs:
           npx --yes "npm@$NPM_CLI_VERSION" pack --pack-destination ../../target/react-native-runtime
 
       - name: Save JavaScript runtime artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: react-native-runtime-ci-${{ github.sha }}
           path: target/react-native-runtime/
@@ -229,7 +232,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -245,7 +248,7 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           cache-on-failure: true
 
@@ -264,7 +267,7 @@ jobs:
           test "$(jq -r .sourceRevision target/web-release/web-package-files.json)" = "$GITHUB_SHA"
 
       - name: Upload Web candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: web-ci-${{ github.sha }}
           path: target/web-release/
@@ -279,14 +282,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up JDK 17
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "17"
           cache: gradle
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -301,7 +304,7 @@ jobs:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
 
       - name: Cache Rust Android build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           cache-on-failure: true
 
@@ -312,12 +315,20 @@ jobs:
           "$SDKMANAGER" \
             "platforms;android-36" \
             "build-tools;35.0.0" \
-            "ndk;28.2.13676358" \
             "cmake;3.22.1" \
             "emulator" \
             "platform-tools" \
             "system-images;android-26;google_apis;x86" \
             "system-images;android-35;google_apis;x86_64"
+          python3 -I tools/android/provision_ndk.py "ndk;28.2.13676358"
+
+      - name: Retain exact NDK setup identity and diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-ndk-setup
+          path: target/android-ndk-provision/
+          if-no-files-found: ignore
 
       - name: Install repository tooling
         run: npm ci
@@ -354,7 +365,7 @@ jobs:
 
       - name: Retain Android JVM failure reports
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-junit-failure-${{ github.sha }}-${{ github.run_attempt }}
           path: platforms/android/sdk/build/test-results/testDebugUnitTest/*.xml
@@ -377,7 +388,7 @@ jobs:
         run: tools/android/test-emulator-lane.sh --api 35
 
       - name: Upload non-publishing Android evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-ci-${{ github.sha }}
           path: target/android-release/
@@ -397,7 +408,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -409,7 +420,7 @@ jobs:
           toolchain: 1.98.0
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           cache-on-failure: true
 
@@ -451,7 +462,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
 
@@ -461,7 +472,7 @@ jobs:
           toolchain: 1.98.0
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           cache-on-failure: true
 
@@ -515,7 +526,7 @@ jobs:
           tools/apple/test-pod-archive.sh --evidence-only
 
       - name: Upload unpublished Apple evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: apple-package-${{ github.sha }}
           path: target/apple-release/
@@ -537,13 +548,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
 
       - name: Set up JDK 17
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "17"
@@ -562,8 +573,16 @@ jobs:
           "$SDKMANAGER" \
             "platforms;android-36" \
             "build-tools;35.0.0" \
-            "ndk;28.2.13676358" \
             "cmake;3.22.1"
+          python3 -I tools/android/provision_ndk.py "ndk;28.2.13676358"
+
+      - name: Retain exact NDK setup identity and diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: flutter-ndk-setup
+          path: target/android-ndk-provision/
+          if-no-files-found: ignore
 
       - name: Install repository tooling
         run: npm ci
@@ -592,7 +611,7 @@ jobs:
 
       - name: Upload Flutter candidate
         if: steps.package.outputs.candidate-ready == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: flutter-ci-${{ github.sha }}
           path: target/flutter-release/
@@ -608,37 +627,37 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
 
       - name: Download Android candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: android-ci-${{ github.sha }}
           path: target/android-release/
 
       - name: Download Apple candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: apple-package-${{ github.sha }}
           path: target/apple-release/
 
       - name: Download React Native candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: react-native-ci-${{ github.sha }}
           path: target/react-native-release/
 
       - name: Download Web candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: web-ci-${{ github.sha }}
           path: target/web-release/
 
       - name: Download Flutter candidate
         if: needs.flutter.outputs.candidate-ready == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: flutter-ci-${{ github.sha }}
           path: target/flutter-release/
@@ -671,7 +690,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload candidate inventory
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-candidate-${{ github.sha }}
           path: |

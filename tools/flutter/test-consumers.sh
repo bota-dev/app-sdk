@@ -31,11 +31,21 @@ export BOTA_FLUTTER_HOME="$flutter_home"
 
 test_tmp_root="$(cd "${BOTA_TEST_TMPDIR:-/tmp}" && pwd -P)"
 consumer_root="$(mktemp -d "$test_tmp_root/bota-flutter-consumers.XXXXXX")"
-consumer="$consumer_root/example"
+consumer="$consumer_root/android/example"
+ios_consumer="$consumer_root/ios/example"
+mkdir -p "$consumer_root/android" "$consumer_root/ios"
 consumer_gradle_home="$consumer_root/gradle-home"
+android_pid=""
+ios_pid=""
 cleanup() {
   local status=$?
   trap - EXIT
+  # Join submitted builds before stopping Gradle or removing either work tree.
+  for pid in "$android_pid" "$ios_pid"; do
+    if [[ -n "$pid" ]] && ! wait "$pid"; then
+      status=1
+    fi
+  done
   if [[ -x "$consumer/android/gradlew" && -d "$consumer_gradle_home" ]]; then
     GRADLE_USER_HOME="$consumer_gradle_home" \
       "$consumer/android/gradlew" -p "$consumer/android" --stop \
@@ -154,7 +164,7 @@ if ! grep -Eq "spec.version = \"$sdk_version\"" \
   echo "Local BotaAppSDK pod does not match $sdk_version" >&2
   exit 1
 fi
-local_plugin_root="$consumer_root/local-plugin"
+local_plugin_root="$consumer_root/android/local-plugin"
 rsync -a \
   --exclude .dart_tool \
   --exclude build \
@@ -210,7 +220,7 @@ cp "$example_root/lib/main.dart" "$consumer/lib/main.dart"
 cp "$info_plist" "$consumer/ios/Runner/Info.plist"
 cp "$android_manifest" "$consumer/android/app/src/main/AndroidManifest.xml"
 
-EXAMPLE_PUBSPEC="$consumer/pubspec.yaml" PLUGIN_ROOT="$local_plugin_root" node -e '
+EXAMPLE_PUBSPEC="$consumer/pubspec.yaml" node -e '
   const fs = require("node:fs");
   const path = process.env.EXAMPLE_PUBSPEC;
   const source = fs.readFileSync(path, "utf8");
@@ -218,7 +228,7 @@ EXAMPLE_PUBSPEC="$consumer/pubspec.yaml" PLUGIN_ROOT="$local_plugin_root" node -
   if (!source.includes(marker)) {
     throw new Error("Flutter example dependency path marker is missing");
   }
-  fs.writeFileSync(path, source.replace(marker, `    path: ${process.env.PLUGIN_ROOT}`));
+  fs.writeFileSync(path, source.replace(marker, "    path: ../local-plugin"));
 '
 
 ANDROID_BUILD="$consumer/android/build.gradle.kts" \
@@ -255,44 +265,67 @@ perl -0pi -e \
   's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]+;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/g' \
   "$consumer/ios/Runner.xcodeproj/project.pbxproj"
 
+# Both platforms start from unbuilt generated hosts and separate plugin copies.
+# Flutter maintains its own SDK cache lock; project build state must not be shared.
+cp -R "$consumer_root/android/." "$consumer_root/ios/"
 "$workspace_root/tools/flutter/run-flutter.sh" pub get --directory="$consumer"
+cp "$consumer/pubspec.lock" "$ios_consumer/pubspec.lock"
+"$workspace_root/tools/flutter/run-flutter.sh" pub get \
+  --enforce-lockfile --directory="$ios_consumer"
 
-(
+build_android() (
+  set -e
   cd "$consumer"
   GRADLE_OPTS="${GRADLE_OPTS:-} -Dorg.gradle.daemon=false" \
     GRADLE_USER_HOME="$consumer_gradle_home" \
     env -u BOTA_FLUTTER_HOME -u FLUTTER_ROOT \
     "$flutter_home/bin/flutter" build apk \
     --release --target lib/main.dart
-)
-android_output="$consumer/build/app/outputs/flutter-apk/app-release.apk"
-require_file "$android_output"
+  android_output="$consumer/build/app/outputs/flutter-apk/app-release.apk"
+  require_file "$android_output"
 
-GRADLE_USER_HOME="$consumer_gradle_home" \
-  "$consumer/android/gradlew" -p "$consumer/android" \
-  --no-daemon \
-  :app:dependencyInsight \
-  --configuration releaseRuntimeClasspath \
-  --dependency dev.bota:bota-app-sdk \
-  >"$consumer_root/android-dependency.txt"
-if ! grep -Fq "dev.bota:bota-app-sdk:$sdk_version" \
-  "$consumer_root/android-dependency.txt"; then
-  echo "Flutter Android release did not resolve bota-app-sdk $sdk_version" >&2
+  GRADLE_USER_HOME="$consumer_gradle_home" \
+    "$consumer/android/gradlew" -p "$consumer/android" \
+    --no-daemon \
+    :app:dependencyInsight \
+    --configuration releaseRuntimeClasspath \
+    --dependency dev.bota:bota-app-sdk \
+    >"$consumer_root/android-dependency.txt"
+  if ! grep -Fq "dev.bota:bota-app-sdk:$sdk_version" \
+    "$consumer_root/android-dependency.txt"; then
+    echo "Flutter Android release did not resolve bota-app-sdk $sdk_version" >&2
+    exit 1
+  fi
+)
+
+build_ios() (
+  set -e
+  cd "$ios_consumer"
+  "$workspace_root/tools/flutter/run-flutter.sh" build ios \
+    --release --no-codesign --target lib/main.dart
+  ios_output="$ios_consumer/build/ios/iphoneos/Runner.app"
+  [[ -d "$ios_output" ]] || {
+    echo "Flutter iOS release application is missing" >&2
+    exit 1
+  }
+)
+
+build_android >"$consumer_root/android-build.log" 2>&1 &
+android_pid=$!
+build_ios >"$consumer_root/ios-build.log" 2>&1 &
+ios_pid=$!
+build_status=0
+if ! wait "$android_pid"; then build_status=1; fi
+android_pid=""
+if ! wait "$ios_pid"; then build_status=1; fi
+ios_pid=""
+cat "$consumer_root/android-build.log" "$consumer_root/ios-build.log"
+if [[ "$build_status" -ne 0 ]]; then
+  echo "Flutter release consumer build failed" >&2
   exit 1
 fi
 
-(
-  cd "$consumer"
-  "$workspace_root/tools/flutter/run-flutter.sh" build ios \
-    --release --no-codesign --target lib/main.dart
-)
-ios_output="$consumer/build/ios/iphoneos/Runner.app"
-[[ -d "$ios_output" ]] || {
-  echo "Flutter iOS release application is missing" >&2
-  exit 1
-}
-
 printf 'Flutter Android release consumer built: %s (native %s)\n' \
-  "$android_output" "$sdk_version"
+  "$consumer/build/app/outputs/flutter-apk/app-release.apk" "$sdk_version"
 printf 'Flutter iOS release consumer built: %s (native %s)\n' \
-  "$ios_output" "$sdk_version"
+  "$ios_consumer/build/ios/iphoneos/Runner.app" "$sdk_version"

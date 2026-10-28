@@ -1,5 +1,10 @@
 # BYO customer envelopes and opaque relay
 
+The current customer-hooks-v2 source packages the existing envelope inside the
+uploaded file. Complete carries ciphertext totals, not a separate envelope. See
+[the current implementation and review](byo-storage.md#customer-hooks-v2-source-implementation).
+The October 15 statements below describe the earlier signed contract.
+
 October 15, 2026: BYO uses one fixed BOTAENC2 content format and HPKE
 X25519/HKDF-SHA256/ChaCha20-Poly1305 envelope suite. The customer public key is the
 recipient of the recording data key. The customer opens the envelope and decrypts

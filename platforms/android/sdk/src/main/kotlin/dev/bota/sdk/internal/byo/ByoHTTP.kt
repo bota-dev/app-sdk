@@ -70,16 +70,8 @@ internal class ByoHTTP(private val options: ByoStorageOptions): ByoControlClient
         val url=text.toHttpUrl();require(url.isHttps && url.username.isEmpty() && url.password.isEmpty() && url.fragment==null)
         val request=Request.Builder().url(url).put(file.asRequestBody("application/octet-stream".toMediaType()))
         val headers=instructions.getJSONObject("headers")
-        for(name in headers.keys()) {
-            val value=headers.getString(name);require(value.length<=256 && '\r' !in value && '\n' !in value)
-            when(name) {
-                "content-type" -> require(value=="application/octet-stream")
-                "x-amz-checksum-sha256" -> require(Base64.getDecoder().decode(value).size==32)
-                "x-ms-blob-type" -> require(value=="BlockBlob")
-                else -> throw ByoException("invalid_headers")
-            }
-            request.header(name,value)
-        }
+        byoCustomer(3,headers)
+        for(name in headers.keys()) request.header(name,headers.getString(name))
         currentCoroutineContext().ensureActive();options.validateScope()
         val result=send(request.build());currentCoroutineContext().ensureActive();options.validateScope()
         if(result.first !in 200..299) throw ByoException("http",result.first)

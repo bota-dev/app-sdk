@@ -1,5 +1,14 @@
 # AGENTS.md
 
+Beta.23 preparation includes merged model/WiFi PR #58 and current-main BYO PR #56, and targets a standalone Demo dev APK using the published SDK. Regenerate the shared JavaScript and Apple checksums after main integration; do not select either stale generated side of the merge. Retain synchronized versions, independent integration review, exact main CI/inventory and protected publication. See [preflight](release/evidence/2.0.0-beta.23-preflight.md).
+
+Beta.22 preparation includes merged PR #51 and targets the existing synchronized release. Beta.21 is already published; prior preparation paragraphs are historical. Require canonical generated inputs, exact main CI/inventory, independent PR approval and protected release approval. Demo rollout for this request is development OTA only. See [preflight](release/evidence/2.0.0-beta.22-preflight.md).
+
+Unpublished synchronized beta.21 has canonical Linux/Apple/Flutter preparation
+and all release-tool checks passing in run `40261663660`. Final PR/main CI,
+the required approving review, annotated tag and protected publication remain
+pending. See [preflight evidence](release/evidence/2.0.0-beta.21-preflight.md).
+
 Unreleased encrypted token delivery adds an opaque HPKE envelope to existing
 provisioning material and a dedicated credential characteristic. Apps retain the
 same bind/provision/confirm flow. See [contract and evidence](docs/parity/device-token-envelope.md).
@@ -1534,3 +1543,16 @@ on the exact same-device refresh route; the predecessor never regains ordinary
 access. Migration125 precedes backend rollout; firmware HTTP retry/durable
 replacement and local encrypted storage remain separate. See
 [the recovery contract and verification](../internal-docs/device/Device-Token-Envelope.md).
+
+
+Customer-hooks-v2 package order, header bounds and transfer-only ACK validation
+belong in `core/device-sdk-core/src/model/byo_customer.rs`; native ABI and generated
+JS consume that implementation. Preserve the fixed backend/C/Rust package vector,
+BLE v3 original-ciphertext reads and receipt-only cleanup. See
+[the owning review](docs/parity/byo-storage.md#customer-hooks-v2-source-implementation).
+
+
+## October 28 dependency maintenance
+
+The internal JavaScript runtime fixture now pins eventemitter3 5.0.4. Its package
+contract must match that exact dependency while continuing to reject native imports and autolinking.

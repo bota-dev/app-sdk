@@ -1397,6 +1397,8 @@ mod tests {
         ))
         .unwrap();
         let view = packet.view();
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let fields = unsafe { slice::from_raw_parts(view.fields, view.field_count as usize) };
         let encrypted = fields
             .iter()
@@ -1408,6 +1410,8 @@ mod tests {
             .iter()
             .find(|field| field.field_id == field_id::CONTENT_SHA256)
             .expect("SHA-256 field");
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let bytes = unsafe { slice::from_raw_parts(sha256.data.data, sha256.data.len as usize) };
         assert_eq!(bytes, &[0x5a; 32]);
     }
@@ -1433,11 +1437,15 @@ mod tests {
         ))
         .unwrap();
         let view = packet.view();
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let fields = unsafe { slice::from_raw_parts(view.fields, view.field_count as usize) };
         assert_eq!(fields.len(), 1);
         assert_eq!(fields[0].field_id, field_id::CHECKPOINT);
         assert_eq!(fields[0].field_type, field_type::BYTES);
         let bytes =
+            // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             unsafe { slice::from_raw_parts(fields[0].data.data, fields[0].data.len as usize) };
         assert!(bytes.starts_with(b"BOTACKP1"));
     }

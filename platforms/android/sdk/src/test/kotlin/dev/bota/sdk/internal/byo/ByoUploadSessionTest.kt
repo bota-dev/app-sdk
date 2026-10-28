@@ -10,19 +10,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ByoUploadSessionTest {
-    private class Fixture(size: Int=300) {
+    private class Fixture(size: Int=300,val customer: Boolean=false,var assembled: Boolean=false) {
         val root=Files.createTempDirectory("byo-host-test-").toFile()
-        val bytes=ByteArray(size){it.toByte()}
+        val vector: JSONObject?=if(customer) JSONObject(generateSequence(File(requireNotNull(System.getProperty("user.dir")))) {it.parentFile}
+            .map {File(it,"protocol/vectors/byo-customer-hooks/package.json")}.first {it.isFile}.readText()) else null
+        val bytes=vector?.getString("ciphertext_hex")?.chunked(2)?.map {it.toInt(16).toByte()}?.toByteArray() ?: ByteArray(size){it.toByte()}
         val hash=MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") {"%02x".format(it.toInt() and 255)}
         val context=JSONObject("""{"contract_version":"bota-byo-batch-control-v1","environment":"development","organization_id":"org_test","project_id":"proj_test","configuration_id":"310eec75-feb0-487b-9d05-2d21c0b18794","configuration_revision":1,"destination_ref":"archive","recording_id":"rec_test","recording_uuid":"00112233-4455-6677-8899-aabbccddeeff","recording_generation":9,"device_id":"dev_test","binding_generation":1,"device_assignment_generation":1,"upload_session_id":"cde68c61-db75-43c8-8112-623ad29a2f13","owner_revision":1,"policy_revision":"1","channel":"ble","file_profile":"botaenc2-batch","ciphertext_length":300}""").put("ciphertext_sha256",hash).put("ciphertext_length",bytes.size)
+        init {if(customer) {val c=vector!!.getJSONObject("context");for(key in c.keys()) context.put(key,c.get(key))}}
+        val uploaded=mutableMapOf<Int,ByteArray>();var nextSegment: JSONObject?=null;var needsRepair=false;var loseSegment=false;var failMerge=false
         val calls=mutableListOf<String>();var committed=false;var loseCompletion=false;var rejectReceipt=false;var loseConfirm=false;var removed=false
         var expired=false;var loseRenewal=false;var loseCreate=false;var conflict=false
         val renewals=mutableListOf<String>();val createBodies=mutableListOf<String>()
         val options=ByoStorageOptions("https://customer.example/v1","account-a","org_test","proj_test","dev_test","development",1u,root,{"app-token"},{})
         val recording=ByoRecording(context.getString("recording_uuid"),9u)
-        val auth=JSONObject().put("configuration_sha256","ab".repeat(32))
+        val auth=vector?.getJSONObject("authorization") ?: JSONObject().put("configuration_sha256","ab".repeat(32))
         val receipt=JSONObject().put("signed","fake-device-verified-evidence")
-        fun status()=JSONObject().put("state",if(committed) "completed" else "receiving").apply {if(committed) put("receipt",receipt)}
+        fun status()=JSONObject().put("state",if(committed) "completed" else "receiving").apply {if(customer) {put("hook_contract","customer-hooks-v2");put("package_profile","bota-byo-package-v1");if(needsRepair) put("error","upload_incomplete")};if(committed) put("receipt",receipt)}
         val http=object: ByoControlClient {
             override suspend fun control(suffix: String,body: JSONObject?,context: Boolean): JSONObject {
                 calls+="http:$suffix"
@@ -38,14 +42,35 @@ class ByoUploadSessionTest {
                     suffix.endsWith("/upload") && conflict -> throw ByoException("http",409)
                     suffix.endsWith("/upload") && expired -> throw ByoException("expired",409)
                     suffix.endsWith("/prepare") || suffix.endsWith("/upload") -> JSONObject().put("authorization",auth).put("status",status()).apply {
-                        if(!committed && suffix.endsWith("/upload")) put("upload",JSONObject().put("method","PUT"))
+                        if(!committed && suffix.endsWith("/upload")) {nextSegment=body?.optJSONObject("segment");put("upload",JSONObject().put("method","PUT"))}
                     }
-                    suffix.endsWith("/complete") -> {committed=true;if(loseCompletion) {loseCompletion=false;throw ByoException("network")};status()}
+                    suffix.endsWith("/complete") -> {
+                        if(customer) {
+                            val facts=requireNotNull(body).getJSONObject("upload_package")
+                            val expected=vector!!.getJSONObject("upload_package")
+                            assertEquals(expected.getLong("file_size_bytes"),facts.getLong("file_size_bytes"))
+                            assertEquals(expected.getString("content_sha256"),facts.getString("content_sha256"))
+                            assertEquals(expected.getString("metadata_sha256"),facts.getString("metadata_sha256"))
+                            if(assembled) assertEquals(2,facts.getInt("segment_count")) else assertFalse(facts.has("segment_count"))
+                            if(failMerge) {failMerge=false;needsRepair=true;throw ByoException("missing_parts",409)}
+                        }
+                        committed=true;if(loseCompletion) {loseCompletion=false;throw ByoException("network")};status()}
                     suffix=="/"+this@Fixture.context.getString("upload_session_id") -> status()
                     else -> error("Unexpected request")
                 }
             }
-            override suspend fun put(instructions: JSONObject,file: File) {assertArrayEquals(bytes,file.readBytes());calls+="PUT"}
+            override suspend fun put(instructions: JSONObject,file: File) {
+                val sent=file.readBytes()
+                if(customer) {
+                    val trailer=vector!!.getString("trailer_hex").chunked(2).map {it.toInt(16).toByte()}.toByteArray()
+                    val packageBytes=bytes+trailer
+                    nextSegment?.let {segment -> val offset=segment.getInt("offset");val count=segment.getInt("length")
+                        assertArrayEquals(packageBytes.copyOfRange(offset,offset+count),sent);uploaded[segment.getInt("index")]=sent
+                    } ?: assertArrayEquals(packageBytes,sent)
+                    if(loseSegment) {loseSegment=false;throw ByoException("expired_url",403)}
+                } else assertArrayEquals(bytes,sent)
+                calls+="PUT"
+            }
         }
         val ble=object: ByoDeviceLink {
             override suspend fun call(operation: Int,document: ByteArray): ByteArray {
@@ -53,7 +78,7 @@ class ByoUploadSessionTest {
                 return when(operation) {
                     1 -> "{\"contract\":\"bota-byo-device-batch-v1\",\"signing_key_ids\":[1],\"max_ciphertext_bytes\":134217728}".toByteArray()
                     2 -> if(removed) "{\"missing\":true}".toByteArray() else JSONObject().put("recording_uuid",recording.uuid).put("recording_generation",9).put("ciphertext_length",bytes.size).put("ciphertext_sha256",hash).toString().toByteArray()
-                    3 -> "{\"manifest\":{\"opaque\":\"same-original-manifest\"}}".toByteArray()
+                    3 -> (if(customer) JSONObject().put("manifest",vector!!.getJSONObject("manifest")).toString() else "{\"manifest\":{\"opaque\":\"same-original-manifest\"}}").toByteArray()
                     4 -> {val input=java.nio.ByteBuffer.wrap(document).order(java.nio.ByteOrder.LITTLE_ENDIAN);val offset=input.long.toInt();val count=input.short.toInt() and 65535;bytes.copyOfRange(offset,offset+count)}
                     5 -> {if(rejectReceipt) throw ByoException("device_rejected");ByteArray(32){0x42}}
                     6 -> {check(committed);removed=true;if(loseConfirm){loseConfirm=false;throw ByoException("network")};byteArrayOf()}
@@ -61,8 +86,25 @@ class ByoUploadSessionTest {
                 }
             }
         }
-        suspend fun run()=ByoUploadSession(options,recording,ble,http,{calls+="refresh"}).use {it.run()}
+        suspend fun run()=ByoUploadSession(options,recording,ble,http,{calls+="refresh"},if(assembled) JSONObject().put("context",context).put("mode","assembled") else null).use {it.run()}
         fun cleanup() {root.deleteRecursively()}
+    }
+    @Test fun customerPackageUsesExactBytesAndRecoversLostCompletion()=runBlocking {
+        val f=Fixture(customer=true);try {
+            f.loseCompletion=true
+            try {f.run();fail("Expected lost completion")} catch(_: ByoException) {}
+            assertFalse(f.removed);assertEquals(1,f.calls.count {it=="PUT"})
+            f.run();assertTrue(f.removed);assertEquals(1,f.calls.count {it=="PUT"})
+        } finally {f.cleanup()}
+    }
+    @Test fun customerFooterRenewsAndRepairsMissingPartsWithSamePackage()=runBlocking {
+        val f=Fixture(customer=true,assembled=true);try {
+            f.loseSegment=true;f.failMerge=true
+            try {f.run();fail("Expected missing customer part")} catch(_: ByoException) {}
+            assertFalse(f.removed);assertEquals(setOf(1),f.uploaded.keys)
+            f.run();assertTrue(f.removed);assertEquals(setOf(0,1),f.uploaded.keys)
+            assertArrayEquals(f.bytes,f.uploaded[0])
+        } finally {f.cleanup()}
     }
     @Test fun wholeFileRequiresDeviceReceiptBeforeConfirm()=runBlocking {
         val f=Fixture();try {
@@ -141,8 +183,8 @@ class ByoUploadSessionTest {
         assertEquals(2000L,byoRetryDelay(null,2000L,0L))
         assertNull(byoRetryDelay("3600",2000L,0L))
     }
-    private class LiveFixture(val initialWSFailure: Boolean=false,val establishedFailure: Boolean=false) {
-        val batch=Fixture(20000);var closed=false;var acknowledged=0;var connections=0;var sent=0
+    private class LiveFixture(val initialWSFailure: Boolean=false,val establishedFailure: Boolean=false,val customer: Boolean=false,val badAck: Boolean=false) {
+        val batch=Fixture(20000,customer,customer);var closed=customer;var acknowledged=0;var connections=0;var sent=0
         var holdCapture=false;var allowed=listOf("whole_file","http_segments","ws_relay");var selected=false;var savedContext=false;var handedOff=false;var loseHandoff=false;var mode=""
         val segments=mutableListOf<JSONObject>();val wsBytes=mutableListOf<ByteArray>()
         val context=JSONObject(batch.context.toString()).put("upload_session_id","11111111-1111-4111-8111-111111111111")
@@ -151,7 +193,7 @@ class ByoUploadSessionTest {
                 1 -> JSONObject(batch.ble.call(1,document).decodeToString()).put("upload_modes",org.json.JSONArray(listOf("whole_file","http_segments","ws_relay"))).toString().toByteArray()
                 9 -> {if(document.size==21) selected=true
                     JSONObject().put("recording_uuid",batch.recording.uuid).put("recording_generation",9)
-                        .put("ciphertext_length",if(closed) 20000 else 16384).put("closed",closed).put("failed",false)
+                        .put("ciphertext_length",if(closed) batch.bytes.size else 16384).put("closed",closed).put("failed",false)
                         .put("ciphertext_sha256",batch.hash).put("overflow",false).put("retained_offset",acknowledged)
                         .put("stream_selected",selected).apply {if(savedContext) put("stream_context",context)}.toString().toByteArray()}
                 10 -> {check(selected&&savedContext);val p=java.nio.ByteBuffer.wrap(document,20,6).order(java.nio.ByteOrder.LITTLE_ENDIAN)
@@ -163,7 +205,7 @@ class ByoUploadSessionTest {
             }
         }
         fun status()=JSONObject().put("phase",if(handedOff) "handed_off" else "receiving").put("recovery_required",false)
-            .apply {if(handedOff) put("successor",batch.context).put("handoff_mode",mode)}
+            .apply {if(customer) put("hook_contract","customer-hooks-v2").put("contiguous_offset",acknowledged);if(handedOff) put("successor",batch.context).put("handoff_mode",mode)}
         val http=object: ByoControlClient {
             override suspend fun control(suffix: String,body: JSONObject?,context: Boolean)=batch.http.control(suffix,body,context).also {
                 if(suffix=="/capabilities") it.put("upload_modes",org.json.JSONArray(allowed))
@@ -175,8 +217,8 @@ class ByoUploadSessionTest {
             override suspend fun streamControl(suffix: String,body: JSONObject?): JSONObject=when {
                 suffix=="" -> {check(selected);JSONObject().put("context",context)}
                 suffix.endsWith("/grants") -> {segments+=JSONObject(requireNotNull(body).toString());JSONObject().put("result",JSONObject().put("state","write_authorized").put("segment",body).put("grant",JSONObject().put("segment",true).put("offset",body.getInt("offset")).put("length",body.getInt("length"))))}
-                suffix.endsWith("/confirm") -> JSONObject().put("result",JSONObject().put("state","confirmed").put("segment",body))
-                suffix.endsWith("/handoff") -> {val input=requireNotNull(body);if(handedOff) assertEquals(mode,input.getString("mode"));mode=input.getString("mode");handedOff=true
+                suffix.endsWith("/confirm") -> JSONObject().put("contract_version",if(customer) "customer-hooks-v2" else "legacy").put("result",JSONObject().put("state",if(customer) "transferred" else "confirmed").put("segment",body).put("cleanup_allowed",false))
+                suffix.endsWith("/handoff") -> {val input=requireNotNull(body);if(handedOff) assertEquals(mode,input.getString("mode"));mode=input.getString("mode");handedOff=true;batch.assembled=mode=="assembled"
                     assertEquals(batch.hash,input.getJSONObject("final").getString("ciphertext_sha256"))
                     if(loseHandoff){loseHandoff=false;throw ByoException("network")};status()}
                 else -> status()
@@ -185,15 +227,37 @@ class ByoUploadSessionTest {
                 connections++;if(initialWSFailure) throw ByoException("network")
                 return object: ByoStreamSocket {
                     override suspend fun exchange(segment: JSONObject,bytes: ByteArray): JSONObject {
-                        assertTrue(!closed || sent>0);if(!holdCapture) closed=true;sent++;segments+=JSONObject(segment.toString());wsBytes+=bytes.copyOf()
+                        assertTrue(customer || !closed || sent>0);if(!holdCapture) closed=true;sent++;segments+=JSONObject(segment.toString());wsBytes+=bytes.copyOf()
                         if(establishedFailure) throw ByoException("network")
-                        return JSONObject()
+                        return if(customer) JSONObject().put("proof",JSONObject().put("contract_version","customer-hooks-v2")
+                            .put("result",JSONObject().put("state","transferred").put("segment",segment).put("cleanup_allowed",badAck))) else JSONObject()
                     }
                     override fun close() {}
                 }
             }
         }
         suspend fun run()=ByoStreamSession(batch.options,batch.recording,link,http,{}).use {it.run()}
+    }
+    @Test fun customerLiveHTTPAndWSUseTransferOnlyAckAndAppendFooter()=runBlocking {
+        for(http in listOf(false,true)) {
+            val f=LiveFixture(initialWSFailure=http,customer=true);try {
+                f.run();assertEquals("assembled",f.mode);assertEquals(f.batch.bytes.size,f.acknowledged)
+                assertEquals(setOf(1),f.batch.uploaded.keys);assertTrue(f.batch.removed)
+            } finally {f.batch.cleanup()}
+        }
+    }
+    @Test fun customerResumeUsesTransferredCheckpointWithoutReuploadingBody()=runBlocking {
+        val f=LiveFixture(customer=true);try {
+            f.selected=true;f.savedContext=true;f.acknowledged=f.batch.bytes.size
+            f.run();assertEquals("assembled",f.mode);assertEquals(0,f.sent)
+            assertEquals(setOf(1),f.batch.uploaded.keys);assertTrue(f.batch.removed)
+        } finally {f.batch.cleanup()}
+    }
+    @Test fun customerAckCannotAuthorizeCleanupOrReleaseUnprovedRange()=runBlocking {
+        val f=LiveFixture(customer=true,badAck=true);try {
+            f.run();assertEquals("whole_file",f.mode);assertEquals(0,f.acknowledged)
+            assertEquals(4,f.connections);assertEquals(1,f.batch.calls.count {it=="PUT"})
+        } finally {f.batch.cleanup()}
     }
     @Test fun liveWSReachesBatchReceiptWithoutWholeFilePut()=runBlocking {
         val f=LiveFixture();try {

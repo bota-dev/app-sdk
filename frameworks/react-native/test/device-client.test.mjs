@@ -853,6 +853,36 @@ test('provisioning resolves nonce-bound native material and supports remove-only
   ]);
 });
 
+for (const deviceToken of ['x', 'x'.repeat(255)]) {
+  test(`provisioning forwards a ${deviceToken.length}-byte plaintext credential through the public client`, async () => {
+    const fixture = nativeFixture();
+    const client = createBotaDeviceSDK(fixture.module);
+    const material = { apiEndpoint: '\x00', deviceToken, mtu: 247 };
+    await client.provisioning.provision(connected, async () => material);
+    assert.deepEqual(fixture.calls, [
+      ['provision', connected], ['resolveProvisioningMaterial', 'material-request', material],
+    ]);
+  });
+}
+
+for (const [label, credential] of [
+  ['missing', { deviceToken: '' }],
+  ['mixed', { deviceToken: 'dtok_synthetic', credentialEnvelope: 'opaque-envelope' }],
+  ['empty envelope', { deviceToken: '', credentialEnvelope: '' }],
+  ['control character', { deviceToken: 'dtok_\ninvalid' }],
+  ['oversized', { deviceToken: 'x'.repeat(256) }],
+]) {
+  test(`provisioning rejects ${label} material before the adapter resolves credentials`, async () => {
+    const fixture = nativeFixture();
+    const client = createBotaDeviceSDK(fixture.module);
+    await assert.rejects(client.provisioning.provision(connected, async () => ({
+      apiEndpoint: '\x00', mtu: 247, ...credential,
+    })), /Exactly one valid provisioning credential is required/);
+    assert.equal(fixture.calls.some(call => call[0] === 'resolveProvisioningMaterial'), false);
+    assert.equal(fixture.calls.filter(call => call[0] === 'rejectApplicationMaterial').length, 1);
+  });
+}
+
 test('provisioning rejects native material requests when the application provider fails', async () => {
   const fixture = nativeFixture();
   const client = createBotaDeviceSDK(fixture.module);

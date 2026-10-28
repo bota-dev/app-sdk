@@ -29,6 +29,9 @@ After connection, `180A/2A24` remains the authoritative canonical model and
 `180A/2A25` remains the full serial. Registration must use those connected values.
 The suffix may collide and never authorizes binding, reconnection or capability.
 
+The [connected model and WiFi correction](connected-model-wifi.md) normalizes
+known GATT aliases and restores per-connection discovered WiFi capability.
+
 ## Verification
 
 - Firmware extracted-C tests cover the exact payload bytes, all known and unknown

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "package": "@bota.dev/react-native-app-sdk",
-  "packageVersion": "2.0.0-beta.20",
+  "packageVersion": "2.0.0-beta.23",
   "reactNativeVersion": "0.86.3",
   "codegenLibrary": "BotaDeviceSDKSpec",
   "nativeModule": "BotaDeviceSDK",
@@ -4417,5 +4417,5 @@
       }
     ]
   },
-  "contractDigest": "2be7dda7ea09a4780c1a689d41b762a755a6b9d1593c11bde0430e8e5f9a0ede"
+  "contractDigest": "5c0a0f6eb72ccca058b8cfaf88afe970e5774e472bb97edd52edfa1582812909"
 }
