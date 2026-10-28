@@ -82,7 +82,8 @@ test('new release keeps protected approval and immutable inputs while replacing 
   assert.match(publisher, /http.followRedirects=false/);
   assert.match(publisher, /credential.helper=!gh auth git-credential/);
   assert.match(publisher, /https:\/\/github.com\/bota-dev\/cocoapods-specs.git/);
-  assert.match(publisher, /publish_push HEAD:refs\/heads\/main/);
+  assert.match(publisher, /owned-specs-pull-request.mjs/);
+  assert.doesNotMatch(publisher, /HEAD:refs\/heads\/main/);
   const commands = publisher.split(/\r?\n/).filter(line => !line.trimStart().startsWith('#')).join('\n');
   assert.doesNotMatch(commands, /push[^\n]*--force|ssh-keyscan|git[^\n]*rebase/);
   const release = (await readFile(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');

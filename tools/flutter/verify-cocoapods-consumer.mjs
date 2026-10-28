@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import { publicPackageIdentifier } from '../release/package-identities.mjs';
@@ -13,7 +13,7 @@ const isRecord = value => value !== null && typeof value === 'object' && !Array.
 const rootName = value => value.split(' (')[0].split('/')[0];
 
 export function verifyCocoaPodsConsumer({
-  lock, expectedSpec, installedSpec, expectedSpecChecksum, version,
+  lock, expectedSpec, installedSpec, installedManifest, installedSdkPresent, expectedSpecChecksum, version,
   repository = specsRepository,
 }) {
   ownedSpecPath(version);
@@ -47,12 +47,17 @@ export function verifyCocoaPodsConsumer({
   assert(isRecord(expectedSpec.source) && expectedSpec.source.http === expectedUrl
     && /^[0-9a-f]{64}$/.test(expectedSpec.source.sha256 ?? '')
     && !/^0+$/.test(expectedSpec.source.sha256), 'indexed archive identity or SHA-256 mismatch');
-  assert(isDeepStrictEqual(installedSpec, expectedSpec), 'installed Podspec differs from the indexed Podspec');
+  assert(installedSpec === null || isDeepStrictEqual(installedSpec, expectedSpec),
+    'installed Podspec differs from the indexed Podspec');
   assert(/^[0-9a-f]{40}$/.test(expectedSpecChecksum ?? '')
     && isRecord(lock['SPEC CHECKSUMS']) && lock['SPEC CHECKSUMS'][name] === expectedSpecChecksum,
   'indexed Podspec checksum does not match the lock');
+  assert(isRecord(installedManifest) && isDeepStrictEqual(installedManifest, lock),
+    'installed sandbox manifest differs from the consumer lock');
+  assert(installedSdkPresent === true, 'installed SDK payload is missing from the sandbox');
   return { name, version, repository, artifactUrl: expectedUrl,
-    artifactSha256: expectedSpec.source.sha256, cocoapodsVersion: lock.COCOAPODS };
+    artifactSha256: expectedSpec.source.sha256, cocoapodsVersion: lock.COCOAPODS,
+    specificationStorage: installedSpec === null ? 'registry' : 'sandbox' };
 }
 
 async function main() {
@@ -64,18 +69,18 @@ async function main() {
   for (let index = 2; index < process.argv.length; index += 2) {
     const key = process.argv[index];
     const value = process.argv[index + 1];
-    if (!['--version', '--lock', '--repos-root', '--installed-spec', '--repository'].includes(key)
+    if (!['--version', '--lock', '--repos-root', '--sandbox', '--repository'].includes(key)
       || !value || value.startsWith('--') || Object.hasOwn(options, key)) throw new Error('invalid consumer verification arguments');
     options[key] = value;
   }
-  for (const key of ['--version', '--lock', '--repos-root', '--installed-spec']) {
+  for (const key of ['--version', '--lock', '--repos-root', '--sandbox']) {
     if (!options[key]) throw new Error(`${key} is required`);
   }
   const version = options['--version'];
   const name = publicPackageIdentifier('apple', version);
   ownedSpecPath(version);
-  assert(basename(options['--installed-spec']) === `${name}.podspec.json`, 'installed Podspec must be the selected JSON metadata');
   const repository = options['--repository'] ?? specsRepository;
+  let indexedCheckout;
   let indexedSpec;
   for (const entry of await readdir(options['--repos-root'], { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
@@ -88,21 +93,43 @@ async function main() {
     } catch { continue; }
     if (origin !== repository) continue;
     assert(!indexedSpec, 'multiple selected Specs repository checkouts');
+    indexedCheckout = checkout;
     indexedSpec = join(checkout, ...ownedSpecPath(version).split('/'));
   }
   assert(indexedSpec, 'selected Specs repository checkout is missing');
-  // Parse both the actual lock and JSON Podspecs with the same pinned CocoaPods Core that generated them.
-  // All file paths are literal argv values. The indexed/installed inputs have fixed .podspec.json extensions.
-  const ruby = `gem 'cocoapods-core', '= 1.16.2'
-require 'cocoapods-core'
+  // Registry pods need not have a Local Podspecs copy. Bind the actual sandbox manifest
+  // to the consumer lock and the selected source's JSON spec using CocoaPods' own APIs.
+  // All paths are literal argv values; no executable Ruby Podspec is loaded.
+  const ruby = `gem 'cocoapods', '= 1.16.2'
+require 'cocoapods'
 require 'json'
 lock = Pod::Lockfile.from_file(Pathname.new(ARGV.fetch(0)))
 abort 'consumer lock is missing' unless lock
-expected = Pod::Specification.from_file(Pathname.new(ARGV.fetch(1)))
-installed = Pod::Specification.from_file(Pathname.new(ARGV.fetch(2)))
-puts JSON.generate({ lock: lock.to_hash, expectedSpec: expected.to_hash, installedSpec: installed.to_hash,
+source = Pod::Source.new(Pathname.new(ARGV.fetch(1)))
+indexed_path = Pathname.new(ARGV.fetch(2)).expand_path
+name = ARGV.fetch(4)
+version = ARGV.fetch(5)
+abort 'indexed Podspec must be the selected JSON metadata' unless indexed_path.file? &&
+  indexed_path.basename.to_s == "#{name}.podspec.json" && source.specification_path(name, version) == indexed_path
+expected = source.specification(name, version)
+sandbox_root = Pathname.new(ARGV.fetch(3))
+abort 'installed sandbox is missing' unless sandbox_root.directory?
+sandbox = Pod::Sandbox.new(sandbox_root)
+manifest = sandbox.manifest
+abort 'installed sandbox manifest is missing' unless manifest
+payload = sandbox.pod_dir(name)
+payload_present = payload.directory? && !payload.symlink? && payload.realpath.parent == sandbox.root && !payload.children.empty?
+local_path = sandbox.specification_path(name)
+if local_path
+  abort 'installed Podspec must be the selected JSON metadata' unless local_path.file? &&
+    local_path.basename.to_s == "#{name}.podspec.json"
+end
+installed = sandbox.specification(name) if local_path
+puts JSON.generate({ lock: lock.to_hash, expectedSpec: expected.to_hash, installedSpec: installed&.to_hash,
+  installedManifest: manifest.to_hash, installedSdkPresent: payload_present,
   expectedSpecChecksum: expected.checksum })`;
-  const parsed = JSON.parse(execFileSync('ruby', ['-e', ruby, options['--lock'], indexedSpec, options['--installed-spec']],
+  const parsed = JSON.parse(execFileSync('ruby', ['-e', ruby, options['--lock'], indexedCheckout,
+    indexedSpec, options['--sandbox'], name, version],
     { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, stdio: ['ignore', 'pipe', 'inherit'] }));
   console.log(JSON.stringify(verifyCocoaPodsConsumer({ ...parsed, version, repository })));
 }

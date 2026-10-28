@@ -157,7 +157,7 @@ node "$ROOT/tools/flutter/verify-cocoapods-consumer.mjs" \
   --version "$VERSION" \
   --lock "$consumer/ios/Podfile.lock" \
   --repos-root "$CP_REPOS_DIR" \
-  --installed-spec "$consumer/ios/Pods/Local Podspecs/${APPLE_PACKAGE}.podspec.json"
+  --sandbox "$consumer/ios/Pods"
 (
   cd "$consumer"
   "$ROOT/tools/flutter/run-flutter.sh" build ios --release --no-codesign --target lib/main.dart
@@ -167,5 +167,5 @@ node "$ROOT/tools/flutter/verify-cocoapods-consumer.mjs" \
   --version "$VERSION" \
   --lock "$consumer/ios/Podfile.lock" \
   --repos-root "$CP_REPOS_DIR" \
-  --installed-spec "$consumer/ios/Pods/Local Podspecs/${APPLE_PACKAGE}.podspec.json"
+  --sandbox "$consumer/ios/Pods"
 echo "Flutter $VERSION and native ${APPLE_PACKAGE} $VERSION compiled through Bota Specs ($flutter_source Flutter candidate)"

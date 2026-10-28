@@ -86,7 +86,7 @@ node "$ROOT/tools/flutter/verify-cocoapods-consumer.mjs" \
   --version "$VERSION" \
   --lock "$temporary/Podfile.lock" \
   --repos-root "$temporary/cocoapods-repos" \
-  --installed-spec "$temporary/Pods/Local Podspecs/${APPLE_PACKAGE}.podspec.json"
+  --sandbox "$temporary/Pods"
 xcodebuild \
   -workspace "$temporary/PublicPodConsumer.xcworkspace" \
   -scheme PublicPodConsumer \

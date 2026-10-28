@@ -888,7 +888,7 @@ fn tag_and_recovery_workflows_bind_native_and_flutter_outputs_to_the_ci_candidat
 }
 
 #[test]
-fn apple_pod_bootstrap_is_protected_exact_and_publicly_verified() {
+fn apple_pod_owned_index_is_protected_exact_and_publicly_verified() {
     let contents =
         fs::read_to_string(root().join(".github/workflows/publish-apple-pod.yml")).unwrap();
     let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
@@ -896,11 +896,20 @@ fn apple_pod_bootstrap_is_protected_exact_and_publicly_verified() {
 
     assert_eq!(publish["environment"].as_str(), Some("release"));
     assert_eq!(publish["permissions"]["contents"].as_str(), Some("read"));
-    assert!(contents.contains("COCOAPODS_TRUNK_TOKEN"));
+    assert!(contents.contains("BOTA_COCOAPODS_SPECS_TOKEN"));
     assert!(contents.contains("BotaDeviceSDKCore.xcframework.zip.sha256"));
-    assert!(contents.contains("pod trunk push platforms/apple/${APPLE_PACKAGE}.podspec"));
-    assert!(contents.contains("trunk.cocoapods.org/api/v1/pods/${APPLE_PACKAGE}/specs/"));
-    assert!(contents.contains("verify_public_spec"));
+    assert!(contents.contains("generate-public-podspec.mjs"));
+    assert!(contents.contains("--check"));
+    assert!(contents.contains("pod _1.16.2_ ipc spec"));
+    assert!(contents.contains("tools/release/publish-owned-cocoapods.sh"));
+    assert!(!contents.contains("pod trunk push"));
+    assert!(!contents.contains("COCOAPODS_TRUNK_TOKEN"));
+    let publisher =
+        fs::read_to_string(root().join("tools/release/publish-owned-cocoapods.sh")).unwrap();
+    assert!(publisher.contains("wait-owned-spec-checks.mjs"));
+    assert!(publisher.contains("owned-specs-pull-request.mjs"));
+    assert!(publisher.contains("verify-public"));
+    assert!(!publisher.contains("HEAD:refs/heads/main"));
     assert!(!contents.contains("pod spec cat BotaAppSDK --version"));
     assert!(!contents.contains("BOTA_APPLE_SDK_PACKAGE_PATH"));
 }

@@ -15,7 +15,7 @@ const fixture = () => {
     source_files: `Sources/${name}/**/*.swift`,
     vendored_frameworks: 'Artifacts/BotaDeviceSDKCore.xcframework',
   };
-  return {
+  const input = {
     repository, version, expectedSpec, installedSpec: structuredClone(expectedSpec),
     expectedSpecChecksum: 'b'.repeat(40),
     lock: {
@@ -26,12 +26,15 @@ const fixture = () => {
       COCOAPODS: '1.16.2',
     },
   };
+  input.installedManifest = structuredClone(input.lock);
+  input.installedSdkPresent = true;
+  return input;
 };
 
 test('admits the exact named/versioned SDK only from the selected Specs repository', () => {
   assert.deepEqual(verifyCocoaPodsConsumer(fixture()), {
     name, version, repository, artifactUrl: fixture().expectedSpec.source.http,
-    artifactSha256: checksum, cocoapodsVersion: '1.16.2',
+    artifactSha256: checksum, cocoapodsVersion: '1.16.2', specificationStorage: 'sandbox',
   });
 });
 
@@ -59,6 +62,7 @@ test('refuses local, podspec and Git overrides while allowing unrelated Flutter 
   }
   const input = fixture();
   input.lock['EXTERNAL SOURCES'] = { bota_app_sdk: { ':path': '.symlinks/plugins/bota_app_sdk/ios' } };
+  input.installedManifest = structuredClone(input.lock);
   assert.equal(verifyCocoaPodsConsumer(input).version, version);
 });
 
@@ -115,7 +119,29 @@ test('supports preserved historical package identities and dependency-bearing lo
   input.lock.DEPENDENCIES = [`BotaAppleSDK (= ${input.version})`];
   input.lock['SPEC REPOS'] = { [repository]: ['BotaAppleSDK'] };
   input.lock['SPEC CHECKSUMS'] = { BotaAppleSDK: 'b'.repeat(40) };
+  input.installedManifest = structuredClone(input.lock);
   assert.equal(verifyCocoaPodsConsumer(input).name, 'BotaAppleSDK');
+});
+
+test('registry installation is admitted without a Local Podspecs copy only with matching installed state', () => {
+  const input = fixture();
+  input.installedSpec = null;
+  assert.equal(verifyCocoaPodsConsumer(input).specificationStorage, 'registry');
+});
+
+test('missing, stale or substituted sandbox manifests and missing SDK payloads are refused', () => {
+  for (const change of [
+    input => { input.installedManifest = null; },
+    input => { delete input.installedManifest; },
+    input => { input.installedManifest.PODS = [`${name} (2.0.0-beta.2)`]; },
+    input => { input.installedManifest['SPEC REPOS'] = { trunk: [name] }; },
+    input => { input.installedManifest['SPEC CHECKSUMS'][name] = 'c'.repeat(40); },
+    input => { input.installedSdkPresent = false; },
+  ]) {
+    const input = fixture();
+    change(input);
+    assert.throws(() => verifyCocoaPodsConsumer(input), /sandbox|payload/);
+  }
 });
 
 test('refuses incomplete lock metadata and a different CocoaPods client', () => {
@@ -133,13 +159,17 @@ test('refuses incomplete lock metadata and a different CocoaPods client', () => 
   }
 });
 
-test('CLI refuses executable or unrelated installed Podspec inputs before invoking Ruby', () => {
+test('CLI requires the installed sandbox and refuses direct Podspec inputs before invoking Ruby', () => {
   const helper = fileURLToPath(new URL('./verify-cocoapods-consumer.mjs', import.meta.url));
   for (const filename of ['BotaAppSDK.podspec', 'OtherPod.podspec.json']) {
     const result = spawnSync(process.execPath, [helper,
       '--version', version, '--lock', 'unused-lock', '--repos-root', 'unused-repositories',
       '--installed-spec', filename], { encoding: 'utf8' });
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /installed Podspec must be the selected JSON metadata/);
+    assert.match(result.stderr, /invalid consumer verification arguments/);
   }
+  const result = spawnSync(process.execPath, [helper,
+    '--version', version, '--lock', 'unused-lock', '--repos-root', 'unused-repositories'], { encoding: 'utf8' });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /--sandbox is required/);
 });

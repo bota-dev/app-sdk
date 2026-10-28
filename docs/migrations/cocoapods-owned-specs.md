@@ -117,13 +117,24 @@ An existing version must match the complete canonical specification. A mismatch
 stops the release; retries must not overwrite it or rebuild the original
 archive.
 
+For a new entry, the publisher stages the exact candidate on a unique branch
+and opens a pull request. The exact head must pass Validate Specs, License Gate
+and Scan. Organization policy requires at least one independent approval and
+approval of the latest push, followed by an authorized merge. The publisher
+waits for that merge and verifies the actual public specification on `main`.
+It does not approve or merge its own pull request, push `main` directly, or
+bypass repository rules.
+
 The current publisher receives `BOTA_COCOAPODS_SPECS_TOKEN` from the SDK's
 protected `release` environment. Provision an approved fine-grained token with
-Contents write access restricted to `bota-dev/cocoapods-specs` and only the read
-permissions needed to observe its required checks. An approved GitHub App
+Contents write and Pull requests write access restricted to
+`bota-dev/cocoapods-specs`. Required public check observations are anonymous. An approved GitHub App
 integration may provide a short-lived repository installation token at execution
 time instead. Track expiration, rotation and revocation. Neither this guide nor
 a workflow reference establishes that the writer has actually been configured.
+The writer secret is not configured, so automatic new-version publication is
+not activated. An available index or passing consumer build is not evidence
+that this publishing route is active.
 
 Publication uses HTTPS with a per-command credential helper. Do not persist a
 general user credential, introduce a deploy-key fallback around repository

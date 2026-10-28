@@ -32,7 +32,7 @@ if [[ "$CREATED" == true ]]; then
   command -v gh >/dev/null
   publish_push() {
     # No token in the remote URL, process argv, Git config or credential store.
-    # The approved token must have Contents write only on this one repository.
+    # The approved token is restricted to this repository's Contents and PRs.
     GH_HOST=github.com GH_TOKEN="$BOTA_COCOAPODS_SPECS_TOKEN" \
       git -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
         -c credential.useHttpPath=true -c http.followRedirects=false -C "$INDEX" \
@@ -44,12 +44,13 @@ if [[ "$CREATED" == true ]]; then
     -c user.name='bota-sdk-release' -c user.email='noreply@bota.dev' \
     commit --quiet -m "Publish immutable CocoaPod $VERSION" \
     -m 'Co-Authored-By: OpenAI Codex <noreply@openai.com>'
-  # Validate the exact immutable commit on a unique branch before the protected
-  # main fast-forward. No merge, rebase, force-push or broad account token is used.
+  # Validate the exact immutable commit before submitting its protected PR.
+  # Independent approval and merge follow the existing organization rules.
   publication_ref="refs/heads/publish/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
   publish_push "HEAD:$publication_ref"
   node "$ROOT/tools/release/wait-owned-spec-checks.mjs" "$(git -C "$INDEX" rev-parse HEAD)"
-  publish_push HEAD:refs/heads/main
+  node "$ROOT/tools/release/owned-specs-pull-request.mjs" \
+    "$(git -C "$INDEX" rev-parse HEAD)" "${publication_ref#refs/heads/}"
   unset BOTA_COCOAPODS_SPECS_TOKEN
 fi
 

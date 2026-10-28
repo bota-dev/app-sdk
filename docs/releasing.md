@@ -320,13 +320,25 @@ version, retarget its archive, force-push the index or rebuild an occupied
 artifact. An uncertain push outcome requires reading the actual index before
 retrying.
 
+A new specification is staged on a unique publication branch and submitted as a
+pull request for that exact commit. Validate Specs, License Gate and Scan must
+pass on the exact head. Organization policy requires an independent approval
+of the latest push before an authorized maintainer merges it. The publisher
+waits for the actual merge and verifies the public specification on `main`.
+It must not approve or merge its own pull request, update `main` directly or
+bypass the review policy. A staged entry or an open pull request is not a
+published version.
+
 The index writer is scoped to that repository and supplied as
 `BOTA_COCOAPODS_SPECS_TOKEN` only to the protected `release` publisher. An approved
-fine-grained token needs Contents write access to this one repository and only
-the read permissions required to observe its checks; an approved GitHub App may
+fine-grained token needs Contents write and Pull requests write access to this
+one repository. Public check observations are anonymous; an approved GitHub App may
 provide a short-lived repository installation token at execution time instead.
 Verify provisioning and manage expiry/rotation/revocation before enabling the
 publisher. A checked-in secret reference is not proof that a writer exists.
+The writer secret is not configured, and automatic new-version publication has
+not been activated. Existing indexed versions and clean consumer results do
+not establish activation of that future publishing route.
 Use HTTPS and a per-command credential helper, without persisting a general user
 credential or falling back to a policy-prohibited deploy key.
 Public installations require no writer credential. The same
