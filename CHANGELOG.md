@@ -3,6 +3,7 @@
 ## 2.0.0-beta.23 (unreleased)
 
 - Prepare the synchronized SDK release containing connected Pin/Note model normalization and discovered WiFi service capabilities for Android/iOS React Native consumers.
+- Retain the merged customer-hooks-v2 BYO upload implementation from main, with regenerated shared JavaScript and native archive checksums for the combined source.
 - Preserve existing provisioning, serial verification and connection ownership contracts. Public package and physical acceptance remain pending.
 
 User-facing changes to the Bota App SDK. Entries under **Unreleased** describe

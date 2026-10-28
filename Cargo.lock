@@ -123,6 +123,7 @@ dependencies = [
 name = "bota-device-sdk-core"
 version = "2.0.0-beta.23"
 dependencies = [
+ "base64",
  "serde",
  "serde_json",
  "sha2",

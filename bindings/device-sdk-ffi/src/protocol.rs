@@ -463,6 +463,14 @@ pub(crate) unsafe fn encode(
     // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
     let bytes = match packet.kind {
+        packet_kind::PROTOCOL_BYO_CUSTOMER => {
+            fields.validate_allowed(&[field_id::COMMAND, field_id::VALUE])?;
+            let command = fields.required_u64(field_id::COMMAND)?;
+            let input = fields.required_bytes_bounded(field_id::VALUE, 32768)?;
+            let bytes = bota_device_sdk_core::model::byo_customer::adapter(command, &input)
+                .map_err(|_| invalid("invalid BYO customer adapter input"))?;
+            return Ok(BotaDeviceSdkPacketV1::new(packet.kind).with_bytes(field_id::VALUE, bytes));
+        }
         packet_kind::PROTOCOL_ENCODE_BYO_BLE => {
             // The validated live C packet is forwarded to the BYO helper, which bounds fields to 512 bytes.
             // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage

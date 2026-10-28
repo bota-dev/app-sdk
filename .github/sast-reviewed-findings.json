@@ -4,16 +4,17 @@
     "C ABI v1 ownership and lifetime rules in bindings/device-sdk-ffi/include/bota_device_sdk.h",
     "Rust exported # Safety contracts; PacketFields count, null, duplicate, type and UTF-8 checks",
     "Owned ABI regression fixtures and explicit literal-argv developer tools",
-    "Pinned NDK downloader: fixed Google HTTPS origin and explicit ssl.create_default_context() chain/hostname verification; https://docs.python.org/3/library/ssl.html#ssl.create_default_context"
+    "Pinned NDK downloader: fixed Google HTTPS origin and explicit ssl.create_default_context() chain/hostname verification; https://docs.python.org/3/library/ssl.html#ssl.create_default_context",
+    "BYO customer ABI 0x0530: packet-kind constant only; encode uses PacketFields.required_bytes_bounded to check typed field length <= 32768 before the existing owned copy. No new unsafe borrow or suppression is introduced; existing reviewed unsafe boundaries are unchanged."
   ],
   "original_source_revision": "dc51e35dd5f968ad2b2847d0a08742757cf9fdbb",
   "reviewed_files": {
-    "bindings/device-sdk-ffi/src/command.rs": "a577e2942555eafa4657878a85a74b5c98d1313066bfee6b771cb70eaeff0b86",
+    "bindings/device-sdk-ffi/src/command.rs": "98237b8abacebc7cc3df45c9780fa268bc0089b8fe3c7ff564432dbf78a22d9d",
     "bindings/device-sdk-ffi/src/event.rs": "ef75367e23d5c50e3688a76b6e02b6b669a808eb194e47a7691aed56e14183e1",
     "bindings/device-sdk-ffi/src/lib.rs": "8abc996862cbef531b7388bee816513e367cb751818d7456a81f1df9ba4c7c43",
     "bindings/device-sdk-ffi/src/output.rs": "937ec7839d7d3cee8627b7f2b4ddaf79d99e4598184a9645eadbef35ad8f5f46",
-    "bindings/device-sdk-ffi/src/packet.rs": "24b7a31cbaf479113872a0813aa293e3a0feaf7dc44f917331b1e4fe0866fa51",
-    "bindings/device-sdk-ffi/src/protocol.rs": "cf476063ea10d1ab160a5b78270c46213f5c050170b8b9f6da2b6bccc0c46217",
+    "bindings/device-sdk-ffi/src/packet.rs": "cad11458b11c6ddefe8205b43e75a6df8ec1d0a58598086677440272af3cf69d",
+    "bindings/device-sdk-ffi/src/protocol.rs": "4a0fb2b32d8343682de7111d271aa23b8c66d120d5bcddfc119705a844bb842c",
     "bindings/device-sdk-ffi/src/protocol/byo_ble.rs": "dab32cf60949b109d512a62e70e21736021d9b4044cb9310aa9b94b0f32a6a81",
     "bindings/device-sdk-ffi/src/protocol/byo_recovery.rs": "7fe1df556cce2f5812f9068ab26f990133b957c53dfe5cb33f26e1dbd1fb79d2",
     "bindings/device-sdk-ffi/src/protocol/v2_demo.rs": "469f2ad2bfeab53015e99529e9014f20e294b672a2dd6e658f43cbc774e17b0c",

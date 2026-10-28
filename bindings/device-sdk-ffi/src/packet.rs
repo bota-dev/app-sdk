@@ -180,6 +180,7 @@ pub mod kind {
     pub const PROTOCOL_REDUCE_BYO_RECOVERY: u32 = 0x052d;
     pub const PROTOCOL_ENCODE_BYO_BLE: u32 = 0x052e;
     pub const PROTOCOL_DECODE_BYO_BLE: u32 = 0x052f;
+    pub const PROTOCOL_BYO_CUSTOMER: u32 = 0x0530;
 }
 
 pub mod field_type {

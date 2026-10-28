@@ -526,6 +526,20 @@ impl<'a> PacketFields<'a> {
             .ok_or_else(|| missing(id, field_type::BYTES))
     }
 
+    pub(crate) fn required_bytes_bounded(
+        &self,
+        id: u32,
+        max_len: u64,
+    ) -> Result<Vec<u8>, DeviceSdkError> {
+        let field = self
+            .optional_field(id, field_type::BYTES)?
+            .ok_or_else(|| missing(id, field_type::BYTES))?;
+        if field.data.len > max_len {
+            return Err(invalid(format!("field {id} exceeds {max_len} bytes")));
+        }
+        self.required_bytes(id)
+    }
+
     pub(crate) fn required_fixed_bytes<const N: usize>(
         &self,
         id: u32,

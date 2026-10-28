@@ -1,4 +1,5 @@
 mod byo_checkpoint;
+pub mod byo_customer;
 mod byo_upload;
 mod device;
 mod discovery;
