@@ -309,24 +309,56 @@ first, then polls package-level `beta` independently (up to 30 checks, ten
 seconds apart). Every tag check still rejects a changed `latest`; checksum and
 historical-tag protections remain mandatory. The wait never republishes bytes.
 
-Before a clean public CocoaPods install, `tools/release/wait-cocoapods.mjs`
-requires both the exact version in the CDN's sharded version index and the
-matching public podspec. A successful Trunk publication or direct spec URL alone
-is insufficient. It checks up to 61 times, thirty seconds apart, with bounded
-HTTP requests. Only absent index entries/specs are treated as propagation lag;
-authentication, server, network, malformed-spec and identity failures stop the
-gate. The consumer still uses the normal CDN and `pod install --repo-update`,
-with no local spec override. Exhaustion requires retrying verification later,
-not republishing. These tooling changes apply to subsequent source revisions;
-immutable beta.3 continues to use its tagged scripts.
+Current CocoaPods distribution uses the public
+[`bota-dev/cocoapods-specs`](https://github.com/bota-dev/cocoapods-specs) Git
+index. The approved Apple publisher adds only the exact preserved release's
+canonical JSON specification under `Specs/<name>/<version>/<name>.podspec.json`.
+The specification retains the immutable GitHub Release archive URL and its
+SHA-256. A missing entry may be added; an occupied entry must match the complete
+canonical specification or publication fails. Never overwrite a published
+version, retarget its archive, force-push the index or rebuild an occupied
+artifact. An uncertain push outcome requires reading the actual index before
+retrying.
+
+The index writer is scoped to that repository and supplied as
+`BOTA_COCOAPODS_SPECS_TOKEN` only to the protected `release` publisher. An approved
+fine-grained token needs Contents write access to this one repository and only
+the read permissions required to observe its checks; an approved GitHub App may
+provide a short-lived repository installation token at execution time instead.
+Verify provisioning and manage expiry/rotation/revocation before enabling the
+publisher. A checked-in secret reference is not proof that a writer exists.
+Use HTTPS and a per-command credential helper, without persisting a general user
+credential or falling back to a policy-prohibited deploy key.
+Public installations require no writer credential. The same
+approved-release, preserved-artifact and checksum gates remain mandatory; a new
+Trunk registration is no longer part of current publication. Customer setup and
+mirror requirements are in the
+[CocoaPods source migration guide](migrations/cocoapods-owned-specs.md).
+
+Index publication and consumer readiness remain separate. The clean Apple
+consumer must install the exact named pod from the Bota Specs source with empty
+repositories and caches, verify its `Podfile.lock` source/version and compile.
+The Flutter consumer must resolve the matching native dependency through that
+source and build the preserved Flutter package. The official CocoaPods CDN may
+still supply unrelated dependencies; it must not supply the Bota pod for this
+gate. A direct podspec, Git dependency or local path override does not qualify
+this index route. Both public consumer gates must pass before synchronized
+release completion.
+
+Historical tagged releases retain their original Trunk/CDN publisher and
+`tools/release/wait-cocoapods.mjs` checks. Those checks required both the exact
+version in the CDN's sharded index and the matching public podspec, then a normal
+CDN-backed install. A delayed or absent entry did not authorize another upload.
+The migration does not modify those tags, central registrations or archives.
 
 Readiness review: `publish-npm.test.mjs` covers delayed tags on both fresh
 publication and occupied-version recovery, bounded exhaustion, and immediate
-`latest` drift rejection. `wait-cocoapods.test.mjs` covers independently delayed
-index/spec visibility, exact identity, bounded exhaustion, hard failures, and
-consumer ordering. These checks match the existing no-republish/no-override
-release requirements. They do not establish publication or public consumer
-build success; the protected workflow must still supply that evidence. The
+`latest` drift rejection. Historical `wait-cocoapods.test.mjs` coverage retains
+independently delayed index/spec visibility, exact identity, bounded exhaustion,
+hard failures and consumer ordering. The owned-index tests must additionally
+cover immutable full-spec matching and the selected consumer source. Source
+tests do not establish index publication or public consumer build success; the
+protected workflow must still supply that evidence. The
 Rust `release_readiness` structural gate also checks the bounded npm tag guard;
 run `cargo test -p xtask --test release_readiness` alongside the Node tests when
 changing the release scripts.
@@ -483,8 +515,11 @@ Configure two GitHub environments for `bota-dev/app-sdk`:
    with no required reviewers or wait timer. Store only
    `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
    `SIGNING_IN_MEMORY_KEY`, `SIGNING_IN_MEMORY_KEY_PASSWORD`, and
-   `COCOAPODS_TRUNK_TOKEN` as environment secrets. Do not add a crates.io or
-   pub.dev token; Flutter's later automated publications use OIDC.
+   the approved repository-scoped `BOTA_COCOAPODS_SPECS_TOKEN` as environment
+   secrets. The current publisher does not use `COCOAPODS_TRUNK_TOKEN`; retain it
+   only while an explicitly supported historical recovery still requires it.
+   Do not delete a credential needed by an active approved recovery. Do not add
+   a crates.io or pub.dev token; Flutter's later automated publications use OIDC.
 
 ### Single-approval migration
 

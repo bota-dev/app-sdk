@@ -114,6 +114,23 @@ In Xcode, add `https://github.com/bota-dev/app-sdk.git` at exact version
 .package(url: "https://github.com/bota-dev/app-sdk.git", exact: "2.0.0-beta.19")
 ```
 
+For CocoaPods, keep the same `BotaAppSDK` name and exact version, and select the
+[Bota Specs repository](https://github.com/bota-dev/cocoapods-specs):
+
+```ruby
+source 'https://github.com/bota-dev/cocoapods-specs.git'
+source 'https://cdn.cocoapods.org/'
+
+target 'YourApp' do
+  use_frameworks!
+  pod 'BotaAppSDK', '2.0.0-beta.19', :source => 'https://github.com/bota-dev/cocoapods-specs.git'
+end
+```
+
+This is Bota's public index, separate from the CocoaPods central Specs registry.
+The [CocoaPods source migration guide](docs/migrations/cocoapods-owned-specs.md)
+covers existing lockfiles, Flutter applications and customer-maintained mirrors.
+
 Add `NSBluetoothAlwaysUsageDescription` to your application. Sandboxed macOS
 apps also need the **App Sandbox > Hardware > Bluetooth** entitlement.
 
@@ -145,6 +162,10 @@ dependencies:
 
 Follow the [Flutter guide](frameworks/flutter/bota_app_sdk/README.md) for native
 setup and backend callbacks, then rebuild the iOS or Android app.
+Flutter applications using CocoaPods must also add the
+[Bota Specs source](docs/migrations/cocoapods-owned-specs.md#flutter-applications)
+to their application's `ios/Podfile`; the plugin retains the exact matching
+`BotaAppSDK` dependency.
 
 ### Web
 

@@ -19,6 +19,28 @@ permissions:
   contents: read
 
 jobs:
+  owned-cocoapods:
+    name: Bota Specs Apple and Flutter consumers
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Verify owned-source admission
+        run: node --test tools/release/owned-cocoapods.test.mjs tools/flutter/verify-cocoapods-consumer.test.mjs
+      - name: Install isolated CocoaPods toolchain
+        run: tools/flutter/install-pinned-cocoapods.sh
+      - name: Compile clean public Apple CocoaPod through Bota Specs
+        run: tools/flutter/test-public-apple-pod-consumer.sh 2.0.0-beta.22
+      - name: Compile clean public Flutter CocoaPods consumer through Bota Specs
+        run: tools/flutter/test-public-cocoapods-consumer.sh 2.0.0-beta.22
+
   quality:
     name: Rust and tooling
     runs-on: ubuntu-latest

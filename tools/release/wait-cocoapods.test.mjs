@@ -123,15 +123,18 @@ test('invalid inputs cannot initiate registry requests', async () => {
   }
 });
 
-test('public pod consumer waits on its normal isolated install and retains strict checks', async () => {
+test('public pod consumer installs from Bota Specs in isolation and verifies provenance before compiling', async () => {
   const script = await readFile(new URL('../flutter/test-public-apple-pod-consumer.sh', import.meta.url), 'utf8');
-  const wait = script.indexOf('node "$ROOT/tools/release/wait-cocoapods.mjs" "$VERSION" -- "${pod_command[@]}"');
-  assert.ok(wait > script.indexOf('cd "$temporary"'));
+  const install = script.indexOf('"${pod_command[@]}" install --repo-update');
+  assert.ok(install > script.indexOf('cd "$temporary"'));
   for (const setting of ['CP_HOME_DIR', 'CP_REPOS_DIR', 'CP_CACHE_DIR']) {
     assert.match(script, new RegExp(`export ${setting}="\\$temporary/`));
   }
-  assert.ok(script.includes("source 'https://cdn.cocoapods.org/'"));
-  assert.ok(script.includes("grep -q '^EXTERNAL SOURCES:'"));
-  assert.ok(script.includes('grep -Fq "${APPLE_PACKAGE} ($VERSION)"'));
+  assert.ok(script.includes("source '$SPECS_REPOSITORY'"));
+  assert.ok(script.includes(":source => '$SPECS_REPOSITORY'"));
+  assert.ok(!script.includes('wait-cocoapods.mjs'));
+  const verify = script.indexOf('node "$ROOT/tools/flutter/verify-cocoapods-consumer.mjs" \\');
+  assert.ok(verify > install && verify < script.indexOf('xcodebuild \\'));
+  assert.ok(script.includes('--repos-root "$temporary/cocoapods-repos"'));
   assert.ok(script.includes('xcodebuild \\'));
 });

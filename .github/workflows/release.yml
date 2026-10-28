@@ -490,7 +490,7 @@ jobs:
           fi
 
   publish-apple-pod:
-    name: Publish Apple CocoaPod bootstrap
+    name: Publish Apple CocoaPod to Bota Specs
     if: github.event_name == 'push'
     needs: publish
     permissions:
@@ -498,7 +498,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/publish-apple-pod.yml
     secrets:
-      COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
+      BOTA_COCOAPODS_SPECS_TOKEN: ${{ secrets.BOTA_COCOAPODS_SPECS_TOKEN }}
 
   approve-recovery:
     name: Approve SDK recovery
@@ -918,13 +918,6 @@ jobs:
             --pattern release-candidate-files.json \
             --dir target/tagged-candidate
 
-      - name: Resolve clean public native consumers
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          tools/apple/test-remote-consumer.sh "$VERSION"
-          tools/flutter/test-public-apple-pod-consumer.sh "$VERSION"
-          tools/android/test-consumer.sh --public --compile-only
-
       - name: Download promoted Flutter candidate
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -947,6 +940,17 @@ jobs:
             target/tagged-candidate/release-candidate-files.json)"
           CURRENT_FLUTTER="$(jq -S -c . target/current-flutter-candidate-files.json)"
           test "$CURRENT_FLUTTER" = "$EXPECTED_FLUTTER"
+
+      - name: Resolve clean public native and preserved Flutter consumers
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          FLUTTER_PACKAGE="$(node tools/release/package-identities.mjs flutter "$VERSION")"
+          tools/apple/test-remote-consumer.sh "$VERSION"
+          tools/flutter/test-public-apple-pod-consumer.sh "$VERSION"
+          tools/flutter/test-public-cocoapods-consumer.sh "$VERSION" \
+            --plugin-archive "target/flutter-release/${FLUTTER_PACKAGE}-$VERSION.tar.gz" \
+            --plugin-inventory target/flutter-release/package-inventory.json
+          tools/android/test-consumer.sh --public --compile-only
 
   publish-flutter:
     name: Publish or verify preserved Flutter package
