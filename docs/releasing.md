@@ -1,3 +1,7 @@
+# Candidate synchronized beta: 2.0.0-beta.23
+
+Prepare merged model/WiFi fixes together with current-main BYO changes at `c5a25cc40cb9f87b03c7ffe0647fa860d0dea924` for the requested Demo dev APK. Regenerate canonical JavaScript and native archive checksums for the combined source. Exact final main CI/inventory and protected release approval remain required. Existing versions are immutable. See [preflight](../release/evidence/2.0.0-beta.23-preflight.md).
+
 # Candidate synchronized beta: 2.0.0-beta.22
 
 This candidate includes merged PR #51 at main `64a61ea552083e829c21f3b45ea4f8626b136332`. It preserves exact-one credential validation and never retries encrypted failure through plaintext. Beta.21 is already published; the dated checkpoints below retain their historical status.

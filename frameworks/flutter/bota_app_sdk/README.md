@@ -1,6 +1,6 @@
 # Bota SDK for Flutter
 
-Source candidate `2.0.0-beta.22` carries opaque encrypted device-token
+Source candidate `2.0.0-beta.23` carries opaque encrypted device-token
 provisioning through the existing native adapters and confirmation flow.
 Flutter retains its native facade and installed adapter contracts. Canonical
 artifacts, exact main CI, protected publication and public consumer checks
@@ -11,8 +11,8 @@ remain required. Device acceptance and application delivery remain separate.
 The 2.x distribution is `bota_app_sdk`, with `BotaAppSDK` on Apple and
 `dev.bota:bota-app-sdk` on Android. Replace the old dependency and Dart imports;
 do not install both packages in the same application. Historical 1.x releases
-remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.22`.
-See the [candidate preflight](../../../release/evidence/2.0.0-beta.22-preflight.md).
+remain under `bota_flutter_sdk`. This source prepares synchronized `2.0.0-beta.23`.
+See the [candidate preflight](../../../release/evidence/2.0.0-beta.23-preflight.md).
 Rebuild native applications and reconnect explicitly after connection loss.
 Completed-resume and broader hardware acceptance remain separate.
 
