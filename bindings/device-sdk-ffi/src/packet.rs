@@ -620,7 +620,11 @@ pub unsafe extern "C" fn bota_device_sdk_v1_packet_view(
     }
 
     match catch_unwind(AssertUnwindSafe(|| {
+        // The documented packet owner remains live; null checks precede this borrowed view.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let packet = unsafe { &*packet };
+        // The C ABI requires writable view storage; its null check precedes this write.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         unsafe { out_view.write(packet.view()) };
     })) {
         Ok(()) => BotaDeviceSdkStatusV1::Ok,
@@ -634,6 +638,8 @@ pub unsafe extern "C" fn bota_device_sdk_v1_packet_view(
 /// `packet` must be null or a live SDK-owned packet that has not been freed.
 pub unsafe extern "C" fn bota_device_sdk_v1_packet_free(packet: *mut BotaDeviceSdkPacketV1) {
     if !packet.is_null() {
+        // The documented C ABI transfers this SDK packet once; null is ignored before Box reclamation.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         drop(unsafe { Box::from_raw(packet) });
     }
 }
