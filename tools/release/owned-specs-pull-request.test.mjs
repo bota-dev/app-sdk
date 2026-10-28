@@ -137,3 +137,22 @@ test('invalid inputs, missing authority and bounded waits fail without merging',
   await assert.rejects(waitForOwnedSpecsPullRequest({ ...denied.options,
     fetchImpl: async () => new Response('', { status: 403 }) }), /HTTP 403/);
 });
+
+test('stops reading an oversized streamed API response and releases its body', async () => {
+  let pulls = 0;
+  let cancelled = false;
+  const body = new ReadableStream({
+    pull(controller) {
+      pulls++;
+      controller.enqueue(new Uint8Array(600_000).fill(32));
+      if (pulls === 3) controller.close();
+    },
+    cancel() { cancelled = true; },
+  }, { highWaterMark: 0 });
+  const run = scenario();
+  await assert.rejects(waitForOwnedSpecsPullRequest({ ...run.options,
+    fetchImpl: async () => new Response(body, { status: 200 }) }), /metadata limit/);
+  assert.equal(pulls, 2, 'the reader consumed beyond the first chunk that exceeded the bound');
+  assert.equal(cancelled, true, 'the remaining response body was not cancelled');
+  assert.equal(body.locked, false, 'the response reader lock was not released');
+});

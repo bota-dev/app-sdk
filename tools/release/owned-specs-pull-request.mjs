@@ -8,7 +8,26 @@ const SHA = /^(?!0{40}$)[0-9a-f]{40}$/;
 const branchPattern = /^publish\/[1-9][0-9]*-[1-9][0-9]*$/;
 const pathPattern = /^Specs\/(BotaAppSDK|BotaAppleSDK)\/([^/]+)\/\1\.podspec\.json$/;
 const prUrl = number => `https://github.com/${repository}/pull/${number}`;
-const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+
+async function readMetadata(response) {
+  assert.ok(response.body, 'empty Specs PR API response');
+  const reader = response.body.getReader();
+  const chunks = [];
+  let length = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      assert.ok(length <= 1024 * 1024, 'Specs PR API response exceeds the metadata limit');
+      chunks.push(Buffer.from(value));
+    }
+    return JSON.parse(Buffer.concat(chunks, length).toString('utf8'));
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
+  }
+}
 
 export async function waitForOwnedSpecsPullRequest({
   commit, branch, token = process.env.BOTA_COCOAPODS_SPECS_TOKEN,
@@ -36,9 +55,7 @@ export async function waitForOwnedSpecsPullRequest({
       throw Object.assign(new Error(`GitHub Specs PR API failed: HTTP ${response.status}`), { status: response.status });
     }
     assert.ok(!response.headers.get('link')?.includes('rel="next"'), 'incomplete paginated Specs PR response');
-    const text = await response.text();
-    assert.ok(Buffer.byteLength(text) <= 1024 * 1024, 'Specs PR API response exceeds the metadata limit');
-    return JSON.parse(text);
+    return readMetadata(response);
   }
 
   function identity(pr) {
