@@ -50,7 +50,6 @@ if [[ "${#pod_command[@]}" -eq 0 ]]; then
   echo "CocoaPods $required_cocoapods_version is required" >&2
   exit 1
 fi
-export PATH="$(dirname "${pod_command[0]}"):$PATH"
 unset BOTA_APPLE_SDK_PACKAGE_PATH
 
 temporary="$(mktemp -d "${BOTA_TEST_TMPDIR:-/tmp}/bota-public-flutter-pods.XXXXXX")"
@@ -62,6 +61,21 @@ export CP_REPOS_DIR="$temporary/cocoapods-repos"
 export CP_CACHE_DIR="$temporary/cocoapods-cache"
 export PUB_CACHE="$temporary/pub-cache"
 export COCOAPODS_DISABLE_STATS=true
+
+# BEGIN CONSUMER POD TOOLCHAIN
+# Flutter invokes plain `pod`; preserve the exact executable and gem selector.
+export BOTA_CONSUMER_POD="$(cd "$(dirname "${pod_command[0]}")" && pwd)/$(basename "${pod_command[0]}")"
+mkdir "$temporary/pod-bin"
+cat >"$temporary/pod-bin/pod" <<'POD'
+#!/usr/bin/env bash
+set -euo pipefail
+exec "$BOTA_CONSUMER_POD" _1.16.2_ "$@"
+POD
+chmod +x "$temporary/pod-bin/pod"
+export PATH="$temporary/pod-bin:$PATH"
+pod_command=("$temporary/pod-bin/pod")
+test "$("${pod_command[@]}" --version)" = "$required_cocoapods_version"
+# END CONSUMER POD TOOLCHAIN
 
 "$ROOT/tools/flutter/run-flutter.sh" create --platforms=ios \
   --org=dev.bota --project-name=bota_public_cocoapods_consumer "$consumer" >/dev/null

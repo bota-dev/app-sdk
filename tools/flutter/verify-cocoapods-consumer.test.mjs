@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { verifyCocoaPodsConsumer } from './verify-cocoapods-consumer.mjs';
@@ -160,6 +162,20 @@ test('refuses incomplete lock metadata and a different CocoaPods client', () => 
   }
 });
 
+test('reports a changed or missing CocoaPods client without dumping the lock', () => {
+  for (const observed of ['1.17.0', undefined]) {
+    const input = fixture();
+    if (observed === undefined) delete input.lock.COCOAPODS;
+    else input.lock.COCOAPODS = observed;
+    assert.throws(() => verifyCocoaPodsConsumer(input), error => {
+      assert.match(error.message, /expected 1\.16\.2/);
+      assert.ok(error.message.includes(observed === undefined ? '<missing>' : '"1.17.0"'));
+      assert.ok(!error.message.includes('SPEC REPOS'));
+      return true;
+    });
+  }
+});
+
 test('CLI requires the installed sandbox and refuses direct Podspec inputs before invoking Ruby', () => {
   const helper = fileURLToPath(new URL('./verify-cocoapods-consumer.mjs', import.meta.url));
   for (const filename of ['BotaAppSDK.podspec', 'OtherPod.podspec.json']) {
@@ -194,5 +210,62 @@ test('the real Flutter YAML edit enables CocoaPods and refuses a missing Flutter
     const refused = spawnSync('ruby', ['-0p', '-e', snippet], { encoding: 'utf8', input });
     assert.notEqual(refused.status, 0);
     assert.match(refused.stderr, /Flutter configuration marker is missing/);
+  }
+});
+
+const bashBinary = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : 'bash';
+const bashProbe = spawnSync(bashBinary, ['--version'], { encoding: 'utf8' });
+const shellPath = value => process.platform === 'win32'
+  ? value.replaceAll('\\', '/').replace(/^([A-Za-z]):/, (_, drive) => `/${drive.toLowerCase()}`) : value;
+test('the actual consumer toolchain pins Flutter and direct pod calls without changing the gem environment', async context => {
+  const script = (await readFile(new URL('./test-public-cocoapods-consumer.sh', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
+  const setup = script.match(/# BEGIN CONSUMER POD TOOLCHAIN\n([\s\S]*?)# END CONSUMER POD TOOLCHAIN/)?.[1];
+  assert.ok(setup, 'the actual consumer pod setup was not found');
+  if (process.platform === 'win32' && bashProbe.error?.code === 'ENOENT') {
+    context.skip('Git Bash is unavailable on Windows; this execution is required on Linux and macOS');
+    return;
+  }
+  assert.ifError(bashProbe.error);
+  assert.equal(bashProbe.status, 0, bashProbe.stderr);
+  const temporary = await mkdtemp(join(tmpdir(), 'bota-pod-wrapper-'));
+  try {
+    const underlying = join(temporary, 'underlying tool with spaces', 'pod');
+    await mkdir(dirname(underlying));
+    await writeFile(underlying, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "\${1:-}" == --version || "\${2:-}" == --version ]]; then
+  if [[ "\${1:-}" == _1.16.2_ ]]; then echo 1.16.2; else echo 1.17.0; fi
+  exit 0
+fi
+printf '%s\\0' CALL "$@" >> "$BOTA_CONSUMER_ARGS"
+printf '%s\\0' "$GEM_HOME" "$GEM_PATH" "$PATH" "$BOTA_TEST_ORIGINAL_PATH" > "$BOTA_CONSUMER_ENV"
+`, { mode: 0o755 });
+    const result = spawnSync(bashBinary, ['-c', `set -euo pipefail
+temporary="$BOTA_TEST_TEMP"
+required_cocoapods_version=1.16.2
+pod_command=("$BOTA_TEST_POD" _1.16.2_)
+chmod +x "$BOTA_TEST_POD"
+export BOTA_TEST_ORIGINAL_PATH="$PATH"
+${setup}
+pod install --repo-update "argument with spaces"
+"\${pod_command[@]}" install --repo-update "argument with spaces"
+`], { encoding: 'utf8', env: { ...process.env,
+      BOTA_TEST_TEMP: shellPath(temporary), BOTA_TEST_POD: shellPath(underlying),
+      BOTA_CONSUMER_ARGS: shellPath(join(temporary, 'arguments')),
+      BOTA_CONSUMER_ENV: shellPath(join(temporary, 'environment')),
+      GEM_HOME: 'synthetic gem home', GEM_PATH: 'synthetic:gem path',
+    } });
+    assert.equal(result.status, 0, result.stderr);
+    const argumentsSeen = (await readFile(join(temporary, 'arguments'), 'utf8')).split('\0').slice(0, -1);
+    const invocation = ['CALL', '_1.16.2_', 'install', '--repo-update', 'argument with spaces'];
+    assert.deepEqual(argumentsSeen, [...invocation, ...invocation]);
+    const [gemHome, gemPath, path, originalPath] = (await readFile(join(temporary, 'environment'), 'utf8')).split('\0');
+    assert.equal(gemHome, 'synthetic gem home');
+    assert.equal(gemPath, 'synthetic:gem path');
+    assert.equal(path, `${shellPath(temporary)}/pod-bin:${originalPath}`);
+  } finally {
+    assert.equal(dirname(resolve(temporary)), resolve(tmpdir()));
+    assert.ok(basename(temporary).startsWith('bota-pod-wrapper-'));
+    await rm(temporary, { recursive: true, force: true });
   }
 });

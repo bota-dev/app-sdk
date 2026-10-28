@@ -56,6 +56,17 @@ embedded Ruby snippet against valid and missing-marker YAML on Linux/macOS.
 Windows without Ruby explicitly skips this one executed-tool fixture. Actual
 Flutter compilation remains required after this correction.
 
+Source `cf340355` then compiled the beta.21 Flutter iOS application to a 23 MB
+`Runner.app` in run `40757539789`, with the pre-build Bota source/archive proof
+passing. Its post-build gate rejected the CocoaPods client metadata; that log
+did not expose the actual changed/missing value. Flutter's pinned tool invokes
+plain `pod`, so the consumer now provides a task-local wrapper around the
+already selected executable and `_1.16.2_` gem selector for both Flutter and
+direct calls. An executed Bash regression verifies the actual setup, spaced
+paths/arguments and preserved gem environment. The exact client/source/checksum
+gates remain; post-build diagnostics now report only a bounded client value.
+Fresh complete qualification is still required after this correction.
+
 The first clean clone used the repository's bootstrap default branch. The
 default is now explicitly `main`, verified through both repository metadata
 and Git's symbolic remote HEAD.

@@ -21,7 +21,10 @@ export function verifyCocoaPodsConsumer({
   const repositoryUrl = new URL(repository);
   assert(repositoryUrl.protocol === 'https:' && !repositoryUrl.username && !repositoryUrl.password
     && !repositoryUrl.search && !repositoryUrl.hash, 'invalid Specs repository');
-  assert(isRecord(lock) && lock.COCOAPODS === '1.16.2', 'unexpected CocoaPods client or lock metadata');
+  assert(isRecord(lock), 'invalid CocoaPods lock metadata');
+  const observedClient = !Object.hasOwn(lock, 'COCOAPODS') ? '<missing>'
+    : typeof lock.COCOAPODS === 'string' ? JSON.stringify(lock.COCOAPODS.slice(0, 64)) : '<invalid>';
+  assert(lock.COCOAPODS === '1.16.2', `unexpected CocoaPods client: expected 1.16.2, observed ${observedClient}`);
   assert(Array.isArray(lock.PODS), 'missing resolved SDK');
   const entries = lock.PODS.flatMap(entry => typeof entry === 'string' ? [entry]
     : isRecord(entry) ? Object.keys(entry) : []);
