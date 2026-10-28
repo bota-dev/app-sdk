@@ -336,6 +336,9 @@ one repository. Public check observations are anonymous; an approved GitHub App 
 provide a short-lived repository installation token at execution time instead.
 Verify provisioning and manage expiry/rotation/revocation before enabling the
 publisher. A checked-in secret reference is not proof that a writer exists.
+The protected publication job refuses a missing writer secret before any
+registry publication. Presence alone does not prove its permissions, expiry or
+ability to complete the independent Specs review.
 The writer secret is not configured, and automatic new-version publication has
 not been activated. Existing indexed versions and clean consumer results do
 not establish activation of that future publishing route.

@@ -53,6 +53,11 @@ The first clean clone used the repository's bootstrap default branch. The
 default is now explicitly `main`, verified through both repository metadata
 and Git's symbolic remote HEAD.
 
+The protected release publisher checks for its configured Specs writer before
+any registry publication. This prevents a known missing credential from starting
+another partial synchronized release; it does not prove token permissions,
+expiry or successful independent Specs approval.
+
 ## Remaining gates
 
 - Successful exact-source hosted CI, including both clean iOS consumer builds.

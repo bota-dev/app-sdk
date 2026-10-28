@@ -87,6 +87,9 @@ test('new release keeps protected approval and immutable inputs while replacing 
   const commands = publisher.split(/\r?\n/).filter(line => !line.trimStart().startsWith('#')).join('\n');
   assert.doesNotMatch(commands, /push[^\n]*--force|ssh-keyscan|git[^\n]*rebase/);
   const release = (await readFile(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
+  const publish = release.slice(release.indexOf('  publish:\n'), release.indexOf('  publish-apple-pod:\n'));
+  assert.ok(publish.indexOf('test -n "$BOTA_COCOAPODS_SPECS_TOKEN"') > 0);
+  assert.ok(publish.indexOf('test -n "$BOTA_COCOAPODS_SPECS_TOKEN"') < publish.indexOf('Check out tagged source'));
   const start = release.indexOf('  flutter:\n');
   const end = release.indexOf('  publish-flutter:\n', start);
   const flutter = release.slice(start, end);
