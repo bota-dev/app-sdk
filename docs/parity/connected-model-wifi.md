@@ -33,8 +33,10 @@ remain separate from the tests below.
 | Missing service, unknown identity and stale discovery remain safe | Negative fixtures; existing serial/ownership regressions | Source passed |
 | Demo registers connected identity and retains scan enrichment | Companion Demo model/WiFi PR; real screen, hook and API regression matrix | Companion source passed |
 | Existing conflicting cloud model is not silently overwritten | Companion Demo refuses binding before token issuance; administrator verifies historical records separately | Companion source passed |
-| Published SDK and normal Demo dependency adoption | Release a new immutable SDK version, then update Demo's registry pin/lock; the existing beta.22 archive does not contain this correction | Pending release |
-| Android and iOS app consumption | Packed SDK with real Demo WiFi hook/wrapper, simulated BLE PLX services and both production-mode Expo bundles | Passed locally; release pin pending |
+| One preserves connected Note aliases and scan freshness | Companion One real pairing screen, model admission and React/Zustand regressions; Pin 4G/Pro are never registered as ordinary Pin | Companion source passed |
+| One's composite registration validates identity before binding | Actual Lambda/client tests for exact serial and stored model; conflicts cannot fall through to bind; older provisional mismatches attempt exact abort | Companion source passed; backend deployment pending |
+| Published SDK and both app dependency adoptions | Release a new immutable SDK version, then update One and Demo to the same registry version/lock; current One beta.19 and Demo beta.22 lack this correction | Pending release and both adoptions |
+| Android and iOS app consumption | Packed SDK with real One and Demo WiFi hooks/wrappers and simulated BLE PLX services; platform bundle results are recorded in each companion | Packed flows passed locally; release pins pending |
 | Physical Note pairing, reconnect and WiFi association | Check the exact serial, service discovery, fresh cloud model and actual network status on both phones | Not run |
 
 ## Verification and design review
@@ -49,15 +51,23 @@ the compound-engineering skill is unavailable in this environment.
 Local RN build, strict types, package metadata, Codegen and license checks pass.
 All 599 RN tests pass, including Android/iOS simulated transport paths. These
 are source/contract results, not Bluetooth-radio or network-association proof.
-The root `npm run check` could not run because this host has no Cargo binary;
-Rust generation/workspace and native-binary checks remain for CI. No Rust or
-native adapter source is changed here.
+The root `npm run check` could not run because this host has no Cargo binary.
+The PR's Rust/tooling job subsequently passed for source `ff5f9c42`; native-binary
+checks remain separate. No Rust or native adapter source is changed here.
 
 The companion Demo additionally passed its 117 migration tests, two packed
 runtime WiFi tests, strict types, license checks and Android/iOS Expo exports.
 Its committed dependency remains the existing public release; the tested local
 archive is not a publication. See the companion review for archive qualification
 and dependency-resolution limits.
+
+One's companion adds 125 passing migration tests, two packed runtime WiFi tests,
+backend/app strict types, root/app lint, 28 data-access checks and its license
+gate. Its registration Lambda is a composite create/lookup/bind operation, so
+the model check must run there before token preparation, in addition to client
+checks. One's existing beta.19 also lacks the method required by its current
+envelope-pairing guard. Both apps must adopt the same corrected release and pass
+their exact native/physical checks before this checklist is complete.
 
 ## Firmware integration checklist
 
