@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { verifyCocoaPodsConsumer } from './verify-cocoapods-consumer.mjs';
@@ -172,4 +173,26 @@ test('CLI requires the installed sandbox and refuses direct Podspec inputs befor
     '--version', version, '--lock', 'unused-lock', '--repos-root', 'unused-repositories'], { encoding: 'utf8' });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /--sandbox is required/);
+});
+
+const rubyProbe = spawnSync('ruby', ['--version'], { encoding: 'utf8' });
+test('the real Flutter YAML edit enables CocoaPods and refuses a missing Flutter marker', async context => {
+  const script = (await readFile(new URL('./test-public-cocoapods-consumer.sh', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
+  const snippet = script.match(/ruby -0pi -e \\\n\s*'([^']+)' \\\n\s*"\$consumer\/pubspec\.yaml"/)?.[1];
+  assert.ok(snippet, 'the actual Flutter YAML edit was not found');
+  if (process.platform === 'win32' && rubyProbe.error?.code === 'ENOENT') {
+    context.skip('Ruby is unavailable on Windows; this execution is required on Linux and macOS');
+    return;
+  }
+  assert.ifError(rubyProbe.error);
+  assert.equal(rubyProbe.status, 0, rubyProbe.stderr);
+  const input = 'name: fixture\nflutter:\n  uses-material-design: true\n';
+  const edited = spawnSync('ruby', ['-0p', '-e', snippet], { encoding: 'utf8', input });
+  assert.equal(edited.status, 0, edited.stderr);
+  assert.equal(edited.stdout, 'name: fixture\nflutter:\n  config:\n    enable-swift-package-manager: false\n  uses-material-design: true\n');
+  for (const input of ['name: fixture\n', 'name: fixture\n# flutter:\n']) {
+    const refused = spawnSync('ruby', ['-0p', '-e', snippet], { encoding: 'utf8', input });
+    assert.notEqual(refused.status, 0);
+    assert.match(refused.stderr, /Flutter configuration marker is missing/);
+  }
 });

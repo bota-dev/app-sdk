@@ -95,7 +95,7 @@ plugin = lock.fetch('packages').fetch('bota_app_sdk')
 abort 'Flutter dependency version/source mismatch' unless plugin.fetch('version') == ARGV.fetch(1) && plugin.fetch('source') == ARGV.fetch(2)
 RUBY
 ruby -0pi -e \
-  'abort "Flutter configuration marker is missing" unless sub!(/^flutter:\n/, "flutter:\n  config:\n    enable-swift-package-manager: false\n")' \
+  'abort "Flutter configuration marker is missing" unless $_.sub!(/^flutter:\n/, "flutter:\n  config:\n    enable-swift-package-manager: false\n")' \
   "$consumer/pubspec.yaml"
 perl -0pi -e 's/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]+;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/g' \
   "$consumer/ios/Runner.xcodeproj/project.pbxproj"

@@ -49,6 +49,13 @@ versions. Future release-candidate qualification still uses the exact preserved
 candidate archive and matching owned-index native version. No package is
 published or rebuilt to satisfy this source-migration gate.
 
+The beta.21 Flutter attempt then exposed a consumer-script Ruby error before
+native dependency installation: the in-place YAML edit invoked `sub!` without
+its string receiver. It now edits `$_.sub!`; a regression executes the actual
+embedded Ruby snippet against valid and missing-marker YAML on Linux/macOS.
+Windows without Ruby explicitly skips this one executed-tool fixture. Actual
+Flutter compilation remains required after this correction.
+
 The first clean clone used the repository's bootstrap default branch. The
 default is now explicitly `main`, verified through both repository metadata
 and Git's symbolic remote HEAD.
