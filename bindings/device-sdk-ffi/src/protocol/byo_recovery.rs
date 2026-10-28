@@ -5,10 +5,14 @@ use bota_device_sdk_core::{error::DeviceSdkError, model::*};
 pub(super) unsafe fn reduce(
     packet: &BotaDeviceSdkPacketViewV1,
 ) -> Result<BotaDeviceSdkPacketV1, DeviceSdkError> {
+    // The C ABI requires live fields; PacketFields checks count, nulls, duplicates and types.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
     let borrowed = if packet.field_count == 0 {
         &[]
     } else {
+        // PacketFields checked the nonempty live list; metadata limits are enforced before copying.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         unsafe { std::slice::from_raw_parts(packet.fields, packet.field_count as usize) }
     };
     for field in borrowed {

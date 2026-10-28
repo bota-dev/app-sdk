@@ -269,6 +269,8 @@ export function compareWorkflowTraces(suites, traces) {
 }
 
 function run(command, args, cwd) {
+  // Call sites select fixed git/npm/cargo programs and literal argv for an explicit developer checkout.
+  // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
   const result = spawnSync(command, args, {
     cwd,
     encoding: 'utf8',

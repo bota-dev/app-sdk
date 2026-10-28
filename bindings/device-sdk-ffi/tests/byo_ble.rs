@@ -59,6 +59,24 @@ fn customer_adapter_validates_headers_and_bounds_native_input() {
         BotaDeviceSdkStatusV1::Ok
     );
     unsafe { bota_device_sdk_v1_packet_free(output) };
+    // Valid JSON at the exact ABI limit must work; the same document with one
+    // more whitespace byte must fail because of size, not invalid JSON.
+    for (length, accepted) in [(32768, true), (32769, false)] {
+        let mut json = b"{}".to_vec();
+        json.resize(length, b' ');
+        let input = BotaDeviceSdkPacketV1::new(0x0530)
+            .with_u64(COMMAND, 3)
+            .with_bytes(VALUE, json);
+        output = ptr::null_mut();
+        let status =
+            unsafe { bota_device_sdk_v1_protocol_encode(engine, &input.view(), &mut output) };
+        assert_eq!(status == BotaDeviceSdkStatusV1::Ok, accepted);
+        if accepted {
+            unsafe { bota_device_sdk_v1_packet_free(output) };
+        } else {
+            assert!(output.is_null());
+        }
+    }
     for command in [1, 2, 3, 4] {
         let input = BotaDeviceSdkPacketV1::new(0x0530)
             .with_u64(COMMAND, command)
