@@ -1550,3 +1550,11 @@ belong in `core/device-sdk-core/src/model/byo_customer.rs`; native ABI and gener
 JS consume that implementation. Preserve the fixed backend/C/Rust package vector,
 BLE v3 original-ciphertext reads and receipt-only cleanup. See
 [the owning review](docs/parity/byo-storage.md#customer-hooks-v2-source-implementation).
+
+
+## October 28 dependency maintenance
+
+Cargo dependency updates require exact Linux regeneration of the ordinary-JS
+React Native core. The October 28 source reuses core.expected.ts from CI run
+40649583702, diagnostic artifact12798723391; all generator input hashes and the
+artifact SHA-256 must match before adoption. New hosted/native checks remain required.
