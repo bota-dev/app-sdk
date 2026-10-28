@@ -7,6 +7,11 @@ tracked separately.
 
 ## Unreleased
 
+- Normalize connected Pin/Note model aliases and restore React Native WiFi
+  capability from the discovered GATT service on every connection and reconnect.
+  Unknown identities never become Pin. The BLE PLX host uses the same inspection
+  on Android and iOS; see [qualification](docs/parity/connected-model-wifi.md).
+
 - Fix the React Native public client's leftover encrypted-only provisioning
   check. A valid plaintext token now reaches the compatible adapter instead of
   failing with `provision: internal`; mixed credentials still fail and encrypted

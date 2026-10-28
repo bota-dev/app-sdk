@@ -22,6 +22,7 @@ export interface BlePlxManager {
     listener: (error: Error | null, device: Peripheral | null) => void): void | Promise<void>;
   stopDeviceScan(): void | Promise<void>;
   connectedDevices?(serviceUUIDs: string[]): Promise<Peripheral[]>;
+  servicesForDevice?(deviceIdentifier: string): Promise<readonly { uuid: string }[]>;
   connectToDevice(id: string, options?: { requestMTU?: number }): Promise<Peripheral>;
   cancelDeviceConnection(id: string): Promise<Peripheral>;
   requestMTUForDevice(id: string, mtu: number, transactionId?: string): Promise<Peripheral>;
@@ -250,6 +251,23 @@ export function createBlePlxPort(manager: BlePlxManager): JsBlePort {
       check(context);
       connected.set(peripheralId, discovered);
     },
+    ...(manager.servicesForDevice ? { async hasService(peripheralId: string, serviceUuid: string, context: JsHostContext) {
+      check(context);
+      const device = connected.get(peripheralId);
+      const generation = connectionGenerations.get(peripheralId);
+      if (!device || generation === undefined) throw new Error('Peripheral has no local connection');
+      const services = await manager.servicesForDevice!(peripheralId);
+      check(context);
+      if (connected.get(peripheralId) !== device || connectionGenerations.get(peripheralId) !== generation) {
+        throw new Error('Peripheral connection changed during service inspection');
+      }
+      const canonicalUuid = (uuid: string) => {
+        const value = uuid.toLowerCase();
+        return /^[0-9a-f]{4}$/.test(value) ? `0000${value}-0000-1000-8000-00805f9b34fb`
+          : /^[0-9a-f]{8}$/.test(value) ? `${value}-0000-1000-8000-00805f9b34fb` : value;
+      };
+      return services.some(service => canonicalUuid(service.uuid) === canonicalUuid(serviceUuid));
+    } } : {}),
     async disconnect(peripheralId) {
       if (!connected.has(peripheralId) && !uncertainConnections.has(peripheralId)) return;
       await manager.cancelDeviceConnection(peripheralId);
