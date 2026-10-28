@@ -330,6 +330,18 @@ STREAMING below is a separate device HTTP contract, not an implicit BLE relay.
 
 ## BYO Customer Storage
 
+Customer-hooks-v2 source keeps the BLE v3 framing and original ciphertext READ
+bytes unchanged. The SDK packages finalized context/authorization/manifest after
+BOTAENC2, using a uint32BE metadata length and `BOTABYO1` trailer. A transfer ACK
+may release relay RAM but never authorize source cleanup; final signed receipt
+verification/readback remains mandatory. Capability admission and contract pinning,
+16 KiB segments, metadata reserve and recovery are specified in
+[the uploader contract](docs/parity/byo-storage.md#customer-hooks-v2-source-implementation).
+The native SDK ABI adds encode packet `0x0530`: COMMAND (field 97) is 1 for the
+canonical trailer, 2 for exact transfer-proof validation, or 3 for PUT headers;
+VALUE (field 30) contains bounded JSON (at most 32 KiB), and returns bytes. This
+is a host ABI allocation, not a firmware opcode or a change to BLE v3.
+
 BYO uses independent version-3 RPC frames on STORAGE CONTROL_V2 (`0008`) and
 TRANSFER_V2 (`0009`). It shares the characteristics, not the ordinary v2 command
 namespace. Serialize ownership and subscribe before writing.
@@ -360,7 +372,7 @@ payload. Correlate request ID/operation and reject conflicting fragments.
 | 6 | CONFIRM | 13 | LIVE_SUCCESSOR |
 | 7 | ABORT | | |
 
-The customer-storage flow is:
+The customer-hooks-v2 App relay flow is:
 
 ```mermaid
 sequenceDiagram
@@ -376,15 +388,16 @@ sequenceDiagram
     S->>D: Relay authorization with pinned recipient
     D->>D: Seal recording data key to customer public key
     D-->>S: Original ciphertext and customer envelope/manifest
-    S->>O: Upload ciphertext
-    S->>B: Complete with original manifest/envelope
-    B->>C: Completion hook
-    C->>O: Read ciphertext
-    C->>C: Open envelope with own private key, decrypt and verify
-    C-->>B: Signed completion evidence
+    S->>S: Persist canonical ciphertext-plus-metadata package
+    S->>O: PUT package or immutable segments
+    S->>B: Complete with manifest and upload_package facts
+    B->>C: upload-complete with final ciphertext size/hash/count
+    C->>O: Merge parts and verify actual stored ciphertext
+    C-->>B: uploaded and persisted verification result
     B-->>S: Signed completion receipt
     S->>D: Receipt, then exact confirmation
     D->>D: Verify and persist completion before source cleanup
+    Note over C,O: Private-key decryption is independent of complete
 ```
 
 The diagram shows the App relay path; device-direct radio ownership is not
