@@ -1,15 +1,22 @@
 # CocoaPods source migration
 
-Bota continues to support CocoaPods through the public
-[`bota-dev/cocoapods-specs`](https://github.com/bota-dev/cocoapods-specs)
-repository. Configure this source explicitly when installing the Apple pod or
-the native dependency of a Flutter application. Swift Package Manager remains an
-independent supported route; this migration does not require switching to it.
+Bota's CocoaPods index belongs in [`Specs/`](../../Specs/) in the same public
+[`bota-dev/app-sdk`](https://github.com/bota-dev/app-sdk) repository as the SDK
+source. This migration retains CocoaPods for the Apple pod and the native
+dependency of Flutter applications. Swift Package Manager remains an independent
+supported route; this migration does not require switching to it.
+
+The bootstrap and publisher changes are awaiting integration, exact-main
+qualification and activation. The installation examples below describe the
+source after its Specs bootstrap is merged and qualified on `main`. A candidate
+branch passing CI does not establish default-source availability, and this guide
+does not announce a new package release or active publication service.
 
 ## What changes
 
-The index URL is `https://github.com/bota-dev/cocoapods-specs.git`. It contains
-JSON specifications in CocoaPods' Git-spec-repository layout:
+The canonical index URL is `https://github.com/bota-dev/app-sdk.git`. Its
+`Specs/` directory contains JSON specifications in CocoaPods' Git-spec-repository
+layout:
 
 ```text
 Specs/BotaAppSDK/2.0.0-beta.22/BotaAppSDK.podspec.json
@@ -17,8 +24,8 @@ Specs/BotaAppSDK/2.0.0-beta.22/BotaAppSDK.podspec.json
 
 The pod name, exact SDK version and checksummed archive stay the same. The
 specification still downloads the corresponding immutable archive from the
-`bota-dev/app-sdk` GitHub Release. This repository stores the version index,
-not another SDK implementation or a replacement binary build.
+`bota-dev/app-sdk` GitHub Release. The Specs directory stores version metadata;
+moving the index neither duplicates the SDK implementation nor rebuilds binaries.
 
 Historical 1.x packages retain the `BotaAppleSDK` name. Use the name belonging to
 the selected release; do not rename a historical pod or combine independently
@@ -30,14 +37,14 @@ and historical installs are unchanged.
 Select the Bota source for the exact published version in your `Podfile`:
 
 ```ruby
-source 'https://github.com/bota-dev/cocoapods-specs.git'
+source 'https://github.com/bota-dev/app-sdk.git'
 source 'https://cdn.cocoapods.org/'
 
 platform :ios, '15.0'
 use_frameworks!
 
 target 'YourApp' do
-  pod 'BotaAppSDK', '2.0.0-beta.22', :source => 'https://github.com/bota-dev/cocoapods-specs.git'
+  pod 'BotaAppSDK', '2.0.0-beta.22', :source => 'https://github.com/bota-dev/app-sdk.git'
 end
 ```
 
@@ -55,7 +62,7 @@ declarations to the top of the application's existing `ios/Podfile`, before the
 Flutter-generated dependency setup:
 
 ```ruby
-source 'https://github.com/bota-dev/cocoapods-specs.git'
+source 'https://github.com/bota-dev/app-sdk.git'
 source 'https://cdn.cocoapods.org/'
 ```
 
@@ -112,42 +119,57 @@ bytes.
 
 ## Release and verification requirements
 
-The protected SDK release publisher appends the preserved release specification
-to the Bota index only after checking its source, version, archive and checksum.
-An existing version must match the complete canonical specification. A mismatch
-stops the release; retries must not overwrite it or rebuild the original
-archive.
+For the new route, the tag workflow must create a real production deployment
+request through Bota Releases and wait for its Slack approval before publishing.
+The signed execution receipt must bind the repository, release tag and tag
+object, source revision, original release run and attempt, successful main CI
+run and attempt, preserved artifact inventory digest and approval identity.
+Publishers refresh and verify that binding before promotion. A Slack message
+alone, approval for another attempt or an unverified callback cannot authorize
+publication.
+
+The approved SDK publisher appends the preserved release specification under
+`Specs/` only after checking its source, version, archive and checksum. An
+existing version must match the complete canonical specification. A mismatch
+stops the release; retries must not overwrite it or rebuild the original archive.
 
 For a new entry, the publisher stages the exact candidate on a unique branch
-and opens a pull request. The exact head must pass Validate Specs, License Gate
-and Scan. Organization policy requires at least one independent approval and
-approval of the latest push, followed by an authorized merge. The publisher
-waits for that merge and verifies the actual public specification on `main`.
-It does not approve or merge its own pull request, push `main` directly, or
-bypass repository rules.
+and opens a pull request in `bota-dev/app-sdk`. The exact head must pass Validate
+Specs, Dependency licenses and Scan, plus the repository's required checks.
+Organization policy requires at least one independent approval and approval of
+the latest push, followed by an authorized merge. This GitHub source review is
+distinct from Slack approval to release the preserved SDK candidate. The
+publisher waits for the actual merge and verifies the public specification on
+`main`. It does not approve or merge its own pull request, push `main` directly,
+or bypass repository rules.
 
-The current publisher receives `BOTA_COCOAPODS_SPECS_TOKEN` from the SDK's
-protected `release` environment. Provision an approved fine-grained token with
-Contents write and Pull requests write access restricted to
-`bota-dev/cocoapods-specs`. Required public check observations are anonymous. An approved GitHub App
-integration may provide a short-lived repository installation token at execution
-time instead. Track expiration, rotation and revocation. Neither this guide nor
-a workflow reference establishes that the writer has actually been configured.
-The writer secret is not configured, so automatic new-version publication is
-not activated. An available index or passing consumer build is not evidence
-that this publishing route is active.
+The approved publisher uses the SDK job's built-in `GITHUB_TOKEN`, exposed only
+as `GH_TOKEN`, with Contents write, Pull requests write and Actions write in this
+repository. Actions write explicitly dispatches validators for the staged
+commit, because token-generated pushes do not automatically trigger them.
+Publication uses HTTPS with a per-command credential helper. No cross-repository
+PAT, deploy key or persisted general user credential is required. Applications
+and public-index readers need no publisher credential; never put one in a
+`Podfile`.
 
-Publication uses HTTPS with a per-command credential helper. Do not persist a
-general user credential, introduce a deploy-key fallback around repository
-policy, or commit credentials to this index. Applications and public-index
-readers do not need the publisher token; never put it in a `Podfile`.
+The SDK approval policy and Bota Releases SDK unit remain disabled, the Slack
+activation variable is not enabled, and Actions pull-request creation remains
+disabled pending reviewed setup. New-version publication through this route is
+not activated. Review and qualify the bootstrap and release/service changes,
+enable only the required Actions PR setting, and verify the actual signed Slack
+request/approval flow before enabling publication. Preserve the historical
+`release-approval` gate and historical tagged workflows; their presence does
+not establish activation of this new route.
 
 Qualification requires a clean Apple consumer and a real Flutter consumer,
 using empty CocoaPods repositories/caches and the exact published version.
 Check both the resolved version and Bota source in `Podfile.lock`, then compile
-the applications. Index metadata, a successful `pod install` alone, or source
-fixtures do not establish both consumer builds. These builds do not establish
-physical-device, background-execution or enterprise-policy acceptance.
+the applications. During bootstrap CI, an explicitly named branch and full
+commit may qualify the candidate Specs. Repeat the consumers against default
+`main` after integration; branch results cannot replace that gate. Index
+metadata, a successful `pod install` alone, or source fixtures do not establish
+both consumer builds. These builds do not establish physical-device,
+background-execution or enterprise-policy acceptance.
 
 See the [release runbook](../releasing.md#package-name-migration) for the
 preserved-artifact and synchronized-publication gates. Historical release

@@ -14,7 +14,7 @@ const spec = { name: 'BotaAppSDK', module_name: 'BotaAppSDK', version,
   license: { type: 'Apache-2.0' },
   source: { http: `https://github.com/bota-dev/app-sdk/releases/download/v${version}/BotaAppSDK.cocoapods.zip`, sha256: archive } };
 const bytes = canonicalPodspec({ spec, sdkVersion: version, artifactChecksum: archive });
-const repository = { id: 123, full_name: 'bota-dev/cocoapods-specs' };
+const repository = { id: 123, full_name: 'bota-dev/app-sdk' };
 const pr = (changes = {}) => ({ number: 7, state: 'open', merged: false, user: { id: 1 },
   head: { sha: commit, ref: branch, repo: repository }, base: { ref: 'main', repo: repository }, ...changes });
 const merged = () => pr({ state: 'closed', merged: true, merge_commit_sha: mergedCommit });
@@ -65,7 +65,7 @@ test('creates one source-bound PR, waits for external merge and verifies retaine
   assert.equal(result.mergeCommit, mergedCommit);
   assert.equal(result.specPath, file);
   assert.equal(result.blob, blob);
-  assert.match(run.messages[0], /https:\/\/github.com\/bota-dev\/cocoapods-specs\/pull\/7/);
+  assert.match(run.messages[0], /https:\/\/github.com\/bota-dev\/app-sdk\/pull\/7/);
   assert.equal(run.calls.filter(call => call.method === 'POST').length, 1);
   assert.ok(run.calls.every(call => call.method === 'GET' || call.path.endsWith('/pulls')),
     'publisher attempted to approve or merge a PR');

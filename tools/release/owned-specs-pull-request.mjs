@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
 import { canonicalPodspec, ownedSpecPath } from './owned-cocoapods.mjs';
 
-const repository = 'bota-dev/cocoapods-specs';
+const repository = 'bota-dev/app-sdk';
 const api = `https://api.github.com/repos/${repository}`;
 const SHA = /^(?!0{40}$)[0-9a-f]{40}$/;
 const branchPattern = /^publish\/[1-9][0-9]*-[1-9][0-9]*$/;
@@ -30,13 +30,13 @@ async function readMetadata(response) {
 }
 
 export async function waitForOwnedSpecsPullRequest({
-  commit, branch, token = process.env.BOTA_COCOAPODS_SPECS_TOKEN,
+  commit, branch, token = process.env.GH_TOKEN,
   fetchImpl = fetch, maxAttempts = 120,
   sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), onWait = () => {},
 }) {
   assert.ok(SHA.test(commit ?? '') && branchPattern.test(branch ?? ''), 'an exact staged commit and publication branch are required');
   assert.ok(typeof token === 'string' && token.length > 0 && token.length <= 4096 && !/[\x00-\x20\x7f]/.test(token),
-    'BOTA_COCOAPODS_SPECS_TOKEN with repository Contents/Pull requests write is required');
+    'GH_TOKEN with repository Contents/Pull requests write is required');
   assert.ok(Number.isSafeInteger(maxAttempts) && maxAttempts >= 1 && maxAttempts <= 120, 'invalid PR wait bound');
   const deadline = Date.now() + 60 * 60_000;
 

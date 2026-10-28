@@ -13,9 +13,10 @@ tracked separately.
 
 ## Unreleased
 
-- Continue CocoaPods distribution through Bota's own Specs repository, retaining
-  package names, exact versions and checksummed release archives. Apple and
-  Flutter applications must configure the [Bota source](docs/migrations/cocoapods-owned-specs.md).
+- Prepare CocoaPods distribution through `Specs/` in this same SDK repository,
+  retaining package names, exact versions and checksummed release archives.
+  Bootstrap/main qualification and signed Slack publication activation are
+  pending. See the [Bota source setup](docs/migrations/cocoapods-owned-specs.md).
 
 - Normalize connected Pin/Note model aliases and restore React Native WiFi
   capability from the discovered GATT service on every connection and reconnect.

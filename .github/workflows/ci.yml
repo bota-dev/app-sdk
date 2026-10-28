@@ -36,6 +36,15 @@ jobs:
         run: node --test tools/release/owned-cocoapods.test.mjs tools/flutter/verify-cocoapods-consumer.test.mjs
       - name: Install isolated CocoaPods toolchain
         run: tools/flutter/install-pinned-cocoapods.sh
+      - name: Select an explicitly identified candidate Specs branch
+        if: >-
+          (github.event_name == 'workflow_dispatch' && github.ref_type == 'branch' && github.ref_name != 'main') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          INDEX_REF: ${{ github.head_ref || github.ref_name }}
+          INDEX_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          printf 'BOTA_COCOAPODS_SPECS_REF=%s\nBOTA_COCOAPODS_SPECS_SHA=%s\n' "$INDEX_REF" "$INDEX_SHA" >> "$GITHUB_ENV"
       - name: Compile clean public Apple CocoaPod through Bota Specs
         run: tools/flutter/test-public-apple-pod-consumer.sh 2.0.0-beta.21
       - name: Compile clean public Flutter CocoaPods consumer through Bota Specs
@@ -89,6 +98,11 @@ jobs:
 
       - name: Test release approval and publication tooling
         run: npm run test:release
+
+      - name: Validate SDK Specs and append-only history
+        env:
+          SPEC_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node tools/release/validate-owned-specs.mjs --base "$SPEC_BASE_SHA"
 
       - name: Test pinned NDK provisioning failure paths
         run: python3 -I tools/android/test_provision_ndk.py
@@ -611,6 +625,15 @@ jobs:
 
       - name: Verify isolated CocoaPods toolchain with public predecessor
         run: tools/flutter/install-pinned-cocoapods.sh
+      - name: Select an explicitly identified candidate Specs branch
+        if: >-
+          (github.event_name == 'workflow_dispatch' && github.ref_type == 'branch' && github.ref_name != 'main') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          INDEX_REF: ${{ github.head_ref || github.ref_name }}
+          INDEX_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          printf 'BOTA_COCOAPODS_SPECS_REF=%s\nBOTA_COCOAPODS_SPECS_SHA=%s\n' "$INDEX_REF" "$INDEX_SHA" >> "$GITHUB_ENV"
 
       - name: Compile public beta.11 CocoaPods consumer
         run: tools/flutter/test-public-apple-pod-consumer.sh 1.2.0-beta.11

@@ -7,10 +7,12 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { verifyCocoaPodsConsumer } from './verify-cocoapods-consumer.mjs';
 
-const repository = 'https://github.com/bota-dev/cocoapods-specs.git';
+const repository = 'https://github.com/bota-dev/app-sdk.git';
 const name = 'BotaAppSDK';
 const version = '2.0.0-beta.22';
 const checksum = 'a'.repeat(64);
+const indexCommit = 'd'.repeat(40);
+const candidateRef = 'codex/cocoapods-owned-specs-20261028';
 const fixture = () => {
   const expectedSpec = {
     name, version, module_name: name,
@@ -21,6 +23,8 @@ const fixture = () => {
   const input = {
     repository, version, expectedSpec, installedSpec: structuredClone(expectedSpec),
     expectedSpecChecksum: 'b'.repeat(40),
+    indexSelection: {},
+    indexState: { commit: indexCommit, ref: 'main', mainCommit: indexCommit, defaultRef: 'origin/main' },
     lock: {
       PODS: [`${name} (${version})`],
       DEPENDENCIES: [`${name} (= ${version})`],
@@ -38,7 +42,79 @@ test('admits the exact named/versioned SDK only from the selected Specs reposito
   assert.deepEqual(verifyCocoaPodsConsumer(fixture()), {
     name, version, repository, artifactUrl: fixture().expectedSpec.source.http,
     artifactSha256: checksum, cocoapodsVersion: '1.16.2', specificationStorage: 'sandbox',
+    indexCommit, indexRef: 'main', indexMode: 'default-main', defaultMain: true,
   });
+});
+
+test('reports a verified default main index rather than an unlabeled repository URL', () => {
+  const result = verifyCocoaPodsConsumer(fixture());
+  assert.equal(result.indexCommit, indexCommit);
+  assert.equal(result.indexRef, 'main');
+  assert.equal(result.indexMode, 'default-main');
+  assert.equal(result.defaultMain, true);
+});
+
+test('default-main qualification refuses missing, detached, non-main or stale index state', () => {
+  for (const change of [
+    input => { delete input.indexState; },
+    input => { input.indexState.ref = candidateRef; },
+    input => { input.indexState.ref = '<detached>'; },
+    input => { input.indexState.defaultRef = 'origin/other'; },
+    input => { input.indexState.mainCommit = 'e'.repeat(40); },
+    input => { input.indexState.commit = '0'.repeat(40); },
+  ]) {
+    const input = fixture();
+    change(input);
+    assert.throws(() => verifyCocoaPodsConsumer(input), /index/);
+  }
+});
+
+test('candidate qualification requires both the exact branch and post-install commit and never claims main', () => {
+  const input = fixture();
+  input.indexSelection = { ref: candidateRef, sha: indexCommit };
+  input.indexState = { commit: indexCommit, ref: candidateRef };
+  const result = verifyCocoaPodsConsumer(input);
+  assert.equal(result.indexCommit, indexCommit);
+  assert.equal(result.indexRef, candidateRef);
+  assert.equal(result.indexMode, 'candidate');
+  assert.equal(result.defaultMain, false);
+  for (const change of [
+    state => { state.commit = 'e'.repeat(40); },
+    state => { state.ref = 'main'; },
+    state => { state.ref = '<detached>'; },
+  ]) {
+    const changed = structuredClone(input);
+    change(changed.indexState);
+    assert.throws(() => verifyCocoaPodsConsumer(changed), /index/);
+  }
+});
+
+test('invalid candidate environment pairs fail before repository discovery or CocoaPods', () => {
+  const helper = fileURLToPath(new URL('./verify-cocoapods-consumer.mjs', import.meta.url));
+  const environment = { ...process.env };
+  delete environment.BOTA_COCOAPODS_SPECS_REF;
+  delete environment.BOTA_COCOAPODS_SPECS_SHA;
+  for (const selection of [
+    { BOTA_COCOAPODS_SPECS_REF: candidateRef },
+    { BOTA_COCOAPODS_SPECS_SHA: indexCommit },
+    { BOTA_COCOAPODS_SPECS_REF: '', BOTA_COCOAPODS_SPECS_SHA: '' },
+    ...['--other', 'HEAD', 'bad..ref', 'bad//ref', '.hidden/ref', 'bad.lock', 'bad/ref.', 'bad ref', 'bad;command', 'bad@{1}']
+      .map(ref => ({ BOTA_COCOAPODS_SPECS_REF: ref, BOTA_COCOAPODS_SPECS_SHA: indexCommit })),
+    ...['0'.repeat(40), 'D'.repeat(40), 'd'.repeat(39), '../main']
+      .map(sha => ({ BOTA_COCOAPODS_SPECS_REF: candidateRef, BOTA_COCOAPODS_SPECS_SHA: sha })),
+  ]) {
+    const result = spawnSync(process.execPath, [helper, '--repository-url'], {
+      encoding: 'utf8', env: { ...environment, ...selection },
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /candidate index/);
+  }
+  for (const selection of [{}, { BOTA_COCOAPODS_SPECS_REF: candidateRef, BOTA_COCOAPODS_SPECS_SHA: indexCommit }]) {
+    const result = spawnSync(process.execPath, [helper, '--repository-url'], {
+      encoding: 'utf8', env: { ...environment, ...selection },
+    });
+    assert.equal(result.status, 0, result.stderr);
+  }
 });
 
 test('refuses successful installation from Trunk, another repository or ambiguous sources', () => {
@@ -266,6 +342,51 @@ pod install --repo-update "argument with spaces"
   } finally {
     assert.equal(dirname(resolve(temporary)), resolve(tmpdir()));
     assert.ok(basename(temporary).startsWith('bota-pod-wrapper-'));
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test('both real consumer install blocks add only the explicitly selected canonical candidate source', async context => {
+  if (process.platform === 'win32' && bashProbe.error?.code === 'ENOENT') {
+    context.skip('Git Bash is unavailable on Windows; this execution is required on Linux and macOS');
+    return;
+  }
+  assert.ifError(bashProbe.error);
+  assert.equal(bashProbe.status, 0, bashProbe.stderr);
+  const temporary = await mkdtemp(join(tmpdir(), 'bota-index-install-'));
+  try {
+    const pod = join(temporary, 'selected pod');
+    const argumentsFile = join(temporary, 'arguments');
+    await writeFile(pod, '#!/usr/bin/env bash\nprintf "%s\\0" CALL "$@" >> "$BOTA_TEST_ARGS"\n', { mode: 0o755 });
+    for (const file of ['./test-public-apple-pod-consumer.sh', './test-public-cocoapods-consumer.sh']) {
+      const script = (await readFile(new URL(file, import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
+      const install = script.match(/# BEGIN CONSUMER INDEX INSTALL\n([\s\S]*?)\s*# END CONSUMER INDEX INSTALL/)?.[1];
+      assert.ok(install, 'the real consumer index install was not found');
+      for (const candidate of [false, true]) {
+        await writeFile(argumentsFile, '');
+        const environment = { ...process.env };
+        delete environment.BOTA_COCOAPODS_SPECS_REF;
+        delete environment.BOTA_COCOAPODS_SPECS_SHA;
+        const result = spawnSync(bashBinary, ['-c', `set -euo pipefail
+pod_command=("$BOTA_TEST_POD" _1.16.2_)
+chmod +x "$BOTA_TEST_POD"
+SPECS_REPOSITORY="$BOTA_TEST_REPOSITORY"
+${install}
+`], { encoding: 'utf8', env: { ...environment,
+          BOTA_TEST_POD: shellPath(pod), BOTA_TEST_ARGS: shellPath(argumentsFile), BOTA_TEST_REPOSITORY: repository,
+          ...(candidate ? { BOTA_COCOAPODS_SPECS_REF: candidateRef, BOTA_COCOAPODS_SPECS_SHA: indexCommit } : {}),
+        } });
+        assert.equal(result.status, 0, result.stderr);
+        const seen = (await readFile(argumentsFile, 'utf8')).split('\0').slice(0, -1);
+        assert.deepEqual(seen, [
+          ...(candidate ? ['CALL', '_1.16.2_', 'repo', 'add', 'bota-app-sdk-candidate', repository, candidateRef] : []),
+          'CALL', '_1.16.2_', 'install', '--repo-update',
+        ]);
+      }
+    }
+  } finally {
+    assert.equal(dirname(resolve(temporary)), resolve(tmpdir()));
+    assert.ok(basename(temporary).startsWith('bota-index-install-'));
     await rm(temporary, { recursive: true, force: true });
   }
 });

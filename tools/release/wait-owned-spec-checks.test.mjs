@@ -3,7 +3,7 @@ import test from 'node:test';
 import { waitForOwnedSpecsChecks } from './wait-owned-spec-checks.mjs';
 
 const commit = 'a'.repeat(40);
-const complete = () => ['Validate Specs', 'License Gate', 'Scan'].map((name, index) => ({
+const complete = () => ['Validate Specs', 'Dependency licenses', 'Scan'].map((name, index) => ({
   id: index + 1, name, head_sha: commit, app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success',
 }));
 const response = check_runs => new Response(JSON.stringify({ total_count: check_runs.length, check_runs }));
@@ -11,7 +11,7 @@ const response = check_runs => new Response(JSON.stringify({ total_count: check_
 test('publication waits for every exact-commit registry check before advancing main', async () => {
   let calls = 0;
   const fetchImpl = async (url, options) => {
-    assert.equal(url, `https://api.github.com/repos/bota-dev/cocoapods-specs/commits/${commit}/check-runs?filter=latest&per_page=100`);
+    assert.equal(url, `https://api.github.com/repos/bota-dev/app-sdk/commits/${commit}/check-runs?filter=latest&per_page=100`);
     assert.equal(options.redirect, 'error');
     return response(++calls === 1 ? complete().slice(0, 2) : complete());
   };

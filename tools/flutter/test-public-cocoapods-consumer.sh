@@ -165,7 +165,12 @@ DART
   cd "$consumer"
   "$ROOT/tools/flutter/run-flutter.sh" pub get --enforce-lockfile
   cd ios
+  # BEGIN CONSUMER INDEX INSTALL
+  if [[ -n "${BOTA_COCOAPODS_SPECS_REF:-}" ]]; then
+    "${pod_command[@]}" repo add bota-app-sdk-candidate "$SPECS_REPOSITORY" "$BOTA_COCOAPODS_SPECS_REF"
+  fi
   "${pod_command[@]}" install --repo-update
+  # END CONSUMER INDEX INSTALL
 )
 node "$ROOT/tools/flutter/verify-cocoapods-consumer.mjs" \
   --version "$VERSION" \

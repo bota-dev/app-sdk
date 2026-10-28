@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { publicPackageIdentifier } from './package-identities.mjs';
 
 export const specsRepository = Object.freeze({
-  gitUrl: 'https://github.com/bota-dev/cocoapods-specs.git',
+  gitUrl: 'https://github.com/bota-dev/app-sdk.git',
   branch: 'main',
 });
 const VERSION = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/;
@@ -94,7 +94,7 @@ async function boundedBody(response) {
 export async function verifyOwnedPodspec({ fetchImpl = fetch, ...options }) {
   const contents = canonicalPodspec(options);
   const relativePath = ownedSpecPath(options.sdkVersion);
-  const url = `https://raw.githubusercontent.com/bota-dev/cocoapods-specs/main/${relativePath}`;
+  const url = `https://raw.githubusercontent.com/bota-dev/app-sdk/main/${relativePath}`;
   const response = await fetchImpl(url, { redirect: 'error', signal: AbortSignal.timeout(30_000) });
   if (response.status !== 200 || response.redirected) throw new Error(`owned Specs lookup failed: HTTP ${response.status}`);
   if (await boundedBody(response) !== contents) throw new Error('public owned podspec differs from the approved spec');

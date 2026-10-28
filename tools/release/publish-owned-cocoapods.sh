@@ -5,6 +5,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VERSION="${1:-}"
 SPEC_JSON="${2:-}"
 CHECKSUM="${3:-}"
+refresh_approval() {
+  if [[ "${SLACK_SDK_PRODUCTION_APPROVAL_ENABLED:-false}" == true ]]; then
+    (cd "$ROOT" && node tools/release/slack-sdk-release.mjs refresh)
+  fi
+}
 if [[ $# -ne 3 || ! -f "$SPEC_JSON" || ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ || ! "$CHECKSUM" =~ ^[0-9a-f]{64}$ ]]; then
   echo 'usage: publish-owned-cocoapods.sh <version> <approved-podspec.json> <archive-sha256>' >&2
   exit 2
@@ -13,10 +18,10 @@ fi
 temporary="$(mktemp -d "${RUNNER_TEMP:-/tmp}/bota-specs-publish.XXXXXX")"
 trap 'rm -rf "$temporary"' EXIT
 INDEX="$temporary/index"
-# The public index is read without a credential. Only an absent, approved
-# version needs a repository-scoped credential in the protected job.
+# Read the same repository's public index; approved writes use the job's
+# repository-scoped GITHUB_TOKEN, exposed as GH_TOKEN.
 git -c credential.helper= -c http.followRedirects=false clone --quiet --depth 1 --branch main \
-  https://github.com/bota-dev/cocoapods-specs.git "$INDEX"
+  https://github.com/bota-dev/app-sdk.git "$INDEX"
 RESULT="$(node "$ROOT/tools/release/owned-cocoapods.mjs" stage "$VERSION" "$CHECKSUM" "$SPEC_JSON" "$INDEX")"
 SPEC_PATH="$(node -e 'console.log(JSON.parse(process.argv[1]).path)' "$RESULT")"
 CREATED="$(node -e 'console.log(JSON.parse(process.argv[1]).created)' "$RESULT")"
@@ -25,18 +30,18 @@ if [[ "$CREATED" == true ]]; then
     echo 'An exact approved GitHub run and attempt are required for a new Specs publication branch' >&2
     exit 1
   }
-  test -n "${BOTA_COCOAPODS_SPECS_TOKEN:-}" || {
-    echo 'BOTA_COCOAPODS_SPECS_TOKEN is required to append this version to the Bota Specs repository' >&2
+  test -n "${GH_TOKEN:-}" || {
+    echo 'The approved job GH_TOKEN is required to append this version to the SDK Specs index' >&2
     exit 1
   }
   command -v gh >/dev/null
   publish_push() {
     # No token in the remote URL, process argv, Git config or credential store.
-    # The approved token is restricted to this repository's Contents and PRs.
-    GH_HOST=github.com GH_TOKEN="$BOTA_COCOAPODS_SPECS_TOKEN" \
+    # The built-in token is restricted to this SDK repository and this job.
+    GH_HOST=github.com \
       git -c credential.helper= -c 'credential.helper=!gh auth git-credential' \
         -c credential.useHttpPath=true -c http.followRedirects=false -C "$INDEX" \
-        push https://github.com/bota-dev/cocoapods-specs.git "$1"
+        push https://github.com/bota-dev/app-sdk.git "$1"
   }
   git -C "$INDEX" add -- "$SPEC_PATH"
   test "$(git -C "$INDEX" diff --cached --name-only)" = "$SPEC_PATH"
@@ -47,11 +52,15 @@ if [[ "$CREATED" == true ]]; then
   # Validate the exact immutable commit before submitting its protected PR.
   # Independent approval and merge follow the existing organization rules.
   publication_ref="refs/heads/publish/$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+  refresh_approval
   publish_push "HEAD:$publication_ref"
+  node "$ROOT/tools/release/dispatch-owned-spec-checks.mjs" \
+    "$(git -C "$INDEX" rev-parse HEAD)" "${publication_ref#refs/heads/}"
   node "$ROOT/tools/release/wait-owned-spec-checks.mjs" "$(git -C "$INDEX" rev-parse HEAD)"
+  refresh_approval
   node "$ROOT/tools/release/owned-specs-pull-request.mjs" \
     "$(git -C "$INDEX" rev-parse HEAD)" "${publication_ref#refs/heads/}"
-  unset BOTA_COCOAPODS_SPECS_TOKEN
+  unset GH_TOKEN
 fi
 
 # A new public raw path can take a short time to propagate. Every attempt

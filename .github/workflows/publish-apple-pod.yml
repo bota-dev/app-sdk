@@ -1,10 +1,12 @@
-name: Publish Apple CocoaPod to Bota Specs
+name: Promote Apple CocoaPod to SDK Specs
 
 on:
   workflow_call:
-    secrets:
-      BOTA_COCOAPODS_SPECS_TOKEN:
+    inputs:
+      slack-approved:
+        type: boolean
         required: false
+        default: false
 
 concurrency:
   group: bota-cocoapods-specs-publish
@@ -12,17 +14,20 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  SLACK_SDK_PRODUCTION_APPROVAL_ENABLED: ${{ inputs.slack-approved && 'true' || 'false' }}
 
 jobs:
   publish:
     name: Publish and verify Apple SDK
     runs-on: macos-15
     timeout-minutes: 90
-    # The caller depends on the approved publish job; retain the environment secret.
+    # Preserve original tag context and the SDK repository's approved job token.
     environment: release
     permissions:
-      actions: read
-      contents: read
+      actions: write
+      contents: write
+      pull-requests: write
+      id-token: write
     steps:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -71,9 +76,24 @@ jobs:
       - name: Install exact CocoaPods client
         run: gem install --no-document cocoapods -v 1.16.2
 
-      - name: Append approved podspec to Bota Specs and verify public metadata
+      - name: Download the frozen Slack request inputs
+        if: inputs.slack-approved
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-inputs-${{ github.ref_name }}
+          path: target/
+      - name: Download the approved SDK execution binding
+        if: inputs.slack-approved
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdk-slack-approval-${{ github.ref_name }}-${{ github.run_attempt }}
+          path: target/
+      - name: Refresh signed approval before promoting Specs
+        if: inputs.slack-approved
+        run: node tools/release/slack-sdk-release.mjs refresh
+
+      - name: Append approved podspec to SDK Specs and verify public metadata
         env:
-          BOTA_COCOAPODS_SPECS_TOKEN: ${{ secrets.BOTA_COCOAPODS_SPECS_TOKEN }}
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |

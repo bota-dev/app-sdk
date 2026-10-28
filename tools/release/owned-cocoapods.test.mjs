@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { canonicalPodspec, stageOwnedPodspec, verifyOwnedPodspec } from './owned-cocoapods.mjs';
+import { canonicalPodspec, specsRepository, stageOwnedPodspec, verifyOwnedPodspec } from './owned-cocoapods.mjs';
 
 const version = '2.0.0-beta.22';
 const checksum = '1'.repeat(64);
@@ -57,7 +57,7 @@ test('index staging refuses symlink traversal before touching an outside directo
 test('public verification requires exact canonical bytes and rejects lookup uncertainty', async () => {
   const expected = canonicalPodspec(options());
   const request = async (url, init) => {
-    assert.equal(url, `https://raw.githubusercontent.com/bota-dev/cocoapods-specs/main/Specs/BotaAppSDK/${version}/BotaAppSDK.podspec.json`);
+    assert.equal(url, `https://raw.githubusercontent.com/bota-dev/app-sdk/main/Specs/BotaAppSDK/${version}/BotaAppSDK.podspec.json`);
     assert.equal(init.redirect, 'error');
     return new Response(expected);
   };
@@ -70,26 +70,40 @@ test('public verification requires exact canonical bytes and rejects lookup unce
   }
 });
 
-test('new release keeps protected approval and immutable inputs while replacing Trunk with the owned index', async () => {
-  const workflow = await readFile(new URL('../../.github/workflows/publish-apple-pod.yml', import.meta.url), 'utf8');
+test('same-repository Specs retain protected approval, immutable inputs and built-in job credentials', async () => {
+  assert.deepEqual(specsRepository, { gitUrl: 'https://github.com/bota-dev/app-sdk.git', branch: 'main' });
+  const workflow = (await readFile(new URL('../../.github/workflows/publish-apple-pod.yml', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
   assert.match(workflow, /environment: release/);
   assert.match(workflow, /cancel-in-progress: false/);
   assert.match(workflow, /generate-public-podspec.mjs/);
   assert.ok(workflow.indexOf('--check') < workflow.indexOf('tools/release/publish-owned-cocoapods.sh'));
-  assert.match(workflow, /BOTA_COCOAPODS_SPECS_TOKEN/);
-  assert.doesNotMatch(workflow, /pod trunk push|COCOAPODS_TRUNK_TOKEN|trunk.cocoapods.org/);
-  const publisher = await readFile(new URL('./publish-owned-cocoapods.sh', import.meta.url), 'utf8');
+  for (const permission of ['actions', 'contents', 'pull-requests', 'id-token']) assert.match(workflow, new RegExp(`${permission}: write\\n`));
+  assert.match(workflow, /GH_TOKEN: \$\{\{ github.token \}\}/);
+  assert.match(workflow, /slack-approved:\n        type: boolean/);
+  assert.ok(workflow.indexOf('node tools/release/slack-sdk-release.mjs refresh')
+    < workflow.indexOf('tools/release/publish-owned-cocoapods.sh'));
+  assert.doesNotMatch(workflow, /pod trunk push|COCOAPODS_TRUNK_TOKEN|trunk.cocoapods.org|BOTA_COCOAPODS_SPECS_TOKEN/);
+  const publisher = (await readFile(new URL('./publish-owned-cocoapods.sh', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
   assert.match(publisher, /http.followRedirects=false/);
   assert.match(publisher, /credential.helper=!gh auth git-credential/);
-  assert.match(publisher, /https:\/\/github.com\/bota-dev\/cocoapods-specs.git/);
+  assert.match(publisher, /https:\/\/github.com\/bota-dev\/app-sdk.git/);
   assert.match(publisher, /owned-specs-pull-request.mjs/);
+  assert.match(publisher, /test -n "\$\{GH_TOKEN:-\}"/);
+  assert.doesNotMatch(publisher, /BOTA_COCOAPODS_SPECS_TOKEN|github.com\/bota-dev\/cocoapods-specs/);
+  const push = publisher.indexOf('publish_push "HEAD:$publication_ref"');
+  const dispatch = publisher.indexOf('dispatch-owned-spec-checks.mjs');
+  const checks = publisher.indexOf('wait-owned-spec-checks.mjs');
+  const review = publisher.indexOf('owned-specs-pull-request.mjs');
+  assert.ok(push > 0 && push < dispatch && dispatch < checks && checks < review);
+  assert.match(publisher.slice(0, push), /refresh_approval\n  $/);
+  assert.match(publisher.slice(checks, review), /refresh_approval\n  node "\$ROOT\/tools\/release\/$/);
   assert.doesNotMatch(publisher, /HEAD:refs\/heads\/main/);
   const commands = publisher.split(/\r?\n/).filter(line => !line.trimStart().startsWith('#')).join('\n');
   assert.doesNotMatch(commands, /push[^\n]*--force|ssh-keyscan|git[^\n]*rebase/);
   const release = (await readFile(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
   const publish = release.slice(release.indexOf('  publish:\n'), release.indexOf('  publish-apple-pod:\n'));
-  assert.ok(publish.indexOf('test -n "$BOTA_COCOAPODS_SPECS_TOKEN"') > 0);
-  assert.ok(publish.indexOf('test -n "$BOTA_COCOAPODS_SPECS_TOKEN"') < publish.indexOf('Check out tagged source'));
+  assert.ok(publish.indexOf('test "$SDK_SPECS_ACTIONS_PR_ENABLED" = true') > 0);
+  assert.ok(publish.indexOf('test "$SDK_SPECS_ACTIONS_PR_ENABLED" = true') < publish.indexOf('Check out tagged source'));
   const start = release.indexOf('  flutter:\n');
   const end = release.indexOf('  publish-flutter:\n', start);
   const flutter = release.slice(start, end);

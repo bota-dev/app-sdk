@@ -80,7 +80,12 @@ EOF
   export CP_HOME_DIR="$temporary/cocoapods-home"
   export CP_REPOS_DIR="$temporary/cocoapods-repos"
   export CP_CACHE_DIR="$temporary/cocoapods-cache"
+  # BEGIN CONSUMER INDEX INSTALL
+  if [[ -n "${BOTA_COCOAPODS_SPECS_REF:-}" ]]; then
+    "${pod_command[@]}" repo add bota-app-sdk-candidate "$SPECS_REPOSITORY" "$BOTA_COCOAPODS_SPECS_REF"
+  fi
   "${pod_command[@]}" install --repo-update
+  # END CONSUMER INDEX INSTALL
 )
 node "$ROOT/tools/flutter/verify-cocoapods-consumer.mjs" \
   --version "$VERSION" \
@@ -95,4 +100,4 @@ xcodebuild \
   -derivedDataPath "$temporary/DerivedData" \
   CODE_SIGNING_ALLOWED=NO \
   build
-echo "Public CocoaPods consumer resolved ${APPLE_PACKAGE} $VERSION from Bota Specs without SDK overrides"
+echo "CocoaPods consumer compiled ${APPLE_PACKAGE} $VERSION; verification JSON identifies the exact index selection"

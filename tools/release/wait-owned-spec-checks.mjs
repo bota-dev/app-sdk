@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url';
 
-const required = ['Validate Specs', 'License Gate', 'Scan'];
+const required = ['Validate Specs', 'Dependency licenses', 'Scan'];
 
 export async function waitForOwnedSpecsChecks({
   commit, fetchImpl = fetch, maxAttempts = 30,
@@ -11,7 +11,7 @@ export async function waitForOwnedSpecsChecks({
   }
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     // This is a public-repository read; no SDK token or write credential is sent.
-    const response = await fetchImpl(`https://api.github.com/repos/bota-dev/cocoapods-specs/commits/${commit}/check-runs?filter=latest&per_page=100`, {
+    const response = await fetchImpl(`https://api.github.com/repos/bota-dev/app-sdk/commits/${commit}/check-runs?filter=latest&per_page=100`, {
       redirect: 'error', signal: AbortSignal.timeout(30_000), headers: { Accept: 'application/vnd.github+json' },
     });
     if (response.status !== 200 || response.redirected) throw new Error(`Specs check lookup failed: HTTP ${response.status}`);

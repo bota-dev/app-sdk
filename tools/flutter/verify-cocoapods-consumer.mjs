@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readdir } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
@@ -11,10 +11,36 @@ export const specsRepository = ownedSpecsRepository.gitUrl;
 
 const isRecord = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const rootName = value => value.split(' (')[0].split('/')[0];
+const SHA = /^(?!0{40}$)[0-9a-f]{40}$/;
+
+function specsIndexSelection({ ref, sha } = {}) {
+  if (ref === undefined && sha === undefined) return { ref: 'main', defaultMain: true };
+  assert(typeof ref === 'string' && typeof sha === 'string', 'candidate index ref and SHA must be supplied together');
+  assert(ref.length <= 200 && /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(ref)
+    && ref !== 'HEAD' && !ref.startsWith('refs/') && !ref.includes('..')
+    && ref.split('/').every(part => part && !part.startsWith('.') && !part.endsWith('.') && !part.endsWith('.lock')),
+  'candidate index ref must be a bounded literal branch name');
+  assert(SHA.test(sha), 'candidate index SHA must be nonzero lowercase 40-hex');
+  return { ref, sha, defaultMain: false };
+}
+
+function verifySpecsIndex(indexSelection, indexState) {
+  const selection = specsIndexSelection(indexSelection);
+  assert(isRecord(indexState) && SHA.test(indexState.commit ?? ''), 'selected index commit is missing or invalid');
+  if (selection.defaultMain) {
+    assert(indexState.ref === 'main' && indexState.defaultRef === 'origin/main'
+      && indexState.mainCommit === indexState.commit, 'selected index is not the normal default main source');
+  } else {
+    assert(indexState.ref === selection.ref && indexState.commit === selection.sha,
+      'candidate index branch or post-install commit drifted');
+  }
+  return { indexCommit: indexState.commit, indexRef: indexState.ref,
+    indexMode: selection.defaultMain ? 'default-main' : 'candidate', defaultMain: selection.defaultMain };
+}
 
 export function verifyCocoaPodsConsumer({
   lock, expectedSpec, installedSpec, installedManifest, installedSdkPresent, expectedSpecChecksum, version,
-  repository = specsRepository,
+  repository = specsRepository, indexSelection = {}, indexState,
 }) {
   ownedSpecPath(version);
   const name = publicPackageIdentifier('apple', version);
@@ -60,10 +86,13 @@ export function verifyCocoaPodsConsumer({
   assert(installedSdkPresent === true, 'installed SDK payload is missing from the sandbox');
   return { name, version, repository, artifactUrl: expectedUrl,
     artifactSha256: expectedSpec.source.sha256, cocoapodsVersion: lock.COCOAPODS,
-    specificationStorage: installedSpec === null ? 'registry' : 'sandbox' };
+    specificationStorage: installedSpec === null ? 'registry' : 'sandbox',
+    ...verifySpecsIndex(indexSelection, indexState) };
 }
 
 async function main() {
+  const indexSelection = { ref: process.env.BOTA_COCOAPODS_SPECS_REF, sha: process.env.BOTA_COCOAPODS_SPECS_SHA };
+  const selection = specsIndexSelection(indexSelection);
   if (process.argv.length === 3 && process.argv[2] === '--repository-url') {
     console.log(specsRepository);
     return;
@@ -100,6 +129,19 @@ async function main() {
     indexedSpec = join(checkout, ...ownedSpecPath(version).split('/'));
   }
   assert(indexedSpec, 'selected Specs repository checkout is missing');
+  const gitText = args => execFileSync('git', ['-C', indexedCheckout, ...args],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 4096 }).trim();
+  const optionalGitText = args => { try { return gitText(args); } catch { return '<missing>'; } };
+  const indexState = { commit: gitText(['rev-parse', '--verify', 'HEAD^{commit}']),
+    ref: optionalGitText(['symbolic-ref', '--quiet', '--short', 'HEAD']) };
+  if (selection.defaultMain) {
+    indexState.defaultRef = optionalGitText(['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD']);
+    indexState.mainCommit = optionalGitText(['rev-parse', '--verify', 'refs/remotes/origin/main^{commit}']);
+  }
+  verifySpecsIndex(indexSelection, indexState);
+  const committedSpec = execFileSync('git', ['-C', indexedCheckout, 'show', `${indexState.commit}:${ownedSpecPath(version)}`],
+    { stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 128 * 1024 });
+  assert(committedSpec.equals(await readFile(indexedSpec)), 'indexed Podspec differs from the selected index commit');
   // Registry pods need not have a Local Podspecs copy. Bind the actual sandbox manifest
   // to the consumer lock and the selected source's JSON spec using CocoaPods' own APIs.
   // All paths are literal argv values; no executable Ruby Podspec is loaded.
@@ -134,7 +176,7 @@ puts JSON.generate({ lock: lock.to_hash, expectedSpec: expected.to_hash, install
   const parsed = JSON.parse(execFileSync('ruby', ['-e', ruby, options['--lock'], indexedCheckout,
     indexedSpec, options['--sandbox'], name, version],
     { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, stdio: ['ignore', 'pipe', 'inherit'] }));
-  console.log(JSON.stringify(verifyCocoaPodsConsumer({ ...parsed, version, repository })));
+  console.log(JSON.stringify(verifyCocoaPodsConsumer({ ...parsed, version, repository, indexSelection, indexState })));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
