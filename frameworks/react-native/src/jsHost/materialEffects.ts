@@ -94,23 +94,32 @@ export class JsMaterialEffects {
     const request = this.require(requestId, 'provisioning');
     try {
       this.check(request.context, request.registration);
-      if (!input || typeof input.apiEndpoint !== 'string' || input.deviceToken !== '' || typeof input.credentialEnvelope !== 'string' ||
+      if (!input || typeof input.apiEndpoint !== 'string' || typeof input.deviceToken !== 'string' ||
           !Number.isInteger(input.mtu) || input.mtu < 23 || input.mtu > 517 ||
           Buffer.byteLength(input.apiEndpoint, 'utf8') > 4096) {
         throw new BotaJsHostError('invalid_provisioning_material', request.context.operation);
       }
-      const encoded = input.credentialEnvelope;
-      if (!/^[A-Za-z0-9_-]{307,1024}$/.test(encoded)) {
-        throw new BotaJsHostError('invalid_provisioning_material', request.context.operation);
+      let envelope: number[] | null = null;
+      let token: number[] = [];
+      if (input.credentialEnvelope !== undefined) {
+        const encoded = input.credentialEnvelope;
+        if (input.deviceToken !== '' || typeof encoded !== 'string' || !/^[A-Za-z0-9_-]{307,1024}$/.test(encoded)) {
+          throw new BotaJsHostError('invalid_provisioning_material', request.context.operation);
+        }
+        const bytes = Buffer.from(encoded, 'base64url');
+        if (bytes.toString('base64url') !== encoded || bytes.length < 230 || bytes.length > 768) {
+          throw new BotaJsHostError('invalid_provisioning_material', request.context.operation);
+        }
+        envelope = Array.from(bytes);
+      } else {
+        if (!/^[\x21-\x7e]{1,255}$/.test(input.deviceToken)) {
+          throw new BotaJsHostError('invalid_provisioning_material', request.context.operation);
+        }
+        token = Array.from(Buffer.from(input.deviceToken, 'utf8'));
       }
-      const bytes = Buffer.from(encoded, 'base64url');
-      if (bytes.toString('base64url') !== encoded || bytes.length < 230 || bytes.length > 768) {
-        throw new BotaJsHostError('invalid_provisioning_material', request.context.operation);
-      }
-      const envelope = Array.from(bytes);
       request.resolve({ ProvisioningMaterialPrepared: { material: {
         api_endpoint: Array.from(Buffer.from(input.apiEndpoint, 'utf8')),
-        device_token: [], credential_envelope: envelope, mtu: input.mtu,
+        device_token: token, credential_envelope: envelope, mtu: input.mtu,
       } } });
     } catch (error) { request.reject(error); throw error; }
   }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import { loadSource } from './loadSource.mjs';
 
 const { createGeneratedJsCore } = loadSource('core.ts');
@@ -32,15 +33,15 @@ function fixture(extra = {}) {
   const core = createGeneratedJsCore(); const journal = new Map(); const files = new Map(); const operations = [];
   const owner = new AbortController(); const ctx = { operationId: input().operationId, operation: 'ByoUpload', requestId: '0',
     cancellationId: '01'.repeat(16), generation: '1', signal: owner.signal };
-  const publicResult = []; const uploaded = []; let owned = false;
-  const persistence = { namespace: 'account/project/production', async load(key) { return journal.get(key) ?? null; },
+  const publicResult = []; const uploaded = []; let owned = false; let failedCleanup = false;
+  const persistence = { namespace: 'account/project/production', async load(key) { if (extra.seed && !journal.has(key)) journal.set(key, structuredClone(extra.seed)); return journal.get(key) ?? null; },
     async save(key, value) { journal.set(key, structuredClone(value)); }, async remove(key) { journal.delete(key); } };
   const filePort = { async open(id) { if (!files.has(id)) files.set(id, Buffer.alloc(0)); return { id, scope: persistence.namespace, kind: 'file' }; },
     async create() { throw new Error('unexpected create'); }, async truncate(handle, size) { files.set(handle.id, files.get(handle.id).subarray(0, Number(size))); },
     async append(handle, offset, bytes) { assert.equal(Number(offset), files.get(handle.id).length); files.set(handle.id, Buffer.concat([files.get(handle.id), Buffer.from(bytes)])); return { durableUnits: String(files.get(handle.id).length) }; },
     async read(handle, offset, maximum) { return Uint8Array.from(files.get(handle.id).subarray(Number(offset), Number(offset) + maximum)); },
     async metadata(handle) { return { durableUnits: String(files.get(handle.id).length) }; }, async flush() {}, async finalize() {},
-    async remove(handle) { files.delete(handle.id); } };
+    async remove(handle) { if (extra.loseCleanup && !failedCleanup) { failedCleanup = true; throw Object.assign(new Error("lost cleanup"), { code: "persistence_failed" }); } files.delete(handle.id); } };
   const link = { async refresh() { operations.push('refresh'); }, setLive(live) { operations.push(`live:${live}`); },
     async call(operation, bytes) {
       operations.push(operation);
@@ -213,7 +214,62 @@ test('BYO failed unsubscribe is reported and remains retryable cleanup', async (
 });
 test('BYO signed/context/socket helpers reject mismatched authorities in generated Rust', () => {
   const f = fixture();
-  assert.throws(() => f.core.codec('validateByoPut', { target: { method: 'PUT', url: 'https://storage.example/key', headers: { Authorization: 'must-not-forward' } } }));
+  assert.throws(() => f.core.codec('validateByoPut', { target: { method: 'PUT', url: 'https://storage.example/key', headers: { Host: 'must-not-forward' } } }));
   assert.throws(() => f.core.codec('acceptByoContextResult', { id: UUID, challengeBase64: 'x', bytes: Array.from(encoded({ data: { context_id: SESSION, challenge_base64: 'x', state: 'pending' } })) }));
   assert.throws(() => f.core.codec('acceptByoSocketReady', { session: SESSION, protocol: 'other', bytes: Array.from(encoded({ type: 'ready', session_id: SESSION })) }));
+});
+
+
+for (const assembled of [false, true]) test(`customer-hooks-v2 host uploads ${assembled ? 'final segment' : 'whole package'}, renews failed PUT and receipt-gates cleanup`, async () => {
+  const vector = JSON.parse(readFileSync(new URL('../../../../../protocol/vectors/byo-customer-hooks/package.json', import.meta.url)));
+  const c = vector.context;
+  const ciphertext = Buffer.from(vector.ciphertext_hex, 'hex');
+  const expected = Buffer.concat([ciphertext, Buffer.from(vector.trailer_hex, 'hex')]);
+  let puts = 0, grants = 0, verified = false, complete = false;
+  const f = fixture({
+    seed: assembled ? { context: c, assembled: true } : undefined, loseCleanup: true,
+    fetch: async (url, request, fallback) => {
+      if (url.endsWith('/byo-uploads')) return response(url, 200, { data: { context: c } });
+      if (url.endsWith('/prepare')) return response(url, 200, { data: { authorization: vector.authorization,
+        status: { hook_contract: 'customer-hooks-v2', package_profile: 'bota-byo-package-v1' } } });
+      if (url.endsWith('/upload')) { grants++; return response(url, 200, { data: { status: {}, upload: {
+        method: 'PUT', url: 'https://customer.example/object', headers: { Authorization: 'Bearer upload-jwt' } } } }); }
+      if (url.endsWith('/complete')) {
+        assert.deepEqual(JSON.parse(request.body).upload_package, { ...vector.upload_package, ...(assembled ? { segment_count: 2 } : {}) });
+        assert.equal(puts, 2); complete = true;
+        return response(url, 200, { data: { receipt: { signature: 'device-verifies' } } });
+      }
+      return fallback(url, request);
+    },
+    options: {
+      async uploadFile(target, handle) {
+        assert.equal(target.headers.Authorization, 'Bearer upload-jwt');
+        assert.equal(target.headers['Content-Type'], 'application/octet-stream');
+        assert.deepEqual(f.files.get(handle.id), assembled ? Buffer.from(vector.trailer_hex, 'hex') : expected);
+        if (++puts === 1) throw Object.assign(new Error('expired URL'), { code: 'transport_failed' });
+      },
+      async withDevice(_device, _operation, _live, _signal, body) {
+        return body(f.ctx, { async refresh() {}, async call(operation, request) {
+          if (operation === 1) return encoded({ upload_modes: ['whole_file'] });
+          if (operation === 2) return encoded({ recording_uuid: c.recording_uuid, recording_generation: c.recording_generation,
+            ciphertext_length: ciphertext.length, ciphertext_sha256: hash(ciphertext) });
+          if (operation === 3) return encoded({ manifest: vector.manifest });
+          if (operation === 4) { const b = Buffer.from(request); return Uint8Array.from(ciphertext.subarray(Number(b.readBigUInt64LE()), Number(b.readBigUInt64LE()) + b.readUInt16LE(8))); }
+          if (operation === 5) { assert.equal(complete, true); verified = true; return Uint8Array.from(Buffer.alloc(32, 4)); }
+          if (operation === 6) { assert.equal(verified, true); assert.ok([...f.journal.values()].some(v => v.recovery?.phase === 'CleanupPending')); return new Uint8Array(); }
+          throw new Error(`unexpected operation ${operation}`);
+        } });
+      },
+    },
+  });
+  const request = input({ recording: { uuid: c.recording_uuid, generation: c.recording_generation },
+    scope: { ...input().scope, organizationId: c.organization_id, projectId: c.project_id,
+      environment: c.environment, deviceId: c.device_id, bindingGeneration: c.binding_generation } });
+  await assert.rejects(f.effects.syncByo(JSON.stringify(request)));
+  assert.ok([...f.journal.values()].some(value => value.recovery?.phase === 'Complete'));
+  assert.ok(f.files.size > 0);
+  const result = JSON.parse(await f.effects.syncByo(JSON.stringify(request)));
+  assert.equal(puts, 2);
+  assert.equal(result.recordingId, c.recording_id); assert.equal(verified, true); assert.ok(grants >= 2);
+  assert.equal(f.files.size, 0); await f.effects.dispose();
 });

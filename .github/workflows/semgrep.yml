@@ -1,0 +1,455 @@
+name: Semgrep
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Optional immutable 40-character commit SHA for a retrospective scan
+        type: string
+        required: false
+        default: ''
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, edited]
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 3 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sast-${{ github.event.pull_request.number || github.ref }}-${{ inputs.revision || 'current' }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  scan:
+    name: Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: semgrep/semgrep:1.168.0@sha256:59fbed6127ea7c5dde3ba6a85142733bb20ea9aaa36120c953904f1539aaf66e
+    env:
+      SCANNER_IMAGE: semgrep/semgrep:1.168.0@sha256:59fbed6127ea7c5dde3ba6a85142733bb20ea9aaa36120c953904f1539aaf66e
+      RULE_PACKS: '["security-audit","owasp-top-ten","javascript","typescript","python","github-actions","c","rust","kotlin","swift","ruby"]'
+      EXPECTED_SHELLCHECK_FILES: '{"platforms/android/gradlew":"734b3879d3501dce471cf0522d3bcbafe76873d9fc5129345b67fb43bd15e933"}'
+    steps:
+      - name: Validate retrospective revision
+        env:
+          REQUESTED_REVISION: ${{ inputs.revision }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "$REQUESTED_REVISION" && ! "$REQUESTED_REVISION" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo 'revision must be a full immutable 40-character commit SHA' >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: source
+        with:
+          ref: ${{ inputs.revision || github.sha }}
+          persist-credentials: false
+
+      - name: Trust the checked-out workspace for read-only Git analysis
+        shell: bash
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Snapshot community security rules and scan identity
+        id: identity
+        env:
+          REQUESTED_REVISION: ${{ inputs.revision }}
+          SOURCE_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          SOURCE_WORKFLOW_REF: ${{ github.workflow_ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I - <<'PY'
+          import datetime, hashlib, json, os, pathlib, subprocess, urllib.request
+          from ruamel.yaml import YAML
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'sast-evidence'
+          policy = root / 'policy'
+          policy.mkdir(parents=True, exist_ok=True)
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          requested = os.environ.get('REQUESTED_REVISION', '')
+          if requested and actual.lower() != requested.lower():
+              raise SystemExit('Checked-out commit does not match requested immutable revision')
+          generated = pathlib.Path('frameworks/react-native/src/jsHost/generated/core.ts')
+          if any(item.is_symlink() for item in (generated, *generated.parents)) or not generated.is_file() or not generated.resolve().is_relative_to(pathlib.Path.cwd().resolve()):
+              raise SystemExit('Generated production runtime absent; scan applicability requires review')
+          entry = subprocess.check_output(['git', 'ls-tree', '-z', 'HEAD', '--', generated.as_posix()], text=True).strip('\0')
+          metadata, name = entry.split('\t')
+          mode, kind, blob = metadata.split()
+          if mode != '100644' or kind != 'blob' or name != generated.as_posix():
+              raise SystemExit('Generated production runtime is not the reviewed ordinary Git input')
+          size = int(subprocess.check_output(['git', 'cat-file', '-s', blob], text=True))
+          if not 0 < size <= 5_000_000 or generated.stat().st_size != size:
+              raise SystemExit('Generated production runtime exceeds the reviewed finite scan bound')
+          with generated.open('rb') as stream:
+              generated_bytes = stream.read(size + 1)
+          canonical_bytes = subprocess.check_output(['git', 'cat-file', 'blob', blob])
+          if generated_bytes != canonical_bytes:
+              raise SystemExit('Generated runtime working bytes differ from the exact committed Git blob')
+          required_sources = [{'path': generated.as_posix(), 'bytes': len(generated_bytes),
+                               'sha256': hashlib.sha256(generated_bytes).hexdigest(), 'git_blob': blob}]
+          snapshots = []
+          for pack in json.loads(os.environ['RULE_PACKS']):
+              url = 'https://semgrep.dev/c/p/' + pack
+              request = urllib.request.Request(url, headers={'User-Agent': 'bota-sast-rule-snapshot'})
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  body = response.read()
+              document = YAML(typ='safe').load(body)
+              if not isinstance(document.get('rules'), list) or not document['rules']:
+                  raise SystemExit('Rule pack did not contain rules: ' + pack)
+              path = policy / (pack + '.yaml')
+              path.write_bytes(body)
+              snapshots.append({'source': url, 'file': path.name, 'sha256': hashlib.sha256(body).hexdigest(), 'rules': len(document['rules'])})
+          identity = {
+              'repository': os.environ['GITHUB_REPOSITORY'], 'scanned_sha': actual,
+              'requested_revision': requested or None, 'retrospective': bool(requested),
+              'original_premerge_verification_claimed': False if requested else None,
+              'event': os.environ['GITHUB_EVENT_NAME'], 'github_sha': os.environ['GITHUB_SHA'],
+              'workflow_sha': os.environ['SOURCE_WORKFLOW_SHA'], 'workflow_ref': os.environ['SOURCE_WORKFLOW_REF'],
+              'pr_head_sha': os.environ.get('PR_HEAD_SHA') or None, 'pr_base_sha': os.environ.get('PR_BASE_SHA') or None,
+              'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'recorded_at': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              'scanner_image': os.environ['SCANNER_IMAGE'],
+              'scanner_version': subprocess.check_output(['semgrep', '--version'], text=True).strip(),
+              'rule_snapshots': snapshots,
+              'required_sources': required_sources,
+              'analysis_profiles': {'eligible_tree': {'max_target_bytes': 1_000_000, 'rule_timeout_seconds': 30, 'rules': 'original snapshots'},
+                                    'generated_runtime': {'max_target_bytes': 5_000_000, 'rule_timeout_seconds': 300, 'rules': 'original snapshots with exact necessary-conjunct completion proof'}},
+          }
+          (root / 'identity.json').write_text(json.dumps(identity, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps({'scanned_sha': actual, 'retrospective': bool(requested), 'rule_packs': len(snapshots)}))
+          PY
+
+      - name: Validate reviewed audit annotations against exact source
+        id: reviewed_annotations
+        env:
+          REVIEWED_FILES: '{"bindings/device-sdk-ffi/src/command.rs":"98237b8abacebc7cc3df45c9780fa268bc0089b8fe3c7ff564432dbf78a22d9d","bindings/device-sdk-ffi/src/event.rs":"ef75367e23d5c50e3688a76b6e02b6b669a808eb194e47a7691aed56e14183e1","bindings/device-sdk-ffi/src/lib.rs":"8abc996862cbef531b7388bee816513e367cb751818d7456a81f1df9ba4c7c43","bindings/device-sdk-ffi/src/output.rs":"937ec7839d7d3cee8627b7f2b4ddaf79d99e4598184a9645eadbef35ad8f5f46","bindings/device-sdk-ffi/src/packet.rs":"cad11458b11c6ddefe8205b43e75a6df8ec1d0a58598086677440272af3cf69d","bindings/device-sdk-ffi/src/protocol.rs":"4a0fb2b32d8343682de7111d271aa23b8c66d120d5bcddfc119705a844bb842c","bindings/device-sdk-ffi/src/protocol/byo_ble.rs":"dab32cf60949b109d512a62e70e21736021d9b4044cb9310aa9b94b0f32a6a81","bindings/device-sdk-ffi/src/protocol/byo_recovery.rs":"7fe1df556cce2f5812f9068ab26f990133b957c53dfe5cb33f26e1dbd1fb79d2","bindings/device-sdk-ffi/src/protocol/v2_demo.rs":"469f2ad2bfeab53015e99529e9014f20e294b672a2dd6e658f43cbc774e17b0c","tools/android/provision_ndk.py":"c93eab6fd2c259e034be50e759746f35a915d57384f02bf7fe92d914fba95697","tools/android/test-emulator-lane.test.mjs":"30f12135c2ced2bd4d77ac89e6cc5217060aabf75bd5e2be190f92a3de75054d","tools/baseline/compare-react-native.mjs":"de0c2916477cb8499c0ef4995aa8c4de339dc479284070e1497cdf8e75a38f9c","tools/baseline/compare-workflows.mjs":"5916b0f0712342a153fee18d4751270374221f0bd68df52b6ba5aab8155a57cf","tools/flutter/verify-pigeon.mjs":"7075ea28256ea6f3307a220b8d29117bad4721dfa4e7b74863aea8c84784f2e0","tools/release/wait-cocoapods.mjs":"96d05f66038c98d44a6d3f046216d00b8d14a1172430e570db251319e0bc5a8d","tools/xtask/src/main.rs":"a47014fe411b655db72de809f5f1dc16d1658f840cccce72e8ff6fbe86585fcc"}'
+        shell: bash
+        run: |
+          python3 -I - <<'PY'
+          import hashlib, json, os, pathlib, re
+          root = pathlib.Path.cwd().resolve()
+          evidence = pathlib.Path(os.environ['RUNNER_TEMP']) / 'sast-evidence'
+          expected = json.loads(os.environ['REVIEWED_FILES'])
+          annotated = []
+          for name, digest in expected.items():
+              path = root / name
+              if not path.exists():
+                  continue
+              if path.is_symlink() or not path.resolve().is_relative_to(root):
+                  raise SystemExit('Reviewed annotation path escapes the source checkout')
+              body = path.read_bytes()
+              if re.search(r'\bnosemgrep\b', body.decode('utf-8')):
+                  annotated.append({'path': name, 'sha256': hashlib.sha256(body).hexdigest(), 'expected': digest})
+          receipt = {'applicable': bool(annotated), 'annotated_sources': annotated, 'source_execution': False}
+          (evidence / 'reviewed-annotations.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
+          if annotated:
+              ledger = root / '.github/sast-reviewed-findings.json'
+              if not ledger.is_file() or ledger.is_symlink() or not ledger.resolve().is_relative_to(root):
+                  raise SystemExit('Reviewed annotations require their exact source review ledger')
+              manifest = json.loads(ledger.read_text(encoding='utf-8'))
+              if manifest.get('schema_version') != 1 or manifest.get('reviewed_files') != expected:
+                  raise SystemExit('Source review ledger does not match the workflow policy')
+              if len(manifest.get('findings', [])) != 85:
+                  raise SystemExit('Source review ledger is missing reviewed audit dispositions')
+              if any(item['sha256'] != item['expected'] for item in annotated):
+                  raise SystemExit('Reviewed annotated source changed; inspect the affected audit disposition')
+          print(json.dumps({'reviewed_annotations_applicable': bool(annotated), 'annotated_files': len(annotated)}))
+          PY
+
+      - name: Install verified ShellCheck for reviewed shell sources
+        id: shellcheck_install
+        if: ${{ always() && steps.identity.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I - <<'PY'
+          import hashlib, io, json, os, pathlib, subprocess, tarfile, urllib.request
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'sast-evidence'
+          tool = root / 'tools' / 'shellcheck'
+          tool.parent.mkdir(parents=True, exist_ok=True)
+          url = 'https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.gz'
+          expected = 'b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6'
+          with urllib.request.urlopen(url, timeout=60) as response:
+              archive_bytes = response.read()
+          actual = hashlib.sha256(archive_bytes).hexdigest()
+          if actual != expected:
+              raise SystemExit('ShellCheck archive SHA-256 mismatch')
+          with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode='r:gz') as archive:
+              member = archive.getmember('shellcheck-v0.11.0/shellcheck')
+              if not member.isfile():
+                  raise SystemExit('ShellCheck archive member is not a regular file')
+              tool.write_bytes(archive.extractfile(member).read())
+          tool.chmod(0o755)
+          version = subprocess.check_output([str(tool), '--version'], text=True).strip()
+          if 'version: 0.11.0' not in version:
+              raise SystemExit('Unexpected ShellCheck version')
+          receipt = {'source_url': url, 'archive_sha256': actual, 'version': version,
+                     'binary_sha256': hashlib.sha256(tool.read_bytes()).hexdigest()}
+          (root / 'shellcheck-tool.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps({'shellcheck_version': '0.11.0', 'archive_sha256': actual}))
+          PY
+
+      - name: Analyze exact reviewed shell sources with ShellCheck
+        id: shellcheck
+        if: ${{ always() && steps.identity.outcome == 'success' && steps.shellcheck_install.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'sast-evidence'
+          expected = json.loads(os.environ['EXPECTED_SHELLCHECK_FILES'])
+          sources = []
+          for name, digest in expected.items():
+              actual = hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest()
+              if actual != digest:
+                  raise SystemExit('Reviewed shell source changed; review its parser exception: ' + name)
+              sources.append({'path': name, 'sha256': actual})
+          result = subprocess.run([str(root / 'tools' / 'shellcheck'), '--norc', '--format=json', *expected],
+                                  capture_output=True, text=True)
+          (root / 'shellcheck-results.json').write_text(result.stdout, encoding='utf-8')
+          (root / 'shellcheck-stderr.txt').write_text(result.stderr, encoding='utf-8')
+          findings = json.loads(result.stdout)
+          for source in sources:
+              if hashlib.sha256(pathlib.Path(source['path']).read_bytes()).hexdigest() != source['sha256']:
+                  raise SystemExit('Shell source changed during static analysis')
+          receipt = {'version': '0.11.0', 'sources': sources, 'exit_code': result.returncode,
+                     'findings': len(findings), 'source_execution': False, 'rc_files': False}
+          (root / 'shellcheck-summary.json').write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(receipt))
+          if result.returncode != 0 or findings:
+              raise SystemExit('ShellCheck reported findings or analysis errors')
+          PY
+
+      - name: Run eligible-tree security analysis
+        id: analysis
+        if: ${{ always() && steps.identity.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          configs=()
+          for config in "$RUNNER_TEMP/sast-evidence/policy/"*; do
+            configs+=(--config="$config")
+          done
+          semgrep scan \
+            --oss-only --strict --error --metrics=off --disable-version-check --no-rewrite-rule-ids \
+            --jobs=2 --timeout=30 --max-target-bytes=1000000 \
+            --exclude=/platforms/android/gradlew \
+            --json-output "$RUNNER_TEMP/sast-evidence/results.json" \
+            --sarif-output "$RUNNER_TEMP/sast-evidence/results.sarif" \
+            "${configs[@]}" .
+
+      - name: Analyze the unchanged generated production runtime
+        id: generated_analysis
+        if: ${{ always() && steps.identity.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          from ruamel.yaml import YAML
+
+          TARGET = 'javascript.lang.security.audit.unknown-value-with-script-tag.unknown-value-with-script-tag'
+          SOURCE_RULE_SHA = 'e5a3d09543237d599d216ef07e938071d063b1f3f8491f472c6aa4d1f9f2c054'
+          PROOF_ID = TARGET + '.mandatory-positive-clause'
+          CORE = 'frameworks/react-native/src/jsHost/generated/core.ts'
+
+          def digest(body):
+              return hashlib.sha256(body).hexdigest()
+
+          def canonical(value):
+              return json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
+
+          def fail(message):
+              raise SystemExit(message)
+
+          def checked_source(source):
+              path = pathlib.Path(source['path'])
+              workspace = pathlib.Path.cwd().resolve()
+              if path.is_absolute() or not path.resolve().is_relative_to(workspace) or any(item.is_symlink() for item in (path, *path.parents)):
+                  fail('Required generated source is not an ordinary workspace input')
+              if not 0 < source['bytes'] <= 5_000_000 or path.stat().st_size != source['bytes']:
+                  fail('Required generated source size changed or exceeds finite bound')
+              with path.open('rb') as stream:
+                  body = stream.read(5_000_001)
+              if len(body) != source['bytes'] or digest(body) != source['sha256']:
+                  fail('Required generated source bytes changed between analysis phases')
+              return body
+
+          def make_proof_rule(original):
+              if original.get('id') != TARGET or digest(canonical(original)) != SOURCE_RULE_SHA:
+                  fail('Original conjunction changed; review completion-proof applicability')
+              if len(original['patterns']) != 3 or [list(item) for item in original['patterns']] != [['pattern-inside'], ['pattern'], ['pattern']]:
+                  fail('Expected exactly the reviewed three positive AND clauses')
+              proof = json.loads(json.dumps(original))
+              del proof['patterns']
+              proof.update(original['patterns'][1])
+              proof['id'] = PROOF_ID
+              proof['message'] = 'Necessary positive-clause applicability match; not a complete security finding.'
+              proof['severity'] = 'INFO'
+              return proof
+
+          def normalized(name):
+              return name.replace('\\', '/').removeprefix('./')
+
+          def validate_proof(report, sources, outcome):
+              expected = {source['path']: source for source in sources}
+              timing = report.get('time', {})
+              targets = timing.get('targets', [])
+              if not all(isinstance(report.get(key), list) for key in ('results', 'errors', 'skipped_rules')):
+                  fail('Prerequisite report lacks explicit unfiltered result/error/skip arrays')
+              if outcome != 'success' or report.get('version') != '1.168.0' or report.get('engine_requested') != 'OSS':
+                  fail('Prerequisite scanner did not fully succeed with the reviewed OSS engine')
+              if report['errors'] or report['skipped_rules'] or timing.get('fixpoint_timeouts') != []:
+                  fail('Prerequisite errors, skips or partial analysis cannot prove zero matches')
+              if timing.get('rules') != [PROOF_ID]:
+                  fail('Exactly the mandatory positive-clause rule must execute')
+              scanned = report.get('paths', {}).get('scanned', [])
+              if not isinstance(scanned, list) or len(scanned) != len(expected) or {normalized(name) for name in scanned} != set(expected):
+                  fail('Prerequisite did not analyze every exact required source')
+              if len(targets) != len(expected) or {normalized(item['path']) for item in targets} != set(expected):
+                  fail('Prerequisite profiling omits a required input')
+              if timing.get('total_bytes') != sum(item['bytes'] for item in sources):
+                  fail('Prerequisite did not admit the complete source byte extent')
+              for item in targets:
+                  source = expected[normalized(item['path'])]
+                  if item.get('num_bytes') != source['bytes'] or len(item.get('match_times', [])) != 1 or len(item.get('parse_times', [])) != 1:
+                      fail('Prerequisite profiling does not cover the exact file and rule')
+              for item in report.get('results', []):
+                  if item.get('check_id') != PROOF_ID or normalized(item['path']) not in expected or item.get('extra', {}).get('is_ignored'):
+                      fail('Prerequisite results must be raw and unfiltered')
+              return len(report.get('results', [])) == 0
+
+          def write_effective_policy(documents, root, empty):
+              effective_root = root / 'generated-policy'
+              effective_root.mkdir(exist_ok=False)
+              effective_snapshots, removed = [], 0
+              for path, body, document in documents:
+                  original_body, original_count = body, len(document['rules'])
+                  has_target = any(rule.get('id') == TARGET for rule in document['rules'])
+                  if empty and has_target:
+                      for rule in document['rules']:
+                          if rule.get('id') == TARGET:
+                              make_proof_rule(rule)
+                      document['rules'] = [rule for rule in document['rules'] if rule.get('id') != TARGET]
+                      body = (json.dumps(document, indent=2) + '\n').encode()
+                      destination = effective_root / (path.stem + '.json')
+                      removed += 1
+                  else:
+                      destination = effective_root / path.name
+                  destination.write_bytes(body)
+                  effective_snapshots.append({'file': destination.name, 'sha256': digest(body), 'rules': len(document['rules']), 'source_file': path.name, 'source_sha256': digest(original_body), 'source_rules': original_count})
+              if removed != (1 if empty else 0):
+                  fail('Effective profile changed more than the exactly proven conjunction')
+              return effective_root, effective_snapshots
+
+          def main():
+              root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'sast-evidence'
+              identity = json.loads((root / 'identity.json').read_text(encoding='utf-8'))
+              sources = identity['required_sources']
+              if len(sources) != 1 or sources[0]['path'] != CORE or identity['scanner_version'] != '1.168.0':
+                  fail('Generated completion profile requires the exact reviewed source identity')
+              checked_source(sources[0])
+              documents, selected = [], []
+              for path in sorted((root / 'policy').iterdir()):
+                  body = path.read_bytes()
+                  document = YAML(typ='safe').load(body)
+                  documents.append((path, body, document))
+                  selected.extend(rule for rule in document['rules'] if rule.get('id') == TARGET)
+              if len(selected) != 1:
+                  fail('Original conjunction is missing or duplicated')
+              original = selected[0]
+              proof = make_proof_rule(original)
+              original_path = root / 'generated-original-rule.json'
+              proof_path = root / 'generated-prerequisite-rule.json'
+              original_path.write_text(json.dumps({'rules': [original]}, indent=2) + '\n', encoding='utf-8')
+              proof_path.write_text(json.dumps({'rules': [proof]}, indent=2) + '\n', encoding='utf-8')
+              common = ['semgrep', 'scan', '--oss-only', '--strict', '--metrics=off', '--disable-version-check', '--no-rewrite-rule-ids', '--jobs=2', '--timeout=300', '--max-target-bytes=5000000']
+              # No baseline, severity, result or rule filters. Suppression comments must
+              # not hide the call-range prerequisite while leaving the focused UNK live.
+              process = subprocess.run(common + ['--disable-nosem', '--time', '--config=' + str(proof_path), '--json-output=' + str(root / 'generated-prerequisite-results.json'), '--sarif-output=' + str(root / 'generated-prerequisite-results.sarif'), CORE])
+              checked_source(sources[0])
+              report = json.loads((root / 'generated-prerequisite-results.json').read_text(encoding='utf-8'))
+              empty = validate_proof(report, sources, 'success' if process.returncode == 0 else 'failure')
+              effective_root, effective_snapshots = write_effective_policy(documents, root, empty)
+              certificate = {'source_rule_id': TARGET, 'source_rule_sha256': SOURCE_RULE_SHA, 'original_rule_file_sha256': digest(original_path.read_bytes()), 'proof_rule_id': PROOF_ID, 'proof_rule_sha256': digest(canonical(proof)), 'proof_rule_file_sha256': digest(proof_path.read_bytes()), 'proof_result_file_sha256': digest((root / 'generated-prerequisite-results.json').read_bytes()), 'mandatory_positive_clause': original['patterns'][1], 'proof_outcome': 'success', 'proof_matches': len(report['results']), 'proof_errors': 0, 'proof_nosem_disabled': True, 'proof_unfiltered': True, 'proof_cli_options': common[2:] + ['--disable-nosem', '--time'], 'proof_full_input_and_rule_verified': True, 'conjunction_certified_empty': empty, 'original_rule_retained': not empty, 'required_sources': sources, 'effective_rule_snapshots': effective_snapshots, 'rationale': 'An empty independently evaluated mandatory positive clause makes this exact three-positive-clause AND unsatisfiable. Any prerequisite match retains the original conjunction and is not itself a finding.'}
+              (root / 'generated-completion-proof.json').write_text(json.dumps(certificate, indent=2) + '\n', encoding='utf-8')
+              checked_source(sources[0])
+              configs = ['--config=' + str(path) for path in sorted(effective_root.iterdir())]
+              process = subprocess.run(common + ['--error', '--json-output=' + str(root / 'generated-results.json'), '--sarif-output=' + str(root / 'generated-results.sarif'), *configs, CORE])
+              checked_source(sources[0])
+              certificate['generated_analysis_exit_code'] = process.returncode
+              certificate['source_bytes_unchanged'] = True
+              (root / 'generated-completion-proof.json').write_text(json.dumps(certificate, indent=2) + '\n', encoding='utf-8')
+              print(json.dumps({'proof_matches': len(report['results']), 'conjunction_certified_empty': empty, 'original_rule_retained': not empty, 'generated_exit_code': process.returncode, 'source_bytes_unchanged': True}))
+              raise SystemExit(process.returncode)
+
+          if __name__ == '__main__':
+              main()
+          PY
+
+      - name: Record findings, errors and scanned file count
+        if: ${{ always() && steps.identity.outcome == 'success' }}
+        env:
+          ANALYSIS_OUTCOME: ${{ steps.analysis.outcome }}
+          GENERATED_ANALYSIS_OUTCOME: ${{ steps.generated_analysis.outcome }}
+        shell: bash
+        run: |
+          python3 -I - <<'PY'
+          import hashlib, json, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'sast-evidence'
+          report = json.loads((root / 'results.json').read_text(encoding='utf-8'))
+          generated = json.loads((root / 'generated-results.json').read_text(encoding='utf-8'))
+          identity = json.loads((root / 'identity.json').read_text(encoding='utf-8'))
+          completion = json.loads((root / 'generated-completion-proof.json').read_text(encoding='utf-8'))
+          required = identity['required_sources']
+          if len(required) != 1 or required[0]['path'] != 'frameworks/react-native/src/jsHost/generated/core.ts':
+              raise SystemExit('Generated runtime scan identity is missing or invalid')
+          scanned = {name.replace('\\', '/').removeprefix('./') for part in [report, generated] for name in part.get('paths', {}).get('scanned', [])}
+          generated_scanned = {name.replace('\\', '/').removeprefix('./') for name in generated.get('paths', {}).get('scanned', [])}
+          outcomes = [os.environ['ANALYSIS_OUTCOME'], os.environ['GENERATED_ANALYSIS_OUTCOME']]
+          summary = {'analysis_outcome': 'success' if outcomes == ['success', 'success'] else 'failure', 'findings': sum(len(part.get('results', [])) for part in [report, generated]), 'errors': sum(len(part.get('errors', [])) for part in [report, generated]), 'scanned_files': len(scanned), 'semgrep_version': report.get('version')}
+          summary['component_outcomes'] = {'eligible_tree': outcomes[0], 'generated_runtime': outcomes[1]}
+          summary['generated_completion'] = completion
+          summary['required_sources'] = required
+          summary['required_sources_verified'] = False
+          (root / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n', encoding='utf-8')
+          for source in required:
+              path = pathlib.Path(source['path'])
+              if generated_scanned != {source['path']} or path.is_symlink() or not path.is_file():
+                  raise SystemExit('Required generated production source was not analyzed')
+              body = path.read_bytes()
+              if len(body) != source['bytes'] or hashlib.sha256(body).hexdigest() != source['sha256']:
+                  raise SystemExit('Generated production source changed during analysis')
+          if not summary['scanned_files']:
+              raise SystemExit('SAST scanned zero files; applicability needs a separate review')
+          if not report.get('paths', {}).get('scanned', []):
+              raise SystemExit('Eligible-tree analysis scanned zero files')
+          if summary['errors']:
+              raise SystemExit('SAST reported analysis errors; evidence is incomplete')
+          if summary['analysis_outcome'] != 'success' or summary['findings']:
+              raise SystemExit('A required security analysis component failed or reported findings')
+          if completion.get('required_sources') != required or completion.get('source_bytes_unchanged') is not True or completion.get('generated_analysis_exit_code') != 0 or completion.get('proof_full_input_and_rule_verified') is not True:
+              raise SystemExit('Generated completion proof did not fully qualify the exact source')
+          summary['required_sources_verified'] = True
+          (root / 'summary.json').write_text(json.dumps(summary, indent=2) + '\n', encoding='utf-8')
+          print(json.dumps(summary))
+          PY
+
+      - name: Retain scan identity, exact rules and results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sast-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sast-evidence/
+          if-no-files-found: error
+          retention-days: 90

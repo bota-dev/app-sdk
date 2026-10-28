@@ -39,7 +39,7 @@ final class ByoDurableStore: @unchecked Sendable {
         guard fd >= 0 else { throw ByoFailure.persistence }; return fd
     }
     private func valid(_ name: String) throws {
-        guard ["state", "documents", "ciphertext"].contains(name) else { throw ByoFailure.persistence }
+        guard ["state", "documents", "ciphertext", "segment"].contains(name) else { throw ByoFailure.persistence }
     }
     func load(_ name: String) throws -> Data? {
         try valid(name); let dir = try directory(); defer { close(dir) }
@@ -60,17 +60,19 @@ final class ByoDurableStore: @unchecked Sendable {
         guard synchronize(fd) == 0, renameat(dir, temporary, dir, name) == 0, synchronize(dir) == 0,
               try load(name) == bytes else { throw ByoFailure.persistence }
     }
-    func createCiphertext() throws -> FileHandle {
+    func createCiphertext(_ name: String = "ciphertext") throws -> FileHandle {
         let dir = try directory(); defer { close(dir) }
         // A partial local copy is never recovery authority; the device retains
         // its complete source until signed receipt/CONFIRM.
-        let fd = openat(dir, "ciphertext", O_CREAT | O_WRONLY | O_TRUNC | O_NOFOLLOW, 0o600)
+        try valid(name)
+        let fd = openat(dir, name, O_CREAT | O_WRONLY | O_TRUNC | O_NOFOLLOW, 0o600)
         guard fd >= 0 else { throw ByoFailure.persistence }
         return FileHandle(fileDescriptor: fd, closeOnDealloc: true)
     }
     func removeCiphertext() throws {
         let dir = try directory(); defer { close(dir) }
         guard unlinkat(dir, "ciphertext", 0) == 0 || errno == ENOENT else { throw ByoFailure.persistence }
+        guard unlinkat(dir, "segment", 0) == 0 || errno == ENOENT else { throw ByoFailure.persistence }
         guard synchronize(dir) == 0 else { throw ByoFailure.persistence }
     }
 }

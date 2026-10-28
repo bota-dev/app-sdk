@@ -52,7 +52,10 @@ Publication, app binary delivery and physical acceptance are distinct gates; see
 External firmware integrations use the all-English [FIRMWARE_PROTOCOL.md](FIRMWARE_PROTOCOL.md) in this active SDK repository. The #201 marker section is a development contract, not proof of released package support; keep protocol facts aligned with the feature implementation/manifest, distinguish source from release availability, and preserve exact owner/completion/deletion semantics. Do not send new SDK work to the retired standalone react-native-sdk repository.
 
 BYO live and whole-file uploads now connect Rust framing/recovery to Apple/Android
-BLE, HTTP and WS, private durable journals and receipt-gated cleanup. Native
+BLE, HTTP and WS, private durable journals and receipt-gated cleanup. Shared Rust
+customer-package/header/transfer-proof helpers serve the native ABI and generated
+JS; OS adapters execute IO. Package/transfer progress never replaces final receipt
+authority. Native
 `streamByoRecording` and RN `stream(device, null, target)` discover the active
 physical capture; explicit identities also work. Three WS reconnects precede a
 fenced full-file successor; initial WS failure stays on HTTP segments. Stop

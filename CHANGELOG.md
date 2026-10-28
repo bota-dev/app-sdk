@@ -1,11 +1,34 @@
 # Changelog
 
+## 2.0.0-beta.23 (unreleased)
+
+- Prepare the synchronized SDK release containing connected Pin/Note model normalization and discovered WiFi service capabilities for Android/iOS React Native consumers.
+- Retain the merged customer-hooks-v2 BYO upload implementation from main, with regenerated shared JavaScript and native archive checksums for the combined source.
+- Preserve existing provisioning, serial verification and connection ownership contracts. Public package and physical acceptance remain pending.
+
 User-facing changes to the Bota App SDK. Entries under **Unreleased** describe
 source changes that are not in the published packages. Published versions and
 tags are immutable; package publication and application/device acceptance are
 tracked separately.
 
 ## Unreleased
+
+- Normalize connected Pin/Note model aliases and restore React Native WiFi
+  capability from the discovered GATT service on every connection and reconnect.
+  Unknown identities never become Pin. The BLE PLX host uses the same inspection
+  on Android and iOS; see [qualification](docs/parity/connected-model-wifi.md).
+
+- Fix the React Native public client's leftover encrypted-only provisioning
+  check. A valid plaintext token now reaches the compatible adapter instead of
+  failing with `provision: internal`; mixed credentials still fail and encrypted
+  errors never fall back to plaintext.
+
+## 2.0.0-beta.22 (candidate)
+
+- Include reviewed PR #51: accept exactly one plaintext or encrypted provisioning credential, preserving the backend-selected representation.
+- Reject malformed or mixed material before BLE writes; encrypted failures never retry through the plaintext path.
+- Keep package identities and existing confirmation flow. Canonical artifacts, protected publication and physical acceptance remain separate gates.
+
 
 - Add opaque encrypted device-token provisioning through `credentialEnvelope` and
   React Native `devices.provisionEnvelope`, using the existing confirmation flow.

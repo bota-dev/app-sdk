@@ -1528,15 +1528,21 @@ async function settleWithWatchdog<T>(
   }
 }
 
-test('plaintext-only provisioning material is rejected without a device write', async () => {
+test('plaintext provisioning uses only the legacy characteristic and keeps confirmation', async () => {
   const harness = await createHarness()
+  const token = new TextEncoder().encode('dtok_legacy')
   harness.provider.prepareHandler = async context => ({
     materialId: context.materialId, apiEndpoint: Uint8Array.of(0),
-    deviceToken: new TextEncoder().encode('dtok_retired'), mtu: 185,
+    deviceToken: token.slice(), mtu: 185,
   })
-  await assert.rejects(harness.manager.provision({ attemptId: 'retired-raw' }))
-  assert.equal(harness.transport.writes.some(write =>
-    [API_ENDPOINT_CHARACTERISTIC, DEVICE_TOKEN_CHARACTERISTIC, 'B07A000A-0001-1000-8000-00805F9B34FB']
-      .some(uuid => canonicalGattUuid(uuid) === canonicalGattUuid(write.characteristicUuid))), false)
-  assert.equal(harness.provider.confirms.length, 0)
+  const provision = harness.manager.provision({ attemptId: 'legacy-raw' })
+  await eventually(() => harness.transport.writes.some(write => canonicalGattUuid(write.characteristicUuid) === canonicalGattUuid(DEVICE_TOKEN_CHARACTERISTIC)))
+  await settleReducer()
+  const fragments = harness.transport.writes.filter(write => canonicalGattUuid(write.characteristicUuid) === canonicalGattUuid(DEVICE_TOKEN_CHARACTERISTIC))
+  assert.deepEqual(Uint8Array.from(fragments.flatMap(write => [...write.value.slice(2)])), token)
+  assert.equal(harness.transport.writes.some(write => canonicalGattUuid(write.characteristicUuid) === canonicalGattUuid('B07A000A-0001-1000-8000-00805F9B34FB')), false)
+  harness.transport.emitNotification(harness.transport.device, BOTA_PROVISIONING_SERVICE, PROVISIONING_RESULT_CHARACTERISTIC, Uint8Array.of(0))
+  await provision
+  assert.deepEqual(harness.provider.confirms, [{ attemptId: 'legacy-raw', serialNumber: SERIAL }])
+  assert.ok(harness.provider.materials[0]?.deviceToken.every(byte => byte === 0))
 })

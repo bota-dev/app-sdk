@@ -6,19 +6,7 @@ HEADER="$ROOT/bindings/device-sdk-ffi/include/bota_device_sdk.h"
 HEADER_DIGEST="$ROOT/bindings/device-sdk-ffi/bota_device_sdk.h.sha256"
 OUTPUT="$ROOT/platforms/android/sdk/build/generated/bota/jniLibs"
 ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Library/Android/sdk}}"
-NDK_VERSION="28.2.13676358"
-NDK_ROOT="${ANDROID_NDK_HOME:-$ANDROID_SDK_ROOT/ndk/$NDK_VERSION}"
-
-if [[ ! -d "$NDK_ROOT" ]]; then
-  echo "Android NDK $NDK_VERSION was not found at $NDK_ROOT" >&2
-  exit 1
-fi
-
-TOOLCHAIN="$(find "$NDK_ROOT/toolchains/llvm/prebuilt" -mindepth 1 -maxdepth 1 -type d -print -quit)"
-if [[ -z "$TOOLCHAIN" ]]; then
-  echo "Android NDK LLVM toolchain was not found" >&2
-  exit 1
-fi
+source "$ROOT/tools/android/pinned-ndk.sh"
 
 sha256() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -65,6 +53,7 @@ for row in "${rows[@]}"; do
     echo "Pinned API-26 linker is missing: $linker_path" >&2
     exit 1
   fi
+  echo "Android $abi Rust linker: $linker_path"
 
   target_env="$(printf '%s' "$target" | tr '[:lower:]-' '[:upper:]_')"
   env \

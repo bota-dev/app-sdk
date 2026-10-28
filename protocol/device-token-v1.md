@@ -4,7 +4,11 @@ This candidate keeps bind → provision → confirm/abort and existing refresh
 semantics. HTTPS returns `credential_envelope` with `format=bota-device-token-v1`,
 `encoding=base64url` and unpadded canonical `data`. Encrypted responses never
 include `device_token`. Clients request `credential_delivery=hpke_v1` in the
-existing request; all devices reject clients that omit it.
+existing request for encrypted issuance. The backend switch
+`DEVICE_TOKEN_ENCRYPTION_ENABLED` defaults to false in all environments: in that
+mode it returns only raw `device_token` without requiring trusted enrollment.
+Compatible clients must support both representations; mixed responses fail.
+Missing trust or invalid crypto never triggers automatic plaintext fallback.
 
 ## Delivery versus subsequent authentication
 
@@ -79,22 +83,25 @@ The initial BLE route accepts purpose1 only. A purpose2 refresh is for a device
 HTTP consumer calling the shared verifier with expected purpose2; this candidate
 does not add a new direct-HTTP activation or refresh workflow.
 
-Firmware unconditionally rejects the retired plaintext characteristic. The
-legacy installer and compile-time opt-out have been removed. All devices must
-have trusted enrollment; missing enrollment fails rather than issuing plaintext. Already stored credentials are
-not re-encrypted by an OTA and still require normal rotation to retire exposure.
+Plaintext compatibility uses the original characteristic
+`B07A0003-0002-1000-8000-00805F9B34FB` with the same chunk framing and a
+1–255-byte printable ASCII token. Both modes share connection/credential epoch,
+paired/reset fencing, deferred persistence and read-back. The receiver never
+interprets a failed encrypted payload as a raw token; chunks from different
+characteristics cannot be combined. Existing stored credentials are unchanged.
 
 ## HTTPS refresh recovery (backend source candidate)
 
 Use `POST /v1/devices/:id/token/refresh` with the original device Bearer and
 `{ "credential_delivery": "hpke_v1" }`; omit `Idempotency-Key`. The server saves
-the encrypted purpose2 result atomically with rotation. For 15 minutes from
+the selected result atomically with rotation; raw results are protected at rest
+by a KMS/Vault-wrapped AES-GCM key (migration128). For 15 minutes from
 receipt creation, retrying that same predecessor on the exact same-device route
-returns identical `credential_envelope` bytes without another rotation or an
+returns the same original representation and credential without another rotation or an
 extended deadline. The retired predecessor cannot call ordinary APIs.
 
 Recovery requires unchanged project/owner/generation, live device and EndUser,
-matching trusted key, a valid successor and no pending reset. Explicit revocation,
+matching trusted key for encrypted receipts, a valid successor and no pending reset. Explicit revocation,
 unbind/transfer/deletion, successor expiry/rotation or deadline expiry stops it.
 Missing signing configuration can block new issuance but does not block saved
 ciphertext recovery. Success responses use `Cache-Control: no-store`.
@@ -103,24 +110,29 @@ The firmware HTTP consumer must keep its predecessor until purpose2 verification
 and reliable successor persistence complete, retry uncertain outcomes with that
 same credential and bounded backoff, then use the successor for HTTPS. Recovery
 failure outside the window requires supported authenticated binding recovery;
-never reinstall plaintext or assume indefinite offline replay. The server
-stores ciphertext only, at most one receipt per device (migration125). This
+never fall back after failed crypto or assume indefinite offline replay. The server
+stores only encrypted material, at most one receipt per device. Switching policy
+does not change an in-flight bind or extend a refresh recovery deadline. This
 change adds no user step, request field, BLE opcode or SDK ABI change. Firmware
 HTTP orchestration and local encrypted storage remain unimplemented separately.
 
 ## SDK and rollout
 
-Rust `ProvisioningMaterial` requires `credential_envelope` bytes at runtime. The
-old `device_token` ABI slot must be empty and is retained only to reject old
-callers without renumbering fields. Native ABI field223 is mandatory for successful
-provisioning; absent, plaintext or mixed material fails before any write. Apple, Android, Web and Flutter
-carry bytes. RN exposes `credentialEnvelope` as canonical unpadded base64url
-and `DeviceManager.provisionEnvelope`; it never decrypts. Invalid envelopes,
-missing GATT support and old SDKs must fail, never retry through the plaintext
-characteristic. Bota One/Demo keep published dependency pins until the candidate
-runtime and release are qualified.
+Rust `ProvisioningMaterial` accepts exactly one nonempty raw `device_token`
+(1–255 printable ASCII bytes) or `credential_envelope` (230–768 bytes with magic
+`BOTATOK1` and an empty token field). Missing, malformed or mixed material fails
+before any write. Apple, Android, Web and Flutter carry bytes; RN exposes raw
+`DeviceManager.provision` and canonical-base64url `provisionEnvelope`. It never
+decrypts envelopes and never retries an encrypted failure via the raw path.
+The public RN client's material callback must accept the same exclusive raw/envelope
+choice before forwarding to the adapter; an encrypted-only callback would reject
+plaintext before any credential write even when the generated core supports it.
+Bota One/Demo keep published dependency pins until the compatible runtime and
+release are qualified. Deploy compatible firmware/SDK/Apps before changing a
+running encrypted-only backend to plaintext. Missing configuration selects
+plaintext; explicitly retain `true` during a staged rollout when needed.
 
-Release requires migration124, independently verified Manufacturing enrollment,
+Encrypted mode requires migration124, independently verified Manufacturing enrollment,
 a provisioned device private key and matching backend signing trust, regenerated
 RN core on the mandated Linux/Rust toolchain, native/Web/Flutter qualification,
 and physical BLE/WiFi/LTE acceptance. Legacy claim/provision token-return routes

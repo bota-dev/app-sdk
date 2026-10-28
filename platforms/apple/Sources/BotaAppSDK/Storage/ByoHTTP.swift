@@ -76,23 +76,20 @@ actor ByoHTTP: ByoControlClient {
         }
         throw ByoFailure.pending
     }
-    func put(_ instructions: Data, file: URL) async throws {
+    static func uploadRequest(_ instructions: Data) throws -> URLRequest {
         let object = try byoObject(instructions)
         guard object["method"] as? String == "PUT", let text = object["url"] as? String, text.utf8.count <= 8192,
               let url = URL(string: text), let parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
               parts.scheme == "https", parts.host != nil, parts.user == nil, parts.password == nil, parts.fragment == nil,
               let headers = object["headers"] as? [String: String] else { throw ByoFailure.protocolViolation }
         var request = URLRequest(url: url); request.httpMethod = "PUT"
-        for (name, value) in headers {
-            guard !value.contains("\r"), !value.contains("\n"), value.utf8.count <= 256 else { throw ByoFailure.protocolViolation }
-            switch name {
-            case "content-type": guard value == "application/octet-stream" else { throw ByoFailure.protocolViolation }
-            case "x-amz-checksum-sha256": guard Data(base64Encoded: value)?.count == 32 else { throw ByoFailure.protocolViolation }
-            case "x-ms-blob-type": guard value == "BlockBlob" else { throw ByoFailure.protocolViolation }
-            default: throw ByoFailure.protocolViolation
-            }
-            request.setValue(value, forHTTPHeaderField: name)
-        }
+        _ = try byoCustomer(3, headers)
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
+        return request
+    }
+    func put(_ instructions: Data, file: URL) async throws {
+        let request = try Self.uploadRequest(instructions)
         try Task.checkCancellation(); try await options.validateScope()
         let (_, response) = try await session.upload(for: request, fromFile: file)
         try Task.checkCancellation(); try await options.validateScope()

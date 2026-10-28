@@ -12,6 +12,8 @@ const writeExecutable = async (path, contents) => {
 
 const executeWithDeadline = (path, arguments_, options, deadlineMilliseconds) =>
   new Promise((resolve) => {
+    // This test launches its fixed local emulator fixture with literal argv and no shell command string.
+    // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
     const child = spawn(path, arguments_, { ...options, detached: true });
     let stdout = '';
     let stderr = '';

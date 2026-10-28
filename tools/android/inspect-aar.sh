@@ -4,8 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 AAR="${1:-$ROOT/platforms/android/sdk/build/outputs/aar/sdk-release.aar}"
 ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Library/Android/sdk}}"
-NDK_ROOT="${ANDROID_NDK_HOME:-$ANDROID_SDK_ROOT/ndk/28.2.13676358}"
-TOOLCHAIN="$(find "$NDK_ROOT/toolchains/llvm/prebuilt" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+source "$ROOT/tools/android/pinned-ndk.sh"
 
 if [[ ! -f "$AAR" ]]; then
   echo "AAR not found: $AAR" >&2

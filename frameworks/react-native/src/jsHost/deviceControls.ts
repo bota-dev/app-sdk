@@ -1,4 +1,5 @@
 import type { NativeConnectedDevice } from '../specs/NativeBotaDeviceSDK';
+import { normalizeConnectedDeviceType } from '../deviceModel';
 import type {
   BotaJsHostPorts, GattAddress, JsGattValue, JsHostContext, JsHostSubscription,
   JsValue, RawJsCoreFactory,
@@ -176,7 +177,7 @@ export class JsDeviceControls {
         const deviceType = await this.decodeRead('decodeText', 'SERVICE_DEVICE_INFO', 'CHAR_MODEL_NUMBER', connection, context, { required: true });
         const firmwareVersion = await this.decodeRead('decodeText', 'SERVICE_DEVICE_INFO', 'CHAR_FIRMWARE_REVISION', connection, context, { required: true });
         const hardwareRevision = await this.decodeRead('decodeText', 'SERVICE_DEVICE_INFO', 'CHAR_HARDWARE_REVISION', connection, context, { required: false });
-        return { serialNumber, deviceType, firmwareVersion, hardwareRevision };
+        return { serialNumber, deviceType: normalizeConnectedDeviceType(String(deviceType)), firmwareVersion, hardwareRevision };
       }
       case 'setApiEndpoint':
         return this.writeEncoded('encodeApiEndpoint', { environment: json(args[1]) },

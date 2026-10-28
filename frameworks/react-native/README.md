@@ -1,10 +1,10 @@
 # Bota SDK for React Native
 
-Source candidate `2.0.0-beta.21` adds opaque encrypted device-token
+Source candidate `2.0.0-beta.23` adds opaque encrypted device-token
 provisioning and system-connected BLE discovery to the generated runtime.
 It retains `@bota.dev/react-native-app-sdk/runtime` and version 1 installed
 OS ports. Canonical artifacts, exact main CI, protected publication and public
-consumer checks are required. See the [candidate preflight](../../release/evidence/2.0.0-beta.21-preflight.md).
+consumer checks are required. See the [candidate preflight](../../release/evidence/2.0.0-beta.23-preflight.md).
 Device acceptance and application delivery remain separate.
 
 ## Generated JavaScript runtime and app OTA updates

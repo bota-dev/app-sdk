@@ -85,6 +85,8 @@ actor ByoUploadSession {
     func run() async throws -> ByoUploadResult {
         try Task.checkCancellation(); try await options.validateScope(); try await refresh()
         var capabilities = try byoObject(await rpc(1))
+        capabilities["customer_hooks"] = "customer-hooks-v2"
+        capabilities["max_ciphertext_bytes"] = min((capabilities["max_ciphertext_bytes"] as? NSNumber)?.uint64Value ?? 134201332, 134201332)
         capabilities["upload_modes"] = ["whole_file"]; capabilities["durable_source"] = true; capabilities["durable_receipt"] = true
         let selection = try byoDataObject(await http.control("/capabilities", body: byoJSON(capabilities)))
         if documents["context"] == nil && documents["selected_customer"] as? Bool != true {
@@ -93,7 +95,7 @@ actor ByoUploadSession {
         documents["selected_customer"] = true; try persist()
         if let saved = documents["context"] as? [String: Any], try store.load("state") != nil {
             try scope(saved); _ = try advance(2)
-            if phase == 9 { return try result(saved) }
+            if phase == 9 { try store.removeCiphertext(); return try result(saved) }
         }
         var uuid = UUID(uuidString: recording.uuid)!.uuid
         var identity = withUnsafeBytes(of: &uuid) { Data($0) }
@@ -124,7 +126,7 @@ actor ByoUploadSession {
         try scope(context)
         guard try number(context, "ciphertext_length") == length, try text(context, "ciphertext_sha256") == hash else { throw ByoFailure.identityConflict }
         if try store.load("state") == nil { _ = try advance(1) } else { _ = try advance(2) }
-        if phase == 9 { return try result(context) }
+        if phase == 9 { try store.removeCiphertext(); return try result(context) }
         _ = try advance(6, [.unsigned(id: 130, value: length), .text(id: 144, value: hash)])
         let endpoint = try path(context)
         let inspection = try advance(15)
@@ -132,6 +134,11 @@ actor ByoUploadSession {
         var upload = try byoDataObject(await http.control(endpoint + "/prepare", body: byoJSON([:])))
         guard let authorization = upload["authorization"] as? [String: Any],
               var status = upload["status"] as? [String: Any] else { throw ByoFailure.protocolViolation }
+        let customer = status["hook_contract"] as? String == "customer-hooks-v2"
+        guard !customer || status["package_profile"] as? String == "bota-byo-package-v1" else { throw ByoFailure.protocolViolation }
+        if let old = documents["customer_package"] as? Bool, old != customer { throw ByoFailure.identityConflict }
+        documents["customer_package"] = customer
+        if let old = documents["authorization"] as? [String: Any], try byoJSON(old) != byoJSON(authorization) { throw ByoFailure.identityConflict }
         documents["authorization"] = authorization; try persist()
         if phase == 0 {
             _ = try advance(3, [.text(id: 212, value: try text(context, "recording_id")),
@@ -170,7 +177,16 @@ actor ByoUploadSession {
         guard let manifest = opened["manifest"] as? [String: Any] else { throw ByoFailure.protocolViolation }
         if let previous = documents["manifest"] as? [String: Any], try byoJSON(previous) != byoJSON(manifest) { throw ByoFailure.identityConflict }
         documents["manifest"] = manifest; try persist()
-        if status["receipt"] is [String: Any] == false && phase == 5 {
+        if customer && status["receipt"] is [String: Any] == false {
+            try await package(length: length, hash: hash, context: context, authorization: authorization, manifest: manifest)
+            if ["upload_incomplete", "upload_not_found"].contains(status["error"] as? String ?? "") {
+                documents["package_next"] = 0; documents["package_sent"] = false; try persist()
+            }
+            if documents["package_sent"] as? Bool != true {
+                try await sendPackage(endpoint: endpoint, length: length)
+            }
+            if phase == 5 { _ = try advance(9) }
+        } else if status["receipt"] is [String: Any] == false && phase == 5 {
             if documents["assembled"] as? Bool == true { _ = try advance(9) }
             else if let instructions = upload["upload"] as? [String: Any] {
                 try await download(length: length, hash: hash)
@@ -185,7 +201,7 @@ actor ByoUploadSession {
         if status["receipt"] is [String: Any] == false {
             for poll in 0..<24 {
                 try Task.checkCancellation()
-                status = try byoDataObject(await http.control(endpoint + "/complete", body: byoJSON(["manifest": manifest])))
+                status = try byoDataObject(await http.control(endpoint + "/complete", body: byoJSON(customer ? ["manifest": manifest, "upload_package": documents["upload_package"]!] : ["manifest": manifest])))
                 if status["receipt"] is [String: Any] { break }
                 guard !["failed", "blocked"].contains(status["state"] as? String ?? "") else { throw ByoFailure.deviceRejected }
                 if poll < 23 { try await Task.sleep(nanoseconds: 5_000_000_000) }
@@ -210,7 +226,59 @@ actor ByoUploadSession {
     private func result(_ context: [String: Any]) throws -> ByoUploadResult {
         ByoUploadResult(recordingID: try text(context, "recording_id"), uploadSessionID: try text(context, "upload_session_id"))
     }
-    private func download(length: UInt64, hash: String) async throws {
+    private func package(length: UInt64, hash: String, context: [String: Any], authorization: [String: Any], manifest: [String: Any]) async throws {
+        let trailer = try byoCustomer(1, ["context": context, "authorization": authorization, "manifest": manifest])
+        let encoded = trailer.base64EncodedString()
+        if let old = documents["package_trailer"] as? String, old != encoded { throw ByoFailure.identityConflict }
+        documents["package_trailer"] = encoded; try persist()
+        // Rebuild from the retained device source after a crash; never reseal the key.
+        try await download(length: length, hash: hash, trailer: trailer)
+        let file = try FileHandle(forReadingFrom: store.root.appendingPathComponent("ciphertext")); defer { try? file.close() }
+        var digest = SHA256(); var count: UInt64 = 0
+        while let bytes = try file.read(upToCount: 65536), !bytes.isEmpty { digest.update(data: bytes); count += UInt64(bytes.count) }
+        guard count == length + UInt64(trailer.count) else { throw ByoFailure.persistence }
+        var facts: [String: Any] = ["file_size_bytes": count, "content_sha256": digest.finalize().map { String(format: "%02x", $0) }.joined(),
+            "metadata_sha256": SHA256.hash(data: trailer).map { String(format: "%02x", $0) }.joined()]
+        if documents["assembled"] as? Bool == true { facts["segment_count"] = (length + 16383) / 16384 + 1 }
+        if let old = documents["upload_package"] as? [String: Any], try byoJSON(old) != byoJSON(facts) { throw ByoFailure.identityConflict }
+        documents["upload_package"] = facts; try persist()
+    }
+    private func sendPackage(endpoint: String, length: UInt64) async throws {
+        let assembled = documents["assembled"] as? Bool == true
+        let bodyCount = (length + 16383) / 16384
+        guard !assembled || bodyCount < 8192 else { throw ByoFailure.protocolViolation }
+        let total = try number(documents["upload_package"] as! [String: Any], "file_size_bytes")
+        var next = (documents["package_next"] as? NSNumber)?.uint64Value ?? (assembled ? bodyCount : 0)
+        guard next <= (assembled ? bodyCount + 1 : 0) else { throw ByoFailure.identityConflict }
+        let source = try FileHandle(forReadingFrom: store.root.appendingPathComponent("ciphertext")); defer { try? source.close() }
+        while !assembled || next <= bodyCount {
+            try Task.checkCancellation()
+            var request: [String: Any] = [:]
+            var target = store.root.appendingPathComponent("ciphertext")
+            if assembled {
+                let offset = next == bodyCount ? length : next * 16384
+                let count = next == bodyCount ? total - length : min(16384, length - offset)
+                try source.seek(toOffset: offset)
+                guard let bytes = try source.read(upToCount: Int(count)), bytes.count == count else { throw ByoFailure.persistence }
+                request["segment"] = ["index": next, "offset": offset, "length": count, "sha256": SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()]
+                let file = try store.createCiphertext("segment")
+                do { try file.write(contentsOf: bytes); try file.synchronize(); try file.close() } catch { try? file.close(); throw error }
+                target = store.root.appendingPathComponent("segment")
+            }
+            for attempt in 0..<3 {
+                var reply: [String: Any]
+                do { reply = try byoDataObject(await http.control(endpoint + "/upload", body: byoJSON(request))) }
+                catch ByoFailure.expiredAuthorization { try await renew(endpoint); reply = try byoDataObject(await http.control(endpoint + "/upload", body: byoJSON(request))) }
+                guard let grant = reply["upload"] as? [String: Any] else { throw ByoFailure.pending }
+                do { try await http.put(byoJSON(grant), file: target); break }
+                catch { if attempt == 2 { throw error }; try Task.checkCancellation() }
+            }
+            if !assembled { break }
+            next += 1; documents["package_next"] = next; try persist()
+        }
+        documents["package_sent"] = true; try persist()
+    }
+    private func download(length: UInt64, hash: String, trailer: Data = Data()) async throws {
         let file = try store.createCiphertext(); defer { try? file.close() }
         var digest = SHA256(); var offset: UInt64 = 0
         var refreshed = ByoContinuousInstant.now
@@ -225,6 +293,7 @@ actor ByoUploadSession {
             try file.write(contentsOf: data); digest.update(data: data); offset += UInt64(count)
         }
         guard digest.finalize().map({ String(format: "%02x", $0) }).joined() == hash else { throw ByoFailure.identityConflict }
+        try file.write(contentsOf: trailer)
         try file.synchronize()
     }
 }

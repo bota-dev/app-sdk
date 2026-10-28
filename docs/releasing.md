@@ -1,3 +1,13 @@
+# Candidate synchronized beta: 2.0.0-beta.23
+
+Prepare merged model/WiFi fixes together with current-main BYO changes at `c5a25cc40cb9f87b03c7ffe0647fa860d0dea924` for the requested Demo dev APK. Regenerate canonical JavaScript and native archive checksums for the combined source. Exact final main CI/inventory and protected release approval remain required. Existing versions are immutable. See [preflight](../release/evidence/2.0.0-beta.23-preflight.md).
+
+# Candidate synchronized beta: 2.0.0-beta.22
+
+This candidate includes merged PR #51 at main `64a61ea552083e829c21f3b45ea4f8626b136332`. It preserves exact-one credential validation and never retries encrypted failure through plaintext. Beta.21 is already published; the dated checkpoints below retain their historical status.
+
+Canonical generation, Apple checksums and the complete Flutter inventory pass in preparation40334355007. Final exact main CI and protected publication remain required. Demo consumption is limited to development OTA for this request; Preview and production publication are outside scope. See [preflight](../release/evidence/2.0.0-beta.22-preflight.md).
+
 # Unpublished synchronized beta: 2.0.0-beta.21
 
 Beta.21 prepares the current main source with opaque encrypted device-token
@@ -1060,7 +1070,13 @@ The single tag-triggered release workflow then:
    only `beta`, checks exact occupied bytes, and preserves `latest`.
 5. Publishes or verifies CocoaPods, waits for CDN readiness, and runs the public
    SwiftPM, CocoaPods and API 26/35 Maven consumer gates. Registry acceptance
-   alone does not establish customer install readiness.
+   alone does not establish customer install readiness. The CocoaPods consumer
+   uses isolated specs/cache directories and requires its normal CDN-backed
+   `pod install --repo-update` to succeed within the readiness wait. CDN index
+   and podspec reads alone can disagree with CocoaPods during propagation.
+   Only missing-spec exit 31 retries within the existing 61-check budget;
+   other install failures stop immediately. Exact lockfile identity, refusal
+   of external sources and the Release build remain required afterward.
 6. Verifies the already preserved Flutter payload against the tag inventory;
    it does not rebuild the package, native libraries or local Flutter examples.
 7. Publishes Flutter in the same dependency graph, respecting workflow
