@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.0-beta.23 (unreleased)
+
+- Prepare the synchronized SDK release containing connected Pin/Note model normalization and discovered WiFi service capabilities for Android/iOS React Native consumers.
+- Preserve existing provisioning, serial verification and connection ownership contracts. Public package and physical acceptance remain pending.
+
 User-facing changes to the Bota App SDK. Entries under **Unreleased** describe
 source changes that are not in the published packages. Published versions and
 tags are immutable; package publication and application/device acceptance are

@@ -1,3 +1,8 @@
+## 2.0.0-beta.23 (unreleased)
+
+- Prepare the synchronized SDK release containing connected Pin/Note model normalization and discovered WiFi service capabilities for Android/iOS React Native consumers.
+- Preserve existing provisioning, serial verification and connection ownership contracts. Public package and physical acceptance remain pending.
+
 ## 2.0.0-beta.22 (candidate)
 
 - Include reviewed PR #51: accept exactly one plaintext or encrypted provisioning credential, preserving the backend-selected representation.

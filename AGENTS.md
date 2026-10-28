@@ -1,5 +1,7 @@
 # AGENTS.md
 
+Beta.23 preparation includes merged model/WiFi PR #58 and targets a standalone Demo dev APK using the published SDK. Retain synchronized versions, canonical generation, independent integration review, exact main CI/inventory and protected publication. See [preflight](release/evidence/2.0.0-beta.23-preflight.md).
+
 Beta.22 preparation includes merged PR #51 and targets the existing synchronized release. Beta.21 is already published; prior preparation paragraphs are historical. Require canonical generated inputs, exact main CI/inventory, independent PR approval and protected release approval. Demo rollout for this request is development OTA only. See [preflight](release/evidence/2.0.0-beta.22-preflight.md).
 
 Unpublished synchronized beta.21 has canonical Linux/Apple/Flutter preparation
