@@ -39,6 +39,16 @@ first reproduced the invalid assumption and missing/stale-manifest admission.
 This correction requires fresh macOS compilation; the earlier successful
 download is not a successful build claim.
 
+Source `ba0f6988` subsequently compiled the clean beta.22 Apple application
+through Bota Specs in [run 40755373668](https://github.com/bota-dev/app-sdk/actions/runs/40755373668).
+The Flutter consumer correctly refused beta.22 because that version was not
+published on pub.dev. A fresh authoritative pub.dev API read found beta.21
+was the latest available Flutter package. Public migration qualification now
+selects beta.21 for both consumers, preserving exact matching native/plugin
+versions. Future release-candidate qualification still uses the exact preserved
+candidate archive and matching owned-index native version. No package is
+published or rebuilt to satisfy this source-migration gate.
+
 The first clean clone used the repository's bootstrap default branch. The
 default is now explicitly `main`, verified through both repository metadata
 and Git's symbolic remote HEAD.

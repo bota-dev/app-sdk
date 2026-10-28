@@ -8,7 +8,7 @@ on:
         description: Exact already-published SDK version to qualify through Bota Specs
         type: string
         required: true
-        default: 2.0.0-beta.22
+        default: 2.0.0-beta.21
 
 permissions:
   contents: read

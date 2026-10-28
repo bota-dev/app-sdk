@@ -49,7 +49,8 @@ runtime permissions.
 
 ## Flutter applications
 
-Keep the exact `bota_app_sdk` version in `pubspec.yaml`. Add these source
+Keep the exact `bota_app_sdk` version in `pubspec.yaml`, selecting a version
+already published in both the Flutter package registry and Bota Specs. Add these source
 declarations to the top of the application's existing `ios/Podfile`, before the
 Flutter-generated dependency setup:
 

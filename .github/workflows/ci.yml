@@ -37,9 +37,9 @@ jobs:
       - name: Install isolated CocoaPods toolchain
         run: tools/flutter/install-pinned-cocoapods.sh
       - name: Compile clean public Apple CocoaPod through Bota Specs
-        run: tools/flutter/test-public-apple-pod-consumer.sh 2.0.0-beta.22
+        run: tools/flutter/test-public-apple-pod-consumer.sh 2.0.0-beta.21
       - name: Compile clean public Flutter CocoaPods consumer through Bota Specs
-        run: tools/flutter/test-public-cocoapods-consumer.sh 2.0.0-beta.22
+        run: tools/flutter/test-public-cocoapods-consumer.sh 2.0.0-beta.21
 
   quality:
     name: Rust and tooling
