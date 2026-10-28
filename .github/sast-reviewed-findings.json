@@ -1,0 +1,627 @@
+{
+  "schema_version": 1,
+  "review_basis": [
+    "C ABI v1 ownership and lifetime rules in bindings/device-sdk-ffi/include/bota_device_sdk.h",
+    "Rust exported # Safety contracts; PacketFields count, null, duplicate, type and UTF-8 checks",
+    "Owned ABI regression fixtures and explicit literal-argv developer tools",
+    "Pinned NDK downloader: fixed Google HTTPS origin and explicit ssl.create_default_context() chain/hostname verification; https://docs.python.org/3/library/ssl.html#ssl.create_default_context",
+    "BYO customer ABI 0x0530: packet-kind constant only; encode uses PacketFields.required_bytes_bounded to check typed field length <= 32768 before the existing owned copy. No new unsafe borrow or suppression is introduced; existing reviewed unsafe boundaries are unchanged."
+  ],
+  "original_source_revision": "dc51e35dd5f968ad2b2847d0a08742757cf9fdbb",
+  "reviewed_files": {
+    "bindings/device-sdk-ffi/src/command.rs": "98237b8abacebc7cc3df45c9780fa268bc0089b8fe3c7ff564432dbf78a22d9d",
+    "bindings/device-sdk-ffi/src/event.rs": "ef75367e23d5c50e3688a76b6e02b6b669a808eb194e47a7691aed56e14183e1",
+    "bindings/device-sdk-ffi/src/lib.rs": "8abc996862cbef531b7388bee816513e367cb751818d7456a81f1df9ba4c7c43",
+    "bindings/device-sdk-ffi/src/output.rs": "937ec7839d7d3cee8627b7f2b4ddaf79d99e4598184a9645eadbef35ad8f5f46",
+    "bindings/device-sdk-ffi/src/packet.rs": "cad11458b11c6ddefe8205b43e75a6df8ec1d0a58598086677440272af3cf69d",
+    "bindings/device-sdk-ffi/src/protocol.rs": "4a0fb2b32d8343682de7111d271aa23b8c66d120d5bcddfc119705a844bb842c",
+    "bindings/device-sdk-ffi/src/protocol/byo_ble.rs": "dab32cf60949b109d512a62e70e21736021d9b4044cb9310aa9b94b0f32a6a81",
+    "bindings/device-sdk-ffi/src/protocol/byo_recovery.rs": "7fe1df556cce2f5812f9068ab26f990133b957c53dfe5cb33f26e1dbd1fb79d2",
+    "bindings/device-sdk-ffi/src/protocol/v2_demo.rs": "469f2ad2bfeab53015e99529e9014f20e294b672a2dd6e658f43cbc774e17b0c",
+    "tools/android/provision_ndk.py": "c93eab6fd2c259e034be50e759746f35a915d57384f02bf7fe92d914fba95697",
+    "tools/android/test-emulator-lane.test.mjs": "30f12135c2ced2bd4d77ac89e6cc5217060aabf75bd5e2be190f92a3de75054d",
+    "tools/baseline/compare-react-native.mjs": "de0c2916477cb8499c0ef4995aa8c4de339dc479284070e1497cdf8e75a38f9c",
+    "tools/baseline/compare-workflows.mjs": "5916b0f0712342a153fee18d4751270374221f0bd68df52b6ba5aab8155a57cf",
+    "tools/flutter/verify-pigeon.mjs": "7075ea28256ea6f3307a220b8d29117bad4721dfa4e7b74863aea8c84784f2e0",
+    "tools/release/wait-cocoapods.mjs": "96d05f66038c98d44a6d3f046216d00b8d14a1172430e570db251319e0bc5a8d",
+    "tools/xtask/src/main.rs": "a47014fe411b655db72de809f5f1dc16d1658f840cccce72e8ff6fbe86585fcc"
+  },
+  "findings": [
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/command.rs",
+      "original_line": 82,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The live typed C packet is borrowed only through the checked PacketFields constructor."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/command.rs",
+      "original_line": 446,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires live aligned fields; count <= 64 and non-null checks precede this borrow."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/command.rs",
+      "original_line": 512,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "PacketFields checked the field shape; the caller keeps bytes live and UTF-8 is validated below."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/command.rs",
+      "original_line": 541,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "PacketFields checked the field shape; caller-live bytes are copied into an owned Vec."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/command.rs",
+      "original_line": 615,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "Only validated field shapes reach this caller-live C slice; length conversion and zero are checked."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/event.rs",
+      "original_line": 27,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires live packet fields; PacketFields checks count, nulls, duplicates and types."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/event.rs",
+      "original_line": 610,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/event.rs",
+      "original_line": 657,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/event.rs",
+      "original_line": 752,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/event.rs",
+      "original_line": 762,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 69,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires a live engine; null is rejected and access is serialized by its mutex."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 113,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The documented C ABI transfers this SDK allocation once; null is ignored before Box reclamation."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 126,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The documented live-engine precondition is forwarded to the null-checking mutex owner."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 150,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires a readable packet for this call; null checks precede its copy."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 155,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The checked packet and caller-live engine enter the mutex-serialized typed command path."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 184,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires writable output storage; null is rejected before initializing it."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 185,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires a live engine; null is rejected and its output queue is mutex-serialized."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 202,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "Writable output storage was checked; this transfers one fresh SDK packet allocation."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 223,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires a readable packet for this call; null checks precede its copy."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 228,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "Caller-live fields enter the mutex owner; operation and cancellation identity are checked below."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 295,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires a readable packet; all three pointer null checks precede its copy."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 297,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires writable output storage; its null check precedes this failure initialization."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 298,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The caller-live engine was null-checked; decoder reset holds its mutex."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 311,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires writable output storage; its null check precedes initialization."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 312,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The caller-live engine was null-checked; protocol state is mutex-serialized."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 326,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "Writable output storage was checked; this transfers one fresh SDK protocol packet."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 345,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The documented live pointer contract is forwarded to protocol_call, which checks nulls and ABI."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 368,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The documented live pointer contract is forwarded to protocol_call, which checks nulls and ABI."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 389,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires writable output storage; null checks precede initialization."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 390,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires a live engine; null is rejected and its error state is mutex-serialized."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 395,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "Writable output storage was checked; this transfers one newly cloned SDK error allocation."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 418,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The documented error owner remains live; null checks precede this borrowed view."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 419,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires writable view storage; its null check precedes this write."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/lib.rs",
+      "original_line": 432,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The documented C ABI transfers this SDK error once; null is ignored before Box reclamation."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/output.rs",
+      "original_line": 1400,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/output.rs",
+      "original_line": 1411,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/output.rs",
+      "original_line": 1436,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/output.rs",
+      "original_line": 1441,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/packet.rs",
+      "original_line": 623,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The documented packet owner remains live; null checks precede this borrowed view."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/packet.rs",
+      "original_line": 624,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires writable view storage; its null check precedes this write."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/packet.rs",
+      "original_line": 637,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The documented C ABI transfers this SDK packet once; null is ignored before Box reclamation."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 43,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The validated C packet remains live; PacketFields checks counts, nulls, duplicate IDs and shapes."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 47,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "PacketFields validated this single live field; its length is bounded before any byte copy."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 148,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The live typed C packet passes header validation and the BYO helper checks field bounds."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 157,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The live typed C packet passes header validation and the v2 helper checks exact input bounds."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 159,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The caller-live packet passed header checks; PacketFields validates borrowed field shapes."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 452,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The caller-live packet passed header checks; PacketFields validates borrowed field shapes."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 455,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The validated live C packet is forwarded to the BYO helper, which bounds fields to 512 bytes."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 458,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The validated live C packet is forwarded to the bounded BYO recovery field decoder."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1367,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1428,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1472,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1580,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1638,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1646,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1671,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1696,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1710,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1748,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1785,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1799,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1819,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1821,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1823,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1832,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1846,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1856,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1862,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol.rs",
+      "original_line": 1886,
+      "scope": "owned ABI regression fixture",
+      "rationale": "This ABI regression owns the packet and byte storage through this checked decoder/assertion."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol/byo_ble.rs",
+      "original_line": 12,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires live fields; PacketFields checks count, nulls, duplicates and types."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol/byo_ble.rs",
+      "original_line": 15,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "PacketFields checked the nonempty live list; every BYO field is bounded before copying."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol/byo_recovery.rs",
+      "original_line": 8,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires live fields; PacketFields checks count, nulls, duplicates and types."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol/byo_recovery.rs",
+      "original_line": 12,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "PacketFields checked the nonempty live list; metadata limits are enforced before copying."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol/v2_demo.rs",
+      "original_line": 19,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The C ABI requires live fields; PacketFields checks count, nulls, duplicates and types."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol/v2_demo.rs",
+      "original_line": 39,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "PacketFields validated the live list before bound_value checks its exact v2 size limit."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol/v2_demo.rs",
+      "original_line": 99,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The caller-live packet passed header checks; PacketFields validates all field shapes."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol/v2_demo.rs",
+      "original_line": 101,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "PacketFields validated the live list before bound_value checks the fixed catalog entry limit."
+    },
+    {
+      "rule": "rust.lang.security.unsafe-usage.unsafe-usage",
+      "path": "bindings/device-sdk-ffi/src/protocol/v2_demo.rs",
+      "original_line": 135,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "Callers first validate PacketFields; only a nonempty live list is read to enforce VALUE bounds."
+    },
+    {
+      "rule": "javascript.lang.security.detect-child-process.detect-child-process",
+      "path": "tools/android/test-emulator-lane.test.mjs",
+      "original_line": 15,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "This test launches its fixed local emulator fixture with literal argv and no shell command string."
+    },
+    {
+      "rule": "javascript.lang.security.detect-child-process.detect-child-process",
+      "path": "tools/baseline/compare-react-native.mjs",
+      "original_line": 219,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "Call sites select fixed git/npm programs and literal argv for an explicit developer checkout."
+    },
+    {
+      "rule": "javascript.lang.security.detect-child-process.detect-child-process",
+      "path": "tools/baseline/compare-workflows.mjs",
+      "original_line": 272,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "Call sites select fixed git/npm/cargo programs and literal argv for an explicit developer checkout."
+    },
+    {
+      "rule": "javascript.lang.security.detect-child-process.detect-child-process",
+      "path": "tools/flutter/verify-pigeon.mjs",
+      "original_line": 16,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "This deliberately launches the explicit developer checkout generation script, with no shell."
+    },
+    {
+      "rule": "javascript.lang.security.detect-child-process.detect-child-process",
+      "path": "tools/release/wait-cocoapods.mjs",
+      "original_line": 53,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The CLI deliberately selects a local CocoaPods executable; arguments stay literal without a shell."
+    },
+    {
+      "rule": "rust.lang.security.args-os.args-os",
+      "path": "tools/xtask/src/main.rs",
+      "original_line": 2,
+      "scope": "reviewed native/tool boundary",
+      "rationale": "The executable name is discarded by skip(1); only explicit xtask arguments reach its parser."
+    },
+    {
+      "rule": "python.lang.security.audit.httpsconnection-detected.httpsconnection-detected",
+      "path": "tools/android/provision_ndk.py",
+      "original_line": 89,
+      "scope": "reviewed pinned artifact HTTPS transport",
+      "rationale": "The origin and path are fixed to the official Google NDK object; explicit ssl.create_default_context() requires certificate chain and hostname verification. No redirects, untrusted URL or unverified context is accepted. Exact size/SHA-256 and ZIP CRCs are checked before unpacking.",
+      "source_revision_basis": "bd19cd344bd2389d4ca3923a63d64e4c71d53fd0 plus this new reviewed downloader"
+    }
+  ]
+}

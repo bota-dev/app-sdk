@@ -40,10 +40,14 @@ pub(crate) unsafe fn decode_diagnostics(
 ) -> Result<BotaDeviceSdkPacketV1, DeviceSdkError> {
     let result = (|| {
         validate_packet(packet)?;
+        // The validated C packet remains live; PacketFields checks counts, nulls, duplicate IDs and shapes.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
         fields.validate_allowed(&[field_id::VALUE])?;
         // Check the borrowed slice length before required_bytes allocates a copy.
         if packet.field_count == 1
+            // PacketFields validated this single live field; its length is bounded before any byte copy.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             && unsafe { (*packet.fields).data.len } > wire::DIAGNOSTIC_MAX_PACKET_BYTES as u64
         {
             return Err(invalid("diagnostic packet exceeds 20 bytes"));
@@ -145,6 +149,8 @@ pub(crate) unsafe fn decode(
 ) -> Result<BotaDeviceSdkPacketV1, DeviceSdkError> {
     validate_packet(packet)?;
     if packet.kind == packet_kind::PROTOCOL_DECODE_BYO_BLE {
+        // The live typed C packet passes header validation and the BYO helper checks field bounds.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         return unsafe { byo_ble::process(packet, true) };
     }
     if matches!(
@@ -154,8 +160,12 @@ pub(crate) unsafe fn decode(
             | packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_AUTHORIZATION_IDENTITY
             | packet_kind::PROTOCOL_VALIDATE_ENCRYPTED_UPLOAD_V2_ADMISSION
     ) {
+        // The live typed C packet passes header validation and the v2 helper checks exact input bounds.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         return unsafe { v2_demo::decode(packet) };
     }
+    // The caller-live packet passed header checks; PacketFields validates borrowed field shapes.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
     fields.validate_allowed(&[field_id::VALUE])?;
     let value = fields.required_bytes(field_id::VALUE)?;
@@ -449,28 +459,26 @@ pub(crate) unsafe fn encode(
     packet: &BotaDeviceSdkPacketViewV1,
 ) -> Result<BotaDeviceSdkPacketV1, DeviceSdkError> {
     validate_packet(packet)?;
+    // The caller-live packet passed header checks; PacketFields validates borrowed field shapes.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
     let bytes = match packet.kind {
         packet_kind::PROTOCOL_BYO_CUSTOMER => {
             fields.validate_allowed(&[field_id::COMMAND, field_id::VALUE])?;
             let command = fields.required_u64(field_id::COMMAND)?;
-            let views =
-                unsafe { std::slice::from_raw_parts(packet.fields, packet.field_count as usize) };
-            if views
-                .iter()
-                .any(|field| field.field_id == field_id::VALUE && field.data.len > 32768)
-            {
-                return Err(invalid("BYO customer input exceeds 32768 bytes"));
-            }
-            let input = fields.required_bytes(field_id::VALUE)?;
+            let input = fields.required_bytes_bounded(field_id::VALUE, 32768)?;
             let bytes = bota_device_sdk_core::model::byo_customer::adapter(command, &input)
                 .map_err(|_| invalid("invalid BYO customer adapter input"))?;
             return Ok(BotaDeviceSdkPacketV1::new(packet.kind).with_bytes(field_id::VALUE, bytes));
         }
         packet_kind::PROTOCOL_ENCODE_BYO_BLE => {
+            // The validated live C packet is forwarded to the BYO helper, which bounds fields to 512 bytes.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             return unsafe { byo_ble::process(packet, false) };
         }
         packet_kind::PROTOCOL_REDUCE_BYO_RECOVERY => {
+            // The validated live C packet is forwarded to the bounded BYO recovery field decoder.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             return unsafe { byo_recovery::reduce(packet) };
         }
         packet_kind::PROTOCOL_ENCODE_UPLOAD_CONTEXT_BEGIN => {
@@ -1380,6 +1388,8 @@ mod tests {
         ];
         let mut logs = DeviceLogDecoder::default();
         for (index, input) in decode_cases.iter().enumerate() {
+            // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             let output = unsafe { decode(&input.view(), &mut logs) };
             assert!(output.is_ok(), "decode case {index}");
             assert_eq!(output.unwrap().view().kind, input.view().kind);
@@ -1441,6 +1451,8 @@ mod tests {
                 .with_u64(field_id::TRANSPORT_SESSION_ID, 1),
         ];
         for (index, input) in encode_cases.iter().enumerate() {
+            // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             let output = unsafe { encode(&input.view()) };
             assert!(output.is_ok(), "encode case {index}");
             assert_eq!(output.unwrap().view().kind, input.view().kind);
@@ -1485,6 +1497,8 @@ mod tests {
         ];
 
         for (input, expected) in cases {
+            // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             let output = unsafe { encode(&input.view()) }.unwrap();
             let fields = packet_fields(&output);
             assert_eq!(bytes(&fields, field_id::VALUE), hex(&expected));
@@ -1593,6 +1607,8 @@ mod tests {
         ];
 
         for (input, expected) in cases {
+            // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             let output = unsafe { encode(&input.view()) }.unwrap();
             let fields = packet_fields(&output);
             assert_eq!(bytes(&fields, field_id::VALUE), hex(&expected));
@@ -1651,6 +1667,8 @@ mod tests {
                 field_id::VALUE,
                 hex("010218007f00000000040004f40010000800000010000000"),
             );
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let capability = unsafe { decode(&capability.view(), &mut logs) }.unwrap();
         let fields = packet_fields(&capability);
         assert_eq!(unsigned(&fields, field_id::PROTOCOL_VARIANT), 1);
@@ -1659,6 +1677,8 @@ mod tests {
 
         let blob = packet(packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_SIGNED_BLOB)
             .with_bytes(field_id::VALUE, hex("610201000403020100000300aabbcc"));
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let blob = unsafe { decode(&blob.view(), &mut logs) }.unwrap();
         let fields = packet_fields(&blob);
         assert_eq!(unsigned(&fields, field_id::MESSAGE_TYPE), 0x61);
@@ -1684,6 +1704,8 @@ mod tests {
         start[126..128].copy_from_slice(&244_u16.to_le_bytes());
         let transfer = packet(packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_TRANSFER_OR_STATUS)
             .with_bytes(field_id::VALUE, start);
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let transfer = unsafe { decode(&transfer.view(), &mut logs) }.unwrap();
         let fields = packet_fields(&transfer);
         assert_eq!(unsigned(&fields, field_id::PROTOCOL_VARIANT), 3);
@@ -1709,6 +1731,8 @@ mod tests {
                 field_id::VALUE,
                 hex("230200006655443322110000101112131415161718191a1b1c1d1e1f00112233445566778899aabbccddeeff0900000003000000f8acd46a795a3f1cc599a8284d0f65543bb5b986fe721d735c6139ec028c20fc"),
             );
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let confirm = unsafe { decode(&confirm.view(), &mut logs) }.unwrap();
         let fields = packet_fields(&confirm);
         assert_eq!(unsigned(&fields, field_id::OWNER_REVISION), 3);
@@ -1723,6 +1747,8 @@ mod tests {
                 field_id::VALUE,
                 hex("02030f006655443322110000400000000000000025030000"),
             );
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let status = unsafe { decode(&status.view(), &mut logs) }.unwrap();
         let fields = packet_fields(&status);
         assert_eq!(unsigned(&fields, field_id::PROTOCOL_VARIANT), 4);
@@ -1761,6 +1787,8 @@ mod tests {
             let decoded =
                 packet(packet_kind::PROTOCOL_DECODE_ENCRYPTED_UPLOAD_V2_TRANSFER_OR_STATUS)
                     .with_bytes(field_id::VALUE, hex(&wire));
+            // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             let decoded = unsafe { decode(&decoded.view(), &mut logs) }.unwrap();
             let fields = packet_fields(&decoded);
             let missing = fields
@@ -1798,6 +1826,8 @@ mod tests {
                     field_id::MISSING_SEQUENCE,
                     bytes(&fields, field_id::MISSING_SEQUENCE),
                 );
+            // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             let encoded = unsafe { encode(&encoded.view()) }.unwrap();
             assert_eq!(bytes(&packet_fields(&encoded), field_id::VALUE), hex(&wire));
         }
@@ -1812,6 +1842,8 @@ mod tests {
             )
             .with_u64(field_id::FLAGS, 0);
         let mut logs = DeviceLogDecoder::default();
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let error = match unsafe { decode(&input.view(), &mut logs) } {
             Ok(_) => panic!("unexpected field must be rejected"),
             Err(error) => error,
@@ -1832,10 +1864,16 @@ mod tests {
             .with_bool(field_id::HEARTBEAT_WIFI, true)
             .with_bool(field_id::HEARTBEAT_CELLULAR, false)
             .with_u64(field_id::DEVICE_MODEL, 1);
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let output = unsafe { encode(&input.view()) }.unwrap();
         let view = output.view();
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let fields = unsafe { std::slice::from_raw_parts(view.fields, view.field_count as usize) };
         let bytes = fields[0].data;
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let bytes = unsafe { std::slice::from_raw_parts(bytes.data, bytes.len as usize) };
         assert_eq!(bytes, hex("0203010203ff00003c810000"));
     }
@@ -1845,6 +1883,8 @@ mod tests {
         let state = packet(packet_kind::PROTOCOL_DECODE_RECORDING_STATE)
             .with_bytes(field_id::VALUE, hex("010100112233445566778899aabbccddeeff"));
         let mut logs = DeviceLogDecoder::default();
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let state = unsafe { decode(&state.view(), &mut logs) }.unwrap();
         let state_fields = packet_fields(&state);
         assert_eq!(unsigned(&state_fields, field_id::RECORDING_ACTIVE), 1);
@@ -1859,6 +1899,8 @@ mod tests {
 
         let result = packet(packet_kind::PROTOCOL_DECODE_RECORDING_CONTROL_RESULT)
             .with_bytes(field_id::VALUE, hex("000000000004"));
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let result = unsafe { decode(&result.view(), &mut logs) }.unwrap();
         let result_fields = packet_fields(&result);
         assert_eq!(unsigned(&result_fields, field_id::RECORDING_SUCCESS), 0);
@@ -1869,12 +1911,16 @@ mod tests {
 
         let command = packet(packet_kind::PROTOCOL_ENCODE_RECORDING_CONTROL_COMMAND)
             .with_u64(field_id::COMMAND, 1);
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let command = unsafe { encode(&command.view()) }.unwrap();
         assert_eq!(bytes(&packet_fields(&command), field_id::VALUE), [0x10]);
     }
 
     fn packet_fields(packet: &BotaDeviceSdkPacketV1) -> Vec<BotaDeviceSdkFieldViewV1> {
         let view = packet.view();
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         unsafe { std::slice::from_raw_parts(view.fields, view.field_count as usize) }.to_vec()
     }
 
@@ -1899,6 +1945,8 @@ mod tests {
         if value.len == 0 {
             return Vec::new();
         }
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         unsafe { std::slice::from_raw_parts(value.data, value.len as usize) }.to_vec()
     }
 

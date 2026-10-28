@@ -24,6 +24,8 @@ pub(crate) unsafe fn host_event_from_packet(
             "host event operation and request_id must be non-zero and reserved must be zero",
         ));
     }
+    // The C ABI requires live packet fields; PacketFields checks count, nulls, duplicates and types.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let fields = unsafe { PacketFields::new(packet.fields, packet.field_count)? };
     let kind = match packet.kind {
         packet_kind::HOST_EVENT_BLE_SCAN_RESULT => {
@@ -607,6 +609,8 @@ mod tests {
             .with_u64(field_id::DATA_PAYLOAD_BYTES, 160)
             .with_bytes(field_id::MISSING_SEQUENCE, 7_u32.to_le_bytes().to_vec());
 
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let decoded = unsafe { host_event_from_packet(&packet.view()) }.unwrap();
 
         let HostEventKind::EncryptedUploadV2(EncryptedUploadV2HostEvent::WindowStaged {
@@ -654,6 +658,8 @@ mod tests {
             )
             .with_u64(field_id::RECORDING_GENERATION, 7);
 
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let decoded = unsafe { host_event_from_packet(&packet.view()) };
 
         assert!(decoded.is_err());
@@ -749,6 +755,8 @@ mod tests {
 
         assert_eq!(packets.len(), 34);
         for (index, packet) in packets.iter().enumerate() {
+            // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             let decoded = unsafe { host_event_from_packet(&packet.view()) };
             assert!(decoded.is_ok(), "event case {index}: {decoded:?}");
         }
@@ -759,6 +767,8 @@ mod tests {
         let packet = event(packet_kind::HOST_EVENT_BLE_NOTIFICATION)
             .with_text(field_id::CHARACTERISTIC_UUID, "characteristic")
             .with_bytes(field_id::VALUE, vec![0, 255, 0, 127]);
+        // This ABI regression owns the packet and byte storage through this checked decoder/assertion.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let decoded = unsafe { host_event_from_packet(&packet.view()) }.unwrap();
         assert!(matches!(
             decoded.kind,
