@@ -1,28 +1,44 @@
-name: Publish Apple CocoaPod
+name: Promote Apple CocoaPod to SDK Specs
 
 on:
   workflow_call:
-    secrets:
-      COCOAPODS_TRUNK_TOKEN:
-        required: true
+    inputs:
+      slack-approved:
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: bota-cocoapods-specs-publish
+  cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  SLACK_SDK_PRODUCTION_APPROVAL_ENABLED: ${{ inputs.slack-approved && 'true' || 'false' }}
 
 jobs:
   publish:
     name: Publish and verify Apple SDK
     runs-on: macos-15
-    # The caller depends on the approved publish job; retain the environment secret.
+    timeout-minutes: 90
+    # Preserve original tag context and the SDK repository's approved job token.
     environment: release
     permissions:
-      actions: read
-      contents: read
+      actions: write
+      contents: write
+      pull-requests: write
+      id-token: write
     steps:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
 
       - name: Download immutable Apple payload
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -60,48 +76,30 @@ jobs:
       - name: Install exact CocoaPods client
         run: gem install --no-document cocoapods -v 1.16.2
 
-      - name: Publish absent pod and verify public metadata
+      - name: Download the frozen Slack request inputs
+        if: inputs.slack-approved
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-inputs-${{ github.ref_name }}
+          path: target/
+      - name: Download the approved SDK execution binding
+        if: inputs.slack-approved
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdk-slack-approval-${{ github.ref_name }}-${{ github.run_attempt }}
+          path: target/
+      - name: Refresh signed approval before promoting Specs
+        if: inputs.slack-approved
+        run: node tools/release/slack-sdk-release.mjs refresh
+
+      - name: Append approved podspec to SDK Specs and verify public metadata
         env:
-          COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           VERSION="${GITHUB_REF_NAME#v}"
           APPLE_PACKAGE="$(node tools/release/package-identities.mjs apple "$VERSION")"
-          POD_URL="https://github.com/bota-dev/app-sdk/releases/download/v$VERSION/${APPLE_PACKAGE}.cocoapods.zip"
           POD_CHECKSUM="$(shasum -a 256 target/apple-release/${APPLE_PACKAGE}.cocoapods.zip | awk '{print $1}')"
-          SPEC_URL="https://trunk.cocoapods.org/api/v1/pods/${APPLE_PACKAGE}/specs/$VERSION"
-          existing="$(mktemp)"
-          fetch_public_spec() {
-            local status
-            status="$(curl --silent --show-error --location --retry 3 \
-              --connect-timeout 10 --max-time 60 --output "$existing" \
-              --write-out '%{http_code}' "$SPEC_URL")"
-            case "$status" in
-              200) return 0 ;;
-              404) return 1 ;;
-              *) echo "CocoaPods Trunk lookup failed: HTTP $status" >&2; exit 1 ;;
-            esac
-          }
-          verify_public_spec() {
-            jq -e --arg version "$VERSION" --arg url "$POD_URL" \
-              --arg checksum "$POD_CHECKSUM" \
-              '.version == $version and .source.http == $url and .source.sha256 == $checksum' \
-              "$existing" >/dev/null
-          }
-          if fetch_public_spec; then
-            verify_public_spec
-          else
-            test -n "$COCOAPODS_TRUNK_TOKEN"
-            # Trunk may register the pod before its CLI finishes or times out.
-            pod trunk push platforms/apple/${APPLE_PACKAGE}.podspec || true
-          fi
-          for attempt in {1..30}; do
-            if fetch_public_spec; then
-              verify_public_spec
-              break
-            fi
-            sleep 10
-          done
-          fetch_public_spec
-          verify_public_spec
+          pod _1.16.2_ ipc spec "platforms/apple/${APPLE_PACKAGE}.podspec" > target/apple-release/approved.podspec.json
+          tools/release/publish-owned-cocoapods.sh "$VERSION" target/apple-release/approved.podspec.json "$POD_CHECKSUM"

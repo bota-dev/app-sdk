@@ -1055,6 +1055,8 @@ function otaFixture(options = {}) {
   };
   f.ports.ble.write = async (address, bytes) => {
     f.calls.push(['write', address, [...bytes]]);
+    if (address.serviceUuid !== f.metadata.SERVICE_BOTA_STORAGE
+      || address.characteristicUuid !== f.metadata.CHAR_TRANSFER_CONTROL) return;
     if (bytes[0] === start) {
       if (options.beforeVerifyDisconnect) observers.get('original')('disconnected before verification');
       else notifyStatus(Uint8Array.from(f.core.codec('encodeOtaStatus', { command: start, result: 0, sequence: null })));
@@ -1074,8 +1076,14 @@ function otaFixture(options = {}) {
     storedAttempts: () => storedAttempts };
 }
 
-test('generated OTA routes an expected reboot disconnect, adopts a changed peripheral, and never retransmits verified bytes', async () => {
+const firmwareDataWrites = f => f.calls.filter(call => Array.isArray(call) && call[0] === 'write'
+  && call[1].serviceUuid === f.metadata.SERVICE_BOTA_STORAGE
+  && call[1].characteristicUuid === f.metadata.CHAR_RECORDING_TRANSFER && call[2][0] === f.data);
+
+test('generated OTA routes an expected reboot disconnect, adopts a changed peripheral, and never retransmits verified bytes', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1793230112000 }); // Both time-sync payloads start with the firmware DATA opcode.
   const f = otaFixture();
+  t.after(async () => { await f.adapter.destroy(); f.core.dispose(); });
   const progress = [];
   f.adapter.onFirmwareUpdateProgress(value => progress.push(value));
   await f.adapter.configure({ logLevel: 'none' });
@@ -1083,7 +1091,7 @@ test('generated OTA routes an expected reboot disconnect, adopts a changed perip
   const oldObserver = f.observers.get('original');
   await f.adapter.updateFirmware(device, f.image);
   assert.equal(f.storedAttempts(), 0); // Rust discovers candidates before probing stale OS identities.
-  assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'write' && call[2][0] === f.data).length, 1);
+  assert.equal(firmwareDataWrites(f).length, 1);
   assert.equal(progress.at(-1).phase, 'complete');
   assert.equal(f.unregisters.length, 1);
   assert.equal(f.unregisters[0].context.signal.aborted, false);
@@ -1093,17 +1101,17 @@ test('generated OTA routes an expected reboot disconnect, adopts a changed perip
   assert.ok(await f.adapter.nextClientPresence('rebooted'));
   await f.adapter.syncTime({ ...device, id: 'rebooted', firmwareVersion: '9.0.0' });
   assert.equal(f.calls.at(-1)[1].peripheralId, 'rebooted');
-  await f.adapter.destroy();
 });
 
-test('a verified status-monitor failure enters the same generated recovery path without cancelling OTA', async () => {
+test('a verified status-monitor failure enters the same generated recovery path without cancelling OTA', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1793230112000 });
   const f = otaFixture({ monitorFailure: true });
+  t.after(async () => { await f.adapter.destroy(); f.core.dispose(); });
   await f.adapter.configure({ logLevel: 'none' });
   const device = await f.adapter.connectSelected({ id: 'original', rssi: -50, discoveredAtMs: 0 });
   await f.adapter.updateFirmware(device, f.image);
   assert.ok(await f.adapter.nextClientPresence('rebooted'));
-  assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'write' && call[2][0] === f.data).length, 1);
-  await f.adapter.destroy();
+  assert.equal(firmwareDataWrites(f).length, 1);
 });
 
 test('monitor-triggered recovery retires old observers before reconnect reuses the same peripheral ID', async () => {
@@ -1185,7 +1193,7 @@ test('shortened recovery deadline retains ownership until ignored connection can
   assert.equal(f.unregisters.length, 0);
   release(); await rejected;
   assert.equal(f.unregisters.length, 1);
-  assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'write' && call[2][0] === f.data).length, 1);
+  assert.equal(firmwareDataWrites(f).length, 1);
   await f.adapter.destroy();
 });
 
