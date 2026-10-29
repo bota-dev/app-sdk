@@ -557,25 +557,32 @@ Configure two GitHub environments for `bota-dev/app-sdk`:
    Do not delete a credential needed by an active approved recovery. Do not add
    a crates.io or pub.dev token; Flutter's later automated publications use OIDC.
 
-### Pending signed Slack SDK approval activation
+### Staged signed Slack SDK approval activation
 
 The new route uses the existing Bota Releases service's SDK-only `sdk-tag-wait`
 mode. It creates the production deployment request from the exact original tag
 run after CI-artifact promotion, waits for the real Slack decision, and verifies
-the signed execution binding before publication. The SDK's
-`release/slack-production-policy.json` and the service's SDK unit remain
-disabled; `SLACK_SDK_PRODUCTION_APPROVAL_ENABLED` is not enabled. Actions PR
-creation also remains disabled. Checked-in integration is not a live service or
-authorization to start a new release.
+the signed execution binding before publication. This activation change enables
+the SDK source policy in `release/slack-production-policy.json`; repository
+activation remains off and the installed service's SDK unit remains disabled.
+Actions PR creation is permitted with default workflow permissions kept read-only.
+The service support is installed and verified, but the SDK-only read-token client
+and enabled SDK unit still require a new reviewed immutable ZIP and installation.
+The staged source policy alone cannot start publication or authorize a new release.
 
 Before activation, require independent source review, exact main CI/License/
 Scan and clean default-main Apple/Flutter consumers. Review the required Actions
 PR creation setting and publisher Contents/Pull requests/Actions write grants.
-Verify the service's SDK unit, webhook and signed original-run binding, then
-enable the reviewed policy/unit/variable together. Exercise the real deployment
-request and Slack approval without bypassing GitHub's independent metadata PR
-review or changing immutable candidate bytes. Preserve native `release-approval`
-and supported historical recovery gates throughout this cutover.
+Install the reviewed SDK-only read client and enabled service unit, then verify
+the exact installed ZIP, all three Lambda package hashes, unchanged 36 resource
+identities and configured webhook/signing-key bindings. Keep repository activation
+variables unset until that verification and the final merged SDK qualification
+pass. Set `SDK_SPECS_ACTIONS_PR_ENABLED=true` only with verified PR capability,
+then enable `SLACK_SDK_PRODUCTION_APPROVAL_ENABLED=true` last. A controlled release
+must verify the real deployment request, Slack decision, original tag OIDC and
+signed claim/refresh before this route is accepted. Do not bypass GitHub's
+independent metadata PR review or change immutable candidate bytes. Preserve native
+`release-approval` and supported historical recovery gates throughout this cutover.
 
 ### Historical single-approval environment migration
 
