@@ -1555,9 +1555,9 @@ BLE v3 original-ciphertext reads and receipt-only cleanup. See
 ## October 28 dependency maintenance
 
 Cargo dependency updates require exact Linux regeneration of the ordinary-JS
-React Native core. The October 28 source reuses core.expected.ts from CI run
-40649583702, diagnostic artifact12798723391; all generator input hashes and the
-artifact SHA-256 must match before adoption. New hosted/native checks remain required.
+React Native core. Adopt unmodified `core.expected.ts` from exact-source Linux CI
+only after every generator input and the artifact SHA-256 match; never edit the
+provenance header alone. New hosted/native checks remain required.
 
 The generated React Native core provenance includes the root package-lock.json.
 Even a tooling-only fast-uri lock update requires exact Linux regeneration and the
