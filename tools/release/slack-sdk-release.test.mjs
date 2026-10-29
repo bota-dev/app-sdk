@@ -120,7 +120,8 @@ test('reuses an existing exact registration and never blindly repeats an uncerta
 });
 
 test('rejects disabled activation, non-tag executions, changed inventory and source or artifact substitution', async () => {
-  for (const patch of [{ activation: false }, { event: { ...event, name: 'workflow_dispatch' } },
+  for (const patch of [{ activation: false }, { policy: { ...policy, enabled: false } },
+    { event: { ...event, name: 'workflow_dispatch' } },
     { event: { ...event, runAttempt: 2 } }, { inventoryBytes: Buffer.from('{}') },
     { promotion: { ...promotion, inventorySha256: '0'.repeat(64) } }, { promotion: { ...promotion, ciRunAttempt: 3 } }]) {
     const f = fixture();

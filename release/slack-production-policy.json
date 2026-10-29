@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "enabled": false,
+  "enabled": true,
   "endpoint": "https://lkum88xsel.execute-api.us-west-2.amazonaws.com",
   "repository": "bota-dev/app-sdk",
   "repositoryId": "1350249290",
