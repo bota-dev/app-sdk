@@ -1554,6 +1554,11 @@ BLE v3 original-ciphertext reads and receipt-only cleanup. See
 
 ## October 28 dependency maintenance
 
+Cargo dependency updates require exact Linux regeneration of the ordinary-JS
+React Native core. Adopt unmodified `core.expected.ts` from exact-source Linux CI
+only after every generator input and the artifact SHA-256 match; never edit the
+provenance header alone. New hosted/native checks remain required.
+
 The internal JavaScript runtime fixture now pins eventemitter3 5.0.4. Its package
 contract must match that exact dependency while continuing to reject native imports and autolinking.
 
