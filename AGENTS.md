@@ -1556,3 +1556,13 @@ BLE v3 original-ciphertext reads and receipt-only cleanup. See
 
 The internal JavaScript runtime fixture now pins eventemitter3 5.0.4. Its package
 contract must match that exact dependency while continuing to reject native imports and autolinking.
+
+The generated React Native core provenance includes the root package-lock.json.
+Even a tooling-only fast-uri lock update requires exact Linux regeneration and the
+existing runtime/native/Hermes checks; never edit only the embedded source hash.
+
+The exact October 28 fast-uri qualification reuses unmodified expected output
+from CI40787109785, diagnostic artifact12860435548. Its complete source hash is
+`d7154c1cfc78717155dbc2d16214f471a4700bc1f64d98123b4ae7d6b5f8fc0d`;
+the expected file digest is `0ee6b59f09aa9faeb7985e17cd89a4154e23ecb61a96ef84c4192a8015401a8d`.
+Only the provenance header changes; executable payload bytes match main.
