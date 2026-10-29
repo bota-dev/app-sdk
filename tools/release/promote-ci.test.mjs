@@ -24,7 +24,7 @@ function fixture() {
   const artifacts = names.map((name, i) => ({ id: 10 + i, name, expired: false,
     digest: `sha256:${hash(zips[i])}`, workflow_run: { id: 100, head_sha: sha, repository_id: 1 } }));
   const ci = { id: 100, path: '.github/workflows/ci.yml', head_sha: sha, head_branch: 'main',
-    event: 'push', status: 'completed', conclusion: 'success', repository: { id: 1, full_name: 'bota-dev/app-sdk' } };
+    event: 'push', run_attempt: 1, status: 'completed', conclusion: 'success', repository: { id: 1, full_name: 'bota-dev/app-sdk' } };
   const license = { ...ci, id: 101, path: '.github/workflows/license-gate.yml' };
   const tag = { tag: 'v2.0.0-beta.5', object: { type: 'commit', sha },
     message: `Release\nSource-Revision: ${sha}\nCandidate-Run-ID: 100\nCandidate-Inventory-SHA256: ${hash(raw)}\n` };
@@ -48,6 +48,7 @@ test('promotes the five original payloads and records their exact run, IDs and d
   const f = fixture();
   const result = await f.run();
   assert.equal(result.provenance.ciRunId, 100);
+  assert.equal(result.provenance.ciRunAttempt, 1);
   assert.deepEqual(result.provenance.artifacts.map(a => a.id), [10, 11, 12, 13, 14, 15]);
   assert.equal(result.files['flutter-release/flutter.bin'].toString(), 'flutter');
   assert.equal(result.inventory.sourceRevision, sha);
@@ -55,6 +56,7 @@ test('promotes the five original payloads and records their exact run, IDs and d
 });
 
 for (const [field, value] of [['head_sha', 'c'.repeat(40)], ['head_branch', 'feature'],
+  ['run_attempt', 0],
   ['event', 'pull_request'], ['conclusion', 'failure'], ['status', 'in_progress'],
   ['path', '.github/workflows/other.yml'], ['repository', { id: 1, full_name: 'fork/app-sdk' }]]) {
   test(`rejects CI ${field} mismatch before downloading payloads`, async () => {
@@ -117,4 +119,13 @@ test('rejects a tag moved while its artifacts were being downloaded', async () =
     return value;
   };
   await assert.rejects(promoteCandidate({ api, source: sha, tagName: f.tag.tag }), /tag changed/);
+});
+
+test('rejects a CI rerun that starts while preserved artifacts are being downloaded', async () => {
+  const f = fixture(); let reads = 0;
+  const api = async (path, binary) => {
+    const value = await f.api(path, binary);
+    return path === 'actions/runs/100' && ++reads > 1 ? { ...value, run_attempt: 2 } : value;
+  };
+  await assert.rejects(promoteCandidate({ api, source: sha, tagName: f.tag.tag }), /CI changed/);
 });

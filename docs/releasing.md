@@ -309,24 +309,91 @@ first, then polls package-level `beta` independently (up to 30 checks, ten
 seconds apart). Every tag check still rejects a changed `latest`; checksum and
 historical-tag protections remain mandatory. The wait never republishes bytes.
 
-Before a clean public CocoaPods install, `tools/release/wait-cocoapods.mjs`
-requires both the exact version in the CDN's sharded version index and the
-matching public podspec. A successful Trunk publication or direct spec URL alone
-is insufficient. It checks up to 61 times, thirty seconds apart, with bounded
-HTTP requests. Only absent index entries/specs are treated as propagation lag;
-authentication, server, network, malformed-spec and identity failures stop the
-gate. The consumer still uses the normal CDN and `pod install --repo-update`,
-with no local spec override. Exhaustion requires retrying verification later,
-not republishing. These tooling changes apply to subsequent source revisions;
-immutable beta.3 continues to use its tagged scripts.
+The CocoaPods migration stores its public index under `Specs/` in the same
+[`bota-dev/app-sdk`](https://github.com/bota-dev/app-sdk) repository as the SDK.
+Its canonical source is `https://github.com/bota-dev/app-sdk.git`; publication
+uses this repository's job token. Bootstrap integration,
+exact-main consumer qualification and Slack publication activation are pending.
+These source changes do not publish a new package version.
+
+After activation, the tag workflow registers a real production deployment
+request with Bota Releases and waits for Slack approval of the preserved SDK
+candidate. The signed execution binding includes the repository, tag and tag
+object, source revision, original release run and attempt, successful main CI
+run and attempt, candidate inventory digest and approval identity. Publishers
+refresh and verify the signed binding before promotion; a message, another
+attempt's approval or an unverified callback cannot authorize a release.
+
+The approved Apple publisher adds only the exact preserved release's
+canonical JSON specification under `Specs/<name>/<version>/<name>.podspec.json`.
+The specification retains the immutable GitHub Release archive URL and its
+SHA-256. A missing entry may be added; an occupied entry must match the complete
+canonical specification or publication fails. Never overwrite a published
+version, retarget its archive, force-push the index or rebuild an occupied
+artifact. An uncertain push outcome requires reading the actual index before
+retrying.
+
+A new specification is staged on a unique publication branch and submitted as a
+pull request in the SDK repository for that exact commit. Validate Specs,
+Dependency licenses and Scan, plus existing required repository checks, must
+pass on the exact head. Organization policy requires an independent approval
+of the latest push before an authorized maintainer merges it. The publisher
+waits for the actual merge and verifies the public specification on `main`.
+It must not approve or merge its own pull request, update `main` directly or
+bypass the review policy. A staged entry or an open pull request is not a
+published version. This GitHub source review remains distinct from Slack
+approval to release the exact preserved SDK candidate.
+
+The protected publisher uses the SDK job's built-in `GITHUB_TOKEN`, exposed as
+`GH_TOKEN`, with Contents write, Pull requests write and Actions write only
+within this repository. Token-generated pushes suppress automatic workflow
+triggers, so the publisher explicitly dispatches the fixed validators for the
+exact staged commit and checks their results. Public check observations need
+no credential. Use HTTPS and a per-command credential helper; do not provision
+a cross-repository PAT or deploy key, persist a general user credential, or add
+a publisher credential to a consumer's `Podfile`.
+
+The SDK policy and Bota Releases SDK unit are disabled and the Slack activation
+variable is not enabled. Actions pull-request creation is also disabled pending
+reviewed setup. New-version publication through this route is not activated.
+Merge and qualify the bootstrap/release/service changes, review the required
+Actions PR setting, and verify an actual signed Slack request/approval flow
+before enabling publication. Preserve the historical `release-approval` gate
+and historical tagged workflows. Available metadata or a passing branch consumer
+does not establish service activation or a completed new release.
+Public installations require no writer credential. The same
+approved-release, preserved-artifact and checksum gates remain mandatory; a new
+Trunk registration is not part of the new publication route. Customer setup and
+mirror requirements are in the
+[CocoaPods source migration guide](migrations/cocoapods-owned-specs.md).
+
+Index publication and consumer readiness remain separate. The clean Apple
+consumer must install the exact named pod from the Bota Specs source with empty
+repositories and caches, verify its `Podfile.lock` source/version and compile.
+The Flutter consumer must resolve the matching native dependency through that
+source and build the preserved Flutter package. The official CocoaPods CDN may
+still supply unrelated dependencies; it must not supply the Bota pod for this
+gate. A direct podspec, Git dependency or local path override does not qualify
+this index route. Bootstrap CI may select an explicit candidate branch and full
+commit to qualify its Specs. Repeat both consumers against the default `main`
+source after merge; the branch result cannot establish public default-source
+readiness. Both public consumer gates must pass before synchronized release
+completion.
+
+Historical tagged releases retain their original Trunk/CDN publisher and
+`tools/release/wait-cocoapods.mjs` checks. Those checks required both the exact
+version in the CDN's sharded index and the matching public podspec, then a normal
+CDN-backed install. A delayed or absent entry did not authorize another upload.
+The migration does not modify those tags, central registrations or archives.
 
 Readiness review: `publish-npm.test.mjs` covers delayed tags on both fresh
 publication and occupied-version recovery, bounded exhaustion, and immediate
-`latest` drift rejection. `wait-cocoapods.test.mjs` covers independently delayed
-index/spec visibility, exact identity, bounded exhaustion, hard failures, and
-consumer ordering. These checks match the existing no-republish/no-override
-release requirements. They do not establish publication or public consumer
-build success; the protected workflow must still supply that evidence. The
+`latest` drift rejection. Historical `wait-cocoapods.test.mjs` coverage retains
+independently delayed index/spec visibility, exact identity, bounded exhaustion,
+hard failures and consumer ordering. The owned-index tests must additionally
+cover immutable full-spec matching and the selected consumer source. Source
+tests do not establish index publication or public consumer build success; the
+protected workflow must still supply that evidence. The
 Rust `release_readiness` structural gate also checks the bounded npm tag guard;
 run `cargo test -p xtask --test release_readiness` alongside the Node tests when
 changing the release scripts.
@@ -482,11 +549,35 @@ Configure two GitHub environments for `bota-dev/app-sdk`:
 2. `release`: retain the same tag/main restrictions and registry OIDC identity,
    with no required reviewers or wait timer. Store only
    `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`,
-   `SIGNING_IN_MEMORY_KEY`, `SIGNING_IN_MEMORY_KEY_PASSWORD`, and
-   `COCOAPODS_TRUNK_TOKEN` as environment secrets. Do not add a crates.io or
-   pub.dev token; Flutter's later automated publications use OIDC.
+   `SIGNING_IN_MEMORY_KEY`, and `SIGNING_IN_MEMORY_KEY_PASSWORD` as environment
+   secrets. The same-repository Specs publisher uses the built-in job token;
+   do not add a cross-repository writer secret. It does not use
+   `COCOAPODS_TRUNK_TOKEN`; retain it
+   only while an explicitly supported historical recovery still requires it.
+   Do not delete a credential needed by an active approved recovery. Do not add
+   a crates.io or pub.dev token; Flutter's later automated publications use OIDC.
 
-### Single-approval migration
+### Pending signed Slack SDK approval activation
+
+The new route uses the existing Bota Releases service's SDK-only `sdk-tag-wait`
+mode. It creates the production deployment request from the exact original tag
+run after CI-artifact promotion, waits for the real Slack decision, and verifies
+the signed execution binding before publication. The SDK's
+`release/slack-production-policy.json` and the service's SDK unit remain
+disabled; `SLACK_SDK_PRODUCTION_APPROVAL_ENABLED` is not enabled. Actions PR
+creation also remains disabled. Checked-in integration is not a live service or
+authorization to start a new release.
+
+Before activation, require independent source review, exact main CI/License/
+Scan and clean default-main Apple/Flutter consumers. Review the required Actions
+PR creation setting and publisher Contents/Pull requests/Actions write grants.
+Verify the service's SDK unit, webhook and signed original-run binding, then
+enable the reviewed policy/unit/variable together. Exercise the real deployment
+request and Slack approval without bypassing GitHub's independent metadata PR
+review or changing immutable candidate bytes. Preserve native `release-approval`
+and supported historical recovery gates throughout this cutover.
+
+### Historical single-approval environment migration
 
 The release owner requested one approval for the entire synchronized release
 on 2026-09-28. `approve-release` waits for verified promotion of all five CI payloads, then pauses
@@ -1060,23 +1151,28 @@ The single tag-triggered release workflow then:
 1. Verifies synchronized metadata, main ancestry and the promoted payloads.
    It rechecks the root SwiftPM and CocoaPods checksums against the preserved
    Apple archives because normal CI's evidence mode does not check those roots.
-2. Requires one `release-approval` decision. Downstream `release` environments
-   retain secrets and registry OIDC identity without another reviewer gate.
+2. For the reviewed new route after activation, creates a real Bota Releases
+   deployment request and waits for signed Slack approval bound to the exact
+   tag/source, original run/attempt, main CI run/attempt and inventory. Publishers
+   refresh that binding before promotion. Historical tagged workflows retain
+   their native `release-approval` decision. The new route is still disabled;
+   an old environment approval does not establish Slack activation. Downstream
+   `release` environments retain secrets and registry OIDC identity.
 3. Uses `tools/android/sign-preserved.mjs` to sign the five verified Maven
    inputs with the existing protected key. It verifies the signatures, retains
    the 30-file Central normalization/public checks, and archives the signed
    bundle before publication. Retries restore that exact signed bundle.
 4. Publishes or verifies the preserved native and npm artifacts. npm advances
    only `beta`, checks exact occupied bytes, and preserves `latest`.
-5. Publishes or verifies CocoaPods, waits for CDN readiness, and runs the public
-   SwiftPM, CocoaPods and API 26/35 Maven consumer gates. Registry acceptance
-   alone does not establish customer install readiness. The CocoaPods consumer
-   uses isolated specs/cache directories and requires its normal CDN-backed
-   `pod install --repo-update` to succeed within the readiness wait. CDN index
-   and podspec reads alone can disagree with CocoaPods during propagation.
-   Only missing-spec exit 31 retries within the existing 61-check budget;
-   other install failures stop immediately. Exact lockfile identity, refusal
-   of external sources and the Release build remain required afterward.
+5. Publishes or verifies the immutable CocoaPods specification through a checked
+   and independently reviewed metadata PR into the SDK's own `Specs/` directory.
+   After its authorized merge, verifies the exact public spec on `main` and runs
+   the public SwiftPM, CocoaPods and API 26/35 Maven consumer gates. The clean
+   CocoaPods consumer uses isolated repositories/caches, checks the selected
+   version and Bota Git source in `Podfile.lock`, and compiles without a local
+   path or direct podspec override. Registry metadata alone does not establish
+   customer readiness. Historical tagged workflows keep their original Trunk/
+   CDN readiness checks and retry budget; they are not rewritten by this change.
 6. Verifies the already preserved Flutter payload against the tag inventory;
    it does not rebuild the package, native libraries or local Flutter examples.
 7. Publishes Flutter in the same dependency graph, respecting workflow
@@ -1094,8 +1190,12 @@ The single tag-triggered release workflow then:
    final progress summary distinguishes candidate integrity, publication,
    public consumers and completion. CI does not claim hardware acceptance.
 
-Use GitHub's failed-job retry for a transient failure in this new graph. It
-retains successful upstream checks and the original tag source. A failed
+For the environment-approved route and historical tag workflows, use GitHub's
+failed-job retry for a transient failure. It retains successful upstream checks
+and the original tag source. When signed Slack approval is active, a new run
+attempt requires rerunning all jobs, including preflight and registration, and
+obtaining a new Slack decision. Attempt-scoped request/approval artifacts from
+an earlier attempt cannot authorize a failed-jobs-only retry. A failed
 publication job may have already written to a registry: its occupied-version
 checks and preserved Central bundle determine what remains. Re-running candidate
 promotion may replace this run's transport artifacts only after validating the
@@ -1134,8 +1234,9 @@ The protected workflow stages the signed raw Maven repository with in-memory
 PGP material, normalizes it to the exact 30-file Portal tree, and persists the
 bundle, inventory, and `central-portal-state.json` on a draft GitHub Release
 before upload. The initial HTTP 201 deployment UUID is fsynced before polling.
-An uncertain upload outcome stops automatic retries; use the protected
-`workflow_dispatch` recovery with the exact `refs/tags/v<version>`, the Portal
+An uncertain upload outcome stops automatic retries. Historical tag workflows
+and the environment-approved route retain protected `workflow_dispatch`
+recovery with the exact `refs/tags/v<version>`, the Portal
 UUID, the original tag workflow `releaseRunId`, and
 `centralRecoveryMode=resume-uncertain`. That mode downloads the preserved bytes
 and never rebuilds, re-signs, or re-uploads them.
@@ -1151,7 +1252,10 @@ validation cause, then dispatch `centralRecoveryMode=retry-failed` with that
 failed UUID. The protected job verifies the old deployment is `FAILED` and has
 the preserved deployment name, recreates `READY` state from the archived ZIP
 and inventory, and uploads those exact bytes as a fresh deployment. The new
-state records `retryOfDeploymentId` for auditability.
+state records `retryOfDeploymentId` for auditability. New-source manual recovery
+is disabled while signed Slack approval is active; it must not bypass the
+original tag-run approval and receipt. Preserve uncertain Central state and
+obtain a separately reviewed recovery procedure instead of repeating upload.
 
 Both recovery modes download the original run's Apple, Android, React Native,
 and Web artifacts and compare their non-Flutter subset with the five-platform

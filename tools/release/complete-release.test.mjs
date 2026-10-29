@@ -23,7 +23,7 @@ test('Flutter completion preserves the previously published native manifest', ()
 
 test('Flutter OIDC upload retains its registered identity and checks occupied versions on every retry', () => {
   const publisher = job(workflow, 'publish-flutter');
-  assert.match(publisher, /needs: flutter\n/);
+  assert.match(publisher, /needs: \[flutter, publish\]\n/);
   assert.match(publisher, /if: \$\{\{ !cancelled\(\) && github.event_name == 'push' && needs.flutter.result == 'success' \}\}/);
   assert.match(publisher, /uses: dart-lang\/setup-dart@[0-9a-f]{40}/);
   assert.match(publisher, /environment: release\n/);
@@ -41,14 +41,38 @@ function job(source, name) {
   return next < 0 ? rest : rest.slice(0, next + 1);
 }
 
-test('tag publishing has one approval after all package gates', () => {
-  const approval = job(workflow, 'approve-release');
-  assert.match(approval, /if: github.event_name == 'push'/);
+function jobCondition(source) {
+  const match = /^    if: (.*)\n((?:      .*(?:\n|$))*)/m.exec(source);
+  assert.ok(match, 'job condition is missing');
+  return (match[1] === '>-' ? match[2] : match[1]).replace(/\s+/g, ' ').trim();
+}
+
+function assertApprovalTopology(source) {
+  const approval = job(source, 'approve-release');
+  const slack = job(source, 'approve-release-slack');
+  assert.equal(jobCondition(approval), "github.event_name == 'push' && vars.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED != 'true'");
+  assert.equal(jobCondition(slack), "github.event_name == 'push' && vars.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED == 'true'");
   assert.match(approval, /needs: verify\n/);
   assert.match(approval, /environment: release-approval\n/);
-  assert.match(job(workflow, 'publish'), /needs: approve-release\n/);
+  assert.match(slack, /needs: verify\n/);
+  assert.match(slack, /id-token: write\n/);
+  const publish = job(source, 'publish');
+  assert.match(publish, /needs: \[approve-release, approve-release-slack\]\n/);
+  assert.equal(jobCondition(publish), "always() && !cancelled() && github.event_name == 'push' && "
+    + "((needs.approve-release.result == 'success' && needs.approve-release-slack.result == 'skipped') || "
+    + "(needs.approve-release.result == 'skipped' && needs.approve-release-slack.result == 'success'))");
+}
+
+test('tag publishing accepts exactly one approval route after completed candidate verification', () => {
+  assertApprovalTopology(workflow);
   assert.match(job(workflow, 'publish'), /environment: release\n/);
   assert.match(job(workflow, 'publish-apple-pod'), /needs: publish\n/);
+  for (const changed of [
+    workflow.replace('needs: [approve-release, approve-release-slack]', 'needs: verify'),
+    workflow.replace("needs.approve-release-slack.result == 'success'))", "needs.approve-release-slack.result == 'failure'))"),
+    workflow.replace("if: github.event_name == 'push' && vars.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED != 'true'",
+      "if: github.event_name == 'push'"),
+  ]) assert.throws(() => assertApprovalTopology(changed), 'an approval bypass passed the topology guard');
 });
 
 test('manual recovery has its own single approval', () => {
@@ -57,6 +81,53 @@ test('manual recovery has its own single approval', () => {
   assert.match(approval, /environment: release-approval\n/);
   assert.match(job(workflow, 'recover-central'), /needs: approve-recovery\n/);
   assert.match(job(workflow, 'recover-central'), /environment: release\n/);
+  for (const name of ['approve-recovery', 'recover-central']) {
+    assert.equal(jobCondition(job(workflow, name)), "github.event_name == 'workflow_dispatch' && vars.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED != 'true'",
+      'manual recovery must not bypass active Slack approval');
+  }
+});
+
+test('Slack requests preserve six tag artifacts and wait only after the preflight job completes', () => {
+  const verify = job(workflow, 'verify');
+  assert.match(verify, /name: Verify tag and promote CI artifacts\n/);
+  const registration = verify.indexOf('node tools/release/slack-sdk-release.mjs register');
+  assert.ok(registration > 0);
+  const preserved = verify.slice(0, registration).match(/name: (?:apple|android|react-native|web|flutter)-release-\$\{\{ github.ref_name \}\}|name: release-inputs-\$\{\{ github.ref_name \}\}/g);
+  assert.equal(preserved?.length, 6, 'all immutable tag payloads must exist before request registration');
+  assert.match(verify.slice(registration), /if: always\(\) && vars.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED == 'true'/);
+  assert.match(verify.slice(registration), /name: sdk-slack-request-\$\{\{ github.ref_name \}\}-\$\{\{ github.run_attempt \}\}/);
+  const slack = job(workflow, 'approve-release-slack');
+  const wait = slack.indexOf('node tools/release/slack-sdk-release.mjs wait');
+  assert.ok(wait > slack.indexOf('name: release-inputs-${{ github.ref_name }}'));
+  assert.ok(wait > slack.indexOf('name: sdk-slack-request-${{ github.ref_name }}-${{ github.run_attempt }}'));
+  assert.match(slack.slice(wait), /name: sdk-slack-approval-\$\{\{ github.ref_name \}\}-\$\{\{ github.run_attempt \}\}/);
+  assert.doesNotMatch(slack, /publish-npm.mjs|gh release (create|upload|edit)|publish-preserved.sh --publish/);
+});
+
+function assertWriteRefresh(source) {
+  const writes = /gh release (?:create|upload|edit)|central-portal\.mjs upload-or-resume|publish-npm\.mjs (?:react-native|web)|publish-preserved\.sh --publish/;
+  const blocks = source.split(/\n      - /).slice(1).filter(block => writes.test(block));
+  assert.ok(blocks.length > 0, 'publisher has no guarded writes');
+  for (const block of blocks) {
+    const firstWrite = block.search(writes);
+    const refresh = block.indexOf('node tools/release/slack-sdk-release.mjs refresh');
+    assert.ok(refresh >= 0 && refresh < firstWrite, 'publication write lost its preceding signed refresh');
+    assert.match(block.slice(0, refresh), /if \[\[ "\$SLACK_SDK_PRODUCTION_APPROVAL_ENABLED" == true \]\]; then/);
+  }
+}
+
+test('each publisher refreshes frozen approval before public writes while pub.dev keeps tag-push OIDC', () => {
+  assert.match(workflow, /on:\n  push:\n    tags:\n      - "v\*\.\*\.\*"/);
+  for (const name of ['publish', 'publish-flutter', 'complete-release']) {
+    const publisher = job(workflow, name);
+    assert.match(publisher, /name: sdk-slack-approval-\$\{\{ github.ref_name \}\}-\$\{\{ github.run_attempt \}\}/);
+    assert.match(publisher, /name: release-inputs-\$\{\{ github.ref_name \}\}/);
+    assert.match(publisher, /id-token: write/);
+    assertWriteRefresh(publisher);
+  }
+  const publish = job(workflow, 'publish');
+  assert.throws(() => assertWriteRefresh(publish.replaceAll('node tools/release/slack-sdk-release.mjs refresh', 'echo removed')));
+  assert.match(job(workflow, 'complete-release'), /needs: \[verify-flutter-publication, publish\]/);
 });
 
 test('normal and recovery publication verify the original generated runtime after npm publication', async () => {
