@@ -39,6 +39,9 @@ test('Apple build tooling is pinned and exposes local and remote gates', () => {
   );
   assert.match(workflow, /DEVELOPER_DIR: \/Applications\/Xcode_26\.3\.app\/Contents\/Developer/);
   assert.match(workflow, /BOTA_EXPECTED_RUBY_VERSION: "3\.3\.13"/);
+  assert.match(workflow, /uses: ruby\/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f/);
+  assert.match(workflow, /ruby-version: \$\{\{ env\.BOTA_EXPECTED_RUBY_VERSION \}\}/);
+  assert.match(workflow, /bundler: none/);
   assert.match(workflow, /BOTA_EXPECTED_XCODE_BUILD: 17C529/);
   assert.match(workflow, /npm run test:apple:spm-workaround/);
   assert.match(swiftPackage, /path: "\.\.\/\.\.\/platforms\/apple"/);

@@ -464,6 +464,12 @@ jobs:
         working-directory: frameworks/react-native
         run: npm ci
 
+      - name: Select pinned Ruby independently of the runner image
+        uses: ruby/setup-ruby@7f797815d8adceb1c412e7abefdd1ab4abc47a5f # v1.335.0
+        with:
+          ruby-version: ${{ env.BOTA_EXPECTED_RUBY_VERSION }}
+          bundler: none
+
       - name: Install and verify pinned Apple build tooling
         working-directory: frameworks/react-native
         run: |
