@@ -490,7 +490,7 @@ jobs:
 
       - name: Test React Native Apple SPM compatibility
         working-directory: frameworks/react-native
-        run: npm run test:apple:spm-workaround
+        run: bundle _2.6.9_ exec npm run test:apple:spm-workaround
 
       - name: Build linked iOS consumer
         working-directory: frameworks/react-native
