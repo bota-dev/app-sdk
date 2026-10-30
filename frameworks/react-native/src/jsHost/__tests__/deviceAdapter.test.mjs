@@ -6,7 +6,7 @@ const { createGeneratedJsCore } = loadSource('core.ts');
 const { createJsDeviceAdapter } = loadSource('deviceAdapter.ts');
 
 function fixture(options = {}) {
-  const core = createGeneratedJsCore();
+  const core = options.core ?? createGeneratedJsCore();
   const metadata = core.codec('protocolMetadata', {});
   const calls = [];
   const saved = new Map();
@@ -1023,7 +1023,7 @@ function otaFixture(options = {}) {
     async download(_id, progress) { progress('3', '3'); return { crc32: 0x11223344 }; },
     async upload() { throw new Error('Unexpected upload'); },
   };
-  f = fixture({ files, network, adapterOptions: options.adapterOptions });
+  f = fixture({ core: options.core, files, network, adapterOptions: options.adapterOptions });
   const start = f.core.codec('encodeFirmwareUploadStart', { size: 3 })[0];
   const verify = f.core.codec('encodeFirmwareVerify', { crc32: 0x11223344 })[0];
   const data = f.core.codec('encodeFirmwareData', { sequence: 0, payload: [...imageBytes] })[0];
@@ -1063,22 +1063,89 @@ function otaFixture(options = {}) {
     }
     if (bytes[0] === verify) notifyStatus(Uint8Array.from(f.core.codec('encodeOtaStatus', { command: verify, result: 0, sequence: null })));
   };
-  f.adapter.onFirmwareUpdateProgress(value => {
-    if (value.phase === 'rebooting') {
+  const reboot = () => {
+    if (!rebooted) {
       rebooted = true;
       f.values.set(f.metadata.CHAR_FIRMWARE_REVISION, Buffer.from('9.0.0'));
       if (options.monitorFailure) failStatus(Object.assign(new Error('stream closed for reboot'), { platformCode: -7 }));
       else observers.get('original')();
     }
+  };
+  f.adapter.onFirmwareUpdateProgress(value => {
+    if (value.phase === 'rebooting') reboot();
   });
   return { ...f, registrations, unregisters, observers, image: { version: '9.0.0', sizeUnits: 3,
     crc32: 0x11223344, url: 'https://firmware.example.test/firmware.bin' }, data,
-    storedAttempts: () => storedAttempts };
+    reboot, storedAttempts: () => storedAttempts };
 }
 
 const firmwareDataWrites = f => f.calls.filter(call => Array.isArray(call) && call[0] === 'write'
   && call[1].serviceUuid === f.metadata.SERVICE_BOTA_STORAGE
   && call[1].characteristicUuid === f.metadata.CHAR_RECORDING_TRANSFER && call[2][0] === f.data);
+
+test('public generated OTA maps every core phase through the client and manager before START and verified completion',
+  { timeout: 15000 }, async t => {
+    const f = otaFixture();
+    const { createBotaReactNativeJsRuntime } = loadSource('../runtime.ts');
+    const runtime = createBotaReactNativeJsRuntime(f.ports);
+    t.after(async () => { await runtime.client.destroy(); await f.adapter.destroy(); f.core.dispose(); });
+    const phases = [], stages = [], completed = [];
+    const updateFirmware = runtime.sdk.ota.updateFirmware.bind(runtime.sdk.ota);
+    runtime.sdk.ota.updateFirmware = (device, image, onProgress) => updateFirmware(device, image, progress => {
+      phases.push(progress.phase);
+      onProgress?.(progress);
+    });
+    await runtime.client.configure({ logLevel: 'none', backgroundSyncEnabled: false });
+    const device = await runtime.client.devices.connect({ id: 'original', rssi: -50, discoveredAt: new Date(0) });
+    runtime.client.ota.on('progress', (_id, progress) => {
+      stages.push(progress.stage);
+      if (progress.stage === 'restarting') f.reboot();
+    });
+    runtime.client.ota.on('completed', (id, version) => completed.push([id, version]));
+    const grant = Buffer.alloc(207, 1); grant[0] = 4;
+    await runtime.client.ota.performUpdate(device, {
+      version: f.image.version, size: f.image.sizeUnits, url: f.image.url,
+    }, grant.toString('base64'));
+    assert.deepEqual([...new Set(phases)], [
+      'downloading', 'awaiting_device', 'transferring', 'verifying', 'rebooting', 'reconnecting', 'complete',
+    ]);
+    assert.deepEqual([...new Set(stages)], [
+      'downloading', 'preparing', 'updating', 'verifying', 'restarting', 'completed',
+    ]);
+    const writes = writesBeyondTimeSync(f);
+    const start = writes.findIndex(call => call[1].characteristicUuid === f.metadata.CHAR_TRANSFER_CONTROL && call[2][0] === 0x08);
+    assert.ok(start > 0);
+    assert.equal(writes[0][1].characteristicUuid, f.metadata.CHAR_DEVICE_COMMAND);
+    assert.deepEqual(writes[start][2], [0x08, 3, 0, 0, 0]);
+    assert.equal(firmwareDataWrites(f).length, 1);
+    assert.deepEqual(completed, [[device.id, f.image.version]]);
+    assert.ok(f.calls.some(call => Array.isArray(call) && call[0] === 'read'
+      && call[1].peripheralId === 'rebooted' && call[1].characteristicUuid === f.metadata.CHAR_FIRMWARE_REVISION));
+  });
+
+test('generated OTA rejects an unknown core firmware phase instead of publishing an invalid public value', async t => {
+  const generated = createGeneratedJsCore();
+  const core = { ...generated, createEngine() {
+    const engine = generated.createEngine();
+    return { ...engine, request(input) {
+      const response = engine.request(input);
+      if (response.ok) for (const effect of response.result.effects) {
+        const progress = effect.effect.Notify?.FirmwareProgress?.progress;
+        if (progress?.phase === 'AwaitingDevice') progress.phase = 'UnexpectedFirmwarePhase';
+      }
+      return response;
+    } };
+  } };
+  const f = otaFixture({ core });
+  t.after(async () => { await f.adapter.destroy(); core.dispose(); });
+  const phases = [];
+  f.adapter.onFirmwareUpdateProgress(progress => phases.push(progress.phase));
+  await f.adapter.configure({ logLevel: 'none' });
+  const device = await f.adapter.connectSelected({ id: 'original', rssi: -50, discoveredAtMs: 0 });
+  await assert.rejects(f.adapter.updateFirmware(device, f.image), { code: 'invalid_core_result', operation: 'UpdateFirmware' });
+  assert.deepEqual([...new Set(phases)], ['downloading']);
+  assert.equal(firmwareDataWrites(f).length, 0);
+});
 
 test('generated OTA routes an expected reboot disconnect, adopts a changed peripheral, and never retransmits verified bytes', async t => {
   t.mock.timers.enable({ apis: ['Date'], now: 1793230112000 }); // Both time-sync payloads start with the firmware DATA opcode.
