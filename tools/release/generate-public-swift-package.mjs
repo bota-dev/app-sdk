@@ -18,6 +18,7 @@ export function renderPublicSwiftPackage({ sdkVersion, artifactChecksum }) {
   }
 
   const packageName = publicPackageIdentifier('apple', sdkVersion);
+  const watchSupport = Number(sdkVersion.split('.')[0]) >= 2;
   return `// swift-tools-version: 6.0
 
 import PackageDescription
@@ -27,9 +28,11 @@ let package = Package(
     platforms: [
         .iOS(.v15),
         .macOS(.v13),
+${watchSupport ? '        .watchOS(.v11),\n' : ''}\
     ],
     products: [
         .library(name: "${packageName}", targets: ["${packageName}"]),
+${watchSupport ? '        .library(name: "BotaWatchControl", targets: ["BotaWatchControl"]),\n' : ''}\
     ],
     targets: [
         .binaryTarget(
@@ -42,6 +45,11 @@ let package = Package(
             dependencies: ["BotaDeviceSDKC"],
             path: "platforms/apple/Sources/${packageName}"
         ),
+${watchSupport ? `        .target(
+            name: "BotaWatchControl",
+            path: "platforms/watch/Sources/BotaWatchControl"
+        ),
+` : ''}\
     ]
 )
 `;

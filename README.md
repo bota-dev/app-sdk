@@ -56,6 +56,14 @@ to check the workflows available to your application.
 
 ## Supported platforms
 
+The root Swift package now exports an unpublished
+[`BotaWatchControl` source product](platforms/watch/README.md) for customer-built
+watchOS 11+ apps, with cloud recording commands and a primary Double Tap helper.
+Select that product for Watch targets; the existing `BotaAppSDK` product still
+requires the iOS/macOS binary core. Customers own UI and authentication.
+Published-package availability, watchOS builds and physical acceptance remain
+separate gates; the published packages below do not yet establish Watch support.
+
 | Platform | Package | Requirements | Guide |
 | --- | --- | --- | --- |
 | React Native | `@bota.dev/react-native-app-sdk` | RN 0.86.3+ with New Architecture, React 19.2.3+, iOS 15.1+ / Android API 26+ | [React Native](frameworks/react-native/README.md) |

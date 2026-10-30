@@ -13,6 +13,13 @@ tracked separately.
 
 ## Unreleased
 
+- Add a Watch HTTP command source product and primary Double Tap helper to the
+  root Swift package and release generator, separate from the native core.
+  Developers supply their own application UI, authorization headers and business
+  lifecycle. Known-command detail lookup is optional for existing backends;
+  list recovery remains bounded and read-only. Published package, watchOS build
+  and physical Watch acceptance remain pending.
+
 - Prepare CocoaPods distribution through `Specs/` in this same SDK repository,
   retaining package names, exact versions and checksummed release archives.
   Bootstrap/main qualification and signed Slack publication activation are

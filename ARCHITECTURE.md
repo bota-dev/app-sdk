@@ -226,7 +226,12 @@ firmware/release/hardware gates or enable v2 compatibility metadata. See
   `frameworks/react-native-runtime` fixture verifies the same source with structural
   declarations; it is not an application installation or npm publication target.
 - The host application obtains backend grants, device tokens, and presigned
-  upload targets. This repository does not provide a Bota API client.
+  upload targets. The BLE facades do not provide a general Bota API client.
+  The optional SwiftPM [Watch source product](platforms/watch/README.md)
+  maps existing cloud recording commands through customer-configured HTTPS
+  routes and request headers. It has no binary-core dependency and owns no
+  account, application screen or business workflow. Customers retain login,
+  authorization, device selection, retry decisions and lifecycle ownership.
 - Customer-facing package and module names follow the public matrix in
   [README.md](README.md). Internal Rust crates, C ABI artifacts, paths, and
   symbols retain their established `device-sdk` names.

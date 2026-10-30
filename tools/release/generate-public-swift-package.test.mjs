@@ -1,9 +1,30 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 import { renderPublicSwiftPackage } from './generate-public-swift-package.mjs';
 
 const checksum = 'a'.repeat(64);
+
+test('major two exposes a Watch source product without a binary-core dependency', () => {
+  const manifest = renderPublicSwiftPackage({ sdkVersion: '2.0.0-beta.23', artifactChecksum: checksum });
+  assert.match(manifest, /\.watchOS\(\.v11\)/);
+  assert.match(manifest, /\.library\(name: "BotaWatchControl", targets: \["BotaWatchControl"\]\)/);
+  assert.match(manifest, /\.target\(\s*name: "BotaWatchControl",\s*path: "platforms\/watch\/Sources\/BotaWatchControl"\s*\)/);
+});
+
+test('legacy major-one manifests do not advertise the new Watch product', () => {
+  const manifest = renderPublicSwiftPackage({ sdkVersion: '1.0.0', artifactChecksum: checksum });
+  assert.doesNotMatch(manifest, /watchOS|BotaWatchControl/);
+});
+
+test('checked-in root package matches the release generator including Watch sources', async () => {
+  const manifest = await readFile(new URL('../../Package.swift', import.meta.url), 'utf8');
+  const [, sdkVersion, artifactChecksum] = manifest.match(
+    /releases\/download\/v([^/]+)\/BotaDeviceSDKCore\.xcframework\.zip",\s*checksum: "([a-f0-9]{64})"/,
+  );
+  assert.equal(manifest, renderPublicSwiftPackage({ sdkVersion, artifactChecksum }));
+});
 
 test('major two changes the facade but not its core binary identity', () => {
   const manifest = renderPublicSwiftPackage({ sdkVersion: '2.0.0-beta.0', artifactChecksum: checksum });

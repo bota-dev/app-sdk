@@ -64,3 +64,8 @@ swift build \
     --product AppleRemoteConsumer
 
 printf '%s %s public consumer compiled successfully\n' "$APPLE_PACKAGE" "$VERSION"
+
+# New tagged source must qualify its Watch product through the real public URL.
+if grep -F '"BotaWatchControl"' "$ROOT/Package.swift" >/dev/null; then
+    bash "$ROOT/tools/apple/test-watch-remote-consumer.sh" "$VERSION"
+fi

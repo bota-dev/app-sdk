@@ -518,6 +518,12 @@ jobs:
       - name: Test Apple package and XCFramework
         run: tools/apple/test-package.sh -Xswiftc -strict-concurrency=complete -Xswiftc -warnings-as-errors
 
+      - name: Test independent Watch HTTP controls and source consumer
+        run: bash tools/apple/test-watch-control.sh
+
+      - name: Compile root-package Watch consumer for device and simulator
+        run: bash tools/apple/test-watch-root-consumer.sh
+
       - name: Test external Apple consumer
         run: tools/apple/test-consumer.sh
 
