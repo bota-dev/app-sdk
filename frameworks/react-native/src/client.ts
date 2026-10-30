@@ -968,8 +968,14 @@ export const createBotaDeviceSDK = (
               nonce: request.nonce,
               devicePublicKey: request.devicePublicKey,
             });
-            if (material.deviceToken !== '' || !material.credentialEnvelope) {
-              throw new Error('Encrypted provisioning material is required');
+            const plaintext = typeof material.deviceToken === 'string'
+              && /^[\x21-\x7e]{1,255}$/.test(material.deviceToken)
+              && material.credentialEnvelope === undefined;
+            const encrypted = material.deviceToken === ''
+              && typeof material.credentialEnvelope === 'string'
+              && material.credentialEnvelope.length > 0;
+            if (!plaintext && !encrypted) {
+              throw new Error('Exactly one valid provisioning credential is required');
             }
             await module.resolveProvisioningMaterial(request.requestId, material);
           } catch (error) {

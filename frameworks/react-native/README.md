@@ -1,14 +1,11 @@
 # Bota SDK for React Native
 
-Source candidate `2.0.0-beta.20` includes the scoped encrypted-v2 completion,
-Find revision-2 authorization and BLE naming/model corrections. It retains
-`@bota.dev/react-native-app-sdk/runtime` and version 1 installed OS ports.
-Published beta.19 remains the installation baseline until protected publication
-and public-consumer checks pass. Earlier qualification notes below are dated
-snapshots; see the [current preflight](../../release/evidence/2.0.0-beta.20-preflight.md).
-Find requires qualified device firmware. Native-only Find adapters are not
-available, and physical Find remains unverified. App delivery and OTA remain
-separate gates.
+Source candidate `2.0.0-beta.23` adds opaque encrypted device-token
+provisioning and system-connected BLE discovery to the generated runtime.
+It retains `@bota.dev/react-native-app-sdk/runtime` and version 1 installed
+OS ports. Canonical artifacts, exact main CI, protected publication and public
+consumer checks are required. See the [candidate preflight](../../release/evidence/2.0.0-beta.23-preflight.md).
+Device acceptance and application delivery remain separate.
 
 ## Generated JavaScript runtime and app OTA updates
 
@@ -459,4 +456,4 @@ standalone `BotaLocalWifiTransport` pod, as Bota One's config plugin does.
 The actual Android App candidate builds with this configuration; its generated
 schema contains only the WiFi IO module. Profile-2 control and App source are
 implemented; public release adoption, iOS target compilation and external
-firmware acceptance remain pending. See [installation, tests and limitations](../../docs/parity/local-wifi.md#generated-jsnative-os-bridge-checkpoint--2026-10-24).
+firmware acceptance remain pending. See [installation and limitations](../../docs/parity/local-wifi.md#standalone-native-packaging).

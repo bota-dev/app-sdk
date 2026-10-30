@@ -1,40 +1,15 @@
-October 29 authorized JieLi reference source now includes protected local GATT,
-retained signed-token identity, AP and isolated TLS 1.3/Range; host checks pass,
-while default-off target qualification and the external BES port remain pending.
-See [reference evidence](../firmware-local-wifi/docs/local-wifi.md) and the
-[single checklist](../internal-docs/device/App-Local-WiFi-Protocol-Contract.md#9-single-completion-checklist).
-
 # AGENTS.md
 
-October 29 successor recovery now uses verified parents in the existing managed
-journal and shared Rust checkpoint migration. Fresh authenticated evidence and
-actual prefix verification precede durable migration, Range or FINISH. Complete
-bytes are reused; identity, receipt and cleanup guards remain strict. Canonical
-JS, 625 package/host tests and native component checks pass. See
-[recovery evidence and limits](docs/parity/local-wifi.md#authorized-successor-recovery--october-29-follow-up).
+Local WiFi follows the [protocol contract](https://github.com/bota-dev/internal-docs/blob/feat/local-wifi-sync/device/App-Local-WiFi-Protocol-Contract.md) and [SDK integration guide](docs/parity/local-wifi.md).
 
+Beta.23 preparation includes merged model/WiFi PR #58 and current-main BYO PR #56, and targets a standalone Demo dev APK using the published SDK. Regenerate the shared JavaScript and Apple checksums after main integration; do not select either stale generated side of the merge. Retain synchronized versions, independent integration review, exact main CI/inventory and protected publication. See [preflight](release/evidence/2.0.0-beta.23-preflight.md).
 
-October 29 local control source uses the [minimal profile-2 security contract](protocol/local-wifi-control-v1.md):
-existing identity/HPKE authorization, shared Rust AEAD, and App owner-fenced native
-IO. Bota One source and an isolated Android App candidate are verified; normal
-public release adoption, full iOS build and external target qualification remain pending. Earlier dated secure-link gaps below are historical checkpoints.
+Beta.22 preparation includes merged PR #51 and targets the existing synchronized release. Beta.21 is already published; prior preparation paragraphs are historical. Require canonical generated inputs, exact main CI/inventory, independent PR approval and protected release approval. Demo rollout for this request is development OTA only. See [preflight](release/evidence/2.0.0-beta.22-preflight.md).
 
-Unreleased local WiFi source adds a Rust receive state machine and an opt-in
-carrier branch inside the existing encrypted-v2 workflow. The JS host executes
-secure-link preflight, bounded Range reads, durable prefix checkpoints, FINISH
-and confirmed hotspot shutdown, then reuses existing cloud reconciliation and
-receipt/CONFIRM. Explicit public SDK/managed-provider selection uses the same
-queue and cloud identity. Native Apple/Android hotspot and pinned TLS IO
-components and their optional generated-JS OS bridge are now implemented.
-A standalone native IO target now avoids linking a second native workflow
-runtime. Bota One source forwards explicit transport selection and handles
-permissions. Profile-2 control security and App host installation/user entry are
-implemented; target qualification and published SDK adoption remain pending. Production firmware belongs to the external
-team; local firmware is reference only and repository access is not required
-for our SDK/App development. Joint acceptance uses agreed protocol/test firmware.
-Production capability and issuance remain disabled. See
-[implementation evidence](docs/parity/local-wifi.md) for exact validation gates.
-
+Unpublished synchronized beta.21 has canonical Linux/Apple/Flutter preparation
+and all release-tool checks passing in run `40261663660`. Final PR/main CI,
+the required approving review, annotated tag and protected publication remain
+pending. See [preflight evidence](release/evidence/2.0.0-beta.21-preflight.md).
 
 Unreleased encrypted token delivery adds an opaque HPKE envelope to existing
 provisioning material and a dedicated credential characteristic. Apps retain the
@@ -1570,3 +1545,31 @@ on the exact same-device refresh route; the predecessor never regains ordinary
 access. Migration125 precedes backend rollout; firmware HTTP retry/durable
 replacement and local encrypted storage remain separate. See
 [the recovery contract and verification](../internal-docs/device/Device-Token-Envelope.md).
+
+
+Customer-hooks-v2 package order, header bounds and transfer-only ACK validation
+belong in `core/device-sdk-core/src/model/byo_customer.rs`; native ABI and generated
+JS consume that implementation. Preserve the fixed backend/C/Rust package vector,
+BLE v3 original-ciphertext reads and receipt-only cleanup. See
+[the owning review](docs/parity/byo-storage.md#customer-hooks-v2-source-implementation).
+
+
+## October 28 dependency maintenance
+
+Cargo dependency updates require exact Linux regeneration of the ordinary-JS
+React Native core. Adopt unmodified `core.expected.ts` from exact-source Linux CI
+only after every generator input and the artifact SHA-256 match; never edit the
+provenance header alone. New hosted/native checks remain required.
+
+The internal JavaScript runtime fixture now pins eventemitter3 5.0.4. Its package
+contract must match that exact dependency while continuing to reject native imports and autolinking.
+
+The generated React Native core provenance includes the root package-lock.json.
+Even a tooling-only fast-uri lock update requires exact Linux regeneration and the
+existing runtime/native/Hermes checks; never edit only the embedded source hash.
+
+The exact October 28 fast-uri qualification reuses unmodified expected output
+from CI40787109785, diagnostic artifact12860435548. Its complete source hash is
+`d7154c1cfc78717155dbc2d16214f471a4700bc1f64d98123b4ae7d6b5f8fc0d`;
+the expected file digest is `0ee6b59f09aa9faeb7985e17cd89a4154e23ecb61a96ef84c4192a8015401a8d`.
+Only the provenance header changes; executable payload bytes match main.

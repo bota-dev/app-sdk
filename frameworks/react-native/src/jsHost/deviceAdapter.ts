@@ -294,7 +294,11 @@ export function createJsDeviceAdapter(core: RawJsCoreFactory, ports: BotaJsHostP
           }
         }
         const provisioned = await deviceControls.execute('isProvisioned', [initial], context) as boolean;
-        const device = { ...initial, ...identity, mtu, isProvisioned: provisioned };
+        const wifiUpload = ports.ble.hasService
+          ? await executor.gatt(context, () => ports.ble.hasService!(initial.id, text(metadata.SERVICE_BOTA_WIFI_CONFIG), context))
+          : false;
+        const device = { ...initial, ...identity, mtu, isProvisioned: provisioned,
+          capabilities: { bleSync: true, wifiUpload, lteUpload: identity.deviceType === 'bota_pin_4g', remoteRecord: true } };
         const random = await ports.randomBytes(16);
         if (!(random instanceof Uint8Array) || random.length !== 16) throw new BotaJsHostError('invalid_entropy', operation);
         const session = Array.from(random, byte => byte.toString(16).padStart(2, '0')).join('');

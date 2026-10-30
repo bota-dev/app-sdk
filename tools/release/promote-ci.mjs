@@ -53,7 +53,9 @@ export async function promoteCandidate({ api, source, tagName }) {
   assert.ok(Number.isSafeInteger(runId), 'invalid annotation run ID');
   const expectedDigest = annotation(tag.message, 'Candidate-Inventory-SHA256', /^[0-9a-f]{64}$/);
   const ci = await api(`actions/runs/${runId}`);
-  assert.ok(ci.id === runId && validRun(ci, source, 'ci'), 'CI identity or successful main conclusion mismatch');
+  assert.ok(ci.id === runId && validRun(ci, source, 'ci')
+    && Number.isSafeInteger(ci.run_attempt) && ci.run_attempt > 0, 'CI identity or successful main conclusion mismatch');
+  const ciRunAttempt = ci.run_attempt;
   const licenses = await api(`actions/workflows/license-gate.yml/runs?head_sha=${source}&branch=main&event=push&status=success&per_page=100`);
   assert.ok(licenses.workflow_runs.some(run => validRun(run, source, 'license-gate')),
     'successful exact main License Gate required');
@@ -100,9 +102,12 @@ export async function promoteCandidate({ api, source, tagName }) {
   const finalRef = await api(`git/ref/tags/${tagName}`);
   assert.ok(finalRef.object?.type === 'tag' && finalRef.object.sha === ref.object.sha,
     'tag changed during candidate promotion');
+  const finalCi = await api(`actions/runs/${runId}`);
+  assert.ok(finalCi.id === runId && validRun(finalCi, source, 'ci') && finalCi.run_attempt === ciRunAttempt,
+    'CI changed during candidate promotion');
   return { files, inventory, rawInventory: raw, provenance: {
     schemaVersion: 1, sourceRevision: source, tag: tagName, tagObject: ref.object.sha,
-    ciRunId: runId, inventorySha256: expectedDigest, artifacts: selected.sort((a, b) => a.id - b.id),
+    ciRunId: runId, ciRunAttempt, inventorySha256: expectedDigest, artifacts: selected.sort((a, b) => a.id - b.id),
   } };
 }
 

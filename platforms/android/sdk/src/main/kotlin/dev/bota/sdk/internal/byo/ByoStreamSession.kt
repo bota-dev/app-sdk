@@ -45,7 +45,8 @@ internal class ByoStreamSession(private val options: ByoStorageOptions,private v
                 store.removeCiphertext();return result
             }
             val capability=JSONObject(rpc(1,byteArrayOf()).decodeToString());require(byoSupportsLive(capability))
-            capability.put("upload_modes",JSONArray(listOf("whole_file","http_segments","ws_relay"))).put("durable_source",true).put("durable_receipt",true)
+            capability.put("upload_modes",JSONArray(listOf("whole_file","http_segments","ws_relay"))).put("durable_source",true).put("durable_receipt",true).put("customer_hooks","customer-hooks-v2")
+            capability.put("max_ciphertext_bytes",minOf(capability.optLong("max_ciphertext_bytes",134201332),134201332))
             val selected=http.control("/capabilities",capability)
             var facts=JSONObject(rpc(9).decodeToString())
             if(!docs.has("selected") && !facts.optBoolean("stream_selected") && selected.getJSONObject("destination").getString("kind")!="customer") throw ByoException("not_selected")
@@ -58,9 +59,14 @@ internal class ByoStreamSession(private val options: ByoStorageOptions,private v
                 .put("source_mode","durable").put("limits_profile","byo-stream-128m-4h-v1")).getJSONObject("context")
             validate(context);docs.put("context",context);persist();rpc(12,identity+context.toString().toByteArray())
             val endpoint="/"+context.getString("upload_session_id")
-            // A restarted client fences the stream and uses its complete durable source.
-            var fallback=resumed || docs.optBoolean("fallback")
-            var offset=0L;var index=0;val started=System.nanoTime();var refreshed=started
+            val checkpoint=http.streamControl(endpoint)
+            val customer=checkpoint.optString("hook_contract")=="customer-hooks-v2"
+            require(!docs.has("customer_package") || docs.getBoolean("customer_package")==customer)
+            docs.put("customer_package",customer);persist()
+            var fallback=(!customer && resumed) || docs.optBoolean("fallback") || checkpoint.optString("phase")=="handed_off"
+            var offset=if(customer) checkpoint.getLong("contiguous_offset") else 0L
+            require(offset in 0..134201332)
+            var index=((offset+16383)/16384).toInt();val started=System.nanoTime();var refreshed=started
             if(!fallback) {
                 socket=try {if("ws_relay" in allowed) http.streamSocket(context.getString("upload_session_id")) else null} catch(error: CancellationException) {throw error} catch(_: Exception) {null}
                 docs.put("transport",if(socket==null) "http" else "ws");persist()
@@ -72,7 +78,7 @@ internal class ByoStreamSession(private val options: ByoStorageOptions,private v
                 facts=JSONObject(rpc(9).decodeToString())
                 require(facts.getString("recording_uuid")==recording.uuid && facts.getLong("recording_generation")==recording.generation.toLong())
                 if(facts.getBoolean("failed")) throw ByoException("incomplete_recording")
-                val length=facts.getLong("ciphertext_length");require(length in offset..134217728)
+                val length=facts.getLong("ciphertext_length");require(length in offset..if(customer) 134201332 else 134217728)
                 val closed=facts.getBoolean("closed")
                 if(facts.getBoolean("overflow") || facts.getLong("retained_offset")>offset) fallback=true
                 val count=minOf(16384,length-offset).toInt()
@@ -88,7 +94,9 @@ internal class ByoStreamSession(private val options: ByoStorageOptions,private v
                         val segment=JSONObject().put("index",index).put("offset",offset).put("length",count).put("sha256",hash(bytes))
                         if(docs.getString("transport")=="ws") {
                             while(true) {
-                                try {requireNotNull(socket).exchange(segment,bytes);break}
+                                try {val ack=requireNotNull(socket).exchange(segment,bytes)
+                                    if(customer) byoTransferAck(ack.getJSONObject("proof"),segment,true)
+                                    break}
                                 catch(error: CancellationException) {throw error}
                                 catch(error: Exception) {
                                     socket?.close();socket=null
@@ -98,14 +106,14 @@ internal class ByoStreamSession(private val options: ByoStorageOptions,private v
                                 }
                             }
                         } else {
-                            var proof=http.streamControl("$endpoint/grants",segment).getJSONObject("result")
+                            var granted=http.streamControl("$endpoint/grants",segment);var proof=granted.getJSONObject("result")
                             require(proof.getJSONObject("segment").byoEquivalent(segment))
-                            if(proof.getString("state")!="confirmed") {
+                            if(proof.getString("state")!=if(customer) "transferred" else "confirmed") {
                                 require(proof.getString("state")=="write_authorized")
                                 store.createCiphertext().use {file ->val buffer=ByteBuffer.wrap(bytes);while(buffer.hasRemaining()) file.write(buffer);file.force(true)}
-                                http.put(proof.getJSONObject("grant"),store.ciphertext());proof=http.streamControl("$endpoint/confirm",segment).getJSONObject("result")
+                                http.put(proof.getJSONObject("grant"),store.ciphertext());granted=http.streamControl("$endpoint/confirm",segment);proof=granted.getJSONObject("result")
                             }
-                            require(proof.getString("state")=="confirmed" && proof.getJSONObject("segment").byoEquivalent(segment))
+                            byoTransferAck(granted,segment,customer)
                         }
                         offset+=count;index++;rpc(11,identity+ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(offset.toInt()).array())
                     } catch(error: CancellationException) {throw error}

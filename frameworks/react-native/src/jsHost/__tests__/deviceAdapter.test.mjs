@@ -18,7 +18,7 @@ function fixture(options = {}) {
     [metadata.CHAR_PAIRING_STATE, Uint8Array.of(2)],
   ]);
   const unusedFile = async () => { throw new Error('Unexpected file IO'); };
-  const ports = { apiVersion: 1, platform: 'ios', randomBytes: length => Uint8Array.from({ length }, (_, index) => index + 1),
+  const ports = { apiVersion: 1, platform: options.platform ?? 'ios', randomBytes: length => Uint8Array.from({ length }, (_, index) => index + 1),
     ...(options.signal ? { signal: options.signal } : {}),
     ...(options.files ? { files: { open: unusedFile, metadata: unusedFile, append: unusedFile, truncate: unusedFile,
       read: unusedFile, finalize: unusedFile, remove: unusedFile, ...options.files } } : {}),
@@ -728,8 +728,9 @@ test('real generated connection workflow verifies physical serial and builds nat
   const f = fixture();
   await f.adapter.configure({ logLevel: 'none' });
   const device = await f.adapter.connectSelected({ id: 'selected', name: 'Bota spoofable', rssi: -60, discoveredAtMs: 0 });
-  assert.deepEqual(device, { id: 'selected', serialNumber: 'C8SU2XXWHI', deviceType: 'Bota Note', firmwareVersion: '1.2.3',
-    hardwareRevision: 'rev1', isProvisioned: true, connectionState: 'connected', mtu: 247 });
+  assert.deepEqual(device, { id: 'selected', serialNumber: 'C8SU2XXWHI', deviceType: 'bota_note', firmwareVersion: '1.2.3',
+    hardwareRevision: 'rev1', isProvisioned: true, connectionState: 'connected', mtu: 247,
+    capabilities: { bleSync: true, wifiUpload: false, lteUpload: false, remoteRecord: true } });
   assert.equal(f.saved.get('connection/C8SU2XXWHI').candidate.peripheral_id, 'selected');
   const presence = await f.adapter.nextClientPresence('selected');
   assert.equal(presence.platform, 'ios');
@@ -737,6 +738,70 @@ test('real generated connection workflow verifies physical serial and builds nat
   await f.adapter.disconnect();
   assert.equal(await f.adapter.nextClientPresence('selected'), null);
   await f.adapter.destroy();
+});
+
+for (const platform of ['android', 'ios']) {
+  test(`${platform} uses connected Note identity and refreshes WiFi capability after reconnect`, async () => {
+    const f = fixture({ platform });
+    let wifiPresent = true;
+    const probes = [];
+    f.ports.ble.hasService = async (id, service) => { probes.push([id, service]); return wifiPresent; };
+    f.ports.ble.scan = async (_duplicates, candidate) => {
+      candidate({ peripheral_id: 'selected', name: 'Bota Pin', advertised_address: null, rssi: -50 });
+      return { async remove() {} };
+    };
+    const subscribers = new Map();
+    f.ports.ble.subscribe = async (address, notify) => {
+      subscribers.set(address.characteristicUuid, notify);
+      return { async remove() { subscribers.delete(address.characteristicUuid); } };
+    };
+    const write = f.ports.ble.write;
+    f.ports.ble.write = async (...args) => {
+      await write(...args);
+      if (args[0].characteristicUuid === f.metadata.CHAR_WIFI_CREDENTIAL) {
+        assert.equal(f.calls.at(-2)[1].characteristicUuid, f.metadata.CHAR_WIFI_GRANT);
+        subscribers.get(f.metadata.CHAR_WIFI_CREDENTIAL)(Uint8Array.of(0));
+      }
+    };
+    const { createBotaDeviceSDK } = loadSource('../client.ts');
+    const client = createBotaDeviceSDK(f.adapter);
+    await client.configure({ logLevel: 'none' });
+    try {
+      for (const model of ['bota_note', 'Bota Note', 'bota-note']) {
+        f.values.set(f.metadata.CHAR_MODEL_NUMBER, Buffer.from(model));
+        const device = await client.devices.connect({ id: 'selected', name: 'Bota Pin', deviceType: 'bota_pin',
+          firmwareVersion: '', pairingState: 'unpaired', macAddress: null, rssi: -60, discoveredAt: new Date() });
+        assert.equal(device.deviceType, 'bota_note');
+        assert.equal(device.capabilities.wifiUpload, wifiPresent);
+        assert.equal(device.capabilities.lteUpload, false);
+        assert.deepEqual(await client.wifi.configure(device, { ssid: 'fixture-wifi', password: 'fixture-password' },
+          { grantBlob: 'synthetic-grant', expiresAt: new Date(Date.now() + 60000) }), { success: true });
+        await client.devices.disconnect();
+      }
+      wifiPresent = false;
+      const reconnected = await client.devices.reconnect('C8SU2XXWHI');
+      assert.equal(reconnected.deviceType, 'bota_note');
+      assert.equal(reconnected.capabilities.wifiUpload, false, 'a prior connection cannot lend its WiFi capability');
+      assert.deepEqual(probes, Array(4).fill(['selected', f.metadata.SERVICE_BOTA_WIFI_CONFIG]));
+    } finally { await client.destroy(); f.core.dispose(); }
+  });
+}
+
+test('unknown connected models do not become Pin and failed service inspection cannot publish a connection', async () => {
+  const f = fixture();
+  await f.adapter.configure({});
+  try {
+    for (const model of ['BOTA_DEV', 'bota_pin_pro', 'future-model']) {
+      f.values.set(f.metadata.CHAR_MODEL_NUMBER, Buffer.from(model));
+      const device = await f.adapter.connectSelected({ id: 'selected', name: 'Bota Pin', rssi: -60, discoveredAtMs: 0 });
+      assert.equal(device.deviceType, model);
+      assert.equal(device.capabilities.wifiUpload, false);
+      await f.adapter.disconnect();
+    }
+    f.ports.ble.hasService = async () => { throw new Error('service discovery failed'); };
+    await assert.rejects(f.adapter.connectSelected({ id: 'selected', rssi: -60, discoveredAtMs: 0 }), /service discovery failed/);
+    assert(f.calls.some(call => call[0] === 'disconnect'));
+  } finally { await f.adapter.destroy(); f.core.dispose(); }
 });
 
 test('incompatible installed ports fail before constructing an engine or acquiring resources', () => {
@@ -990,6 +1055,8 @@ function otaFixture(options = {}) {
   };
   f.ports.ble.write = async (address, bytes) => {
     f.calls.push(['write', address, [...bytes]]);
+    if (address.serviceUuid !== f.metadata.SERVICE_BOTA_STORAGE
+      || address.characteristicUuid !== f.metadata.CHAR_TRANSFER_CONTROL) return;
     if (bytes[0] === start) {
       if (options.beforeVerifyDisconnect) observers.get('original')('disconnected before verification');
       else notifyStatus(Uint8Array.from(f.core.codec('encodeOtaStatus', { command: start, result: 0, sequence: null })));
@@ -1009,8 +1076,14 @@ function otaFixture(options = {}) {
     storedAttempts: () => storedAttempts };
 }
 
-test('generated OTA routes an expected reboot disconnect, adopts a changed peripheral, and never retransmits verified bytes', async () => {
+const firmwareDataWrites = f => f.calls.filter(call => Array.isArray(call) && call[0] === 'write'
+  && call[1].serviceUuid === f.metadata.SERVICE_BOTA_STORAGE
+  && call[1].characteristicUuid === f.metadata.CHAR_RECORDING_TRANSFER && call[2][0] === f.data);
+
+test('generated OTA routes an expected reboot disconnect, adopts a changed peripheral, and never retransmits verified bytes', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1793230112000 }); // Both time-sync payloads start with the firmware DATA opcode.
   const f = otaFixture();
+  t.after(async () => { await f.adapter.destroy(); f.core.dispose(); });
   const progress = [];
   f.adapter.onFirmwareUpdateProgress(value => progress.push(value));
   await f.adapter.configure({ logLevel: 'none' });
@@ -1018,7 +1091,7 @@ test('generated OTA routes an expected reboot disconnect, adopts a changed perip
   const oldObserver = f.observers.get('original');
   await f.adapter.updateFirmware(device, f.image);
   assert.equal(f.storedAttempts(), 0); // Rust discovers candidates before probing stale OS identities.
-  assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'write' && call[2][0] === f.data).length, 1);
+  assert.equal(firmwareDataWrites(f).length, 1);
   assert.equal(progress.at(-1).phase, 'complete');
   assert.equal(f.unregisters.length, 1);
   assert.equal(f.unregisters[0].context.signal.aborted, false);
@@ -1028,17 +1101,17 @@ test('generated OTA routes an expected reboot disconnect, adopts a changed perip
   assert.ok(await f.adapter.nextClientPresence('rebooted'));
   await f.adapter.syncTime({ ...device, id: 'rebooted', firmwareVersion: '9.0.0' });
   assert.equal(f.calls.at(-1)[1].peripheralId, 'rebooted');
-  await f.adapter.destroy();
 });
 
-test('a verified status-monitor failure enters the same generated recovery path without cancelling OTA', async () => {
+test('a verified status-monitor failure enters the same generated recovery path without cancelling OTA', async t => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1793230112000 });
   const f = otaFixture({ monitorFailure: true });
+  t.after(async () => { await f.adapter.destroy(); f.core.dispose(); });
   await f.adapter.configure({ logLevel: 'none' });
   const device = await f.adapter.connectSelected({ id: 'original', rssi: -50, discoveredAtMs: 0 });
   await f.adapter.updateFirmware(device, f.image);
   assert.ok(await f.adapter.nextClientPresence('rebooted'));
-  assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'write' && call[2][0] === f.data).length, 1);
-  await f.adapter.destroy();
+  assert.equal(firmwareDataWrites(f).length, 1);
 });
 
 test('monitor-triggered recovery retires old observers before reconnect reuses the same peripheral ID', async () => {
@@ -1120,7 +1193,7 @@ test('shortened recovery deadline retains ownership until ignored connection can
   assert.equal(f.unregisters.length, 0);
   release(); await rejected;
   assert.equal(f.unregisters.length, 1);
-  assert.equal(f.calls.filter(call => Array.isArray(call) && call[0] === 'write' && call[2][0] === f.data).length, 1);
+  assert.equal(firmwareDataWrites(f).length, 1);
   await f.adapter.destroy();
 });
 
@@ -1174,6 +1247,49 @@ test('generated provisioning waits for exact application material and subscribes
   assert.equal(subset.at(-1)[0], 'remove-provisioning');
   await f.adapter.destroy();
 });
+
+for (const encrypted of [false, true]) {
+  test(`public RN runtime provisions ${encrypted ? 'encrypted' : 'plaintext'} credentials through the client bridge`,
+    { timeout: 5000 }, async () => {
+      const f = fixture();
+      f.values.set(f.metadata.CHAR_AUTH_NONCE, new Uint8Array(16).fill(2));
+      f.values.set(f.metadata.CHAR_PK_D, new Uint8Array(64).fill(3));
+      const credential = encrypted
+        ? Buffer.concat([Buffer.from('BOTATOK1'), Buffer.alloc(222)])
+        : Buffer.from('dtok_synthetic_bridge_regression');
+      const characteristic = encrypted ? 'B07A000A-0001-1000-8000-00805F9B34FB'
+        : f.metadata.CHAR_DEVICE_TOKEN;
+      let notify;
+      f.ports.ble.subscribe = async (address, callback) => {
+        if (address.characteristicUuid === f.metadata.CHAR_PROVISIONING_RESULT) notify = callback;
+        return { async remove() { notify = undefined; } };
+      };
+      const write = f.ports.ble.write;
+      f.ports.ble.write = async (address, bytes, response, context) => {
+        await write(address, bytes, response, context);
+        if (address.characteristicUuid === characteristic && bytes[0] + 1 === bytes[1]) {
+          notify(Uint8Array.of(0));
+        }
+      };
+      const { createBotaReactNativeJsRuntime } = loadSource('../runtime.ts');
+      const runtime = createBotaReactNativeJsRuntime(f.ports);
+      try {
+        await runtime.client.configure({ logLevel: 'none', backgroundSyncEnabled: false });
+        const manager = runtime.client.devices;
+        const device = await manager.connect({ id: 'selected', rssi: -50, discoveredAt: new Date(0) });
+        if (encrypted) await manager.provisionEnvelope(device, credential.toString('base64url'), 'development');
+        else await manager.provision(device, credential.toString('ascii'), 'development');
+        const writes = writesBeyondTimeSync(f);
+        assert.deepEqual(writes.map(call => call[1].characteristicUuid), [f.metadata.CHAR_API_ENDPOINT, characteristic]);
+        assert.deepEqual(writes[0][2], [0]);
+        assert.deepEqual(writes[1][2], [0, 1, ...credential]);
+      } finally {
+        await runtime.client.destroy();
+        await f.adapter.destroy();
+        f.core.dispose();
+      }
+    });
+}
 
 test('cancelling a provisioning callback rejects its late response and emits no protected command', async () => {
   const f = fixture();

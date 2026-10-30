@@ -47,6 +47,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      deployments: write
     steps:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -54,7 +55,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -95,7 +96,7 @@ jobs:
             --repository target/android-release --coordinate dev.bota:bota-app-sdk --version "$VERSION"
 
       - name: Preserve promoted apple payload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: apple-release-${{ github.ref_name }}
           path: target/apple-release/
@@ -104,7 +105,7 @@ jobs:
           overwrite: true
 
       - name: Preserve promoted android payload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: android-release-${{ github.ref_name }}
           path: target/android-release/
@@ -113,7 +114,7 @@ jobs:
           overwrite: true
 
       - name: Preserve promoted react-native payload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: react-native-release-${{ github.ref_name }}
           path: target/react-native-release/
@@ -122,7 +123,7 @@ jobs:
           overwrite: true
 
       - name: Preserve promoted web payload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: web-release-${{ github.ref_name }}
           path: target/web-release/
@@ -131,7 +132,7 @@ jobs:
           overwrite: true
 
       - name: Preserve promoted flutter payload
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: flutter-release-${{ github.ref_name }}
           path: target/flutter-release/
@@ -140,7 +141,7 @@ jobs:
           overwrite: true
 
       - name: Preserve promotion provenance and candidate inventory
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-inputs-${{ github.ref_name }}
           path: |
@@ -151,9 +152,25 @@ jobs:
           compression-level: 0
           overwrite: true
 
+      - name: Register the exact SDK candidate for Slack deployment approval
+        if: vars.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_SDK_PRODUCTION_APPROVAL_ENABLED: 'true'
+        run: node tools/release/slack-sdk-release.mjs register
+
+      - name: Retain the SDK request and any unresolved write intent
+        if: always() && vars.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sdk-slack-request-${{ github.ref_name }}-${{ github.run_attempt }}
+          path: target/sdk-slack-request.json
+          if-no-files-found: ignore
+          compression-level: 0
+
   approve-release:
     name: Approve SDK release
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && vars.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED != 'true'
     needs: verify
     runs-on: ubuntu-latest
     environment: release-approval
@@ -162,27 +179,86 @@ jobs:
       - name: Authorize the complete synchronized release
         run: echo 'Release approved; downstream publishers retain their artifact and consumer gates.'
 
+  approve-release-slack:
+    name: Await signed Slack approval of the preserved SDK candidate
+    if: github.event_name == 'push' && vars.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED == 'true'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    environment: release
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      SLACK_SDK_PRODUCTION_APPROVAL_ENABLED: 'true'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Read the frozen SDK promotion inputs
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-inputs-${{ github.ref_name }}
+          path: target/
+      - name: Read this original run attempt's request
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdk-slack-request-${{ github.ref_name }}-${{ github.run_attempt }}
+          path: target/
+      - name: Wait for Slack decision and claim the signed execution
+        run: node tools/release/slack-sdk-release.mjs wait
+      - name: Preserve the verified public approval binding
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sdk-slack-approval-${{ github.ref_name }}-${{ github.run_attempt }}
+          path: target/sdk-slack-request.json
+          if-no-files-found: error
+          compression-level: 0
+
   publish:
     name: Publish ${{ github.ref_name }}
-    if: github.event_name == 'push'
-    needs: approve-release
+    if: >-
+      always() && !cancelled() && github.event_name == 'push' &&
+      ((needs.approve-release.result == 'success' && needs.approve-release-slack.result == 'skipped') ||
+       (needs.approve-release.result == 'skipped' && needs.approve-release-slack.result == 'success'))
+    needs: [approve-release, approve-release-slack]
     runs-on: ubuntu-latest
-    # Secrets and OIDC identity only; human review belongs to release-approval.
+    # Secrets/OIDC only; the selected upstream approval job owns human review.
     environment: release
     outputs:
       android-central-published: ${{ steps.central-readiness.outputs.published }}
+      slack-approved: ${{ steps.approval-mode.outputs.enabled }}
+    env:
+      SLACK_SDK_PRODUCTION_APPROVAL_ENABLED: ${{ needs.approve-release-slack.result == 'success' && 'true' || 'false' }}
     permissions:
       actions: read
       contents: write
       id-token: write
     steps:
+      - name: Require approved same-repository Specs PR creation before registry writes
+        env:
+          SDK_SPECS_ACTIONS_PR_ENABLED: ${{ vars.SDK_SPECS_ACTIONS_PR_ENABLED }}
+        run: |
+          test "$SDK_SPECS_ACTIONS_PR_ENABLED" = true || {
+            echo 'Verify the reviewed SDK Actions PR-creation setting before starting publication.' >&2
+            exit 1
+          }
+
+      - name: Record the successful approval path
+        id: approval-mode
+        run: echo "enabled=$SLACK_SDK_PRODUCTION_APPROVAL_ENABLED" >> "$GITHUB_OUTPUT"
+
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           registry-url: https://registry.npmjs.org
@@ -190,6 +266,22 @@ jobs:
 
       - name: Install repository tooling
         run: npm ci
+
+      - name: Read frozen Slack promotion inputs
+        if: env.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-inputs-${{ github.ref_name }}
+          path: target/
+      - name: Read verified Slack approval state
+        if: env.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdk-slack-approval-${{ github.ref_name }}-${{ github.run_attempt }}
+          path: target/
+      - name: Refresh signed approval before publication preparation
+        if: env.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED == 'true'
+        run: node tools/release/slack-sdk-release.mjs refresh
 
       - name: Resolve publication channel
         id: release-channel
@@ -200,40 +292,44 @@ jobs:
             --github-output "$GITHUB_OUTPUT"
 
       - name: Export publication metadata
+        env:
+          CHANNEL_VERSION: ${{ steps.release-channel.outputs.version }}
+          CHANNEL_NPM_TAG: ${{ steps.release-channel.outputs.npm_tag }}
+          CHANNEL_PRERELEASE: ${{ steps.release-channel.outputs.github_prerelease }}
         run: |
           {
             echo "RELEASE_TAG=$GITHUB_REF_NAME"
-            echo "RELEASE_VERSION=${{ steps.release-channel.outputs.version }}"
-            echo "NPM_DIST_TAG=${{ steps.release-channel.outputs.npm_tag }}"
-            echo "GITHUB_PRERELEASE=${{ steps.release-channel.outputs.github_prerelease }}"
+            echo "RELEASE_VERSION=$CHANNEL_VERSION"
+            echo "NPM_DIST_TAG=$CHANNEL_NPM_TAG"
+            echo "GITHUB_PRERELEASE=$CHANNEL_PRERELEASE"
           } >> "$GITHUB_ENV"
-          test "${{ steps.release-channel.outputs.version }}" = "${GITHUB_REF_NAME#v}"
-          ANDROID_COORDINATE="$(node tools/release/package-identities.mjs android '${{ steps.release-channel.outputs.version }}')"
+          test "$CHANNEL_VERSION" = "${GITHUB_REF_NAME#v}"
+          ANDROID_COORDINATE="$(node tools/release/package-identities.mjs android "$CHANNEL_VERSION")"
           echo "ANDROID_COORDINATE=$ANDROID_COORDINATE" >> "$GITHUB_ENV"
           echo "ANDROID_ARTIFACT=${ANDROID_COORDINATE#*:}" >> "$GITHUB_ENV"
-          test "${{ steps.release-channel.outputs.npm_tag }}" = beta
-          test "${{ steps.release-channel.outputs.github_prerelease }}" = true
+          test "$CHANNEL_NPM_TAG" = beta
+          test "$CHANNEL_PRERELEASE" = true
 
       - name: Download Apple release payload
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: apple-release-${{ github.ref_name }}
           path: target/apple-release/
 
       - name: Download Android release payload
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: android-release-${{ github.ref_name }}
           path: target/android-release/
 
       - name: Download React Native release payload
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: react-native-release-${{ github.ref_name }}
           path: target/react-native-release/
 
       - name: Download Web release payload
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: web-release-${{ github.ref_name }}
           path: target/web-release/
@@ -369,6 +465,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$SLACK_SDK_PRODUCTION_APPROVAL_ENABLED" == true ]]; then
+            node tools/release/slack-sdk-release.mjs refresh
+          fi
           if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release create "$RELEASE_TAG" --draft --prerelease --verify-tag \
               --generate-notes --title "Bota App SDK $RELEASE_VERSION"
@@ -396,6 +495,9 @@ jobs:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
         run: |
+          if [[ "$SLACK_SDK_PRODUCTION_APPROVAL_ENABLED" == true ]]; then
+            node tools/release/slack-sdk-release.mjs refresh
+          fi
           test -n "$MAVEN_CENTRAL_USERNAME"
           test -n "$MAVEN_CENTRAL_PASSWORD"
           node tools/android/central-portal.mjs upload-or-resume \
@@ -421,6 +523,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$SLACK_SDK_PRODUCTION_APPROVAL_ENABLED" == true ]]; then
+            node tools/release/slack-sdk-release.mjs refresh
+          fi
           gh release upload "$RELEASE_TAG" target/apple-release/* target/react-native-release/* target/web-release/* --clobber
           gh release edit "$RELEASE_TAG" --draft=false --prerelease
           APPLE_BINARY=target/apple-release/BotaDeviceSDKCore.xcframework.zip
@@ -433,6 +538,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$SLACK_SDK_PRODUCTION_APPROVAL_ENABLED" == true ]]; then
+            node tools/release/slack-sdk-release.mjs refresh
+          fi
           PACKAGE_PATH="$(find target/react-native-release -maxdepth 1 -type f -name '*.tgz' -print -quit)"
           test -n "$PACKAGE_PATH"
           node tools/release/publish-npm.mjs react-native "$RELEASE_VERSION" "$PACKAGE_PATH"
@@ -458,6 +566,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$SLACK_SDK_PRODUCTION_APPROVAL_ENABLED" == true ]]; then
+            node tools/release/slack-sdk-release.mjs refresh
+          fi
           mapfile -t WEB_PACKAGES < <(find target/web-release -maxdepth 1 -type f -name '*.tgz' -print)
           test "${#WEB_PACKAGES[@]}" = 1
           PACKAGE_PATH="${WEB_PACKAGES[0]}"
@@ -469,7 +580,7 @@ jobs:
 
       - name: Preserve latest Central deployment state
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           overwrite: true
           name: central-deployment-${{ github.ref_name }}
@@ -482,22 +593,28 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [[ -f target/central-portal-state.json ]]; then
+            if [[ "$SLACK_SDK_PRODUCTION_APPROVAL_ENABLED" == true ]]; then
+              node tools/release/slack-sdk-release.mjs refresh
+            fi
             gh release upload "$RELEASE_TAG" target/central-portal-state.json --clobber
           fi
 
   publish-apple-pod:
-    name: Publish Apple CocoaPod bootstrap
+    name: Promote Apple CocoaPod to SDK Specs
     if: github.event_name == 'push'
     needs: publish
     permissions:
-      actions: read
-      contents: read
+      actions: write
+      contents: write
+      pull-requests: write
+      id-token: write
     uses: ./.github/workflows/publish-apple-pod.yml
-    secrets: inherit
+    with:
+      slack-approved: ${{ needs.publish.outputs.slack-approved == 'true' }}
 
   approve-recovery:
     name: Approve SDK recovery
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && vars.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED != 'true'
     runs-on: ubuntu-latest
     environment: release-approval
     permissions: {}
@@ -507,7 +624,7 @@ jobs:
 
   recover-central:
     name: Recover Central deployment
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && vars.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED != 'true'
     needs: approve-recovery
     runs-on: ubuntu-latest
     environment: release
@@ -535,7 +652,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           registry-url: https://registry.npmjs.org
@@ -562,21 +679,24 @@ jobs:
       - name: Export recovery metadata
         env:
           RELEASE_REF_INPUT: ${{ inputs.releaseRef }}
+          CHANNEL_VERSION: ${{ steps.release-channel.outputs.version }}
+          CHANNEL_NPM_TAG: ${{ steps.release-channel.outputs.npm_tag }}
+          CHANNEL_PRERELEASE: ${{ steps.release-channel.outputs.github_prerelease }}
         run: |
           RELEASE_REF="$RELEASE_REF_INPUT"
           RELEASE_TAG="${RELEASE_REF#refs/tags/}"
           {
             echo "RELEASE_REF=$RELEASE_REF"
             echo "RELEASE_TAG=$RELEASE_TAG"
-            echo "RELEASE_VERSION=${{ steps.release-channel.outputs.version }}"
-            echo "NPM_DIST_TAG=${{ steps.release-channel.outputs.npm_tag }}"
-            echo "GITHUB_PRERELEASE=${{ steps.release-channel.outputs.github_prerelease }}"
+            echo "RELEASE_VERSION=$CHANNEL_VERSION"
+            echo "NPM_DIST_TAG=$CHANNEL_NPM_TAG"
+            echo "GITHUB_PRERELEASE=$CHANNEL_PRERELEASE"
           } >> "$GITHUB_ENV"
-          ANDROID_COORDINATE="$(node tools/release/package-identities.mjs android '${{ steps.release-channel.outputs.version }}')"
+          ANDROID_COORDINATE="$(node tools/release/package-identities.mjs android "$CHANNEL_VERSION")"
           echo "ANDROID_COORDINATE=$ANDROID_COORDINATE" >> "$GITHUB_ENV"
           echo "ANDROID_ARTIFACT=${ANDROID_COORDINATE#*:}" >> "$GITHUB_ENV"
-          test "${{ steps.release-channel.outputs.npm_tag }}" = beta
-          test "${{ steps.release-channel.outputs.github_prerelease }}" = true
+          test "$CHANNEL_NPM_TAG" = beta
+          test "$CHANNEL_PRERELEASE" = true
 
       - name: Verify immutable tag identity
         run: |
@@ -608,7 +728,7 @@ jobs:
             --dir target
 
       - name: Download preserved Apple release payload
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: apple-release-v${{ steps.release-channel.outputs.version }}
           path: target/recovered/apple-release/
@@ -616,7 +736,7 @@ jobs:
           run-id: ${{ inputs.releaseRunId }}
 
       - name: Download preserved Android release payload
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: android-release-v${{ steps.release-channel.outputs.version }}
           path: target/recovered/android-release/
@@ -624,7 +744,7 @@ jobs:
           run-id: ${{ inputs.releaseRunId }}
 
       - name: Download preserved React Native release payload
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: react-native-release-v${{ steps.release-channel.outputs.version }}
           path: target/recovered/react-native-release/
@@ -632,7 +752,7 @@ jobs:
           run-id: ${{ inputs.releaseRunId }}
 
       - name: Download preserved Web release payload
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: web-release-v${{ steps.release-channel.outputs.version }}
           path: target/recovered/web-release/
@@ -701,7 +821,7 @@ jobs:
 
       - name: Preserve recovered deployment state
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: central-deployment-v${{ steps.release-channel.outputs.version }}-recovery
           path: target/central-portal-state.json
@@ -819,7 +939,7 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.releaseRef || github.ref }}
 
       - name: Set up JDK 17
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "17"
@@ -865,13 +985,13 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
 
       - name: Set up JDK 17
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: "17"
@@ -884,8 +1004,16 @@ jobs:
           "$SDKMANAGER" \
             "platforms;android-36" \
             "build-tools;35.0.0" \
-            "ndk;28.2.13676358" \
             "cmake;3.22.1"
+          python3 -I tools/android/provision_ndk.py "ndk;28.2.13676358"
+
+      - name: Retain exact NDK setup identity and diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: public-native-ndk-setup
+          path: target/android-ndk-provision/
+          if-no-files-found: ignore
 
       - name: Install isolated CocoaPods toolchain
         run: tools/flutter/install-pinned-cocoapods.sh
@@ -902,15 +1030,8 @@ jobs:
             --pattern release-candidate-files.json \
             --dir target/tagged-candidate
 
-      - name: Resolve clean public native consumers
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          tools/apple/test-remote-consumer.sh "$VERSION"
-          tools/flutter/test-public-apple-pod-consumer.sh "$VERSION"
-          tools/android/test-consumer.sh --public --compile-only
-
       - name: Download promoted Flutter candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: flutter-release-${{ github.ref_name }}
           path: target/flutter-release/
@@ -932,22 +1053,36 @@ jobs:
           CURRENT_FLUTTER="$(jq -S -c . target/current-flutter-candidate-files.json)"
           test "$CURRENT_FLUTTER" = "$EXPECTED_FLUTTER"
 
+      - name: Resolve clean public native and preserved Flutter consumers
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          FLUTTER_PACKAGE="$(node tools/release/package-identities.mjs flutter "$VERSION")"
+          tools/apple/test-remote-consumer.sh "$VERSION"
+          tools/flutter/test-public-apple-pod-consumer.sh "$VERSION"
+          tools/flutter/test-public-cocoapods-consumer.sh "$VERSION" \
+            --plugin-archive "target/flutter-release/${FLUTTER_PACKAGE}-$VERSION.tar.gz" \
+            --plugin-inventory target/flutter-release/package-inventory.json
+          tools/android/test-consumer.sh --public --compile-only
+
   publish-flutter:
     name: Publish or verify preserved Flutter package
     if: ${{ !cancelled() && github.event_name == 'push' && needs.flutter.result == 'success' }}
-    needs: flutter
+    needs: [flutter, publish]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: release
+    env:
+      SLACK_SDK_PRODUCTION_APPROVAL_ENABLED: ${{ needs.publish.outputs.slack-approved == 'true' && 'true' || 'false' }}
     permissions:
       contents: read
+      actions: read
       id-token: write
     steps:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -956,7 +1091,7 @@ jobs:
         run: npm ci
 
       - name: Download preserved Flutter candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: flutter-release-${{ github.ref_name }}
           path: target/flutter-release/
@@ -964,6 +1099,19 @@ jobs:
       - name: Verify an occupied version or authorize first upload
         id: public-version
         run: node tools/flutter/prepare-publication.mjs
+
+      - name: Read frozen Slack promotion inputs
+        if: env.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-inputs-${{ github.ref_name }}
+          path: target/
+      - name: Read verified Slack approval state
+        if: env.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdk-slack-approval-${{ github.ref_name }}-${{ github.run_attempt }}
+          path: target/
 
       # Keep pub.dev's tag-push and release-environment OIDC identity. Using the
       # official setup action here lets retries check occupied bytes first.
@@ -973,7 +1121,11 @@ jobs:
 
       - name: Publish the preserved candidate files with pinned Flutter
         if: steps.public-version.outputs.needs-publish == 'true'
-        run: tools/flutter/publish-preserved.sh --publish
+        run: |
+          if [[ "$SLACK_SDK_PRODUCTION_APPROVAL_ENABLED" == true ]]; then
+            node tools/release/slack-sdk-release.mjs refresh
+          fi
+          tools/flutter/publish-preserved.sh --publish
 
   verify-flutter-publication:
     name: Verify Flutter publication
@@ -990,7 +1142,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -999,7 +1151,7 @@ jobs:
         run: npm ci
 
       - name: Download preserved Flutter candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: flutter-release-${{ github.ref_name }}
           path: target/flutter-release/
@@ -1026,7 +1178,7 @@ jobs:
             --output target/flutter-release/publication-evidence.json
 
       - name: Upload public Flutter verification
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           overwrite: true
           name: flutter-publication-${{ github.ref_name }}
@@ -1041,20 +1193,43 @@ jobs:
     if: >-
       ${{ always() && github.event_name == 'push' &&
           needs.verify-flutter-publication.result == 'success' }}
-    needs: verify-flutter-publication
+    needs: [verify-flutter-publication, publish]
     runs-on: ubuntu-latest
+    environment: release
+    env:
+      SLACK_SDK_PRODUCTION_APPROVAL_ENABLED: ${{ needs.publish.outputs.slack-approved == 'true' && 'true' || 'false' }}
     permissions:
       actions: read
       contents: write
+      id-token: write
     steps:
+      - name: Check out approved tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - name: Read frozen Slack promotion inputs
+        if: env.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-inputs-${{ github.ref_name }}
+          path: target/
+      - name: Read verified Slack approval state
+        if: env.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdk-slack-approval-${{ github.ref_name }}-${{ github.run_attempt }}
+          path: target/
       - name: Download verified Flutter candidate
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: flutter-release-${{ github.ref_name }}
           path: target/flutter-release/
 
       - name: Download public Flutter verification
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: flutter-publication-${{ github.ref_name }}
           path: target/flutter-publication/
@@ -1063,6 +1238,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [[ "$SLACK_SDK_PRODUCTION_APPROVAL_ENABLED" == true ]]; then
+            node tools/release/slack-sdk-release.mjs refresh
+          fi
           mv target/flutter-release/release-manifest.json \
             target/flutter-release/flutter-release-manifest.json
           gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \

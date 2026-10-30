@@ -21,6 +21,9 @@ try {
   execFileSync('tar', ['-xzf', join(work, packed.filename), '-C', work]);
   const unpacked = join(work, 'package');
   const entry = require(join(unpacked, 'native-io/react-native.config.cjs'));
+  // This exercises Expo's low-level resolver with an explicit root. Its CLI
+  // drops dependency root overrides; actual host autolinking is verified by
+  // Bota One's test-local-wifi-autolinking.mjs and standalone iOS config plugin.
   const project = { dependencies: { '@bota.dev/react-native-app-sdk': entry } };
   const resolutions = await scanDependenciesFromRNProjectConfig(work, project);
   const resolution = resolutions['@bota.dev/react-native-app-sdk'];
@@ -83,5 +86,5 @@ try {
     await assert.rejects(ports.localWifi.preflight('device', context), /retired/);
     console.log('Packed runtime installs through Bota One source and preserves owner retirement and the existing BLE port.');
   }
-  console.log('Packed npm payload: Expo iOS/Android select only local WiFi; default native entry remains unchanged.');
+  console.log('Packed standalone iOS/Android targets resolve independently; default native entry remains unchanged. Actual Expo host configuration requires the consumer checks.');
 } finally { rmSync(work, { recursive: true, force: true }); }

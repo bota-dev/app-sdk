@@ -21,7 +21,7 @@ export function validateJsHostPorts(ports: BotaJsHostPorts): void {
   }
   const ble = requiredObject(supplied.ble, 'ble');
   requiredMethods(ble, 'ble', ['scan', 'connect', 'discoverServices', 'disconnect', 'read', 'write', 'subscribe']);
-  optionalMethods(ble, 'ble', ['getMtu', 'observeDisconnect', 'writeOpaque', 'readBluetoothState', 'observeBluetoothState']);
+  optionalMethods(ble, 'ble', ['getMtu', 'hasService', 'observeDisconnect', 'writeOpaque', 'readBluetoothState', 'observeBluetoothState']);
   requiredMethods(persistence, 'persistence', ['load', 'save', 'remove']);
   requiredMethod(supplied, 'randomBytes', 'randomBytes');
   optionalMethods(supplied, '', ['checkScope']);

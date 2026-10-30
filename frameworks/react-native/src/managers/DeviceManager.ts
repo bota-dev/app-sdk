@@ -331,7 +331,9 @@ export class DeviceManager extends EventEmitter<DeviceManagerEvents> {
     options?: ProvisionOptions
   ): Promise<void> {
     this.requireConnected(device.id);
-    if (deviceToken !== '' || !options?.credentialEnvelope) {
+    if (typeof deviceToken !== 'string' || (options?.credentialEnvelope !== undefined
+      ? deviceToken !== '' || !options.credentialEnvelope
+      : !/^[\x21-\x7e]{1,255}$/.test(deviceToken))) {
       throw ProvisioningError.invalidToken(device.id);
     }
     const provision = () => this.client.provisioning.provision(

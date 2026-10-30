@@ -66,6 +66,8 @@ unsafe fn with_engine(
     }
 
     match catch_unwind(AssertUnwindSafe(|| {
+        // The C ABI requires a live engine; null is rejected and access is serialized by its mutex.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let engine = unsafe { &*engine };
         let mut bridge = engine
             .bridge
@@ -110,6 +112,8 @@ pub extern "C" fn bota_device_sdk_v1_engine_new() -> *mut BotaDeviceSdkEngineV1 
 /// [`bota_device_sdk_v1_engine_new`] that has not already been freed.
 pub unsafe extern "C" fn bota_device_sdk_v1_engine_free(engine: *mut BotaDeviceSdkEngineV1) {
     if !engine.is_null() {
+        // The documented C ABI transfers this SDK allocation once; null is ignored before Box reclamation.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         drop(unsafe { Box::from_raw(engine) });
     }
 }
@@ -123,6 +127,8 @@ pub unsafe extern "C" fn bota_device_sdk_v1_engine_cancel(
     cancellation_id_high: u64,
     cancellation_id_low: u64,
 ) -> BotaDeviceSdkStatusV1 {
+    // The documented live-engine precondition is forwarded to the null-checking mutex owner.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     unsafe {
         with_engine(engine, |bridge| {
             let effects = bridge.engine.dispatch(Event::Cancelled {
@@ -147,11 +153,15 @@ pub unsafe extern "C" fn bota_device_sdk_v1_engine_start(
     if engine.is_null() || packet.is_null() {
         return BotaDeviceSdkStatusV1::InvalidArgument;
     }
+    // The C ABI requires a readable packet for this call; null checks precede its copy.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let packet = unsafe { *packet };
     if packet.abi_version != ABI_VERSION {
         return BotaDeviceSdkStatusV1::UnsupportedAbi;
     }
 
+    // The checked packet and caller-live engine enter the mutex-serialized typed command path.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     unsafe {
         with_engine(engine, |bridge| {
             let command = command::command_from_packet(&packet)?;
@@ -181,7 +191,11 @@ pub unsafe extern "C" fn bota_device_sdk_v1_engine_poll_output(
     }
 
     match catch_unwind(AssertUnwindSafe(|| {
+        // The C ABI requires writable output storage; null is rejected before initializing it.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         unsafe { out_packet.write(ptr::null_mut()) };
+        // The C ABI requires a live engine; null is rejected and its output queue is mutex-serialized.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let engine = unsafe { &*engine };
         let mut bridge = engine.bridge.lock().map_err(|_| ())?;
         let Some(effect) = bridge.outputs.pop_front() else {
@@ -199,6 +213,8 @@ pub unsafe extern "C" fn bota_device_sdk_v1_engine_poll_output(
         }
     })) {
         Ok(Ok(Some(packet))) => {
+            // Writable output storage was checked; this transfers one fresh SDK packet allocation.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             unsafe { out_packet.write(Box::into_raw(Box::new(packet))) };
             BotaDeviceSdkStatusV1::Ok
         }
@@ -220,11 +236,15 @@ pub unsafe extern "C" fn bota_device_sdk_v1_engine_dispatch(
     if engine.is_null() || packet.is_null() {
         return BotaDeviceSdkStatusV1::InvalidArgument;
     }
+    // The C ABI requires a readable packet for this call; null checks precede its copy.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let packet = unsafe { *packet };
     if packet.abi_version != ABI_VERSION {
         return BotaDeviceSdkStatusV1::UnsupportedAbi;
     }
 
+    // Caller-live fields enter the mutex owner; operation and cancellation identity are checked below.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     unsafe {
         with_engine(engine, |bridge| {
             let event = event::host_event_from_packet(&packet)?;
@@ -292,9 +312,15 @@ unsafe fn protocol_call(
     if engine.is_null() || packet.is_null() || out_packet.is_null() {
         return BotaDeviceSdkStatusV1::InvalidArgument;
     }
+    // The C ABI requires a readable packet; all three pointer null checks precede its copy.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     let packet = unsafe { *packet };
     if packet.abi_version != ABI_VERSION {
+        // The C ABI requires writable output storage; its null check precedes this failure initialization.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         unsafe { out_packet.write(ptr::null_mut()) };
+        // The caller-live engine was null-checked; decoder reset holds its mutex.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         if let Ok(mut bridge) = unsafe { &*engine }.bridge.lock() {
             match packet.kind {
                 packet_kind::PROTOCOL_DECODE_DIAGNOSTICS => bridge.diagnostics_decoder.reset(),
@@ -308,7 +334,11 @@ unsafe fn protocol_call(
     }
 
     match catch_unwind(AssertUnwindSafe(|| {
+        // The C ABI requires writable output storage; its null check precedes initialization.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         unsafe { out_packet.write(ptr::null_mut()) };
+        // The caller-live engine was null-checked; protocol state is mutex-serialized.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let engine = unsafe { &*engine };
         let mut bridge = engine.bridge.lock().map_err(|_| ())?;
         match operation(&mut bridge, &packet) {
@@ -323,6 +353,8 @@ unsafe fn protocol_call(
         }
     })) {
         Ok(Ok(packet)) => {
+            // Writable output storage was checked; this transfers one fresh SDK protocol packet.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             unsafe { out_packet.write(Box::into_raw(Box::new(packet))) };
             BotaDeviceSdkStatusV1::Ok
         }
@@ -342,6 +374,8 @@ pub unsafe extern "C" fn bota_device_sdk_v1_protocol_decode(
     packet: *const BotaDeviceSdkPacketViewV1,
     out_packet: *mut *mut BotaDeviceSdkPacketV1,
 ) -> BotaDeviceSdkStatusV1 {
+    // The documented live pointer contract is forwarded to protocol_call, which checks nulls and ABI.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     unsafe {
         protocol_call(engine, packet, out_packet, |bridge, packet| {
             if packet.kind == packet_kind::PROTOCOL_DECODE_DIAGNOSTICS {
@@ -365,6 +399,8 @@ pub unsafe extern "C" fn bota_device_sdk_v1_protocol_encode(
     packet: *const BotaDeviceSdkPacketViewV1,
     out_packet: *mut *mut BotaDeviceSdkPacketV1,
 ) -> BotaDeviceSdkStatusV1 {
+    // The documented live pointer contract is forwarded to protocol_call, which checks nulls and ABI.
+    // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
     unsafe {
         protocol_call(engine, packet, out_packet, |_bridge, packet| {
             protocol::encode(packet)
@@ -386,12 +422,18 @@ pub unsafe extern "C" fn bota_device_sdk_v1_engine_last_error(
     }
 
     match catch_unwind(AssertUnwindSafe(|| {
+        // The C ABI requires writable output storage; null checks precede initialization.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         unsafe { out_error.write(ptr::null_mut()) };
+        // The C ABI requires a live engine; null is rejected and its error state is mutex-serialized.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let engine = unsafe { &*engine };
         let bridge = engine.bridge.lock().map_err(|_| ())?;
         Ok::<_, ()>(bridge.last_error.clone())
     })) {
         Ok(Ok(Some(error))) => {
+            // Writable output storage was checked; this transfers one newly cloned SDK error allocation.
+            // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
             unsafe { out_error.write(Box::into_raw(Box::new(error.into()))) };
             BotaDeviceSdkStatusV1::Ok
         }
@@ -415,7 +457,11 @@ pub unsafe extern "C" fn bota_device_sdk_v1_error_view(
     }
 
     match catch_unwind(AssertUnwindSafe(|| {
+        // The documented error owner remains live; null checks precede this borrowed view.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         let error = unsafe { &*error };
+        // The C ABI requires writable view storage; its null check precedes this write.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         unsafe { out_view.write(error.view()) };
     })) {
         Ok(()) => BotaDeviceSdkStatusV1::Ok,
@@ -429,6 +475,8 @@ pub unsafe extern "C" fn bota_device_sdk_v1_error_view(
 /// `error` must be null or a live SDK-owned error that has not been freed.
 pub unsafe extern "C" fn bota_device_sdk_v1_error_free(error: *mut BotaDeviceSdkErrorV1) {
     if !error.is_null() {
+        // The documented C ABI transfers this SDK error once; null is ignored before Box reclamation.
+        // nosemgrep: rust.lang.security.unsafe-usage.unsafe-usage
         drop(unsafe { Box::from_raw(error) });
     }
 }

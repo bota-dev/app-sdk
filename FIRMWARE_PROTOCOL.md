@@ -102,7 +102,7 @@ Characteristic shorthand `xxxx/yyyy` expands to
 | Battery | Standard `180F` / `2A19` | Battery level |
 | AUDIO | `0001` | Data `0001`, codec `0002`, control `0003`; allocation alone does not enable a recording relay |
 | CONTROL | `0002` | Device status `0001`, recording control `0002`, recording status `0003`, time sync `0004`, device command `0005` |
-| PROVISIONING | `0003` | Pairing state `0001`, retired token UUID `0002` (always rejects), API endpoint `0003`, WiFi config `0004`, result `0005`, settings `0006` |
+| PROVISIONING | `0003` | Pairing state `0001`, plaintext Token `0002` (compatibility mode), API endpoint `0003`, WiFi config `0004`, result `0005`, settings `0006` |
 | STORAGE | `0004` | Storage info `0001`, legacy list `0002`, legacy transfer `0003`, legacy control `0004`, legacy status `0005`; v2 allocation `0006` through `000C` below |
 | AUTH | `0005` | Device public key `0001`, nonce `0002`, historical backend public key `0003`, device certificate `0004` |
 | WIFI_CONFIG | `0006` | Grant `0001`, credential `0002`, status `0003`, scan `0004` |
@@ -130,7 +130,7 @@ and omits `device_token`. The backend selects an independently enrolled `PK_D`;
 the observed BLE key only checks identity consistency. The App/SDK forwards the
 opaque envelope to `000A/0001` without decrypting it. RN uses
 `DeviceManager.provisionEnvelope` with canonical unpadded base64url; native,
-Web and Flutter provisioning material carries bytes. Supply the encrypted envelope and leave the reserved raw-token slot empty. See [device token envelope v1](protocol/device-token-v1.md)
+Web and Flutter provisioning material carries bytes. For encrypted delivery, supply the envelope and leave the raw-token slot empty. See [device token envelope v1](protocol/device-token-v1.md)
 for the complete crypto, payload, SDK and rollout contract.
 
 Encrypted writes use `index:u8 || count:u8 || data`, zero-based, ordered,
@@ -140,11 +140,17 @@ index0 starts a new assembly. Disconnect clears partial state; a partial assembl
 older than 30 seconds is cleared on the next write. Initial BLE installation
 accepts purpose1; purpose2 belongs to a refresh consumer and cannot be relayed
 through this initial-bind path. Firmware verifies/decrypts, persists and reads
-back the token before reporting the existing result. All backend and firmware paths reject plaintext; missing support or validation failure
-must never trigger a fallback to `DEVICE_TOKEN`.
+back the token before reporting the existing result. Missing encrypted support or validation failure must never trigger a fallback
+to `DEVICE_TOKEN`.
 
-**Retired:** `0003/0002` `DEVICE_TOKEN` always returns invalid-token. No
-plaintext assembler, installer, SDK write branch or build opt-out remains.
+**Plaintext compatibility (unreleased):** server configuration
+`DEVICE_TOKEN_ENCRYPTION_ENABLED=false` is the default and returns raw
+`device_token` without trusted-key enrollment. SDK material uses a nonempty token
+and no envelope; `0003/0002` carries 1–255 printable ASCII bytes with the same
+ordered framing. It shares deferred persistence, read-back, paired/reset and
+connection fencing. Interleaved formats cannot combine fragments. Compatible
+clients accept either server response; only the explicit server policy selects
+plaintext, never a failed encrypted operation.
 
 Encrypted delivery retains bind → provision → confirm/abort and existing result values;
 no additional user action or application request round trip is introduced.
@@ -324,6 +330,18 @@ STREAMING below is a separate device HTTP contract, not an implicit BLE relay.
 
 ## BYO Customer Storage
 
+Customer-hooks-v2 source keeps the BLE v3 framing and original ciphertext READ
+bytes unchanged. The SDK packages finalized context/authorization/manifest after
+BOTAENC2, using a uint32BE metadata length and `BOTABYO1` trailer. A transfer ACK
+may release relay RAM but never authorize source cleanup; final signed receipt
+verification/readback remains mandatory. Capability admission and contract pinning,
+16 KiB segments, metadata reserve and recovery are specified in
+[the uploader contract](docs/parity/byo-storage.md#customer-hooks-v2-source-implementation).
+The native SDK ABI adds encode packet `0x0530`: COMMAND (field 97) is 1 for the
+canonical trailer, 2 for exact transfer-proof validation, or 3 for PUT headers;
+VALUE (field 30) contains bounded JSON (at most 32 KiB), and returns bytes. This
+is a host ABI allocation, not a firmware opcode or a change to BLE v3.
+
 BYO uses independent version-3 RPC frames on STORAGE CONTROL_V2 (`0008`) and
 TRANSFER_V2 (`0009`). It shares the characteristics, not the ordinary v2 command
 namespace. Serialize ownership and subscribe before writing.
@@ -354,7 +372,7 @@ payload. Correlate request ID/operation and reject conflicting fragments.
 | 6 | CONFIRM | 13 | LIVE_SUCCESSOR |
 | 7 | ABORT | | |
 
-The customer-storage flow is:
+The customer-hooks-v2 App relay flow is:
 
 ```mermaid
 sequenceDiagram
@@ -370,15 +388,16 @@ sequenceDiagram
     S->>D: Relay authorization with pinned recipient
     D->>D: Seal recording data key to customer public key
     D-->>S: Original ciphertext and customer envelope/manifest
-    S->>O: Upload ciphertext
-    S->>B: Complete with original manifest/envelope
-    B->>C: Completion hook
-    C->>O: Read ciphertext
-    C->>C: Open envelope with own private key, decrypt and verify
-    C-->>B: Signed completion evidence
+    S->>S: Persist canonical ciphertext-plus-metadata package
+    S->>O: PUT package or immutable segments
+    S->>B: Complete with manifest and upload_package facts
+    B->>C: upload-complete with final ciphertext size/hash/count
+    C->>O: Merge parts and verify actual stored ciphertext
+    C-->>B: uploaded and persisted verification result
     B-->>S: Signed completion receipt
     S->>D: Receipt, then exact confirmation
     D->>D: Verify and persist completion before source cleanup
+    Note over C,O: Private-key decryption is independent of complete
 ```
 
 The diagram shows the App relay path; device-direct radio ownership is not

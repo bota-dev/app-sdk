@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "enabled": true,
+  "endpoint": "https://lkum88xsel.execute-api.us-west-2.amazonaws.com",
+  "repository": "bota-dev/app-sdk",
+  "repositoryId": "1350249290",
+  "unit": "app-sdk-prod",
+  "mode": "sdk-tag-wait",
+  "publicKey": {
+    "id": "arn:aws:kms:us-west-2:926960810850:key/bc7e995d-d7a9-4331-9a37-4fbf5bcfdcbd",
+    "pem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnKZXddEKQb+Up/xrKm3H\n7YRaKL8NV6rIFpoHBdXbYirQf3+0YiDKSmueVQQdV833N60G85SFSquzkn2nIalJ\nt8SAK4W9VwecCi4TwXoVW/s/LOHyrH1QTIR4x9dfC3ZWKn/9F+N6Kjn2qwbDW0Y0\nKfjv7es3dN/j8VyqId5pumuhLh8Bny6obGtqb+v6hq417wQJf5YiG9dXUWlcljEi\ngdg0FUQ3AvIRPbDOAn6xYKHGoQ1bP86ejAGDvgwvDLMSLTxYhtVz2KkAlM+ss3UR\nPVXDWysHCKQ/+x3O8iKBUMXZjG04/iRJxJNNGX8FZsPj8HAYg5kVfGzXztCZ+Ds4\neQIDAQAB\n-----END PUBLIC KEY-----\n"
+  }
+}

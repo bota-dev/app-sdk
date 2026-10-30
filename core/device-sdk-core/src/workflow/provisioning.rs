@@ -8,7 +8,7 @@ use crate::{
     },
     error::{DeviceSdkError, ErrorCode, Operation},
     generated::protocol::{
-        CHAR_API_ENDPOINT, CHAR_AUTH_NONCE, CHAR_CREDENTIAL_ENVELOPE, CHAR_PK_D,
+        CHAR_API_ENDPOINT, CHAR_AUTH_NONCE, CHAR_CREDENTIAL_ENVELOPE, CHAR_DEVICE_TOKEN, CHAR_PK_D,
         CHAR_PROVISIONING_RESULT, PROVISIONING_SUCCESS, SERVICE_BOTA_AUTH, SERVICE_BOTA_CREDENTIAL,
         SERVICE_BOTA_PROVISIONING,
     },
@@ -45,6 +45,7 @@ pub(crate) struct ProvisioningWorkflow {
     device_public_key: Option<DevicePublicKey>,
     api_endpoint: Vec<u8>,
     token_chunks: Vec<Vec<u8>>,
+    encrypted: bool,
     chunk_index: usize,
     nonce_request_id: Option<RequestId>,
     public_key_request_id: Option<RequestId>,
@@ -71,6 +72,7 @@ impl ProvisioningWorkflow {
             device_public_key: None,
             api_endpoint: Vec::new(),
             token_chunks: Vec::new(),
+            encrypted: false,
             chunk_index: 0,
             nonce_request_id: None,
             public_key_request_id: None,
@@ -121,8 +123,18 @@ impl ProvisioningWorkflow {
         };
         self.phase = Phase::WritingToken;
         let write = context.request(Effect::Ble(BleEffect::Write {
-            service_uuid: SERVICE_BOTA_CREDENTIAL.into(),
-            characteristic_uuid: CHAR_CREDENTIAL_ENVELOPE.into(),
+            service_uuid: if self.encrypted {
+                SERVICE_BOTA_CREDENTIAL
+            } else {
+                SERVICE_BOTA_PROVISIONING
+            }
+            .into(),
+            characteristic_uuid: if self.encrypted {
+                CHAR_CREDENTIAL_ENVELOPE
+            } else {
+                CHAR_DEVICE_TOKEN
+            }
+            .into(),
             payload,
             with_response: true,
         }));
@@ -315,7 +327,15 @@ impl WorkflowReducer for ProvisioningWorkflow {
                             && bytes.starts_with(b"BOTATOK1")
                             && (23..=517).contains(&mtu) =>
                     {
+                        self.encrypted = true;
                         bytes
+                    }
+                    None if (1..=255).contains(&device_token.len())
+                        && device_token.iter().all(|b| (0x21..=0x7e).contains(b))
+                        && (23..=517).contains(&mtu) =>
+                    {
+                        self.encrypted = false;
+                        device_token
                     }
                     _ => {
                         return Ok(self.fail(
@@ -324,9 +344,7 @@ impl WorkflowReducer for ProvisioningWorkflow {
                                 Operation::Provision,
                                 false,
                             )
-                            .with_detail(
-                                "encrypted credential envelope is required; plaintext is rejected",
-                            ),
+                            .with_detail("exactly one valid device credential is required"),
                             context,
                         ));
                     }

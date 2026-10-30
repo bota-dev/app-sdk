@@ -92,7 +92,7 @@ fn release_metadata_fixture() -> PathBuf {
         "platforms/android/gradle.properties",
         "platforms/apple/BotaAppSDK.podspec",
         "protocol/compatibility/firmware-compatibility.json",
-        "release/examples/2.0.0-beta.20.json",
+        "release/examples/2.0.0-beta.23.json",
     ] {
         let destination = temp_root.join(path);
         fs::create_dir_all(destination.parent().unwrap()).unwrap();
@@ -140,9 +140,9 @@ fn occupied_flutter_release_fixture() -> PathBuf {
 
 #[test]
 fn version_tag_and_publishable_metadata_are_synchronized() {
-    let release = xtask::release::verify_release(&root(), "v2.0.0-beta.20").unwrap();
+    let release = xtask::release::verify_release(&root(), "v2.0.0-beta.23").unwrap();
 
-    assert_eq!(release.version, "2.0.0-beta.20");
+    assert_eq!(release.version, "2.0.0-beta.23");
     assert_eq!(release.crate_name, "bota-device-sdk-core");
 }
 
@@ -218,42 +218,42 @@ fn every_public_package_version_copy_fails_closed_on_drift() {
     for (path, needle, replacement) in [
         (
             "package-lock.json",
-            "\"version\": \"2.0.0-beta.20\"",
+            "\"version\": \"2.0.0-beta.23\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/react-native/package.json",
-            "\"version\": \"2.0.0-beta.20\"",
+            "\"version\": \"2.0.0-beta.23\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/react-native/package-lock.json",
-            "\"version\": \"2.0.0-beta.20\"",
+            "\"version\": \"2.0.0-beta.23\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/web/package.json",
-            "\"version\": \"2.0.0-beta.20\"",
+            "\"version\": \"2.0.0-beta.23\"",
             "\"version\": \"1.2.0-beta.2\"",
         ),
         (
             "frameworks/flutter/bota_app_sdk/pubspec.yaml",
-            "version: 2.0.0-beta.20",
+            "version: 2.0.0-beta.23",
             "version: 1.2.0-beta.2",
         ),
         (
             "frameworks/flutter/bota_app_sdk/ios/bota_app_sdk/Package.swift",
-            "exact: \"2.0.0-beta.20\"",
+            "exact: \"2.0.0-beta.23\"",
             "exact: \"1.2.0-beta.2\"",
         ),
         (
             "platforms/android/gradle.properties",
-            "VERSION_NAME=2.0.0-beta.20",
+            "VERSION_NAME=2.0.0-beta.23",
             "VERSION_NAME=1.2.0-beta.2",
         ),
         (
             "platforms/apple/BotaAppSDK.podspec",
-            "spec.version = \"2.0.0-beta.20\"",
+            "spec.version = \"2.0.0-beta.23\"",
             "spec.version = \"1.2.0-beta.2\"",
         ),
     ] {
@@ -263,7 +263,7 @@ fn every_public_package_version_copy_fails_closed_on_drift() {
         assert!(contents.contains(needle));
         fs::write(&target, contents.replacen(needle, replacement, 1)).unwrap();
 
-        let error = xtask::release::verify_release(&fixture, "v2.0.0-beta.20").unwrap_err();
+        let error = xtask::release::verify_release(&fixture, "v2.0.0-beta.23").unwrap_err();
         assert!(
             error.contains("version") || error.contains("Version"),
             "{path}: {error}"
@@ -303,7 +303,7 @@ fn compatibility_metadata_reports_apple_and_the_android_release_candidate() {
 #[test]
 fn mismatched_or_unprefixed_tags_are_rejected() {
     let wrong_version = xtask::release::verify_release(&root(), "v1.0.0-alpha.1").unwrap_err();
-    let missing_prefix = xtask::release::verify_release(&root(), "2.0.0-beta.20").unwrap_err();
+    let missing_prefix = xtask::release::verify_release(&root(), "2.0.0-beta.23").unwrap_err();
 
     assert!(wrong_version.contains("does not match"));
     assert!(missing_prefix.contains("must start with v"));
@@ -311,7 +311,7 @@ fn mismatched_or_unprefixed_tags_are_rejected() {
 
 #[test]
 fn ci_workflow_validates_the_current_release_manifest() {
-    let release = xtask::release::verify_release(&root(), "v2.0.0-beta.20").unwrap();
+    let release = xtask::release::verify_release(&root(), "v2.0.0-beta.23").unwrap();
     let path = root().join(".github/workflows/ci.yml");
     let contents = fs::read_to_string(path).unwrap();
     let _: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
@@ -808,8 +808,9 @@ fn flutter_release_is_ordered_after_public_native_dependencies_and_verified_befo
 
     let complete = &workflow["jobs"]["complete-release"];
     assert_eq!(
-        complete["needs"].as_str(),
-        Some("verify-flutter-publication")
+        complete["needs"],
+        serde_yaml_ng::from_str::<serde_yaml_ng::Value>("[verify-flutter-publication, publish]")
+            .unwrap()
     );
     assert!(complete["if"].as_str().unwrap().contains("always()"));
     assert!(
@@ -888,21 +889,45 @@ fn tag_and_recovery_workflows_bind_native_and_flutter_outputs_to_the_ci_candidat
 }
 
 #[test]
-fn apple_pod_bootstrap_is_protected_exact_and_publicly_verified() {
+fn apple_pod_owned_index_is_protected_exact_and_publicly_verified() {
     let contents =
         fs::read_to_string(root().join(".github/workflows/publish-apple-pod.yml")).unwrap();
     let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
     let publish = &workflow["jobs"]["publish"];
 
     assert_eq!(publish["environment"].as_str(), Some("release"));
-    assert_eq!(publish["permissions"]["contents"].as_str(), Some("read"));
-    assert!(contents.contains("COCOAPODS_TRUNK_TOKEN"));
+    for permission in ["contents", "actions", "pull-requests", "id-token"] {
+        assert_eq!(
+            publish["permissions"][permission].as_str(),
+            Some("write"),
+            "{permission}"
+        );
+    }
+    assert!(contents.contains("GH_TOKEN: ${{ github.token }}"));
+    assert!(!contents.contains("BOTA_COCOAPODS_SPECS_TOKEN"));
     assert!(contents.contains("BotaDeviceSDKCore.xcframework.zip.sha256"));
-    assert!(contents.contains("pod trunk push platforms/apple/${APPLE_PACKAGE}.podspec"));
-    assert!(contents.contains("trunk.cocoapods.org/api/v1/pods/${APPLE_PACKAGE}/specs/"));
-    assert!(contents.contains("verify_public_spec"));
+    assert!(contents.contains("generate-public-podspec.mjs"));
+    assert!(contents.contains("--check"));
+    assert!(contents.contains("pod _1.16.2_ ipc spec"));
+    assert!(contents.contains("tools/release/publish-owned-cocoapods.sh"));
+    assert!(!contents.contains("pod trunk push"));
+    assert!(!contents.contains("COCOAPODS_TRUNK_TOKEN"));
+    let publisher =
+        fs::read_to_string(root().join("tools/release/publish-owned-cocoapods.sh")).unwrap();
+    assert!(publisher.contains("https://github.com/bota-dev/app-sdk.git"));
+    assert!(publisher.contains("dispatch-owned-spec-checks.mjs"));
+    assert!(publisher.contains("wait-owned-spec-checks.mjs"));
+    assert!(publisher.contains("owned-specs-pull-request.mjs"));
+    assert!(publisher.contains("verify-public"));
+    assert!(!publisher.contains("HEAD:refs/heads/main"));
     assert!(!contents.contains("pod spec cat BotaAppSDK --version"));
     assert!(!contents.contains("BOTA_APPLE_SDK_PACKAGE_PATH"));
+    assert!(
+        contents.find("slack-sdk-release.mjs refresh").unwrap()
+            < contents
+                .find("tools/release/publish-owned-cocoapods.sh")
+                .unwrap()
+    );
 }
 
 #[test]
@@ -910,7 +935,10 @@ fn future_flutter_publication_uses_official_oidc_and_preserved_inputs_without_se
     let contents = fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
     let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
     let publish = &workflow["jobs"]["publish-flutter"];
-    assert_eq!(publish["needs"].as_str(), Some("flutter"));
+    assert_eq!(
+        publish["needs"],
+        serde_yaml_ng::from_str::<serde_yaml_ng::Value>("[flutter, publish]").unwrap()
+    );
     assert_eq!(publish["environment"].as_str(), Some("release"));
     assert_eq!(publish["permissions"]["id-token"].as_str(), Some("write"));
     let steps = serde_yaml_ng::to_string(&publish["steps"]).unwrap();
@@ -923,10 +951,57 @@ fn future_flutter_publication_uses_official_oidc_and_preserved_inputs_without_se
     assert!(!steps.contains("secrets."));
     assert!(!steps.contains("PUB_TOKEN"));
     assert!(
+        publish["if"]
+            .as_str()
+            .unwrap()
+            .contains("github.event_name == 'push'")
+    );
+    assert!(
+        steps.find("slack-sdk-release.mjs refresh").unwrap()
+            < steps
+                .find("tools/flutter/publish-preserved.sh --publish")
+                .unwrap()
+    );
+    assert!(
         !root()
             .join(".github/workflows/publish-flutter.yml")
             .exists()
     );
+}
+
+#[test]
+fn slack_sdk_approval_retains_tag_push_and_cannot_use_manual_recovery_as_a_bypass() {
+    let contents = fs::read_to_string(root().join(".github/workflows/release.yml")).unwrap();
+    let workflow: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents).unwrap();
+    assert_eq!(workflow["on"]["push"]["tags"][0].as_str(), Some("v*.*.*"));
+    let jobs = &workflow["jobs"];
+    for name in ["approve-release", "approve-release-slack"] {
+        assert_eq!(jobs[name]["needs"].as_str(), Some("verify"));
+    }
+    assert_eq!(
+        jobs["publish"]["needs"],
+        serde_yaml_ng::from_str::<serde_yaml_ng::Value>(
+            "[approve-release, approve-release-slack]",
+        )
+        .unwrap()
+    );
+    assert_eq!(
+        jobs["approve-release-slack"]["permissions"]["id-token"].as_str(),
+        Some("write")
+    );
+    assert!(
+        serde_yaml_ng::to_string(&jobs["approve-release-slack"])
+            .unwrap()
+            .contains("slack-sdk-release.mjs wait")
+    );
+    for name in ["approve-recovery", "recover-central"] {
+        assert_eq!(
+            jobs[name]["if"].as_str(),
+            Some(
+                "github.event_name == 'workflow_dispatch' && vars.SLACK_SDK_PRODUCTION_APPROVAL_ENABLED != 'true'"
+            )
+        );
+    }
 }
 
 #[test]

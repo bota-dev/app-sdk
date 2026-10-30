@@ -13,6 +13,8 @@ export const generatedPigeonFiles = Object.freeze([
 ]);
 
 const runGenerator = (root, outputRoot) => new Promise((resolveRun, reject) => {
+  // This deliberately launches the explicit developer checkout generation script, with no shell.
+  // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
   const child = spawn(resolve(root, 'tools/flutter/generate-pigeon.sh'), [], {
     cwd: root,
     env: { ...process.env, BOTA_PIGEON_OUTPUT_ROOT: outputRoot },

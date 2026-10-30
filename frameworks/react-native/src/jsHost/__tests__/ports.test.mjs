@@ -80,7 +80,7 @@ test('declared network and lifecycle ports are checked without requiring backgro
 });
 
 test('optional hooks must be callable when supplied, and scope signals are structural', () => {
-  const cases = [['ble', 'getMtu'], ['ble', 'observeDisconnect'], ['ble', 'writeOpaque'], ['', 'checkScope'],
+  const cases = [['ble', 'getMtu'], ['ble', 'hasService'], ['ble', 'observeDisconnect'], ['ble', 'writeOpaque'], ['', 'checkScope'],
     ['files', 'create'], ['files', 'flush'], ['network', 'registerDownload'], ['network', 'unregister']];
   for (const [prefix, hook] of cases) {
     const f = fixture();

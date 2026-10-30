@@ -1,6 +1,6 @@
 {
   "name": "@bota.dev/react-native-app-sdk",
-  "version": "2.0.0-beta.20",
+  "version": "2.0.0-beta.23",
   "description": "React Native facade for the Bota App SDK",
   "license": "MIT",
   "author": "Bota",

@@ -82,6 +82,8 @@ export interface JsBlePort {
     context: JsHostContext, onError?: (error: unknown) => void): Promise<JsHostSubscription>;
   connect(peripheralId: string, context: JsHostContext): Promise<void>;
   discoverServices(peripheralId: string, context: JsHostContext): Promise<void>;
+  /** Inspect the discovered GATT services of the captured local connection. */
+  hasService?(peripheralId: string, serviceUuid: string, context: JsHostContext): Promise<boolean>;
   disconnect(peripheralId: string, context: JsHostContext): Promise<void>;
   getMtu?(peripheralId: string, context: JsHostContext): Promise<number>;
   observeDisconnect?(peripheralId: string, onDisconnect: (error?: string) => void,

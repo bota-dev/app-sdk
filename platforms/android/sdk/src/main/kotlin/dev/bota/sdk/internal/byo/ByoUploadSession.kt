@@ -71,13 +71,14 @@ internal class ByoUploadSession(private val options: ByoStorageOptions,private v
     suspend fun run(): ByoUploadResult {
         currentCoroutineContext().ensureActive();options.validateScope();refresh()
         val capabilities=JSONObject(rpc(1).decodeToString()).put("upload_modes",org.json.JSONArray(listOf("whole_file")))
-            .put("durable_source",true).put("durable_receipt",true)
+            .put("durable_source",true).put("durable_receipt",true).put("customer_hooks","customer-hooks-v2")
+        capabilities.put("max_ciphertext_bytes",minOf(capabilities.optLong("max_ciphertext_bytes",134201332),134201332))
         val selected=http.control("/capabilities",capabilities)
         if(!docs.has("context") && !docs.optBoolean("selected_customer",false) && selected.getJSONObject("destination").getString("kind")!="customer") throw ByoException("not_selected")
         docs.put("selected_customer",true);persist()
         if(docs.has("context") && store.load("state")!=null) {
             val saved=docs.getJSONObject("context");scope(saved);advance(2)
-            if(phase==9uL) return result(saved)
+            if(phase==9uL) {store.removeCiphertext();return result(saved)}
         }
         val facts=JSONObject(rpc(2,byoIdentity(recording.uuid,recording.generation)+byteArrayOf(1)).decodeToString())
         if(facts.optBoolean("missing",false)) {
@@ -96,13 +97,18 @@ internal class ByoUploadSession(private val options: ByoStorageOptions,private v
         }
         scope(context);require(context.getLong("ciphertext_length")==length && context.getString("ciphertext_sha256")==hash)
         if(store.load("state")==null) advance(1) else advance(2)
-        if(phase==9uL) return result(context)
+        if(phase==9uL) {store.removeCiphertext();return result(context)}
         advance(6,listOf(130 to length,144 to hash))
         val session=context.getString("upload_session_id");require(UUID.fromString(session).toString()==session)
         val endpoint="/$session"
         if(advance(15).renewalOperation!=null) renew(endpoint)
         val prepared=http.control("$endpoint/prepare",JSONObject());val authorization=prepared.getJSONObject("authorization")
-        docs.put("authorization",authorization);persist()
+        val preparedStatus=prepared.getJSONObject("status")
+        val customer=preparedStatus.optString("hook_contract")=="customer-hooks-v2"
+        require(!customer || preparedStatus.optString("package_profile")=="bota-byo-package-v1")
+        require(!docs.has("customer_package") || docs.getBoolean("customer_package")==customer)
+        require(docs.optJSONObject("authorization")?.byoEquivalent(authorization)!=false)
+        docs.put("customer_package",customer).put("authorization",authorization);persist()
         if(phase==0uL) advance(3,listOf(212 to context.getString("recording_id"),213 to context.getString("configuration_id"),
             214 to context.getLong("configuration_revision"),215 to authorization.getString("configuration_sha256"),
             216 to context.getString("destination_ref"),217 to session,165 to context.getLong("owner_revision"),218 to 3))
@@ -125,14 +131,19 @@ internal class ByoUploadSession(private val options: ByoStorageOptions,private v
         val manifest=opened.getJSONObject("manifest")
         require(docs.optJSONObject("manifest")?.byoEquivalent(manifest)!=false)
         docs.put("manifest",manifest);persist()
-        if(status.optJSONObject("receipt")==null && phase==5uL) {
+        if(customer && status.optJSONObject("receipt")==null) {
+            buildPackage(length,hash,context,authorization,manifest)
+            if(status.optString("error") in listOf("upload_incomplete","upload_not_found")) {docs.put("package_next",0).put("package_sent",false);persist()}
+            if(!docs.optBoolean("package_sent")) sendPackage(endpoint,length)
+            if(phase==5uL) advance(9)
+        } else if(status.optJSONObject("receipt")==null && phase==5uL) {
             if(!docs.optBoolean("assembled")) upload.optJSONObject("upload")?.let {instructions ->download(length,hash);http.put(instructions,store.ciphertext())}
             advance(9)
         } else if(phase==5uL) advance(9)
         if(status.optJSONObject("receipt")==null) {
             for(poll in 0 until 24) {
                 currentCoroutineContext().ensureActive()
-                status=http.control("$endpoint/complete",JSONObject().put("manifest",manifest))
+                status=http.control("$endpoint/complete",JSONObject().put("manifest",manifest).apply {if(customer) put("upload_package",docs.getJSONObject("upload_package"))})
                 if(status.optJSONObject("receipt")!=null) break
                 if(status.optString("state") in listOf("failed","blocked")) throw ByoException("terminal_failure")
                 if(poll<23) delay(5000)
@@ -151,7 +162,53 @@ internal class ByoUploadSession(private val options: ByoStorageOptions,private v
         rpc(6,digest);advance(12);store.removeCiphertext();return result(context)
     }
     private fun result(context: JSONObject)=ByoUploadResult(context.getString("recording_id"),context.getString("upload_session_id"))
-    private suspend fun download(length: Long,hash: String) {
+    private suspend fun buildPackage(length: Long,hash: String,context: JSONObject,authorization: JSONObject,manifest: JSONObject) {
+        val trailer=byoCustomer(1,JSONObject().put("context",context).put("authorization",authorization).put("manifest",manifest))
+        val encoded=java.util.Base64.getEncoder().encodeToString(trailer)
+        require(!docs.has("package_trailer") || docs.getString("package_trailer")==encoded)
+        docs.put("package_trailer",encoded);persist()
+        download(length,hash,trailer)
+        val digest=MessageDigest.getInstance("SHA-256")
+        store.ciphertext().inputStream().use {file ->val buffer=ByteArray(65536);while(true) {val n=file.read(buffer);if(n<0) break;digest.update(buffer,0,n)}}
+        val facts=JSONObject().put("file_size_bytes",length+trailer.size).put("content_sha256",hex(digest.digest()))
+            .put("metadata_sha256",hex(MessageDigest.getInstance("SHA-256").digest(trailer)))
+        if(docs.optBoolean("assembled")) facts.put("segment_count",(length+16383)/16384+1)
+        require(docs.optJSONObject("upload_package")?.byoEquivalent(facts)!=false)
+        docs.put("upload_package",facts);persist()
+    }
+    private suspend fun sendPackage(endpoint: String,length: Long) {
+        val assembled=docs.optBoolean("assembled");val bodyCount=(length+16383)/16384
+        require(!assembled || bodyCount<8192)
+        val total=docs.getJSONObject("upload_package").getLong("file_size_bytes")
+        var next=docs.optLong("package_next",if(assembled) bodyCount else 0)
+        require(next in 0..if(assembled) bodyCount+1 else 0)
+        java.io.RandomAccessFile(store.ciphertext(),"r").use {source ->
+            while(!assembled || next<=bodyCount) {
+                currentCoroutineContext().ensureActive()
+                val request=JSONObject();var target=store.ciphertext()
+                if(assembled) {
+                    val offset=if(next==bodyCount) length else next*16384
+                    val count=if(next==bodyCount) total-length else minOf(16384,length-offset)
+                    val bytes=ByteArray(count.toInt());source.seek(offset);source.readFully(bytes)
+                    request.put("segment",JSONObject().put("index",next).put("offset",offset).put("length",count)
+                        .put("sha256",hex(MessageDigest.getInstance("SHA-256").digest(bytes))))
+                    store.createCiphertext("segment").use {file ->val buffer=ByteBuffer.wrap(bytes);while(buffer.hasRemaining()) file.write(buffer);file.force(true)}
+                    target=File(store.root,"segment")
+                }
+                for(attempt in 0..2) {
+                    val reply=try {http.control("$endpoint/upload",request)} catch(e: ByoException) {
+                        if(e.reason!="expired") throw e;renew(endpoint);http.control("$endpoint/upload",request)
+                    }
+                    val grant=reply.optJSONObject("upload") ?: throw ByoException("pending")
+                    try {http.put(grant,target);break} catch(e: Exception) {currentCoroutineContext().ensureActive();if(attempt==2) throw e}
+                }
+                if(!assembled) break
+                next++;docs.put("package_next",next);persist()
+            }
+        }
+        docs.put("package_sent",true);persist()
+    }
+    private suspend fun download(length: Long,hash: String,trailer: ByteArray=byteArrayOf()) {
         store.createCiphertext().use {file ->
             val digest=MessageDigest.getInstance("SHA-256");var offset=0L;var refreshed=System.nanoTime()
             while(offset<length) {
@@ -162,7 +219,8 @@ internal class ByoUploadSession(private val options: ByoStorageOptions,private v
                 require(bytes.size==count);val buffer=ByteBuffer.wrap(bytes);while(buffer.hasRemaining()) file.write(buffer)
                 digest.update(bytes);offset+=count
             }
-            require(hex(digest.digest())==hash);file.force(true)
+            require(hex(digest.digest())==hash)
+            val tail=ByteBuffer.wrap(trailer);while(tail.hasRemaining()) file.write(tail);file.force(true)
         }
     }
     override fun close() {try {recovery.close()} finally {store.close()}}

@@ -12,7 +12,7 @@ const pkg = require('../package.json');
 test('private source fixture has only JavaScript dependencies and no native autolinking', () => {
   assert.equal(pkg.private, true);
   assert.equal(pkg.publishConfig, undefined);
-  assert.deepEqual(pkg.dependencies, { buffer: '6.0.3', eventemitter3: '5.0.1' });
+  assert.deepEqual(pkg.dependencies, { buffer: '6.0.3', eventemitter3: '5.0.4' });
   for (const key of ['peerDependencies', 'codegenConfig']) assert.equal(pkg[key], undefined);
   for (const name of ['ios', 'android', 'react-native.config.js']) assert.ok(!readdirSync(root).includes(name));
 });

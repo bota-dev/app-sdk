@@ -13,6 +13,7 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 APPLE_PACKAGE="$(node "$ROOT/tools/release/package-identities.mjs" apple "$VERSION")"
+SPECS_REPOSITORY="$(node "$ROOT/tools/flutter/verify-cocoapods-consumer.mjs" --repository-url)"
 
 unset BOTA_APPLE_SDK_PACKAGE_PATH
 required_cocoapods_version="1.16.2"
@@ -65,25 +66,32 @@ scheme.save_as(project.path, target.name, true)
 RUBY
 
 cat >"$temporary/Podfile" <<EOF
-source 'https://cdn.cocoapods.org/'
+source '$SPECS_REPOSITORY'
 platform :ios, '15.0'
 use_frameworks!
 
 target 'PublicPodConsumer' do
-  pod '${APPLE_PACKAGE}', '$VERSION'
+  pod '${APPLE_PACKAGE}', '$VERSION', :source => '$SPECS_REPOSITORY'
 end
 EOF
 
-node "$ROOT/tools/release/wait-cocoapods.mjs" "$VERSION"
 (
   cd "$temporary"
+  export CP_HOME_DIR="$temporary/cocoapods-home"
+  export CP_REPOS_DIR="$temporary/cocoapods-repos"
+  export CP_CACHE_DIR="$temporary/cocoapods-cache"
+  # BEGIN CONSUMER INDEX INSTALL
+  if [[ -n "${BOTA_COCOAPODS_SPECS_REF:-}" ]]; then
+    "${pod_command[@]}" repo add bota-app-sdk-candidate "$SPECS_REPOSITORY" "$BOTA_COCOAPODS_SPECS_REF"
+  fi
   "${pod_command[@]}" install --repo-update
+  # END CONSUMER INDEX INSTALL
 )
-if grep -q '^EXTERNAL SOURCES:' "$temporary/Podfile.lock"; then
-  echo "Public CocoaPods consumer resolved a local source" >&2
-  exit 1
-fi
-grep -Fq "${APPLE_PACKAGE} ($VERSION)" "$temporary/Podfile.lock"
+node "$ROOT/tools/flutter/verify-cocoapods-consumer.mjs" \
+  --version "$VERSION" \
+  --lock "$temporary/Podfile.lock" \
+  --repos-root "$temporary/cocoapods-repos" \
+  --sandbox "$temporary/Pods"
 xcodebuild \
   -workspace "$temporary/PublicPodConsumer.xcworkspace" \
   -scheme PublicPodConsumer \
@@ -92,4 +100,4 @@ xcodebuild \
   -derivedDataPath "$temporary/DerivedData" \
   CODE_SIGNING_ALLOWED=NO \
   build
-echo "Public CocoaPods consumer resolved ${APPLE_PACKAGE} $VERSION without overrides"
+echo "CocoaPods consumer compiled ${APPLE_PACKAGE} $VERSION; verification JSON identifies the exact index selection"

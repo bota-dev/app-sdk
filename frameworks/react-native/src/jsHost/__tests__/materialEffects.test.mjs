@@ -128,13 +128,14 @@ test('credential envelopes stay opaque and mixed plaintext delivery fails closed
   await rejection;
 });
 
-test('raw-only material is rejected and settles the waiting provider', async () => {
+test('raw-only material is forwarded in the legacy field without an envelope', async () => {
   const f = fixture();
   f.effects.registerProvisioning('op', { serialNumber: 'SERIAL' });
   const pending = f.effects.handler(f.provisioning, f.context);
-  const rejected = assert.rejects(pending, { code: 'invalid_provisioning_material' });
-  await assert.rejects(f.effects.resolveProvisioningMaterial(f.events[0][1].requestId, {
+  await f.effects.resolveProvisioningMaterial(f.events[0][1].requestId, {
     apiEndpoint: '\0', deviceToken: 'dtok_legacy', mtu: 23,
-  }), { code: 'invalid_provisioning_material' });
-  await rejected;
+  });
+  const material = (await pending).ProvisioningMaterialPrepared.material;
+  assert.deepEqual(material.device_token, Array.from(Buffer.from('dtok_legacy')));
+  assert.equal(material.credential_envelope, null);
 });
