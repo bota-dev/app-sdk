@@ -28,6 +28,13 @@ callback fences lifecycle only; authenticated encrypted QUERY supplies protocol
 key proof. Neither control keys nor temporary network credentials are persisted.
 A new transport grant does not replace recording authorization or deletion proof.
 
+Control keys are derived from the grant's ephemeral key and transcript with
+HKDF-SHA256 and separate App/device labels. The zero-initialized 40-byte arrays
+in `LocalWifiControl::new` are output buffers: successful HKDF expansion overwrites
+every byte before either direction is installed; an expansion error returns
+without constructing a session. They are not fixed encryption keys. The control
+tests reject a different key or transcript, reflected frames and replayed counters.
+
 ## Receive, shutdown and completion
 
 Fresh authenticated PREPARED/manifest evidence precedes network IO. HTTP validates
@@ -84,6 +91,10 @@ node frameworks/react-native/scripts/prepare-local-wifi-native.mjs --check
 
 Never edit those copies directly. The native module owns no BLE connection,
 upload queue, Rust engine or protocol policy.
+
+The JavaScript-only runtime fixture also converts the local WiFi Codegen
+declaration to a structural interface. Its package checks reject React Native
+imports and TurboModule inheritance, including in declaration files.
 
 ## Verification and delivery boundary
 
